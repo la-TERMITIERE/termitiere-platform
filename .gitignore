@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+.env
+.env.local
+*.local
+.DS_Store
+.netlify
+.vite
+*.log
+
+# Secrets Firebase — NE JAMAIS COMMITER
+scripts/serviceAccountKey.json
+serviceAccountKey.json
+.firebase
+firebase-debug.log
+*.serviceaccount.json

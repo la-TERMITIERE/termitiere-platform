@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────── Fonctions utilitaires ─────────
+    function signedIn() {
+      return request.auth != null;
+    }
+    // Profil de l'utilisateur courant (1 lecture facturée par opération protégée).
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function role() {
+      return profile().role;
+    }
+    function isActive() {
+      return signedIn() && profile().actif != false;
+    }
+    function isAdmin() {
+      return isActive() && role() == 'admin';
+    }
+    function isManager() {
+      return isActive() && role() in ['admin', 'controleur'];
+    }
+    // Vrai si l'utilisateur a accès au module demandé (admin = tous).
+    // Le contrôle d'accès est ainsi appliqué CÔTÉ SERVEUR, pas seulement dans l'UI.
+    function hasModule(m) {
+      return isActive() && (role() == 'admin' ||
+        (profile().modules != null && m in profile().modules));
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Refus par défaut
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ───────── Utilisateurs ─────────
+    // Lecture : son propre profil, ou tout pour l'admin. Écriture : admin uniquement.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ───────── MAXI-AGRO (module 'agro') ─────────
+    match /agro_referentiel/{doc} {
+      allow read: if hasModule('agro');
+      allow write: if hasModule('agro') && isManager();
+    }
+    match /agro_inventaires/{doc} {
+      allow read: if hasModule('agro');
+      allow create: if hasModule('agro');
+      allow update, delete: if hasModule('agro') && isManager();
+    }
+    match /agro_factures/{doc} {
+      allow read: if hasModule('agro');
+      allow write: if hasModule('agro') && isManager();
+    }
+    match /agro_demandes/{doc} {
+      allow read: if hasModule('agro');
+      allow create: if hasModule('agro');
+      allow update, delete: if hasModule('agro') && isManager();
+    }
+    match /agro_sante/{doc} {
+      allow read: if hasModule('agro');
+      allow write: if hasModule('agro');
+    }
+
+    // ───────── LOGISTIQUE (module 'logistique') ─────────
+    match /logistique_vehicules/{doc} {
+      allow read: if hasModule('logistique');
+      allow write: if hasModule('logistique') && isManager();
+    }
+    match /logistique_livraisons/{doc} {
+      allow read: if hasModule('logistique');
+      allow write: if hasModule('logistique');
+    }
+    match /logistique_fournisseurs/{doc} {
+      allow read: if hasModule('logistique');
+      allow write: if hasModule('logistique') && isManager();
+    }
+    match /logistique_stock/{doc} {
+      allow read: if hasModule('logistique');
+      allow write: if hasModule('logistique');
+    }
+
+    // ───────── ÉVÉNEMENTIEL (module 'evenementiel') ─────────
+    match /evenementiel_evenements/{doc} {
+      allow read: if hasModule('evenementiel');
+      allow write: if hasModule('evenementiel');
+    }
+    match /evenementiel_devis/{doc} {
+      allow read: if hasModule('evenementiel');
+      allow write: if hasModule('evenementiel');
+    }
+    match /evenementiel_materiel/{doc} {
+      allow read: if hasModule('evenementiel');
+      allow write: if hasModule('evenementiel');
+    }
+
+    // ───────── RH (module 'rh') ─────────
+    match /rh_employes/{doc} {
+      allow read: if hasModule('rh');
+      allow write: if hasModule('rh') && isManager();
+    }
+    match /rh_presences/{doc} {
+      allow read: if hasModule('rh');
+      allow write: if hasModule('rh');
+    }
+
+    // ───────── Audit global ─────────
+    // Lecture : admin. Création : tout utilisateur actif. Jamais de modif/suppression.
+    match /audit_global/{doc} {
+      allow read: if isAdmin();
+      allow create: if isActive();
+      allow update, delete: if false;
+    }
+  }
+}

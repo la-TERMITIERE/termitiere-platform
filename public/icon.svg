@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="110" fill="#16a34a"/>
+  <!-- Termite stylisée (blanc sur vert) -->
+  <g fill="#ffffff" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Antennes -->
+    <path d="M236 150 q-26 -34 -54 -44" fill="none" stroke-width="10"/>
+    <path d="M276 150 q26 -34 54 -44" fill="none" stroke-width="10"/>
+    <!-- Tête -->
+    <circle cx="256" cy="168" r="34"/>
+    <!-- Thorax -->
+    <ellipse cx="256" cy="240" rx="40" ry="46"/>
+    <!-- Abdomen segmenté -->
+    <ellipse cx="256" cy="350" rx="56" ry="86"/>
+    <!-- Pattes -->
+    <path d="M216 224 q-50 -8 -78 -34" fill="none" stroke-width="11"/>
+    <path d="M216 248 q-54 6 -82 30" fill="none" stroke-width="11"/>
+    <path d="M296 224 q50 -8 78 -34" fill="none" stroke-width="11"/>
+    <path d="M296 248 q54 6 82 30" fill="none" stroke-width="11"/>
+  </g>
+  <!-- Segments abdomen (vert) -->
+  <g stroke="#16a34a" stroke-width="6" fill="none">
+    <path d="M204 320 q52 22 104 0"/>
+    <path d="M202 358 q54 24 108 0"/>
+    <path d="M206 396 q50 20 100 0"/>
+  </g>
+</svg>

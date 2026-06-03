@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Charte LA TERMITIÈRE — rouge brique + anthracite */
+  --primary: #BC3C31;
+  --primary-dark: #8F2A20;
+  --primary-light: #D9594B;
+  --secondary: #2E2E2E;
+  --secondary-dark: #1A1A1A;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #0284c7;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #faf6f5; /* blanc cassé chaud (teinte rouge très légère) */
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar discrète */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; }
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-black/[0.08] shadow-sm;
+  }
+  .input-base {
+    @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+           focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
+           disabled:bg-gray-100 disabled:text-gray-500;
+  }
+  .num-readonly {
+    @apply bg-gray-100 text-gray-600 font-semibold;
+  }
+}
+
+/* Animation d'apparition des toasts */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.toast-enter { animation: toast-in 0.22s ease-out; }
