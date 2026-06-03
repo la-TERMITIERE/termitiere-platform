@@ -55,10 +55,15 @@ export const getModule = (id) => MODULES.find((m) => m.id === id)
 
 // Navigation interne de chaque module : [{ label, to, icon, badge? }]
 export const MODULE_NAV = {
-  // L'application MAXI-AGRO est embarquée telle quelle (iframe) et possède sa
-  // propre navigation interne ; on n'expose donc qu'un point d'entrée unique.
   agro: [
-    { label: 'Application MAXI-AGRO', to: '/agro', icon: LayoutDashboard, end: true }
+    { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
+    { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
+    { label: 'Facturation', to: '/agro/factures', icon: FileText },
+    { label: 'Analyses', to: '/agro/analyses', icon: TrendingUp },
+    { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
+    { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
+    { label: 'Journal', to: '/agro/journal', icon: BookOpen },
+    { label: 'Paramètres', to: '/agro/params', icon: Settings }
   ],
   logistique: [
     { label: 'Dashboard', to: '/logistique', icon: LayoutDashboard, end: true },

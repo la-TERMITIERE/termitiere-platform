@@ -1,15 +1,33 @@
-// Module MAXI-AGRO — intègre l'application approuvée telle quelle (code identique
-// à maxi-agro-deploy) via une iframe servie depuis public/apps/maxi-agro/.
-// Aucune modification n'est apportée au code MAXI-AGRO : il est embarqué octet pour octet.
+// Module MAXI-AGRO — routes internes (module natif intégré au portail).
+// S'affiche dans le shell du portail (sidebar + topbar + retour à l'accueil),
+// sans second écran de connexion : l'authentification est celle du portail.
+import { useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
+import Dashboard from './Dashboard'
+import Saisie from './Saisie'
+import Factures from './Factures'
+import Analyses from './Analyses'
+import Sante from './Sante'
+import Demandes from './Demandes'
+import Journal from './Journal'
+import Params from './Params'
+import { useAgroStore } from './store/agroStore'
+
 export default function AgroModule() {
+  // Démarre la synchronisation temps réel du référentiel (espèces / aliments).
+  const init = useAgroStore((s) => s.init)
+  useEffect(() => { init() }, [init])
+
   return (
-    <div className="-m-4 h-[calc(100%+2rem)] md:-m-6 md:h-[calc(100%+3rem)]">
-      <iframe
-        src="/apps/maxi-agro/index.html"
-        title="MAXI-AGRO"
-        className="h-full w-full border-0"
-        allow="clipboard-read; clipboard-write; notifications"
-      />
-    </div>
+    <Routes>
+      <Route index element={<Dashboard />} />
+      <Route path="saisie" element={<Saisie />} />
+      <Route path="factures" element={<Factures />} />
+      <Route path="analyses" element={<Analyses />} />
+      <Route path="sante" element={<Sante />} />
+      <Route path="demandes" element={<Demandes />} />
+      <Route path="journal" element={<Journal />} />
+      <Route path="params" element={<Params />} />
+    </Routes>
   )
 }

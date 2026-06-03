@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, User, Lock } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { isFirebaseConfigured } from '../core/firebase'
 import { DEFAULT_USERS } from '../core/auth'
 
 export default function Login() {
@@ -74,8 +73,9 @@ export default function Login() {
             Se connecter
           </button>
 
-          {/* Comptes de démonstration (mode dev / sans Firebase) */}
-          {(import.meta.env.DEV || !isFirebaseConfigured) && (
+          {/* Comptes de démonstration : visibles uniquement en développement local,
+              jamais sur le site déployé (production). */}
+          {import.meta.env.DEV && (
             <div className="mt-5 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
               <p className="mb-2 font-semibold text-gray-700">Comptes de démonstration :</p>
               <div className="space-y-1">
