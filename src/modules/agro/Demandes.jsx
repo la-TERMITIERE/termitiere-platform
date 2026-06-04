@@ -17,6 +17,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
 import { addItem, updateItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
+import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatDateTime } from '../../utils/formatters'
 import { dernierStock } from './logic'
@@ -78,6 +79,16 @@ export default function Demandes() {
     }
     await addItem('agro_demandes', demande)
     await audit('agro', 'DEMANDE', `${num} — ${demande.qte} × ${art.nom} pour le ${form.dateSortie}`)
+    // Notifie les responsables (admin + contrôleur) en temps réel.
+    await notify({
+      type: 'demande',
+      title: 'Nouvelle demande de sortie',
+      body: `${demande.qte} × ${art.nom} — par ${user.nom} pour le ${form.dateSortie}`,
+      module: 'agro',
+      forRoles: ['admin', 'controleur'],
+      excludeUid: user.uid,
+      link: '/agro/demandes'
+    })
     toast.success('📤 Demande soumise à la hiérarchie ✓')
     setCreateOpen(false)
   }
@@ -94,6 +105,16 @@ export default function Demandes() {
     })
     await audit('agro', statut === 'approuve' ? 'APPROBATION' : 'REFUS',
       `${d.num} — ${d.qte} × ${d.articleNom} (${d.demandeurNom})`)
+    // Notifie le demandeur de la décision.
+    await notify({
+      type: statut === 'approuve' ? 'approuve' : 'refus',
+      title: statut === 'approuve' ? 'Demande approuvée ✅' : 'Demande refusée ⛔',
+      body: `${d.qte} × ${d.articleNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+      module: 'agro',
+      forUsers: [d.demandeur],
+      excludeUid: user.uid,
+      link: '/agro/demandes'
+    })
     if (statut === 'approuve')
       toast.success(`✅ Approuvé — ${d.qte} × ${d.articleNom} sortira le ${d.dateSortie}`)
     else toast.error('Demande refusée')

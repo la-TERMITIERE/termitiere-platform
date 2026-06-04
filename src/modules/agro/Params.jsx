@@ -17,7 +17,6 @@ import { migrerDepuisFirebase, migrerDepuisDB } from '../../utils/migration'
 import { toast } from '../../core/notifications'
 import { formatMoney, genId } from '../../utils/formatters'
 import { CAT_ANIMAUX, CAT_ALIMENTS } from './data'
-import { PIN_KEY, getPin } from './Journal'
 
 const TABS = [
   ['especes', 'Espèces'],
@@ -217,15 +216,8 @@ function DonneesTab() {
 
 // ── Système : PIN journal, statut Firebase / EmailJS ──
 function SystemeTab() {
-  const [pin, setPin] = useState(getPin())
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Card title="Code PIN du Journal">
-        <FormGroup label="Code PIN" hint="Protège l'accès à l'historique des saisies.">
-          <Input value={pin} onChange={(e) => setPin(e.target.value)} maxLength={8} />
-        </FormGroup>
-        <Button onClick={() => { localStorage.setItem(PIN_KEY, pin || '0000'); toast.success('PIN mis à jour') }}>Enregistrer le PIN</Button>
-      </Card>
       <Card title="Connexions">
         <ul className="space-y-2 text-sm">
           <li className="flex items-center justify-between">

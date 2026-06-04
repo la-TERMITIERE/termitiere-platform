@@ -10,7 +10,7 @@
 // dans les composants ; ils sont alimentés par une souscription init().
 import { create } from 'zustand'
 import { ESPECES, ALIMENTS } from '../data'
-import { subscribeCollection, setItem, removeItem } from '../../../core/db'
+import { subscribeCollection, getAll, setItem, removeItem } from '../../../core/db'
 
 const COL = 'agro_referentiel'
 let _unsub = null
@@ -57,8 +57,11 @@ export const useAgroStore = create((set, get) => ({
   saveAliment: (ali) => setItem(COL, ali.id, { ...ali, type: 'aliment' }),
   removeAliment: (id) => removeItem(COL, id),
 
-  // Réinitialise le référentiel aux valeurs d'usine (écrase les ajouts).
+  // Réinitialise le référentiel aux valeurs d'usine : supprime TOUT l'existant
+  // (y compris les articles personnalisés) puis ré-amorce les valeurs par défaut.
   resetReferentiel: async () => {
+    const rows = await getAll(COL)
+    await Promise.all(rows.map((r) => removeItem(COL, r.id)))
     await seedDefaults()
   }
 }))

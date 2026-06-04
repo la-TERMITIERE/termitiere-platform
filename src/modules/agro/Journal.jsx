@@ -3,21 +3,16 @@
 // connexions, logistique, événementiel…), avec sélecteur de période (calendrier
 // + plage personnalisée) et filtre par type d'événement.
 import { useMemo, useState } from 'react'
-import { Lock, FileSpreadsheet } from 'lucide-react'
+import { FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
-import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportExcel } from '../../utils/exportExcel'
-import { toast } from '../../core/notifications'
 import { formatDateTime } from '../../utils/formatters'
-
-export const PIN_KEY = 'termitiere_agro_pin'
-export const getPin = () => localStorage.getItem(PIN_KEY) || '0000'
 
 // Libellé + icône par type d'événement.
 const EVENTS = {
@@ -53,8 +48,6 @@ const dayOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '')
 export default function Journal() {
   const { data: events } = useCollection('audit_global')
 
-  const [unlocked, setUnlocked] = useState(false)
-  const [pin, setPin] = useState('')
   const [type, setType] = useState('')      // filtre type d'événement
   const [who, setWho] = useState('')         // filtre utilisateur
   const { start, end, node: periodNode } = usePeriodSelect('30')
@@ -80,11 +73,6 @@ export default function Journal() {
       .sort((a, b) => b._ms - a._ms)
   }, [events, start, end, type, who])
 
-  function unlock() {
-    if (pin === getPin()) { setUnlocked(true); toast.success('Journal déverrouillé') }
-    else toast.error('Code PIN incorrect')
-  }
-
   function exportXLSX() {
     exportExcel(
       lignes.map((l) => ({
@@ -96,22 +84,6 @@ export default function Journal() {
       })),
       'journal-activite.xlsx',
       'Journal'
-    )
-  }
-
-  if (!unlocked) {
-    return (
-      <div className="mx-auto max-w-sm">
-        <Card className="text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600"><Lock size={26} /></div>
-          <h2 className="mb-1 text-lg font-bold">Journal protégé</h2>
-          <p className="mb-4 text-sm text-gray-500">Saisissez le code PIN pour accéder au journal d'activité.</p>
-          <Input type="password" inputMode="numeric" placeholder="••••" className="mb-3 text-center tracking-widest"
-            value={pin} onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && unlock()} />
-          <Button className="w-full" onClick={unlock}>Déverrouiller</Button>
-          <p className="mt-3 text-xs text-gray-400">PIN par défaut : 0000 (modifiable dans Paramètres)</p>
-        </Card>
-      </div>
     )
   }
 

@@ -2,6 +2,7 @@
 import { Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { getModule, MODULE_NAV } from '../modules'
+import NotificationBell from './NotificationBell'
 
 export default function Topbar({ onMenuToggle, user }) {
   const location = useLocation()
@@ -31,6 +32,7 @@ export default function Topbar({ onMenuToggle, user }) {
         <Menu size={22} />
       </button>
       <h1 className="flex-1 truncate text-base font-bold text-gray-800">{title}</h1>
+      <NotificationBell />
       <div className="hidden items-center gap-2 sm:flex">
         <span className="text-sm font-medium text-gray-600">{user?.nom}</span>
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold capitalize text-primary-dark">

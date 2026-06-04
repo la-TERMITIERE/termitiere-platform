@@ -5,9 +5,8 @@
 //  2. Firebase Realtime Database de l'ancienne app (chemin `maxiagro`)
 //  3. Fichier JSON exporté depuis l'ancienne app (upload manuel)
 //
-// Cible : Firestore (collections agro_*) si configuré, sinon collections localStorage de la plateforme.
-import { writeBatch, collection, doc, serverTimestamp } from 'firebase/firestore'
-import { db, isFirebaseConfigured } from '../core/firebase'
+// Cible : la base de la plateforme via la couche db.js (Realtime Database en
+// production, localStorage en mode démo) — un seul chemin, robuste.
 import { setItem, addItem } from '../core/db'
 
 const OLD_KEY = 'maxiagro_db_v1'
@@ -53,25 +52,13 @@ export async function migrerDepuisDB(oldDB) {
   const recap = recapVide()
   if (!oldDB) return recap
 
-  if (isFirebaseConfigured) {
-    const batch = writeBatch(db)
-    Object.entries(oldDB.inventaires || {}).forEach(([date, inv]) => {
-      batch.set(doc(db, 'agro_inventaires', date), { date, ...inv, migratedAt: serverTimestamp() })
-      recap.inventaires++
-    })
-    ;(oldDB.factures || []).forEach((f) => { batch.set(doc(collection(db, 'agro_factures')), { ...f, migratedAt: serverTimestamp() }); recap.factures++ })
-    ;(oldDB.demandes || []).forEach((d) => { batch.set(doc(collection(db, 'agro_demandes')), { ...d, migratedAt: serverTimestamp() }); recap.demandes++ })
-    ;(oldDB.sanitaire || []).forEach((s) => { batch.set(doc(collection(db, 'agro_sante')), { ...s, migratedAt: serverTimestamp() }); recap.sante++ })
-    await batch.commit()
-  } else {
-    // Mode démo : écriture séquentielle dans les collections locales
-    for (const [date, inv] of Object.entries(oldDB.inventaires || {})) {
-      await setItem('agro_inventaires', date, { date, ...inv }); recap.inventaires++
-    }
-    for (const f of oldDB.factures || []) { await addItem('agro_factures', f); recap.factures++ }
-    for (const d of oldDB.demandes || []) { await addItem('agro_demandes', d); recap.demandes++ }
-    for (const s of oldDB.sanitaire || []) { await addItem('agro_sante', s); recap.sante++ }
+  // Écriture via la couche db.js → synchronisée sur la base (RTDB) ou localStorage.
+  for (const [date, inv] of Object.entries(oldDB.inventaires || {})) {
+    await setItem('agro_inventaires', date, { date, ...inv }); recap.inventaires++
   }
+  for (const f of oldDB.factures || []) { await addItem('agro_factures', f); recap.factures++ }
+  for (const d of oldDB.demandes || []) { await addItem('agro_demandes', d); recap.demandes++ }
+  for (const s of oldDB.sanitaire || []) { await addItem('agro_sante', s); recap.sante++ }
 
   localStorage.setItem(FLAG_KEY, new Date().toISOString())
   return recap
