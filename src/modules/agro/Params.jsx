@@ -11,6 +11,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useAgroStore } from './store/agroStore'
 import { isFirebaseConfigured } from '../../core/firebase'
+import { getAll, setItem } from '../../core/db'
 import { exportExcel } from '../../utils/exportExcel'
 import { migrerDepuisFirebase, migrerDepuisDB } from '../../utils/migration'
 import { toast } from '../../core/notifications'
@@ -138,13 +139,12 @@ function DonneesTab() {
     reader.readAsText(file)
   }
 
-  function readCol(name) {
-    try { return JSON.parse(localStorage.getItem('termitiere_col_' + name)) || [] } catch { return [] }
-  }
+  // Lit une collection depuis la base (cloud en temps réel, ou localStorage en démo).
+  const readCol = (name) => getAll(name)
 
-  function exportJSON() {
+  async function exportJSON() {
     const dump = {}
-    COLS.forEach((c) => (dump[c] = readCol(c)))
+    for (const c of COLS) dump[c] = await readCol(c)
     dump.especes = useAgroStore.getState().especes
     dump.aliments = useAgroStore.getState().aliments
     dump.exportedAt = new Date().toISOString()
@@ -160,20 +160,28 @@ function DonneesTab() {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const data = JSON.parse(reader.result)
-        COLS.forEach((c) => { if (data[c]) localStorage.setItem('termitiere_col_' + c, JSON.stringify(data[c])) })
-        if (data.especes) useAgroStore.getState().saveEspece && localStorage.setItem('termitiere_agro_especes', JSON.stringify(data.especes))
-        if (data.aliments) localStorage.setItem('termitiere_agro_aliments', JSON.stringify(data.aliments))
-        toast.success('Import réussi — rechargez la page')
+        // Réécrit chaque enregistrement dans la base (synchronisé partout).
+        for (const c of COLS) {
+          for (const row of data[c] || []) {
+            if (row && row.id) await setItem(c, row.id, row)
+          }
+        }
+        // Référentiel espèces / aliments
+        const store = useAgroStore.getState()
+        for (const e of data.especes || []) await store.saveEspece(e)
+        for (const a of data.aliments || []) await store.saveAliment(a)
+        toast.success('Import réussi ✓ (données synchronisées)')
       } catch (err) { toast.error('Fichier invalide') }
     }
     reader.readAsText(file)
   }
 
-  function exportXLSX() {
-    exportExcel(readCol('agro_factures').map((f) => ({ Numero: f.numero, Date: f.date, Client: f.client?.nom, TTC: f.totalTTC })), 'factures.xlsx', 'Factures')
+  async function exportXLSX() {
+    const factures = await readCol('agro_factures')
+    exportExcel(factures.map((f) => ({ Numero: f.numero, Date: f.date, Client: f.client?.nom, TTC: f.totalTTC })), 'factures.xlsx', 'Factures')
   }
 
   return (

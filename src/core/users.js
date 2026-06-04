@@ -7,8 +7,18 @@
 //   réel se fait via la console Firebase ; ici on gère les profils/droits.
 import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
-import { DEFAULT_USERS } from './auth'
+import { DEFAULT_USERS, hashPassword } from './auth'
 import { getAll, setItem, removeItem } from './db'
+
+// Prépare le profil à enregistrer : hache le mot de passe s'il est fourni et ne
+// stocke JAMAIS le mot de passe en clair. Si `pass` est vide (édition sans
+// changement), on n'inclut pas `passHash` → l'existant est conservé (fusion).
+async function toProfile(u) {
+  const { pass, passHash, ...rest } = u
+  const profile = { ...rest }
+  if (pass) profile.passHash = await hashPassword(pass)
+  return profile
+}
 
 const KEY = 'termitiere_demo_users'
 
@@ -41,7 +51,7 @@ export const useUsersStore = create((set, get) => ({
     }
   },
 
-  // Crée ou met à jour un utilisateur (clé = login en démo, uid/login en Firebase).
+  // Crée ou met à jour un utilisateur (clé = login). Mot de passe haché.
   saveUser: async (u) => {
     if (!isFirebaseConfigured) {
       const list = [...get().users]
@@ -53,7 +63,8 @@ export const useUsersStore = create((set, get) => ({
       return
     }
     const id = u.uid || u.id || u.login
-    await setItem('users', id, { ...u, uid: id })
+    const profile = await toProfile({ ...u, uid: id })
+    await setItem('users', id, profile)
     await get().load()
   },
 

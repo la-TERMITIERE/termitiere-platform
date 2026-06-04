@@ -43,7 +43,7 @@ export default function Utilisateurs() {
     const u = modal.data
     if (!u.nom.trim() || !u.login.trim()) return toast.error('Nom et identifiant requis')
     if (modal.isNew && users.some((x) => x.login === u.login)) return toast.error('Cet identifiant existe déjà')
-    if (modal.isNew && !u.pass && !isFirebaseConfigured) return toast.error('Définissez un mot de passe')
+    if (modal.isNew && !u.pass) return toast.error('Définissez un mot de passe')
     // L'admin a accès à tous les modules par défaut
     const modules = u.role === 'admin' ? MODULES.map((m) => m.id) : u.modules
     await saveUser({ ...u, modules })
@@ -72,9 +72,9 @@ export default function Utilisateurs() {
       </div>
 
       {isFirebaseConfigured && (
-        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          Mode Firebase : la création du compte d'authentification se fait dans la console Firebase.
-          Ici vous gérez les profils et les droits d'accès (collection <code>users</code>).
+        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          🟢 Synchronisation cloud active : les comptes et les droits sont partagés
+          en temps réel entre tous les appareils.
         </div>
       )}
 
@@ -126,11 +126,9 @@ export default function Utilisateurs() {
               </FormGroup>
               <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
               <FormGroup label="Secteur"><Input value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} /></FormGroup>
-              {!isFirebaseConfigured && (
-                <FormGroup label={modal.isNew ? 'Mot de passe' : 'Réinitialiser le mot de passe'} className="col-span-2" hint={modal.isNew ? '' : 'Laissez vide pour conserver l\'actuel'}>
-                  <Input type="text" value={modal.data.pass} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, pass: e.target.value } }))} placeholder="••••••" />
-                </FormGroup>
-              )}
+              <FormGroup label={modal.isNew ? 'Mot de passe' : 'Réinitialiser le mot de passe'} className="col-span-2" hint={modal.isNew ? '' : 'Laissez vide pour conserver l\'actuel'}>
+                <Input type="text" value={modal.data.pass} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, pass: e.target.value } }))} placeholder="••••••" />
+              </FormGroup>
             </div>
 
             <FormGroup label="Accès aux modules">
