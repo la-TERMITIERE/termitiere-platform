@@ -162,16 +162,34 @@ function DonneesTab() {
     reader.onload = async () => {
       try {
         const data = JSON.parse(reader.result)
-        // Réécrit chaque enregistrement dans la base (synchronisé partout).
+
+        // Détection automatique du format de l'ancienne app standalone
+        // (maxiagro_db_v1 : inventaires/factures/demandes/sanitaire, sans clés agro_*).
+        const aFormatPortail = COLS.some((c) => Array.isArray(data[c]))
+        const aFormatAncien = !aFormatPortail &&
+          (data.inventaires || data.sanitaire || data.factures || data.demandes)
+        if (aFormatAncien) {
+          const r = await migrerDepuisDB(data)
+          toast.success(`Import ancienne app : ${recapMsg(r)}`)
+          return
+        }
+
+        // Format du portail : réécrit chaque enregistrement dans la base (synchronisé partout).
+        let n = 0
         for (const c of COLS) {
           for (const row of data[c] || []) {
-            if (row && row.id) await setItem(c, row.id, row)
+            if (row && row.id) { await setItem(c, row.id, row); n++ }
           }
         }
         // Référentiel espèces / aliments
         const store = useAgroStore.getState()
-        for (const e of data.especes || []) await store.saveEspece(e)
-        for (const a of data.aliments || []) await store.saveAliment(a)
+        for (const sp of data.especes || []) { await store.saveEspece(sp); n++ }
+        for (const al of data.aliments || []) { await store.saveAliment(al); n++ }
+
+        if (n === 0) {
+          toast.error('Aucune donnée reconnue dans ce fichier (structure inattendue)')
+          return
+        }
         toast.success('Import réussi ✓ (données synchronisées)')
       } catch (err) { toast.error('Fichier invalide') }
     }
