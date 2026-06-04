@@ -1,19 +1,17 @@
-// Saisie journalière MAXI-AGRO.
-// Logique métier (fidèle à l'app d'origine) :
+// Saisie journalière MAXI-AGRO — 4 colonnes : EF Initial · Entrées · Sorties · EF Final.
+// Logique métier (fidèle à l'app d'origine, simplifiée) :
 //  - EF Initial = valeur enregistrée OU EF Final de la veille (report automatique).
 //    → colonne VERROUILLÉE/grisée pour l'agent (modifiable admin/contrôleur).
-//  - Naissances / Entrées : saisis librement par l'utilisateur.
-//  - Sorties (animaux) = somme des demandes APPROUVÉES pour cette date (lecture seule).
-//  - Décès : saisi + MOTIF obligatoire pour chaque décès.
-//  - EF Final = init + naiss + ent − sorties − décès (≥ 0) — colonne grisée (calculée).
+//  - Entrées : liste de mouvements TYPÉS (Achat / Naissance / Mutation / Dons / Autres).
+//  - Sorties : liste de mouvements TYPÉS (Ventes / Décès / Mutation / Perte / Dons / Autres)
+//    + les sorties issues des demandes APPROUVÉES (lecture seule, type Ventes).
+//  - Le type « Autres » ouvre un champ libre (personne / motif personnalisé).
+//  - Le type « Décès » exige un motif.
+//  - EF Final = EF Initial + Σ Entrées − Σ Sorties (≥ 0) — colonne calculée.
 //  - L'EF Final du jour devient l'EF Initial du jour suivant.
-//
-// Ajout d'articles : l'utilisateur peut créer de nouveaux animaux/aliments ET de
-// nouvelles catégories (avec prix unitaire + effectif initial). Les nouvelles
-// catégories se synchronisent automatiquement avec le Dashboard (même référentiel).
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Save, Send, CheckCircle2, Plus } from 'lucide-react'
+import { Save, Send, CheckCircle2, Plus, Trash2, ArrowDownToLine, ArrowUpFromLine, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -28,7 +26,11 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateTime, genId } from '../../utils/formatters'
 import { CAT_ANIMAUX, CAT_ALIMENTS, catColor } from './data'
-import { previousInventoryDate, getInventaire, autoSorties, finAnimal, finAliment } from './logic'
+import {
+  previousInventoryDate, getInventaire, autoSorties,
+  agregerAnimal, agregerAliment, sommeMouvements, mouvementsDepuisSaisie,
+  ENTREE_TYPES_ANIMAL, SORTIE_TYPES_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_ALIMENT, labelRequis
+} from './logic'
 
 export default function Saisie() {
   const { user, role } = useAuth()
@@ -41,11 +43,11 @@ export default function Saisie() {
 
   const [date, setDate] = useState(todayStr())
   const [tab, setTab] = useState('animaux')
-  const [anim, setAnim] = useState({}) // { id: { init, naiss, ent, dec, decMotif } }
-  const [alim, setAlim] = useState({}) // { id: { init, ent, sor } }
-  const [seedInit, setSeedInit] = useState({}) // effectifs initiaux des articles fraîchement créés : { date: { id: valeur } }
+  const [anim, setAnim] = useState({}) // { id: { init, entrees:[], sorties:[] } }
+  const [alim, setAlim] = useState({}) // { id: { init, entrees:[], sorties:[] } }
+  const [seedInit, setSeedInit] = useState({}) // effectifs initiaux des articles fraîchement créés : { date: { id } }
   const [saving, setSaving] = useState(false)
-  const [decesModal, setDecesModal] = useState(null) // { id, nom }
+  const [mvtModal, setMvtModal] = useState(null) // { id, kind, dir, nom }
   const [addModal, setAddModal] = useState(null) // { kind: 'animal' | 'aliment' }
 
   // EF Initial éditable uniquement par admin / contrôleur (sinon grisé/auto).
@@ -65,24 +67,16 @@ export default function Saisie() {
     const a = {}
     especes.forEach((e) => {
       const saved = inv.animaux?.[e.id]
-      a[e.id] = {
-        init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id),
-        naiss: saved?.naiss || 0,
-        ent: saved?.ent || 0,
-        dec: saved?.dec || 0,
-        decMotif: saved?.decMotif || ''
-      }
+      const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'animaux')
+      a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties }
     })
     setAnim(a)
 
     const al = {}
     aliments.forEach((x) => {
       const saved = inv.aliments?.[x.id]
-      al[x.id] = {
-        init: initOf(saved, prevInv?.aliments?.[x.id]?.fin, x.id),
-        ent: saved?.ent || 0,
-        sor: saved?.sor || 0
-      }
+      const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'aliments')
+      al[x.id] = { init: initOf(saved, prevInv?.aliments?.[x.id]?.fin, x.id), entrees, sorties }
     })
     setAlim(al)
   }, [date, inventaires, especes, aliments, seedInit])
@@ -90,14 +84,18 @@ export default function Saisie() {
   const existing = getInventaire(inventaires, date)
   const dejaSaisi = existing && existing.savedAt
 
-  const setA = (id, field, val) => {
-    const v = Math.max(0, parseInt(val) || 0)
-    // Tout décès doit être motivé → ouvre la fenêtre de motif.
-    if (field === 'dec' && v > 0) setDecesModal({ id, nom: especes.find((e) => e.id === id)?.nom })
-    setAnim((s) => ({ ...s, [id]: { ...s[id], [field]: v } }))
+  const setInit = (kind, id, val) => {
+    const v = Math.max(0, parseFloat(val) || 0)
+    const setter = kind === 'animaux' ? setAnim : setAlim
+    setter((s) => ({ ...s, [id]: { ...s[id], init: v } }))
   }
-  const setAl = (id, field, val) =>
-    setAlim((s) => ({ ...s, [id]: { ...s[id], [field]: Math.max(0, parseFloat(val) || 0) } }))
+
+  // Remplace la liste de mouvements (entrées/sorties) d'un article.
+  const setLignes = (kind, id, dir, lignes) => {
+    const field = dir === 'entree' ? 'entrees' : 'sorties'
+    const setter = kind === 'animaux' ? setAnim : setAlim
+    setter((s) => ({ ...s, [id]: { ...s[id], [field]: lignes } }))
+  }
 
   // Catégories présentes (base + personnalisées)
   const catsAnim = useMemo(() => {
@@ -109,7 +107,7 @@ export default function Saisie() {
     return [...CAT_ALIMENTS, ...custom].filter((c) => aliments.some((a) => a.cat === c))
   }, [aliments])
 
-  const sorOf = (id) => autoSorties(demandes, id, date)
+  const autoSorOf = (id) => autoSorties(demandes, id, date)
 
   // Création d'un nouvel article (+ éventuelle nouvelle catégorie).
   function handleAddArticle({ nom, cat, prix, initial }) {
@@ -120,7 +118,6 @@ export default function Saisie() {
     const article = { id, nom: nom.trim(), cat: cat.trim().toUpperCase(), prix: parseInt(prix) || 0 }
     if (kind === 'animal') saveEspece(article)
     else saveAliment(article)
-    // Mémorise l'effectif initial pour ce nouvel article à cette date.
     setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
     setTab(kind === 'animal' ? 'animaux' : 'aliments')
     setAddModal(null)
@@ -131,40 +128,108 @@ export default function Saisie() {
     if (!date) return toast.error('Choisissez une date')
     if (!user) return toast.error('Session expirée — reconnectez-vous')
 
-    // Motif de décès obligatoire
-    const sansMotif = especes.find((e) => (anim[e.id]?.dec || 0) > 0 && !(anim[e.id]?.decMotif || '').trim())
-    if (sansMotif) {
-      setDecesModal({ id: sansMotif.id, nom: sansMotif.nom })
-      return toast.error(`Indiquez le motif du décès — ${sansMotif.nom}`)
+    // Validation : tout mouvement « Autres » ou « Décès » doit être précisé.
+    const articleManquant = (coll, src) => {
+      for (const e of coll) {
+        for (const dir of ['entrees', 'sorties']) {
+          const lignes = src[e.id]?.[dir] || []
+          const ko = lignes.find((l) => (parseInt(l.qte) || 0) > 0 && labelRequis(l.type) && !(l.label || '').trim())
+          if (ko) return { nom: e.nom, type: ko.type }
+        }
+      }
+      return null
     }
+    const ko = articleManquant(especes, anim) || articleManquant(aliments, alim)
+    if (ko) return toast.error(`Précisez le motif « ${ko.type} » — ${ko.nom}`)
 
     setSaving(true)
     try {
+      let totEnt = 0, totSor = 0
       const animaux = {}
       especes.forEach((e) => {
-        const d = anim[e.id] || {}
-        const sor = sorOf(e.id)
-        animaux[e.id] = {
-          init: d.init || 0, naiss: d.naiss || 0, ent: d.ent || 0,
-          sor, dec: d.dec || 0, fin: finAnimal({ ...d, sor }), decMotif: d.decMotif || ''
-        }
+        const d = anim[e.id] || { init: 0, entrees: [], sorties: [] }
+        const autoSor = autoSorOf(e.id)
+        const agg = agregerAnimal(d, autoSor)
+        animaux[e.id] = { ...agg, entrees: d.entrees || [], sorties: d.sorties || [], autoSor }
+        totEnt += sommeMouvements(d.entrees)
+        totSor += sommeMouvements(d.sorties) + autoSor
       })
       const alimentsOut = {}
       aliments.forEach((x) => {
-        const d = alim[x.id] || {}
-        alimentsOut[x.id] = { init: d.init || 0, ent: d.ent || 0, sor: d.sor || 0, fin: finAliment(d) }
+        const d = alim[x.id] || { init: 0, entrees: [], sorties: [] }
+        const agg = agregerAliment(d)
+        alimentsOut[x.id] = { ...agg, entrees: d.entrees || [], sorties: d.sorties || [] }
       })
 
       await setItem('agro_inventaires', date, {
         date, agentId: user.uid, agentNom: user.nom, savedAt: ts(), animaux, aliments: alimentsOut
       })
-      await audit('agro', 'SAISIE', `Saisie enregistrée pour le ${date}`)
+      const totalTetes = Object.values(animaux).reduce((s, a) => s + (a.fin || 0), 0)
+      await audit('agro', 'SAISIE', `Saisie du ${date} : ${totEnt} entrée(s), ${totSor} sortie(s) — ${totalTetes} têtes au total`, {
+        date, totalEntrees: totEnt, totalSorties: totSor, totalTetes,
+        détail: detailMouvements(especes, anim, autoSorOf)
+      })
       toast.success('Saisie enregistrée ✓')
     } catch (e) {
       toast.error('Erreur : ' + e.message)
     } finally {
       setSaving(false)
     }
+  }
+
+  const renderTable = (kind) => {
+    const cats = kind === 'animaux' ? catsAnim : catsAlim
+    const articles = kind === 'animaux' ? especes : aliments
+    const src = kind === 'animaux' ? anim : alim
+    return (
+      <Card className="overflow-x-auto p-0">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th className="px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
+              <th className="px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
+              <th className="px-2 py-2 text-center">Entrées</th>
+              <th className="px-2 py-2 text-center">Sorties</th>
+              <th className="px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {cats.map((cat) => (
+              <FragmentCat key={cat} cat={cat} color={catColor(cat)} span={5}>
+                {articles.filter((a) => a.cat === cat).map((a) => {
+                  const d = src[a.id] || { init: 0, entrees: [], sorties: [] }
+                  const autoSor = kind === 'animaux' ? autoSorOf(a.id) : 0
+                  const totEnt = sommeMouvements(d.entrees)
+                  const totSor = sommeMouvements(d.sorties) + autoSor
+                  const fin = Math.max(0, (d.init || 0) + totEnt - totSor)
+                  return (
+                    <tr key={a.id}>
+                      <td className="px-3 py-1.5 font-semibold">{a.nom}</td>
+                      <td className="px-2 py-1.5 text-center">
+                        <input
+                          type="number" min="0" value={d.init ?? 0} readOnly={!peutEditerInit}
+                          title={peutEditerInit ? undefined : 'Reporté automatiquement de la veille'}
+                          onChange={(e) => setInit(kind, a.id, e.target.value)}
+                          onFocus={(e) => peutEditerInit && e.target.select()}
+                          className={`w-16 rounded border px-1 py-1 text-center text-sm focus:outline-none ${
+                            peutEditerInit ? 'border-gray-200 focus:border-primary' : 'num-readonly cursor-not-allowed border-gray-200'
+                          }`}
+                        />
+                      </td>
+                      <MvtCell total={totEnt} dir="entree" lignes={d.entrees}
+                        onClick={() => setMvtModal({ id: a.id, kind, dir: 'entree', nom: a.nom })} />
+                      <MvtCell total={totSor} dir="sortie" lignes={d.sorties} auto={autoSor}
+                        onClick={() => setMvtModal({ id: a.id, kind, dir: 'sortie', nom: a.nom })} />
+                      <td className="px-2 py-1.5 text-center font-bold text-primary-dark">{fin}</td>
+                    </tr>
+                  )
+                })}
+              </FragmentCat>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    )
   }
 
   return (
@@ -193,6 +258,11 @@ export default function Saisie() {
         </div>
       )}
 
+      <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        💡 Cliquez sur une cellule <strong>Entrées</strong> ou <strong>Sorties</strong> pour détailler les mouvements par type
+        (Achat, Naissance, Vente, Décès, Mutation, Perte, Dons… ou <strong>Autres</strong> avec précision).
+      </p>
+
       {/* Onglets + ajout d'article */}
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200">
         {[['animaux', 'Animaux'], ['aliments', 'Aliments & Divers']].map(([v, l]) => (
@@ -216,95 +286,19 @@ export default function Saisie() {
         </Button>
       </div>
 
-      {tab === 'animaux' ? (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-3 py-2 text-left">Espèce</th>
-                <th className="px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
-                <th className="px-2 py-2">Naissances</th>
-                <th className="px-2 py-2">Entrées</th>
-                <th className="px-2 py-2" title="Auto depuis demandes approuvées">Sorties 🔄</th>
-                <th className="px-2 py-2">Décès</th>
-                <th className="px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {catsAnim.map((cat) => (
-                <FragmentCat key={cat} cat={cat} color={catColor(cat)} span={7}>
-                  {especes.filter((e) => e.cat === cat).map((e) => {
-                    const d = anim[e.id] || {}
-                    const sor = sorOf(e.id)
-                    const fin = finAnimal({ ...d, sor })
-                    return (
-                      <tr key={e.id}>
-                        <td className="px-3 py-1.5 font-semibold">{e.nom}</td>
-                        <NumCell value={d.init} readOnly={!peutEditerInit} onChange={(v) => setA(e.id, 'init', v)} />
-                        <NumCell value={d.naiss} onChange={(v) => setA(e.id, 'naiss', v)} />
-                        <NumCell value={d.ent} onChange={(v) => setA(e.id, 'ent', v)} />
-                        <NumCell value={sor} readOnly />
-                        <NumCell value={d.dec} onChange={(v) => setA(e.id, 'dec', v)} />
-                        <td className="px-2 py-1.5 text-center font-bold text-primary-dark">{fin}</td>
-                      </tr>
-                    )
-                  })}
-                </FragmentCat>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-3 py-2 text-left">Article</th>
-                <th className="px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
-                <th className="px-2 py-2">Entrées</th>
-                <th className="px-2 py-2">Sorties</th>
-                <th className="px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {catsAlim.map((cat) => (
-                <FragmentCat key={cat} cat={cat} color={catColor(cat)} span={5}>
-                  {aliments.filter((a) => a.cat === cat).map((x) => {
-                    const d = alim[x.id] || {}
-                    return (
-                      <tr key={x.id}>
-                        <td className="px-3 py-1.5 font-semibold">{x.nom}</td>
-                        <NumCell value={d.init} readOnly={!peutEditerInit} onChange={(v) => setAl(x.id, 'init', v)} />
-                        <NumCell value={d.ent} onChange={(v) => setAl(x.id, 'ent', v)} />
-                        <NumCell value={d.sor} onChange={(v) => setAl(x.id, 'sor', v)} />
-                        <td className="px-2 py-1.5 text-center font-bold text-secondary-dark">{finAliment(d)}</td>
-                      </tr>
-                    )
-                  })}
-                </FragmentCat>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      {renderTable(tab)}
 
-      {/* Modal motif décès */}
-      <Modal
-        open={!!decesModal}
-        onClose={() => setDecesModal(null)}
-        title={`Motif du décès — ${decesModal?.nom || ''}`}
-        footer={<Button onClick={() => setDecesModal(null)}>Valider</Button>}
-      >
-        <p className="mb-2 text-xs text-gray-500">Le motif est obligatoire pour chaque décès enregistré.</p>
-        <textarea
-          className="input-base"
-          rows={3}
-          autoFocus
-          placeholder="Cause du décès (maladie, accident, prédateur…)"
-          value={decesModal ? anim[decesModal.id]?.decMotif || '' : ''}
-          onChange={(e) => setAnim((s) => ({ ...s, [decesModal.id]: { ...s[decesModal.id], decMotif: e.target.value } }))}
-        />
-      </Modal>
+      {/* Modal mouvements typés */}
+      <MouvementModal
+        modal={mvtModal}
+        anim={anim}
+        alim={alim}
+        autoSor={mvtModal && mvtModal.kind === 'animaux' && mvtModal.dir === 'sortie' ? autoSorOf(mvtModal.id) : 0}
+        demandes={demandes}
+        date={date}
+        onClose={() => setMvtModal(null)}
+        onChange={(lignes) => setLignes(mvtModal.kind, mvtModal.id, mvtModal.dir, lignes)}
+      />
 
       {/* Modal ajout d'article */}
       <AddArticleModal
@@ -318,6 +312,22 @@ export default function Saisie() {
       />
     </div>
   )
+}
+
+// Détail lisible des mouvements (pour le journal d'activité).
+function detailMouvements(especes, anim, autoSorOf) {
+  const out = {}
+  especes.forEach((e) => {
+    const d = anim[e.id]
+    if (!d) return
+    const parts = []
+    ;(d.entrees || []).forEach((l) => l.qte && parts.push(`+${l.qte} ${l.type}${l.label ? ` (${l.label})` : ''}`))
+    ;(d.sorties || []).forEach((l) => l.qte && parts.push(`−${l.qte} ${l.type}${l.label ? ` (${l.label})` : ''}`))
+    const auto = autoSorOf(e.id)
+    if (auto) parts.push(`−${auto} Ventes (demandes approuvées)`)
+    if (parts.length) out[e.nom] = parts.join(', ')
+  })
+  return out
 }
 
 // ─────────── Sous-composants ───────────
@@ -335,22 +345,98 @@ function FragmentCat({ cat, color, span, children }) {
   )
 }
 
-function NumCell({ value, onChange, readOnly }) {
+// Cellule Entrées / Sorties : bouton affichant le total + un résumé des types.
+function MvtCell({ total, dir, lignes = [], auto = 0, onClick }) {
+  const Icon = dir === 'entree' ? ArrowDownToLine : ArrowUpFromLine
+  const tone = dir === 'entree' ? 'text-green-700' : 'text-amber-700'
+  const resume = (lignes || []).filter((l) => l.qte).map((l) => `${l.type} ${l.qte}`)
+  if (auto) resume.push(`Ventes ${auto} 🔄`)
   return (
     <td className="px-2 py-1.5 text-center">
-      <input
-        type="number"
-        min="0"
-        value={value ?? 0}
-        readOnly={readOnly}
-        title={readOnly ? 'Champ verrouillé (calculé / reporté automatiquement)' : undefined}
-        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-        onFocus={(e) => !readOnly && e.target.select()}
-        className={`w-16 rounded border px-1 py-1 text-center text-sm focus:outline-none ${
-          readOnly ? 'num-readonly cursor-not-allowed border-gray-200' : 'border-gray-200 focus:border-primary'
-        }`}
-      />
+      <button
+        type="button"
+        onClick={onClick}
+        className="mx-auto flex w-24 flex-col items-center gap-0.5 rounded-lg border border-gray-200 px-2 py-1 hover:border-primary hover:bg-primary/5"
+        title="Cliquer pour détailler les mouvements par type"
+      >
+        <span className={`flex items-center gap-1 font-bold ${tone}`}><Icon size={13} /> {total}</span>
+        {resume.length > 0 && (
+          <span className="line-clamp-1 max-w-full truncate text-[10px] text-gray-400">{resume.join(' · ')}</span>
+        )}
+      </button>
     </td>
+  )
+}
+
+// Fenêtre d'édition des mouvements typés d'un article (entrées ou sorties).
+function MouvementModal({ modal, anim, alim, autoSor, demandes, date, onClose, onChange }) {
+  if (!modal) return null
+  const { id, kind, dir, nom } = modal
+  const src = kind === 'animaux' ? anim : alim
+  const lignes = (dir === 'entree' ? src[id]?.entrees : src[id]?.sorties) || []
+
+  const types = kind === 'animaux'
+    ? (dir === 'entree' ? ENTREE_TYPES_ANIMAL : SORTIE_TYPES_ANIMAL)
+    : (dir === 'entree' ? ENTREE_TYPES_ALIMENT : SORTIE_TYPES_ALIMENT)
+
+  const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '' }])
+  const setLigne = (i, patch) => onChange(lignes.map((l, k) => (k === i ? { ...l, ...patch } : l)))
+  const delLigne = (i) => onChange(lignes.filter((_, k) => k !== i))
+
+  // Sorties auto issues des demandes approuvées (lecture seule).
+  const autoLignes = dir === 'sortie' && kind === 'animaux'
+    ? (demandes || []).filter((dm) => dm.statut === 'approuve' && dm.typeArticle === 'animal' && dm.articleId === id && dm.dateSortie === date)
+    : []
+
+  const total = sommeMouvements(lignes) + (dir === 'sortie' ? (autoSor || 0) : 0)
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`${dir === 'entree' ? '⬇️ Entrées' : '⬆️ Sorties'} — ${nom}`}
+      footer={<Button onClick={onClose}>Terminer</Button>}
+    >
+      <p className="mb-3 text-sm text-gray-500">
+        Total {dir === 'entree' ? 'des entrées' : 'des sorties'} : <strong className="text-gray-800">{total}</strong>
+      </p>
+
+      {autoLignes.length > 0 && (
+        <div className="mb-3 space-y-1 rounded-lg bg-amber-50 p-2">
+          <p className="flex items-center gap-1 text-xs font-semibold text-amber-700"><Lock size={12} /> Sorties automatiques (demandes approuvées)</p>
+          {autoLignes.map((dm) => (
+            <p key={dm.id} className="text-xs text-amber-800">🔄 {dm.qte} × Ventes — {dm.num} ({dm.motif})</p>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {lignes.length === 0 && <p className="text-sm text-gray-400">Aucun mouvement saisi. Ajoutez une ligne ci-dessous.</p>}
+        {lignes.map((l, i) => (
+          <div key={i} className="rounded-lg border border-gray-200 p-2">
+            <div className="flex items-center gap-2">
+              <Select className="flex-1" value={l.type} onChange={(e) => setLigne(i, { type: e.target.value })}>
+                {types.map((t) => <option key={t} value={t}>{t}</option>)}
+              </Select>
+              <Input type="number" min="0" className="w-20" value={l.qte}
+                onChange={(e) => setLigne(i, { qte: Math.max(0, parseInt(e.target.value) || 0) })} />
+              <button onClick={() => delLigne(i)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 size={16} /></button>
+            </div>
+            {labelRequis(l.type) && (
+              <Input
+                className="mt-2"
+                value={l.label || ''}
+                onChange={(e) => setLigne(i, { label: e.target.value })}
+                placeholder={l.type === 'Décès' ? 'Motif du décès (maladie, accident, prédateur…)' : 'Précisez (personne, motif…)'}
+                autoFocus
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter une ligne</Button>
+    </Modal>
   )
 }
 
@@ -362,7 +448,6 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
   const [prix, setPrix] = useState('')
   const [initial, setInitial] = useState('')
 
-  // Réinitialise à l'ouverture
   useEffect(() => {
     if (open) { setNom(''); setCatChoice(existingCats[0] || ''); setCatNew(''); setPrix(''); setInitial('') }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps

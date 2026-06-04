@@ -2,11 +2,10 @@
 // se passe sur l'application (saisies, factures, demandes, santé, utilisateurs,
 // connexions, logistique, événementiel…), avec sélecteur de période (calendrier
 // + plage personnalisée) et filtre par type d'événement.
-import { useMemo, useState } from 'react'
-import { FileSpreadsheet } from 'lucide-react'
+import { Fragment, useMemo, useState } from 'react'
+import { FileSpreadsheet, ChevronRight, ChevronDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import Select from '../../shared/forms/Select'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
@@ -24,6 +23,10 @@ const EVENTS = {
   APPROBATION:    { label: 'Demande approuvée', emoji: '✅' },
   REFUS:          { label: 'Demande refusée', emoji: '⛔' },
   SANTE:          { label: 'Fiche santé', emoji: '🩺' },
+  VACCIN:         { label: 'Vaccination / traitement', emoji: '💉' },
+  RDV:            { label: 'Rendez-vous programmé', emoji: '📅' },
+  RDV_FAIT:       { label: 'Rendez-vous clôturé', emoji: '✔️' },
+  STOCK_VACCIN:   { label: 'Stock vaccins / produits', emoji: '🧪' },
   USER_CREATE:    { label: 'Utilisateur créé', emoji: '👤' },
   USER_EDIT:      { label: 'Utilisateur modifié', emoji: '🪪' },
   USER_DELETE:    { label: 'Utilisateur supprimé', emoji: '🚫' },
@@ -50,6 +53,7 @@ export default function Journal() {
 
   const [type, setType] = useState('')      // filtre type d'événement
   const [who, setWho] = useState('')         // filtre utilisateur
+  const [openRow, setOpenRow] = useState(null) // ligne dépliée (détails)
   const { start, end, node: periodNode } = usePeriodSelect('30')
 
   // Types présents dans les données (pour alimenter le filtre).
@@ -78,9 +82,11 @@ export default function Journal() {
       lignes.map((l) => ({
         'Date / heure': formatDateTime(l._ms),
         Utilisateur: l.userNom,
+        Rôle: l.userRole || '',
         Module: moduleLabel(l.module),
         Événement: evInfo(l.action).label,
-        Détails: l.details || ''
+        Détails: l.details || '',
+        'Détails complets': metaToText(l.meta)
       })),
       'journal-activite.xlsx',
       'Journal'
@@ -112,20 +118,83 @@ export default function Journal() {
         </div>
       </div>
 
-      <Card className="p-0">
-        <Table
-          columns={[
-            { key: 'date', label: 'Date / heure', render: (r) => <span className="whitespace-nowrap font-mono text-xs">{formatDateTime(r._ms)}</span> },
-            { key: 'event', label: 'Événement', render: (r) => <span className="font-semibold">{evInfo(r.action).emoji} {evInfo(r.action).label}</span> },
-            { key: 'module', label: 'Module', render: (r) => <Badge tone="neutral">{moduleLabel(r.module)}</Badge> },
-            { key: 'user', label: 'Utilisateur', render: (r) => r.userNom || '—' },
-            { key: 'details', label: 'Détails', render: (r) => <span className="text-gray-600">{r.details || '—'}</span> }
-          ]}
-          rows={lignes}
-          rowKey="id"
-          empty="Aucun événement sur la période."
-        />
+      <Card className="overflow-x-auto p-0">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th className="w-6 px-2 py-2"></th>
+              <th className="px-3 py-2 text-left">Date / heure</th>
+              <th className="px-3 py-2 text-left">Événement</th>
+              <th className="px-3 py-2 text-left">Module</th>
+              <th className="px-3 py-2 text-left">Utilisateur</th>
+              <th className="px-3 py-2 text-left">Détails</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {lignes.length === 0 && (
+              <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Aucun événement sur la période.</td></tr>
+            )}
+            {lignes.map((r) => {
+              const hasMeta = r.meta && Object.keys(r.meta).length > 0
+              const isOpen = openRow === r.id
+              return (
+                <Fragment key={r.id}>
+                  <tr
+                    className={hasMeta ? 'cursor-pointer hover:bg-gray-50' : ''}
+                    onClick={() => hasMeta && setOpenRow(isOpen ? null : r.id)}
+                  >
+                    <td className="px-2 py-2 text-center text-gray-400">
+                      {hasMeta && (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{formatDateTime(r._ms)}</td>
+                    <td className="px-3 py-2 font-semibold">{evInfo(r.action).emoji} {evInfo(r.action).label}</td>
+                    <td className="px-3 py-2"><Badge tone="neutral">{moduleLabel(r.module)}</Badge></td>
+                    <td className="px-3 py-2">
+                      {r.userNom || '—'}
+                      {r.userRole && <span className="ml-1 text-xs capitalize text-gray-400">· {r.userRole}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{r.details || '—'}</td>
+                  </tr>
+                  {hasMeta && isOpen && (
+                    <tr className="bg-gray-50/70">
+                      <td></td>
+                      <td colSpan={5} className="px-3 py-2">
+                        <MetaDetail meta={r.meta} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
       </Card>
     </div>
   )
+}
+
+// Affiche le détail structuré (meta) d'un événement de façon lisible.
+function MetaDetail({ meta }) {
+  return (
+    <div className="space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs">
+      {Object.entries(meta).map(([k, v]) => (
+        <div key={k} className="flex gap-2">
+          <span className="min-w-[120px] font-semibold capitalize text-gray-500">{k}</span>
+          <span className="text-gray-700">
+            {v && typeof v === 'object'
+              ? <span className="space-y-0.5">{Object.entries(v).map(([k2, v2]) => <span key={k2} className="block">• <strong>{k2}</strong> : {String(v2)}</span>)}</span>
+              : String(v)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Convertit un objet meta en texte plat (export Excel).
+function metaToText(meta) {
+  if (!meta || typeof meta !== 'object') return ''
+  return Object.entries(meta)
+    .map(([k, v]) => `${k}: ${v && typeof v === 'object' ? Object.entries(v).map(([a, b]) => `${a}=${b}`).join('; ') : v}`)
+    .join(' | ')
 }

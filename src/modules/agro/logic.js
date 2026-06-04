@@ -43,6 +43,80 @@ export const finAnimal = ({ init, naiss, ent, sor, dec }) =>
 export const finAliment = ({ init, ent, sor }) =>
   Math.max(0, (init || 0) + (ent || 0) - (sor || 0))
 
+// ─────────── Mouvements typés (Entrées / Sorties) ───────────
+// Saisie journalière simplifiée à 4 colonnes : EF Initial · Entrées · Sorties · EF Final.
+// Chaque entrée et chaque sortie porte un TYPE choisi dans un menu déroulant ;
+// le type « Autres » ouvre un champ libre (personne / motif personnalisé).
+
+// Types d'ENTRÉES pour les animaux (la naissance est un cas d'entrée biologique).
+export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Mutation', 'Dons', 'Autres']
+// Types de SORTIES pour les animaux.
+export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', 'Perte', 'Dons', 'Autres']
+// Aliments / divers : pas de naissance ni de décès.
+export const ENTREE_TYPES_ALIMENT = ['Achat', 'Mutation', 'Dons', 'Autres']
+export const SORTIE_TYPES_ALIMENT = ['Consommation', 'Ventes', 'Perte', 'Mutation', 'Dons', 'Autres']
+
+// Le type « Autres » exige une précision (personne / motif personnalisé).
+// Le type « Décès » exige un motif (faithful à la règle d'origine).
+export const labelRequis = (type) => type === 'Autres' || type === 'Décès'
+
+// Somme des quantités d'une liste de mouvements.
+export const sommeMouvements = (lignes) =>
+  (lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
+
+// Somme des quantités d'un type précis.
+const sommeType = (lignes, type) =>
+  (lignes || []).filter((l) => l.type === type).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
+
+// Agrège des listes de mouvements typés en champs scalaires de compatibilité
+// (naiss / ent / sor / dec) + EF Final, attendus par le Dashboard et les Analyses.
+//  - `ent`  = entrées HORS naissances   - `sor` = sorties HORS décès
+//  - `naiss`= entrées de type Naissance  - `dec` = sorties de type Décès
+//  - autoSor = sorties auto issues des demandes approuvées (incluses dans le total)
+export function agregerAnimal({ init = 0, entrees = [], sorties = [] }, autoSor = 0) {
+  const totalEnt = sommeMouvements(entrees)
+  const naiss = sommeType(entrees, 'Naissance')
+  const decManuel = sommeType(sorties, 'Décès')
+  const totalSorManuel = sommeMouvements(sorties)
+  const totalSor = totalSorManuel + (autoSor || 0)
+  const ent = totalEnt - naiss
+  const sor = totalSor - decManuel // les sorties auto sont des ventes (jamais des décès)
+  const fin = Math.max(0, init + totalEnt - totalSor)
+  const decMotif = (sorties || [])
+    .filter((l) => l.type === 'Décès' && (l.label || '').trim())
+    .map((l) => l.label.trim())
+    .join(' ; ')
+  return { init, naiss, ent, sor, dec: decManuel, fin, decMotif }
+}
+
+// Agrégation aliments (pas de naissance / décès).
+export function agregerAliment({ init = 0, entrees = [], sorties = [] }) {
+  const ent = sommeMouvements(entrees)
+  const sor = sommeMouvements(sorties)
+  return { init, ent, sor, fin: Math.max(0, init + ent - sor) }
+}
+
+// Reconstruit des listes de mouvements typés à partir d'une saisie déjà enregistrée.
+// Gère les anciennes saisies (champs scalaires naiss/ent/sor/dec sans listes typées).
+export function mouvementsDepuisSaisie(saved, kind = 'animaux') {
+  if (saved?.entrees || saved?.sorties) {
+    return { entrees: saved.entrees || [], sorties: saved.sorties || [] }
+  }
+  if (!saved) return { entrees: [], sorties: [] }
+  const entrees = []
+  const sorties = []
+  if (kind === 'animaux') {
+    if (saved.naiss) entrees.push({ type: 'Naissance', qte: saved.naiss, label: '' })
+    if (saved.ent) entrees.push({ type: 'Achat', qte: saved.ent, label: '' })
+    if (saved.dec) sorties.push({ type: 'Décès', qte: saved.dec, label: saved.decMotif || '' })
+    // saved.sor inclut les sorties auto (demandes) → on ne les recrée pas en manuel.
+  } else {
+    if (saved.ent) entrees.push({ type: 'Achat', qte: saved.ent, label: '' })
+    if (saved.sor) sorties.push({ type: 'Consommation', qte: saved.sor, label: '' })
+  }
+  return { entrees, sorties }
+}
+
 // Dernier stock connu d'un article (pour le contrôle de disponibilité des demandes).
 export function dernierStock(inventaires, type, articleId) {
   const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
