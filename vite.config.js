@@ -14,6 +14,8 @@ export default defineConfig({
         // Ne pas servir le fallback SPA (index.html du portail) pour l'app
         // MAXI-AGRO embarquée : elle a son propre index.html sous /apps/.
         navigateFallbackDenylist: [/^\/apps\//],
+        // Handlers Web Push intégrés au service worker (notifications app fermée).
+        importScripts: ['push-handler.js'],
         // Mise en cache des appels Firebase pour le mode hors-ligne
         runtimeCaching: [
           {

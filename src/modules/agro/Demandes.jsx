@@ -18,6 +18,7 @@ import { useAgroStore } from './store/agroStore'
 import { addItem, updateItem, getAll, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
+import { pushToUsers } from '../../core/push'
 import { sendWhatsApp } from '../../core/whatsapp'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatDateTime } from '../../utils/formatters'
@@ -93,7 +94,15 @@ export default function Demandes() {
     // Alerte WhatsApp aux responsables disposant d'un numéro (si configuré côté serveur).
     try {
       const users = await getAll('users')
-      const phones = users.filter((u) => ['admin', 'controleur'].includes(u.role) && u.telephone).map((u) => u.telephone)
+      const managers = users.filter((u) => ['admin', 'controleur'].includes(u.role))
+      // Push (notification téléphone même app fermée) aux responsables.
+      pushToUsers(managers.map((u) => u.uid || u.login), {
+        title: 'Nouvelle demande de sortie',
+        body: `${demande.qte} × ${art.nom} — par ${user.nom} pour le ${form.dateSortie}`,
+        url: '/agro/demandes'
+      })
+      // WhatsApp (si configuré).
+      const phones = managers.filter((u) => u.telephone).map((u) => u.telephone)
       if (phones.length) sendWhatsApp({ phones, text: `🔔 LA TERMITIÈRE — Nouvelle demande de sortie\n${demande.qte} × ${art.nom}\nPar ${user.nom} pour le ${form.dateSortie}\nMotif : ${form.motif}` })
     } catch (e) { /* best effort */ }
     toast.success('📤 Demande soumise à la hiérarchie ✓')
@@ -124,10 +133,16 @@ export default function Demandes() {
     })
     // Alerte WhatsApp au demandeur (si numéro renseigné et serveur configuré).
     try {
+      const verdict = statut === 'approuve' ? 'APPROUVÉE ✅' : 'REFUSÉE ⛔'
+      // Push au demandeur (notification téléphone même app fermée).
+      pushToUsers([d.demandeur], {
+        title: statut === 'approuve' ? 'Demande approuvée ✅' : 'Demande refusée ⛔',
+        body: `${d.num} : ${d.qte} × ${d.articleNom}`,
+        url: '/agro/demandes'
+      })
       const users = await getAll('users')
       const dem = users.find((u) => (u.login === d.demandeur || u.uid === d.demandeur))
       if (dem?.telephone) {
-        const verdict = statut === 'approuve' ? 'APPROUVÉE ✅' : 'REFUSÉE ⛔'
         sendWhatsApp({ phones: [dem.telephone], text: `LA TERMITIÈRE — Votre demande ${d.num} est ${verdict}\n${d.qte} × ${d.articleNom}${commentaire.trim() ? '\nNote : ' + commentaire.trim() : ''}` })
       }
     } catch (e) { /* best effort */ }

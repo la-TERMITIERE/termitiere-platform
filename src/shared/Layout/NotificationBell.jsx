@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Check, BellRing } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useAuth } from '../../hooks/useAuth'
+import { subscribeToPush } from '../../core/push'
 
 const EMOJI = { demande: '📤', approuve: '✅', refus: '⛔', user: '👤', info: '🔔' }
 
@@ -23,10 +25,16 @@ function timeAgo(ms) {
 
 export default function NotificationBell() {
   const { mine, unread, markRead, markAllRead } = useNotifications()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [perm, setPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   const ref = useRef(null)
+
+  // Si l'autorisation est déjà accordée, (ré)abonner cet appareil au push.
+  useEffect(() => {
+    if (user && perm === 'granted') subscribeToPush(user)
+  }, [user, perm])
 
   // Fermeture au clic extérieur
   useEffect(() => {
@@ -38,7 +46,11 @@ export default function NotificationBell() {
 
   async function activerAlertes() {
     if (typeof Notification === 'undefined') return
-    try { const p = await Notification.requestPermission(); setPerm(p) } catch (e) { /* ignore */ }
+    try {
+      const p = await Notification.requestPermission()
+      setPerm(p)
+      if (p === 'granted') await subscribeToPush(user)
+    } catch (e) { /* ignore */ }
   }
 
   function onClickNotif(n) {
