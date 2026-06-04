@@ -9,7 +9,7 @@
 //  2. Mode DÉMO (aucune base) → auth locale contre DEFAULT_USERS (localStorage).
 import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
-import { getAll, getOne, setItem } from './db'
+import { getAll, getOne, setItem, addItem } from './db'
 
 // Comptes par défaut (amorçage au premier lancement / mode démo)
 export const DEFAULT_USERS = [
@@ -142,8 +142,12 @@ export const useAuthStore = create((set, get) => ({
       const u = sessionFromProfile(profile)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
       set({ user: u, role: u.role, modules: u.modules, isLoading: false })
-      // Trace de dernière connexion (best effort, non bloquant).
+      // Trace de dernière connexion + entrée au journal d'activité (non bloquant).
       setItem('users', id, { lastLogin: Date.now() }).catch(() => {})
+      addItem('audit_global', {
+        userId: u.uid, userNom: u.nom, module: 'portail',
+        action: 'CONNEXION', details: '', timestamp: Date.now()
+      }).catch(() => {})
       return true
     } catch (e) {
       set({ isLoading: false, error: 'Connexion impossible — vérifiez le réseau' })

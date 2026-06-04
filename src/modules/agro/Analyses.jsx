@@ -6,14 +6,8 @@ import StatCard from '../../shared/ui/StatCard'
 import Table from '../../shared/ui/Table'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
+import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-
-const PERIODES = [
-  { v: 30, label: '30 j' },
-  { v: 90, label: '90 j' },
-  { v: 180, label: '180 j' },
-  { v: 365, label: '1 an' }
-]
 
 export default function Analyses() {
   const { data: inventaires } = useCollection('agro_inventaires')
@@ -22,15 +16,9 @@ export default function Analyses() {
   const aliments = useAgroStore((s) => s.aliments)
 
   const [tab, setTab] = useState('animaux')
-  const [periode, setPeriode] = useState(90)
+  const { start, end, node: periodNode } = usePeriodSelect('90')
 
-  const limStr = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - periode)
-    return d.toISOString().split('T')[0]
-  }, [periode])
-
-  const invPeriode = useMemo(() => inventaires.filter((i) => i.date >= limStr), [inventaires, limStr])
+  const invPeriode = useMemo(() => inventaires.filter((i) => i.date >= start && i.date <= end), [inventaires, start, end])
 
   // ── Animaux ──
   const totauxAnim = useMemo(() => {
@@ -61,7 +49,7 @@ export default function Analyses() {
   // ── Clients : CA par client sur la période ──
   const clients = useMemo(() => {
     const map = {}
-    factures.filter((f) => f.date >= limStr).forEach((f) => {
+    factures.filter((f) => f.date >= start && f.date <= end).forEach((f) => {
       const nom = f.client?.nom || 'Inconnu'
       if (!map[nom]) map[nom] = { nom, ca: 0, nb: 0, derniere: f.date }
       map[nom].ca += f.totalTTC || 0
@@ -69,7 +57,7 @@ export default function Analyses() {
       if (f.date > map[nom].derniere) map[nom].derniere = f.date
     })
     return Object.values(map).sort((a, b) => b.ca - a.ca)
-  }, [factures, limStr])
+  }, [factures, start, end])
   const caTotal = clients.reduce((s, c) => s + c.ca, 0)
   const panierMoyen = clients.reduce((s, c) => s + c.nb, 0) ? caTotal / clients.reduce((s, c) => s + c.nb, 0) : 0
 
@@ -81,11 +69,7 @@ export default function Analyses() {
             <button key={v} onClick={() => setTab(v)} className={`rounded px-3 py-1.5 text-sm font-semibold ${tab === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>{l}</button>
           ))}
         </div>
-        <div className="ml-auto flex gap-1">
-          {PERIODES.map((p) => (
-            <button key={p.v} onClick={() => setPeriode(p.v)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${periode === p.v ? 'bg-secondary text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>{p.label}</button>
-          ))}
-        </div>
+        <div className="ml-auto">{periodNode}</div>
       </div>
 
       {tab === 'animaux' && (

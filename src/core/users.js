@@ -9,6 +9,7 @@ import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
 import { DEFAULT_USERS, hashPassword } from './auth'
 import { getAll, setItem, removeItem } from './db'
+import { audit } from './audit'
 
 // Prépare le profil à enregistrer : hache le mot de passe s'il est fourni et ne
 // stocke JAMAIS le mot de passe en clair. Si `pass` est vide (édition sans
@@ -63,8 +64,10 @@ export const useUsersStore = create((set, get) => ({
       return
     }
     const id = u.uid || u.id || u.login
+    const existed = get().users.some((x) => (x.uid || x.login) === id)
     const profile = await toProfile({ ...u, uid: id })
     await setItem('users', id, profile)
+    await audit('portail', existed ? 'USER_EDIT' : 'USER_CREATE', `${u.login} — ${u.role}`)
     await get().load()
   },
 
@@ -76,6 +79,7 @@ export const useUsersStore = create((set, get) => ({
       return
     }
     await removeItem('users', u.uid || u.id || u.login)
+    await audit('portail', 'USER_DELETE', `${u.login} — ${u.nom || ''}`)
     await get().load()
   }
 }))
