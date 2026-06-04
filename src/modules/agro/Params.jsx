@@ -11,11 +11,12 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useAgroStore } from './store/agroStore'
 import { isFirebaseConfigured } from '../../core/firebase'
-import { getAll, setItem } from '../../core/db'
+import { getAll, setItem, removeItem } from '../../core/db'
+import { audit } from '../../core/audit'
 import { exportExcel } from '../../utils/exportExcel'
 import { migrerDepuisFirebase, migrerDepuisDB } from '../../utils/migration'
 import { toast } from '../../core/notifications'
-import { formatMoney, genId } from '../../utils/formatters'
+import { genId } from '../../utils/formatters'
 import { CAT_ANIMAUX, CAT_ALIMENTS } from './data'
 
 const TABS = [
@@ -51,12 +52,13 @@ function ReferentielTab({ kind }) {
   const cats = kind === 'espece' ? CAT_ANIMAUX : CAT_ALIMENTS
   const [modal, setModal] = useState(null)
 
-  function openNew() { setModal({ id: '', nom: '', cat: cats[0], prix: 0, isNew: true }) }
+  function openNew() { setModal({ id: '', nom: '', cat: cats[0], isNew: true }) }
 
   function submit() {
     if (!modal.nom.trim()) return toast.error('Nom requis')
     const id = modal.isNew ? (modal.nom.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 24) + '_' + genId().slice(0, 3).toLowerCase()) : modal.id
-    save({ id, nom: modal.nom.trim(), cat: modal.cat, prix: parseInt(modal.prix) || 0 })
+    // Plus de prix par article : le prix est saisi directement sur la facture.
+    save({ id, nom: modal.nom.trim(), cat: modal.cat, prix: 0 })
     toast.success('Enregistré ✓')
     setModal(null)
   }
@@ -69,7 +71,6 @@ function ReferentielTab({ kind }) {
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'cat', label: 'Catégorie', render: (r) => <Badge tone="neutral">{r.cat}</Badge> },
-            { key: 'prix', label: 'Prix', align: 'right', render: (r) => formatMoney(r.prix) },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ ...r, isNew: false })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
@@ -88,7 +89,6 @@ function ReferentielTab({ kind }) {
           <>
             <FormGroup label="Nom" required><Input value={modal.nom} onChange={(e) => setModal((m) => ({ ...m, nom: e.target.value }))} /></FormGroup>
             <FormGroup label="Catégorie"><Select value={modal.cat} onChange={(e) => setModal((m) => ({ ...m, cat: e.target.value }))} options={cats.map((c) => ({ value: c, label: c }))} /></FormGroup>
-            <FormGroup label="Prix (FCFA)"><Input type="number" min="0" value={modal.prix} onChange={(e) => setModal((m) => ({ ...m, prix: e.target.value }))} /></FormGroup>
           </>
         )}
       </Modal>
@@ -101,7 +101,29 @@ function DonneesTab() {
   const fileRef = useRef(null)
   const oldFileRef = useRef(null)
   const [migrating, setMigrating] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante']
+  // Collections vidées par la réinitialisation totale (tout repart à zéro).
+  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins', 'audit_global', 'notifications']
+
+  async function reinitialiserTout() {
+    if (!confirm('⚠️ ATTENTION : ceci supprime DÉFINITIVEMENT toutes les saisies, factures, demandes, fiches santé, le stock de vaccins, le journal et les notifications. Tout repart à zéro (000000). Continuer ?')) return
+    if (!confirm('Dernière confirmation : action IRRÉVERSIBLE. Réinitialiser maintenant ?')) return
+    setResetting(true)
+    try {
+      let n = 0
+      for (const c of RESET_COLS) {
+        const rows = await getAll(c)
+        for (const row of rows) { await removeItem(c, row.id); n++ }
+      }
+      await audit('agro', 'RESET', `Réinitialisation totale des données — ${n} enregistrement(s) supprimé(s)`)
+      toast.success('Toutes les données ont été réinitialisées ✓ (tout est à zéro)')
+    } catch (e) {
+      toast.error('Erreur : ' + e.message)
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const recapMsg = (r) =>
     `${r.inventaires} saisie(s), ${r.factures} facture(s), ${r.demandes} demande(s), ${r.sante} fiche(s) santé`
@@ -224,8 +246,19 @@ function DonneesTab() {
       </Card>
       <Card title="Réinitialisation">
         <p className="mb-3 text-sm text-gray-500">Restaure les espèces et aliments aux valeurs d'usine.</p>
-        <Button variant="danger" onClick={() => { if (confirm('Réinitialiser le référentiel ?')) { useAgroStore.getState().resetReferentiel(); toast.success('Référentiel réinitialisé') } }}>
+        <Button variant="outline" onClick={() => { if (confirm('Réinitialiser le référentiel ?')) { useAgroStore.getState().resetReferentiel(); toast.success('Référentiel réinitialisé') } }}>
           <RotateCcw size={16} /> Réinitialiser le référentiel
+        </Button>
+      </Card>
+
+      <Card title="⚠️ Tout réinitialiser" className="md:col-span-2 border border-red-200">
+        <p className="mb-3 text-sm text-gray-500">
+          Remet <strong>toutes les données à zéro</strong> : saisies, factures, demandes, fiches santé,
+          stock de vaccins, journal d'activité et notifications. Le référentiel des espèces/aliments est conservé.
+          <strong className="text-red-600"> Cette action est irréversible.</strong>
+        </p>
+        <Button variant="danger" onClick={reinitialiserTout} loading={resetting}>
+          <RotateCcw size={16} /> Réinitialiser toutes les données
         </Button>
       </Card>
     </div>

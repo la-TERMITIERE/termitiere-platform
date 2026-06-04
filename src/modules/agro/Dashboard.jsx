@@ -244,7 +244,6 @@ function CategorieDetail({ cat, onClose, especes, dernier, invPeriode }) {
                   <th className="px-2 py-2 text-center">Sorties</th>
                   <th className="px-2 py-2 text-center">Décès</th>
                   <th className="px-2 py-2 text-center">EF Final</th>
-                  <th className="px-2 py-2 text-right">Prix unit.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -257,7 +256,6 @@ function CategorieDetail({ cat, onClose, especes, dernier, invPeriode }) {
                     <td className="px-2 py-1.5 text-center text-amber-600">{l.sor}</td>
                     <td className="px-2 py-1.5 text-center text-red-600">{l.dec}</td>
                     <td className="px-2 py-1.5 text-center font-bold" style={{ color: data.color }}>{l.fin}</td>
-                    <td className="px-2 py-1.5 text-right text-gray-500">{formatNumber(l.prix)} F</td>
                   </tr>
                 ))}
               </tbody>

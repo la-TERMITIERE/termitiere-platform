@@ -67,7 +67,8 @@ export default function Factures() {
   }
   function pickArticle(i, id) {
     const art = getArticle(id)
-    setLigne(i, { articleId: id, article: art?.nom || '', prixUnit: art?.prix || 0 })
+    // Le prix n'est plus prérempli : l'utilisateur saisit lui-même le prix de l'animal.
+    setLigne(i, { articleId: id, article: art?.nom || '' })
   }
   function addLigne() {
     setModal((m) => ({ ...m, facture: { ...m.facture, lignes: [...m.facture.lignes, { articleId: '', article: '', qte: 1, prixUnit: 0, total: 0 }] } }))

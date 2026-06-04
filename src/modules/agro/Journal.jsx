@@ -27,6 +27,7 @@ const EVENTS = {
   RDV:            { label: 'Rendez-vous programmé', emoji: '📅' },
   RDV_FAIT:       { label: 'Rendez-vous clôturé', emoji: '✔️' },
   STOCK_VACCIN:   { label: 'Stock vaccins / produits', emoji: '🧪' },
+  RESET:          { label: 'Réinitialisation des données', emoji: '♻️' },
   USER_CREATE:    { label: 'Utilisateur créé', emoji: '👤' },
   USER_EDIT:      { label: 'Utilisateur modifié', emoji: '🪪' },
   USER_DELETE:    { label: 'Utilisateur supprimé', emoji: '🚫' },
@@ -56,18 +57,21 @@ export default function Journal() {
   const [openRow, setOpenRow] = useState(null) // ligne dépliée (détails)
   const { start, end, node: periodNode } = usePeriodSelect('30')
 
+  // On ignore les événements de connexion (qui s'est connecté quand) : non pertinents ici.
+  const evenements = useMemo(() => events.filter((e) => e.action !== 'CONNEXION'), [events])
+
   // Types présents dans les données (pour alimenter le filtre).
   const typesPresents = useMemo(
-    () => [...new Set(events.map((e) => e.action).filter(Boolean))].sort(),
-    [events]
+    () => [...new Set(evenements.map((e) => e.action).filter(Boolean))].sort(),
+    [evenements]
   )
   const usersPresents = useMemo(
-    () => [...new Set(events.map((e) => e.userNom).filter(Boolean))].sort(),
-    [events]
+    () => [...new Set(evenements.map((e) => e.userNom).filter(Boolean))].sort(),
+    [evenements]
   )
 
   const lignes = useMemo(() => {
-    return events
+    return evenements
       .map((e) => ({ ...e, _ms: tsOf(e), _day: dayOf(tsOf(e)) }))
       .filter((e) =>
         (e._day >= start && e._day <= end) &&
@@ -75,7 +79,7 @@ export default function Journal() {
         (!who || e.userNom === who)
       )
       .sort((a, b) => b._ms - a._ms)
-  }, [events, start, end, type, who])
+  }, [evenements, start, end, type, who])
 
   function exportXLSX() {
     exportExcel(

@@ -11,7 +11,7 @@
 //  - L'EF Final du jour devient l'EF Initial du jour suivant.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Save, Send, CheckCircle2, Plus, Trash2, ArrowDownToLine, ArrowUpFromLine, Lock } from 'lucide-react'
+import { Save, Send, CheckCircle2, Plus, Trash2, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -110,12 +110,12 @@ export default function Saisie() {
   const autoSorOf = (id) => autoSorties(demandes, id, date)
 
   // Création d'un nouvel article (+ éventuelle nouvelle catégorie).
-  function handleAddArticle({ nom, cat, prix, initial }) {
+  function handleAddArticle({ nom, cat, initial }) {
     const kind = addModal.kind
     const base = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
     const id = (base || 'article') + '_' + genId().slice(0, 3).toLowerCase()
-    const article = { id, nom: nom.trim(), cat: cat.trim().toUpperCase(), prix: parseInt(prix) || 0 }
+    const article = { id, nom: nom.trim(), cat: cat.trim().toUpperCase(), prix: 0 }
     if (kind === 'animal') saveEspece(article)
     else saveAliment(article)
     setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
@@ -216,9 +216,9 @@ export default function Saisie() {
                           }`}
                         />
                       </td>
-                      <MvtCell total={totEnt} dir="entree" lignes={d.entrees}
+                      <MvtCell total={totEnt} dir="entree"
                         onClick={() => setMvtModal({ id: a.id, kind, dir: 'entree', nom: a.nom })} />
-                      <MvtCell total={totSor} dir="sortie" lignes={d.sorties} auto={autoSor}
+                      <MvtCell total={totSor} dir="sortie"
                         onClick={() => setMvtModal({ id: a.id, kind, dir: 'sortie', nom: a.nom })} />
                       <td className="px-2 py-1.5 text-center font-bold text-primary-dark">{fin}</td>
                     </tr>
@@ -257,11 +257,6 @@ export default function Saisie() {
           <strong>{Object.values(existing.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)} têtes</strong>
         </div>
       )}
-
-      <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
-        💡 Cliquez sur une cellule <strong>Entrées</strong> ou <strong>Sorties</strong> pour détailler les mouvements par type
-        (Achat, Naissance, Vente, Décès, Mutation, Perte, Dons… ou <strong>Autres</strong> avec précision).
-      </p>
 
       {/* Onglets + ajout d'article */}
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200">
@@ -345,24 +340,18 @@ function FragmentCat({ cat, color, span, children }) {
   )
 }
 
-// Cellule Entrées / Sorties : bouton affichant le total + un résumé des types.
-function MvtCell({ total, dir, lignes = [], auto = 0, onClick }) {
-  const Icon = dir === 'entree' ? ArrowDownToLine : ArrowUpFromLine
+// Cellule Entrées / Sorties : bouton affichant uniquement le total (cliquer = détail).
+function MvtCell({ total, dir, onClick }) {
   const tone = dir === 'entree' ? 'text-green-700' : 'text-amber-700'
-  const resume = (lignes || []).filter((l) => l.qte).map((l) => `${l.type} ${l.qte}`)
-  if (auto) resume.push(`Ventes ${auto} 🔄`)
   return (
     <td className="px-2 py-1.5 text-center">
       <button
         type="button"
         onClick={onClick}
-        className="mx-auto flex w-24 flex-col items-center gap-0.5 rounded-lg border border-gray-200 px-2 py-1 hover:border-primary hover:bg-primary/5"
+        className="mx-auto flex w-16 items-center justify-center rounded-lg border border-gray-200 px-2 py-1 hover:border-primary hover:bg-primary/5"
         title="Cliquer pour détailler les mouvements par type"
       >
-        <span className={`flex items-center gap-1 font-bold ${tone}`}><Icon size={13} /> {total}</span>
-        {resume.length > 0 && (
-          <span className="line-clamp-1 max-w-full truncate text-[10px] text-gray-400">{resume.join(' · ')}</span>
-        )}
+        <span className={`font-bold ${tone}`}>{total}</span>
       </button>
     </td>
   )
@@ -445,11 +434,10 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
   const [nom, setNom] = useState('')
   const [catChoice, setCatChoice] = useState('')
   const [catNew, setCatNew] = useState('')
-  const [prix, setPrix] = useState('')
   const [initial, setInitial] = useState('')
 
   useEffect(() => {
-    if (open) { setNom(''); setCatChoice(existingCats[0] || ''); setCatNew(''); setPrix(''); setInitial('') }
+    if (open) { setNom(''); setCatChoice(existingCats[0] || ''); setCatNew(''); setInitial('') }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cat = catChoice === '__new__' ? catNew : catChoice
@@ -457,7 +445,7 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
   function submit() {
     if (!nom.trim()) return toast.error('Nom requis')
     if (!cat.trim()) return toast.error('Catégorie requise')
-    onSave({ nom, cat, prix, initial })
+    onSave({ nom, cat, initial })
   }
 
   return (
@@ -483,14 +471,9 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
           </FormGroup>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <FormGroup label="Prix unitaire (FCFA)">
-          <Input type="number" min="0" value={prix} onChange={(e) => setPrix(e.target.value)} placeholder="0" />
-        </FormGroup>
-        <FormGroup label="Effectif initial" hint="Stock de départ à cette date">
-          <Input type="number" min="0" value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="0" />
-        </FormGroup>
-      </div>
+      <FormGroup label="Effectif initial" hint="Stock de départ à cette date">
+        <Input type="number" min="0" value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="0" />
+      </FormGroup>
       {catChoice === '__new__' && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           La nouvelle catégorie « {(catNew || '…').toUpperCase()} » apparaîtra automatiquement dans le Dashboard et les analyses.
