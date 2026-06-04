@@ -21,7 +21,7 @@ const ROLES = [
   { value: 'agent', label: 'Agent' }
 ]
 
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], secteur: '', actif: true })
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], secteur: '', telephone: '', actif: true })
 
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
@@ -126,6 +126,9 @@ export default function Utilisateurs() {
               </FormGroup>
               <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
               <FormGroup label="Secteur"><Input value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} /></FormGroup>
+              <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 — pour les alertes WhatsApp">
+                <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />
+              </FormGroup>
               <FormGroup label={modal.isNew ? 'Mot de passe' : 'Réinitialiser le mot de passe'} className="col-span-2" hint={modal.isNew ? '' : 'Laissez vide pour conserver l\'actuel'}>
                 <Input type="text" value={modal.data.pass} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, pass: e.target.value } }))} placeholder="••••••" />
               </FormGroup>

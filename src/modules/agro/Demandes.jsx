@@ -15,9 +15,10 @@ import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
-import { addItem, updateItem, ts } from '../../core/db'
+import { addItem, updateItem, getAll, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
+import { sendWhatsApp } from '../../core/whatsapp'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatDateTime } from '../../utils/formatters'
 import { dernierStock } from './logic'
@@ -89,6 +90,12 @@ export default function Demandes() {
       excludeUid: user.uid,
       link: '/agro/demandes'
     })
+    // Alerte WhatsApp aux responsables disposant d'un numéro (si configuré côté serveur).
+    try {
+      const users = await getAll('users')
+      const phones = users.filter((u) => ['admin', 'controleur'].includes(u.role) && u.telephone).map((u) => u.telephone)
+      if (phones.length) sendWhatsApp({ phones, text: `🔔 LA TERMITIÈRE — Nouvelle demande de sortie\n${demande.qte} × ${art.nom}\nPar ${user.nom} pour le ${form.dateSortie}\nMotif : ${form.motif}` })
+    } catch (e) { /* best effort */ }
     toast.success('📤 Demande soumise à la hiérarchie ✓')
     setCreateOpen(false)
   }
@@ -115,6 +122,15 @@ export default function Demandes() {
       excludeUid: user.uid,
       link: '/agro/demandes'
     })
+    // Alerte WhatsApp au demandeur (si numéro renseigné et serveur configuré).
+    try {
+      const users = await getAll('users')
+      const dem = users.find((u) => (u.login === d.demandeur || u.uid === d.demandeur))
+      if (dem?.telephone) {
+        const verdict = statut === 'approuve' ? 'APPROUVÉE ✅' : 'REFUSÉE ⛔'
+        sendWhatsApp({ phones: [dem.telephone], text: `LA TERMITIÈRE — Votre demande ${d.num} est ${verdict}\n${d.qte} × ${d.articleNom}${commentaire.trim() ? '\nNote : ' + commentaire.trim() : ''}` })
+      }
+    } catch (e) { /* best effort */ }
     if (statut === 'approuve')
       toast.success(`✅ Approuvé — ${d.qte} × ${d.articleNom} sortira le ${d.dateSortie}`)
     else toast.error('Demande refusée')
