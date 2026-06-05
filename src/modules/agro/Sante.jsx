@@ -5,7 +5,7 @@
 //   • Rendez-vous : suivis à venir + rappels envoyés à celui qui a enregistré.
 //   • Bilan : synthèse (interventions par type, animaux traités, alertes).
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Syringe, Boxes, CalendarClock, BarChart3, AlertTriangle, CheckCircle2, Bell } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Syringe, Boxes, CalendarClock, BarChart3, AlertTriangle, CheckCircle2, Bell } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -23,6 +23,7 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
+import { exportExcel } from '../../utils/exportExcel'
 import { todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const TYPES = [
@@ -163,6 +164,22 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
     })
   }
 
+  function exportXLSX() {
+    exportExcel(liste.map((f) => ({
+      Date: formatDateShort(f.date),
+      Espèce: f.especeNom,
+      Type: labelOf(f.type).replace(/^[^\sA-Za-zÀ-ÿ]+\s*/, ''),
+      Produit: f.produit,
+      Dosage: f.dosage || '',
+      'Nb animaux': f.nombreAnimaux,
+      'N° animaux': f.animauxIds || '',
+      Vétérinaire: f.veterinaire || '',
+      'Prochain RDV': f.prochainRdv ? formatDateShort(f.prochainRdv) : '',
+      Notes: f.description || ''
+    })), 'rapport-sanitaire.xlsx', 'Santé')
+    toast.success('Rapport santé Excel généré ✓')
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -171,6 +188,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
           {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
         <div className="ml-auto flex gap-2">
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Rapport Excel</Button>
           <Button variant="outline" onClick={exportPDF}><FileDown size={16} /> Rapport PDF</Button>
           <Button onClick={openCreate}><Plus size={16} /> Nouvelle intervention</Button>
         </div>

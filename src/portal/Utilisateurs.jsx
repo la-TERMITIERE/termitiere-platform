@@ -46,9 +46,13 @@ export default function Utilisateurs() {
     if (modal.isNew && !u.pass) return toast.error('Définissez un mot de passe')
     // L'admin a accès à tous les modules par défaut
     const modules = u.role === 'admin' ? MODULES.map((m) => m.id) : u.modules
-    await saveUser({ ...u, modules })
-    toast.success(modal.isNew ? 'Utilisateur créé ✓' : 'Utilisateur mis à jour ✓')
-    setModal(null)
+    try {
+      await saveUser({ ...u, modules })
+      toast.success(modal.isNew ? 'Utilisateur créé ✓' : 'Utilisateur mis à jour ✓')
+      setModal(null)
+    } catch (e) {
+      toast.error("Échec de l'enregistrement : " + (e?.message || e))
+    }
   }
 
   async function supprimer(u) {

@@ -1,13 +1,19 @@
-// Analyses MAXI-AGRO — onglets Animaux | Aliments | Clients.
+// Analyses MAXI-AGRO — onglets Animaux | Aliments | Clients + export de rapports Excel.
 import { useMemo, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
+import { FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import Button from '../../shared/ui/Button'
 import StatCard from '../../shared/ui/StatCard'
 import Table from '../../shared/ui/Table'
+import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
+import { exportExcelMulti } from '../../utils/exportExcel'
+import { toast } from '../../core/notifications'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
+import { construireRapport } from './rapport'
 
 export default function Analyses() {
   const { data: inventaires } = useCollection('agro_inventaires')
@@ -16,9 +22,17 @@ export default function Analyses() {
   const aliments = useAgroStore((s) => s.aliments)
 
   const [tab, setTab] = useState('animaux')
+  const [gran, setGran] = useState('jour')
   const { start, end, node: periodNode } = usePeriodSelect('90')
 
   const invPeriode = useMemo(() => inventaires.filter((i) => i.date >= start && i.date <= end), [inventaires, start, end])
+
+  function exporterRapport() {
+    const { sheets, fichier } = construireRapport({ inventaires, especes, aliments, factures, start, end, gran })
+    const vide = sheets.every((s) => !s.rows.length || (s.rows.length === 1 && (s.rows[0]['N°'] === '—' || s.rows[0]['Période'] === '—')))
+    exportExcelMulti(sheets, fichier)
+    toast.success(vide ? 'Rapport généré (période sans données) ✓' : 'Rapport Excel généré ✓')
+  }
 
   // ── Animaux ──
   const totauxAnim = useMemo(() => {
@@ -71,6 +85,23 @@ export default function Analyses() {
         </div>
         <div className="ml-auto">{periodNode}</div>
       </div>
+
+      {/* Export de rapports propres en Excel (animaux, aliments, évolution, factures) */}
+      <Card className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Type de rapport</label>
+          <Select className="w-auto" value={gran} onChange={(e) => setGran(e.target.value)}>
+            <option value="jour">Journalier</option>
+            <option value="semaine">Hebdomadaire</option>
+            <option value="mois">Mensuel</option>
+          </Select>
+        </div>
+        <p className="flex-1 text-xs text-gray-500">
+          Génère un fichier Excel propre couvrant la période sélectionnée : synthèse, animaux par espèce,
+          aliments &amp; divers, évolution {gran === 'jour' ? 'jour par jour' : gran === 'semaine' ? 'semaine par semaine' : 'mois par mois'} et factures.
+        </p>
+        <Button onClick={exporterRapport}><FileSpreadsheet size={16} /> Exporter le rapport Excel</Button>
+      </Card>
 
       {tab === 'animaux' && (
         <>

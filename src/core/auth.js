@@ -9,7 +9,14 @@
 //  2. Mode DÉMO (aucune base) → auth locale contre DEFAULT_USERS (localStorage).
 import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
-import { getAll, getOne, setItem, addItem } from './db'
+import { getAll, setItem, addItem } from './db'
+
+// Recherche un profil par son identifiant de connexion (champ `login`).
+// Robuste aux identifiants contenant des caractères interdits comme clé RTDB.
+async function findByLogin(login) {
+  const rows = await getAll('users')
+  return rows.find((u) => u.login === login) || null
+}
 
 // Comptes par défaut (amorçage au premier lancement / mode démo)
 export const DEFAULT_USERS = [
@@ -126,11 +133,13 @@ export const useAuthStore = create((set, get) => ({
 
     // ── Mode cloud (Realtime Database) ──
     try {
-      let profile = await getOne('users', id)
+      // On recherche par CHAMP `login` (et non par clé), car un identifiant peut
+      // contenir des caractères interdits dans une clé RTDB (e-mail, point…).
+      let profile = await findByLogin(id)
       if (!profile) {
         // Collection vide au tout premier login → amorçage puis nouvel essai.
         await ensureSeed()
-        profile = await getOne('users', id)
+        profile = await findByLogin(id)
       }
       if (!profile) { set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' }); return false }
       if (profile.actif === false) { set({ isLoading: false, error: 'Compte désactivé par l\'administrateur' }); return false }
@@ -143,7 +152,8 @@ export const useAuthStore = create((set, get) => ({
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
       set({ user: u, role: u.role, modules: u.modules, isLoading: false })
       // Trace de dernière connexion + entrée au journal d'activité (non bloquant).
-      setItem('users', id, { lastLogin: Date.now() }).catch(() => {})
+      // On écrit avec la CLÉ technique du profil (jamais l'identifiant brut).
+      setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})
       addItem('audit_global', {
         userId: u.uid, userNom: u.nom, module: 'portail',
         action: 'CONNEXION', details: '', timestamp: Date.now()
