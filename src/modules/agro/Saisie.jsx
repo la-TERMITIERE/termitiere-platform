@@ -29,6 +29,7 @@ import { CAT_ANIMAUX, CAT_ALIMENTS, catColor } from './data'
 import {
   previousInventoryDate, getInventaire, autoSorties,
   agregerAnimal, agregerAliment, sommeMouvements, mouvementsDepuisSaisie,
+  mutationsEntrantes, mutationsEntrantesDetail,
   ENTREE_TYPES_ANIMAL, SORTIE_TYPES_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_ALIMENT, labelRequis
 } from './logic'
 
@@ -108,6 +109,9 @@ export default function Saisie() {
   }, [aliments])
 
   const autoSorOf = (id) => autoSorties(demandes, id, date)
+  // Mutations entrantes par espèce de destination (générées par les mutations
+  // sortantes des autres espèces : −1 à l'origine, +1 à la destination).
+  const mutIn = useMemo(() => mutationsEntrantes(anim), [anim])
 
   // Création d'un nouvel article (+ éventuelle nouvelle catégorie).
   function handleAddArticle({ nom, cat, initial }) {
@@ -142,6 +146,12 @@ export default function Saisie() {
     const ko = articleManquant(especes, anim) || articleManquant(aliments, alim)
     if (ko) return toast.error(`Précisez le motif « ${ko.type} » — ${ko.nom}`)
 
+    // Validation : toute mutation sortante doit désigner une espèce de destination.
+    const mutSansCible = especes.find((e) =>
+      (anim[e.id]?.sorties || []).some((l) => l.type === 'Mutation' && (parseInt(l.qte) || 0) > 0 && !l.cible)
+    )
+    if (mutSansCible) return toast.error(`Choisissez l'espèce de destination de la mutation — ${mutSansCible.nom}`)
+
     setSaving(true)
     try {
       let totEnt = 0, totSor = 0
@@ -149,9 +159,10 @@ export default function Saisie() {
       especes.forEach((e) => {
         const d = anim[e.id] || { init: 0, entrees: [], sorties: [] }
         const autoSor = autoSorOf(e.id)
-        const agg = agregerAnimal(d, autoSor)
+        const mIn = mutIn[e.id] || 0
+        const agg = agregerAnimal(d, autoSor, mIn)
         animaux[e.id] = { ...agg, entrees: d.entrees || [], sorties: d.sorties || [], autoSor }
-        totEnt += sommeMouvements(d.entrees)
+        totEnt += sommeMouvements(d.entrees) + mIn
         totSor += sommeMouvements(d.sorties) + autoSor
       })
       const alimentsOut = {}
@@ -199,7 +210,8 @@ export default function Saisie() {
                 {articles.filter((a) => a.cat === cat).map((a) => {
                   const d = src[a.id] || { init: 0, entrees: [], sorties: [] }
                   const autoSor = kind === 'animaux' ? autoSorOf(a.id) : 0
-                  const totEnt = sommeMouvements(d.entrees)
+                  const mIn = kind === 'animaux' ? (mutIn[a.id] || 0) : 0
+                  const totEnt = sommeMouvements(d.entrees) + mIn
                   const totSor = sommeMouvements(d.sorties) + autoSor
                   const fin = Math.max(0, (d.init || 0) + totEnt - totSor)
                   return (
@@ -288,7 +300,11 @@ export default function Saisie() {
         modal={mvtModal}
         anim={anim}
         alim={alim}
+        especes={especes}
         autoSor={mvtModal && mvtModal.kind === 'animaux' && mvtModal.dir === 'sortie' ? autoSorOf(mvtModal.id) : 0}
+        mutIn={mvtModal && mvtModal.kind === 'animaux' ? (mutIn[mvtModal.id] || 0) : 0}
+        mutInDetail={mvtModal && mvtModal.kind === 'animaux' && mvtModal.dir === 'entree'
+          ? mutationsEntrantesDetail(anim, especes, mvtModal.id) : []}
         demandes={demandes}
         date={date}
         onClose={() => setMvtModal(null)}
@@ -311,13 +327,20 @@ export default function Saisie() {
 
 // Détail lisible des mouvements (pour le journal d'activité).
 function detailMouvements(especes, anim, autoSorOf) {
+  const nomDe = (id) => especes.find((e) => e.id === id)?.nom || id
+  const mIn = mutationsEntrantes(anim)
   const out = {}
   especes.forEach((e) => {
     const d = anim[e.id]
     if (!d) return
     const parts = []
     ;(d.entrees || []).forEach((l) => l.qte && parts.push(`+${l.qte} ${l.type}${l.label ? ` (${l.label})` : ''}`))
-    ;(d.sorties || []).forEach((l) => l.qte && parts.push(`−${l.qte} ${l.type}${l.label ? ` (${l.label})` : ''}`))
+    if (mIn[e.id]) parts.push(`+${mIn[e.id]} Mutation (entrantes)`)
+    ;(d.sorties || []).forEach((l) => {
+      if (!l.qte) return
+      if (l.type === 'Mutation') parts.push(`−${l.qte} Mutation (→ ${nomDe(l.cible)})`)
+      else parts.push(`−${l.qte} ${l.type}${l.label ? ` (${l.label})` : ''}`)
+    })
     const auto = autoSorOf(e.id)
     if (auto) parts.push(`−${auto} Ventes (demandes approuvées)`)
     if (parts.length) out[e.nom] = parts.join(', ')
@@ -358,7 +381,7 @@ function MvtCell({ total, dir, onClick }) {
 }
 
 // Fenêtre d'édition des mouvements typés d'un article (entrées ou sorties).
-function MouvementModal({ modal, anim, alim, autoSor, demandes, date, onClose, onChange }) {
+function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, mutInDetail = [], demandes, date, onClose, onChange }) {
   if (!modal) return null
   const { id, kind, dir, nom } = modal
   const src = kind === 'animaux' ? anim : alim
@@ -368,7 +391,7 @@ function MouvementModal({ modal, anim, alim, autoSor, demandes, date, onClose, o
     ? (dir === 'entree' ? ENTREE_TYPES_ANIMAL : SORTIE_TYPES_ANIMAL)
     : (dir === 'entree' ? ENTREE_TYPES_ALIMENT : SORTIE_TYPES_ALIMENT)
 
-  const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '' }])
+  const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '', cible: '' }])
   const setLigne = (i, patch) => onChange(lignes.map((l, k) => (k === i ? { ...l, ...patch } : l)))
   const delLigne = (i) => onChange(lignes.filter((_, k) => k !== i))
 
@@ -377,7 +400,10 @@ function MouvementModal({ modal, anim, alim, autoSor, demandes, date, onClose, o
     ? (demandes || []).filter((dm) => dm.statut === 'approuve' && dm.typeArticle === 'animal' && dm.articleId === id && dm.dateSortie === date)
     : []
 
-  const total = sommeMouvements(lignes) + (dir === 'sortie' ? (autoSor || 0) : 0)
+  // Destinations possibles d'une mutation (toutes les espèces sauf l'origine).
+  const ciblesPossibles = especes.filter((e) => e.id !== id)
+
+  const total = sommeMouvements(lignes) + (dir === 'sortie' ? (autoSor || 0) : (mutIn || 0))
 
   return (
     <Modal
@@ -399,6 +425,16 @@ function MouvementModal({ modal, anim, alim, autoSor, demandes, date, onClose, o
         </div>
       )}
 
+      {/* Mutations entrantes (générées par les mutations d'autres espèces) — lecture seule */}
+      {dir === 'entree' && mutInDetail.length > 0 && (
+        <div className="mb-3 space-y-1 rounded-lg bg-sky-50 p-2">
+          <p className="flex items-center gap-1 text-xs font-semibold text-sky-700"><Lock size={12} /> Mutations entrantes (animaux ayant grandi)</p>
+          {mutInDetail.map((m, k) => (
+            <p key={k} className="text-xs text-sky-800">🔁 +{m.qte} depuis {m.depuis}</p>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-2">
         {lignes.length === 0 && <p className="text-sm text-gray-400">Aucun mouvement saisi. Ajoutez une ligne ci-dessous.</p>}
         {lignes.map((l, i) => (
@@ -411,6 +447,16 @@ function MouvementModal({ modal, anim, alim, autoSor, demandes, date, onClose, o
                 onChange={(e) => setLigne(i, { qte: Math.max(0, parseInt(e.target.value) || 0) })} />
               <button onClick={() => delLigne(i)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 size={16} /></button>
             </div>
+            {/* Mutation (sortie animale) : choisir l'espèce de destination → +1 auto là-bas */}
+            {kind === 'animaux' && dir === 'sortie' && l.type === 'Mutation' && (
+              <div className="mt-2">
+                <Select value={l.cible || ''} onChange={(e) => setLigne(i, { cible: e.target.value })}>
+                  <option value="">— Espèce de destination (où va l'animal) —</option>
+                  {ciblesPossibles.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                </Select>
+                <p className="mt-1 text-[11px] text-sky-600">↪︎ +{l.qte || 0} sera ajouté automatiquement à l'espèce de destination.</p>
+              </div>
+            )}
             {labelRequis(l.type) && (
               <Input
                 className="mt-2"

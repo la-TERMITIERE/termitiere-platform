@@ -49,12 +49,14 @@ export const finAliment = ({ init, ent, sor }) =>
 // le type « Autres » ouvre un champ libre (personne / motif personnalisé).
 
 // Types d'ENTRÉES pour les animaux (la naissance est un cas d'entrée biologique).
-export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Mutation', 'Dons', 'Autres']
-// Types de SORTIES pour les animaux.
+// La « Mutation » n'est PAS saisie en entrée : elle est générée automatiquement
+// côté espèce de destination quand on enregistre la mutation en SORTIE de l'origine.
+export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Dons', 'Autres']
+// Types de SORTIES pour les animaux. La « Mutation » porte une espèce de destination.
 export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', 'Perte', 'Dons', 'Autres']
-// Aliments / divers : pas de naissance ni de décès.
-export const ENTREE_TYPES_ALIMENT = ['Achat', 'Mutation', 'Dons', 'Autres']
-export const SORTIE_TYPES_ALIMENT = ['Consommation', 'Ventes', 'Perte', 'Mutation', 'Dons', 'Autres']
+// Aliments / divers : pas de naissance ni de décès ni de mutation inter-espèces.
+export const ENTREE_TYPES_ALIMENT = ['Achat', 'Dons', 'Autres']
+export const SORTIE_TYPES_ALIMENT = ['Consommation', 'Ventes', 'Perte', 'Dons', 'Autres']
 
 // Le type « Autres » exige une précision (personne / motif personnalisé).
 // Le type « Décès » exige un motif (faithful à la règle d'origine).
@@ -68,16 +70,52 @@ export const sommeMouvements = (lignes) =>
 const sommeType = (lignes, type) =>
   (lignes || []).filter((l) => l.type === type).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
 
+// Mutations = un animal qui change d'espèce/catégorie en grandissant
+// (ex. agneau → bélier). On l'enregistre en SORTIE de l'espèce d'origine avec une
+// espèce `cible` ; cela génère automatiquement une ENTRÉE de même quantité côté
+// destination (conservation du cheptel : −1 ici, +1 là-bas).
+//
+// Calcule, pour chaque espèce de destination, le total des mutations ENTRANTES
+// à partir de l'état complet des animaux du jour. Renvoie { destId: total }.
+export function mutationsEntrantes(animState) {
+  const map = {}
+  Object.values(animState || {}).forEach((d) => {
+    ;(d?.sorties || []).forEach((l) => {
+      if (l.type === 'Mutation' && l.cible) {
+        map[l.cible] = (map[l.cible] || 0) + (parseInt(l.qte) || 0)
+      }
+    })
+  })
+  return map
+}
+
+// Détail des mutations entrantes d'une espèce (libellés « depuis X »), pour
+// affichage en lecture seule côté destination.
+export function mutationsEntrantesDetail(animState, especes, destId) {
+  const nomDe = (id) => especes.find((e) => e.id === id)?.nom || id
+  const out = []
+  Object.entries(animState || {}).forEach(([srcId, d]) => {
+    ;(d?.sorties || []).forEach((l) => {
+      if (l.type === 'Mutation' && l.cible === destId && (parseInt(l.qte) || 0) > 0) {
+        out.push({ depuis: nomDe(srcId), qte: parseInt(l.qte) || 0 })
+      }
+    })
+  })
+  return out
+}
+
 // Agrège des listes de mouvements typés en champs scalaires de compatibilité
 // (naiss / ent / sor / dec) + EF Final, attendus par le Dashboard et les Analyses.
-//  - `ent`  = entrées HORS naissances   - `sor` = sorties HORS décès
+//  - `ent`  = entrées HORS naissances (mutations entrantes incluses)
+//  - `sor`  = sorties HORS décès
 //  - `naiss`= entrées de type Naissance  - `dec` = sorties de type Décès
 //  - autoSor = sorties auto issues des demandes approuvées (incluses dans le total)
-export function agregerAnimal({ init = 0, entrees = [], sorties = [] }, autoSor = 0) {
-  const totalEnt = sommeMouvements(entrees)
+//  - mutIn   = mutations entrantes (depuis d'autres espèces), comptées en entrée
+export function agregerAnimal({ init = 0, entrees = [], sorties = [] }, autoSor = 0, mutIn = 0) {
+  const totalEnt = sommeMouvements(entrees) + (mutIn || 0)
   const naiss = sommeType(entrees, 'Naissance')
   const decManuel = sommeType(sorties, 'Décès')
-  const totalSorManuel = sommeMouvements(sorties)
+  const totalSorManuel = sommeMouvements(sorties) // inclut les mutations sortantes
   const totalSor = totalSorManuel + (autoSor || 0)
   const ent = totalEnt - naiss
   const sor = totalSor - decManuel // les sorties auto sont des ventes (jamais des décès)
@@ -86,7 +124,7 @@ export function agregerAnimal({ init = 0, entrees = [], sorties = [] }, autoSor 
     .filter((l) => l.type === 'Décès' && (l.label || '').trim())
     .map((l) => l.label.trim())
     .join(' ; ')
-  return { init, naiss, ent, sor, dec: decManuel, fin, decMotif }
+  return { init, naiss, ent, sor, dec: decManuel, fin, decMotif, mutIn: mutIn || 0 }
 }
 
 // Agrégation aliments (pas de naissance / décès).
