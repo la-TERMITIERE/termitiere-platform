@@ -4,34 +4,44 @@ import { Bar } from 'react-chartjs-2'
 import { FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
+import Modal from '../../shared/ui/Modal'
 import StatCard from '../../shared/ui/StatCard'
 import Table from '../../shared/ui/Table'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
-import { exportExcelMulti } from '../../utils/exportExcel'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-import { construireRapport } from './rapport'
+import { sectionsRapport, SECTIONS_RAPPORT } from './rapport'
 
 export default function Analyses() {
   const { data: inventaires } = useCollection('agro_inventaires')
   const { data: factures } = useCollection('agro_factures')
+  const { data: sante } = useCollection('agro_sante')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
 
   const [tab, setTab] = useState('animaux')
   const [gran, setGran] = useState('jour')
+  const [exportOpen, setExportOpen] = useState(false)
+  // Sections cochées par défaut (toutes).
+  const [choix, setChoix] = useState(() => Object.fromEntries(SECTIONS_RAPPORT.map((s) => [s.id, true])))
   const { start, end, node: periodNode } = usePeriodSelect('90')
 
   const invPeriode = useMemo(() => inventaires.filter((i) => i.date >= start && i.date <= end), [inventaires, start, end])
 
+  const toggleSection = (id) => setChoix((c) => ({ ...c, [id]: !c[id] }))
+
   function exporterRapport() {
-    const { sheets, fichier } = construireRapport({ inventaires, especes, aliments, factures, start, end, gran })
-    const vide = sheets.every((s) => !s.rows.length || (s.rows.length === 1 && (s.rows[0]['N°'] === '—' || s.rows[0]['Période'] === '—')))
-    exportExcelMulti(sheets, fichier)
-    toast.success(vide ? 'Rapport généré (période sans données) ✓' : 'Rapport Excel généré ✓')
+    const ids = SECTIONS_RAPPORT.filter((s) => choix[s.id]).map((s) => s.id)
+    if (!ids.length) return toast.error('Choisissez au moins une section à exporter')
+    const secs = sectionsRapport({ inventaires, especes, aliments, factures, sante, start, end, gran })
+    const sections = ids.map((id) => secs[id]).filter(Boolean)
+    exportRapportExcel({ filename: `rapport-maxi-agro-${start}_${end}.xlsx`, sections })
+    toast.success('Rapport Excel généré ✓')
+    setExportOpen(false)
   }
 
   // ── Animaux ──
@@ -83,25 +93,48 @@ export default function Analyses() {
             <button key={v} onClick={() => setTab(v)} className={`rounded px-3 py-1.5 text-sm font-semibold ${tab === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>{l}</button>
           ))}
         </div>
-        <div className="ml-auto">{periodNode}</div>
+        <div className="ml-auto flex items-center gap-2">
+          {periodNode}
+          <Button onClick={() => setExportOpen(true)}><FileSpreadsheet size={16} /> Exporter un rapport</Button>
+        </div>
       </div>
 
-      {/* Export de rapports propres en Excel (animaux, aliments, évolution, factures) */}
-      <Card className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Type de rapport</label>
+      {/* Modal : configuration du rapport Excel (sections + période + granularité) */}
+      <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Exporter un rapport Excel"
+        footer={<><Button variant="ghost" onClick={() => setExportOpen(false)}>Annuler</Button><Button onClick={exporterRapport}><FileSpreadsheet size={16} /> Générer le fichier</Button></>}
+      >
+        <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">
+          📅 Période : <strong>{formatDateShort(start)} → {formatDateShort(end)}</strong>
+          <span className="text-sky-500"> (modifiable via le sélecteur de période)</span>
+        </p>
+
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Que voulez-vous exporter ?</p>
+        <div className="mb-4 grid grid-cols-1 gap-1 sm:grid-cols-2">
+          {SECTIONS_RAPPORT.map((s) => (
+            <label key={s.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50">
+              <input type="checkbox" checked={!!choix[s.id]} onChange={() => toggleSection(s.id)} />
+              {s.label}
+            </label>
+          ))}
+        </div>
+        <div className="mb-1 flex gap-2">
+          <button onClick={() => setChoix(Object.fromEntries(SECTIONS_RAPPORT.map((s) => [s.id, true])))} className="text-xs font-semibold text-primary hover:underline">Tout cocher</button>
+          <span className="text-gray-300">·</span>
+          <button onClick={() => setChoix({})} className="text-xs font-semibold text-gray-500 hover:underline">Tout décocher</button>
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Granularité de la feuille « Évolution »</label>
           <Select className="w-auto" value={gran} onChange={(e) => setGran(e.target.value)}>
-            <option value="jour">Journalier</option>
-            <option value="semaine">Hebdomadaire</option>
-            <option value="mois">Mensuel</option>
+            <option value="jour">Journalier (jour par jour)</option>
+            <option value="semaine">Hebdomadaire (semaine par semaine)</option>
+            <option value="mois">Mensuel (mois par mois)</option>
           </Select>
         </div>
-        <p className="flex-1 text-xs text-gray-500">
-          Génère un fichier Excel propre couvrant la période sélectionnée : synthèse, animaux par espèce,
-          aliments &amp; divers, évolution {gran === 'jour' ? 'jour par jour' : gran === 'semaine' ? 'semaine par semaine' : 'mois par mois'} et factures.
-        </p>
-        <Button onClick={exporterRapport}><FileSpreadsheet size={16} /> Exporter le rapport Excel</Button>
-      </Card>
+      </Modal>
 
       {tab === 'animaux' && (
         <>

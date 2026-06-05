@@ -23,7 +23,7 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
-import { exportExcel } from '../../utils/exportExcel'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const TYPES = [
@@ -165,18 +165,39 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
   }
 
   function exportXLSX() {
-    exportExcel(liste.map((f) => ({
-      Date: formatDateShort(f.date),
-      Espèce: f.especeNom,
-      Type: labelOf(f.type).replace(/^[^\sA-Za-zÀ-ÿ]+\s*/, ''),
-      Produit: f.produit,
-      Dosage: f.dosage || '',
-      'Nb animaux': f.nombreAnimaux,
-      'N° animaux': f.animauxIds || '',
-      Vétérinaire: f.veterinaire || '',
-      'Prochain RDV': f.prochainRdv ? formatDateShort(f.prochainRdv) : '',
-      Notes: f.description || ''
-    })), 'rapport-sanitaire.xlsx', 'Santé')
+    exportRapportExcel({
+      filename: 'rapport-sanitaire.xlsx',
+      sections: [{
+        name: 'Santé animale',
+        title: 'Rapport sanitaire',
+        subtitle: `${liste.length} intervention(s)${filtreType ? ` · ${labelOf(filtreType)}` : ''}`,
+        columns: [
+          { key: 'Date', label: 'Date', width: 12 },
+          { key: 'Espèce', label: 'Espèce', width: 18 },
+          { key: 'Type', label: 'Type', width: 14 },
+          { key: 'Produit', label: 'Produit', width: 20 },
+          { key: 'Dosage', label: 'Dosage', width: 14 },
+          { key: 'Nb animaux', label: 'Nb animaux', width: 11, type: 'number' },
+          { key: 'N° animaux', label: 'N° animaux', width: 20 },
+          { key: 'Vétérinaire', label: 'Vétérinaire', width: 18 },
+          { key: 'Prochain RDV', label: 'Prochain RDV', width: 14 },
+          { key: 'Notes', label: 'Notes', width: 28 }
+        ],
+        rows: liste.map((f) => ({
+          Date: formatDateShort(f.date),
+          Espèce: f.especeNom,
+          Type: labelOf(f.type).replace(/^[^\sA-Za-zÀ-ÿ]+\s*/, ''),
+          Produit: f.produit,
+          Dosage: f.dosage || '',
+          'Nb animaux': f.nombreAnimaux || 0,
+          'N° animaux': f.animauxIds || '',
+          Vétérinaire: f.veterinaire || '',
+          'Prochain RDV': f.prochainRdv ? formatDateShort(f.prochainRdv) : '',
+          Notes: f.description || ''
+        })),
+        totals: { __label: 'TOTAL', 'Nb animaux': liste.reduce((s, f) => s + (f.nombreAnimaux || 0), 0) }
+      }]
+    })
     toast.success('Rapport santé Excel généré ✓')
   }
 
