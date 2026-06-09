@@ -53,8 +53,10 @@ export default function Saisie() {
   const [mvtModal, setMvtModal] = useState(null) // { id, kind, dir, nom }
   const [addModal, setAddModal] = useState(null) // { kind: 'animal' | 'aliment' }
 
-  // EF Initial éditable uniquement par admin / contrôleur (sinon grisé/auto).
-  const peutEditerInit = role === 'admin' || role === 'controleur'
+  // Seuls les agents peuvent saisir ; admins et contrôleurs sont en lecture seule.
+  const peutSaisir = role === 'agent'
+  // EF Initial : lecture seule pour tout le monde (reporté automatiquement de la veille).
+  const peutEditerInit = false
 
   // (Re)construit l'état du formulaire quand la date / les données / le référentiel changent.
   useEffect(() => {
@@ -301,17 +303,22 @@ export default function Saisie() {
           <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
         </div>
         <div className="ml-auto flex gap-2">
-          <Link to="/agro/demandes"><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
-          <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>
+          {peutSaisir && <Link to="/agro/demandes"><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>}
+          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
       </div>
 
+      {!peutSaisir && (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 font-semibold">
+          👁️ Mode consultation — seuls les agents peuvent saisir et enregistrer des données.
+        </div>
+      )}
       {dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
           <CheckCircle2 size={16} />
           Saisie du {formatDateTime(existing.savedAt)} —{' '}
           <strong>{Object.values(existing.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)} têtes</strong>
-          <span className="text-green-600">· Chaque agent ne peut modifier que ses propres mouvements</span>
+          {peutSaisir && <span className="text-green-600">· Chaque agent ne peut modifier que ses propres mouvements</span>}
         </div>
       )}
 
@@ -328,14 +335,16 @@ export default function Saisie() {
             {l}
           </button>
         ))}
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto mb-1"
-          onClick={() => setAddModal({ kind: tab === 'animaux' ? 'animal' : 'aliment' })}
-        >
-          <Plus size={15} /> Ajouter un {tab === 'animaux' ? 'animal' : 'aliment'}
-        </Button>
+        {peutSaisir && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto mb-1"
+            onClick={() => setAddModal({ kind: tab === 'animaux' ? 'animal' : 'aliment' })}
+          >
+            <Plus size={15} /> Ajouter un {tab === 'animaux' ? 'animal' : 'aliment'}
+          </Button>
+        )}
       </div>
 
       {renderTable(tab)}
@@ -353,6 +362,7 @@ export default function Saisie() {
         date={date}
         onClose={() => setMvtModal(null)}
         user={user}
+        peutSaisir={peutSaisir}
         onChange={(lignes) => setLignes(mvtModal.kind, mvtModal.id, mvtModal.dir, lignes)}
       />
 
@@ -427,7 +437,7 @@ function MvtCell({ total, dir, onClick, sub }) {
 }
 
 // Fenêtre d'édition des mouvements typés d'un article (entrées ou sorties).
-function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, mutInDetail = [], date, onClose, onChange, user }) {
+function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, mutInDetail = [], date, onClose, onChange, user, peutSaisir }) {
   if (!modal) return null
   const { id, kind, dir, nom } = modal
   const src = kind === 'animaux' ? anim : alim
@@ -437,7 +447,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
     ? (dir === 'entree' ? ENTREE_TYPES_ANIMAL : SORTIE_TYPES_SAISIE_ANIMAL)
     : (dir === 'entree' ? ENTREE_TYPES_ALIMENT : SORTIE_TYPES_SAISIE_ALIMENT)
 
-  const peutEditer = (l) => user && peutModifierLigne(l, user.uid)
+  const peutEditer = (l) => peutSaisir && user && peutModifierLigne(l, user.uid)
   const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '', cible: '', agentId: user?.uid, agentNom: user?.nom }])
   const setLigne = (i, patch) => {
     if (!peutEditer(lignes[i])) return
@@ -532,7 +542,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
         )})}
       </div>
 
-      <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter une ligne</Button>
+      {peutSaisir && <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter une ligne</Button>}
     </Modal>
   )
 }

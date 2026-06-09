@@ -13,7 +13,7 @@ import { useAgroStore } from './store/agroStore'
 import { isFirebaseConfigured } from '../../core/firebase'
 import { getAll, setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
-import { exportExcel } from '../../utils/exportExcel'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { migrerDepuisFirebase, migrerDepuisDB } from '../../utils/migration'
 import { toast } from '../../core/notifications'
 import { genId } from '../../utils/formatters'
@@ -228,9 +228,90 @@ function DonneesTab() {
     reader.readAsText(file)
   }
 
+  const EXPORT_OPTIONS = [
+    { id: 'animaux', label: 'Animaux (espèces et effectifs)' },
+    { id: 'aliments', label: 'Aliments & Divers (stocks)' },
+    { id: 'vaccins', label: 'Vaccins & Produits vétérinaires' },
+    { id: 'factures', label: 'Factures (historique)' }
+  ]
+  const [exportChoix, setExportChoix] = useState(() => Object.fromEntries(EXPORT_OPTIONS.map((o) => [o.id, true])))
+  const [exporting, setExporting] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+
   async function exportXLSX() {
-    const factures = await readCol('agro_factures')
-    exportExcel(factures.map((f) => ({ Numero: f.numero, Date: f.date, Client: f.client?.nom, TTC: f.totalTTC })), 'factures.xlsx', 'Factures')
+    const selections = EXPORT_OPTIONS.filter((o) => exportChoix[o.id])
+    if (!selections.length) return toast.error('Choisissez au moins une section')
+    setExporting(true)
+    try {
+      const sections = []
+      if (exportChoix.animaux) {
+        const especes = useAgroStore.getState().especes
+        sections.push({
+          id: 'animaux', name: 'Animaux', title: 'Référentiel animaux (espèces)',
+          subtitle: `Exporté le ${new Date().toLocaleDateString('fr-FR')}`,
+          columns: [
+            { key: 'nom', label: 'Espèce', width: 26 },
+            { key: 'cat', label: 'Catégorie', width: 16 },
+            { key: 'prix', label: 'Prix indicatif', width: 18, type: 'money' }
+          ],
+          rows: especes.map((e) => ({ nom: e.nom, cat: e.cat, prix: e.prix || 0 }))
+        })
+      }
+      if (exportChoix.aliments) {
+        const aliments = useAgroStore.getState().aliments
+        sections.push({
+          id: 'aliments', name: 'Aliments & Divers', title: 'Référentiel aliments & divers',
+          subtitle: `Exporté le ${new Date().toLocaleDateString('fr-FR')}`,
+          columns: [
+            { key: 'nom', label: 'Article', width: 26 },
+            { key: 'cat', label: 'Catégorie', width: 16 },
+            { key: 'unite', label: 'Unité', width: 12 }
+          ],
+          rows: aliments.map((a) => ({ nom: a.nom, cat: a.cat, unite: a.unite || 'kg' }))
+        })
+      }
+      if (exportChoix.vaccins) {
+        const vaccins = await readCol('agro_vaccins')
+        sections.push({
+          id: 'vaccins', name: 'Vaccins & Produits', title: 'Stock vaccins & produits vétérinaires',
+          subtitle: `Exporté le ${new Date().toLocaleDateString('fr-FR')}`,
+          columns: [
+            { key: 'nom', label: 'Produit', width: 30 },
+            { key: 'quantite', label: 'Quantité', width: 14, type: 'number' },
+            { key: 'unite', label: 'Unité', width: 12 },
+            { key: 'seuilAlerte', label: 'Seuil alerte', width: 14, type: 'number' }
+          ],
+          rows: vaccins.map((v) => ({ nom: v.nom || '—', quantite: v.quantite || 0, unite: v.unite || '', seuilAlerte: v.seuilAlerte || 5 }))
+        })
+      }
+      if (exportChoix.factures) {
+        const factures = await readCol('agro_factures')
+        sections.push({
+          id: 'factures', name: 'Factures', title: 'Historique des factures',
+          subtitle: `Exporté le ${new Date().toLocaleDateString('fr-FR')} — ${factures.length} facture(s)`,
+          columns: [
+            { key: 'numero', label: 'N° Facture', width: 20 },
+            { key: 'date', label: 'Date', width: 14 },
+            { key: 'client', label: 'Client', width: 28 },
+            { key: 'tel', label: 'Téléphone', width: 16 },
+            { key: 'totalHT', label: 'Total HT', width: 18, type: 'money' },
+            { key: 'totalTTC', label: 'Total TTC', width: 18, type: 'money' }
+          ],
+          rows: factures.map((f) => ({
+            numero: f.numero, date: f.date, client: f.client?.nom || '—',
+            tel: f.client?.tel || '—', totalHT: f.totalHT || 0, totalTTC: f.totalTTC || 0
+          })),
+          totals: { __label: 'TOTAL', totalHT: factures.reduce((s, f) => s + (f.totalHT || 0), 0), totalTTC: factures.reduce((s, f) => s + (f.totalTTC || 0), 0) }
+        })
+      }
+      exportRapportExcel({ filename: `export-maxi-agro-${new Date().toISOString().slice(0,10)}.xlsx`, sections })
+      toast.success('Export Excel généré ✓')
+      setExportOpen(false)
+    } catch (e) {
+      toast.error('Erreur export : ' + e.message)
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -251,7 +332,7 @@ function DonneesTab() {
           <Button variant="outline" onClick={exportJSON}><Download size={16} /> Export JSON</Button>
           <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload size={16} /> Import JSON</Button>
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={importJSON} />
-          <Button variant="outline" onClick={exportXLSX}>📊 Export Excel</Button>
+          <Button variant="outline" onClick={() => setExportOpen(true)}>📊 Export Excel multi-sections</Button>
         </div>
       </Card>
       <Card title="Réinitialisation">
@@ -271,6 +352,36 @@ function DonneesTab() {
           <RotateCcw size={16} /> Réinitialiser toutes les données
         </Button>
       </Card>
+
+      {/* Modal export Excel multi-sections */}
+      <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export Excel — Choisir les sections"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setExportOpen(false)}>Annuler</Button>
+            <Button onClick={exportXLSX} loading={exporting}>📊 Générer l'Excel</Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-gray-500">
+          Cochez les données à inclure dans le rapport Excel prêt à imprimer :
+        </p>
+        <div className="space-y-2">
+          {EXPORT_OPTIONS.map((o) => (
+            <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 hover:bg-gray-50">
+              <input
+                type="checkbox"
+                checked={!!exportChoix[o.id]}
+                onChange={() => setExportChoix((c) => ({ ...c, [o.id]: !c[o.id] }))}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm font-medium">{o.label}</span>
+            </label>
+          ))}
+        </div>
+      </Modal>
     </div>
   )
 }

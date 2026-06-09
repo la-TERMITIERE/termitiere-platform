@@ -32,6 +32,18 @@ export default function Analyses() {
 
   const invPeriode = useMemo(() => inventaires.filter((i) => i.date >= start && i.date <= end), [inventaires, start, end])
 
+  const ligneAnimaux = useMemo(() => {
+    const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
+    const dernier = tri[0]
+    return especes.map((e) => {
+      let naiss = 0, ent = 0, sor = 0, dec = 0
+      invPeriode.forEach((i) => { const a = i.animaux?.[e.id]; if (a) { naiss += a.naiss || 0; ent += a.ent || 0; sor += a.sor || 0; dec += a.dec || 0 } })
+      const efFinal = dernier?.animaux?.[e.id]?.fin || 0
+      const efInit = dernier?.animaux?.[e.id]?.init || 0
+      return { nom: e.nom, cat: e.cat, efInit, naiss, ent, sor, dec, efFinal }
+    })
+  }, [especes, invPeriode, inventaires])
+
   const ligneAliments = useMemo(() => {
     const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
     const dernier = tri[0]
@@ -83,7 +95,7 @@ export default function Analyses() {
           </button>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="[&_.input-base]:border-white/20 [&_.input-base]:bg-white/10 [&_.input-base]:text-white [&_label]:text-white/70">
+          <div className="[&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white [&_label]:font-bold">
             {periodNode}
           </div>
           <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => setExportOpen(true)}>
@@ -130,6 +142,24 @@ export default function Analyses() {
       )}
 
       {vue === 'tableaux' && (
+        <div className="space-y-4">
+          <Card title="Animaux par espèce — période" className="p-0">
+            <Table
+              columns={[
+                { key: 'nom', label: 'Espèce' },
+                { key: 'cat', label: 'Catégorie' },
+                { key: 'efInit', label: 'EF Initial', align: 'center', render: (r) => formatNumber(r.efInit) },
+                { key: 'naiss', label: 'Naiss.', align: 'center', render: (r) => <span className="font-semibold text-green-600">{formatNumber(r.naiss)}</span> },
+                { key: 'ent', label: 'Entrées', align: 'center', render: (r) => <span className="text-sky-600">{formatNumber(r.ent)}</span> },
+                { key: 'sor', label: 'Sorties', align: 'center', render: (r) => <span className="text-amber-600">{formatNumber(r.sor)}</span> },
+                { key: 'dec', label: 'Décès', align: 'center', render: (r) => <span className="text-red-600">{formatNumber(r.dec)}</span> },
+                { key: 'efFinal', label: 'EF Final', align: 'center', render: (r) => <strong>{formatNumber(r.efFinal)}</strong> }
+              ]}
+              rows={ligneAnimaux}
+              rowKey="nom"
+              empty="Aucun animal."
+            />
+          </Card>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Stocks aliments & divers" className="p-0">
             <Table
@@ -159,6 +189,7 @@ export default function Analyses() {
               empty="Aucune facture."
             />
           </Card>
+        </div>
         </div>
       )}
     </div>

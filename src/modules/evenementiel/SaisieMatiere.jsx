@@ -27,7 +27,8 @@ export default function SaisieMatiere() {
   const [saving, setSaving] = useState(false)
   const [mvtModal, setMvtModal] = useState(null)
 
-  const peutEditerInit = role === 'admin' || role === 'controleur'
+  const peutSaisir = role === 'agent'
+  const peutEditerInit = false // reporté automatiquement depuis la veille
 
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { matieres: {} }
@@ -97,6 +98,11 @@ export default function SaisieMatiere() {
 
   return (
     <div className="space-y-4">
+      {!peutSaisir && (
+        <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          👁️ Mode consultation — seuls les agents peuvent effectuer des saisies
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
@@ -106,7 +112,7 @@ export default function SaisieMatiere() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Agent</label>
           <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
         </div>
-        <Button className="ml-auto" onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>
+        {peutSaisir && <Button className="ml-auto" onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
       </div>
 
       <div className="rounded-lg bg-violet-50 px-4 py-3 text-sm text-violet-800">
@@ -127,10 +133,10 @@ export default function SaisieMatiere() {
             <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
               <tr>
                 <th className="bg-gray-50 px-3 py-2 text-left">Matière</th>
-                <th className="bg-gray-50 px-2 py-2 text-center">EF Initial 🔒</th>
+                <th className="bg-gray-50 px-2 py-2 text-center">Stock Initial 🔒</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Achats</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Consommation</th>
-                <th className="bg-gray-50 px-2 py-2 text-center">EF Final 🔒</th>
+                <th className="bg-gray-50 px-2 py-2 text-center">Stock Final 🔒</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -158,7 +164,7 @@ export default function SaisieMatiere() {
         </div>
       </Card>
 
-      <MouvementModal modal={mvtModal} stock={stock} user={user} onClose={() => setMvtModal(null)}
+      <MouvementModal modal={mvtModal} stock={stock} user={user} peutSaisir={peutSaisir} onClose={() => setMvtModal(null)}
         onChange={(field, lignes) => setLignes(mvtModal.id, field, lignes)} />
     </div>
   )
@@ -176,12 +182,12 @@ function MvtCell({ total, tone, onClick }) {
   )
 }
 
-function MouvementModal({ modal, stock, user, onClose, onChange }) {
+function MouvementModal({ modal, stock, user, peutSaisir, onClose, onChange }) {
   if (!modal) return null
   const { id, dir, nom, unite } = modal
   const field = dir === 'entree' ? 'entrees' : 'consommations'
   const lignes = stock[id]?.[field] || []
-  const peutEditer = (l) => user && peutModifierLigne(l, user.uid)
+  const peutEditer = (l) => peutSaisir && user && peutModifierLigne(l, user.uid)
   const titles = { entree: '⬇️ Achats / Entrées', conso: '⬆️ Consommation production' }
 
   const addLigne = () => onChange(field, [...lignes, { qte: 1, cout: 0, label: '', agentId: user?.uid, agentNom: user?.nom }])
@@ -210,7 +216,7 @@ function MouvementModal({ modal, stock, user, onClose, onChange }) {
           )
         })}
       </div>
-      <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter</Button>
+      {peutSaisir && <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter</Button>}
     </Modal>
   )
 }

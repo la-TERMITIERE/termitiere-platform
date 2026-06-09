@@ -1,16 +1,15 @@
-// Cloche de notifications (barre supérieure) : pastille de non-lues + panneau
-// déroulant listant les notifications de l'utilisateur. Clic = marquer lu + ouvrir.
-// Propose aussi d'activer les notifications système (popup type WhatsApp/Gmail).
+// Cloche de notifications : pastille non-lues + panneau déroulant.
+// - Bouton ✕ par notification pour la faire disparaître manuellement.
+// - Auto-dismiss 5 min après lecture.
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Check, BellRing } from 'lucide-react'
+import { Bell, Check, BellRing, X } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAuth } from '../../hooks/useAuth'
 import { subscribeToPush } from '../../core/push'
 
 const EMOJI = { demande: '📤', approuve: '✅', refus: '⛔', user: '👤', info: '🔔' }
 
-// Temps relatif court : "à l'instant", "il y a 5 min", "il y a 2 h", "il y a 3 j".
 function timeAgo(ms) {
   if (!ms) return ''
   const s = Math.floor((Date.now() - ms) / 1000)
@@ -24,19 +23,17 @@ function timeAgo(ms) {
 }
 
 export default function NotificationBell() {
-  const { mine, unread, markRead, markAllRead } = useNotifications()
+  const { mine, unread, markRead, markAllRead, dismiss, dismissAll } = useNotifications()
   const { user } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [perm, setPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   const ref = useRef(null)
 
-  // Si l'autorisation est déjà accordée, (ré)abonner cet appareil au push.
   useEffect(() => {
     if (user && perm === 'granted') subscribeToPush(user)
   }, [user, perm])
 
-  // Fermeture au clic extérieur
   useEffect(() => {
     if (!open) return
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -80,11 +77,18 @@ export default function NotificationBell() {
         <div className="absolute right-0 z-50 mt-2 w-80 max-w-[90vw] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
             <p className="text-sm font-bold text-gray-800">Notifications</p>
-            {nUnread > 0 && (
-              <button onClick={markAllRead} className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                <Check size={13} /> Tout marquer lu
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {nUnread > 0 && (
+                <button onClick={markAllRead} className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                  <Check size={13} /> Tout marquer lu
+                </button>
+              )}
+              {mine.length > 0 && (
+                <button onClick={dismissAll} className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-gray-600 hover:underline">
+                  <X size={12} /> Tout effacer
+                </button>
+              )}
+            </div>
           </div>
 
           {perm === 'default' && (
@@ -100,25 +104,43 @@ export default function NotificationBell() {
               mine.slice(0, 30).map((n) => {
                 const isUnread = unread.some((u) => u.id === n.id)
                 return (
-                  <button
+                  <div
                     key={n.id}
-                    onClick={() => onClickNotif(n)}
-                    className={`flex w-full items-start gap-3 border-b border-gray-50 px-3 py-2.5 text-left hover:bg-gray-50 ${isUnread ? 'bg-primary/[0.04]' : ''}`}
+                    className={`group relative flex w-full items-start gap-3 border-b border-gray-50 px-3 py-2.5 ${isUnread ? 'bg-primary/[0.04]' : ''}`}
                   >
-                    <span className="mt-0.5 text-lg leading-none">{EMOJI[n.type] || '🔔'}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1">
-                        <span className={`truncate text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title}</span>
-                        {isUnread && <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                    {/* Bouton dismiss par notification */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismiss(n.id) }}
+                      className="absolute right-2 top-2 hidden rounded p-0.5 text-gray-300 hover:bg-gray-100 hover:text-gray-600 group-hover:flex"
+                      title="Masquer"
+                    >
+                      <X size={12} />
+                    </button>
+                    <button
+                      onClick={() => onClickNotif(n)}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left hover:opacity-80"
+                    >
+                      <span className="mt-0.5 text-lg leading-none">{EMOJI[n.type] || '🔔'}</span>
+                      <span className="min-w-0 flex-1 pr-4">
+                        <span className="flex items-center gap-1">
+                          <span className={`truncate text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title}</span>
+                          {isUnread && <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                        </span>
+                        {n.body && <span className="mt-0.5 block truncate text-xs text-gray-500">{n.body}</span>}
+                        <span className="mt-0.5 block text-[11px] text-gray-400">{timeAgo(n.createdAt)}</span>
                       </span>
-                      {n.body && <span className="mt-0.5 block truncate text-xs text-gray-500">{n.body}</span>}
-                      <span className="mt-0.5 block text-[11px] text-gray-400">{timeAgo(n.createdAt)}</span>
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 )
               })
             )}
           </div>
+
+          {mine.length > 0 && (
+            <p className="border-t border-gray-100 px-3 py-2 text-center text-[11px] text-gray-400">
+              Les notifications disparaissent automatiquement 5 min après lecture.
+            </p>
+          )}
         </div>
       )}
     </div>

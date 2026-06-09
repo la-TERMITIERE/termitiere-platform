@@ -10,6 +10,8 @@ import Retours from './Retours'
 import Referentiel from './Referentiel'
 import Clients from './Clients'
 import Fournisseurs from './Fournisseurs'
+import Journal from './Journal'
+import Params from './Params'
 import { useLogistiqueStore } from './store/referentielStore'
 
 export default function LogistiqueModule() {
@@ -27,6 +29,8 @@ export default function LogistiqueModule() {
       <Route path="referentiel" element={<Referentiel />} />
       <Route path="clients" element={<Clients />} />
       <Route path="fournisseurs" element={<Fournisseurs />} />
+      <Route path="journal" element={<Journal />} />
+      <Route path="params" element={<Params />} />
     </Routes>
   )
 }

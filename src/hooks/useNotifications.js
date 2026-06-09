@@ -1,24 +1,23 @@
 // Hook des notifications de l'utilisateur courant.
 // - Filtre la collection `notifications` selon le rôle / l'identité.
 // - Calcule les non-lues.
-// - Déclenche un toast + une notification SYSTÈME (type WhatsApp/Gmail) pour
-//   chaque nouvelle notification reçue pendant que l'app est ouverte.
-import { useEffect, useMemo, useRef } from 'react'
+// - Auto-dismiss 5 min après lecture.
+// - Dismiss manuel possible (cache localement la notification).
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCollection } from './useFirestore'
 import { useAuth } from './useAuth'
 import { updateItem } from '../core/db'
 import { toast } from '../core/notifications'
 
-// Horodatage de chargement de l'app : on ne « popup » que les notifs postérieures
-// (sinon tout l'historique remonterait à chaque ouverture).
 const MOUNT_TS = Date.now()
+const AUTO_DISMISS_MS = 5 * 60 * 1000 // 5 minutes
 
 function isFor(n, user, role) {
   if (!user) return false
   if (n.excludeUid && n.excludeUid === user.uid) return false
   const roles = n.forRoles || []
   const users = n.forUsers || []
-  if (!roles.length && !users.length) return true // diffusion générale
+  if (!roles.length && !users.length) return true
   if (roles.includes(role)) return true
   if (users.includes(user.uid) || users.includes(user.login)) return true
   return false
@@ -29,27 +28,51 @@ export function useNotifications() {
   const { data } = useCollection('notifications')
   const shownRef = useRef(new Set())
 
+  // IDs dismissés manuellement (état local, disparaît au rechargement)
+  const [dismissed, setDismissed] = useState(new Set())
+  // { id: timestamp } — moment où la notif a été lue, pour auto-dismiss après 5 min
+  const [readAt, setReadAt] = useState({})
+
   const mine = useMemo(
     () =>
       data
-        .filter((n) => isFor(n, user, role))
+        .filter((n) => isFor(n, user, role) && !dismissed.has(n.id))
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-    [data, user, role]
+    [data, user, role, dismissed]
   )
 
+  // Notifications non-lues (non dismissées)
   const unread = useMemo(
     () => mine.filter((n) => !(n.readBy && n.readBy[user?.uid])),
     [mine, user]
   )
 
-  // Popup (toast + notification système) pour les nouvelles notifications.
+  // Auto-dismiss : 5 min après avoir été marquée lue
+  useEffect(() => {
+    if (!user) return
+    const timers = []
+    Object.entries(readAt).forEach(([id, ts]) => {
+      const remaining = AUTO_DISMISS_MS - (Date.now() - ts)
+      if (remaining <= 0) {
+        setDismissed((prev) => new Set([...prev, id]))
+      } else {
+        const t = setTimeout(() => {
+          setDismissed((prev) => new Set([...prev, id]))
+        }, remaining)
+        timers.push(t)
+      }
+    })
+    return () => timers.forEach((t) => clearTimeout(t))
+  }, [readAt, user])
+
+  // Toast + notification système pour les nouvelles notifs.
   useEffect(() => {
     if (!user) return
     for (const n of mine) {
       if (shownRef.current.has(n.id)) continue
       shownRef.current.add(n.id)
-      if ((n.createdAt || 0) < MOUNT_TS) continue          // historique : pas de popup
-      if (n.readBy && n.readBy[user.uid]) continue          // déjà lue
+      if ((n.createdAt || 0) < MOUNT_TS) continue
+      if (n.readBy && n.readBy[user.uid]) continue
       toast.info(`🔔 ${n.title}`)
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try { new Notification(n.title, { body: n.body || '', tag: n.id, icon: '/icon-192.png' }) } catch (e) { /* ignore */ }
@@ -57,8 +80,24 @@ export function useNotifications() {
     }
   }, [mine, user])
 
-  const markRead = (id) => { if (user) updateItem('notifications', id, { [`readBy/${user.uid}`]: true }) }
-  const markAllRead = () => unread.forEach((n) => markRead(n.id))
+  const markRead = useCallback((id) => {
+    if (!user) return
+    updateItem('notifications', id, { [`readBy/${user.uid}`]: true })
+    setReadAt((prev) => ({ ...prev, [id]: Date.now() }))
+  }, [user])
 
-  return { mine, unread, markRead, markAllRead }
+  const markAllRead = useCallback(() => {
+    unread.forEach((n) => markRead(n.id))
+  }, [unread, markRead])
+
+  const dismiss = useCallback((id) => {
+    markRead(id)
+    setDismissed((prev) => new Set([...prev, id]))
+  }, [markRead])
+
+  const dismissAll = useCallback(() => {
+    unread.forEach((n) => dismiss(n.id))
+  }, [unread, dismiss])
+
+  return { mine, unread, markRead, markAllRead, dismiss, dismissAll }
 }

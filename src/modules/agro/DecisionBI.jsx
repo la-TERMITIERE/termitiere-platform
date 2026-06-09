@@ -59,6 +59,7 @@ export default function DecisionBI({
 
   const demandesAttente = demandes.filter((d) => d.statut === 'en_attente').length
   const demandesPeriode = demandes.filter((d) => d.date >= start && d.date <= end)
+  const demandesEnAttenteList = demandes.filter((d) => d.statut === 'en_attente')
 
   const interventions = sante.filter((f) => f.date >= start && f.date <= end)
   const stockBas = (stockVaccins || []).filter((s) => (s.quantite ?? 0) <= (s.seuilAlerte ?? 5))
@@ -73,6 +74,63 @@ export default function DecisionBI({
   const baseEffectif = Object.values(dernier?.animaux || {}).reduce((s, a) => s + (a.init || 0), 0) || 1
   const tauxMortalite = ((totauxAnim.dec / baseEffectif) * 100).toFixed(1)
   const tauxCroissance = (((totauxAnim.naiss - totauxAnim.dec) / baseEffectif) * 100).toFixed(1)
+
+  // Décès détaillés (avec motifs) sur la période
+  const decesDetail = useMemo(() => {
+    const result = []
+    invPeriode.forEach((inv) => {
+      especes.forEach((e) => {
+        const a = inv.animaux?.[e.id]
+        if (!a) return
+        const sorties = a.sorties || []
+        const decSorties = sorties.filter((l) => l.type === 'Décès' && (parseInt(l.qte) || 0) > 0)
+        if (decSorties.length) {
+          decSorties.forEach((l) => result.push({
+            date: inv.date, espece: e.nom, cat: e.cat,
+            qte: parseInt(l.qte) || 0, motif: l.label || '—', agent: l.agentNom || inv.agentNom || '—'
+          }))
+        } else if ((a.dec || 0) > 0) {
+          result.push({ date: inv.date, espece: e.nom, cat: e.cat, qte: a.dec, motif: '—', agent: inv.agentNom || '—' })
+        }
+      })
+    })
+    return result.sort((a, b) => b.date.localeCompare(a.date))
+  }, [invPeriode, especes])
+
+  // Naissances détaillées sur la période
+  const naissancesDetail = useMemo(() => {
+    const result = []
+    invPeriode.forEach((inv) => {
+      especes.forEach((e) => {
+        const a = inv.animaux?.[e.id]
+        if (!a) return
+        const entrees = a.entrees || []
+        const naissEntrees = entrees.filter((l) => l.type === 'Naissance' && (parseInt(l.qte) || 0) > 0)
+        if (naissEntrees.length) {
+          naissEntrees.forEach((l) => result.push({
+            date: inv.date, espece: e.nom, cat: e.cat,
+            qte: parseInt(l.qte) || 0, agent: l.agentNom || inv.agentNom || '—'
+          }))
+        } else if ((a.naiss || 0) > 0) {
+          result.push({ date: inv.date, espece: e.nom, cat: e.cat, qte: a.naiss, agent: inv.agentNom || '—' })
+        }
+      })
+    })
+    return result.sort((a, b) => b.date.localeCompare(a.date))
+  }, [invPeriode, especes])
+
+  // Effectifs et mouvements par catégorie POUR LA PÉRIODE (pas seulement aujourd'hui)
+  const parCatPeriode = useMemo(() => cats.map((cat) => {
+    const efFinal = especes.filter((e) => e.cat === cat).reduce((s, e) => s + (dernier?.animaux?.[e.id]?.fin || 0), 0)
+    let entPeriode = 0, sorPeriode = 0, naissP = 0, decP = 0
+    invPeriode.forEach((inv) => {
+      especes.filter((e) => e.cat === cat).forEach((e) => {
+        const a = inv.animaux?.[e.id]
+        if (a) { entPeriode += (a.ent || 0) + (a.naiss || 0); sorPeriode += (a.sor || 0) + (a.dec || 0); naissP += a.naiss || 0; decP += a.dec || 0 }
+      })
+    })
+    return { cat, efFinal, entPeriode, sorPeriode, naissP, decP, color: catColor(cat) }
+  }), [cats, especes, dernier, invPeriode])
 
   const alimentsStock = useMemo(() => {
     return aliments.map((a) => {
@@ -224,28 +282,28 @@ export default function DecisionBI({
 
       {/* Tableaux décisionnels */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Effectifs par catégorie (aujourd'hui)">
+        <Card title={`Effectifs par catégorie — période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Catégorie</th>
-                  <th className="px-2 py-2 text-center">Effectif</th>
-                  <th className="px-2 py-2 text-center">Entrées Δ</th>
-                  <th className="px-2 py-2 text-center">Sorties Δ</th>
+                  <th className="px-2 py-2 text-center">EF Final</th>
+                  <th className="px-2 py-2 text-center">Entrées période</th>
+                  <th className="px-2 py-2 text-center">Sorties période</th>
+                  <th className="px-2 py-2 text-center">Naiss.</th>
+                  <th className="px-2 py-2 text-center">Décès</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {parCat.map((p) => (
+                {parCatPeriode.map((p) => (
                   <tr key={p.cat}>
                     <td className="px-3 py-1.5 font-semibold" style={{ color: p.color }}>{p.cat}</td>
-                    <td className="px-2 py-1.5 text-center font-bold">{formatNumber(p.total)}</td>
-                    <td className={`px-2 py-1.5 text-center text-xs font-semibold ${p.diffEnt >= 0 ? 'text-sky-600' : 'text-sky-800'}`}>
-                      {p.diffEnt >= 0 ? '+' : ''}{p.diffEnt}
-                    </td>
-                    <td className={`px-2 py-1.5 text-center text-xs font-semibold ${p.diffSor >= 0 ? 'text-amber-600' : 'text-amber-800'}`}>
-                      {p.diffSor >= 0 ? '+' : ''}{p.diffSor}
-                    </td>
+                    <td className="px-2 py-1.5 text-center font-bold">{formatNumber(p.efFinal)}</td>
+                    <td className="px-2 py-1.5 text-center text-xs font-semibold text-sky-600">{formatNumber(p.entPeriode)}</td>
+                    <td className="px-2 py-1.5 text-center text-xs font-semibold text-amber-600">{formatNumber(p.sorPeriode)}</td>
+                    <td className="px-2 py-1.5 text-center text-xs text-green-600">{formatNumber(p.naissP)}</td>
+                    <td className="px-2 py-1.5 text-center text-xs text-red-600">{formatNumber(p.decP)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -332,7 +390,7 @@ export default function DecisionBI({
       <KpiDetailModal
         id={kpiDetail}
         onClose={() => setKpiDetail(null)}
-        data={{ achats, ventes, totauxAnim, parCat, alimentsStock, topClients, facturesPeriode, demandesPeriode, interventions, effectifTotal, caTotal }}
+        data={{ achats, ventes, totauxAnim, parCat, parCatPeriode, alimentsStock, topClients, facturesPeriode, demandesPeriode, demandesEnAttenteList, interventions, effectifTotal, caTotal, decesDetail, naissancesDetail, invPeriode, baseEffectif, tauxMortalite, tauxCroissance, start, end }}
       />
     </div>
   )
@@ -341,14 +399,14 @@ export default function DecisionBI({
 function KpiDetailModal({ id, onClose, data }) {
   if (!id) return null
   const titles = {
-    effectif: 'Détail effectif par catégorie',
+    effectif: 'Détail effectif par catégorie (période)',
     ca: 'Factures de la période',
     achats: 'Détail des achats',
     ventes: 'Détail des ventes',
-    naiss: 'Synthèse naissances',
-    dec: 'Synthèse décès',
-    saisies: 'Saisies enregistrées',
-    demandes: 'Demandes de sortie',
+    naiss: 'Détail des naissances — période',
+    dec: 'Détail des décès avec motifs — période',
+    saisies: 'Saisies enregistrées sur la période',
+    demandes: 'Demandes de sortie EN ATTENTE',
     sante: 'Interventions santé'
   }
 
@@ -356,9 +414,115 @@ function KpiDetailModal({ id, onClose, data }) {
   if (id === 'effectif') {
     content = (
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Catégorie</th><th className="p-2 text-center">Effectif</th></tr></thead>
-        <tbody>{data.parCat.map((p) => <tr key={p.cat} className="border-t"><td className="p-2 font-semibold">{p.cat}</td><td className="p-2 text-center font-bold">{formatNumber(p.total)}</td></tr>)}</tbody>
-        <tfoot className="bg-gray-50 font-bold"><tr><td className="p-2 text-right">Total</td><td className="p-2 text-center">{formatNumber(data.effectifTotal)}</td></tr></tfoot>
+        <thead className="bg-gray-50 text-xs uppercase">
+          <tr>
+            <th className="p-2 text-left">Catégorie</th>
+            <th className="p-2 text-center">EF Final</th>
+            <th className="p-2 text-center">Entrées</th>
+            <th className="p-2 text-center">Sorties</th>
+            <th className="p-2 text-center">Naissances</th>
+            <th className="p-2 text-center">Décès</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(data.parCatPeriode || []).map((p) => (
+            <tr key={p.cat} className="border-t">
+              <td className="p-2 font-semibold" style={{ color: p.color }}>{p.cat}</td>
+              <td className="p-2 text-center font-bold">{formatNumber(p.efFinal)}</td>
+              <td className="p-2 text-center text-sky-600">{formatNumber(p.entPeriode)}</td>
+              <td className="p-2 text-center text-amber-600">{formatNumber(p.sorPeriode)}</td>
+              <td className="p-2 text-center text-green-600">{formatNumber(p.naissP)}</td>
+              <td className="p-2 text-center text-red-600">{formatNumber(p.decP)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-gray-50 font-bold">
+          <tr><td className="p-2 text-right" colSpan={1}>Total</td><td className="p-2 text-center">{formatNumber(data.effectifTotal)}</td></tr>
+        </tfoot>
+      </table>
+    )
+  } else if (id === 'naiss') {
+    content = (
+      <div className="space-y-3">
+        <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">
+          <strong>{data.totauxAnim?.naiss || 0}</strong> naissances — Taux de croissance : <strong>{data.tauxCroissance} %</strong>
+          <span className="ml-2 text-xs text-green-600">(formule : ((Naissances − Décès) / EF initial) × 100)</span>
+        </p>
+        {(data.naissancesDetail || []).length === 0 ? (
+          <p className="py-6 text-center text-gray-400">Aucune naissance enregistrée.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase">
+              <tr><th className="p-2">Date</th><th className="p-2">Espèce</th><th className="p-2">Catégorie</th><th className="p-2 text-center">Nés</th><th className="p-2">Agent</th></tr>
+            </thead>
+            <tbody>
+              {data.naissancesDetail.map((n, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-2 font-mono text-xs">{formatDateShort(n.date)}</td>
+                  <td className="p-2 font-semibold">{n.espece}</td>
+                  <td className="p-2 text-gray-500">{n.cat}</td>
+                  <td className="p-2 text-center font-bold text-green-600">{n.qte}</td>
+                  <td className="p-2 text-xs text-gray-400">{n.agent}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    )
+  } else if (id === 'dec') {
+    content = (
+      <div className="space-y-3">
+        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">
+          <strong>{data.totauxAnim?.dec || 0}</strong> décès — Taux de mortalité : <strong>{data.tauxMortalite} %</strong>
+          <span className="ml-2 text-xs text-red-600">(formule : (Décès / EF initial) × 100 — EF initial : {formatNumber(data.baseEffectif)} têtes)</span>
+        </p>
+        {(data.decesDetail || []).length === 0 ? (
+          <p className="py-6 text-center text-gray-400">Aucun décès enregistré.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase">
+              <tr><th className="p-2">Date</th><th className="p-2">Espèce</th><th className="p-2">Catégorie</th><th className="p-2 text-center">Qté</th><th className="p-2">Motif</th><th className="p-2">Agent</th></tr>
+            </thead>
+            <tbody>
+              {data.decesDetail.map((d, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-2 font-mono text-xs">{formatDateShort(d.date)}</td>
+                  <td className="p-2 font-semibold">{d.espece}</td>
+                  <td className="p-2 text-gray-500">{d.cat}</td>
+                  <td className="p-2 text-center font-bold text-red-600">{d.qte}</td>
+                  <td className="p-2 text-gray-700">{d.motif}</td>
+                  <td className="p-2 text-xs text-gray-400">{d.agent}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    )
+  } else if (id === 'saisies') {
+    const saisiesTri = [...(data.invPeriode || [])].sort((a, b) => b.date.localeCompare(a.date))
+    content = (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase">
+          <tr><th className="p-2">Date</th><th className="p-2">Agent</th><th className="p-2 text-center">EF Total</th><th className="p-2 text-center">Entrées</th><th className="p-2 text-center">Sorties</th></tr>
+        </thead>
+        <tbody>
+          {saisiesTri.map((inv) => {
+            const tetes = Object.values(inv.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)
+            const ent = Object.values(inv.animaux || {}).reduce((s, a) => s + (a.ent || 0) + (a.naiss || 0), 0)
+            const sor = Object.values(inv.animaux || {}).reduce((s, a) => s + (a.sor || 0) + (a.dec || 0), 0)
+            return (
+              <tr key={inv.date} className="border-t">
+                <td className="p-2 font-mono text-xs">{formatDateShort(inv.date)}</td>
+                <td className="p-2">{inv.agentNom || '—'}</td>
+                <td className="p-2 text-center font-bold">{formatNumber(tetes)}</td>
+                <td className="p-2 text-center text-sky-600">+{ent}</td>
+                <td className="p-2 text-center text-amber-600">−{sor}</td>
+              </tr>
+            )
+          })}
+        </tbody>
       </table>
     )
   } else if (id === 'achats') {
@@ -379,18 +543,25 @@ function KpiDetailModal({ id, onClose, data }) {
       </table>
     )
   } else if (id === 'demandes') {
+    const liste = data.demandesEnAttenteList || []
     content = (
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2">N°</th><th className="p-2">Article</th><th className="p-2">Statut</th><th className="p-2 text-center">Qté</th></tr></thead>
-        <tbody>{data.demandesPeriode.map((d) => (
-          <tr key={d.id || d.num} className="border-t">
-            <td className="p-2 font-mono text-xs">{d.num}</td>
-            <td className="p-2">{d.articleNom}</td>
-            <td className="p-2">{d.statut}</td>
-            <td className="p-2 text-center">{d.qte}</td>
-          </tr>
-        ))}</tbody>
-      </table>
+      <div className="space-y-2">
+        <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <strong>{liste.length}</strong> demande(s) en attente d'approbation
+        </p>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2">N°</th><th className="p-2">Article</th><th className="p-2">Date</th><th className="p-2 text-center">Qté</th><th className="p-2">Demandeur</th></tr></thead>
+          <tbody>{liste.length ? liste.map((d) => (
+            <tr key={d.id || d.num} className="border-t">
+              <td className="p-2 font-mono text-xs">{d.num}</td>
+              <td className="p-2">{d.articleNom}</td>
+              <td className="p-2 text-xs">{formatDateShort(d.date)}</td>
+              <td className="p-2 text-center">{d.qte}</td>
+              <td className="p-2 text-xs text-gray-500">{d.agentNom || '—'}</td>
+            </tr>
+          )) : <tr><td colSpan={5} className="p-4 text-center text-gray-400">Aucune demande en attente.</td></tr>}</tbody>
+        </table>
+      </div>
     )
   } else if (id === 'sante') {
     content = (
@@ -407,7 +578,7 @@ function KpiDetailModal({ id, onClose, data }) {
       </table>
     )
   } else {
-    content = <p className="py-6 text-center text-gray-500">Consultez les graphiques ci-dessus pour le détail complet.</p>
+    content = <p className="py-6 text-center text-gray-500">Consultez les graphiques ci-dessus.</p>
   }
 
   return (

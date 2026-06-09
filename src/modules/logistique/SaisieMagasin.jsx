@@ -33,7 +33,8 @@ export default function SaisieMagasin() {
   const [saving, setSaving] = useState(false)
   const [mvtModal, setMvtModal] = useState(null) // { id, dir, nom, unite }
 
-  const peutEditerInit = role === 'admin' || role === 'controleur'
+  const peutSaisir = role === 'agent'
+  const peutEditerInit = false // toujours reporté automatiquement
 
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { materiels: {} }
@@ -104,6 +105,11 @@ export default function SaisieMagasin() {
 
   return (
     <div className="space-y-4">
+      {!peutSaisir && (
+        <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          👁️ Mode consultation — seuls les agents peuvent effectuer des saisies magasin
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
@@ -115,7 +121,7 @@ export default function SaisieMagasin() {
         </div>
         <div className="ml-auto flex gap-2">
           <Link to="/logistique/demandes"><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
-          <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>
+          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
       </div>
 
@@ -132,11 +138,11 @@ export default function SaisieMagasin() {
             <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
               <tr>
                 <th className="bg-gray-50 px-3 py-2 text-left">Matériel</th>
-                <th className="bg-gray-50 px-2 py-2 text-center">EF Initial 🔒</th>
+                <th className="bg-gray-50 px-2 py-2 text-center">Stock Initial 🔒</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Achats</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Retours</th>
-                <th className="bg-gray-50 px-2 py-2 text-center">EF Final 🔒</th>
+                <th className="bg-gray-50 px-2 py-2 text-center">Stock Final 🔒</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -180,6 +186,7 @@ export default function SaisieMagasin() {
         stock={stock}
         autoSor={mvtModal ? autoSorOf(mvtModal.id) : 0}
         user={user}
+        peutSaisir={peutSaisir}
         onClose={() => setMvtModal(null)}
         onChange={(lignes) => setLignes(mvtModal.id, mvtModal.dir, lignes)}
       />
@@ -200,13 +207,13 @@ function MvtCell({ total, tone, onClick, sub }) {
   )
 }
 
-function MouvementModal({ modal, stock, autoSor, user, onClose, onChange }) {
+function MouvementModal({ modal, stock, autoSor, user, peutSaisir, onClose, onChange }) {
   if (!modal) return null
   const { id, dir, nom, unite } = modal
   const field = dir === 'entree' ? 'entrees' : dir === 'sortie' ? 'sorties' : 'retours'
   const lignes = stock[id]?.[field] || []
   const types = dir === 'entree' ? ENTREE_TYPES : dir === 'sortie' ? SORTIE_TYPES_SAISIE : RETOUR_TYPES
-  const peutEditer = (l) => user && peutModifierLigne(l, user.uid)
+  const peutEditer = (l) => peutSaisir && user && peutModifierLigne(l, user.uid)
 
   const titles = { entree: '⬇️ Achats', sortie: '⬆️ Sorties', retour: '🔄 Retours' }
 
@@ -254,7 +261,7 @@ function MouvementModal({ modal, stock, autoSor, user, onClose, onChange }) {
           )
         })}
       </div>
-      <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter</Button>
+      {peutSaisir && <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter</Button>}
     </Modal>
   )
 }

@@ -7,7 +7,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' : on contrôle nous-mêmes l'application de la mise à jour via
+      // <UpdateManager/> (polling périodique + rechargement forcé pour tous).
+      registerType: 'prompt',
+      // On enregistre le service worker manuellement (useRegisterSW) afin d'éviter
+      // un double enregistrement avec le script auto-injecté.
+      injectRegister: false,
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],

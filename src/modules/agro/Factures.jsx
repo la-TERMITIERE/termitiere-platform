@@ -26,7 +26,9 @@ const emptyFacture = () => ({
 })
 
 export default function Factures() {
-  const { user, canManage } = useAuth()
+  const { user, role } = useAuth()
+  // Seuls les agents créent/modifient/suppriment des factures ; admin/ctrl consultent.
+  const peutFacturer = () => role === 'agent'
   const { data: factures } = useCollection('agro_factures')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
@@ -120,8 +122,8 @@ export default function Factures() {
       render: (r) => (
         <div className="flex justify-end gap-1">
           <button title="PDF" onClick={() => generateFacturePDF(r)} className="rounded p-1.5 text-secondary hover:bg-sky-50"><FileDown size={16} /></button>
-          {canManage() && <button title="Modifier" onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
-          {canManage() && <button title="Supprimer" onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
+          {peutFacturer() && <button title="Modifier" onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
+          {peutFacturer() && <button title="Supprimer" onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
         </div>
       )
     }
@@ -131,7 +133,7 @@ export default function Factures() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Input className="max-w-xs" placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-        {canManage() && <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
+        {peutFacturer() && <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
       </div>
 
       <Card className="p-0">

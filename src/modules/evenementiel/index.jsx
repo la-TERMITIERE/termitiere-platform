@@ -9,6 +9,7 @@ import Ventes from './Ventes'
 import Demandes from './Demandes'
 import Params from './Params'
 import Clients from './Clients'
+import Journal from './Journal'
 import { useBriqueterieStore } from './store/referentielStore'
 
 export default function EvenementielModule() {
@@ -25,6 +26,7 @@ export default function EvenementielModule() {
       <Route path="demandes" element={<Demandes />} />
       <Route path="params" element={<Params />} />
       <Route path="clients" element={<Clients />} />
+      <Route path="journal" element={<Journal />} />
     </Routes>
   )
 }

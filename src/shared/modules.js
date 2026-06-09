@@ -80,7 +80,9 @@ export const MODULE_NAV = {
     { label: 'Retours matériel', to: '/logistique/retours', icon: RotateCcw },
     { label: 'Référentiel matériel', to: '/logistique/referentiel', icon: Boxes },
     { label: 'Clients', to: '/logistique/clients', icon: UserCircle },
-    { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory }
+    { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory },
+    { label: 'Journal', to: '/logistique/journal', icon: BookOpen },
+    { label: 'Paramètres', to: '/logistique/params', icon: Settings }
   ],
   evenementiel: [
     { label: 'Dashboard', to: '/evenementiel', icon: LayoutDashboard, end: true },
@@ -89,12 +91,15 @@ export const MODULE_NAV = {
     { label: 'Stock briques', to: '/evenementiel/stock', icon: Package },
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
+    { label: 'Journal', to: '/evenementiel/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle }
   ],
   foncier: [
     { label: 'Dashboard', to: '/foncier', icon: LayoutDashboard, end: true },
-    { label: 'Dossiers fonciers', to: '/foncier/dossiers', icon: FileText }
+    { label: 'Dossiers fonciers', to: '/foncier/dossiers', icon: FileText },
+    { label: 'Journal', to: '/foncier/journal', icon: BookOpen },
+    { label: 'Paramètres', to: '/foncier/params', icon: Settings }
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }

@@ -52,50 +52,92 @@ export function genererDocumentPDF(facture, type = 'FACTURE') {
   const doc = new jsPDF()
   let y = header(doc, `${type} N° ${facture.numero}`)
 
+  // Bloc date + référence
   doc.setFontSize(9)
   doc.setTextColor(60, 60, 60)
-  doc.text(`Date : ${formatDate(facture.date)}`, 14, y)
-  // Bloc client
-  y += 8
-  doc.setFont('helvetica', 'bold')
-  doc.text('Client', 14, y)
-  doc.setFont('helvetica', 'normal')
+  doc.text(`Date d'émission : ${formatDate(facture.date)}`, 14, y)
+  doc.text(`Référence : ${facture.numero}`, 14, y + 5)
+
+  // Bloc client (à droite)
   const c = facture.client || {}
-  const lignesClient = [c.nom, c.tel, c.email, c.adresse].filter(Boolean)
-  lignesClient.forEach((l, i) => doc.text(String(l), 14, y + 5 + i * 4))
+  y += 2
+  doc.setDrawColor(...VERT)
+  doc.setFillColor(252, 248, 248)
+  const clientLines = [c.nom, c.tel, c.email, c.adresse].filter(Boolean)
+  doc.roundedRect(120, y, 76, 8 + clientLines.length * 5, 2, 2, 'FD')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...VERT)
+  doc.text('DESTINATAIRE', 122, y + 5)
+  doc.setTextColor(60, 60, 60)
+  doc.setFont('helvetica', 'normal')
+  clientLines.forEach((l, i) => doc.text(String(l), 122, y + 10 + i * 5))
 
   // Tableau des lignes
+  const tableStartY = y + 12 + clientLines.length * 5 + 4
   autoTable(doc, {
-    startY: y + 5 + lignesClient.length * 4 + 4,
-    head: [['Article', 'Qté', 'Prix unit.', 'Total']],
-    body: (facture.lignes || []).map((l) => [
-      l.article,
+    startY: tableStartY,
+    head: [['N°', 'Désignation / Article', 'Qté', 'Prix unitaire (FCFA)', 'Montant (FCFA)']],
+    body: (facture.lignes || []).map((l, i) => [
+      String(i + 1),
+      l.article || '—',
       String(l.qte),
-      formatMoney(l.prixUnit),
-      formatMoney(l.total)
+      new Intl.NumberFormat('fr-FR').format(Math.round(l.prixUnit || 0)),
+      new Intl.NumberFormat('fr-FR').format(Math.round(l.total || 0))
     ]),
     theme: 'striped',
-    headStyles: { fillColor: VERT, textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 2.5 },
-    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+    headStyles: { fillColor: VERT, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      2: { halign: 'center', cellWidth: 12 },
+      3: { halign: 'right', cellWidth: 42 },
+      4: { halign: 'right', cellWidth: 42 }
+    },
+    alternateRowStyles: { fillColor: [252, 248, 248] }
   })
 
-  // Totaux
-  let ty = doc.lastAutoTable.finalY + 6
+  // Totaux dans un cadre
+  let ty = doc.lastAutoTable.finalY + 8
   const right = 196
-  const ligne = (label, val, bold = false) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setFontSize(bold ? 11 : 9)
-    doc.text(label, 140, ty)
-    doc.text(formatMoney(val), right, ty, { align: 'right' })
-    ty += bold ? 7 : 5
-  }
-  ligne('Total HT', facture.totalHT || 0)
-  if (facture.remise) ligne(`Remise (${facture.remise}%)`, -((facture.totalHT || 0) * facture.remise) / 100)
-  if (facture.tva) ligne(`TVA (${facture.tva}%)`, ((facture.totalHT || 0) * (1 - (facture.remise || 0) / 100) * facture.tva) / 100)
+  const boxLeft = 125
+
+  // Cadre pour les totaux
   doc.setDrawColor(...VERT)
-  doc.line(140, ty - 2, right, ty - 2)
-  ligne('TOTAL TTC', facture.totalTTC || 0, true)
+  doc.setFillColor(252, 252, 252)
+
+  const formatNum = (v) => new Intl.NumberFormat('fr-FR').format(Math.round(v || 0)) + ' FCFA'
+
+  const totalHT = facture.totalHT || 0
+  const remiseMontant = facture.remise ? totalHT * facture.remise / 100 : 0
+  const baseTVA = totalHT - remiseMontant
+  const tvaMontant = facture.tva ? baseTVA * facture.tva / 100 : 0
+
+  const ligneTotaux = (label, val, highlight = false) => {
+    doc.setFont('helvetica', highlight ? 'bold' : 'normal')
+    doc.setFontSize(highlight ? 11 : 9)
+    if (highlight) doc.setTextColor(...VERT)
+    else doc.setTextColor(60, 60, 60)
+    doc.text(label, boxLeft, ty)
+    doc.text(formatNum(val), right, ty, { align: 'right' })
+    if (highlight) {
+      doc.setDrawColor(...VERT)
+      doc.line(boxLeft, ty - 3, right, ty - 3)
+    }
+    ty += highlight ? 8 : 6
+    doc.setTextColor(60, 60, 60)
+  }
+  ligneTotaux('Sous-total HT', totalHT)
+  if (facture.remise) ligneTotaux(`Remise (${facture.remise} %)`, -remiseMontant)
+  if (facture.tva) ligneTotaux(`TVA (${facture.tva} %)`, tvaMontant)
+  ligneTotaux('TOTAL À PAYER', facture.totalTTC || 0, true)
+
+  // Note de bas de facture
+  ty += 8
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7)
+  doc.setTextColor(120, 120, 120)
+  doc.text('Règlement à réception. Tout paiement doit être accompagné du numéro de facture.', 14, ty)
 
   footer(doc)
   doc.save(`${type}-${facture.numero}.pdf`)

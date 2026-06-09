@@ -16,7 +16,8 @@ import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 
 export default function Factures() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const peutFacturer = role === 'agent'
   const { data: factures } = useCollection('logistique_factures')
   const { data: prestations } = useCollection('logistique_prestations')
   const [open, setOpen] = useState(false)
@@ -43,14 +44,21 @@ export default function Factures() {
 
   return (
     <div className="space-y-4">
+      {!peutFacturer && (
+        <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          👁️ Mode consultation — seuls les agents peuvent émettre des factures
+        </div>
+      )}
       <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
         <strong>Workflow :</strong> Prestation → Facture → Autorisation hiérarchique → Sortie magasin automatique
       </div>
-      <div className="flex justify-end">
-        <Button onClick={() => { setPrestId(brouillons[0]?.id || ''); setOpen(true) }} disabled={!brouillons.length}>
-          <Plus size={16} /> Émettre une facture
-        </Button>
-      </div>
+      {peutFacturer && (
+        <div className="flex justify-end">
+          <Button onClick={() => { setPrestId(brouillons[0]?.id || ''); setOpen(true) }} disabled={!brouillons.length}>
+            <Plus size={16} /> Émettre une facture
+          </Button>
+        </div>
+      )}
       <Card className="p-0">
         <Table
           columns={[

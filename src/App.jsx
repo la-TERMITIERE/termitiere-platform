@@ -5,6 +5,7 @@ import { useAuth } from './hooks/useAuth'
 import AppShell from './shared/Layout/AppShell'
 import LoadingSpinner from './shared/ui/LoadingSpinner'
 import ToastContainer from './shared/ui/Toast'
+import UpdateManager from './shared/UpdateManager'
 import Login from './portal/Login'
 import PortalHome from './portal/PortalHome'
 import GlobalDashboard from './portal/GlobalDashboard'
@@ -52,6 +53,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <UpdateManager />
       <ToastContainer />
       <Routes>
         {/* Connexion : si déjà connecté, on renvoie au portail */}

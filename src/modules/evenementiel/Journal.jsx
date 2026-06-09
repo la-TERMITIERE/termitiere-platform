@@ -1,70 +1,40 @@
-// Journal d'activité : accès verrouillé par code PIN. Historique de TOUT ce qui
-// se passe sur l'application (saisies, factures, demandes, santé, utilisateurs,
-// connexions, logistique, événementiel…), avec sélecteur de période (calendrier
-// + plage personnalisée) et filtre par type d'événement.
+// Journal d'activité Briqueterie — événements filtrés sur module === 'evenementiel'.
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Badge from '../../shared/ui/Badge'
 import Select from '../../shared/forms/Select'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateTime, formatDateShort } from '../../utils/formatters'
 
-// Libellé + icône par type d'événement.
 const EVENTS = {
-  SAISIE:         { label: 'Saisie journalière', emoji: '📝' },
-  FACTURE:        { label: 'Facture créée', emoji: '🧾' },
-  FACTURE_EDIT:   { label: 'Facture modifiée', emoji: '✏️' },
-  FACTURE_DELETE: { label: 'Facture supprimée', emoji: '🗑️' },
-  DEMANDE:        { label: 'Demande de sortie', emoji: '📤' },
-  APPROBATION:    { label: 'Demande approuvée', emoji: '✅' },
-  REFUS:          { label: 'Demande refusée', emoji: '⛔' },
-  SANTE:          { label: 'Fiche santé', emoji: '🩺' },
-  VACCIN:         { label: 'Vaccination / traitement', emoji: '💉' },
-  RDV:            { label: 'Rendez-vous programmé', emoji: '📅' },
-  RDV_FAIT:       { label: 'Rendez-vous clôturé', emoji: '✔️' },
-  STOCK_VACCIN:   { label: 'Stock vaccins / produits', emoji: '🧪' },
-  RESET:          { label: 'Réinitialisation des données', emoji: '♻️' },
-  USER_CREATE:    { label: 'Utilisateur créé', emoji: '👤' },
-  USER_EDIT:      { label: 'Utilisateur modifié', emoji: '🪪' },
-  USER_DELETE:    { label: 'Utilisateur supprimé', emoji: '🚫' },
-  CONNEXION:      { label: 'Connexion', emoji: '🔑' },
-  VEHICULE:       { label: 'Véhicule', emoji: '🚚' },
-  LIVRAISON:      { label: 'Livraison', emoji: '📦' },
-  EVENEMENT:      { label: 'Événement', emoji: '🎪' },
-  STATUT:         { label: 'Changement de statut', emoji: '🔁' }
+  SAISIE_MATIERE:  { label: 'Saisie matières premières', emoji: '🪨' },
+  PRODUCTION:      { label: 'Production enregistrée', emoji: '🧱' },
+  VENTE:           { label: 'Vente créée', emoji: '🛒' },
+  DEMANDE:         { label: 'Autorisation demandée', emoji: '📤' },
+  APPROBATION:     { label: 'Autorisation approuvée', emoji: '✅' },
+  REFUS:           { label: 'Autorisation refusée', emoji: '⛔' },
+  RESET:           { label: 'Réinitialisation', emoji: '♻️' },
+  STATUT:          { label: 'Changement de statut', emoji: '🔁' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
-
-const MODULES_LBL = {
-  agro: 'MAXI-AGRO', logistique: 'Logistique', evenementiel: 'Événementiel',
-  rh: 'RH', portail: 'Portail'
-}
-const moduleLabel = (m) => MODULES_LBL[m] || m || '—'
-
-// Horodatage robuste (ms). Replie sur createdAt si besoin.
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))
 const dayOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '')
 
 export default function Journal() {
   const { data: events } = useCollection('audit_global')
-
-  const [type, setType] = useState('')      // filtre type d'événement
-  const [who, setWho] = useState('')         // filtre utilisateur
-  const [openRow, setOpenRow] = useState(null) // ligne dépliée (détails)
+  const [type, setType] = useState('')
+  const [who, setWho] = useState('')
+  const [openRow, setOpenRow] = useState(null)
   const { start, end, node: periodNode } = usePeriodSelect('30')
 
-  // On filtre : uniquement les événements du module AGRO (pas les autres modules).
-  // On ignore aussi les connexions (non pertinentes pour le journal métier).
   const evenements = useMemo(
-    () => events.filter((e) => e.module === 'agro' && e.action !== 'CONNEXION'),
+    () => events.filter((e) => e.module === 'evenementiel' && e.action !== 'CONNEXION'),
     [events]
   )
 
-  // Types présents dans les données (pour alimenter le filtre).
   const typesPresents = useMemo(
     () => [...new Set(evenements.map((e) => e.action).filter(Boolean))].sort(),
     [evenements]
@@ -92,13 +62,13 @@ export default function Journal() {
       Rôle: l.userRole || '—',
       Événement: evInfo(l.action).label,
       Détails: l.details || '—',
-      'Détails complets': metaToText(l.meta)
+      Métadonnées: metaToText(l.meta)
     }))
     exportRapportExcel({
-      filename: `journal-maxi-agro-${start}_${end}.xlsx`,
+      filename: `journal-briqueterie-${start}_${end}.xlsx`,
       sections: [{
-        id: 'journal', name: 'Journal MAXI-AGRO',
-        title: 'Journal d\'activité — MAXI-AGRO',
+        id: 'journal', name: 'Journal Briqueterie',
+        title: 'Journal d\'activité — Briqueterie',
         subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} événement(s)`,
         columns: [
           { key: 'Date / Heure', label: 'Date / Heure', width: 20 },
@@ -106,7 +76,7 @@ export default function Journal() {
           { key: 'Rôle', label: 'Rôle', width: 14 },
           { key: 'Événement', label: 'Événement', width: 26 },
           { key: 'Détails', label: 'Détails', width: 40 },
-          { key: 'Détails complets', label: 'Métadonnées', width: 50 }
+          { key: 'Métadonnées', label: 'Métadonnées', width: 50 }
         ],
         rows
       }]
@@ -115,7 +85,6 @@ export default function Journal() {
 
   return (
     <div className="space-y-4">
-      {/* Filtres : période + type d'événement + utilisateur */}
       <div className="flex flex-wrap items-end gap-3">
         {periodNode}
         <div>
@@ -145,30 +114,25 @@ export default function Journal() {
               <th className="w-6 px-2 py-2"></th>
               <th className="px-3 py-2 text-left">Date / heure</th>
               <th className="px-3 py-2 text-left">Événement</th>
-              <th className="px-3 py-2 text-left">Module</th>
               <th className="px-3 py-2 text-left">Utilisateur</th>
               <th className="px-3 py-2 text-left">Détails</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {lignes.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Aucun événement sur la période.</td></tr>
+              <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">Aucun événement sur la période.</td></tr>
             )}
             {lignes.map((r) => {
               const hasMeta = r.meta && Object.keys(r.meta).length > 0
               const isOpen = openRow === r.id
               return (
                 <Fragment key={r.id}>
-                  <tr
-                    className={hasMeta ? 'cursor-pointer hover:bg-gray-50' : ''}
-                    onClick={() => hasMeta && setOpenRow(isOpen ? null : r.id)}
-                  >
+                  <tr className={hasMeta ? 'cursor-pointer hover:bg-gray-50' : ''} onClick={() => hasMeta && setOpenRow(isOpen ? null : r.id)}>
                     <td className="px-2 py-2 text-center text-gray-400">
                       {hasMeta && (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{formatDateTime(r._ms)}</td>
                     <td className="px-3 py-2 font-semibold">{evInfo(r.action).emoji} {evInfo(r.action).label}</td>
-                    <td className="px-3 py-2"><Badge tone="neutral">{moduleLabel(r.module)}</Badge></td>
                     <td className="px-3 py-2">
                       {r.userNom || '—'}
                       {r.userRole && <span className="ml-1 text-xs capitalize text-gray-400">· {r.userRole}</span>}
@@ -178,9 +142,7 @@ export default function Journal() {
                   {hasMeta && isOpen && (
                     <tr className="bg-gray-50/70">
                       <td></td>
-                      <td colSpan={5} className="px-3 py-2">
-                        <MetaDetail meta={r.meta} />
-                      </td>
+                      <td colSpan={4} className="px-3 py-2"><MetaDetail meta={r.meta} /></td>
                     </tr>
                   )}
                 </Fragment>
@@ -193,7 +155,6 @@ export default function Journal() {
   )
 }
 
-// Affiche le détail structuré (meta) d'un événement de façon lisible.
 function MetaDetail({ meta }) {
   return (
     <div className="space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs">
@@ -211,7 +172,6 @@ function MetaDetail({ meta }) {
   )
 }
 
-// Convertit un objet meta en texte plat (export Excel).
 function metaToText(meta) {
   if (!meta || typeof meta !== 'object') return ''
   return Object.entries(meta)
