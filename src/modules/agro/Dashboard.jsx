@@ -12,8 +12,8 @@ import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor } from './data'
-import { mouvementsCategorie } from './logic'
-import { formatNumber, formatMoney, todayStr, addDays, formatDateShort, formatDateTime } from '../../utils/formatters'
+import { mouvementsCategorie, agregerAchatsVentes } from './logic'
+import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const PRESETS = [
   { v: 'journalier', label: 'Journalier (aujourd\'hui)' },
@@ -29,6 +29,7 @@ export default function Dashboard() {
   const { data: inventaires, loading } = useCollection('agro_inventaires')
   const { data: factures } = useCollection('agro_factures')
   const especes = useAgroStore((s) => s.especes)
+  const aliments = useAgroStore((s) => s.aliments)
 
   const [preset, setPreset] = useState('journalier')
   const [from, setFrom] = useState(addDays(todayStr(), -30))
@@ -36,8 +37,8 @@ export default function Dashboard() {
   const [catDetail, setCatDetail] = useState(null)
   const [mortaliteOpen, setMortaliteOpen] = useState(false)
   const [naissancesOpen, setNaissancesOpen] = useState(false)
-  const [saisieJourOpen, setSaisieJourOpen] = useState(false)
   const [caOpen, setCaOpen] = useState(false)
+  const [ventesOpen, setVentesOpen] = useState(false)
 
   const isDaily = preset === 'journalier'
 
@@ -51,9 +52,6 @@ export default function Dashboard() {
   const dernier = tri[0]
   const veille = tri[1]
   const invPeriode = useMemo(() => tri.filter((i) => i.date >= start && i.date <= end), [tri, start, end])
-
-  // Saisie du jour (peut être null si pas encore saisie aujourd'hui)
-  const saisieJour = useMemo(() => inventaires.find((i) => i.date === todayStr()), [inventaires])
 
   // Catégories animales présentes (base + personnalisées)
   const cats = useMemo(() => {
@@ -127,6 +125,20 @@ export default function Dashboard() {
     () => factures.filter((f) => f.date >= start && f.date <= end).sort((a, b) => (a.date < b.date ? 1 : -1)),
     [factures, start, end]
   )
+
+  // Ventes (sorties type « Ventes » + demandes approuvées) sur la période,
+  // avec comparaison période précédente — même logique que le chiffre d'affaires.
+  const ventesData = useMemo(() => {
+    const cur = agregerAchatsVentes(invPeriode, especes, aliments)
+    const invPrec = tri.filter((i) => i.date >= ca.prevStart && i.date <= ca.prevEnd)
+    const prev = agregerAchatsVentes(invPrec, especes, aliments)
+    return {
+      courant: cur.totalVentes,
+      precedent: prev.totalVentes,
+      liste: [...cur.ventes].sort((a, b) => b.date.localeCompare(a.date)),
+      refLabel: isDaily ? 'Hier' : 'Période préc.'
+    }
+  }, [invPeriode, especes, aliments, tri, ca, isDaily])
 
   // Évolution effectif total sur la fenêtre
   const evolution = useMemo(() => {
@@ -274,25 +286,7 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Graphiques */}
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card title="Évolution des effectifs" className="lg:col-span-2">
-          <div className="h-72">
-            {evolution.labels.length
-              ? <Line data={evolution} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
-              : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
-          </div>
-        </Card>
-        <Card title="Répartition par catégorie">
-          <div className="h-72">
-            {parCat.some((p) => p.total > 0)
-              ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
-              : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif.</p>}
-          </div>
-        </Card>
-      </div>
-
-      {/* Mini-stats cliquables */}
+      {/* Mini-stats cliquables — remontées au-dessus des graphiques */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MiniStatBtn
           title="Taux de mortalité"
@@ -308,13 +302,24 @@ export default function Dashboard() {
           color="#16a34a"
           onClick={() => setNaissancesOpen(true)}
         />
-        <MiniStatBtn
-          title="Saisie du jour"
-          value={saisieJour ? '✓ Effectuée' : '— Non faite'}
-          sub={saisieJour ? `${formatDateTime(saisieJour.savedAt)} — cliquer pour détails` : 'Aucune saisie aujourd\'hui'}
-          color={saisieJour ? '#0284c7' : '#94a3b8'}
-          onClick={saisieJour ? () => setSaisieJourOpen(true) : undefined}
-        />
+        <button
+          onClick={() => setVentesOpen(true)}
+          className="card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Ventes</p>
+          <div className="flex items-baseline gap-1">
+            <p className="text-xl font-extrabold text-emerald-700">{formatNumber(ventesData.courant)}</p>
+            {ventesData.precedent > 0 && ventesData.courant !== ventesData.precedent && (
+              <span className={`text-xs font-semibold ${ventesData.courant > ventesData.precedent ? 'text-green-600' : 'text-red-600'}`}>
+                {ventesData.courant > ventesData.precedent ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            {ventesData.refLabel} : <span className="font-semibold text-gray-600">{formatNumber(ventesData.precedent)}</span>
+          </p>
+          <p className="text-[11px] text-gray-400">{ventesData.liste.length} vente(s) — cliquer pour détails</p>
+        </button>
         <button
           onClick={() => setCaOpen(true)}
           className="card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
@@ -333,6 +338,24 @@ export default function Dashboard() {
           </p>
           <p className="text-[11px] text-gray-400">{facturesPeriode.length} facture(s) — cliquer pour détails</p>
         </button>
+      </div>
+
+      {/* Graphiques */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Card title="Évolution des effectifs" className="lg:col-span-2">
+          <div className="h-72">
+            {evolution.labels.length
+              ? <Line data={evolution} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+              : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
+          </div>
+        </Card>
+        <Card title="Répartition par catégorie">
+          <div className="h-72">
+            {parCat.some((p) => p.total > 0)
+              ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
+              : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif.</p>}
+          </div>
+        </Card>
       </div>
 
       {/* Détail catégorie */}
@@ -428,53 +451,63 @@ export default function Dashboard() {
         </div>
       </Modal>
 
-      {/* Modal : saisie du jour */}
-      {saisieJour && (
-        <Modal open={saisieJourOpen} onClose={() => setSaisieJourOpen(false)} size="xl" title={`Saisie du jour — ${formatDateShort(todayStr())}`}>
-          <div className="space-y-4">
-            <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
-              Enregistrée le {formatDateTime(saisieJour.savedAt)} par <strong>{saisieJour.agentNom}</strong>
-            </p>
+      {/* Modal : détail des ventes sur la période */}
+      <Modal open={ventesOpen} onClose={() => setVentesOpen(false)} size="lg" title="Détails — Ventes">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-emerald-50 px-3 py-3 text-center">
+              <p className="text-xs text-emerald-600">{isDaily ? "Aujourd'hui" : 'Période courante'}</p>
+              <p className="text-lg font-extrabold text-emerald-800">{formatNumber(ventesData.courant)}</p>
+              <p className="text-[11px] text-emerald-500">{formatDateShort(start)} → {formatDateShort(end)}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 px-3 py-3 text-center">
+              <p className="text-xs text-gray-500">{ventesData.refLabel}</p>
+              <p className="text-lg font-extrabold text-gray-700">{formatNumber(ventesData.precedent)}</p>
+              <p className="text-[11px] text-gray-400">{formatDateShort(ca.prevStart)} → {formatDateShort(ca.prevEnd)}</p>
+            </div>
+          </div>
+          <p className="text-xs italic text-gray-400">
+            Ventes = sorties de type « Ventes » (animaux et aliments) + sorties issues de demandes approuvées.
+          </p>
+          {ventesData.liste.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">Aucune vente enregistrée sur la période.</p>
+          ) : (
             <div className="overflow-x-auto rounded-lg border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                   <tr>
-                    <th className="px-3 py-2 text-left">Espèce</th>
-                    <th className="px-2 py-2 text-center">EF Initial</th>
-                    <th className="px-2 py-2 text-center">Naiss.</th>
-                    <th className="px-2 py-2 text-center">Entrées</th>
-                    <th className="px-2 py-2 text-center">Sorties</th>
-                    <th className="px-2 py-2 text-center">Décès</th>
-                    <th className="px-2 py-2 text-center">EF Final</th>
-                    <th className="px-3 py-2 text-left">Agent</th>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Article</th>
+                    <th className="px-3 py-2 text-left">Catégorie</th>
+                    <th className="px-2 py-2 text-center">Qté</th>
+                    <th className="px-3 py-2 text-left">Détail / Source</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {especes.map((e) => {
-                    const a = saisieJour.animaux?.[e.id]
-                    if (!a && (a?.fin || 0) === 0 && (a?.init || 0) === 0) return null
-                    return (
-                      <tr key={e.id}>
-                        <td className="px-3 py-1.5 font-semibold">{e.nom}</td>
-                        <td className="px-2 py-1.5 text-center">{a?.init || 0}</td>
-                        <td className="px-2 py-1.5 text-center text-green-600">{a?.naiss || 0}</td>
-                        <td className="px-2 py-1.5 text-center text-sky-600">{a?.ent || 0}</td>
-                        <td className="px-2 py-1.5 text-center text-amber-600">{a?.sor || 0}</td>
-                        <td className="px-2 py-1.5 text-center text-red-600">{a?.dec || 0}</td>
-                        <td className="px-2 py-1.5 text-center font-bold text-primary">{a?.fin || 0}</td>
-                        <td className="px-3 py-1.5 text-xs text-gray-400">
-                          {[...(a?.entrees || []), ...(a?.sorties || [])]
-                            .map((l) => l.agentNom).filter(Boolean)[0] || saisieJour.agentNom || '—'}
-                        </td>
-                      </tr>
-                    )
-                  }).filter(Boolean)}
+                  {ventesData.liste.map((v, i) => (
+                    <tr key={i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
+                      <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(v.date)}</td>
+                      <td className="px-3 py-1.5 font-semibold">{v.article}</td>
+                      <td className="px-3 py-1.5 text-gray-500">{v.cat}</td>
+                      <td className="px-2 py-1.5 text-center font-bold text-emerald-600">{v.qte}</td>
+                      <td className="px-3 py-1.5 text-xs text-gray-500">
+                        {v.label || (v.source === 'demande' ? 'Demande approuvée' : '—')}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-emerald-50/50">
+                    <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">Total vendu</td>
+                    <td className="px-2 py-2 text-center font-extrabold text-emerald-800">{formatNumber(ventesData.courant)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
-          </div>
-        </Modal>
-      )}
+          )}
+        </div>
+      </Modal>
 
       {/* Modal : détail du chiffre d'affaires sur la période */}
       <Modal open={caOpen} onClose={() => setCaOpen(false)} size="lg" title="Détails — Chiffre d'affaires">
