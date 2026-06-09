@@ -10,6 +10,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useAgroStore } from './store/agroStore'
+import { useAuth } from '../../hooks/useAuth'
 import { isFirebaseConfigured } from '../../core/firebase'
 import { getAll, setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -108,6 +109,8 @@ function ReferentielTab({ kind }) {
 
 // ── Données : export / import JSON, export Excel ──
 function DonneesTab() {
+  const { role } = useAuth()
+  const isAdmin = role === 'admin'
   const fileRef = useRef(null)
   const oldFileRef = useRef(null)
   const [migrating, setMigrating] = useState(false)
@@ -117,6 +120,7 @@ function DonneesTab() {
   const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins', 'audit_global', 'notifications']
 
   async function reinitialiserTout() {
+    if (!isAdmin) return toast.error('Action réservée à l\'administrateur')
     if (!confirm('⚠️ ATTENTION : ceci supprime DÉFINITIVEMENT toutes les saisies, factures, demandes, fiches santé, le stock de vaccins, le journal et les notifications. Tout repart à zéro (000000). Continuer ?')) return
     if (!confirm('Dernière confirmation : action IRRÉVERSIBLE. Réinitialiser maintenant ?')) return
     setResetting(true)
@@ -316,42 +320,60 @@ function DonneesTab() {
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Card title="Migration depuis l'ancienne app" className="md:col-span-2">
-        <p className="mb-3 text-sm text-gray-500">
-          Importe les données MAXI-AGRO (saisies, factures, demandes, santé) de l'ancienne application.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={migrerFirebase} loading={migrating}><Download size={16} /> Migrer depuis Firebase</Button>
-          <Button variant="outline" onClick={() => oldFileRef.current?.click()}><Upload size={16} /> Importer un export de l'ancienne app</Button>
-          <input ref={oldFileRef} type="file" accept="application/json" className="hidden" onChange={importOldJSON} />
+      {!isAdmin && (
+        <div className="md:col-span-2 flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          👁️ Les opérations d'import et de réinitialisation des données sont réservées à l'administrateur. Vous pouvez consulter et exporter les données.
         </div>
-      </Card>
-      <Card title="Sauvegarde">
-        <p className="mb-3 text-sm text-gray-500">Exportez ou restaurez toutes les données AGRO (mode local).</p>
+      )}
+
+      {isAdmin && (
+        <Card title="Migration depuis l'ancienne app" className="md:col-span-2">
+          <p className="mb-3 text-sm text-gray-500">
+            Importe les données MAXI-AGRO (saisies, factures, demandes, santé) de l'ancienne application.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={migrerFirebase} loading={migrating}><Download size={16} /> Migrer depuis Firebase</Button>
+            <Button variant="outline" onClick={() => oldFileRef.current?.click()}><Upload size={16} /> Importer un export de l'ancienne app</Button>
+            <input ref={oldFileRef} type="file" accept="application/json" className="hidden" onChange={importOldJSON} />
+          </div>
+        </Card>
+      )}
+
+      <Card title="Sauvegarde / Export">
+        <p className="mb-3 text-sm text-gray-500">Exportez les données AGRO{isAdmin ? ' ou restaurez une sauvegarde' : ''}.</p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={exportJSON}><Download size={16} /> Export JSON</Button>
-          <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload size={16} /> Import JSON</Button>
-          <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={importJSON} />
           <Button variant="outline" onClick={() => setExportOpen(true)}>📊 Export Excel multi-sections</Button>
+          {isAdmin && (
+            <>
+              <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload size={16} /> Import JSON</Button>
+              <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={importJSON} />
+            </>
+          )}
         </div>
       </Card>
-      <Card title="Réinitialisation">
-        <p className="mb-3 text-sm text-gray-500">Restaure les espèces et aliments aux valeurs d'usine.</p>
-        <Button variant="outline" onClick={() => { if (confirm('Réinitialiser le référentiel ?')) { useAgroStore.getState().resetReferentiel(); toast.success('Référentiel réinitialisé') } }}>
-          <RotateCcw size={16} /> Réinitialiser le référentiel
-        </Button>
-      </Card>
 
-      <Card title="⚠️ Tout réinitialiser" className="md:col-span-2 border border-red-200">
-        <p className="mb-3 text-sm text-gray-500">
-          Remet <strong>toutes les données à zéro</strong> : saisies, factures, demandes, fiches santé,
-          stock de vaccins, journal d'activité et notifications. Le référentiel des espèces/aliments est conservé.
-          <strong className="text-red-600"> Cette action est irréversible.</strong>
-        </p>
-        <Button variant="danger" onClick={reinitialiserTout} loading={resetting}>
-          <RotateCcw size={16} /> Réinitialiser toutes les données
-        </Button>
-      </Card>
+      {isAdmin && (
+        <Card title="Réinitialisation">
+          <p className="mb-3 text-sm text-gray-500">Restaure les espèces et aliments aux valeurs d'usine.</p>
+          <Button variant="outline" onClick={() => { if (confirm('Réinitialiser le référentiel ?')) { useAgroStore.getState().resetReferentiel(); toast.success('Référentiel réinitialisé') } }}>
+            <RotateCcw size={16} /> Réinitialiser le référentiel
+          </Button>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card title="⚠️ Tout réinitialiser" className="md:col-span-2 border border-red-200">
+          <p className="mb-3 text-sm text-gray-500">
+            Remet <strong>toutes les données à zéro</strong> : saisies, factures, demandes, fiches santé,
+            stock de vaccins, journal d'activité et notifications. Le référentiel des espèces/aliments est conservé.
+            <strong className="text-red-600"> Cette action est irréversible.</strong>
+          </p>
+          <Button variant="danger" onClick={reinitialiserTout} loading={resetting}>
+            <RotateCcw size={16} /> Réinitialiser toutes les données
+          </Button>
+        </Card>
+      )}
 
       {/* Modal export Excel multi-sections */}
       <Modal

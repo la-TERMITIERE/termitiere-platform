@@ -5,7 +5,7 @@
 // - Sélecteur de période : presets + plage personnalisée.
 import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { ChevronRight, Layers, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ChevronRight, Layers, TrendingUp, TrendingDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
@@ -16,8 +16,9 @@ import { mouvementsCategorie } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort, formatDateTime } from '../../utils/formatters'
 
 const PRESETS = [
-  { v: '7', label: '7 derniers jours' },
-  { v: '30', label: '30 derniers jours' },
+  { v: 'journalier', label: 'Journalier (aujourd\'hui)' },
+  { v: '7', label: 'Hebdomadaire (7 jours)' },
+  { v: '30', label: 'Mensuel (30 jours)' },
   { v: '90', label: '90 derniers jours' },
   { v: '180', label: '180 derniers jours' },
   { v: '365', label: 'Cette année (1 an)' },
@@ -26,17 +27,22 @@ const PRESETS = [
 
 export default function Dashboard() {
   const { data: inventaires, loading } = useCollection('agro_inventaires')
+  const { data: factures } = useCollection('agro_factures')
   const especes = useAgroStore((s) => s.especes)
 
-  const [preset, setPreset] = useState('30')
+  const [preset, setPreset] = useState('journalier')
   const [from, setFrom] = useState(addDays(todayStr(), -30))
   const [to, setTo] = useState(todayStr())
   const [catDetail, setCatDetail] = useState(null)
   const [mortaliteOpen, setMortaliteOpen] = useState(false)
   const [naissancesOpen, setNaissancesOpen] = useState(false)
   const [saisieJourOpen, setSaisieJourOpen] = useState(false)
+  const [caOpen, setCaOpen] = useState(false)
+
+  const isDaily = preset === 'journalier'
 
   const { start, end } = useMemo(() => {
+    if (preset === 'journalier') return { start: todayStr(), end: todayStr() }
     if (preset === 'custom') return { start: from, end: to }
     return { start: addDays(todayStr(), -parseInt(preset)), end: todayStr() }
   }, [preset, from, to])
@@ -55,25 +61,72 @@ export default function Dashboard() {
     return [...CAT_ANIMAUX, ...custom].filter((c) => especes.some((e) => e.cat === c))
   }, [especes])
 
-  // Total final + entrées/sorties par catégorie (aujourd'hui ET veille pour comparaison)
+  // Total + référence + entrées/sorties par catégorie.
+  // - Journalier : référence = HIER (effectif final de la veille), mouvements du jour.
+  // - Période    : référence = DÉBUT (effectif initial du début de période),
+  //                entrées/sorties cumulées sur toute la période.
   const parCat = useMemo(() => {
-    const totalCat = (inv, cat) =>
+    const totalCatFin = (inv, cat) =>
       especes.filter((e) => e.cat === cat).reduce((s, e) => s + (inv?.animaux?.[e.id]?.fin || 0), 0)
+    const totalCatInit = (inv, cat) =>
+      especes.filter((e) => e.cat === cat).reduce((s, e) => s + (inv?.animaux?.[e.id]?.init || 0), 0)
+
+    const periodeAsc = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const premierP = periodeAsc[0]
+    const dernierP = periodeAsc[periodeAsc.length - 1]
+
     return cats.map((cat) => {
-      const mJour = mouvementsCategorie(dernier, especes, cat)
-      const mVeille = mouvementsCategorie(veille, especes, cat)
+      if (isDaily) {
+        const mJour = mouvementsCategorie(dernier, especes, cat)
+        return {
+          cat,
+          total: totalCatFin(dernier, cat),
+          reference: veille ? totalCatFin(veille, cat) : null,
+          refLabel: 'Hier',
+          entrees: mJour.entrees,
+          sorties: mJour.sorties,
+          color: catColor(cat)
+        }
+      }
+      let entrees = 0, sorties = 0
+      invPeriode.forEach((inv) => {
+        const m = mouvementsCategorie(inv, especes, cat)
+        entrees += m.entrees
+        sorties += m.sorties
+      })
       return {
         cat,
-        total: totalCat(dernier, cat),
-        totalVeille: veille ? totalCat(veille, cat) : null,
-        entreesJour: mJour.entrees,
-        sortiesJour: mJour.sorties,
-        entVeille: veille ? mVeille.entrees : null,
-        sorVeille: veille ? mVeille.sorties : null,
+        total: dernierP ? totalCatFin(dernierP, cat) : 0,
+        reference: premierP ? totalCatInit(premierP, cat) : null,
+        refLabel: 'Début',
+        entrees,
+        sorties,
         color: catColor(cat)
       }
     })
-  }, [cats, especes, dernier, veille])
+  }, [cats, especes, dernier, veille, invPeriode, isDaily])
+
+  // Chiffre d'affaires (factures émises) sur la période + comparaison période précédente.
+  const ca = useMemo(() => {
+    const sumIn = (s, e) => factures
+      .filter((f) => f.date >= s && f.date <= e)
+      .reduce((acc, f) => acc + (f.totalTTC || 0), 0)
+    const nbDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+    const prevEnd = addDays(start, -1)
+    const prevStart = addDays(prevEnd, -(nbDays - 1))
+    return {
+      courant: sumIn(start, end),
+      precedent: sumIn(prevStart, prevEnd),
+      refLabel: isDaily ? 'Hier' : 'Période préc.',
+      prevStart, prevEnd
+    }
+  }, [factures, start, end, isDaily])
+
+  // Liste des factures de la période (pour la modale CA).
+  const facturesPeriode = useMemo(
+    () => factures.filter((f) => f.date >= start && f.date <= end).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [factures, start, end]
+  )
 
   // Évolution effectif total sur la fenêtre
   const evolution = useMemo(() => {
@@ -183,10 +236,10 @@ export default function Dashboard() {
         </span>
       </div>
 
-      {/* KPI catégories — cliquables, données J-1 en sous-titre */}
+      {/* KPI catégories — cliquables. Référence Hier (journalier) ou Début (période). */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {parCat.map((p) => {
-          const delta = p.totalVeille !== null ? p.total - p.totalVeille : null
+          const delta = p.reference !== null ? p.total - p.reference : null
           return (
             <button
               key={p.cat}
@@ -200,24 +253,20 @@ export default function Dashboard() {
                 <p className="truncate text-xs font-medium uppercase tracking-wide text-gray-500">{p.cat}</p>
                 <div className="flex items-baseline gap-1">
                   <p className="text-2xl font-extrabold text-gray-900">{formatNumber(p.total)}</p>
-                  {delta !== null && (
-                    <span className={`text-xs font-semibold ${delta > 0 ? 'text-green-600' : delta < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                      {delta > 0 ? <TrendingUp size={13} className="inline" /> : delta < 0 ? <TrendingDown size={13} className="inline" /> : <Minus size={13} className="inline" />}
+                  {delta !== null && delta !== 0 && (
+                    <span className={`text-xs font-semibold ${delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {delta > 0 ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
                       {delta > 0 ? '+' : ''}{delta}
                     </span>
                   )}
                 </div>
-                {p.totalVeille !== null && (
-                  <div className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
-                    <p className="text-gray-400">Hier : <span className="font-semibold text-gray-600">{formatNumber(p.totalVeille)}</span></p>
-                    <p className="text-sky-600 font-medium">
-                      Entrées J-1 : {p.entVeille ?? 0} → Auj. : {p.entreesJour}
-                    </p>
-                    <p className="text-amber-600 font-medium">
-                      Sorties J-1 : {p.sorVeille ?? 0} → Auj. : {p.sortiesJour}
-                    </p>
-                  </div>
-                )}
+                <div className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
+                  {p.reference !== null && (
+                    <p className="text-gray-400">{p.refLabel} : <span className="font-semibold text-gray-600">{formatNumber(p.reference)}</span></p>
+                  )}
+                  <p className="font-medium text-sky-600">Entrées : {p.entrees}</p>
+                  <p className="font-medium text-amber-600">Sorties : {p.sorties}</p>
+                </div>
               </div>
               <ChevronRight size={18} className="text-gray-300 transition-colors group-hover:text-gray-500" />
             </button>
@@ -266,11 +315,24 @@ export default function Dashboard() {
           color={saisieJour ? '#0284c7' : '#94a3b8'}
           onClick={saisieJour ? () => setSaisieJourOpen(true) : undefined}
         />
-        <div className="card p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Dernière saisie</p>
-          <p className="text-2xl font-extrabold text-purple-700">{dernier?.date ? formatDateShort(dernier.date) : '—'}</p>
-          {dernier?.agentNom && <p className="text-xs text-gray-400">{dernier.agentNom}</p>}
-        </div>
+        <button
+          onClick={() => setCaOpen(true)}
+          className="card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Chiffre d'affaires</p>
+          <div className="flex items-baseline gap-1">
+            <p className="text-xl font-extrabold text-purple-700">{formatMoney(ca.courant)}</p>
+            {ca.precedent > 0 && ca.courant !== ca.precedent && (
+              <span className={`text-xs font-semibold ${ca.courant > ca.precedent ? 'text-green-600' : 'text-red-600'}`}>
+                {ca.courant > ca.precedent ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            {ca.refLabel} : <span className="font-semibold text-gray-600">{formatMoney(ca.precedent)}</span>
+          </p>
+          <p className="text-[11px] text-gray-400">{facturesPeriode.length} facture(s) — cliquer pour détails</p>
+        </button>
       </div>
 
       {/* Détail catégorie */}
@@ -413,6 +475,56 @@ export default function Dashboard() {
           </div>
         </Modal>
       )}
+
+      {/* Modal : détail du chiffre d'affaires sur la période */}
+      <Modal open={caOpen} onClose={() => setCaOpen(false)} size="lg" title="Détails — Chiffre d'affaires">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-purple-50 px-3 py-3 text-center">
+              <p className="text-xs text-purple-600">{isDaily ? "Aujourd'hui" : 'Période courante'}</p>
+              <p className="text-lg font-extrabold text-purple-800">{formatMoney(ca.courant)}</p>
+              <p className="text-[11px] text-purple-500">{formatDateShort(start)} → {formatDateShort(end)}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 px-3 py-3 text-center">
+              <p className="text-xs text-gray-500">{ca.refLabel}</p>
+              <p className="text-lg font-extrabold text-gray-700">{formatMoney(ca.precedent)}</p>
+              <p className="text-[11px] text-gray-400">{formatDateShort(ca.prevStart)} → {formatDateShort(ca.prevEnd)}</p>
+            </div>
+          </div>
+          {facturesPeriode.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">Aucune facture émise sur la période.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">N° facture</th>
+                    <th className="px-3 py-2 text-left">Client</th>
+                    <th className="px-3 py-2 text-right">Total TTC</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {facturesPeriode.map((f, i) => (
+                    <tr key={f.id || i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
+                      <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(f.date)}</td>
+                      <td className="px-3 py-1.5 font-semibold">{f.numero || '—'}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{f.client?.nom || f.clientNom || '—'}</td>
+                      <td className="px-3 py-1.5 text-right font-bold text-purple-700">{formatMoney(f.totalTTC || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-purple-50/50">
+                    <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">Total</td>
+                    <td className="px-3 py-2 text-right font-extrabold text-purple-800">{formatMoney(ca.courant)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

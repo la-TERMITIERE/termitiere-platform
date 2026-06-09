@@ -117,6 +117,7 @@ export default function Params() {
   }
 
   async function resetDonnees() {
+    if (role !== 'admin') return toast.error('Action réservée à l\'administrateur')
     setResetting(true)
     try {
       for (const col of RESET_COLLECTIONS) {
