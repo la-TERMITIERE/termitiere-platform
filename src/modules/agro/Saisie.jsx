@@ -23,6 +23,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
 import { setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
+import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateTime, genId } from '../../utils/formatters'
 import { CAT_ANIMAUX, CAT_ALIMENTS, catColor } from './data'
@@ -30,7 +31,8 @@ import {
   previousInventoryDate, getInventaire, autoSorties,
   agregerAnimal, agregerAliment, sommeMouvements, mouvementsDepuisSaisie,
   mutationsEntrantes, mutationsEntrantesDetail,
-  ENTREE_TYPES_ANIMAL, SORTIE_TYPES_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_ALIMENT, labelRequis
+  ENTREE_TYPES_ANIMAL, SORTIE_TYPES_SAISIE_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_SAISIE_ALIMENT,
+  labelRequis, nouvellesSortiesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
 } from './logic'
 
 export default function Saisie() {
@@ -91,11 +93,16 @@ export default function Saisie() {
     setter((s) => ({ ...s, [id]: { ...s[id], init: v } }))
   }
 
-  // Remplace la liste de mouvements (entrées/sorties) d'un article.
+  // Remplace les mouvements de l'utilisateur courant ; conserve ceux des autres agents.
   const setLignes = (kind, id, dir, lignes) => {
+    if (!user) return
     const field = dir === 'entree' ? 'entrees' : 'sorties'
     const setter = kind === 'animaux' ? setAnim : setAlim
-    setter((s) => ({ ...s, [id]: { ...s[id], [field]: lignes } }))
+    setter((s) => {
+      const prev = s[id]?.[field] || []
+      const merged = mergeMouvementsUtilisateur(prev, lignes, user.uid, user.nom)
+      return { ...s, [id]: { ...s[id], [field]: merged } }
+    })
   }
 
   // Catégories présentes (base + personnalisées)
@@ -114,12 +121,14 @@ export default function Saisie() {
   const mutIn = useMemo(() => mutationsEntrantes(anim), [anim])
 
   // Création d'un nouvel article (+ éventuelle nouvelle catégorie).
-  function handleAddArticle({ nom, cat, initial }) {
+  function handleAddArticle({ nom, cat, initial, unite }) {
     const kind = addModal.kind
     const base = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
     const id = (base || 'article') + '_' + genId().slice(0, 3).toLowerCase()
-    const article = { id, nom: nom.trim(), cat: cat.trim().toUpperCase(), prix: 0 }
+    const article = kind === 'animal'
+      ? { id, nom: nom.trim(), cat: cat.trim().toUpperCase(), prix: 0 }
+      : { id, nom: nom.trim(), cat: cat.trim().toUpperCase(), prix: 0, unite: initial.unite || 'kg' }
     if (kind === 'animal') saveEspece(article)
     else saveAliment(article)
     setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
@@ -131,7 +140,6 @@ export default function Saisie() {
   async function save() {
     if (!date) return toast.error('Choisissez une date')
     if (!user) return toast.error('Session expirée — reconnectez-vous')
-
     // Validation : tout mouvement « Autres » ou « Décès » doit être précisé.
     const articleManquant = (coll, src) => {
       for (const e of coll) {
@@ -161,7 +169,12 @@ export default function Saisie() {
         const autoSor = autoSorOf(e.id)
         const mIn = mutIn[e.id] || 0
         const agg = agregerAnimal(d, autoSor, mIn)
-        animaux[e.id] = { ...agg, entrees: d.entrees || [], sorties: d.sorties || [], autoSor }
+        animaux[e.id] = {
+          ...agg,
+          entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
+          sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom),
+          autoSor
+        }
         totEnt += sommeMouvements(d.entrees) + mIn
         totSor += sommeMouvements(d.sorties) + autoSor
       })
@@ -169,7 +182,11 @@ export default function Saisie() {
       aliments.forEach((x) => {
         const d = alim[x.id] || { init: 0, entrees: [], sorties: [] }
         const agg = agregerAliment(d)
-        alimentsOut[x.id] = { ...agg, entrees: d.entrees || [], sorties: d.sorties || [] }
+        alimentsOut[x.id] = {
+          ...agg,
+          entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
+          sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom)
+        }
       })
 
       await setItem('agro_inventaires', date, {
@@ -180,6 +197,23 @@ export default function Saisie() {
         date, totalEntrees: totEnt, totalSorties: totSor, totalTetes,
         détail: detailMouvements(especes, anim, autoSorOf)
       })
+
+      const sortiesNotif = nouvellesSortiesNotifiable(especes, aliments, anim, alim, existing)
+      if (sortiesNotif.length) {
+        const body = sortiesNotif
+          .map((l) => `• ${l.qte} × ${l.article} — ${l.type}${l.motif ? ` (${l.motif})` : ''}`)
+          .join('\n')
+        await notify({
+          type: 'info',
+          title: `Sorties saisies — ${user.nom}`,
+          body: `Date ${date} :\n${body}`,
+          module: 'agro',
+          forRoles: ['admin', 'controleur'],
+          excludeUid: user.uid,
+          link: '/agro/saisie'
+        })
+      }
+
       toast.success('Saisie enregistrée ✓')
     } catch (e) {
       toast.error('Erreur : ' + e.message)
@@ -193,15 +227,16 @@ export default function Saisie() {
     const articles = kind === 'animaux' ? especes : aliments
     const src = kind === 'animaux' ? anim : alim
     return (
-      <Card className="overflow-x-auto p-0">
+      <Card className="overflow-hidden p-0">
+        <div className="max-h-[calc(100vh-14rem)] overflow-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
             <tr>
-              <th className="px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
-              <th className="px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
-              <th className="px-2 py-2 text-center">Entrées</th>
-              <th className="px-2 py-2 text-center">Sorties</th>
-              <th className="px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
+              <th className="bg-gray-50 px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
+              <th className="bg-gray-50 px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
+              <th className="bg-gray-50 px-2 py-2 text-center">Entrées</th>
+              <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
+              <th className="bg-gray-50 px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -216,10 +251,15 @@ export default function Saisie() {
                   const fin = Math.max(0, (d.init || 0) + totEnt - totSor)
                   return (
                     <tr key={a.id}>
-                      <td className="px-3 py-1.5 font-semibold">{a.nom}</td>
+                      <td className="px-3 py-1.5 font-semibold">
+                        {a.nom}
+                        {kind === 'aliments' && a.unite && (
+                          <span className="ml-1 text-[10px] font-normal text-gray-400">({a.unite})</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 text-center">
                         <input
-                          type="number" min="0" value={d.init ?? 0} readOnly={!peutEditerInit}
+                          type="number" min="0" value={d.init ?? 0}                           readOnly={!peutEditerInit}
                           title={peutEditerInit ? undefined : 'Reporté automatiquement de la veille'}
                           onChange={(e) => setInit(kind, a.id, e.target.value)}
                           onFocus={(e) => peutEditerInit && e.target.select()}
@@ -230,9 +270,12 @@ export default function Saisie() {
                       </td>
                       <MvtCell total={totEnt} dir="entree"
                         onClick={() => setMvtModal({ id: a.id, kind, dir: 'entree', nom: a.nom })} />
-                      <MvtCell total={totSor} dir="sortie"
+                      <MvtCell total={sommeMouvements(d.sorties)} dir="sortie"
+                        sub={autoSor > 0 ? `+${autoSor} ventes (demandes)` : null}
                         onClick={() => setMvtModal({ id: a.id, kind, dir: 'sortie', nom: a.nom })} />
-                      <td className="px-2 py-1.5 text-center font-bold text-primary-dark">{fin}</td>
+                      <td className="px-2 py-1.5 text-center font-bold text-primary-dark">
+                        {fin}{kind === 'aliments' && a.unite ? <span className="ml-0.5 text-[10px] font-normal text-gray-400">{a.unite}</span> : null}
+                      </td>
                     </tr>
                   )
                 })}
@@ -240,6 +283,7 @@ export default function Saisie() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     )
   }
@@ -265,8 +309,9 @@ export default function Saisie() {
       {dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
           <CheckCircle2 size={16} />
-          Saisie déjà enregistrée le {formatDateTime(existing.savedAt)} —{' '}
+          Saisie du {formatDateTime(existing.savedAt)} —{' '}
           <strong>{Object.values(existing.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)} têtes</strong>
+          <span className="text-green-600">· Chaque agent ne peut modifier que ses propres mouvements</span>
         </div>
       )}
 
@@ -305,9 +350,9 @@ export default function Saisie() {
         mutIn={mvtModal && mvtModal.kind === 'animaux' ? (mutIn[mvtModal.id] || 0) : 0}
         mutInDetail={mvtModal && mvtModal.kind === 'animaux' && mvtModal.dir === 'entree'
           ? mutationsEntrantesDetail(anim, especes, mvtModal.id) : []}
-        demandes={demandes}
         date={date}
         onClose={() => setMvtModal(null)}
+        user={user}
         onChange={(lignes) => setLignes(mvtModal.kind, mvtModal.id, mvtModal.dir, lignes)}
       />
 
@@ -364,46 +409,50 @@ function FragmentCat({ cat, color, span, children }) {
 }
 
 // Cellule Entrées / Sorties : bouton affichant uniquement le total (cliquer = détail).
-function MvtCell({ total, dir, onClick }) {
+function MvtCell({ total, dir, onClick, sub }) {
   const tone = dir === 'entree' ? 'text-green-700' : 'text-amber-700'
   return (
     <td className="px-2 py-1.5 text-center">
       <button
         type="button"
         onClick={onClick}
-        className="mx-auto flex w-16 items-center justify-center rounded-lg border border-gray-200 px-2 py-1 hover:border-primary hover:bg-primary/5"
+        className="mx-auto flex min-w-[4rem] flex-col items-center justify-center rounded-lg border border-gray-200 px-2 py-1 hover:border-primary hover:bg-primary/5"
         title="Cliquer pour détailler les mouvements par type"
       >
         <span className={`font-bold ${tone}`}>{total}</span>
+        {sub && <span className="text-[9px] leading-tight text-gray-400">{sub}</span>}
       </button>
     </td>
   )
 }
 
 // Fenêtre d'édition des mouvements typés d'un article (entrées ou sorties).
-function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, mutInDetail = [], demandes, date, onClose, onChange }) {
+function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, mutInDetail = [], date, onClose, onChange, user }) {
   if (!modal) return null
   const { id, kind, dir, nom } = modal
   const src = kind === 'animaux' ? anim : alim
   const lignes = (dir === 'entree' ? src[id]?.entrees : src[id]?.sorties) || []
 
   const types = kind === 'animaux'
-    ? (dir === 'entree' ? ENTREE_TYPES_ANIMAL : SORTIE_TYPES_ANIMAL)
-    : (dir === 'entree' ? ENTREE_TYPES_ALIMENT : SORTIE_TYPES_ALIMENT)
+    ? (dir === 'entree' ? ENTREE_TYPES_ANIMAL : SORTIE_TYPES_SAISIE_ANIMAL)
+    : (dir === 'entree' ? ENTREE_TYPES_ALIMENT : SORTIE_TYPES_SAISIE_ALIMENT)
 
-  const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '', cible: '' }])
-  const setLigne = (i, patch) => onChange(lignes.map((l, k) => (k === i ? { ...l, ...patch } : l)))
-  const delLigne = (i) => onChange(lignes.filter((_, k) => k !== i))
-
-  // Sorties auto issues des demandes approuvées (lecture seule).
-  const autoLignes = dir === 'sortie' && kind === 'animaux'
-    ? (demandes || []).filter((dm) => dm.statut === 'approuve' && dm.typeArticle === 'animal' && dm.articleId === id && dm.dateSortie === date)
-    : []
+  const peutEditer = (l) => user && peutModifierLigne(l, user.uid)
+  const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '', cible: '', agentId: user?.uid, agentNom: user?.nom }])
+  const setLigne = (i, patch) => {
+    if (!peutEditer(lignes[i])) return
+    onChange(lignes.map((l, k) => (k === i ? { ...l, ...patch } : l)))
+  }
+  const delLigne = (i) => {
+    if (!peutEditer(lignes[i])) return
+    onChange(lignes.filter((_, k) => k !== i))
+  }
 
   // Destinations possibles d'une mutation (toutes les espèces sauf l'origine).
   const ciblesPossibles = especes.filter((e) => e.id !== id)
 
-  const total = sommeMouvements(lignes) + (dir === 'sortie' ? (autoSor || 0) : (mutIn || 0))
+  // Ventes/Dons et demandes approuvées sont hors de cette fenêtre (workflow Demande).
+  const total = sommeMouvements(lignes) + (dir === 'entree' ? (mutIn || 0) : 0)
 
   return (
     <Modal
@@ -416,13 +465,16 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
         Total {dir === 'entree' ? 'des entrées' : 'des sorties'} : <strong className="text-gray-800">{total}</strong>
       </p>
 
-      {autoLignes.length > 0 && (
-        <div className="mb-3 space-y-1 rounded-lg bg-amber-50 p-2">
-          <p className="flex items-center gap-1 text-xs font-semibold text-amber-700"><Lock size={12} /> Sorties automatiques (demandes approuvées)</p>
-          {autoLignes.map((dm) => (
-            <p key={dm.id} className="text-xs text-amber-800">🔄 {dm.qte} × Ventes — {dm.num} ({dm.motif})</p>
-          ))}
-        </div>
+      {dir === 'sortie' && (
+        <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          Les sorties <strong>Ventes</strong> et <strong>Dons</strong> passent par une demande à approuver — bouton « Demander une sortie ».
+        </p>
+      )}
+
+      {dir === 'sortie' && (autoSor || 0) > 0 && (
+        <p className="mb-3 text-xs text-gray-400">
+          {autoSor} vente(s) issue(s) de demandes approuvées — consultez l'onglet Demandes (non modifiable ici).
+        </p>
       )}
 
       {/* Mutations entrantes (générées par les mutations d'autres espèces) — lecture seule */}
@@ -437,20 +489,29 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
 
       <div className="space-y-2">
         {lignes.length === 0 && <p className="text-sm text-gray-400">Aucun mouvement saisi. Ajoutez une ligne ci-dessous.</p>}
-        {lignes.map((l, i) => (
-          <div key={i} className="rounded-lg border border-gray-200 p-2">
+        {lignes.map((l, i) => {
+          const locked = !peutEditer(l)
+          return (
+          <div key={i} className={`rounded-lg border p-2 ${locked ? 'border-amber-200 bg-amber-50/50' : 'border-gray-200'}`}>
+            {locked && l.agentNom && (
+              <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-amber-700">
+                <Lock size={10} /> Saisi par {l.agentNom} — lecture seule
+              </p>
+            )}
             <div className="flex items-center gap-2">
-              <Select className="flex-1" value={l.type} onChange={(e) => setLigne(i, { type: e.target.value })}>
+              <Select className="flex-1" value={l.type} disabled={locked} onChange={(e) => setLigne(i, { type: e.target.value })}>
                 {types.map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
-              <Input type="number" min="0" className="w-20" value={l.qte}
+              <Input type="number" min="0" className="w-20" value={l.qte} readOnly={locked}
                 onChange={(e) => setLigne(i, { qte: Math.max(0, parseInt(e.target.value) || 0) })} />
-              <button onClick={() => delLigne(i)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 size={16} /></button>
+              {!locked && (
+                <button onClick={() => delLigne(i)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 size={16} /></button>
+              )}
             </div>
             {/* Mutation (sortie animale) : choisir l'espèce de destination → +1 auto là-bas */}
             {kind === 'animaux' && dir === 'sortie' && l.type === 'Mutation' && (
               <div className="mt-2">
-                <Select value={l.cible || ''} onChange={(e) => setLigne(i, { cible: e.target.value })}>
+                <Select value={l.cible || ''} disabled={locked} onChange={(e) => setLigne(i, { cible: e.target.value })}>
                   <option value="">— Espèce de destination (où va l'animal) —</option>
                   {ciblesPossibles.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
                 </Select>
@@ -461,13 +522,14 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
               <Input
                 className="mt-2"
                 value={l.label || ''}
+                readOnly={locked}
                 onChange={(e) => setLigne(i, { label: e.target.value })}
                 placeholder={l.type === 'Décès' ? 'Motif du décès (maladie, accident, prédateur…)' : 'Précisez (personne, motif…)'}
                 autoFocus
               />
             )}
           </div>
-        ))}
+        )})}
       </div>
 
       <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter une ligne</Button>
@@ -481,9 +543,10 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
   const [catChoice, setCatChoice] = useState('')
   const [catNew, setCatNew] = useState('')
   const [initial, setInitial] = useState('')
+  const [unite, setUnite] = useState('kg')
 
   useEffect(() => {
-    if (open) { setNom(''); setCatChoice(existingCats[0] || ''); setCatNew(''); setInitial('') }
+    if (open) { setNom(''); setCatChoice(existingCats[0] || ''); setCatNew(''); setInitial(''); setUnite('kg') }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cat = catChoice === '__new__' ? catNew : catChoice
@@ -491,7 +554,7 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
   function submit() {
     if (!nom.trim()) return toast.error('Nom requis')
     if (!cat.trim()) return toast.error('Catégorie requise')
-    onSave({ nom, cat, initial })
+    onSave({ nom, cat, initial, unite: kind === 'aliment' ? unite : undefined })
   }
 
   return (
@@ -517,9 +580,18 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
           </FormGroup>
         )}
       </div>
-      <FormGroup label="Effectif initial" hint="Stock de départ à cette date">
-        <Input type="number" min="0" value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="0" />
-      </FormGroup>
+      <div className="grid grid-cols-2 gap-3">
+        <FormGroup label={kind === 'animal' ? 'Effectif initial' : 'Stock initial'} hint="À cette date">
+          <Input type="number" min="0" value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="0" />
+        </FormGroup>
+        {kind === 'aliment' && (
+          <FormGroup label="Unité">
+            <Select value={unite} onChange={(e) => setUnite(e.target.value)}>
+              {['kg', 'sacs', 'litres', 'unités', 'tonnes', 'balles'].map((u) => <option key={u} value={u}>{u}</option>)}
+            </Select>
+          </FormGroup>
+        )}
+      </div>
       {catChoice === '__new__' && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           La nouvelle catégorie « {(catNew || '…').toUpperCase()} » apparaîtra automatiquement dans le Dashboard et les analyses.

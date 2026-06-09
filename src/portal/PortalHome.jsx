@@ -12,22 +12,28 @@ export default function PortalHome() {
 
   // Petits KPI résumés par module
   const { data: inventaires } = useCollection('agro_inventaires')
-  const { data: livraisons } = useCollection('logistique_livraisons')
-  const { data: evenements } = useCollection('evenementiel_evenements')
+  const { data: prestations } = useCollection('logistique_prestations')
+  const { data: demandesLog } = useCollection('logistique_demandes')
+  const { data: productions } = useCollection('evenementiel_productions')
+  const { data: demandesBriq } = useCollection('evenementiel_demandes')
+  const { data: dossiersFoncier } = useCollection('foncier_dossiers')
 
   const dernier = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
   const totalAnimaux = dernier
     ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)
     : 0
-  const livraisonsJour = livraisons.filter((l) => l.date === todayStr()).length
-  const moisCourant = todayStr().slice(0, 7)
-  const evenementsMois = evenements.filter((e) => (e.dateDebut || '').startsWith(moisCourant)).length
+  const prestationsMois = prestations.filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).length
+  const autorisationsAttente = demandesLog.filter((d) => d.statut === 'en_attente').length
+  const prodMois = productions.filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).reduce((s, p) => s + (p.totalBriques || 0), 0)
+  const autorisationsBriq = demandesBriq.filter((d) => ['en_attente', 'partiel'].includes(d.statut)).length
+  const dossiersActifs = dossiersFoncier.filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
 
   const kpi = {
     agro: `${totalAnimaux} têtes`,
-    logistique: `${livraisonsJour} livraison(s) aujourd'hui`,
-    evenementiel: `${evenementsMois} événement(s) ce mois`,
-    rh: 'Bientôt disponible'
+    logistique: autorisationsAttente ? `${autorisationsAttente} autorisation(s) en attente` : `${prestationsMois} prestation(s) ce mois`,
+    evenementiel: autorisationsBriq ? `${autorisationsBriq} autorisation(s) en attente` : `${prodMois} briques produites ce mois`,
+    foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
+    rh: 'En développement'
   }
 
   return (

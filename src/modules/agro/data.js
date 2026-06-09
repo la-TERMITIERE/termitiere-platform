@@ -31,20 +31,22 @@ export const ESPECES = [
 ]
 
 export const ALIMENTS = [
-  { id: 'tourteau_mais', nom: 'Tourteau de Maïs', cat: 'ALIMENTS', prix: 350 },
-  { id: 'son_poudre', nom: 'Son en poudre', cat: 'ALIMENTS', prix: 250 },
-  { id: 'aliments_pontes', nom: 'Aliments pontes', cat: 'ALIMENTS', prix: 22000 },
-  { id: 'aliments_pous', nom: 'Aliments poussin', cat: 'ALIMENTS', prix: 24000 },
-  { id: 'cartons', nom: 'Cartons', cat: 'ALIMENTS', prix: 500 },
-  { id: 'sels', nom: 'Sels', cat: 'ALIMENTS', prix: 1500 },
-  { id: 'epluche_manioc', nom: 'Épluché de manioc', cat: 'ALIMENTS', prix: 200 },
-  { id: 'tourteau_soja', nom: 'Tourteau de soja', cat: 'ALIMENTS', prix: 600 },
-  { id: 'sorgho', nom: 'Sorgho', cat: 'ALIMENTS', prix: 400 },
-  { id: 'huile_moteur', nom: 'Huile à moteur', cat: 'DIVERS', prix: 4000 },
-  { id: 'gasoil', nom: 'Gasoil', cat: 'DIVERS', prix: 700 },
-  { id: 'carburant', nom: 'Carburant', cat: 'DIVERS', prix: 800 },
-  { id: 'pierre_lecher', nom: 'Pierre à lécher', cat: 'DIVERS', prix: 5000 }
+  { id: 'tourteau_mais', nom: 'Tourteau de Maïs', cat: 'ALIMENTS', prix: 350, unite: 'kg' },
+  { id: 'son_poudre', nom: 'Son en poudre', cat: 'ALIMENTS', prix: 250, unite: 'kg' },
+  { id: 'aliments_pontes', nom: 'Aliments pontes', cat: 'ALIMENTS', prix: 22000, unite: 'sacs' },
+  { id: 'aliments_pous', nom: 'Aliments poussin', cat: 'ALIMENTS', prix: 24000, unite: 'sacs' },
+  { id: 'cartons', nom: 'Cartons', cat: 'ALIMENTS', prix: 500, unite: 'unités' },
+  { id: 'sels', nom: 'Sels', cat: 'ALIMENTS', prix: 1500, unite: 'kg' },
+  { id: 'epluche_manioc', nom: 'Épluché de manioc', cat: 'ALIMENTS', prix: 200, unite: 'kg' },
+  { id: 'tourteau_soja', nom: 'Tourteau de soja', cat: 'ALIMENTS', prix: 600, unite: 'kg' },
+  { id: 'sorgho', nom: 'Sorgho', cat: 'ALIMENTS', prix: 400, unite: 'kg' },
+  { id: 'huile_moteur', nom: 'Huile à moteur', cat: 'DIVERS', prix: 4000, unite: 'litres' },
+  { id: 'gasoil', nom: 'Gasoil', cat: 'DIVERS', prix: 700, unite: 'litres' },
+  { id: 'carburant', nom: 'Carburant', cat: 'DIVERS', prix: 800, unite: 'litres' },
+  { id: 'pierre_lecher', nom: 'Pierre à lécher', cat: 'DIVERS', prix: 5000, unite: 'unités' }
 ]
+
+export const UNITES_ALIMENT = ['kg', 'sacs', 'litres', 'unités', 'tonnes', 'balles']
 
 // Catégories de base et couleurs associées (pour graphiques / styles)
 export const CAT_ANIMAUX = ['OVINS', 'BOVINS', 'CAPRINS', 'VOLAILLES']

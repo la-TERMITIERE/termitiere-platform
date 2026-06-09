@@ -11,6 +11,7 @@ import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor } from './data'
+import { mouvementsCategorie } from './logic'
 import { formatNumber, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const PRESETS = [
@@ -49,16 +50,23 @@ export default function Dashboard() {
     return [...CAT_ANIMAUX, ...custom].filter((c) => especes.some((e) => e.cat === c))
   }, [especes])
 
-  // Total final + variation par catégorie
+  // Total final + entrées/sorties du jour vs veille (séparément) par catégorie
   const parCat = useMemo(() => {
     const totalCat = (inv, cat) =>
       especes.filter((e) => e.cat === cat).reduce((s, e) => s + (inv?.animaux?.[e.id]?.fin || 0), 0)
-    return cats.map((cat) => ({
-      cat,
-      total: totalCat(dernier, cat),
-      variation: totalCat(dernier, cat) - totalCat(veille, cat),
-      color: catColor(cat)
-    }))
+    return cats.map((cat) => {
+      const mJour = mouvementsCategorie(dernier, especes, cat)
+      const mVeille = mouvementsCategorie(veille, especes, cat)
+      return {
+        cat,
+        total: totalCat(dernier, cat),
+        entreesJour: mJour.entrees,
+        sortiesJour: mJour.sorties,
+        diffEntrees: veille ? mJour.entrees - mVeille.entrees : null,
+        diffSorties: veille ? mJour.sorties - mVeille.sorties : null,
+        color: catColor(cat)
+      }
+    })
   }, [cats, especes, dernier, veille])
 
   // Évolution effectif total sur la fenêtre
@@ -138,9 +146,16 @@ export default function Dashboard() {
               <p className="truncate text-xs font-medium uppercase tracking-wide text-gray-500">{p.cat}</p>
               <p className="text-2xl font-extrabold text-gray-900">{formatNumber(p.total)}</p>
               {veille && (
-                <p className={`text-xs font-semibold ${p.variation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {p.variation >= 0 ? '+' : ''}{p.variation} vs veille
-                </p>
+                <div className="mt-0.5 space-y-0.5 text-[11px] font-semibold leading-tight">
+                  <p className={p.diffEntrees >= 0 ? 'text-sky-600' : 'text-sky-800'}>
+                    Entrées : {p.diffEntrees >= 0 ? '+' : ''}{p.diffEntrees} vs veille
+                    <span className="font-normal text-gray-400"> ({p.entreesJour} auj.)</span>
+                  </p>
+                  <p className={p.diffSorties >= 0 ? 'text-amber-600' : 'text-amber-800'}>
+                    Sorties : {p.diffSorties >= 0 ? '+' : ''}{p.diffSorties} vs veille
+                    <span className="font-normal text-gray-400"> ({p.sortiesJour} auj.)</span>
+                  </p>
+                </div>
               )}
             </div>
             <ChevronRight size={18} className="text-gray-300 transition-colors group-hover:text-gray-500" />

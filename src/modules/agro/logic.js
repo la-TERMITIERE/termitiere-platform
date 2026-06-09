@@ -54,9 +54,12 @@ export const finAliment = ({ init, ent, sor }) =>
 export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Dons', 'Autres']
 // Types de SORTIES pour les animaux. La « Mutation » porte une espèce de destination.
 export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', 'Perte', 'Dons', 'Autres']
+// Saisie directe : Ventes et Dons passent par le workflow « Demande » (approbation).
+export const SORTIE_TYPES_SAISIE_ANIMAL = SORTIE_TYPES_ANIMAL.filter((t) => !['Ventes', 'Dons'].includes(t))
 // Aliments / divers : pas de naissance ni de décès ni de mutation inter-espèces.
 export const ENTREE_TYPES_ALIMENT = ['Achat', 'Dons', 'Autres']
 export const SORTIE_TYPES_ALIMENT = ['Consommation', 'Ventes', 'Perte', 'Dons', 'Autres']
+export const SORTIE_TYPES_SAISIE_ALIMENT = SORTIE_TYPES_ALIMENT.filter((t) => !['Ventes', 'Dons'].includes(t))
 
 // Le type « Autres » exige une précision (personne / motif personnalisé).
 // Le type « Décès » exige un motif (faithful à la règle d'origine).
@@ -153,6 +156,106 @@ export function mouvementsDepuisSaisie(saved, kind = 'animaux') {
     if (saved.sor) sorties.push({ type: 'Consommation', qte: saved.sor, label: '' })
   }
   return { entrees, sorties }
+}
+
+// Totaux entrées / sorties d'une catégorie animale pour un inventaire donné.
+export function mouvementsCategorie(inv, especes, cat) {
+  let entrees = 0
+  let sorties = 0
+  if (!inv) return { entrees, sorties }
+  especes.filter((e) => e.cat === cat).forEach((e) => {
+    const a = inv.animaux?.[e.id]
+    if (!a) return
+    entrees += (a.ent || 0) + (a.naiss || 0)
+    sorties += (a.sor || 0) + (a.dec || 0)
+  })
+  return { entrees, sorties }
+}
+
+// Agrège achats (entrées type Achat) et ventes (sorties type Ventes + demandes approuvées)
+// sur une période, avec le détail ligne par ligne pour les modales d'analyse.
+export function agregerAchatsVentes(invPeriode, especes, aliments) {
+  const achats = []
+  const ventes = []
+
+  invPeriode.forEach((inv) => {
+    especes.forEach((e) => {
+      const d = inv.animaux?.[e.id]
+      if (!d) return
+      const { entrees, sorties } = mouvementsDepuisSaisie(d, 'animaux')
+      entrees.filter((l) => l.type === 'Achat' && (parseInt(l.qte) || 0) > 0).forEach((l) => {
+        achats.push({ date: inv.date, article: e.nom, cat: e.cat, kind: 'animal', qte: parseInt(l.qte) || 0, label: l.label || '' })
+      })
+      sorties.filter((l) => l.type === 'Ventes' && (parseInt(l.qte) || 0) > 0).forEach((l) => {
+        ventes.push({ date: inv.date, article: e.nom, cat: e.cat, kind: 'animal', qte: parseInt(l.qte) || 0, label: l.label || '', source: 'saisie' })
+      })
+      if ((d.autoSor || 0) > 0) {
+        ventes.push({ date: inv.date, article: e.nom, cat: e.cat, kind: 'animal', qte: d.autoSor, label: 'Demande approuvée', source: 'demande' })
+      }
+    })
+    aliments.forEach((a) => {
+      const d = inv.aliments?.[a.id]
+      if (!d) return
+      const { entrees, sorties } = mouvementsDepuisSaisie(d, 'aliments')
+      entrees.filter((l) => l.type === 'Achat' && (parseInt(l.qte) || 0) > 0).forEach((l) => {
+        achats.push({ date: inv.date, article: a.nom, cat: a.cat, kind: 'aliment', qte: parseInt(l.qte) || 0, label: l.label || '' })
+      })
+      sorties.filter((l) => l.type === 'Ventes' && (parseInt(l.qte) || 0) > 0).forEach((l) => {
+        ventes.push({ date: inv.date, article: a.nom, cat: a.cat, kind: 'aliment', qte: parseInt(l.qte) || 0, label: l.label || '', source: 'saisie' })
+      })
+    })
+  })
+
+  const totalAchats = achats.reduce((s, l) => s + l.qte, 0)
+  const totalVentes = ventes.reduce((s, l) => s + l.qte, 0)
+  return { achats, ventes, totalAchats, totalVentes }
+}
+
+// Sorties saisies directement (hors Ventes/Dons) non encore présentes dans l'inventaire précédent.
+export function nouvellesSortiesNotifiable(especes, aliments, anim, alim, prevInv) {
+  const lignes = []
+  const nomCible = (especes, id) => especes.find((e) => e.id === id)?.nom || id
+
+  const check = (coll, src, kind) => {
+    coll.forEach((a) => {
+      const cur = src[a.id]?.sorties || []
+      const prev = prevInv?.[kind]?.[a.id]?.sorties || []
+      cur.forEach((l) => {
+        if (!(parseInt(l.qte) || 0) || ['Ventes', 'Dons'].includes(l.type)) return
+        const sig = (x) => `${x.type}|${x.qte}|${x.label || ''}|${x.cible || ''}`
+        if (prev.some((p) => sig(p) === sig(l))) return
+        const motif = l.type === 'Mutation' && l.cible
+          ? `→ ${nomCible(especes, l.cible)}`
+          : (l.label || '').trim()
+        lignes.push({ article: a.nom, type: l.type, qte: parseInt(l.qte) || 0, motif })
+      })
+    })
+  }
+  check(especes, anim, 'animaux')
+  check(aliments, alim, 'aliments')
+  return lignes
+}
+
+// Une ligne de mouvement n'est modifiable que par son auteur (agentId).
+export function peutModifierLigne(ligne, userId) {
+  if (!ligne?.agentId) return true
+  return ligne.agentId === userId
+}
+
+// Fusionne les mouvements : conserve ceux des autres agents, remplace les siens.
+export function mergeMouvementsUtilisateur(_prev, next, userId, userNom) {
+  const autres = (next || []).filter((l) => l.agentId && l.agentId !== userId)
+  const miennes = (next || [])
+    .filter((l) => !l.agentId || l.agentId === userId)
+    .map((l) => ({ ...l, agentId: userId, agentNom: userNom }))
+  return [...autres, ...miennes]
+}
+
+// Attribue l'auteur aux lignes sans agentId (anciennes saisies ou nouvelles).
+export function annoterLignesAgent(lignes, userId, userNom) {
+  return (lignes || []).map((l) =>
+    l.agentId ? l : { ...l, agentId: userId, agentNom: userNom }
+  )
 }
 
 // Dernier stock connu d'un article (pour le contrôle de disponibilité des demandes).

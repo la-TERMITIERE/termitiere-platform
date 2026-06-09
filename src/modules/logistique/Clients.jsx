@@ -1,4 +1,4 @@
-// Clients briqueterie.
+// Clients logistique & événementiel.
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -11,17 +11,17 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 
-const empty = () => ({ nom: '', telephone: '', adresse: '' })
+const empty = () => ({ nom: '', telephone: '', email: '', adresse: '' })
 
 export default function Clients() {
-  const { data: clients } = useCollection('evenementiel_clients')
+  const { data: clients } = useCollection('logistique_clients')
   const [modal, setModal] = useState(null)
 
   async function save() {
     const c = modal.data
     if (!c.nom.trim()) return toast.error('Nom requis')
-    if (modal.id) await updateItem('evenementiel_clients', modal.id, c)
-    else await addItem('evenementiel_clients', c)
+    if (modal.id) await updateItem('logistique_clients', modal.id, c)
+    else await addItem('logistique_clients', c)
     toast.success('Enregistré ✓')
     setModal(null)
   }
@@ -34,11 +34,11 @@ export default function Clients() {
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'telephone', label: 'Téléphone' },
-            { key: 'adresse', label: 'Adresse' },
+            { key: 'email', label: 'E-mail' },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 hover:bg-gray-100">✏️</button>
-                <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeItem('evenementiel_clients', r.id) }} className="text-red-500"><Trash2 size={16} /></button>
+                <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeItem('logistique_clients', r.id) }} className="text-red-500"><Trash2 size={16} /></button>
               </div>
             ) }
           ]}
@@ -52,6 +52,7 @@ export default function Clients() {
           <>
             <FormGroup label="Nom" required><Input value={modal.data.nom} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, nom: e.target.value } }))} /></FormGroup>
             <FormGroup label="Téléphone"><Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} /></FormGroup>
+            <FormGroup label="E-mail"><Input value={modal.data.email} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, email: e.target.value } }))} /></FormGroup>
             <FormGroup label="Adresse"><Input value={modal.data.adresse} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, adresse: e.target.value } }))} /></FormGroup>
           </>
         )}

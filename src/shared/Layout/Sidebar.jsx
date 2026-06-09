@@ -1,7 +1,7 @@
 // Navigation latérale : en-tête marque + nav portail + nav intra-module + footer utilisateur.
 // Mobile : panneau coulissant avec overlay. Desktop : fixe 260px.
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, LogOut, Users, X } from 'lucide-react'
+import { Home, LayoutDashboard, LogOut, Users, UserCircle, X } from 'lucide-react'
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
@@ -15,9 +15,13 @@ export default function Sidebar({ open, onClose }) {
   const activeModule = getModule(seg)
 
   // Badge demandes AGRO en attente
-  const { data: demandes } = useCollection('agro_demandes')
+  const { data: demandesAgro } = useCollection('agro_demandes')
+  const { data: demandesLog } = useCollection('logistique_demandes')
+  const { data: demandesBriq } = useCollection('evenementiel_demandes')
   const badges = {
-    agroDemandes: demandes.filter((d) => d.statut === 'en_attente').length
+    agroDemandes: demandesAgro.filter((d) => d.statut === 'en_attente').length,
+    logistiqueDemandes: demandesLog.filter((d) => d.statut === 'en_attente').length,
+    briqueterieDemandes: demandesBriq.filter((d) => ['en_attente', 'partiel'].includes(d.statut)).length
   }
 
   const accentColor = activeModule?.color || '#BC3C31'
@@ -67,6 +71,11 @@ export default function Sidebar({ open, onClose }) {
           {isAdmin() && !activeModule && (
             <NavLink to="/utilisateurs" className={navClass} onClick={onClose}>
               <Users size={18} /> Utilisateurs
+            </NavLink>
+          )}
+          {!activeModule && (
+            <NavLink to="/mon-compte" className={navClass} onClick={onClose}>
+              <UserCircle size={18} /> Mon compte
             </NavLink>
           )}
 

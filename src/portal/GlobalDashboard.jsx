@@ -1,6 +1,6 @@
 // Tableau de bord global : KPI consolidés de tous les modules actifs + graphique.
 import { Line } from 'react-chartjs-2'
-import { Leaf, Truck, PartyPopper, Bell } from 'lucide-react'
+import { Leaf, Truck, BrickWall, Bell, MapPin } from 'lucide-react'
 import StatCard from '../shared/ui/StatCard'
 import Card from '../shared/ui/Card'
 import { useCollection } from '../hooks/useFirestore'
@@ -11,25 +11,31 @@ export default function GlobalDashboard() {
   const { hasModule } = useAuth()
   const { data: inventaires } = useCollection('agro_inventaires')
   const { data: demandes } = useCollection('agro_demandes')
-  const { data: livraisons } = useCollection('logistique_livraisons')
-  const { data: evenements } = useCollection('evenementiel_evenements')
+  const { data: demandesLog } = useCollection('logistique_demandes')
+  const { data: prestations } = useCollection('logistique_prestations')
+  const { data: productions } = useCollection('evenementiel_productions')
+  const { data: demandesBriq } = useCollection('evenementiel_demandes')
+  const { data: dossiersFoncier } = useCollection('foncier_dossiers')
 
   const invTries = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
   const dernier = invTries[0]
   const totalAnimaux = dernier
     ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)
     : 0
-  const livraisonsJour = livraisons.filter((l) => l.date === todayStr()).length
   const moisCourant = todayStr().slice(0, 7)
-  const evenementsMois = evenements.filter((e) => (e.dateDebut || '').startsWith(moisCourant)).length
+  const prestationsMois = prestations.filter((p) => (p.date || '').startsWith(moisCourant)).length
   const demandesAttente = demandes.filter((d) => d.statut === 'en_attente').length
+  const autorisationsLog = demandesLog.filter((d) => d.statut === 'en_attente').length
+  const prodMois = productions.filter((p) => (p.date || '').startsWith(moisCourant)).reduce((s, p) => s + (p.totalBriques || 0), 0)
+  const autorisationsBriq = demandesBriq.filter((d) => ['en_attente', 'partiel'].includes(d.statut)).length
+  const dossiersActifs = dossiersFoncier.filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
 
   // Alertes cross-modules
   const alertes = []
   if (demandesAttente > 0)
     alertes.push(`${demandesAttente} demande(s) de sortie AGRO en attente d'approbation`)
-  const retards = livraisons.filter((l) => l.statut === 'en_cours' && l.date < todayStr()).length
-  if (retards > 0) alertes.push(`${retards} livraison(s) en retard`)
+  if (autorisationsLog > 0) alertes.push(`${autorisationsLog} autorisation(s) sortie matériel en attente`)
+  if (autorisationsBriq > 0) alertes.push(`${autorisationsBriq} autorisation(s) sortie briques en attente (3 autorités)`)
 
   // Graphique : évolution effectif total (12 dernières saisies)
   const last = [...invTries].reverse().slice(-12)
@@ -56,10 +62,13 @@ export default function GlobalDashboard() {
           <StatCard title="Animaux (AGRO)" value={totalAnimaux} sub="Dernière saisie" icon={Leaf} accent="#BC3C31" />
         )}
         {hasModule('logistique') && (
-          <StatCard title="Livraisons du jour" value={livraisonsJour} icon={Truck} accent="#0284c7" />
+          <StatCard title="Prestations (log.)" value={prestationsMois} sub={autorisationsLog ? `${autorisationsLog} autorisation(s) attente` : 'Ce mois'} icon={Truck} accent="#0284c7" />
         )}
         {hasModule('evenementiel') && (
-          <StatCard title="Événements du mois" value={evenementsMois} icon={PartyPopper} accent="#7c3aed" />
+          <StatCard title="Briqueterie" value={prodMois} sub={autorisationsBriq ? `${autorisationsBriq} autorisation(s)` : 'Production ce mois'} icon={BrickWall} accent="#7c3aed" />
+        )}
+        {hasModule('foncier') && (
+          <StatCard title="Foncier" value={dossiersActifs} sub="Dossiers actifs" icon={MapPin} accent="#059669" />
         )}
         <StatCard title="Alertes" value={alertes.length} icon={Bell} accent="#d97706" />
       </div>

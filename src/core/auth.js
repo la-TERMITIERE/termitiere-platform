@@ -20,10 +20,12 @@ async function findByLogin(login) {
 
 // Comptes par défaut (amorçage au premier lancement / mode démo)
 export const DEFAULT_USERS = [
-  { login: 'admin', pass: 'admin123', nom: 'Administrateur', role: 'admin', modules: ['agro', 'logistique', 'evenementiel', 'rh'], secteur: 'Direction', actif: true },
-  { login: 'controleur', pass: 'ctrl123', nom: 'Contrôleur', role: 'controleur', modules: ['agro', 'logistique'], secteur: 'Contrôle', actif: true },
+  { login: 'admin', pass: 'admin123', nom: 'Administrateur', role: 'admin', modules: ['agro', 'logistique', 'evenementiel', 'foncier', 'rh'], secteur: 'Direction', actif: true },
+  { login: 'controleur', pass: 'ctrl123', nom: 'Contrôleur', role: 'controleur', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Contrôle', actif: true },
   { login: 'agent', pass: 'agent123', nom: 'Agent Edah Josué', role: 'agent', modules: ['agro'], secteur: 'Élevage', actif: true },
-  { login: 'agent_log', pass: 'log123', nom: 'Agent Logistique', role: 'agent', modules: ['logistique'], secteur: 'Transport', actif: true }
+  { login: 'agent_log', pass: 'log123', nom: 'Agent Logistique', role: 'agent', modules: ['logistique'], secteur: 'Transport', actif: true },
+  { login: 'agent_briq', pass: 'briq123', nom: 'Agent Briqueterie', role: 'agent', modules: ['evenementiel'], secteur: 'Briqueterie', actif: true },
+  { login: 'agent_foncier', pass: 'fonc123', nom: 'Agent Foncier', role: 'agent', modules: ['foncier'], secteur: 'Foncier', actif: true }
 ]
 
 const DEMO_SESSION_KEY = 'termitiere_demo_session'
@@ -78,7 +80,7 @@ function sessionFromProfile(p) {
     login: p.login,
     nom: p.nom || 'Utilisateur',
     role: p.role || 'agent',
-    modules: p.role === 'admin' ? ['agro', 'logistique', 'evenementiel', 'rh'] : (p.modules || []),
+    modules: p.role === 'admin' ? ['agro', 'logistique', 'evenementiel', 'foncier', 'rh'] : (p.modules || []),
     secteur: p.secteur || '',
     actif: p.actif !== false
   }
@@ -168,6 +170,15 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     localStorage.removeItem(DEMO_SESSION_KEY)
     set({ user: null, role: null, modules: [] })
+  },
+
+  // Met à jour la session locale après modification du profil (nom, etc.).
+  updateSession: (patch) => {
+    const cur = get().user
+    if (!cur) return
+    const u = { ...cur, ...patch }
+    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
+    set({ user: u, role: u.role, modules: u.modules || [] })
   },
 
   // Helpers de contrôle d'accès

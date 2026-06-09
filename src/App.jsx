@@ -9,11 +9,13 @@ import Login from './portal/Login'
 import PortalHome from './portal/PortalHome'
 import GlobalDashboard from './portal/GlobalDashboard'
 import Utilisateurs from './portal/Utilisateurs'
+import MonCompte from './portal/MonCompte'
 
 // Chargement paresseux des modules (code-splitting)
 const AgroModule = lazy(() => import('./modules/agro/index.jsx'))
 const LogistiqueModule = lazy(() => import('./modules/logistique/index.jsx'))
 const EvenementielModule = lazy(() => import('./modules/evenementiel/index.jsx'))
+const FoncierModule = lazy(() => import('./modules/foncier/index.jsx'))
 const RhModule = lazy(() => import('./modules/rh/index.jsx'))
 
 // Route protégée : exige une session active.
@@ -66,6 +68,7 @@ export default function App() {
           <Route index element={<PortalHome />} />
           <Route path="dashboard" element={<GlobalDashboard />} />
           <Route path="utilisateurs" element={<AdminGuard><Utilisateurs /></AdminGuard>} />
+          <Route path="mon-compte" element={<MonCompte />} />
 
           <Route
             path="agro/*"
@@ -93,6 +96,16 @@ export default function App() {
               <ModuleGuard moduleId="evenementiel">
                 <Suspense fallback={<LoadingSpinner />}>
                   <EvenementielModule />
+                </Suspense>
+              </ModuleGuard>
+            }
+          />
+          <Route
+            path="foncier/*"
+            element={
+              <ModuleGuard moduleId="foncier">
+                <Suspense fallback={<LoadingSpinner />}>
+                  <FoncierModule />
                 </Suspense>
               </ModuleGuard>
             }

@@ -17,7 +17,7 @@ import { exportExcel } from '../../utils/exportExcel'
 import { migrerDepuisFirebase, migrerDepuisDB } from '../../utils/migration'
 import { toast } from '../../core/notifications'
 import { genId } from '../../utils/formatters'
-import { CAT_ANIMAUX, CAT_ALIMENTS } from './data'
+import { CAT_ANIMAUX, CAT_ALIMENTS, UNITES_ALIMENT } from './data'
 
 const TABS = [
   ['especes', 'Espèces'],
@@ -52,13 +52,15 @@ function ReferentielTab({ kind }) {
   const cats = kind === 'espece' ? CAT_ANIMAUX : CAT_ALIMENTS
   const [modal, setModal] = useState(null)
 
-  function openNew() { setModal({ id: '', nom: '', cat: cats[0], isNew: true }) }
+  function openNew() {
+    setModal({ id: '', nom: '', cat: cats[0], unite: kind === 'aliment' ? 'kg' : undefined, isNew: true })
+  }
 
   function submit() {
     if (!modal.nom.trim()) return toast.error('Nom requis')
     const id = modal.isNew ? (modal.nom.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 24) + '_' + genId().slice(0, 3).toLowerCase()) : modal.id
-    // Plus de prix par article : le prix est saisi directement sur la facture.
-    save({ id, nom: modal.nom.trim(), cat: modal.cat, prix: 0 })
+    const base = { id, nom: modal.nom.trim(), cat: modal.cat, prix: 0 }
+    save(kind === 'aliment' ? { ...base, unite: (modal.unite || 'kg').trim() } : base)
     toast.success('Enregistré ✓')
     setModal(null)
   }
@@ -71,6 +73,7 @@ function ReferentielTab({ kind }) {
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'cat', label: 'Catégorie', render: (r) => <Badge tone="neutral">{r.cat}</Badge> },
+            ...(kind === 'aliment' ? [{ key: 'unite', label: 'Unité', render: (r) => <span className="text-xs font-semibold text-gray-600">{r.unite || 'kg'}</span> }] : []),
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ ...r, isNew: false })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
@@ -89,6 +92,13 @@ function ReferentielTab({ kind }) {
           <>
             <FormGroup label="Nom" required><Input value={modal.nom} onChange={(e) => setModal((m) => ({ ...m, nom: e.target.value }))} /></FormGroup>
             <FormGroup label="Catégorie"><Select value={modal.cat} onChange={(e) => setModal((m) => ({ ...m, cat: e.target.value }))} options={cats.map((c) => ({ value: c, label: c }))} /></FormGroup>
+            {kind === 'aliment' && (
+              <FormGroup label="Unité de mesure" hint="Affichée dans la saisie journalière (kg, sacs, litres…)">
+                <Select value={modal.unite || 'kg'} onChange={(e) => setModal((m) => ({ ...m, unite: e.target.value }))}>
+                  {UNITES_ALIMENT.map((u) => <option key={u} value={u}>{u}</option>)}
+                </Select>
+              </FormGroup>
+            )}
           </>
         )}
       </Modal>

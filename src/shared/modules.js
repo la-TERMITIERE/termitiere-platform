@@ -1,13 +1,10 @@
 // Configuration centrale des modules de la plateforme et de leur navigation interne.
-// Sert au portail (grille de cartes), à la sidebar et au contrôle d'accès.
 import {
-  Leaf, Truck, PartyPopper, Users,
-  LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope,
-  Send, BookOpen, Settings, Car, Package, Factory, Boxes,
-  CalendarDays, BadgeDollarSign, Tent, UserCircle, CalendarCheck
+  Leaf, Truck, BrickWall, Calculator, MapPin,
+  LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
+  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package
 } from 'lucide-react'
 
-// Métadonnées des modules (ordre = ordre d'affichage portail)
 export const MODULES = [
   {
     id: 'agro',
@@ -21,30 +18,40 @@ export const MODULES = [
   },
   {
     id: 'logistique',
-    nom: 'LOGISTIQUE',
-    description: 'Transport & livraisons',
+    nom: 'LOGISTIQUE ET ÉVÉNEMENTIEL',
+    description: 'Matériel, location & prestations',
     icon: Truck,
-    emoji: '🚛',
+    emoji: '🎪',
     color: '#0284c7',
     path: '/logistique',
     statut: 'actif'
   },
   {
     id: 'evenementiel',
-    nom: 'ÉVÉNEMENTIEL',
-    description: 'Mariages & conférences',
-    icon: PartyPopper,
-    emoji: '🎪',
+    nom: 'BRIQUETERIE',
+    description: 'Production & vente de briques',
+    icon: BrickWall,
+    emoji: '🧱',
     color: '#7c3aed',
     path: '/evenementiel',
     statut: 'actif'
   },
   {
+    id: 'foncier',
+    nom: 'FONCIER',
+    description: 'Titres fonciers, morcellement & mutation',
+    icon: MapPin,
+    emoji: '📍',
+    color: '#059669',
+    path: '/foncier',
+    statut: 'actif'
+  },
+  {
     id: 'rh',
-    nom: 'RESSOURCES HUMAINES',
-    description: 'Employés & présences',
-    icon: Users,
-    emoji: '👥',
+    nom: 'COMPTABILITÉ',
+    description: 'Finances & suivi comptable',
+    icon: Calculator,
+    emoji: '📊',
     color: '#ea580c',
     path: '/rh',
     statut: 'bientot'
@@ -53,13 +60,12 @@ export const MODULES = [
 
 export const getModule = (id) => MODULES.find((m) => m.id === id)
 
-// Navigation interne de chaque module : [{ label, to, icon, badge? }]
 export const MODULE_NAV = {
   agro: [
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
-    { label: 'Analyses', to: '/agro/analyses', icon: TrendingUp },
+    { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
     { label: 'Journal', to: '/agro/journal', icon: BookOpen },
@@ -67,21 +73,30 @@ export const MODULE_NAV = {
   ],
   logistique: [
     { label: 'Dashboard', to: '/logistique', icon: LayoutDashboard, end: true },
-    { label: 'Véhicules', to: '/logistique/vehicules', icon: Car },
-    { label: 'Livraisons', to: '/logistique/livraisons', icon: Package },
-    { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory },
-    { label: 'Stock matériel', to: '/logistique/stock', icon: Boxes }
+    { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
+    { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
+    { label: 'Facturation', to: '/logistique/factures', icon: FileText },
+    { label: 'Autorisations sortie', to: '/logistique/demandes', icon: Send, badgeKey: 'logistiqueDemandes' },
+    { label: 'Retours matériel', to: '/logistique/retours', icon: RotateCcw },
+    { label: 'Référentiel matériel', to: '/logistique/referentiel', icon: Boxes },
+    { label: 'Clients', to: '/logistique/clients', icon: UserCircle },
+    { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory }
   ],
   evenementiel: [
     { label: 'Dashboard', to: '/evenementiel', icon: LayoutDashboard, end: true },
-    { label: 'Événements', to: '/evenementiel/evenements', icon: CalendarDays },
-    { label: 'Devis & Facturation', to: '/evenementiel/devis', icon: BadgeDollarSign },
-    { label: 'Matériel & Location', to: '/evenementiel/materiel', icon: Tent },
+    { label: 'Saisie matières', to: '/evenementiel/saisie', icon: ClipboardList },
+    { label: 'Production', to: '/evenementiel/production', icon: Factory },
+    { label: 'Stock briques', to: '/evenementiel/stock', icon: Package },
+    { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
+    { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
+    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle }
   ],
+  foncier: [
+    { label: 'Dashboard', to: '/foncier', icon: LayoutDashboard, end: true },
+    { label: 'Dossiers fonciers', to: '/foncier/dossiers', icon: FileText }
+  ],
   rh: [
-    { label: 'Dashboard', to: '/rh', icon: LayoutDashboard, end: true },
-    { label: 'Employés', to: '/rh/employes', icon: UserCircle },
-    { label: 'Présences & Congés', to: '/rh/presences', icon: CalendarCheck }
+    { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
   ]
 }
