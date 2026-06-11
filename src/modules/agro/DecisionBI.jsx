@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
 import {
   Layers, TrendingUp, ShoppingCart, BadgeDollarSign,
-  AlertTriangle, ClipboardList, Stethoscope, Send, Skull, Baby
+  AlertTriangle, ClipboardList, Stethoscope, Send, Skull, Baby, ChevronRight
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -19,6 +19,7 @@ export default function DecisionBI({
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
   const [kpiDetail, setKpiDetail] = useState(null)
+  const [catPeriode, setCatPeriode] = useState(null) // catégorie détaillée sur la période
 
   const tri = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1)), [inventaires])
   const dernier = tri[0]
@@ -151,26 +152,82 @@ export default function DecisionBI({
     return list
   }, [demandesAttente, stockBas, alimentsStock, tauxMortalite])
 
-  const evolution = useMemo(() => {
+  // Évolution détaillée par espèce et par métrique (effectif, ventes, décès, CA),
+  // jour par jour sur la période. Sert à tracer un graphe par catégorie, avec
+  // une échelle propre à chaque catégorie (les grands effectifs n'écrasent plus
+  // les variations des petites catégories).
+  const evolutionDetail = useMemo(() => {
     const pts = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
-    return {
-      labels: pts.map((i) => i.date?.slice(5)),
-      datasets: [{
-        label: 'Effectif total',
-        data: pts.map((i) => Object.values(i.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)),
-        borderColor: '#BC3C31', backgroundColor: 'rgba(188,60,49,0.1)', fill: true, tension: 0.3
-      }]
-    }
-  }, [invPeriode])
+    // CA par espèce et par date : on rapproche les lignes de facture des espèces
+    // (par identifiant d'article si disponible, sinon par nom).
+    const byId = new Set(especes.map((e) => e.id))
+    const byName = {}
+    especes.forEach((e) => { byName[(e.nom || '').trim().toLowerCase()] = e.id })
+    const caMap = {} // { especeId: { date: montant } }
+    facturesPeriode.forEach((f) => {
+      (f.lignes || []).forEach((l) => {
+        const id = (l.articleId && byId.has(l.articleId))
+          ? l.articleId
+          : byName[(l.article || '').trim().toLowerCase()]
+        if (!id) return
+        caMap[id] = caMap[id] || {}
+        caMap[id][f.date] = (caMap[id][f.date] || 0) + (l.total || 0)
+      })
+    })
+    const parEspece = {}
+    especes.forEach((e) => {
+      parEspece[e.id] = {
+        effectif: pts.map((inv) => inv.animaux?.[e.id]?.fin || 0),
+        ventes: pts.map((inv) => {
+          const a = inv.animaux?.[e.id]
+          if (!a) return 0
+          const vts = (a.sorties || []).filter((l) => l.type === 'Ventes')
+            .reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
+          return vts + (a.autoSor || 0)
+        }),
+        deces: pts.map((inv) => inv.animaux?.[e.id]?.dec || 0),
+        ca: pts.map((inv) => caMap[e.id]?.[inv.date] || 0)
+      }
+    })
+    return { labels: pts.map((i) => i.date?.slice(5)), parEspece }
+  }, [invPeriode, especes, facturesPeriode])
 
-  const caParMois = useMemo(() => {
+  // Évolution du chiffre d'affaires facturé — courbe cumulée jour par jour.
+  const evolutionCA = useMemo(() => {
     const map = {}
     facturesPeriode.forEach((f) => {
-      const m = (f.date || '').slice(0, 7)
-      map[m] = (map[m] || 0) + (f.totalTTC || 0)
+      const d = f.date || ''
+      if (d) map[d] = (map[d] || 0) + (f.totalTTC || 0)
     })
     const keys = Object.keys(map).sort()
-    return { labels: keys.map((k) => k.slice(5)), datasets: [{ label: 'CA (FCFA)', data: keys.map((k) => map[k]), backgroundColor: '#16a34a' }] }
+    let cumul = 0
+    const cumulData = keys.map((k) => (cumul += map[k]))
+    return {
+      labels: keys.map((k) => k.slice(5)),
+      datasets: [
+        {
+          label: 'CA cumulé (FCFA)',
+          data: cumulData,
+          borderColor: '#16a34a',
+          backgroundColor: 'rgba(22,163,74,0.12)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+          borderWidth: 2
+        },
+        {
+          label: 'CA du jour (FCFA)',
+          data: keys.map((k) => map[k]),
+          borderColor: '#0284c7',
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 2,
+          borderDash: [4, 3],
+          borderWidth: 1.5
+        }
+      ]
+    }
   }, [facturesPeriode])
 
   const repartition = {
@@ -247,15 +304,8 @@ export default function DecisionBI({
         ))}
       </div>
 
-      {/* Graphiques principaux — 3 colonnes */}
+      {/* Vue d'ensemble : répartition + flux */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Évolution de l'effectif" className="lg:col-span-2">
-          <div className="h-64">
-            {evolution.labels.length
-              ? <Line data={evolution} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
-              : <p className="py-16 text-center text-sm text-gray-400">Aucune saisie sur la période</p>}
-          </div>
-        </Card>
         <Card title="Répartition par catégorie">
           <div className="h-64">
             {parCat.some((p) => p.total > 0)
@@ -263,26 +313,37 @@ export default function DecisionBI({
               : <p className="py-16 text-center text-sm text-gray-400">Aucun effectif</p>}
           </div>
         </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Flux opérationnels (période)">
-          <div className="h-56">
+        <Card title="Flux opérationnels (période)" className="lg:col-span-2">
+          <div className="h-64">
             <Bar data={mouvementsBar} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
           </div>
         </Card>
-        <Card title="Chiffre d'affaires facturé">
-          <div className="h-56">
-            {caParMois.labels.length
-              ? <Bar data={caParMois} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
-              : <p className="py-16 text-center text-sm text-gray-400">Aucune facture sur la période</p>}
-          </div>
-        </Card>
       </div>
+
+      {/* Évolution détaillée : un graphe par catégorie, une courbe par espèce.
+          Métrique au choix : effectif, ventes, décès, chiffre d'affaires. */}
+      <div>
+        <p className="mb-2 text-sm font-bold text-gray-700">Évolution par catégorie (détail par espèce)</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {cats.map((cat) => (
+            <EvolutionCategorieCard key={cat} cat={cat} especes={especes} evolutionDetail={evolutionDetail} />
+          ))}
+        </div>
+      </div>
+
+      {/* Évolution du chiffre d'affaires global */}
+      <Card title="Évolution du chiffre d'affaires (global)">
+        <div className="h-56">
+          {evolutionCA.labels.length
+            ? <Line data={evolutionCA} options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }} />
+            : <p className="py-16 text-center text-sm text-gray-400">Aucune facture sur la période</p>}
+        </div>
+      </Card>
 
       {/* Tableaux décisionnels */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={`Effectifs par catégorie — période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
+          <p className="mb-2 text-xs text-gray-400">Cliquez une catégorie pour voir son détail par espèce sur la période.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -297,8 +358,10 @@ export default function DecisionBI({
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {parCatPeriode.map((p) => (
-                  <tr key={p.cat}>
-                    <td className="px-3 py-1.5 font-semibold" style={{ color: p.color }}>{p.cat}</td>
+                  <tr key={p.cat} onClick={() => setCatPeriode(p.cat)} className="cursor-pointer hover:bg-gray-50">
+                    <td className="px-3 py-1.5 font-semibold" style={{ color: p.color }}>
+                      <span className="inline-flex items-center gap-1">{p.cat} <ChevronRight size={13} className="text-gray-300" /></span>
+                    </td>
                     <td className="px-2 py-1.5 text-center font-bold">{formatNumber(p.efFinal)}</td>
                     <td className="px-2 py-1.5 text-center text-xs font-semibold text-sky-600">{formatNumber(p.entPeriode)}</td>
                     <td className="px-2 py-1.5 text-center text-xs font-semibold text-amber-600">{formatNumber(p.sorPeriode)}</td>
@@ -392,7 +455,168 @@ export default function DecisionBI({
         onClose={() => setKpiDetail(null)}
         data={{ achats, ventes, totauxAnim, parCat, parCatPeriode, alimentsStock, topClients, facturesPeriode, demandesPeriode, demandesEnAttenteList, interventions, effectifTotal, caTotal, decesDetail, naissancesDetail, invPeriode, baseEffectif, tauxMortalite, tauxCroissance, start, end }}
       />
+
+      <CategoriePeriodeModal
+        cat={catPeriode}
+        onClose={() => setCatPeriode(null)}
+        especes={especes}
+        invPeriode={invPeriode}
+        dernier={dernier}
+        start={start}
+        end={end}
+      />
     </div>
+  )
+}
+
+// Détail d'une catégorie sur la période : tableau par espèce (EF initial début de
+// période, naissances, entrées, sorties, décès cumulés, EF final).
+function CategoriePeriodeModal({ cat, onClose, especes, invPeriode, dernier, start, end }) {
+  const data = useMemo(() => {
+    if (!cat) return null
+    const periodeAsc = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const premier = periodeAsc[0]
+    const lignes = especes.filter((e) => e.cat === cat).map((e) => {
+      let naiss = 0, ent = 0, sor = 0, dec = 0
+      invPeriode.forEach((inv) => {
+        const a = inv.animaux?.[e.id]
+        if (a) { naiss += a.naiss || 0; ent += a.ent || 0; sor += a.sor || 0; dec += a.dec || 0 }
+      })
+      return {
+        nom: e.nom,
+        efInit: premier?.animaux?.[e.id]?.init || 0,
+        naiss, ent, sor, dec,
+        efFinal: dernier?.animaux?.[e.id]?.fin || 0
+      }
+    })
+    const tot = lignes.reduce((a, l) => ({
+      efInit: a.efInit + l.efInit, naiss: a.naiss + l.naiss, ent: a.ent + l.ent,
+      sor: a.sor + l.sor, dec: a.dec + l.dec, efFinal: a.efFinal + l.efFinal
+    }), { efInit: 0, naiss: 0, ent: 0, sor: 0, dec: 0, efFinal: 0 })
+    return { lignes, tot, color: catColor(cat) }
+  }, [cat, especes, invPeriode, dernier])
+
+  return (
+    <Modal open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} — détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
+      {data && (
+        data.lignes.length === 0 ? (
+          <p className="py-6 text-center text-gray-400">Aucune espèce dans cette catégorie.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="p-2 text-left">Espèce</th>
+                  <th className="p-2 text-center">EF Initial</th>
+                  <th className="p-2 text-center">Naiss.</th>
+                  <th className="p-2 text-center">Entrées</th>
+                  <th className="p-2 text-center">Sorties</th>
+                  <th className="p-2 text-center">Décès</th>
+                  <th className="p-2 text-center">EF Final</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {data.lignes.map((l) => (
+                  <tr key={l.nom}>
+                    <td className="p-2 font-semibold">{l.nom}</td>
+                    <td className="p-2 text-center">{formatNumber(l.efInit)}</td>
+                    <td className="p-2 text-center text-green-600">{formatNumber(l.naiss)}</td>
+                    <td className="p-2 text-center text-sky-600">{formatNumber(l.ent)}</td>
+                    <td className="p-2 text-center text-amber-600">{formatNumber(l.sor)}</td>
+                    <td className="p-2 text-center text-red-600">{formatNumber(l.dec)}</td>
+                    <td className="p-2 text-center font-bold" style={{ color: data.color }}>{formatNumber(l.efFinal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 font-bold">
+                <tr>
+                  <td className="p-2">Total</td>
+                  <td className="p-2 text-center">{formatNumber(data.tot.efInit)}</td>
+                  <td className="p-2 text-center text-green-600">{formatNumber(data.tot.naiss)}</td>
+                  <td className="p-2 text-center text-sky-600">{formatNumber(data.tot.ent)}</td>
+                  <td className="p-2 text-center text-amber-600">{formatNumber(data.tot.sor)}</td>
+                  <td className="p-2 text-center text-red-600">{formatNumber(data.tot.dec)}</td>
+                  <td className="p-2 text-center" style={{ color: data.color }}>{formatNumber(data.tot.efFinal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )
+      )}
+    </Modal>
+  )
+}
+
+const METRICS_EVO = [
+  { id: 'effectif', label: 'Effectif', money: false },
+  { id: 'ventes', label: 'Ventes', money: false },
+  { id: 'deces', label: 'Décès', money: false },
+  { id: 'ca', label: "Chiffre d'affaires", money: true }
+]
+
+// Un graphe d'évolution pour UNE catégorie : une seule courbe agrégée (total de
+// la catégorie), avec métrique sélectionnable (effectif / ventes / décès / CA).
+function EvolutionCategorieCard({ cat, especes, evolutionDetail }) {
+  const [metric, setMetric] = useState('effectif')
+  const espCat = useMemo(() => especes.filter((e) => e.cat === cat), [especes, cat])
+  const isMoney = metric === 'ca'
+
+  // Somme, date par date, de toutes les espèces de la catégorie.
+  const serie = useMemo(() => {
+    const sum = new Array(evolutionDetail.labels.length).fill(0)
+    espCat.forEach((e) => {
+      (evolutionDetail.parEspece[e.id]?.[metric] || []).forEach((v, i) => { sum[i] += v || 0 })
+    })
+    return sum
+  }, [espCat, evolutionDetail, metric])
+
+  const color = catColor(cat)
+  const data = {
+    labels: evolutionDetail.labels,
+    datasets: [{
+      label: cat,
+      data: serie,
+      borderColor: color,
+      backgroundColor: color + '22',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 2,
+      borderWidth: 2
+    }]
+  }
+
+  const options = {
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx) => (isMoney ? formatMoney(ctx.parsed.y) : formatNumber(ctx.parsed.y)) } }
+    },
+    scales: { y: { beginAtZero: true, ticks: { callback: (v) => (isMoney ? new Intl.NumberFormat('fr-FR', { notation: 'compact' }).format(v) : v) } } }
+  }
+
+  const aDesDonnees = evolutionDetail.labels.length > 0 && espCat.length > 0
+
+  return (
+    <Card title={`${cat} — évolution`}>
+      <div className="mb-2 flex flex-wrap gap-1">
+        {METRICS_EVO.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => setMetric(m.id)}
+            className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${metric === m.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div className="h-56">
+        {aDesDonnees
+          ? <Line data={data} options={options} />
+          : <p className="py-16 text-center text-sm text-gray-400">Aucune donnée sur la période</p>}
+      </div>
+    </Card>
   )
 }
 

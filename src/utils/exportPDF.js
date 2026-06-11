@@ -1,7 +1,7 @@
 // Helpers d'export PDF (jsPDF + autotable) avec en-tête LA TERMITIÈRE.
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatMoney, formatDate } from './formatters'
+import { formatDate } from './formatters'
 
 const VERT = [188, 60, 49] // rouge LA TERMITIÈRE (conservé sous ce nom pour compat. interne)
 const ENTREPRISE = {
@@ -12,8 +12,39 @@ const ENTREPRISE = {
   email: 'latermitiere2021@gmail.com'
 }
 
+// Formatage des montants pour le PDF : séparateur de milliers = espace ASCII.
+// (Intl.NumberFormat('fr-FR') utilise une espace insécable étroite U+202F que la
+//  police standard de jsPDF ne sait pas afficher → caractères parasites « & / ».)
+function fmtMontant(v) {
+  const n = Math.round(Number(v) || 0)
+  const s = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return (n < 0 ? '-' : '') + s
+}
+const fmtFCFA = (v) => fmtMontant(v) + ' FCFA'
+
+// Charge une image (logo) et la convertit en data URL pour jsPDF. Mise en cache.
+let _logoCache
+function chargerLogo() {
+  if (_logoCache !== undefined) return Promise.resolve(_logoCache)
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        canvas.getContext('2d').drawImage(img, 0, 0)
+        _logoCache = { dataURL: canvas.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight }
+      } catch { _logoCache = null }
+      resolve(_logoCache)
+    }
+    img.onerror = () => { _logoCache = null; resolve(null) }
+    img.src = '/logo-mark.png'
+  })
+}
+
 // En-tête commun à tous les documents. Renvoie l'ordonnée Y de fin d'en-tête.
-function header(doc, sousTitre) {
+function header(doc, sousTitre, logo) {
   doc.setFillColor(...VERT)
   doc.rect(0, 0, 210, 28, 'F')
   doc.setTextColor(255, 255, 255)
@@ -26,6 +57,19 @@ function header(doc, sousTitre) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
   doc.text(`${ENTREPRISE.adresse}  ·  ${ENTREPRISE.tel}`, 14, 24)
+
+  // Logo dans une pastille blanche à droite de la bande (rendu propre quel que
+  // soit le fond du logo).
+  if (logo?.dataURL) {
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(176, 4, 20, 20, 2.5, 2.5, 'F')
+    const ratio = logo.w && logo.h ? logo.w / logo.h : 1
+    let w = 16, h = 16
+    if (ratio > 1) h = 16 / ratio
+    else w = 16 * ratio
+    doc.addImage(logo.dataURL, 'PNG', 176 + (20 - w) / 2, 4 + (20 - h) / 2, w, h)
+  }
+
   if (sousTitre) {
     doc.setTextColor(...VERT)
     doc.setFont('helvetica', 'bold')
@@ -48,9 +92,10 @@ function footer(doc) {
 }
 
 // Génère une facture/devis PDF. `type` = 'FACTURE' | 'DEVIS'.
-export function genererDocumentPDF(facture, type = 'FACTURE') {
+export async function genererDocumentPDF(facture, type = 'FACTURE') {
   const doc = new jsPDF()
-  let y = header(doc, `${type} N° ${facture.numero}`)
+  const logo = await chargerLogo()
+  let y = header(doc, `${type} N° ${facture.numero}`, logo)
 
   // Bloc date + référence
   doc.setFontSize(9)
@@ -82,8 +127,8 @@ export function genererDocumentPDF(facture, type = 'FACTURE') {
       String(i + 1),
       l.article || '—',
       String(l.qte),
-      new Intl.NumberFormat('fr-FR').format(Math.round(l.prixUnit || 0)),
-      new Intl.NumberFormat('fr-FR').format(Math.round(l.total || 0))
+      fmtMontant(l.prixUnit),
+      fmtMontant(l.total)
     ]),
     theme: 'striped',
     headStyles: { fillColor: VERT, textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -106,7 +151,7 @@ export function genererDocumentPDF(facture, type = 'FACTURE') {
   doc.setDrawColor(...VERT)
   doc.setFillColor(252, 252, 252)
 
-  const formatNum = (v) => new Intl.NumberFormat('fr-FR').format(Math.round(v || 0)) + ' FCFA'
+  const formatNum = fmtFCFA
 
   const totalHT = facture.totalHT || 0
   const remiseMontant = facture.remise ? totalHT * facture.remise / 100 : 0
@@ -144,9 +189,10 @@ export function genererDocumentPDF(facture, type = 'FACTURE') {
 }
 
 // Génère un rapport simple à partir d'un tableau (titre + colonnes + lignes).
-export function genererRapportPDF({ titre, colonnes, lignes, fichier }) {
+export async function genererRapportPDF({ titre, colonnes, lignes, fichier }) {
   const doc = new jsPDF()
-  const y = header(doc, titre)
+  const logo = await chargerLogo()
+  const y = header(doc, titre, logo)
   autoTable(doc, {
     startY: y + 2,
     head: [colonnes],

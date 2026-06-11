@@ -3,8 +3,8 @@
 //  2. L'admin/contrôleur approuve ou refuse avec commentaire.
 //  3. À l'approbation, la sortie est automatiquement reportée dans la saisie
 //     du jour `dateSortie` (la page Saisie lit les demandes approuvées).
-import { useMemo, useState } from 'react'
-import { Plus, Check, X, Clock } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Check, X, Clock, Timer } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -41,6 +41,21 @@ export default function Demandes() {
   const [filtre, setFiltre] = useState('en_attente')
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null) // { demande, action }
+  const [nowTick, setNowTick] = useState(Date.now())
+
+  // Tick pour rafraîchir le compte à rebours d'approbation automatique.
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30 * 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Minutes restantes avant approbation automatique (10 min après création).
+  const minsAvantAuto = (d) => {
+    const created = typeof d.createdAt === 'number'
+      ? d.createdAt
+      : (Date.parse(`${d.date}T${d.heure || '00:00'}:00`) || Date.now())
+    return Math.max(0, Math.ceil((created + 10 * 60 * 1000 - nowTick) / 60000))
+  }
 
   // Formulaire de création
   const [form, setForm] = useState({
@@ -155,6 +170,13 @@ export default function Demandes() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        <Timer size={18} className="mt-0.5 shrink-0" />
+        <p>
+          <strong>Approbation automatique :</strong> toute demande de sortie (ventes, dons, transferts, consommation interne et autres sous-demandes) non traitée sous <strong>10 minutes</strong> est approuvée automatiquement et la sortie est <strong>décomptée</strong>. Toutes les sorties restent consultables ci-dessous.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 rounded-lg bg-white p-1">
           {[['en_attente', `En attente (${nbAttente})`], ['approuve', 'Approuvées'], ['refuse', 'Refusées'], ['tous', 'Toutes']].map(
@@ -196,6 +218,14 @@ export default function Demandes() {
                 <span>🕒 {d.date} {d.heure}</span>
               </div>
               {d.message && <p className="rounded bg-gray-50 p-2 text-xs italic text-gray-600">« {d.message} »</p>}
+              {d.statut === 'en_attente' && (
+                <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-600">
+                  <Timer size={12} />
+                  {minsAvantAuto(d) > 0
+                    ? `Approbation automatique dans ~${minsAvantAuto(d)} min`
+                    : 'Approbation automatique imminente…'}
+                </p>
+              )}
               {d.commentaireDecision && (
                 <p className="text-xs text-gray-500">
                   Décision par {d.approbateurNom} : {d.commentaireDecision}

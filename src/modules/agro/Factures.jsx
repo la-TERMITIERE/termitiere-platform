@@ -69,8 +69,12 @@ export default function Factures() {
   }
   function pickArticle(i, id) {
     const art = getArticle(id)
+    // On mémorise le type + la catégorie de l'article pour rattacher de façon
+    // fiable le chiffre d'affaires à l'espèce/aliment (analyses par catégorie).
+    const type = especes.some((e) => e.id === id) ? 'animal'
+      : aliments.some((a) => a.id === id) ? 'aliment' : ''
     // Le prix n'est plus prérempli : l'utilisateur saisit lui-même le prix de l'animal.
-    setLigne(i, { articleId: id, article: art?.nom || '' })
+    setLigne(i, { articleId: id, article: art?.nom || '', articleType: type, articleCat: art?.cat || '' })
   }
   function addLigne() {
     setModal((m) => ({ ...m, facture: { ...m.facture, lignes: [...m.facture.lignes, { articleId: '', article: '', qte: 1, prixUnit: 0, total: 0 }] } }))
@@ -82,9 +86,19 @@ export default function Factures() {
   async function save() {
     const f = modal.facture
     if (!f.client.nom.trim()) return toast.error('Nom du client requis')
-    if (!f.lignes.some((l) => l.articleId && l.qte > 0)) return toast.error('Ajoutez au moins une ligne')
-    const { totalHT, totalTTC } = calcTotaux(f)
-    const payload = { ...f, totalHT, totalTTC }
+    // Nettoyage : on retire les lignes totalement vides (ni article, ni qté, ni prix).
+    const lignes = (f.lignes || []).filter((l) =>
+      l.articleId || (parseInt(l.qte) || 0) > 0 || (parseFloat(l.prixUnit) || 0) > 0
+    )
+    if (!lignes.some((l) => l.articleId && (parseInt(l.qte) || 0) > 0)) return toast.error('Ajoutez au moins une ligne avec un article')
+    // Toute ligne facturée (avec une quantité) doit référencer un article : sinon
+    // son montant ne pourrait pas être rattaché à une espèce dans les analyses.
+    if (lignes.some((l) => (parseInt(l.qte) || 0) > 0 && !l.articleId)) {
+      return toast.error('Chaque ligne facturée doit avoir un article sélectionné')
+    }
+    const fClean = { ...f, lignes }
+    const { totalHT, totalTTC } = calcTotaux(fClean)
+    const payload = { ...fClean, totalHT, totalTTC }
     try {
       if (modal.editId) {
         await updateItem('agro_factures', modal.editId, payload)
