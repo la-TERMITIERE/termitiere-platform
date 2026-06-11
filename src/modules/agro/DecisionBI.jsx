@@ -252,6 +252,20 @@ export default function DecisionBI({
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [facturesPeriode])
 
+  // Apporteurs d'affaires : CA généré par chaque membre ayant amené un client
+  // (pour les primer). On ignore les factures sans apporteur (clients directs).
+  const topApporteurs = useMemo(() => {
+    const map = {}
+    facturesPeriode.forEach((f) => {
+      const nom = (f.apporteur || '').trim()
+      if (!nom) return
+      if (!map[nom]) map[nom] = { ca: 0, nb: 0 }
+      map[nom].ca += f.totalTTC || 0
+      map[nom].nb += 1
+    })
+    return Object.entries(map).map(([nom, v]) => ({ nom, ...v })).sort((a, b) => b.ca - a.ca)
+  }, [facturesPeriode])
+
   const kpis = [
     { id: 'effectif', title: 'Effectif total', value: formatNumber(effectifTotal), sub: veille ? `${effectifTotal - effectifVeille >= 0 ? '+' : ''}${effectifTotal - effectifVeille} vs veille` : '', icon: Layers, color: '#BC3C31' },
     { id: 'ca', title: 'CA facturé', value: formatMoney(caTotal), sub: `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#16a34a' },
@@ -450,6 +464,32 @@ export default function DecisionBI({
         </Card>
       </div>
 
+      {/* Apporteurs d'affaires — à primer */}
+      <Card title="Apporteurs d'affaires — CA généré (à primer)">
+        {topApporteurs.length ? (
+          <div className="space-y-2">
+            {topApporteurs.map((a, i) => (
+              <div key={a.nom} className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">
+                    {a.nom} <span className="text-xs font-normal text-gray-400">· {a.nb} vente(s)</span>
+                  </p>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${(a.ca / topApporteurs[0].ca) * 100}%` }} />
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-bold text-amber-700">{formatMoney(a.ca)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="py-8 text-center text-sm text-gray-400">
+            Aucun apporteur enregistré sur la période. Renseignez « Apporté par » lors de la facturation.
+          </p>
+        )}
+      </Card>
+
       <KpiDetailModal
         id={kpiDetail}
         onClose={() => setKpiDetail(null)}
@@ -592,7 +632,15 @@ function EvolutionCategorieCard({ cat, especes, evolutionDetail }) {
       legend: { display: false },
       tooltip: { callbacks: { label: (ctx) => (isMoney ? formatMoney(ctx.parsed.y) : formatNumber(ctx.parsed.y)) } }
     },
-    scales: { y: { beginAtZero: true, ticks: { callback: (v) => (isMoney ? new Intl.NumberFormat('fr-FR', { notation: 'compact' }).format(v) : v) } } }
+    scales: {
+      y: {
+        // Échelle automatique (ne part PAS de zéro) : l'axe se cale sur le min/max
+        // des données pour rendre visibles même les plus petites variations.
+        beginAtZero: false,
+        grace: '8%',
+        ticks: { callback: (v) => (isMoney ? new Intl.NumberFormat('fr-FR', { notation: 'compact' }).format(v) : v) }
+      }
+    }
   }
 
   const aDesDonnees = evolutionDetail.labels.length > 0 && espCat.length > 0

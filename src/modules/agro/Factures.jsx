@@ -20,6 +20,9 @@ import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/f
 const emptyFacture = () => ({
   date: todayStr(),
   client: { nom: '', tel: '', adresse: '', email: '' },
+  // Apporteur d'affaires : membre de l'entreprise qui a amené / recommandé le
+  // client (sert à le primer ensuite). Vide = client venu en direct.
+  apporteur: '',
   lignes: [{ articleId: '', article: '', qte: 1, prixUnit: 0, total: 0 }],
   remise: 0,
   tva: 0
@@ -30,6 +33,7 @@ export default function Factures() {
   // Seuls les agents créent/modifient/suppriment des factures ; admin/ctrl consultent.
   const peutFacturer = () => role === 'agent'
   const { data: factures } = useCollection('agro_factures')
+  const { data: users } = useCollection('users') // membres de l'entreprise (apporteurs)
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
   const getArticle = useAgroStore((s) => s.getArticle)
@@ -168,6 +172,19 @@ export default function Factures() {
               <FormGroup label="Client" required><Input value={modal.facture.client.nom} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom: e.target.value } } }))} /></FormGroup>
               <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
               <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
+            </div>
+            <div className="mt-2">
+              <FormGroup label="Apporté / recommandé par (membre de l'entreprise)" hint="Laissez vide si le client est venu en direct. Sert à primer l'apporteur.">
+                <Input
+                  list="apporteurs-list"
+                  placeholder="Nom du membre qui a amené le client…"
+                  value={modal.facture.apporteur || ''}
+                  onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, apporteur: e.target.value } }))}
+                />
+                <datalist id="apporteurs-list">
+                  {users.map((u) => <option key={u.id} value={u.nom || u.login} />)}
+                </datalist>
+              </FormGroup>
             </div>
 
             {/* Lignes */}
