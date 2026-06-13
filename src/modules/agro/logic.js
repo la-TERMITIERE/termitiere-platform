@@ -14,14 +14,15 @@ export function previousInventoryDate(inventaires, date) {
 export const getInventaire = (inventaires, date) =>
   inventaires.find((i) => i.date === date) || null
 
-// Somme des demandes APPROUVÉES pour un article animal à une date de sortie donnée.
+// Somme des demandes APPROUVÉES pour un article à une date de sortie donnée.
 // → alimente automatiquement la colonne "Sorties" de la saisie.
-export function autoSorties(demandes, articleId, dateSortie) {
+// `type` = 'animal' (défaut) ou 'aliment' : toute sortie sur demande compte.
+export function autoSorties(demandes, articleId, dateSortie, type = 'animal') {
   return (demandes || [])
     .filter(
       (d) =>
         d.statut === 'approuve' &&
-        d.typeArticle === 'animal' &&
+        d.typeArticle === type &&
         d.articleId === articleId &&
         d.dateSortie === dateSortie
     )
@@ -131,9 +132,10 @@ export function agregerAnimal({ init = 0, entrees = [], sorties = [] }, autoSor 
 }
 
 // Agrégation aliments (pas de naissance / décès).
-export function agregerAliment({ init = 0, entrees = [], sorties = [] }) {
+// autoSor = sorties auto issues des demandes approuvées (incluses dans le total).
+export function agregerAliment({ init = 0, entrees = [], sorties = [] }, autoSor = 0) {
   const ent = sommeMouvements(entrees)
-  const sor = sommeMouvements(sorties)
+  const sor = sommeMouvements(sorties) + (autoSor || 0)
   return { init, ent, sor, fin: Math.max(0, init + ent - sor) }
 }
 

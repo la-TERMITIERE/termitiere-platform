@@ -11,6 +11,7 @@ import Sante from './Sante'
 import Demandes from './Demandes'
 import Journal from './Journal'
 import Params from './Params'
+import AutoCarryForward from './AutoCarryForward'
 import { useAgroStore } from './store/agroStore'
 
 export default function AgroModule() {
@@ -19,6 +20,8 @@ export default function AgroModule() {
   useEffect(() => { init() }, [init])
 
   return (
+    <>
+    <AutoCarryForward />
     <Routes>
       <Route index element={<Dashboard />} />
       <Route path="saisie" element={<Saisie />} />
@@ -29,5 +32,6 @@ export default function AgroModule() {
       <Route path="journal" element={<Journal />} />
       <Route path="params" element={<Params />} />
     </Routes>
+    </>
   )
 }

@@ -117,7 +117,7 @@ export default function Saisie() {
     return [...CAT_ALIMENTS, ...custom].filter((c) => aliments.some((a) => a.cat === c))
   }, [aliments])
 
-  const autoSorOf = (id) => autoSorties(demandes, id, date)
+  const autoSorOf = (id, kind = 'animaux') => autoSorties(demandes, id, date, kind === 'aliments' ? 'aliment' : 'animal')
   // Mutations entrantes par espèce de destination (générées par les mutations
   // sortantes des autres espèces : −1 à l'origine, +1 à la destination).
   const mutIn = useMemo(() => mutationsEntrantes(anim), [anim])
@@ -183,12 +183,15 @@ export default function Saisie() {
       const alimentsOut = {}
       aliments.forEach((x) => {
         const d = alim[x.id] || { init: 0, entrees: [], sorties: [] }
-        const agg = agregerAliment(d)
+        const autoSor = autoSorOf(x.id, 'aliments')
+        const agg = agregerAliment(d, autoSor)
         alimentsOut[x.id] = {
           ...agg,
           entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
-          sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom)
+          sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom),
+          autoSor
         }
+        totSor += sommeMouvements(d.sorties) + autoSor
       })
 
       await setItem('agro_inventaires', date, {
@@ -246,7 +249,7 @@ export default function Saisie() {
               <FragmentCat key={cat} cat={cat} color={catColor(cat)} span={5}>
                 {articles.filter((a) => a.cat === cat).map((a) => {
                   const d = src[a.id] || { init: 0, entrees: [], sorties: [] }
-                  const autoSor = kind === 'animaux' ? autoSorOf(a.id) : 0
+                  const autoSor = autoSorOf(a.id, kind)
                   const mIn = kind === 'animaux' ? (mutIn[a.id] || 0) : 0
                   const totEnt = sommeMouvements(d.entrees) + mIn
                   const totSor = sommeMouvements(d.sorties) + autoSor
@@ -355,7 +358,7 @@ export default function Saisie() {
         anim={anim}
         alim={alim}
         especes={especes}
-        autoSor={mvtModal && mvtModal.kind === 'animaux' && mvtModal.dir === 'sortie' ? autoSorOf(mvtModal.id) : 0}
+        autoSor={mvtModal && mvtModal.dir === 'sortie' ? autoSorOf(mvtModal.id, mvtModal.kind) : 0}
         mutIn={mvtModal && mvtModal.kind === 'animaux' ? (mutIn[mvtModal.id] || 0) : 0}
         mutInDetail={mvtModal && mvtModal.kind === 'animaux' && mvtModal.dir === 'entree'
           ? mutationsEntrantesDetail(anim, especes, mvtModal.id) : []}

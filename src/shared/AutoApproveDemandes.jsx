@@ -14,6 +14,7 @@ import { audit } from '../core/audit'
 import { notify } from '../core/notify'
 import { pushToUsers } from '../core/push'
 import { todayStr, nowHM } from '../utils/formatters'
+import { appliquerDemandeAuStock } from '../modules/agro/applyDemande'
 
 const DELAI_MS = 10 * 60 * 1000 // 10 minutes sans décision → approbation auto
 const CHECK_MS = 30 * 1000      // fréquence de vérification
@@ -46,6 +47,8 @@ export default function AutoApproveDemandes() {
           decidedAt: ts(),
           autoApprouve: true
         })
+        // Décompte immédiat de la sortie (comptabilisée comme sortie/vente).
+        await appliquerDemandeAuStock({ ...d, statut: 'approuve' })
         await audit('agro', 'APPROBATION', `${d.num} — ${d.qte} × ${d.articleNom} (auto 10 min)`)
         await notify({
           type: 'approuve',

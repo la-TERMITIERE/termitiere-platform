@@ -23,6 +23,7 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatDateTime } from '../../utils/formatters'
 import { dernierStock } from './logic'
+import { appliquerDemandeAuStock } from './applyDemande'
 
 const STATUTS = {
   en_attente: { label: '⏳ En attente', tone: 'warning' },
@@ -134,6 +135,9 @@ export default function Demandes() {
       commentaireDecision: commentaire.trim(),
       decidedAt: ts()
     })
+    // À l'approbation, la sortie est immédiatement décomptée du stock (et donc
+    // comptabilisée dans les sorties/ventes), sans attendre une re-saisie.
+    if (statut === 'approuve') await appliquerDemandeAuStock({ ...d, statut: 'approuve' })
     await audit('agro', statut === 'approuve' ? 'APPROBATION' : 'REFUS',
       `${d.num} — ${d.qte} × ${d.articleNom} (${d.demandeurNom})`)
     // Notifie le demandeur de la décision.
