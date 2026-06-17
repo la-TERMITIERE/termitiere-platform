@@ -1,6 +1,7 @@
-// Autorisations de sortie — validation par 3 autorités avant chargement des briques.
+// Autorisations de sortie des briques — workflow à deux niveaux :
+// un gérant approuve, puis la Direction / GE certifie (libère le chargement).
 import { useMemo, useState } from 'react'
-import { Plus, Check, X, Shield } from 'lucide-react'
+import { Plus, Shield } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -16,22 +17,20 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney } from '../../utils/formatters'
-import { AUTORITES_SORTIE } from './data'
-import { statutAutorisation, dernierStockBriques } from './logic'
+import { dernierStockBriques } from './logic'
+import { APPROVER_ROLES, CERTIFIER_ROLES } from '../../core/roles'
+import { STATUTS_DEMANDE, normaliserStatut, actionsDemande } from '../../shared/workflow'
 
-const STATUTS = {
-  en_attente: { label: '⏳ En attente (0/3)', tone: 'warning' },
-  partiel: { label: '🔄 Partiel', tone: 'info' },
-  approuve: { label: '✅ Approuvé (3/3)', tone: 'success' },
-  refuse: { label: '❌ Refusé', tone: 'danger' }
-}
+const STATUTS = STATUTS_DEMANDE
 
 export default function Demandes() {
-  const { user, canManage, role } = useAuth()
+  const { user, canManage, canCertify } = useAuth()
   const { data: demandes } = useCollection('evenementiel_demandes')
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const briques = useBriqueterieStore((s) => s.briques)
+  const isManager = canManage()
+  const isCertifier = canCertify()
 
   const [filtre, setFiltre] = useState('en_attente')
   const [createOpen, setCreateOpen] = useState(false)
@@ -41,7 +40,7 @@ export default function Demandes() {
 
   const ventesBrouillon = ventes.filter((v) => ['brouillon', 'en_attente'].includes(v.statut))
   const filtrees = useMemo(() =>
-    [...demandes].filter((d) => filtre === 'tous' || d.statut === filtre).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [...demandes].filter((d) => filtre === 'tous' || normaliserStatut(d.statut) === filtre).sort((a, b) => (a.date < b.date ? 1 : -1)),
   [demandes, filtre])
 
   function openCreate() {
@@ -66,9 +65,6 @@ export default function Demandes() {
     const stock = dernierStockBriques(inventaires, form.briqueId, etat)
     if ((parseInt(form.qte) || 0) > stock) return toast.error(`Stock insuffisant (${stock} disponible)`)
 
-    const approbations = {}
-    AUTORITES_SORTIE.forEach((a) => { approbations[a] = 'en_attente' })
-
     const num = genNumero('AUT-BRIQ', demandes.length)
     await addItem('evenementiel_demandes', {
       num, date: todayStr(), heure: nowHM(),
@@ -77,7 +73,7 @@ export default function Demandes() {
       briqueId: m?.id, briqueNom: m?.nom,
       qte: parseInt(form.qte) || 0, dateSortie: form.dateSortie,
       message: form.message.trim(),
-      approbations, statut: 'en_attente'
+      statut: 'en_attente'
     })
     await updateItem('evenementiel_ventes', form.venteId, { statut: 'en_attente' })
     await notify({
@@ -85,46 +81,58 @@ export default function Demandes() {
       title: 'Autorisation sortie briques',
       body: `${form.qte} × ${m?.nom} — vente ${vte?.num} — par ${user.nom}`,
       module: 'evenementiel',
-      forRoles: ['admin', 'controleur'],
+      forRoles: APPROVER_ROLES,
       excludeUid: user.uid,
       link: '/evenementiel/demandes'
     })
     await audit('evenementiel', 'DEMANDE_SORTIE', num)
-    toast.success('Demande soumise — 3 autorités doivent valider')
+    toast.success('Demande soumise — approbation puis certification requises')
     setCreateOpen(false)
   }
 
-  function autoriteUtilisateur() {
-    if (role === 'admin') return AUTORITES_SORTIE[0]
-    if (role === 'controleur') return AUTORITES_SORTIE[1]
-    return null
-  }
-
-  async function appliquerDecision(autorite, action) {
+  // Applique une action du workflow (approuver / certifier / refuser).
+  async function appliquerDecision(action) {
     const d = decision.demande
-    const approbations = { ...(d.approbations || {}), [autorite]: action }
-    const statut = statutAutorisation(approbations, AUTORITES_SORTIE)
-    await updateItem('evenementiel_demandes', d.id, {
-      approbations, statut,
-      [`decision_${autorite}`]: { action, par: user.nom, date: todayStr() + ' ' + nowHM(), commentaire: commentaire.trim() },
-      decidedAt: ts()
-    })
-    if (statut === 'approuve') {
+    const statut = action.statut
+    const horodate = todayStr() + ' ' + nowHM()
+    const patch = { statut, decidedAt: ts(), commentaireDecision: commentaire.trim() }
+    if (statut === 'approuve_n1') { patch.approuveN1Par = user.nom; patch.approuveN1Le = horodate }
+    else if (statut === 'certifie') {
+      patch.certifiePar = user.nom; patch.certifieLe = horodate
+      patch.dateDecision = horodate
+      if (!d.approuveN1Par) { patch.approuveN1Par = user.nom; patch.approuveN1Le = horodate }
+    } else { patch.refusePar = user.nom; patch.dateDecision = horodate }
+    await updateItem('evenementiel_demandes', d.id, patch)
+
+    if (statut === 'certifie') {
       await updateItem('evenementiel_ventes', d.venteId, { statut: 'autorisee' })
       await notify({
-        type: 'success',
-        title: 'Sortie briques autorisée (3/3)',
+        type: 'success', title: 'Sortie briques autorisée ✅',
         body: `${d.qte} × ${d.briqueNom} — chargement ${d.dateSortie}`,
-        module: 'evenementiel',
-        forUsers: [d.demandeur],
-        link: '/evenementiel/stock'
+        module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/stock'
+      })
+      await notify({
+        type: 'info', title: `Sortie autorisée par ${user.nom} ✅`,
+        body: `${d.qte} × ${d.briqueNom} — demandée par ${d.demandeurNom}`,
+        module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+      })
+    } else if (statut === 'approuve_n1') {
+      await notify({
+        type: 'demande', title: 'Sortie briques à certifier 🟡',
+        body: `${d.qte} × ${d.briqueNom} — approuvée par ${user.nom}`,
+        module: 'evenementiel', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+      })
+    } else { // refuse
+      await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })
+      await notify({
+        type: 'refus', title: 'Demande refusée ⛔',
+        body: `${d.qte} × ${d.briqueNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+        module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/demandes'
       })
     }
-    if (statut === 'refuse') {
-      await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })
-    }
-    await audit('evenementiel', action === 'approuve' ? 'AUTORISATION_OK' : 'AUTORISATION_REFUS', d.num)
-    toast.success(action === 'approuve' ? `${autorite} : approuvé` : 'Demande refusée')
+    await audit('evenementiel',
+      statut === 'refuse' ? 'AUTORISATION_REFUS' : statut === 'certifie' ? 'CERTIFICATION' : 'AUTORISATION_OK', d.num)
+    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓' : statut === 'approuve_n1' ? 'Approuvé — en attente de certification' : 'Demande refusée')
     setDecision(null)
     setCommentaire('')
   }
@@ -133,14 +141,13 @@ export default function Demandes() {
     <div className="space-y-4">
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <Shield size={16} className="mr-1 inline" />
-        Toute sortie de briques exige l'accord des <strong>3 autorités</strong> :
-        {AUTORITES_SORTIE.map((a) => <span key={a} className="ml-1 rounded bg-white px-1.5 py-0.5 text-xs font-semibold">{a}</span>)}
+        Toute sortie de briques exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) avant le chargement.
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {['en_attente', 'partiel', 'approuve', 'refuse', 'tous'].map((f) => (
+        {['en_attente', 'approuve_n1', 'certifie', 'refuse', 'tous'].map((f) => (
           <button key={f} onClick={() => setFiltre(f)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filtre === f ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'}`}>
-            {f === 'tous' ? 'Toutes' : STATUTS[f]?.label || f}
+            {f === 'tous' ? 'Toutes' : STATUTS[f]?.short || f}
           </button>
         ))}
         <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
@@ -157,37 +164,38 @@ export default function Demandes() {
               <th className="px-3 py-2">Brique</th>
               <th className="px-3 py-2 text-center">Qté</th>
               <th className="px-3 py-2">Chargement</th>
-              <th className="px-3 py-2">Autorisations</th>
+              <th className="px-3 py-2">Validation</th>
               <th className="px-3 py-2">Statut</th>
-              {canManage() && <th className="px-3 py-2" />}
+              {isManager && <th className="px-3 py-2" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtrees.map((d) => (
+            {filtrees.map((d) => {
+              const sn = normaliserStatut(d.statut)
+              const acts = actionsDemande(d.statut, { canManage: isManager, canCertify: isCertifier })
+              return (
               <tr key={d.id}>
                 <td className="px-3 py-2 font-mono text-xs">{d.num}</td>
                 <td className="px-3 py-2"><span className="font-semibold">{d.venteNum}</span><br /><span className="text-xs text-gray-500">{d.clientNom}</span></td>
                 <td className="px-3 py-2 font-semibold">{d.briqueNom}</td>
                 <td className="px-3 py-2 text-center">{d.qte}</td>
                 <td className="px-3 py-2">{d.dateSortie}</td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-1">
-                    {AUTORITES_SORTIE.map((a) => {
-                      const v = d.approbations?.[a]
-                      const tone = v === 'approuve' ? 'success' : v === 'refuse' ? 'danger' : 'neutral'
-                      const short = a.split(' ').pop()
-                      return <Badge key={a} tone={tone} className="text-[9px]">{short}: {v === 'approuve' ? '✓' : v === 'refuse' ? '✗' : '…'}</Badge>
-                    })}
-                  </div>
+                <td className="px-3 py-2 text-xs text-gray-500">
+                  {d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : '—'}
+                  {d.certifiePar && <span className="block">Certifié : {d.certifiePar}</span>}
                 </td>
-                <td className="px-3 py-2"><Badge tone={STATUTS[d.statut]?.tone}>{STATUTS[d.statut]?.label}</Badge></td>
-                {canManage() && !['approuve', 'refuse'].includes(d.statut) && (
+                <td className="px-3 py-2"><Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge></td>
+                {isManager && (
                   <td className="px-3 py-2 text-right">
-                    <button onClick={() => setDecision({ demande: d })} className="text-green-600"><Check size={18} /></button>
+                    {acts.length > 0 && (
+                      <button onClick={() => setDecision({ demande: d })} className="rounded bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/20">
+                        {sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
+                      </button>
+                    )}
                   </td>
                 )}
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
         {!filtrees.length && <p className="py-10 text-center text-gray-400">Aucune demande.</p>}
@@ -217,21 +225,19 @@ export default function Demandes() {
         </FormGroup>
       </Modal>
 
-      <Modal open={!!decision} onClose={() => setDecision(null)} title="Valider en tant qu'autorité"
+      <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }} title="Traiter la demande"
         footer={<>
-          <Button variant="ghost" onClick={() => setDecision(null)}>Annuler</Button>
-          <Button onClick={() => appliquerDecision(decision.autorite, 'refuse')} style={{ background: '#dc2626' }}>Refuser</Button>
-          <Button onClick={() => appliquerDecision(decision.autorite, 'approuve')} style={{ background: '#16a34a' }}>Approuver</Button>
+          <Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
+          {decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
+            <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
+              {a.label}
+            </Button>
+          ))}
         </>}>
         {decision && (
           <>
-            <p className="mb-3 text-sm">{decision.demande.qte} × <strong>{decision.demande.briqueNom}</strong> — Vente {decision.demande.venteNum}</p>
-            <FormGroup label="Votre autorité">
-              <Select value={decision.autorite || autoriteUtilisateur() || AUTORITES_SORTIE[0]}
-                onChange={(e) => setDecision((d) => ({ ...d, autorite: e.target.value }))}>
-                {AUTORITES_SORTIE.map((a) => <option key={a} value={a}>{a}</option>)}
-              </Select>
-            </FormGroup>
+            <p className="mb-1 text-sm">{decision.demande.qte} × <strong>{decision.demande.briqueNom}</strong> — Vente {decision.demande.venteNum}</p>
+            <p className="mb-3"><Badge tone={STATUTS[normaliserStatut(decision.demande.statut)]?.tone}>{STATUTS[normaliserStatut(decision.demande.statut)]?.label}</Badge></p>
             <FormGroup label="Commentaire"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
           </>
         )}

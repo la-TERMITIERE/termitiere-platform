@@ -32,8 +32,9 @@ import {
   agregerAnimal, agregerAliment, sommeMouvements, mouvementsDepuisSaisie,
   mutationsEntrantes, mutationsEntrantesDetail,
   ENTREE_TYPES_ANIMAL, SORTIE_TYPES_SAISIE_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_SAISIE_ALIMENT,
-  labelRequis, nouvellesSortiesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
+  labelRequis, nouvellesSortiesNotifiable, nouvellesEntreesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
 } from './logic'
+import { APPROVER_ROLES } from '../../core/roles'
 
 export default function Saisie() {
   const { user, role } = useAuth()
@@ -213,13 +214,41 @@ export default function Saisie() {
           title: `Sorties saisies — ${user.nom}`,
           body: `Date ${date} :\n${body}`,
           module: 'agro',
-          forRoles: ['admin', 'controleur'],
+          forRoles: APPROVER_ROLES,
           excludeUid: user.uid,
           link: '/agro/saisie'
         })
       }
 
-      toast.success('Saisie enregistrée ✓')
+      // « Je veux voir si une entrée a eu lieu » — notifie les responsables des entrées.
+      const entreesNotif = nouvellesEntreesNotifiable(especes, aliments, anim, alim, existing)
+      if (entreesNotif.length) {
+        const body = entreesNotif
+          .map((l) => `• ${l.qte} × ${l.article} — ${l.type}${l.motif ? ` (${l.motif})` : ''}`)
+          .join('\n')
+        await notify({
+          type: 'info',
+          title: `Entrées saisies — ${user.nom}`,
+          body: `Date ${date} :\n${body}`,
+          module: 'agro',
+          forRoles: APPROVER_ROLES,
+          excludeUid: user.uid,
+          link: '/agro/saisie'
+        })
+      }
+
+      // « Message si enregistré » — confirmation aux responsables que la saisie est enregistrée.
+      await notify({
+        type: 'info',
+        title: `Saisie enregistrée — ${user.nom}`,
+        body: `Saisie du ${date} enregistrée · ${totalTetes} têtes au total`,
+        module: 'agro',
+        forRoles: APPROVER_ROLES,
+        excludeUid: user.uid,
+        link: '/agro/saisie'
+      })
+
+      toast.success('Saisie enregistrée ✓ — responsables notifiés')
     } catch (e) {
       toast.error('Erreur : ' + e.message)
     } finally {

@@ -10,6 +10,10 @@
 import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
 import { getAll, setItem, addItem } from './db'
+import { isFullAccessRole, isApproverRole, isCertifierRole } from './roles'
+
+// Liste de référence de tous les modules de la plateforme.
+const ALL_MODULES = ['agro', 'logistique', 'evenementiel', 'foncier', 'rh']
 
 // Recherche un profil par son identifiant de connexion (champ `login`).
 // Robuste aux identifiants contenant des caractères interdits comme clé RTDB.
@@ -20,7 +24,11 @@ async function findByLogin(login) {
 
 // Comptes par défaut (amorçage au premier lancement / mode démo)
 export const DEFAULT_USERS = [
-  { login: 'admin', pass: 'admin123', nom: 'Administrateur', role: 'admin', modules: ['agro', 'logistique', 'evenementiel', 'foncier', 'rh'], secteur: 'Direction', actif: true },
+  { login: 'superadmin', pass: 'super123', nom: 'Super-administrateur', role: 'super_admin', modules: ALL_MODULES, secteur: 'Conception', actif: true },
+  { login: 'pdg', pass: 'pdg123', nom: 'PDG', role: 'pdg', modules: ALL_MODULES, secteur: 'Direction', actif: true },
+  { login: 'ge', pass: 'ge123', nom: 'Gérante exécutive', role: 'ge', modules: ALL_MODULES, secteur: 'Direction exécutive', actif: true },
+  { login: 'admin', pass: 'admin123', nom: 'Administrateur', role: 'admin', modules: ALL_MODULES, secteur: 'Direction', actif: true },
+  { login: 'gerant', pass: 'gerant123', nom: 'Gérant', role: 'gerant', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Gérance', actif: true },
   { login: 'controleur', pass: 'ctrl123', nom: 'Contrôleur', role: 'controleur', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Contrôle', actif: true },
   { login: 'agent', pass: 'agent123', nom: 'Agent Edah Josué', role: 'agent', modules: ['agro'], secteur: 'Élevage', actif: true },
   { login: 'agent_log', pass: 'log123', nom: 'Agent Logistique', role: 'agent', modules: ['logistique'], secteur: 'Transport', actif: true },
@@ -75,12 +83,14 @@ async function ensureSeed() {
 }
 
 function sessionFromProfile(p) {
+  const role = p.role || 'agent'
   return {
     uid: p.uid || p.login,
     login: p.login,
     nom: p.nom || 'Utilisateur',
-    role: p.role || 'agent',
-    modules: p.role === 'admin' ? ['agro', 'logistique', 'evenementiel', 'foncier', 'rh'] : (p.modules || []),
+    role,
+    // Les rôles à accès total voient l'ensemble des modules (peu importe leur liste).
+    modules: isFullAccessRole(role) ? ALL_MODULES : (p.modules || []),
     secteur: p.secteur || '',
     actif: p.actif !== false
   }
@@ -184,11 +194,18 @@ export const useAuthStore = create((set, get) => ({
   // Helpers de contrôle d'accès
   hasModule: (mod) => {
     const { role, modules } = get()
-    if (role === 'admin') return true
+    if (isFullAccessRole(role)) return true
     return (modules || []).includes(mod)
   },
-  isAdmin: () => get().role === 'admin',
-  canManage: () => ['admin', 'controleur'].includes(get().role),
+  // Accès total : super-admin, PDG, GE (+ admin hérité). Donne droit aux pages
+  // Paramètres et à la gestion des utilisateurs.
+  isAdmin: () => isFullAccessRole(get().role),
+  // Super-admin uniquement (actions techniques sensibles).
+  isSuperAdmin: () => get().role === 'super_admin',
+  // 1er niveau d'approbation d'une demande de sortie.
+  canManage: () => isApproverRole(get().role),
+  // 2e niveau : certification définitive (déclenche l'effet métier).
+  canCertify: () => isCertifierRole(get().role),
 
   clearError: () => set({ error: null })
 }))

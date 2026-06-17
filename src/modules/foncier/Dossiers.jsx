@@ -13,11 +13,12 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, genNumero, formatDateShort } from '../../utils/formatters'
+import { todayStr, genNumero, genId, formatDateShort } from '../../utils/formatters'
 import {
   TYPES_DOSSIER, MODES_ACQUISITION, STATUTS_DOSSIER, STATUTS_ETAPE
 } from './data'
-import { initEtapes, progressionDossier, etapeCourante, peutPasserSuivante, statutAutoDossier } from './logic'
+import { initEtapesPour, progressionDossier, etapeCourante, peutPasserSuivante, statutAutoDossier } from './logic'
+import { useFoncierStore } from './store/referentielStore'
 
 const emptyDossier = () => ({
   type: 'titre_en_cours',
@@ -37,11 +38,28 @@ const emptyDossier = () => ({
 export default function Dossiers() {
   const { user } = useAuth()
   const { data: dossiers } = useCollection('foncier_dossiers')
+  const customTypes = useFoncierStore((s) => s.customTypes)
+  const saveType = useFoncierStore((s) => s.saveType)
+
+  // Types disponibles = par défaut + personnalisés.
+  const typesAll = useMemo(() => [...TYPES_DOSSIER, ...customTypes], [customTypes])
+  const labelType = (id) => typesAll.find((t) => t.id === id)?.label || id
 
   const [filtreType, setFiltreType] = useState('tous')
   const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null) // create/edit
   const [detail, setDetail] = useState(null)
+  const [typeModal, setTypeModal] = useState(false)
+
+  function handleAddType({ label, description, modele }) {
+    if (!label.trim()) return toast.error('Libellé requis')
+    const base = label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
+    const id = (base || 'type') + '_' + genId().slice(0, 3).toLowerCase()
+    saveType({ id, label: label.trim(), description: description.trim(), modele })
+    setTypeModal(false)
+    toast.success(`Type « ${label.trim()} » ajouté ✓`)
+  }
 
   const liste = useMemo(() => {
     let rows = [...dossiers]
@@ -68,7 +86,7 @@ export default function Dossiers() {
 
     if (modal.isNew) {
       const num = genNumero('FON', dossiers.length)
-      const etapes = initEtapes(d.type)
+      const etapes = initEtapesPour(d.type, customTypes)
       await addItem('foncier_dossiers', {
         num,
         ...d,
@@ -82,7 +100,7 @@ export default function Dossiers() {
       toast.success(`Dossier ${num} créé ✓`)
     } else {
       const existing = dossiers.find((x) => x.id === modal.id)
-      const etapes = existing?.type !== d.type ? initEtapes(d.type) : existing.etapes
+      const etapes = existing?.type !== d.type ? initEtapesPour(d.type, customTypes) : existing.etapes
       await updateItem('foncier_dossiers', modal.id, {
         ...d, etapes, statut: statutAutoDossier({ ...d, etapes }), updatedAt: Date.now()
       })
@@ -111,9 +129,12 @@ export default function Dossiers() {
         <Input className="w-48" placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
         <Select className="w-auto" value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
           <option value="tous">Tous les types</option>
-          {TYPES_DOSSIER.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          {typesAll.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
-        <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouveau dossier</Button>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" onClick={() => setTypeModal(true)}><Plus size={16} /> Ajouter un type</Button>
+          <Button onClick={openCreate}><Plus size={16} /> Nouveau dossier</Button>
+        </div>
       </div>
 
       <Card className="p-0">
@@ -132,7 +153,7 @@ export default function Dossiers() {
           <tbody className="divide-y divide-gray-100">
             {liste.map((d) => {
               const pct = progressionDossier(d.etapes)
-              const typeLabel = TYPES_DOSSIER.find((t) => t.id === d.type)?.label || d.type
+              const typeLabel = labelType(d.type)
               const etape = etapeCourante(d.etapes)
               return (
                 <tr key={d.id} className="hover:bg-gray-50">
@@ -167,9 +188,9 @@ export default function Dossiers() {
           <div className="grid grid-cols-2 gap-3">
             <FormGroup label="Type de dossier" className="col-span-2">
               <Select value={modal.data.type} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, type: e.target.value } }))}>
-                {TYPES_DOSSIER.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                {typesAll.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </Select>
-              <p className="mt-1 text-xs text-gray-500">{TYPES_DOSSIER.find((t) => t.id === modal.data.type)?.description}</p>
+              <p className="mt-1 text-xs text-gray-500">{typesAll.find((t) => t.id === modal.data.type)?.description}</p>
             </FormGroup>
             <FormGroup label="Mode d'acquisition">
               <Select value={modal.data.modeAcquisition} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, modeAcquisition: e.target.value } }))}>
@@ -197,7 +218,7 @@ export default function Dossiers() {
         {detail && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <p><span className="text-gray-500">Type :</span> <strong>{TYPES_DOSSIER.find((t) => t.id === detail.type)?.label}</strong></p>
+              <p><span className="text-gray-500">Type :</span> <strong>{labelType(detail.type)}</strong></p>
               <p><span className="text-gray-500">Acquisition :</span> {MODES_ACQUISITION.find((m) => m.id === detail.modeAcquisition)?.label}</p>
               <p><span className="text-gray-500">Propriétaire :</span> {detail.proprietaire}</p>
               <p><span className="text-gray-500">Lot :</span> {detail.lot || '—'} · {detail.superficie ? `${detail.superficie} m²` : ''}</p>
@@ -251,6 +272,37 @@ export default function Dossiers() {
           </div>
         )}
       </Modal>
+
+      {/* Modal création d'un type de dossier personnalisé */}
+      <AddTypeModal open={typeModal} onClose={() => setTypeModal(false)} onSave={handleAddType} />
     </div>
+  )
+}
+
+// Fenêtre de création d'un type de dossier personnalisé (modèle d'étapes réutilisé).
+function AddTypeModal({ open, onClose, onSave }) {
+  const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
+  const [modele, setModele] = useState(TYPES_DOSSIER[0]?.id || 'titre_en_cours')
+
+  useEffect(() => {
+    if (open) { setLabel(''); setDescription(''); setModele(TYPES_DOSSIER[0]?.id || 'titre_en_cours') }
+  }, [open])
+
+  return (
+    <Modal open={open} onClose={onClose} title="Ajouter un type de dossier"
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={() => onSave({ label, description, modele })}>Ajouter</Button></>}>
+      <FormGroup label="Libellé du type" required>
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="ex : Bail emphytéotique" autoFocus />
+      </FormGroup>
+      <FormGroup label="Description">
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brève description de la procédure" />
+      </FormGroup>
+      <FormGroup label="Modèle d'étapes" hint="Réutilise l'enchaînement administratif d'un type existant">
+        <Select value={modele} onChange={(e) => setModele(e.target.value)}>
+          {TYPES_DOSSIER.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </Select>
+      </FormGroup>
+    </Modal>
   )
 }

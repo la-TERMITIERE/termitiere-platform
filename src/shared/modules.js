@@ -2,7 +2,7 @@
 import {
   Leaf, Truck, BrickWall, Calculator, MapPin,
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
-  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package
+  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History
 } from 'lucide-react'
 
 export const MODULES = [
@@ -68,6 +68,7 @@ export const MODULE_NAV = {
     { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
+    { label: 'Historique', to: '/agro/historique', icon: History },
     { label: 'Journal', to: '/agro/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/agro/params', icon: Settings }
   ],

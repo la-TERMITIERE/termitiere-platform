@@ -14,12 +14,7 @@ import { useUsersStore } from '../core/users'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
 import { MODULES } from '../shared/modules'
-
-const ROLES = [
-  { value: 'admin', label: 'Administrateur' },
-  { value: 'controleur', label: 'Contrôleur' },
-  { value: 'agent', label: 'Agent' }
-]
+import { ROLES, isFullAccessRole, roleLabel, roleTone } from '../core/roles'
 
 const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], secteur: '', telephone: '', actif: true })
 
@@ -44,8 +39,8 @@ export default function Utilisateurs() {
     if (!u.nom.trim() || !u.login.trim()) return toast.error('Nom et identifiant requis')
     if (modal.isNew && users.some((x) => x.login === u.login)) return toast.error('Cet identifiant existe déjà')
     if (modal.isNew && !u.pass) return toast.error('Définissez un mot de passe')
-    // L'admin a accès à tous les modules par défaut
-    const modules = u.role === 'admin' ? MODULES.map((m) => m.id) : u.modules
+    // Les rôles à accès total (super-admin, PDG, GE) voient tous les modules.
+    const modules = isFullAccessRole(u.role) ? MODULES.map((m) => m.id) : u.modules
     try {
       await saveUser({ ...u, modules })
       toast.success(modal.isNew ? 'Utilisateur créé ✓' : 'Utilisateur mis à jour ✓')
@@ -87,10 +82,10 @@ export default function Utilisateurs() {
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'login', label: 'Identifiant', render: (r) => <span className="font-mono text-xs">{r.login}</span> },
-            { key: 'role', label: 'Rôle', render: (r) => <Badge tone={r.role === 'admin' ? 'primary' : r.role === 'controleur' ? 'info' : 'neutral'}>{r.role}</Badge> },
+            { key: 'role', label: 'Rôle', render: (r) => <Badge tone={roleTone(r.role)}>{roleLabel(r.role)}</Badge> },
             { key: 'modules', label: 'Accès modules', render: (r) => (
               <div className="flex flex-wrap gap-1">
-                {r.role === 'admin'
+                {isFullAccessRole(r.role)
                   ? <Badge tone="primary">Tous</Badge>
                   : (r.modules || []).length
                     ? (r.modules || []).map((id) => {
@@ -139,9 +134,9 @@ export default function Utilisateurs() {
             </div>
 
             <FormGroup label="Accès aux modules">
-              {modal.data.role === 'admin' ? (
+              {isFullAccessRole(modal.data.role) ? (
                 <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary-dark">
-                  L'administrateur a accès à tous les modules.
+                  Ce rôle ({roleLabel(modal.data.role)}) a accès à tous les modules.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2">

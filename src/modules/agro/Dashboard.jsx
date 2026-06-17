@@ -309,9 +309,10 @@ export default function Dashboard() {
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Ventes</p>
           <div className="flex items-baseline gap-1">
             <p className="text-xl font-extrabold text-emerald-700">{formatNumber(ventesData.courant)}</p>
-            {ventesData.precedent > 0 && ventesData.courant !== ventesData.precedent && (
-              <span className={`text-xs font-semibold ${ventesData.courant > ventesData.precedent ? 'text-green-600' : 'text-red-600'}`}>
-                {ventesData.courant > ventesData.precedent ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
+            {ventesData.courant !== ventesData.precedent && (
+              <span className={`text-sm font-bold ${ventesData.courant > ventesData.precedent ? 'text-green-600' : 'text-red-600'}`}>
+                {ventesData.courant > ventesData.precedent ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
+                {ventesData.courant > ventesData.precedent ? '+' : ''}{formatNumber(ventesData.courant - ventesData.precedent)}
               </span>
             )}
           </div>
@@ -327,9 +328,10 @@ export default function Dashboard() {
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Chiffre d'affaires</p>
           <div className="flex items-baseline gap-1">
             <p className="text-xl font-extrabold text-purple-700">{formatMoney(ca.courant)}</p>
-            {ca.precedent > 0 && ca.courant !== ca.precedent && (
-              <span className={`text-xs font-semibold ${ca.courant > ca.precedent ? 'text-green-600' : 'text-red-600'}`}>
-                {ca.courant > ca.precedent ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
+            {ca.courant !== ca.precedent && (
+              <span className={`text-sm font-bold ${ca.courant > ca.precedent ? 'text-green-600' : 'text-red-600'}`}>
+                {ca.courant > ca.precedent ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
+                {ca.courant > ca.precedent ? '+' : ''}{formatMoney(ca.courant - ca.precedent)}
               </span>
             )}
           </div>

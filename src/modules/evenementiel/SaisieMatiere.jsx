@@ -1,17 +1,19 @@
 // Saisie matières premières — EF Initial · Achats · Consommation · EF Final.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Save, CheckCircle2, Plus, Trash2, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Input from '../../shared/forms/Input'
+import Select from '../../shared/forms/Select'
+import FormGroup from '../../shared/forms/FormGroup'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
 import { setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, formatDateTime } from '../../utils/formatters'
+import { todayStr, formatDateTime, genId } from '../../utils/formatters'
 import {
   previousInventoryDate, getInventaire, agregerMatiere, sommeMouvements,
   mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
@@ -21,31 +23,51 @@ export default function SaisieMatiere() {
   const { user, role } = useAuth()
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const matieres = useBriqueterieStore((s) => s.matieres)
+  const saveMatiere = useBriqueterieStore((s) => s.saveMatiere)
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
   const [saving, setSaving] = useState(false)
   const [mvtModal, setMvtModal] = useState(null)
+  const [addModal, setAddModal] = useState(false)
+  const [seedInit, setSeedInit] = useState({}) // { date: { id } } pour les matières fraîchement créées
+
+  // Inventaire de la veille : s'il n'existe pas, on autorise la saisie du solde initial (ouverture).
+  const prevInv = useMemo(() => {
+    const prevDate = previousInventoryDate(inventaires, date)
+    return prevDate ? getInventaire(inventaires, prevDate) : null
+  }, [inventaires, date])
 
   const peutSaisir = role === 'agent'
-  const peutEditerInit = false // reporté automatiquement depuis la veille
+  // Solde initial éditable uniquement au premier solde (pas d'antériorité), sinon reporté.
+  const peutEditerInit = peutSaisir && !prevInv
 
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { matieres: {} }
-    const prevDate = previousInventoryDate(inventaires, date)
-    const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
+    const seeds = seedInit[date] || {}
 
     const s = {}
     matieres.forEach((m) => {
       const saved = inv.matieres?.[m.id]
       s[m.id] = {
-        init: saved?.init !== undefined ? saved.init : prevInv?.matieres?.[m.id]?.fin ?? 0,
+        init: saved?.init !== undefined ? saved.init : prevInv?.matieres?.[m.id]?.fin ?? seeds[m.id] ?? 0,
         entrees: saved?.entrees || [],
         consommations: saved?.consommations || []
       }
     })
     setStock(s)
-  }, [date, inventaires, matieres])
+  }, [date, inventaires, matieres, prevInv, seedInit])
+
+  // Création d'une nouvelle matière première depuis la saisie.
+  function handleAddMatiere({ nom, unite, initial }) {
+    const base = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
+    const id = (base || 'matiere') + '_' + genId().slice(0, 3).toLowerCase()
+    saveMatiere({ id, nom: nom.trim(), unite: unite || 'sacs' })
+    setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseFloat(initial) || 0) } }))
+    setAddModal(false)
+    toast.success(`${nom.trim()} ajoutée ✓ — pensez à enregistrer la saisie`)
+  }
 
   const existing = getInventaire(inventaires, date)
   const dejaSaisi = existing?.savedAt
@@ -112,13 +134,22 @@ export default function SaisieMatiere() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Agent</label>
           <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
         </div>
-        {peutSaisir && <Button className="ml-auto" onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
+        <div className="ml-auto flex gap-2">
+          {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter une matière</Button>}
+          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
+        </div>
       </div>
 
       <div className="rounded-lg bg-violet-50 px-4 py-3 text-sm text-violet-800">
         Matières premières : <strong>Ciment</strong>, <strong>Concassé</strong>, <strong>Sable fin</strong>.
         La consommation est aussi alimentée automatiquement lors des enregistrements de production.
       </div>
+
+      {peutEditerInit && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          📥 <strong>Solde d'ouverture :</strong> aucune saisie antérieure — vous pouvez renseigner le <strong>stock initial existant</strong> de chaque matière. Les jours suivants, il sera reporté automatiquement.
+        </div>
+      )}
 
       {dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
@@ -166,7 +197,44 @@ export default function SaisieMatiere() {
 
       <MouvementModal modal={mvtModal} stock={stock} user={user} peutSaisir={peutSaisir} onClose={() => setMvtModal(null)}
         onChange={(field, lignes) => setLignes(mvtModal.id, field, lignes)} />
+
+      <AddMatiereModal open={addModal} onClose={() => setAddModal(false)} onSave={handleAddMatiere} />
     </div>
+  )
+}
+
+// Fenêtre de création d'une matière première : nom, unité, stock initial.
+function AddMatiereModal({ open, onClose, onSave }) {
+  const [nom, setNom] = useState('')
+  const [unite, setUnite] = useState('sacs')
+  const [initial, setInitial] = useState('')
+
+  useEffect(() => {
+    if (open) { setNom(''); setUnite('sacs'); setInitial('') }
+  }, [open])
+
+  function submit() {
+    if (!nom.trim()) return toast.error('Nom requis')
+    onSave({ nom, unite, initial })
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Ajouter une matière première"
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={submit}>Ajouter</Button></>}>
+      <FormGroup label="Nom de la matière" required>
+        <Input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="ex : Adjuvant" autoFocus />
+      </FormGroup>
+      <div className="grid grid-cols-2 gap-3">
+        <FormGroup label="Unité">
+          <Select value={unite} onChange={(e) => setUnite(e.target.value)}>
+            {['sacs', 'm³', 'kg', 'tonnes', 'litres', 'unités'].map((u) => <option key={u} value={u}>{u}</option>)}
+          </Select>
+        </FormGroup>
+        <FormGroup label="Stock initial" hint="À cette date">
+          <Input type="number" min="0" step="0.1" value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="0" />
+        </FormGroup>
+      </div>
+    </Modal>
   )
 }
 

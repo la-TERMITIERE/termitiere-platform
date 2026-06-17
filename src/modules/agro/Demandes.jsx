@@ -24,24 +24,23 @@ import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatDateTime } from '../../utils/formatters'
 import { dernierStock } from './logic'
 import { appliquerDemandeAuStock } from './applyDemande'
+import { APPROVER_ROLES, CERTIFIER_ROLES } from '../../core/roles'
+import { STATUTS_DEMANDE, normaliserStatut, estActif, estCertifie, actionsDemande } from '../../shared/workflow'
 
-const STATUTS = {
-  en_attente: { label: '⏳ En attente', tone: 'warning' },
-  approuve: { label: '✅ Approuvé', tone: 'success' },
-  refuse: { label: '❌ Refusé', tone: 'danger' }
-}
+const STATUTS = STATUTS_DEMANDE
 
 export default function Demandes() {
-  const { user, canManage } = useAuth()
+  const { user, canManage, canCertify } = useAuth()
   const { data: liste } = useCollection('agro_demandes')
   const { data: inventaires } = useCollection('agro_inventaires')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
   const isManager = canManage()
+  const isCertifier = canCertify()
 
   const [filtre, setFiltre] = useState('en_attente')
   const [createOpen, setCreateOpen] = useState(false)
-  const [decision, setDecision] = useState(null) // { demande, action }
+  const [decision, setDecision] = useState(null) // { demande }
   const [nowTick, setNowTick] = useState(Date.now())
 
   // Tick pour rafraîchir le compte à rebours d'approbation automatique.
@@ -69,11 +68,12 @@ export default function Demandes() {
   const filtrees = useMemo(
     () =>
       [...liste]
-        .filter((d) => (filtre === 'tous' ? true : d.statut === filtre))
+        .filter((d) => (filtre === 'tous' ? true : normaliserStatut(d.statut) === filtre))
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
     [liste, filtre]
   )
-  const nbAttente = liste.filter((d) => d.statut === 'en_attente').length
+  const nbAttente = liste.filter((d) => estActif(d.statut)).length
+  const nbACertifier = liste.filter((d) => normaliserStatut(d.statut) === 'approuve_n1').length
 
   function openCreate() {
     setForm({ typeArticle: 'animal', articleId: especes[0]?.id || '', qte: 1, dateSortie: todayStr(), motif: 'Vente', message: '' })
@@ -103,14 +103,14 @@ export default function Demandes() {
       title: 'Nouvelle demande de sortie',
       body: `${demande.qte} × ${art.nom} — par ${user.nom} pour le ${form.dateSortie}`,
       module: 'agro',
-      forRoles: ['admin', 'controleur'],
+      forRoles: APPROVER_ROLES,
       excludeUid: user.uid,
       link: '/agro/demandes'
     })
     // Alerte WhatsApp aux responsables disposant d'un numéro (si configuré côté serveur).
     try {
       const users = await getAll('users')
-      const managers = users.filter((u) => ['admin', 'controleur'].includes(u.role))
+      const managers = users.filter((u) => APPROVER_ROLES.includes(u.role))
       // Push (notification téléphone même app fermée) aux responsables.
       pushToUsers(managers.map((u) => u.uid || u.login), {
         title: 'Nouvelle demande de sortie',
@@ -125,48 +125,83 @@ export default function Demandes() {
     setCreateOpen(false)
   }
 
-  async function appliquerDecision(statut) {
+  // Applique une action du workflow (approuver / certifier / refuser).
+  async function appliquerDecision(action) {
     const d = decision.demande
-    await updateItem('agro_demandes', d.id, {
-      statut,
-      approbateur: user.login,
-      approbateurNom: user.nom,
-      dateDecision: todayStr() + ' ' + nowHM(),
-      commentaireDecision: commentaire.trim(),
-      decidedAt: ts()
-    })
-    // À l'approbation, la sortie est immédiatement décomptée du stock (et donc
-    // comptabilisée dans les sorties/ventes), sans attendre une re-saisie.
-    if (statut === 'approuve') await appliquerDemandeAuStock({ ...d, statut: 'approuve' })
-    await audit('agro', statut === 'approuve' ? 'APPROBATION' : 'REFUS',
+    const statut = action.statut // 'approuve_n1' | 'certifie' | 'refuse'
+    const horodate = todayStr() + ' ' + nowHM()
+    const patch = { statut, decidedAt: ts(), commentaireDecision: commentaire.trim() }
+    if (statut === 'approuve_n1') {
+      patch.approuveN1Par = user.nom
+      patch.approuveN1Le = horodate
+    } else if (statut === 'certifie') {
+      patch.certifiePar = user.nom
+      patch.certifieLe = horodate
+      // Compat : conserve les champs « approbateur » historiques.
+      patch.approbateur = user.login
+      patch.approbateurNom = user.nom
+      patch.dateDecision = horodate
+      if (!d.approuveN1Par) { patch.approuveN1Par = user.nom; patch.approuveN1Le = horodate }
+    } else { // refuse
+      patch.refusePar = user.nom
+      patch.dateDecision = horodate
+    }
+    await updateItem('agro_demandes', d.id, patch)
+
+    // L'effet métier (décompte de la sortie) ne s'applique qu'à la CERTIFICATION.
+    if (statut === 'certifie') await appliquerDemandeAuStock({ ...d, statut: 'certifie' })
+
+    await audit('agro',
+      statut === 'refuse' ? 'REFUS' : statut === 'certifie' ? 'CERTIFICATION' : 'APPROBATION',
       `${d.num} — ${d.qte} × ${d.articleNom} (${d.demandeurNom})`)
-    // Notifie le demandeur de la décision.
-    await notify({
-      type: statut === 'approuve' ? 'approuve' : 'refus',
-      title: statut === 'approuve' ? 'Demande approuvée ✅' : 'Demande refusée ⛔',
-      body: `${d.qte} × ${d.articleNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
-      module: 'agro',
-      forUsers: [d.demandeur],
-      excludeUid: user.uid,
-      link: '/agro/demandes'
-    })
-    // Alerte WhatsApp au demandeur (si numéro renseigné et serveur configuré).
-    try {
-      const verdict = statut === 'approuve' ? 'APPROUVÉE ✅' : 'REFUSÉE ⛔'
-      // Push au demandeur (notification téléphone même app fermée).
-      pushToUsers([d.demandeur], {
-        title: statut === 'approuve' ? 'Demande approuvée ✅' : 'Demande refusée ⛔',
-        body: `${d.num} : ${d.qte} × ${d.articleNom}`,
-        url: '/agro/demandes'
+
+    // Notifications selon l'étape atteinte.
+    if (statut === 'approuve_n1') {
+      // → prévenir les certificateurs qu'une demande attend leur certification.
+      await notify({
+        type: 'demande', title: 'Demande à certifier 🟡',
+        body: `${d.qte} × ${d.articleNom} — approuvée par ${user.nom}`,
+        module: 'agro', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/agro/demandes'
       })
-      const users = await getAll('users')
-      const dem = users.find((u) => (u.login === d.demandeur || u.uid === d.demandeur))
-      if (dem?.telephone) {
-        sendWhatsApp({ phones: [dem.telephone], text: `LA TERMITIÈRE — Votre demande ${d.num} est ${verdict}\n${d.qte} × ${d.articleNom}${commentaire.trim() ? '\nNote : ' + commentaire.trim() : ''}` })
+      await notify({
+        type: 'info', title: 'Demande approuvée (1er niveau) ✅',
+        body: `${d.qte} × ${d.articleNom} — en attente de certification`,
+        module: 'agro', forUsers: [d.demandeur], excludeUid: user.uid, link: '/agro/demandes'
+      })
+    } else {
+      // certifie ou refuse → prévenir le demandeur.
+      await notify({
+        type: statut === 'certifie' ? 'approuve' : 'refus',
+        title: statut === 'certifie' ? 'Demande certifiée ✅' : 'Demande refusée ⛔',
+        body: `${d.qte} × ${d.articleNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+        module: 'agro', forUsers: [d.demandeur], excludeUid: user.uid, link: '/agro/demandes'
+      })
+      // Confirmation aux responsables qu'une autorisation a été délivrée.
+      if (statut === 'certifie') {
+        await notify({
+          type: 'info', title: `Sortie autorisée par ${user.nom} ✅`,
+          body: `${d.qte} × ${d.articleNom} — demandée par ${d.demandeurNom}`,
+          module: 'agro', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/agro/demandes'
+        })
       }
-    } catch (e) { /* best effort */ }
-    if (statut === 'approuve')
-      toast.success(`✅ Approuvé — ${d.qte} × ${d.articleNom} sortira le ${d.dateSortie}`)
+      // Alerte WhatsApp / push au demandeur (best effort).
+      try {
+        const verdict = statut === 'certifie' ? 'CERTIFIÉE ✅' : 'REFUSÉE ⛔'
+        pushToUsers([d.demandeur], {
+          title: statut === 'certifie' ? 'Demande certifiée ✅' : 'Demande refusée ⛔',
+          body: `${d.num} : ${d.qte} × ${d.articleNom}`,
+          url: '/agro/demandes'
+        })
+        const users = await getAll('users')
+        const dem = users.find((u) => (u.login === d.demandeur || u.uid === d.demandeur))
+        if (dem?.telephone) {
+          sendWhatsApp({ phones: [dem.telephone], text: `LA TERMITIÈRE — Votre demande ${d.num} est ${verdict}\n${d.qte} × ${d.articleNom}${commentaire.trim() ? '\nNote : ' + commentaire.trim() : ''}` })
+        }
+      } catch (e) { /* best effort */ }
+    }
+
+    if (statut === 'certifie') toast.success(`✅ Certifié — ${d.qte} × ${d.articleNom} sortira le ${d.dateSortie}`)
+    else if (statut === 'approuve_n1') toast.success('Approuvé — en attente de certification par la GE')
     else toast.error('Demande refusée')
     setDecision(null)
     setCommentaire('')
@@ -177,13 +212,13 @@ export default function Demandes() {
       <div className="flex items-start gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
         <Timer size={18} className="mt-0.5 shrink-0" />
         <p>
-          <strong>Approbation automatique :</strong> toute demande de sortie (ventes, dons, transferts, consommation interne et autres sous-demandes) non traitée sous <strong>10 minutes</strong> est approuvée automatiquement et la sortie est <strong>décomptée</strong>. Toutes les sorties restent consultables ci-dessous.
+          <strong>Validation à deux niveaux :</strong> un gérant <strong>approuve</strong>, puis la GE (ou la Direction) <strong>certifie</strong> — c'est la certification qui décompte la sortie. À défaut de traitement sous <strong>10 minutes</strong>, la demande est <strong>certifiée automatiquement</strong>. Toutes les sorties restent consultables ci-dessous.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-lg bg-white p-1">
-          {[['en_attente', `En attente (${nbAttente})`], ['approuve', 'Approuvées'], ['refuse', 'Refusées'], ['tous', 'Toutes']].map(
+        <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1">
+          {[['en_attente', `En attente (${nbAttente})`], ['approuve_n1', `À certifier (${nbACertifier})`], ['certifie', 'Certifiées'], ['refuse', 'Refusées'], ['tous', 'Toutes']].map(
             ([v, l]) => (
               <button
                 key={v}
@@ -203,17 +238,20 @@ export default function Demandes() {
       </div>
 
       {filtrees.length === 0 ? (
-        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune demande {filtre !== 'tous' ? STATUTS[filtre]?.label.toLowerCase() : ''}.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune demande {filtre !== 'tous' ? STATUTS[filtre]?.short.toLowerCase() : ''}.</p></Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {filtrees.map((d) => (
+          {filtrees.map((d) => {
+            const sn = normaliserStatut(d.statut)
+            const acts = actionsDemande(d.statut, { canManage: isManager, canCertify: isCertifier })
+            return (
             <Card key={d.id} className="space-y-2">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-bold text-gray-800">{d.qte} × {d.articleNom}</p>
                   <p className="text-xs text-gray-500">{d.num} · {d.articleCat}</p>
                 </div>
-                <Badge tone={STATUTS[d.statut]?.tone}>{STATUTS[d.statut]?.label}</Badge>
+                <Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs text-gray-600">
                 <span>👤 {d.demandeurNom}</span>
@@ -222,31 +260,31 @@ export default function Demandes() {
                 <span>🕒 {d.date} {d.heure}</span>
               </div>
               {d.message && <p className="rounded bg-gray-50 p-2 text-xs italic text-gray-600">« {d.message} »</p>}
-              {d.statut === 'en_attente' && (
+              {sn === 'en_attente' && (
                 <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-600">
                   <Timer size={12} />
                   {minsAvantAuto(d) > 0
-                    ? `Approbation automatique dans ~${minsAvantAuto(d)} min`
-                    : 'Approbation automatique imminente…'}
+                    ? `Certification automatique dans ~${minsAvantAuto(d)} min`
+                    : 'Certification automatique imminente…'}
                 </p>
+              )}
+              {d.approuveN1Par && sn !== 'refuse' && (
+                <p className="text-[11px] text-gray-500">Approuvé (1er niveau) par {d.approuveN1Par}{d.certifiePar ? ` · Certifié par ${d.certifiePar}` : ''}</p>
               )}
               {d.commentaireDecision && (
                 <p className="text-xs text-gray-500">
-                  Décision par {d.approbateurNom} : {d.commentaireDecision}
+                  Note : {d.commentaireDecision}
                 </p>
               )}
-              {isManager && d.statut === 'en_attente' && (
-                <div className="flex gap-2 pt-1">
-                  <Button variant="success" size="sm" className="flex-1" onClick={() => setDecision({ demande: d, action: 'approuve' })}>
-                    <Check size={15} /> Approuver
-                  </Button>
-                  <Button variant="danger" size="sm" className="flex-1" onClick={() => setDecision({ demande: d, action: 'refuse' })}>
-                    <X size={15} /> Refuser
+              {acts.length > 0 && (
+                <div className="pt-1">
+                  <Button variant="success" size="sm" className="w-full" onClick={() => setDecision({ demande: d })}>
+                    <Check size={15} /> {sn === 'approuve_n1' ? 'Certifier' : 'Traiter la demande'}
                   </Button>
                 </div>
               )}
             </Card>
-          ))}
+          )})}
         </div>
       )}
 
@@ -295,11 +333,15 @@ export default function Demandes() {
       <Modal
         open={!!decision}
         onClose={() => { setDecision(null); setCommentaire('') }}
-        title={decision?.action === 'approuve' ? 'Approuver la demande' : 'Refuser la demande'}
+        title="Traiter la demande"
         footer={
           <>
-            <Button variant="danger" onClick={() => appliquerDecision('refuse')}><X size={15} /> Refuser</Button>
-            <Button variant="success" onClick={() => appliquerDecision('approuve')}><Check size={15} /> Approuver</Button>
+            <Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
+            {decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
+              <Button key={a.id} variant={a.tone === 'danger' ? 'danger' : 'success'} onClick={() => appliquerDecision(a)}>
+                {a.tone === 'danger' ? <X size={15} /> : <Check size={15} />} {a.label}
+              </Button>
+            ))}
           </>
         }
       >
@@ -307,13 +349,14 @@ export default function Demandes() {
           <div className="mb-3 rounded-lg bg-gray-50 p-3 text-sm">
             <p className="flex items-center gap-2 font-semibold"><Clock size={15} /> {decision.demande.qte} × {decision.demande.articleNom}</p>
             <p className="text-xs text-gray-500">Demandé par {decision.demande.demandeurNom} pour le {decision.demande.dateSortie}</p>
+            <p className="mt-1"><Badge tone={STATUTS[normaliserStatut(decision.demande.statut)]?.tone}>{STATUTS[normaliserStatut(decision.demande.statut)]?.label}</Badge></p>
           </div>
         )}
         <FormGroup label="Commentaire">
           <textarea className="input-base" rows={3} value={commentaire} onChange={(e) => setCommentaire(e.target.value)}
-            placeholder="Motif d'approbation ou de refus…" />
+            placeholder="Motif d'approbation, de certification ou de refus…" />
         </FormGroup>
-        <p className="text-xs text-gray-400">À l'approbation, la sortie sera automatiquement ajoutée à la saisie du {decision?.demande?.dateSortie}.</p>
+        <p className="text-xs text-gray-400">La sortie n'est décomptée qu'à la <strong>certification</strong> (sur la saisie du {decision?.demande?.dateSortie}).</p>
       </Modal>
     </div>
   )

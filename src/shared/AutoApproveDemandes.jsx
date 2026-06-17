@@ -15,6 +15,7 @@ import { notify } from '../core/notify'
 import { pushToUsers } from '../core/push'
 import { todayStr, nowHM } from '../utils/formatters'
 import { appliquerDemandeAuStock } from '../modules/agro/applyDemande'
+import { estFinal } from './workflow'
 
 const DELAI_MS = 10 * 60 * 1000 // 10 minutes sans décision → approbation auto
 const CHECK_MS = 30 * 1000      // fréquence de vérification
@@ -38,28 +39,33 @@ export default function AutoApproveDemandes() {
 
     async function autoApprouver(d) {
       try {
+        const horodate = todayStr() + ' ' + nowHM()
         await updateItem('agro_demandes', d.id, {
-          statut: 'approuve',
+          statut: 'certifie',
           approbateur: 'systeme',
           approbateurNom: 'Système (auto · 10 min)',
-          dateDecision: todayStr() + ' ' + nowHM(),
-          commentaireDecision: 'Approbation automatique : aucune décision sous 10 minutes',
+          approuveN1Par: d.approuveN1Par || 'Système (auto · 10 min)',
+          approuveN1Le: d.approuveN1Le || horodate,
+          certifiePar: 'Système (auto · 10 min)',
+          certifieLe: horodate,
+          dateDecision: horodate,
+          commentaireDecision: 'Certification automatique : aucune décision sous 10 minutes',
           decidedAt: ts(),
           autoApprouve: true
         })
         // Décompte immédiat de la sortie (comptabilisée comme sortie/vente).
-        await appliquerDemandeAuStock({ ...d, statut: 'approuve' })
-        await audit('agro', 'APPROBATION', `${d.num} — ${d.qte} × ${d.articleNom} (auto 10 min)`)
+        await appliquerDemandeAuStock({ ...d, statut: 'certifie' })
+        await audit('agro', 'CERTIFICATION', `${d.num} — ${d.qte} × ${d.articleNom} (auto 10 min)`)
         await notify({
           type: 'approuve',
-          title: 'Demande approuvée automatiquement ✅',
+          title: 'Demande certifiée automatiquement ✅',
           body: `${d.qte} × ${d.articleNom} — délai de 10 min dépassé, sortie décomptée`,
           module: 'agro',
           forUsers: [d.demandeur],
           link: '/agro/demandes'
         })
         pushToUsers([d.demandeur], {
-          title: 'Demande approuvée automatiquement ✅',
+          title: 'Demande certifiée automatiquement ✅',
           body: `${d.num} : ${d.qte} × ${d.articleNom}`,
           url: '/agro/demandes'
         })
@@ -69,7 +75,7 @@ export default function AutoApproveDemandes() {
     function verifier() {
       const now = Date.now()
       for (const d of demandes) {
-        if (d.statut !== 'en_attente') continue
+        if (estFinal(d.statut)) continue // déjà certifiée ou refusée
         if (traitees.current.has(d.id)) continue
         if (now - createdMs(d) < DELAI_MS) continue
         traitees.current.add(d.id)

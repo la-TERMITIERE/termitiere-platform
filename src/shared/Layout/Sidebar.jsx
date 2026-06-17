@@ -5,6 +5,8 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, X } from 'lucide-reac
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
+import { roleLabel } from '../../core/roles'
+import { estActif } from '../workflow'
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
@@ -19,9 +21,9 @@ export default function Sidebar({ open, onClose }) {
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
   const badges = {
-    agroDemandes: demandesAgro.filter((d) => d.statut === 'en_attente').length,
-    logistiqueDemandes: demandesLog.filter((d) => d.statut === 'en_attente').length,
-    briqueterieDemandes: demandesBriq.filter((d) => ['en_attente', 'partiel'].includes(d.statut)).length
+    agroDemandes: demandesAgro.filter((d) => estActif(d.statut)).length,
+    logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
+    briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
   }
 
   const accentColor = activeModule?.color || '#BC3C31'
@@ -126,7 +128,7 @@ export default function Sidebar({ open, onClose }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{user?.nom}</p>
-              <p className="truncate text-xs capitalize text-white/70">{role}</p>
+              <p className="truncate text-xs text-white/70">{roleLabel(role)}</p>
             </div>
           </div>
           <button

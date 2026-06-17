@@ -1,5 +1,6 @@
 // Logique métier MAXI-AGRO — calcul des inventaires et des sorties.
 // Repris fidèlement de l'application d'origine (index.html).
+import { estCertifie } from '../../shared/workflow'
 
 // Renvoie la date d'inventaire la plus récente STRICTEMENT antérieure à `date`.
 export function previousInventoryDate(inventaires, date) {
@@ -21,7 +22,7 @@ export function autoSorties(demandes, articleId, dateSortie, type = 'animal') {
   return (demandes || [])
     .filter(
       (d) =>
-        d.statut === 'approuve' &&
+        estCertifie(d.statut) &&
         d.typeArticle === type &&
         d.articleId === articleId &&
         d.dateSortie === dateSortie
@@ -211,6 +212,59 @@ export function agregerAchatsVentes(invPeriode, especes, aliments) {
   const totalAchats = achats.reduce((s, l) => s + l.qte, 0)
   const totalVentes = ventes.reduce((s, l) => s + l.qte, 0)
   return { achats, ventes, totalAchats, totalVentes }
+}
+
+// Entrées saisies (toutes : Achat / Naissance / Dons / Autres) non encore présentes
+// dans l'inventaire précédent — pour notifier les responsables qu'« une entrée a eu lieu ».
+export function nouvellesEntreesNotifiable(especes, aliments, anim, alim, prevInv) {
+  const lignes = []
+  const check = (coll, src, kind) => {
+    coll.forEach((a) => {
+      const cur = src[a.id]?.entrees || []
+      const prev = prevInv?.[kind]?.[a.id]?.entrees || []
+      cur.forEach((l) => {
+        if (!(parseInt(l.qte) || 0)) return
+        const sig = (x) => `${x.type}|${x.qte}|${x.label || ''}`
+        if (prev.some((p) => sig(p) === sig(l))) return
+        lignes.push({ article: a.nom, type: l.type, qte: parseInt(l.qte) || 0, motif: (l.label || '').trim() })
+      })
+    })
+  }
+  check(especes, anim, 'animaux')
+  check(aliments, alim, 'aliments')
+  return lignes
+}
+
+// Historique plat de tous les mouvements (entrées / sorties) sur une période,
+// pour la page Historique : { date, kind, article, cat, sens, type, qte, motif, agent }.
+export function historiqueMouvements(invPeriode, especes, aliments) {
+  const out = []
+  const nomCible = (id) => especes.find((e) => e.id === id)?.nom || id
+  const parcourir = (coll, kind) => {
+    invPeriode.forEach((inv) => {
+      coll.forEach((a) => {
+        const d = inv[kind]?.[a.id]
+        if (!d) return
+        const { entrees, sorties } = mouvementsDepuisSaisie(d, kind)
+        entrees.forEach((l) => {
+          if (!(parseInt(l.qte) || 0)) return
+          out.push({ date: inv.date, kind, article: a.nom, cat: a.cat, sens: 'entree', type: l.type, qte: parseInt(l.qte) || 0, motif: (l.label || '').trim(), agent: l.agentNom || inv.agentNom || '—' })
+        })
+        sorties.forEach((l) => {
+          if (!(parseInt(l.qte) || 0)) return
+          const motif = l.type === 'Mutation' && l.cible ? `→ ${nomCible(l.cible)}` : (l.label || '').trim()
+          out.push({ date: inv.date, kind, article: a.nom, cat: a.cat, sens: 'sortie', type: l.type, qte: parseInt(l.qte) || 0, motif, agent: l.agentNom || inv.agentNom || '—' })
+        })
+        // Sorties automatiques (demandes certifiées) comptées comme Ventes.
+        if ((d.autoSor || 0) > 0) {
+          out.push({ date: inv.date, kind, article: a.nom, cat: a.cat, sens: 'sortie', type: 'Ventes', qte: d.autoSor, motif: 'Demande certifiée', agent: inv.agentNom || '—' })
+        }
+      })
+    })
+  }
+  parcourir(especes, 'animaux')
+  parcourir(aliments, 'aliments')
+  return out.sort((a, b) => (a.date < b.date ? 1 : -1))
 }
 
 // Sorties saisies directement (hors Ventes/Dons) non encore présentes dans l'inventaire précédent.

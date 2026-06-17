@@ -5,6 +5,7 @@ import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
 import { todayStr } from '../utils/formatters'
+import { estActif } from '../shared/workflow'
 
 export default function PortalHome() {
   const navigate = useNavigate()
@@ -23,9 +24,9 @@ export default function PortalHome() {
     ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)
     : 0
   const prestationsMois = prestations.filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).length
-  const autorisationsAttente = demandesLog.filter((d) => d.statut === 'en_attente').length
+  const autorisationsAttente = demandesLog.filter((d) => estActif(d.statut)).length
   const prodMois = productions.filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).reduce((s, p) => s + (p.totalBriques || 0), 0)
-  const autorisationsBriq = demandesBriq.filter((d) => ['en_attente', 'partiel'].includes(d.statut)).length
+  const autorisationsBriq = demandesBriq.filter((d) => estActif(d.statut)).length
   const dossiersActifs = dossiersFoncier.filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
 
   const kpi = {

@@ -15,10 +15,11 @@
 // Sorties lit déjà les demandes approuvées en direct).
 import { getAll, setItem } from '../../core/db'
 import { getInventaire, previousInventoryDate, autoSorties } from './logic'
+import { estCertifie } from '../../shared/workflow'
 
 export async function appliquerDemandeAuStock(demande) {
   try {
-    if (!demande || demande.statut !== 'approuve') return
+    if (!demande || !estCertifie(demande.statut)) return
     const { typeArticle, articleId, dateSortie } = demande
     if (!articleId || !dateSortie) return
     const kind = typeArticle === 'aliment' ? 'aliments' : 'animaux'

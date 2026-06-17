@@ -35,10 +35,10 @@ function ModuleGuard({ moduleId, children }) {
   return children
 }
 
-// Garde admin : réservé à l'administrateur.
+// Garde admin : réservé aux rôles à accès total (super-admin, PDG, GE).
 function AdminGuard({ children }) {
-  const role = useAuth((s) => s.role)
-  if (role !== 'admin') return <Navigate to="/" replace />
+  const isAdmin = useAuth((s) => s.isAdmin)
+  if (!isAdmin()) return <Navigate to="/" replace />
   return children
 }
 

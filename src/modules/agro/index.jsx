@@ -9,6 +9,7 @@ import Factures from './Factures'
 import Analyses from './Analyses'
 import Sante from './Sante'
 import Demandes from './Demandes'
+import Historique from './Historique'
 import Journal from './Journal'
 import Params from './Params'
 import AutoCarryForward from './AutoCarryForward'
@@ -29,6 +30,7 @@ export default function AgroModule() {
       <Route path="analyses" element={<Analyses />} />
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />
+      <Route path="historique" element={<Historique />} />
       <Route path="journal" element={<Journal />} />
       <Route path="params" element={<Params />} />
     </Routes>

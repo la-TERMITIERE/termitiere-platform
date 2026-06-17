@@ -6,6 +6,7 @@ import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isFullAccessRole } from '../../core/roles'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -77,7 +78,7 @@ export default function Params() {
     }
   }
 
-  const isAdmin = role === 'admin'
+  const isAdmin = isFullAccessRole(role)
 
   return (
     <div className="space-y-4">

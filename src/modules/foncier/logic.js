@@ -2,6 +2,18 @@
 
 import { etapesPourType } from './data'
 
+// Types disponibles = types par défaut + types personnalisés (référentiel).
+export function typesDisponibles(defaults, customTypes = []) {
+  return [...defaults, ...customTypes]
+}
+
+// Étapes initiales en tenant compte des types personnalisés (qui référencent un
+// « modèle » d'étapes existant). Repli sur le type lui-même si pas de modèle.
+export function initEtapesPour(typeId, customTypes = []) {
+  const custom = (customTypes || []).find((t) => t.id === typeId)
+  return initEtapes(custom?.modele || typeId)
+}
+
 export function initEtapes(typeId) {
   return etapesPourType(typeId).map((e) => ({
     id: e.id,

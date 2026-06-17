@@ -9,6 +9,7 @@ import Input from '../../shared/forms/Input'
 import { useBriqueterieStore } from './store/referentielStore'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isFullAccessRole } from '../../core/roles'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -30,7 +31,7 @@ export default function Params() {
   const [resetting, setResetting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  const isAdmin = role === 'admin'
+  const isAdmin = isFullAccessRole(role)
 
   useEffect(() => {
     setLocalRecettes(recettes)

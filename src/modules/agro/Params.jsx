@@ -11,6 +11,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useAgroStore } from './store/agroStore'
 import { useAuth } from '../../hooks/useAuth'
+import { isFullAccessRole } from '../../core/roles'
 import { isFirebaseConfigured } from '../../core/firebase'
 import { getAll, setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -110,7 +111,7 @@ function ReferentielTab({ kind }) {
 // ── Données : export / import JSON, export Excel ──
 function DonneesTab() {
   const { role } = useAuth()
-  const isAdmin = role === 'admin'
+  const isAdmin = isFullAccessRole(role)
   const fileRef = useRef(null)
   const oldFileRef = useRef(null)
   const [migrating, setMigrating] = useState(false)

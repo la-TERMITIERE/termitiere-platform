@@ -1,6 +1,6 @@
 // Stock briques — appatam → séchage → prêtes · caillasses.
 import { useEffect, useState } from 'react'
-import { ArrowRight, Save, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Save, AlertTriangle, Plus } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -13,9 +13,9 @@ import { useBriqueterieStore } from './store/referentielStore'
 import { setItem, ts, addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, formatDateShort } from '../../utils/formatters'
+import { todayStr, formatDateShort, genId } from '../../utils/formatters'
 import { ETATS_BRIQUE, DUREE_SECHAGE_JOURS } from './data'
-import { getInventaire, joursDepuis } from './logic'
+import { getInventaire, previousInventoryDate, joursDepuis } from './logic'
 
 const TRANSITIONS = [
   { from: 'appatam', to: 'sechage', label: 'Vers séchage (extérieur)' },
@@ -23,26 +23,52 @@ const TRANSITIONS = [
 ]
 
 export default function StockBriques() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: transferts } = useCollection('evenementiel_transferts')
   const briques = useBriqueterieStore((s) => s.briques)
+  const saveBrique = useBriqueterieStore((s) => s.saveBrique)
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
   const [saving, setSaving] = useState(false)
   const [transferModal, setTransferModal] = useState(null)
+  const [addModal, setAddModal] = useState(false)
+
+  const peutSaisir = role === 'agent'
 
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { briques: {} }
+    const prevDate = previousInventoryDate(inventaires, date)
+    const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
     const s = {}
     briques.forEach((b) => {
-      const saved = inv.briques?.[b.id]
-      s[b.id] = saved || { appatam: 0, sechage: 0, pret: 0, caillasses: b.id === 'caillasses' ? 0 : 0 }
-      if (b.id === 'caillasses') s[b.id] = saved || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+      // Stock du jour si saisi, sinon report de la veille (solde d'ouverture si rien).
+      const saved = inv.briques?.[b.id] || prevInv?.briques?.[b.id]
+      s[b.id] = {
+        appatam: saved?.appatam || 0,
+        sechage: saved?.sechage || 0,
+        pret: saved?.pret || 0,
+        caillasses: saved?.caillasses || 0
+      }
     })
     setStock(s)
   }, [date, inventaires, briques])
+
+  // Édition directe d'un état (solde existant / ouverture).
+  const setEtat = (briqueId, etat, val) => {
+    setStock((s) => ({ ...s, [briqueId]: { ...s[briqueId], [etat]: Math.max(0, parseInt(val) || 0) } }))
+  }
+
+  // Création d'un nouveau type de brique depuis le stock.
+  function handleAddBrique({ nom, tarifVente }) {
+    const base = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
+    const id = (base || 'brique') + '_' + genId().slice(0, 3).toLowerCase()
+    saveBrique({ id, nom: nom.trim(), tarifVente: parseFloat(tarifVente) || 0 })
+    setAddModal(false)
+    toast.success(`${nom.trim()} ajouté ✓`)
+  }
 
   async function save() {
     if (!user) return
@@ -103,7 +129,10 @@ export default function StockBriques() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
           <input type="date" className="input-base w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
-        <Button className="ml-auto" onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>
+        <div className="ml-auto flex gap-2">
+          {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un type</Button>}
+          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
+        </div>
       </div>
 
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -129,10 +158,10 @@ export default function StockBriques() {
                 return (
                   <tr key={b.id}>
                     <td className="px-3 py-2 font-semibold">{b.nom}</td>
-                    <td className="px-2 py-2 text-center font-bold text-violet-700">{d.appatam || 0}</td>
-                    <td className="px-2 py-2 text-center font-bold text-amber-700">{d.sechage || 0}</td>
-                    <td className="px-2 py-2 text-center font-bold text-green-700">{d.pret || 0}</td>
-                    <td className="px-2 py-2 text-center font-bold text-gray-600">{b.id === 'caillasses' ? (d.caillasses || 0) : '—'}</td>
+                    <EtatCell value={d.appatam} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#7c3aed" onChange={(v) => setEtat(b.id, 'appatam', v)} />
+                    <EtatCell value={d.sechage} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#b45309" onChange={(v) => setEtat(b.id, 'sechage', v)} />
+                    <EtatCell value={d.pret} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#15803d" onChange={(v) => setEtat(b.id, 'pret', v)} />
+                    <EtatCell value={d.caillasses} editable={peutSaisir && b.id === 'caillasses'} disabled={b.id !== 'caillasses'} color="#4b5563" onChange={(v) => setEtat(b.id, 'caillasses', v)} />
                     <td className="px-2 py-2">
                       {b.id !== 'caillasses' && TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
                         <button key={t.to} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: t.to, qte: 1, dateSechage: '' })}
@@ -190,6 +219,46 @@ export default function StockBriques() {
           </div>
         )}
       </Modal>
+
+      <AddBriqueModal open={addModal} onClose={() => setAddModal(false)} onSave={handleAddBrique} />
     </div>
+  )
+}
+
+// Cellule d'état du stock : éditable (input) ou en lecture seule selon les droits.
+function EtatCell({ value = 0, editable, disabled, color, onChange }) {
+  if (disabled) return <td className="px-2 py-2 text-center font-bold text-gray-300">—</td>
+  if (!editable) return <td className="px-2 py-2 text-center font-bold" style={{ color }}>{value || 0}</td>
+  return (
+    <td className="px-2 py-2 text-center">
+      <input type="number" min="0" value={value || 0} onChange={(e) => onChange(e.target.value)}
+        className="w-16 rounded border border-gray-200 px-1 py-1 text-center text-sm font-bold focus:border-secondary focus:outline-none"
+        style={{ color }} />
+    </td>
+  )
+}
+
+// Fenêtre de création d'un type de brique.
+function AddBriqueModal({ open, onClose, onSave }) {
+  const [nom, setNom] = useState('')
+  const [tarifVente, setTarifVente] = useState('')
+
+  useEffect(() => { if (open) { setNom(''); setTarifVente('') } }, [open])
+
+  function submit() {
+    if (!nom.trim()) return toast.error('Nom requis')
+    onSave({ nom, tarifVente })
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Ajouter un type de brique"
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={submit}>Ajouter</Button></>}>
+      <FormGroup label="Nom du type" required>
+        <Input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="ex : 20 creux" autoFocus />
+      </FormGroup>
+      <FormGroup label="Tarif de vente unitaire" hint="FCFA">
+        <Input type="number" min="0" value={tarifVente} onChange={(e) => setTarifVente(e.target.value)} placeholder="0" />
+      </FormGroup>
+    </Modal>
   )
 }

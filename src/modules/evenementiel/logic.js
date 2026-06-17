@@ -1,4 +1,5 @@
 // Logique métier — briqueterie (matières, production, stock briques, autorisations).
+import { estCertifie } from '../../shared/workflow'
 
 export function previousInventoryDate(inventaires, date) {
   const dates = inventaires.map((i) => i.date).filter((d) => d && d < date).sort()
@@ -13,7 +14,7 @@ export const sommeMouvements = (lignes) =>
 
 export function autoSortiesVentes(demandes, briqueId, dateSortie) {
   return (demandes || [])
-    .filter((d) => d.statut === 'approuve' && d.briqueId === briqueId && d.dateSortie === dateSortie)
+    .filter((d) => estCertifie(d.statut) && d.briqueId === briqueId && d.dateSortie === dateSortie)
     .reduce((s, d) => s + (parseInt(d.qte) || 0), 0)
 }
 

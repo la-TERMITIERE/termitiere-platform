@@ -10,6 +10,7 @@ import Badge from '../shared/ui/Badge'
 import { useAuth } from '../hooks/useAuth'
 import { useUsersStore } from '../core/users'
 import { hashPassword } from '../core/auth'
+import { roleLabel, roleTone } from '../core/roles'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
 
@@ -87,7 +88,7 @@ export default function MonCompte() {
 
       <Card>
         <div className="mb-4 flex items-center gap-2">
-          <Badge tone={role === 'admin' ? 'primary' : role === 'controleur' ? 'info' : 'neutral'}>{role}</Badge>
+          <Badge tone={roleTone(role)}>{roleLabel(role)}</Badge>
           <span className="font-mono text-xs text-gray-400">{user?.login}</span>
         </div>
 

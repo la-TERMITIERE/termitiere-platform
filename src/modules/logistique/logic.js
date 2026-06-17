@@ -1,4 +1,5 @@
 // Logique métier — stock matériel logistique & événementiel.
+import { estCertifie } from '../../shared/workflow'
 
 export function previousInventoryDate(inventaires, date) {
   const dates = inventaires.map((i) => i.date).filter((d) => d && d < date).sort()
@@ -16,7 +17,7 @@ export const sommeType = (lignes, type) =>
 
 export function autoSorties(demandes, materielId, dateSortie) {
   return (demandes || [])
-    .filter((d) => d.statut === 'approuve' && d.materielId === materielId && d.dateSortie === dateSortie)
+    .filter((d) => estCertifie(d.statut) && d.materielId === materielId && d.dateSortie === dateSortie)
     .reduce((s, d) => s + (parseInt(d.qte) || 0), 0)
 }
 

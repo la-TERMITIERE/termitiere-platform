@@ -14,7 +14,7 @@ import { useLogistiqueStore } from './store/referentielStore'
 import { setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, formatDateTime } from '../../utils/formatters'
+import { todayStr, formatDateTime, genId } from '../../utils/formatters'
 import { CAT_MATERIEL, catColor } from './data'
 import {
   previousInventoryDate, getInventaire, autoSorties, agregerMateriel, sommeMouvements,
@@ -27,11 +27,14 @@ export default function SaisieMagasin() {
   const { data: inventaires } = useCollection('logistique_inventaires')
   const { data: demandes } = useCollection('logistique_demandes')
   const materiel = useLogistiqueStore((s) => s.materiel)
+  const saveMateriel = useLogistiqueStore((s) => s.saveMateriel)
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
   const [saving, setSaving] = useState(false)
   const [mvtModal, setMvtModal] = useState(null) // { id, dir, nom, unite }
+  const [addModal, setAddModal] = useState(false)
+  const [seedInit, setSeedInit] = useState({}) // stock initial des articles fraîchement créés : { date: { id } }
 
   const peutSaisir = role === 'agent'
   const peutEditerInit = false // toujours reporté automatiquement
@@ -40,16 +43,28 @@ export default function SaisieMagasin() {
     const inv = getInventaire(inventaires, date) || { materiels: {} }
     const prevDate = previousInventoryDate(inventaires, date)
     const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
+    const seeds = seedInit[date] || {}
 
     const s = {}
     materiel.forEach((m) => {
       const saved = inv.materiels?.[m.id]
       const { entrees, sorties, retours } = mouvementsDepuisSaisie(saved)
-      const init = saved?.init !== undefined ? saved.init : prevInv?.materiels?.[m.id]?.fin ?? 0
+      const init = saved?.init !== undefined ? saved.init : prevInv?.materiels?.[m.id]?.fin ?? seeds[m.id] ?? 0
       s[m.id] = { init, entrees, sorties, retours }
     })
     setStock(s)
-  }, [date, inventaires, materiel])
+  }, [date, inventaires, materiel, seedInit])
+
+  // Création d'un nouveau matériel (+ éventuelle nouvelle catégorie) depuis la saisie.
+  function handleAddMateriel({ nom, cat, unite, coutAchat, initial }) {
+    const base = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
+    const id = (base || 'materiel') + '_' + genId().slice(0, 3).toLowerCase()
+    saveMateriel({ id, nom: nom.trim(), cat: cat.trim().toUpperCase(), unite: unite || 'unités', coutAchat: parseFloat(coutAchat) || 0, tarifLocation: 0 })
+    setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
+    setAddModal(false)
+    toast.success(`${nom.trim()} ajouté ✓ — pensez à enregistrer la saisie`)
+  }
 
   const existing = getInventaire(inventaires, date)
   const dejaSaisi = existing?.savedAt
@@ -120,6 +135,7 @@ export default function SaisieMagasin() {
           <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
         </div>
         <div className="ml-auto flex gap-2">
+          {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un matériel</Button>}
           <Link to="/logistique/demandes"><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
           {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
@@ -190,7 +206,71 @@ export default function SaisieMagasin() {
         onClose={() => setMvtModal(null)}
         onChange={(lignes) => setLignes(mvtModal.id, mvtModal.dir, lignes)}
       />
+
+      <AddMaterielModal
+        open={addModal}
+        existingCats={[...new Set([...CAT_MATERIEL, ...materiel.map((m) => m.cat)])]}
+        onClose={() => setAddModal(false)}
+        onSave={handleAddMateriel}
+      />
     </div>
+  )
+}
+
+// Fenêtre de création d'un matériel : nom, catégorie (existante ou nouvelle), unité, coût, stock initial.
+function AddMaterielModal({ open, existingCats = [], onClose, onSave }) {
+  const [nom, setNom] = useState('')
+  const [catChoice, setCatChoice] = useState('')
+  const [catNew, setCatNew] = useState('')
+  const [unite, setUnite] = useState('unités')
+  const [coutAchat, setCoutAchat] = useState('')
+  const [initial, setInitial] = useState('')
+
+  useEffect(() => {
+    if (open) { setNom(''); setCatChoice(existingCats[0] || ''); setCatNew(''); setUnite('unités'); setCoutAchat(''); setInitial('') }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cat = catChoice === '__new__' ? catNew : catChoice
+
+  function submit() {
+    if (!nom.trim()) return toast.error('Nom requis')
+    if (!cat.trim()) return toast.error('Catégorie requise')
+    onSave({ nom, cat, unite, coutAchat, initial })
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Ajouter un matériel"
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={submit}>Ajouter</Button></>}>
+      <FormGroup label="Nom du matériel" required>
+        <Input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="ex : Bâche 4×6 m" autoFocus />
+      </FormGroup>
+      <div className="grid grid-cols-2 gap-3">
+        <FormGroup label="Catégorie" required>
+          <Select value={catChoice} onChange={(e) => setCatChoice(e.target.value)}>
+            {existingCats.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="__new__">➕ Nouvelle catégorie…</option>
+          </Select>
+        </FormGroup>
+        {catChoice === '__new__' && (
+          <FormGroup label="Nom de la catégorie" required>
+            <Input value={catNew} onChange={(e) => setCatNew(e.target.value)} placeholder="ex : LOGISTIQUE" />
+          </FormGroup>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <FormGroup label="Unité">
+          <Select value={unite} onChange={(e) => setUnite(e.target.value)}>
+            {['unités', 'lots', 'm', 'm²', 'kg'].map((u) => <option key={u} value={u}>{u}</option>)}
+          </Select>
+        </FormGroup>
+        <FormGroup label="Coût d'achat" hint="FCFA">
+          <Input type="number" min="0" value={coutAchat} onChange={(e) => setCoutAchat(e.target.value)} placeholder="0" />
+        </FormGroup>
+        <FormGroup label="Stock initial" hint="À cette date">
+          <Input type="number" min="0" value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="0" />
+        </FormGroup>
+      </div>
+    </Modal>
   )
 }
 
