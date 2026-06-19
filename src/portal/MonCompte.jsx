@@ -9,9 +9,10 @@ import Input from '../shared/forms/Input'
 import Badge from '../shared/ui/Badge'
 import { useAuth } from '../hooks/useAuth'
 import { useUsersStore } from '../core/users'
+import { updatePassword } from 'firebase/auth'
 import { hashPassword } from '../core/auth'
 import { roleLabel, roleTone } from '../core/roles'
-import { isFirebaseConfigured } from '../core/firebase'
+import { isFirebaseConfigured, auth } from '../core/firebase'
 import { toast } from '../core/notifications'
 
 export default function MonCompte() {
@@ -61,6 +62,13 @@ export default function MonCompte() {
         telephone: telephone.trim(),
         pass: passNouveau || undefined
       })
+
+      // Propage le nouveau mot de passe à Firebase Auth (l'utilisateur est lui-même
+      // authentifié → updatePassword autorisé). Best-effort, non bloquant.
+      if (changePass && isFirebaseConfigured && auth?.currentUser) {
+        try { await updatePassword(auth.currentUser, passNouveau) }
+        catch (e) { console.warn('[moncompte] Firebase Auth — màj mot de passe :', e?.code || e?.message) }
+      }
 
       updateSession({ nom: nom.trim() })
       setPassActuel('')

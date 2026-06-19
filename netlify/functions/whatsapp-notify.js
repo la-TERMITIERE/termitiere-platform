@@ -10,9 +10,32 @@
 //
 // Tant que le token n'est pas renseigné, la fonction répond proprement (no-op)
 // pour ne rien casser côté application.
+
+// Limite de débit PAR IP (anti-abus). Cet endpoint déclenche des envois WhatsApp
+// PAYANTS : sans garde-fou, un bot pourrait le marteler et générer des coûts. La
+// fenêtre est en mémoire (par instance serverless) : 1re barrière, simple et utile.
+const RL_MAX = 20          // 20 requêtes max
+const RL_WINDOW_MS = 60000 // par minute et par IP
+const rlWindows = new Map()
+function rateLimited(ip) {
+  const now = Date.now()
+  const arr = (rlWindows.get(ip) || []).filter((t) => now - t < RL_WINDOW_MS)
+  if (arr.length >= RL_MAX) return true
+  arr.push(now)
+  rlWindows.set(ip, arr)
+  return false
+}
+
 export async function handler(event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ ok: false, error: 'Method Not Allowed' }) }
+  }
+
+  const ip = event.headers['x-nf-client-connection-ip']
+    || (event.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || 'unknown'
+  if (rateLimited(ip)) {
+    return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de requêtes — réessayez dans une minute.' }) }
   }
 
   let payload = {}

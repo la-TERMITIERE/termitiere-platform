@@ -12,9 +12,30 @@ const VAPID_PRIVATE = process.env.VAPID_PRIVATE || 'tQD0CKCt9FX7TOFGMEHAuaoxHRML
 
 webpush.setVapidDetails('mailto:latermitiere2021@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE)
 
+// Limite de débit PAR IP (anti-abus) : endpoint public → 1re barrière contre les
+// rafales automatiques. Fenêtre en mémoire (par instance serverless).
+const RL_MAX = 30
+const RL_WINDOW_MS = 60000
+const rlWindows = new Map()
+function rateLimited(ip) {
+  const now = Date.now()
+  const arr = (rlWindows.get(ip) || []).filter((t) => now - t < RL_WINDOW_MS)
+  if (arr.length >= RL_MAX) return true
+  arr.push(now)
+  rlWindows.set(ip, arr)
+  return false
+}
+
 export async function handler(event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ ok: false, error: 'Method Not Allowed' }) }
+  }
+
+  const ip = event.headers['x-nf-client-connection-ip']
+    || (event.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || 'unknown'
+  if (rateLimited(ip)) {
+    return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de requêtes' }) }
   }
   let body = {}
   try { body = JSON.parse(event.body || '{}') } catch { return { statusCode: 400, body: JSON.stringify({ ok: false, error: 'JSON invalide' }) } }

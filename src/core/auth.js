@@ -8,7 +8,11 @@
 //     immédiate partout. La session reste locale à chaque appareil.
 //  2. Mode DÉMO (aucune base) → auth locale contre DEFAULT_USERS (localStorage).
 import { create } from 'zustand'
-import { isFirebaseConfigured } from './firebase'
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
+} from 'firebase/auth'
+import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, setItem, addItem } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole } from './roles'
 
@@ -20,6 +24,34 @@ const ALL_MODULES = ['agro', 'logistique', 'evenementiel', 'foncier', 'rh']
 async function findByLogin(login) {
   const rows = await getAll('users')
   return rows.find((u) => u.login === login) || null
+}
+
+// Vraie auth : on branche Firebase Auth (service dédié, audité). Migration
+// TRANSPARENTE → une fois l'identité prouvée par l'auth applicative (hash SHA-256),
+// on garantit une SESSION Firebase Auth réelle (compte créé à la 1re connexion avec
+// le même mot de passe, sinon simple connexion). Objectif : verrouiller ensuite les
+// règles RTDB sur `auth != null` sans casser l'existant, et débloquer plus tard
+// Google login / magic links / 2FA côté Firebase.
+//
+// ⚠️ Best-effort STRICT : ne JAMAIS bloquer la connexion si Firebase Auth est
+// indisponible / provider e-mail désactivé / mot de passe désynchronisé / trop court.
+async function ensureFirebaseAuthSession(login, pass) {
+  if (!auth) return
+  const email = loginToEmail(login)
+  try {
+    await signInWithEmailAndPassword(auth, email, pass)
+  } catch (e) {
+    const code = e?.code || ''
+    if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+      try {
+        await createUserWithEmailAndPassword(auth, email, pass)
+      } catch (e2) {
+        console.warn('[auth] Firebase Auth — création impossible :', e2?.code || e2?.message)
+      }
+    } else {
+      console.warn('[auth] Firebase Auth — connexion impossible :', code || e?.message)
+    }
+  }
 }
 
 // Comptes par défaut (amorçage au premier lancement / mode démo)
@@ -164,6 +196,9 @@ export const useAuthStore = create((set, get) => ({
       const u = sessionFromProfile(profile)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
       set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+      // Établit/crée la session Firebase Auth réelle en arrière-plan (ne bloque
+      // jamais la connexion). Prépare le verrouillage des règles RTDB.
+      ensureFirebaseAuthSession(id, pass).catch(() => {})
       // Trace de dernière connexion + entrée au journal d'activité (non bloquant).
       // On écrit avec la CLÉ technique du profil (jamais l'identifiant brut).
       setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})

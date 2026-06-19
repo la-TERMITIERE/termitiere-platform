@@ -72,4 +72,10 @@ if (isFirebaseConfigured) {
   console.warn('[TERMITIÈRE] Aucune base configurée — mode DÉMO local (localStorage).')
 }
 
+// E-mail synthétique déterministe dérivé de l'identifiant de connexion, pour
+// Firebase Auth. Les comptes reposent sur le `login` (pas un e-mail réel) → on
+// reconstruit une adresse stable. Domaine dédié `termitiere.local` (jamais routé).
+export const loginToEmail = (login) =>
+  `${String(login || '').toLowerCase().replace(/[^a-z0-9._-]/g, '_')}@termitiere.local`
+
 export { app, auth, db, storage, rtdb }
