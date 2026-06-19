@@ -1,0 +1,9 @@
+# Données exportées (sensibles) et dépendances — ne pas versionner
+firebase-export.json
+backups/
+**/node_modules/
+**/.env
+**/.sbtoken
+**/.sbinfo.json
+**/serviceAccount*.json
+**/*-service-account*.json

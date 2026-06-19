@@ -1,0 +1,16 @@
+{
+  "name": "termitiere-migration-supabase",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Migration des données La Termitière (Firebase RTDB) vers PostgreSQL / Supabase",
+  "scripts": {
+    "schema": "node gen-schema.mjs",
+    "import": "node --env-file=.env import.mjs",
+    "backup": "node backup.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.3",
+    "pg": "^8.13.0"
+  }
+}

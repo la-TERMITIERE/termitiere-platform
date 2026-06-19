@@ -24,7 +24,7 @@ import { STATUTS_DEMANDE, normaliserStatut, actionsDemande } from '../../shared/
 const STATUTS = STATUTS_DEMANDE
 
 export default function Demandes() {
-  const { user, canManage, canCertify } = useAuth()
+  const { user, role, canManage, canCertify } = useAuth()
   const { data: demandes } = useCollection('evenementiel_demandes')
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
@@ -150,9 +150,11 @@ export default function Demandes() {
             {f === 'tous' ? 'Toutes' : STATUTS[f]?.short || f}
           </button>
         ))}
-        <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
-          <Plus size={16} /> Demander une autorisation
-        </Button>
+        {role !== 'superviseur' && (
+          <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
+            <Plus size={16} /> Demander une autorisation
+          </Button>
+        )}
       </div>
 
       <Card className="p-0">

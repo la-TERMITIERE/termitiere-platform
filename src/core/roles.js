@@ -1,7 +1,7 @@
 // Référentiel central des rôles de la plateforme La Termitière.
 //
 // Hiérarchie (du plus large au plus restreint) :
-//   super_admin → pdg → ge → gerant → agent
+//   super_admin → pau → ge → superviseur (lecture seule) → gerant → agent
 //
 // Workflow d'autorisation à DEUX niveaux :
 //   - APPROVER_ROLES  : approuvent une demande (1er niveau)
@@ -13,20 +13,24 @@
 
 export const ROLES = [
   { value: 'super_admin', label: 'Super-admin', desc: 'Concepteur — contrôle total + technique' },
-  { value: 'pdg', label: 'PDG', desc: 'Direction — contrôle total sur les applications' },
+  { value: 'pau', label: 'PAU', desc: 'Direction — contrôle total sur les applications' },
   { value: 'ge', label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
+  { value: 'superviseur', label: 'Superviseur', desc: 'Consulte tout (lecture seule) — aucune action' },
   { value: 'gerant', label: 'Gérant', desc: 'Approuve les sorties et les demandes' },
   { value: 'agent', label: 'Agent', desc: 'Saisie des données + demandes d\'autorisation' }
 ]
 
-// Accès total à tous les modules + pages Paramètres + gestion des utilisateurs.
-export const FULL_ACCESS_ROLES = ['super_admin', 'pdg', 'ge', 'admin']
-// 1er niveau d'approbation d'une demande de sortie.
-export const APPROVER_ROLES = ['super_admin', 'pdg', 'ge', 'gerant', 'admin', 'controleur']
+// Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
+export const FULL_ACCESS_ROLES = ['super_admin', 'pau', 'ge', 'admin']
+// Voit TOUS les modules (full access + superviseur en lecture seule).
+export const VIEW_ALL_ROLES = ['super_admin', 'pau', 'ge', 'admin', 'superviseur']
+// 1er niveau d'approbation d'une demande de sortie (le superviseur n'approuve pas).
+export const APPROVER_ROLES = ['super_admin', 'pau', 'ge', 'gerant', 'admin', 'controleur']
 // 2e niveau : certification définitive (déclenche l'effet métier).
-export const CERTIFIER_ROLES = ['super_admin', 'pdg', 'ge', 'admin']
+export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'admin']
 
 export const isFullAccessRole = (r) => FULL_ACCESS_ROLES.includes(r)
+export const isViewAllRole = (r) => VIEW_ALL_ROLES.includes(r)
 export const isApproverRole = (r) => APPROVER_ROLES.includes(r)
 export const isCertifierRole = (r) => CERTIFIER_ROLES.includes(r)
 
@@ -38,6 +42,7 @@ export const roleLabel = (r) =>
 // Ton de badge (cf. shared/ui/Badge) selon le niveau du rôle.
 export const roleTone = (r) => {
   if (FULL_ACCESS_ROLES.includes(r)) return 'primary'
+  if (r === 'superviseur') return 'info'
   if (r === 'gerant' || r === 'controleur') return 'info'
   return 'neutral'
 }

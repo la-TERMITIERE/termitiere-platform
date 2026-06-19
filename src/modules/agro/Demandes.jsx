@@ -30,7 +30,7 @@ import { STATUTS_DEMANDE, normaliserStatut, estActif, estCertifie, actionsDemand
 const STATUTS = STATUTS_DEMANDE
 
 export default function Demandes() {
-  const { user, canManage, canCertify } = useAuth()
+  const { user, role, canManage, canCertify } = useAuth()
   const { data: liste } = useCollection('agro_demandes')
   const { data: inventaires } = useCollection('agro_inventaires')
   const especes = useAgroStore((s) => s.especes)
@@ -232,9 +232,11 @@ export default function Demandes() {
             )
           )}
         </div>
-        <Button className="ml-auto" onClick={openCreate}>
-          <Plus size={16} /> Nouvelle demande
-        </Button>
+        {role !== 'superviseur' && (
+          <Button className="ml-auto" onClick={openCreate}>
+            <Plus size={16} /> Nouvelle demande
+          </Button>
+        )}
       </div>
 
       {filtrees.length === 0 ? (

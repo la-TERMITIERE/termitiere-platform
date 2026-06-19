@@ -10,7 +10,7 @@
 import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
 import { getAll, setItem, addItem } from './db'
-import { isFullAccessRole, isApproverRole, isCertifierRole } from './roles'
+import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole } from './roles'
 
 // Liste de référence de tous les modules de la plateforme.
 const ALL_MODULES = ['agro', 'logistique', 'evenementiel', 'foncier', 'rh']
@@ -25,8 +25,9 @@ async function findByLogin(login) {
 // Comptes par défaut (amorçage au premier lancement / mode démo)
 export const DEFAULT_USERS = [
   { login: 'superadmin', pass: 'super123', nom: 'Super-administrateur', role: 'super_admin', modules: ALL_MODULES, secteur: 'Conception', actif: true },
-  { login: 'pdg', pass: 'pdg123', nom: 'PDG', role: 'pdg', modules: ALL_MODULES, secteur: 'Direction', actif: true },
+  { login: 'pau', pass: 'pau123', nom: 'PAU', role: 'pau', modules: ALL_MODULES, secteur: 'Direction', actif: true },
   { login: 'ge', pass: 'ge123', nom: 'Gérante exécutive', role: 'ge', modules: ALL_MODULES, secteur: 'Direction exécutive', actif: true },
+  { login: 'superviseur', pass: 'super2026', nom: 'Superviseur', role: 'superviseur', modules: ALL_MODULES, secteur: 'Supervision', actif: true },
   { login: 'admin', pass: 'admin123', nom: 'Administrateur', role: 'admin', modules: ALL_MODULES, secteur: 'Direction', actif: true },
   { login: 'gerant', pass: 'gerant123', nom: 'Gérant', role: 'gerant', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Gérance', actif: true },
   { login: 'controleur', pass: 'ctrl123', nom: 'Contrôleur', role: 'controleur', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Contrôle', actif: true },
@@ -89,8 +90,8 @@ function sessionFromProfile(p) {
     login: p.login,
     nom: p.nom || 'Utilisateur',
     role,
-    // Les rôles à accès total voient l'ensemble des modules (peu importe leur liste).
-    modules: isFullAccessRole(role) ? ALL_MODULES : (p.modules || []),
+    // Les rôles « voit tout » (accès total + superviseur) reçoivent tous les modules.
+    modules: isViewAllRole(role) ? ALL_MODULES : (p.modules || []),
     secteur: p.secteur || '',
     actif: p.actif !== false
   }
@@ -194,7 +195,7 @@ export const useAuthStore = create((set, get) => ({
   // Helpers de contrôle d'accès
   hasModule: (mod) => {
     const { role, modules } = get()
-    if (isFullAccessRole(role)) return true
+    if (isViewAllRole(role)) return true
     return (modules || []).includes(mod)
   },
   // Accès total : super-admin, PDG, GE (+ admin hérité). Donne droit aux pages

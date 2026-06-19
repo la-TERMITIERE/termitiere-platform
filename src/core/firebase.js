@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getDatabase } from 'firebase/database'
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 
 // Configuration Firebase. Les clés WEB Firebase ne sont PAS des secrets : elles
 // sont publiques par conception (la sécurité repose sur les règles de la base +
@@ -42,6 +43,18 @@ let rtdb = null
 
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
+  // Firebase App Check — barrière anti-bots (n'autorise que les requêtes issues
+  // de l'app authentique). Activé dès qu'une clé reCAPTCHA v3 est fournie via
+  // VITE_RECAPTCHA_KEY (+ enforcement à activer dans la console Firebase).
+  const recaptchaKey = import.meta.env.VITE_RECAPTCHA_KEY
+  if (recaptchaKey) {
+    try {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaKey),
+        isTokenAutoRefreshEnabled: true
+      })
+    } catch (e) { console.warn('[firebase] App Check non initialisé :', e?.message) }
+  }
   // Realtime Database : synchronisation temps réel multi-appareils (source de
   // vérité des données du portail), via la couche src/core/db.js.
   rtdb = getDatabase(app)
