@@ -10,7 +10,8 @@
 import { create } from 'zustand'
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, setItem, addItem } from './db'
@@ -24,34 +25,6 @@ const ALL_MODULES = ['agro', 'logistique', 'evenementiel', 'foncier', 'rh']
 async function findByLogin(login) {
   const rows = await getAll('users')
   return rows.find((u) => u.login === login) || null
-}
-
-// Vraie auth : on branche Firebase Auth (service dédié, audité). Migration
-// TRANSPARENTE → une fois l'identité prouvée par l'auth applicative (hash SHA-256),
-// on garantit une SESSION Firebase Auth réelle (compte créé à la 1re connexion avec
-// le même mot de passe, sinon simple connexion). Objectif : verrouiller ensuite les
-// règles RTDB sur `auth != null` sans casser l'existant, et débloquer plus tard
-// Google login / magic links / 2FA côté Firebase.
-//
-// ⚠️ Best-effort STRICT : ne JAMAIS bloquer la connexion si Firebase Auth est
-// indisponible / provider e-mail désactivé / mot de passe désynchronisé / trop court.
-async function ensureFirebaseAuthSession(login, pass) {
-  if (!auth) return
-  const email = loginToEmail(login)
-  try {
-    await signInWithEmailAndPassword(auth, email, pass)
-  } catch (e) {
-    const code = e?.code || ''
-    if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
-      try {
-        await createUserWithEmailAndPassword(auth, email, pass)
-      } catch (e2) {
-        console.warn('[auth] Firebase Auth — création impossible :', e2?.code || e2?.message)
-      }
-    } else {
-      console.warn('[auth] Firebase Auth — connexion impossible :', code || e?.message)
-    }
-  }
 }
 
 // Comptes par défaut (amorçage au premier lancement / mode démo)
@@ -176,29 +149,62 @@ export const useAuthStore = create((set, get) => ({
       return true
     }
 
-    // ── Mode cloud (Realtime Database) ──
+    // ── Mode cloud (Realtime Database) + vraie auth Firebase ──
+    // Stratégie « Firebase Auth d'abord » :
+    //  1) on tente une session Firebase Auth (cas normal une fois l'utilisateur migré ;
+    //     INDISPENSABLE quand les règles RTDB sont verrouillées sur `auth != null`) ;
+    //  2) repli sur l'auth applicative (hash SHA-256) tant que tout n'est pas migré /
+    //     que les règles sont encore ouvertes ; on en profite pour CRÉER le compte
+    //     Firebase Auth pour les prochaines connexions (migration transparente).
+    // Rétrocompatible : si le provider e-mail n'est pas (encore) activé, l'étape 1
+    // échoue proprement et on retombe sur le comportement applicatif d'aujourd'hui.
     try {
-      // On recherche par CHAMP `login` (et non par clé), car un identifiant peut
-      // contenir des caractères interdits dans une clé RTDB (e-mail, point…).
+      const email = loginToEmail(id)
+
+      // 1) Tentative d'authentification Firebase.
+      let authed = false
+      if (auth) {
+        try { await signInWithEmailAndPassword(auth, email, pass); authed = true }
+        catch (e) { /* non migré / mauvais mdp / provider désactivé → voie applicative */ }
+      }
+
+      // 2) Lecture du profil (autorisée si déjà authentifié, ou si règles ouvertes).
+      //    Recherche par CHAMP `login` (un identifiant peut contenir des caractères
+      //    interdits dans une clé RTDB : e-mail, point…).
       let profile = await findByLogin(id)
-      if (!profile) {
+      if (!profile && !authed) {
         // Collection vide au tout premier login → amorçage puis nouvel essai.
         await ensureSeed()
         profile = await findByLogin(id)
       }
-      if (!profile) { set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' }); return false }
-      if (profile.actif === false) { set({ isLoading: false, error: 'Compte désactivé par l\'administrateur' }); return false }
-      const hash = await hashPassword(pass)
-      if (profile.passHash !== hash) {
+      if (!profile) {
+        if (authed && auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
         set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' })
         return false
       }
+      if (profile.actif === false) {
+        if (authed && auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
+        set({ isLoading: false, error: 'Compte désactivé par l\'administrateur' })
+        return false
+      }
+
+      // 3) Si pas (encore) authentifié Firebase : on vérifie le hash applicatif…
+      if (!authed) {
+        const hash = await hashPassword(pass)
+        if (profile.passHash !== hash) {
+          set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' })
+          return false
+        }
+        // …puis on crée le compte Firebase Auth pour les prochaines fois (migration).
+        if (auth) {
+          try { await createUserWithEmailAndPassword(auth, email, pass); authed = true }
+          catch (e2) { console.warn('[auth] Firebase Auth — migration différée :', e2?.code || e2?.message) }
+        }
+      }
+
       const u = sessionFromProfile(profile)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
       set({ user: u, role: u.role, modules: u.modules, isLoading: false })
-      // Établit/crée la session Firebase Auth réelle en arrière-plan (ne bloque
-      // jamais la connexion). Prépare le verrouillage des règles RTDB.
-      ensureFirebaseAuthSession(id, pass).catch(() => {})
       // Trace de dernière connexion + entrée au journal d'activité (non bloquant).
       // On écrit avec la CLÉ technique du profil (jamais l'identifiant brut).
       setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})
@@ -214,6 +220,9 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
+    // Ferme aussi la session Firebase Auth (sinon le jeton resterait valide après
+    // déconnexion → accès possible aux données sous règles verrouillées).
+    if (auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
     localStorage.removeItem(DEMO_SESSION_KEY)
     set({ user: null, role: null, modules: [] })
   },

@@ -27,24 +27,48 @@ Validateurs de format : `isValidLogin`, `isValidPhone`.
 
 ## 3. Vraie auth — Firebase Auth (service dédié, audité)
 **Fondation en place (code), non bloquante pour la prod.** À chaque connexion réussie (vérifiée
-par l'auth applicative), `ensureFirebaseAuthSession` (dans `src/core/auth.js`) crée/établit en
-arrière-plan une **vraie session Firebase Auth** (`<login>@termitiere.local`). Le changement de mot
-de passe (« Mon compte ») est propagé à Firebase Auth. **Si Firebase Auth échoue, la connexion
-n'est jamais bloquée.**
+par l'auth applicative), la connexion suit une stratégie **« Firebase Auth d'abord »**
+(`src/core/auth.js`, fonction `login`) :
+1. tentative `signInWithEmailAndPassword(<login>@termitiere.local, mot de passe)` — le cas normal
+   une fois l'utilisateur migré, et **indispensable** quand les règles sont verrouillées ;
+2. repli sur l'auth applicative (hash SHA-256) tant que tout n'est pas migré, **en créant** au
+   passage le compte Firebase Auth (migration transparente) ;
+3. `logout` ferme aussi la session Firebase Auth.
+Rétrocompatible : si le provider e-mail n'est pas encore activé, l'étape 1 échoue proprement et
+l'app fonctionne comme avant. **Déployer ce code ne casse rien.**
 
-### À faire côté console Firebase (par le propriétaire — réglages de sécurité)
-1. **Activer le provider** : Authentication → Sign-in method → **E-mail/Mot de passe** → Activer.
-   À partir de là, chaque connexion crée un compte Firebase Auth réel (sans rien casser).
-2. *(Plus tard, après adoption)* **Verrouiller la base** : déployer les règles `database.rules.json`
-   (`auth != null` sur `tp/`) via `npx firebase-tools deploy --only database`. ⚠️ À ne faire
-   qu'une fois que la majorité des comptes ont une session Auth (sinon blocage). Rollback =
-   republier des règles ouvertes.
-3. *(Bonus offerts par Firebase Auth, une fois la base sur Auth)* : **Google login**, **magic links**
-   (lien de connexion par e-mail), **2FA** — activables dans Authentication sans réécrire l'auth.
+### 🔐 Bascule SÛRE vers la base verrouillée (par étapes, avec filet)
+
+> Règle d'or : on **migre tout le monde AVANT de verrouiller**. Avec ~13 utilisateurs, c'est rapide.
+
+- **Étape 0 — Filet** : la sauvegarde quotidienne tourne ✅. Avant de verrouiller, exporte aussi
+  un JSON de `tp/` (console). Rollback = republier des règles ouvertes
+  `{ "rules": { ".read": true, ".write": true } }` (ou redéployer `database.rules.json`).
+- **Étape 1 — Activer le provider** (console) : Authentication → Sign-in method →
+  **E-mail/Mot de passe** → Activer. (Sans rien casser : règles encore ouvertes.)
+- **Étape 2 — Déployer le code** « Firebase Auth d'abord » (push GitHub → Netlify). Toujours sans
+  rien casser (règles ouvertes).
+- **Étape 3 — Migrer tout le monde** : que **chaque** utilisateur se connecte **une fois**
+  (ou le propriétaire se connecte à chaque compte). Chaque connexion crée le compte Firebase
+  Auth. Vérifier dans **Authentication → Users** que les ~13 comptes apparaissent.
+  - Rattrapage des absents : script Admin SDK (mot de passe temporaire) — cf. §Limites.
+  - ⚠️ S'assurer qu'aucun mot de passe ne fait **< 6 caractères** (refusé par Firebase Auth).
+- **Étape 4 — Verrouiller** : publier les règles `auth != null` (fichier
+  `database.rules.locked.json`) dans la console (Realtime Database → Règles), OU
+  `npx firebase-tools deploy --only database` après avoir copié le contenu verrouillé dans
+  `database.rules.json`. Tester immédiatement une connexion de bout en bout.
+- **Étape 5 — En cas de souci** : rollback règles ouvertes (10 s), on diagnostique, on recommence.
+
+*(Bonus une fois la base sur Auth)* : **Google login**, **magic links**, **2FA** — activables
+dans Authentication sans réécrire l'auth.
 
 ### Limites connues (documentées)
+- **Utilisateur non migré après verrouillage** : il ne pourra plus se connecter (l'étape 2 de
+  `login` lit `users`, bloqué sans session Auth) → le rattraper via le script Admin SDK ou en
+  rouvrant brièvement les règles. D'où l'importance de l'étape 3 (migrer AVANT de verrouiller).
 - Reset de mot de passe par l'admin (page Utilisateurs) non propagé à Firebase Auth (le SDK client
-  ne peut pas changer le mot de passe d'autrui). Rattrapage par script Admin SDK avant verrouillage.
+  ne peut pas changer le mot de passe d'autrui) → l'utilisateur garderait l'ancien mdp côté Auth.
+  Rattrapage par script Admin SDK. (Le changement self-service via « Mon compte » EST propagé.)
 - Mot de passe < 6 caractères refusé par Firebase Auth (compte créé quand l'utilisateur l'allonge).
 
 ## 4. Limite anti-bots — par utilisateur et par route

@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "tp": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$col": {
+        "$id": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
