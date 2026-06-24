@@ -1,5 +1,5 @@
 // Dossiers fonciers — CRUD + suivi des étapes administratives.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Eye, ChevronRight } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'

@@ -9,7 +9,8 @@ import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useLogistiqueStore } from './store/referentielStore'
-import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
+import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
+import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { catColor, CAT_MATERIEL } from './data'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
 
@@ -22,9 +23,10 @@ export default function Dashboard() {
   const { data: retours } = useCollection('logistique_retours')
 
   const [detail, setDetail] = useState(null) // { titre, render }
+  const { start, end, node: periodNode } = usePeriodSelect('30')
 
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
-  const mois = todayStr().slice(0, 7)
+  const dansPeriode = (d) => (d || '') >= start && (d || '') <= end
 
   const stockTotal = useMemo(() =>
     dernier ? Object.values(dernier.materiels || {}).reduce((s, m) => s + (m.fin || 0), 0) : 0,
@@ -35,7 +37,7 @@ export default function Dashboard() {
     return materiel.reduce((s, m) => s + (dernier.materiels?.[m.id]?.fin || 0) * (m.coutAchat || 0), 0)
   }, [dernier, materiel])
 
-  const facturesMois = factures.filter((f) => (f.date || '').startsWith(mois))
+  const facturesMois = factures.filter((f) => dansPeriode(f.date))
   const caMois = facturesMois.reduce((s, f) => s + (f.totalTTC || 0), 0)
   const demandesActives = demandes.filter((d) => estActif(d.statut))
   const prestationsActivesList = prestations.filter((p) => ['facturee', 'en_cours'].includes(p.statut))
@@ -56,7 +58,7 @@ export default function Dashboard() {
   }
 
   const fluxMois = useMemo(() => {
-    const invMois = inventaires.filter((i) => (i.date || '').startsWith(mois))
+    const invMois = inventaires.filter((i) => dansPeriode(i.date))
     let achats = 0, sorties = 0, retOk = 0
     invMois.forEach((i) => Object.values(i.materiels || {}).forEach((m) => {
       achats += m.ent || 0; sorties += m.sor || 0; retOk += m.retourOk || 0
@@ -65,7 +67,7 @@ export default function Dashboard() {
       labels: ['Achats', 'Sorties', 'Retours OK'],
       datasets: [{ data: [achats, sorties, retOk], backgroundColor: ['#16a34a', '#d97706', '#0284c7'] }]
     }
-  }, [inventaires, mois])
+  }, [inventaires, start, end])
 
   // Détail des articles d'une catégorie (2e niveau de drill-down).
   const ouvrirCategorie = (p) => setDetail({ titre: `Catégorie : ${p.cat}`, render: (
@@ -95,9 +97,14 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl bg-gradient-to-r from-sky-600 to-sky-800 p-4 text-white">
-        <h2 className="text-lg font-extrabold">Logistique & Événementiel</h2>
-        <p className="text-sm text-sky-100">Matériel · Location · Prestations · Autorisations (validation à deux niveaux)</p>
+      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-sky-600 to-sky-800 p-4 text-white">
+        <div>
+          <h2 className="text-lg font-extrabold">Logistique & Événementiel</h2>
+          <p className="text-sm text-sky-100">Matériel · Location · Prestations · Autorisations (validation à deux niveaux)</p>
+        </div>
+        <div className="ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white [&_label]:font-bold">
+          {periodNode}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -114,8 +121,8 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard title="CA du mois" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
-          onClick={() => setDetail({ titre: 'Factures du mois', render: (
+        <StatCard title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
+          onClick={() => setDetail({ titre: 'Factures de la période', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
@@ -160,8 +167,8 @@ export default function Dashboard() {
               : <p className="py-16 text-center text-sm text-gray-400">Aucun stock enregistré — commencez par la saisie magasin</p>}
           </div>
         </Card>
-        <Card title={`Flux du mois (${mois})`}>
-          <div className="h-64"><Bar data={fluxMois} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} /></div>
+        <Card title={`Flux de la période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
+          <div className="h-64"><Bar data={fluxMois} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { precision: 0 } } } }} /></div>
         </Card>
       </div>
 

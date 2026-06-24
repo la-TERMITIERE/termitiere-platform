@@ -314,6 +314,35 @@ export function annoterLignesAgent(lignes, userId, userNom) {
   )
 }
 
+// Prévision statistique LÉGÈRE (pas de ML lourd, tourne dans le navigateur) :
+// combine une TENDANCE linéaire (régression des moindres carrés sur la série) et
+// une MOYENNE MOBILE récente (lisse le bruit), puis projette `horizon` points.
+// Renvoie un tableau de valeurs prévues (jamais négatives). Sert au taux de morbidité
+// et peut servir à d'autres séries (effectif, ventes…).
+export function previsionSerie(values, horizon = 7) {
+  const ys = (values || []).map((v) => Number(v) || 0)
+  const n = ys.length
+  if (n === 0) return []
+  if (n === 1) return new Array(horizon).fill(Math.max(0, ys[0]))
+  // Régression linéaire y = a + b·x sur les indices 0..n-1.
+  let sx = 0, sy = 0, sxy = 0, sxx = 0
+  ys.forEach((y, x) => { sx += x; sy += y; sxy += x * y; sxx += x * x })
+  const denom = n * sxx - sx * sx
+  const b = denom !== 0 ? (n * sxy - sx * sy) / denom : 0
+  const a = (sy - b * sx) / n
+  // Moyenne mobile des 3 derniers points (ancrage prudent).
+  const k = Math.min(3, n)
+  const ma = ys.slice(n - k).reduce((s, y) => s + y, 0) / k
+  const out = []
+  for (let h = 1; h <= horizon; h++) {
+    const x = n - 1 + h
+    const lin = a + b * x
+    // Mélange tendance (60 %) + moyenne mobile (40 %) : projection mesurée.
+    out.push(Math.max(0, 0.6 * lin + 0.4 * ma))
+  }
+  return out
+}
+
 // Dernier stock connu d'un article (pour le contrôle de disponibilité des demandes).
 export function dernierStock(inventaires, type, articleId) {
   const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))

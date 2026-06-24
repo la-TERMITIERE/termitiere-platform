@@ -638,7 +638,11 @@ function EvolutionCategorieCard({ cat, especes, evolutionDetail }) {
         // des données pour rendre visibles même les plus petites variations.
         beginAtZero: false,
         grace: '8%',
-        ticks: { callback: (v) => (isMoney ? new Intl.NumberFormat('fr-FR', { notation: 'compact' }).format(v) : v) }
+        // Effectif/ventes/décès = des animaux → graduations ENTIÈRES (pas de demi-animal).
+        ticks: {
+          precision: isMoney ? undefined : 0,
+          callback: (v) => (isMoney ? new Intl.NumberFormat('fr-FR', { notation: 'compact' }).format(v) : (Number.isInteger(v) ? v : ''))
+        }
       }
     }
   }

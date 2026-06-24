@@ -5,14 +5,14 @@
 // - Sélecteur de période : presets + plage personnalisée.
 import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { ChevronRight, Layers, TrendingUp, TrendingDown } from 'lucide-react'
+import { ChevronRight, Layers, TrendingUp, TrendingDown, Stethoscope } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor } from './data'
-import { mouvementsCategorie, agregerAchatsVentes } from './logic'
+import { mouvementsCategorie, agregerAchatsVentes, previsionSerie } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const PRESETS = [
@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [from, setFrom] = useState(addDays(todayStr(), -30))
   const [to, setTo] = useState(todayStr())
   const [catDetail, setCatDetail] = useState(null)
+  const [morbiditeOpen, setMorbiditeOpen] = useState(false)
   const [mortaliteOpen, setMortaliteOpen] = useState(false)
   const [naissancesOpen, setNaissancesOpen] = useState(false)
   const [caOpen, setCaOpen] = useState(false)
@@ -140,21 +141,72 @@ export default function Dashboard() {
     }
   }, [invPeriode, especes, aliments, tri, ca, isDaily])
 
-  // Évolution effectif total sur la fenêtre
-  const evolution = useMemo(() => {
+  // ── TAUX DE MORBIDITÉ ──
+  // Morbidité = animaux MALADES / EFFECTIF (× 100). Référence = dernière saisie.
+  // Détail par catégorie + total. (Champ « malades » saisi dans la saisie journalière.)
+  const morbidite = useMemo(() => {
+    let totMal = 0, totEff = 0
+    const lignesCat = cats.map((cat) => {
+      let mal = 0, eff = 0
+      especes.filter((e) => e.cat === cat).forEach((e) => {
+        const a = dernier?.animaux?.[e.id]
+        mal += a?.malades || 0
+        eff += a?.fin || 0
+      })
+      totMal += mal; totEff += eff
+      return { cat, malades: mal, effectif: eff, taux: eff ? (mal / eff) * 100 : 0, color: catColor(cat) }
+    })
+    return { lignesCat, totMal, totEff, taux: totEff ? (totMal / totEff) * 100 : 0 }
+  }, [cats, especes, dernier])
+
+  // Détail par espèce (pour la modale).
+  const morbiditeEspeces = useMemo(() =>
+    especes.map((e) => {
+      const a = dernier?.animaux?.[e.id]
+      const mal = a?.malades || 0
+      const eff = a?.fin || 0
+      return { nom: e.nom, cat: e.cat, malades: mal, effectif: eff, taux: eff ? (mal / eff) * 100 : 0 }
+    }).filter((l) => l.effectif > 0 || l.malades > 0)
+       .sort((a, b) => b.taux - a.taux),
+  [especes, dernier])
+
+  // Série journalière de morbidité (%) sur la période → courbe + base de prévision.
+  const morbiditeSerie = useMemo(() => {
     const pts = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
     return {
       labels: pts.map((i) => i.date?.slice(5)),
-      datasets: [{
-        label: 'Effectif total',
-        data: pts.map((i) => Object.values(i.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)),
-        borderColor: '#BC3C31',
-        backgroundColor: 'rgba(188,60,49,0.12)',
-        fill: true,
-        tension: 0.3
-      }]
+      values: pts.map((inv) => {
+        let mal = 0, eff = 0
+        Object.values(inv.animaux || {}).forEach((a) => { mal += a.malades || 0; eff += a.fin || 0 })
+        return eff ? +((mal / eff) * 100).toFixed(2) : 0
+      })
     }
   }, [invPeriode])
+
+  // Prévision statistique des 7 prochains jours (tendance + moyenne mobile).
+  const morbiditePrevision = useMemo(() => previsionSerie(morbiditeSerie.values, 7), [morbiditeSerie])
+
+  // Données du graphique : historique (orange) + prévision (violet pointillé, raccordée).
+  const morbiditeChart = useMemo(() => {
+    const hist = morbiditeSerie.values
+    const prev = morbiditePrevision.map((v) => +v.toFixed(2))
+    const lastHist = hist.length ? hist[hist.length - 1] : 0
+    return {
+      labels: [...morbiditeSerie.labels, ...prev.map((_, i) => `J+${i + 1}`)],
+      datasets: [
+        {
+          label: 'Morbidité (%)',
+          data: [...hist, ...new Array(prev.length).fill(null)],
+          borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.12)', fill: true, tension: 0.3, pointRadius: 2
+        },
+        {
+          label: 'Prévision (%)',
+          data: [...new Array(Math.max(0, hist.length - 1)).fill(null), lastHist, ...prev],
+          borderColor: '#9333ea', borderDash: [5, 4], fill: false, tension: 0.3, pointRadius: 2
+        }
+      ]
+    }
+  }, [morbiditeSerie, morbiditePrevision])
 
   const repartition = {
     labels: parCat.map((p) => p.cat),
@@ -344,13 +396,26 @@ export default function Dashboard() {
 
       {/* Graphiques */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <Card title="Évolution des effectifs" className="lg:col-span-2">
-          <div className="h-72">
-            {evolution.labels.length
-              ? <Line data={evolution} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
-              : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
+        <button
+          onClick={() => setMorbiditeOpen(true)}
+          className="card lg:col-span-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité</p>
+              <p className="text-3xl font-extrabold text-amber-600">{morbidite.taux.toFixed(1)} %</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                {morbidite.totMal} malade(s) / {formatNumber(morbidite.totEff)} têtes — cliquer pour la formule, le détail par catégorie &amp; la prévision
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Stethoscope size={22} /></div>
           </div>
-        </Card>
+          <div className="mt-2 h-52">
+            {morbiditeSerie.labels.length
+              ? <Line data={morbiditeChart} options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + ' %' } } } }} />
+              : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période — saisissez les animaux « malades » dans la saisie journalière pour activer le suivi.</p>}
+          </div>
+        </button>
         <Card title="Répartition par catégorie">
           <div className="h-72">
             {parCat.some((p) => p.total > 0)
@@ -368,6 +433,72 @@ export default function Dashboard() {
         dernier={dernier}
         invPeriode={invPeriode}
       />
+
+      {/* Modal : détails morbidité (formule + par catégorie/espèce + prévision) */}
+      <Modal open={morbiditeOpen} onClose={() => setMorbiditeOpen(false)} size="lg" title="Détails — Taux de morbidité">
+        <div className="space-y-4">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Taux de morbidité global : <strong>{morbidite.taux.toFixed(1)} %</strong> — {morbidite.totMal} animal/animaux malade(s) sur {formatNumber(morbidite.totEff)} têtes (dernière saisie)
+          </p>
+          <p className="text-xs italic text-gray-400">
+            Formule : Taux de morbidité = (Nombre d'animaux malades / Effectif) × 100<br />
+            Prévision : tendance linéaire (moindres carrés) + moyenne mobile sur la série journalière — projection à 7 jours.
+          </p>
+
+          <div>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">Par catégorie</p>
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Catégorie</th><th className="px-2 py-2 text-center">Malades</th><th className="px-2 py-2 text-center">Effectif</th><th className="px-2 py-2 text-center">Morbidité</th></tr></thead>
+                <tbody className="divide-y divide-gray-100">
+                  {morbidite.lignesCat.map((p) => (
+                    <tr key={p.cat}>
+                      <td className="px-3 py-1.5 font-semibold" style={{ color: p.color }}>{p.cat}</td>
+                      <td className="px-2 py-1.5 text-center font-bold text-amber-600">{p.malades}</td>
+                      <td className="px-2 py-1.5 text-center">{formatNumber(p.effectif)}</td>
+                      <td className="px-2 py-1.5 text-center font-bold">{p.taux.toFixed(1)} %</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {morbiditeEspeces.some((l) => l.malades > 0) && (
+            <div>
+              <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">Espèces concernées</p>
+              <div className="overflow-x-auto rounded-lg border border-gray-100">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Espèce</th><th className="px-3 py-2 text-left">Catégorie</th><th className="px-2 py-2 text-center">Malades</th><th className="px-2 py-2 text-center">Effectif</th><th className="px-2 py-2 text-center">Morbidité</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {morbiditeEspeces.filter((l) => l.malades > 0).map((l) => (
+                      <tr key={l.nom}>
+                        <td className="px-3 py-1.5 font-semibold">{l.nom}</td>
+                        <td className="px-3 py-1.5 text-gray-500">{l.cat}</td>
+                        <td className="px-2 py-1.5 text-center font-bold text-amber-600">{l.malades}</td>
+                        <td className="px-2 py-1.5 text-center">{formatNumber(l.effectif)}</td>
+                        <td className="px-2 py-1.5 text-center font-bold">{l.taux.toFixed(1)} %</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">Prévision (7 prochains jours)</p>
+            {morbiditePrevision.length ? (
+              <div className="flex flex-wrap gap-2">
+                {morbiditePrevision.map((v, i) => (
+                  <span key={i} className="rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">J+{i + 1} : {v.toFixed(1)} %</span>
+                ))}
+              </div>
+            ) : <p className="text-sm text-gray-400">Pas assez de données pour une prévision.</p>}
+            <p className="mt-2 text-[11px] text-gray-400">Estimation indicative basée sur la tendance récente — à confirmer par le suivi terrain.</p>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal : détails décès avec motifs */}
       <Modal open={mortaliteOpen} onClose={() => setMortaliteOpen(false)} size="lg" title="Détails — Taux de mortalité">
@@ -645,7 +776,7 @@ function CategorieDetail({ cat, onClose, especes, dernier, invPeriode }) {
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Distribution des effectifs</p>
             <div className="h-56">
               {data.totalFin > 0
-                ? <Bar data={distribution} options={{ maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }} />
+                ? <Bar data={distribution} options={{ maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { precision: 0 } } } }} />
                 : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif enregistré pour cette catégorie.</p>}
             </div>
           </div>

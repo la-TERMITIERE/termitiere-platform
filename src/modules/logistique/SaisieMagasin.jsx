@@ -26,14 +26,21 @@ export default function SaisieMagasin() {
   const { user, role } = useAuth()
   const { data: inventaires } = useCollection('logistique_inventaires')
   const { data: demandes } = useCollection('logistique_demandes')
+  const { data: retoursCol } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
   const saveMateriel = useLogistiqueStore((s) => s.saveMateriel)
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
   const [saving, setSaving] = useState(false)
-  const [mvtModal, setMvtModal] = useState(null) // { id, dir, nom, unite }
+  const [mvtModal, setMvtModal] = useState(null) // { id, dir, nom, unite } — entrées/sorties (éditable)
+  const [retourDetail, setRetourDetail] = useState(null) // { nom, lignes } — retours (lecture seule)
   const [addModal, setAddModal] = useState(false)
+
+  // Retours du jour pour un matériel (source = page « Retour matériel », lecture seule ici).
+  const retoursDuJour = (matId) => (retoursCol || [])
+    .filter((r) => r.date === date && r.materielId === matId)
+    .map((r) => ({ type: r.type, qte: parseInt(r.qte) || 0, motif: r.motif, prestationNum: r.prestationNum, agentNom: r.agentNom }))
   const [seedInit, setSeedInit] = useState({}) // stock initial des articles fraîchement créés : { date: { id } }
 
   const peutSaisir = role === 'agent'
@@ -48,12 +55,14 @@ export default function SaisieMagasin() {
     const s = {}
     materiel.forEach((m) => {
       const saved = inv.materiels?.[m.id]
-      const { entrees, sorties, retours } = mouvementsDepuisSaisie(saved)
+      const { entrees, sorties } = mouvementsDepuisSaisie(saved)
       const init = saved?.init !== undefined ? saved.init : prevInv?.materiels?.[m.id]?.fin ?? seeds[m.id] ?? 0
-      s[m.id] = { init, entrees, sorties, retours }
+      // Les retours ne sont PLUS saisis ici : ils proviennent de la page « Retour
+      // matériel » (collection logistique_retours), affichés en lecture seule.
+      s[m.id] = { init, entrees, sorties, retours: retoursDuJour(m.id) }
     })
     setStock(s)
-  }, [date, inventaires, materiel, seedInit])
+  }, [date, inventaires, materiel, seedInit, retoursCol])
 
   // Création d'un nouveau matériel (+ éventuelle nouvelle catégorie) depuis la saisie.
   function handleAddMateriel({ nom, cat, unite, coutAchat, initial }) {
@@ -185,7 +194,8 @@ export default function SaisieMagasin() {
                         <MvtCell total={totEnt} tone="green" onClick={() => setMvtModal({ id: m.id, dir: 'entree', nom: m.nom, unite: m.unite })} />
                         <MvtCell total={sommeMouvements(d.sorties)} tone="amber" sub={autoSor > 0 ? `+${autoSor} auto` : null}
                           onClick={() => setMvtModal({ id: m.id, dir: 'sortie', nom: m.nom, unite: m.unite })} />
-                        <MvtCell total={totRet} tone="sky" onClick={() => setMvtModal({ id: m.id, dir: 'retour', nom: m.nom, unite: m.unite })} />
+                        <MvtCell total={totRet} tone="sky" sub="🔒 via Retour matériel"
+                          onClick={() => setRetourDetail({ nom: m.nom, lignes: d.retours || [] })} />
                         <td className="px-2 py-1.5 text-center font-bold text-secondary">{fin}</td>
                       </tr>
                     )
@@ -206,6 +216,30 @@ export default function SaisieMagasin() {
         onClose={() => setMvtModal(null)}
         onChange={(lignes) => setLignes(mvtModal.id, mvtModal.dir, lignes)}
       />
+
+      {/* Retours — LECTURE SEULE (saisis via la page « Retour matériel ») */}
+      <Modal open={!!retourDetail} onClose={() => setRetourDetail(null)} title={`Retours — ${retourDetail?.nom || ''}`}>
+        <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          🔒 Les retours s'enregistrent depuis la page <strong>Retour matériel</strong> (pour la traçabilité). Ils sont en lecture seule ici.
+        </p>
+        {(!retourDetail?.lignes?.length) ? (
+          <p className="py-4 text-center text-sm text-gray-400">Aucun retour ce jour pour ce matériel.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="p-2 text-left">État</th><th className="p-2 text-center">Qté</th><th className="p-2 text-left">Prestation</th><th className="p-2 text-left">Motif</th></tr></thead>
+            <tbody>
+              {retourDetail.lignes.map((l, i) => (
+                <tr key={i} className="border-t">
+                  <td className={`p-2 font-semibold ${l.type === 'OK' ? 'text-green-600' : 'text-red-600'}`}>{l.type}</td>
+                  <td className="p-2 text-center">{l.qte}</td>
+                  <td className="p-2 text-xs text-gray-500">{l.prestationNum || '—'}</td>
+                  <td className="p-2 text-gray-600">{l.motif || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Modal>
 
       <AddMaterielModal
         open={addModal}

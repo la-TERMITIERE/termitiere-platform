@@ -23,7 +23,9 @@ export default function Factures() {
   const [open, setOpen] = useState(false)
   const [prestId, setPrestId] = useState('')
 
-  const brouillons = prestations.filter((p) => p.statut === 'brouillon')
+  // L'autorisation vient AVANT la facturation : on ne facture QUE les prestations
+  // approuvées (par un gérant / la direction) et pas encore facturées.
+  const brouillons = prestations.filter((p) => p.approuvee && p.statut !== 'facturee' && p.statut !== 'annulee')
   const liste = useMemo(() => [...factures].sort((a, b) => (a.date < b.date ? 1 : -1)), [factures])
 
   async function emettre() {
@@ -38,7 +40,7 @@ export default function Factures() {
     })
     await updateItem('logistique_prestations', p.id, { statut: 'facturee', factureNum: num })
     await audit('logistique', 'FACTURE', `${num} — ${formatMoney(p.total)}`)
-    toast.success(`Facture ${num} émise ✓ — demandez maintenant l'autorisation de sortie`)
+    toast.success(`Facture ${num} émise ✓`)
     setOpen(false)
   }
 
@@ -50,8 +52,13 @@ export default function Factures() {
         </div>
       )}
       <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        <strong>Workflow :</strong> Prestation → Facture → Autorisation hiérarchique → Sortie magasin automatique
+        <strong>Workflow :</strong> Prestation → <strong>Approbation (gérant / direction)</strong> → Facture → Sortie magasin
       </div>
+      {peutFacturer && !brouillons.length && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Aucune prestation approuvée à facturer. Une prestation doit d'abord être <strong>approuvée</strong> par un gérant / la direction (onglet Prestations).
+        </div>
+      )}
       {peutFacturer && (
         <div className="flex justify-end">
           <Button onClick={() => { setPrestId(brouillons[0]?.id || ''); setOpen(true) }} disabled={!brouillons.length}>

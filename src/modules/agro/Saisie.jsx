@@ -9,7 +9,7 @@
 //  - Le type « Décès » exige un motif.
 //  - EF Final = EF Initial + Σ Entrées − Σ Sorties (≥ 0) — colonne calculée.
 //  - L'EF Final du jour devient l'EF Initial du jour suivant.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Save, Send, CheckCircle2, Plus, Trash2, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -53,6 +53,13 @@ export default function Saisie() {
   const [saving, setSaving] = useState(false)
   const [mvtModal, setMvtModal] = useState(null) // { id, kind, dir, nom }
   const [addModal, setAddModal] = useState(null) // { kind: 'animal' | 'aliment' }
+  // Brouillon : passe à true dès que l'agent modifie quelque chose → déclenche
+  // l'auto-enregistrement (anti-perte) ; remis à false après enregistrement / report.
+  const dirtyRef = useRef(false)
+  const draftRef = useRef({})            // dernières valeurs (lues dans l'intervalle)
+  const lastSaveRef = useRef(0)          // horodatage du dernier auto-enregistrement (cadence 1 h)
+  const [draftSavedAt, setDraftSavedAt] = useState(null) // pour l'affichage du bandeau
+  const markDirty = () => { dirtyRef.current = true }
 
   // Seuls les agents peuvent saisir ; admins et contrôleurs sont en lecture seule.
   const peutSaisir = role === 'agent'
@@ -74,7 +81,7 @@ export default function Saisie() {
     especes.forEach((e) => {
       const saved = inv.animaux?.[e.id]
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'animaux')
-      a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties }
+      a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties, malades: saved?.malades || 0 }
     })
     setAnim(a)
 
@@ -93,12 +100,22 @@ export default function Saisie() {
   const setInit = (kind, id, val) => {
     const v = Math.max(0, parseFloat(val) || 0)
     const setter = kind === 'animaux' ? setAnim : setAlim
+    markDirty()
     setter((s) => ({ ...s, [id]: { ...s[id], init: v } }))
+  }
+
+  // Nombre d'animaux MALADES du jour (par espèce) — base du taux de morbidité.
+  // N'affecte pas l'effectif (un animal malade reste compté).
+  const setMalades = (id, val) => {
+    const v = Math.max(0, parseInt(val) || 0)
+    markDirty()
+    setAnim((s) => ({ ...s, [id]: { ...s[id], malades: v } }))
   }
 
   // Remplace les mouvements de l'utilisateur courant ; conserve ceux des autres agents.
   const setLignes = (kind, id, dir, lignes) => {
     if (!user) return
+    markDirty()
     const field = dir === 'entree' ? 'entrees' : 'sorties'
     const setter = kind === 'animaux' ? setAnim : setAlim
     setter((s) => {
@@ -123,6 +140,46 @@ export default function Saisie() {
   // sortantes des autres espèces : −1 à l'origine, +1 à la destination).
   const mutIn = useMemo(() => mutationsEntrantes(anim), [anim])
 
+  // Mémorise les dernières valeurs pour l'auto-enregistrement (lues dans le timeout).
+  draftRef.current = { especes, aliments, anim, alim, autoSorOf, mutIn, user, inventaires, date, peutSaisir }
+
+  // Repart « propre » quand on change de jour (formulaire rechargé).
+  useEffect(() => { dirtyRef.current = false }, [date])
+
+  // AUTO-ENREGISTREMENT DU BROUILLON (anti-perte). Cadence : AU PLUS une fois par
+  // HEURE tant qu'il y a des changements non enregistrés, MAIS forcé en fin de journée
+  // (≥ 23:58) pour capturer la journée AVANT le changement de jour (sinon AutoCarryForward
+  // partirait d'un report vide). Marqué brouillon (autoDraft), SANS notifier les responsables.
+  useEffect(() => {
+    if (!peutSaisir) return
+    const UNE_HEURE = 60 * 60 * 1000
+    const tick = async () => {
+      if (!dirtyRef.current) return
+      const now = new Date()
+      const finDeJournee = now.getHours() === 23 && now.getMinutes() >= 58 // « 23h59 »
+      if (!finDeJournee && Date.now() - (lastSaveRef.current || 0) < UNE_HEURE) return
+      const d = draftRef.current
+      if (!d.user) return
+      const aDuContenu =
+        d.especes.some((e) => (d.anim[e.id]?.entrees?.length || d.anim[e.id]?.sorties?.length || (d.anim[e.id]?.malades || 0) > 0)) ||
+        d.aliments.some((x) => (d.alim[x.id]?.entrees?.length || d.alim[x.id]?.sorties?.length))
+      if (!aDuContenu) return
+      try {
+        const { animaux, aliments: alimentsOut } = aggregateInventaire(d)
+        const dejaEnregistre = !!getInventaire(d.inventaires, d.date)?.savedAt
+        await setItem('agro_inventaires', d.date, {
+          date: d.date, agentId: d.user.uid, agentNom: d.user.nom,
+          autoSavedAt: ts(), autoDraft: !dejaEnregistre, animaux, aliments: alimentsOut
+        })
+        dirtyRef.current = false
+        lastSaveRef.current = Date.now()
+        setDraftSavedAt(Date.now())
+      } catch (e) { /* brouillon best-effort : ne jamais déranger l'agent */ }
+    }
+    const id = setInterval(tick, 30000) // contrôle toutes les 30 s
+    return () => clearInterval(id)
+  }, [peutSaisir]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Création d'un nouvel article (+ éventuelle nouvelle catégorie).
   function handleAddArticle({ nom, cat, initial, unite }) {
     const kind = addModal.kind
@@ -135,6 +192,7 @@ export default function Saisie() {
     if (kind === 'animal') saveEspece(article)
     else saveAliment(article)
     setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
+    markDirty()
     setTab(kind === 'animal' ? 'animaux' : 'aliments')
     setAddModal(null)
     toast.success(`${article.nom} ajouté ✓ — pensez à enregistrer la saisie`)
@@ -165,39 +223,13 @@ export default function Saisie() {
 
     setSaving(true)
     try {
-      let totEnt = 0, totSor = 0
-      const animaux = {}
-      especes.forEach((e) => {
-        const d = anim[e.id] || { init: 0, entrees: [], sorties: [] }
-        const autoSor = autoSorOf(e.id)
-        const mIn = mutIn[e.id] || 0
-        const agg = agregerAnimal(d, autoSor, mIn)
-        animaux[e.id] = {
-          ...agg,
-          entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
-          sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom),
-          autoSor
-        }
-        totEnt += sommeMouvements(d.entrees) + mIn
-        totSor += sommeMouvements(d.sorties) + autoSor
-      })
-      const alimentsOut = {}
-      aliments.forEach((x) => {
-        const d = alim[x.id] || { init: 0, entrees: [], sorties: [] }
-        const autoSor = autoSorOf(x.id, 'aliments')
-        const agg = agregerAliment(d, autoSor)
-        alimentsOut[x.id] = {
-          ...agg,
-          entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
-          sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom),
-          autoSor
-        }
-        totSor += sommeMouvements(d.sorties) + autoSor
-      })
+      const { animaux, aliments: alimentsOut, totEnt, totSor } =
+        aggregateInventaire({ especes, aliments, anim, alim, autoSorOf, mutIn, user })
 
       await setItem('agro_inventaires', date, {
         date, agentId: user.uid, agentNom: user.nom, savedAt: ts(), animaux, aliments: alimentsOut
       })
+      dirtyRef.current = false // saisie validée → plus de brouillon en attente
       const totalTetes = Object.values(animaux).reduce((s, a) => s + (a.fin || 0), 0)
       await audit('agro', 'SAISIE', `Saisie du ${date} : ${totEnt} entrée(s), ${totSor} sortie(s) — ${totalTetes} têtes au total`, {
         date, totalEntrees: totEnt, totalSorties: totSor, totalTetes,
@@ -271,11 +303,14 @@ export default function Saisie() {
               <th className="bg-gray-50 px-2 py-2 text-center">Entrées</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
               <th className="bg-gray-50 px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
+              {kind === 'animaux' && (
+                <th className="bg-gray-50 px-2 py-2 text-center" title="Nombre d'animaux malades ce jour — sert au taux de morbidité">Malades 🤒</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {cats.map((cat) => (
-              <FragmentCat key={cat} cat={cat} color={catColor(cat)} span={5}>
+              <FragmentCat key={cat} cat={cat} color={catColor(cat)} span={kind === 'animaux' ? 6 : 5}>
                 {articles.filter((a) => a.cat === cat).map((a) => {
                   const d = src[a.id] || { init: 0, entrees: [], sorties: [] }
                   const autoSor = autoSorOf(a.id, kind)
@@ -310,6 +345,20 @@ export default function Saisie() {
                       <td className="px-2 py-1.5 text-center font-bold text-primary-dark">
                         {fin}{kind === 'aliments' && a.unite ? <span className="ml-0.5 text-[10px] font-normal text-gray-400">{a.unite}</span> : null}
                       </td>
+                      {kind === 'animaux' && (
+                        <td className="px-2 py-1.5 text-center">
+                          <input
+                            type="number" min="0" max={fin} value={d.malades ?? 0}
+                            readOnly={!peutSaisir}
+                            title="Nombre d'animaux malades ce jour"
+                            onChange={(e) => setMalades(a.id, e.target.value)}
+                            onFocus={(e) => peutSaisir && e.target.select()}
+                            className={`w-16 rounded border px-1 py-1 text-center text-sm focus:outline-none ${
+                              peutSaisir ? 'border-amber-200 focus:border-amber-500' : 'num-readonly cursor-not-allowed border-gray-200'
+                            }`}
+                          />
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -343,6 +392,11 @@ export default function Saisie() {
       {!peutSaisir && (
         <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 font-semibold">
           👁️ Mode consultation — seuls les agents peuvent saisir et enregistrer des données.
+        </div>
+      )}
+      {!dejaSaisi && draftSavedAt && (
+        <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} — vos données sont en sécurité même sans clic sur « Enregistrer ». Pensez tout de même à enregistrer pour notifier les responsables.
         </div>
       )}
       {dejaSaisi && (
@@ -410,6 +464,42 @@ export default function Saisie() {
       />
     </div>
   )
+}
+
+// Agrège l'état du formulaire en document inventaire (animaux + aliments + totaux).
+// Réutilisé par l'enregistrement MANUEL et par l'AUTO-ENREGISTREMENT du brouillon.
+function aggregateInventaire({ especes, aliments, anim, alim, autoSorOf, mutIn, user }) {
+  let totEnt = 0, totSor = 0
+  const animaux = {}
+  especes.forEach((e) => {
+    const d = anim[e.id] || { init: 0, entrees: [], sorties: [] }
+    const autoSor = autoSorOf(e.id, 'animaux')
+    const mIn = mutIn[e.id] || 0
+    const agg = agregerAnimal(d, autoSor, mIn)
+    animaux[e.id] = {
+      ...agg,
+      malades: Math.max(0, parseInt(d.malades) || 0),
+      entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
+      sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom),
+      autoSor
+    }
+    totEnt += sommeMouvements(d.entrees) + mIn
+    totSor += sommeMouvements(d.sorties) + autoSor
+  })
+  const alimentsOut = {}
+  aliments.forEach((x) => {
+    const d = alim[x.id] || { init: 0, entrees: [], sorties: [] }
+    const autoSor = autoSorOf(x.id, 'aliments')
+    const agg = agregerAliment(d, autoSor)
+    alimentsOut[x.id] = {
+      ...agg,
+      entrees: annoterLignesAgent(d.entrees || [], user.uid, user.nom),
+      sorties: annoterLignesAgent(d.sorties || [], user.uid, user.nom),
+      autoSor
+    }
+    totSor += sommeMouvements(d.sorties) + autoSor
+  })
+  return { animaux, aliments: alimentsOut, totEnt, totSor }
 }
 
 // Détail lisible des mouvements (pour le journal d'activité).

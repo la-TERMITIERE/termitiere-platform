@@ -51,6 +51,23 @@ export default function Factures() {
     [factures, recherche]
   )
 
+  // Clients déjà facturés (uniques par nom, fiche la plus récente), triés par nom.
+  // → menu déroulant pour éviter les fautes de frappe + remplissage auto des coordonnées.
+  const clientsConnus = useMemo(() => {
+    const map = {}
+    factures.forEach((f) => {
+      const nom = (f.client?.nom || '').trim()
+      if (!nom) return
+      if (!map[nom] || (f.date || '') > (map[nom]._date || '')) {
+        map[nom] = {
+          nom, _date: f.date || '',
+          tel: f.client?.tel || '', email: f.client?.email || '', adresse: f.client?.adresse || ''
+        }
+      }
+    })
+    return Object.values(map).sort((a, b) => a.nom.localeCompare(b.nom))
+  }, [factures])
+
   // ── Calculs ──
   const calcTotaux = (f) => {
     const totalHT = (f.lignes || []).reduce((s, l) => s + (l.total || 0), 0)
@@ -169,7 +186,28 @@ export default function Factures() {
           <>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
-              <FormGroup label="Client" required><Input value={modal.facture.client.nom} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom: e.target.value } } }))} /></FormGroup>
+              <FormGroup label="Client" required hint="Choisissez un client existant ou tapez un nouveau nom">
+                <Input
+                  list="clients-list"
+                  value={modal.facture.client.nom}
+                  onChange={(e) => {
+                    const nom = e.target.value
+                    const connu = clientsConnus.find((c) => c.nom.toLowerCase() === nom.trim().toLowerCase())
+                    setModal((m) => ({
+                      ...m,
+                      facture: {
+                        ...m.facture,
+                        client: connu
+                          ? { ...m.facture.client, nom, tel: connu.tel, email: connu.email, adresse: connu.adresse }
+                          : { ...m.facture.client, nom }
+                      }
+                    }))
+                  }}
+                />
+                <datalist id="clients-list">
+                  {clientsConnus.map((c) => <option key={c.nom} value={c.nom} />)}
+                </datalist>
+              </FormGroup>
               <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
               <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
             </div>

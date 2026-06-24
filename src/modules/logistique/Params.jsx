@@ -1,17 +1,21 @@
-// Paramètres Logistique — export multi-sections + réinitialisation des données.
-import { useState } from 'react'
-import { FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react'
+// Paramètres Logistique — export/import JSON + export multi-sections + réinitialisation.
+import { useRef, useState } from 'react'
+import { FileSpreadsheet, Trash2, AlertTriangle, Download, Upload } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { useLogistiqueStore } from './store/referentielStore'
 import { isFullAccessRole } from '../../core/roles'
-import { removeItem } from '../../core/db'
+import { getAll, setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
+import { formatDateShort, todayStr } from '../../utils/formatters'
+
+// Collections logistique sauvegardées/restaurées par l'export/import JSON.
+const JSON_COLS = ['logistique_inventaires', 'logistique_factures', 'logistique_prestations', 'logistique_demandes', 'logistique_retours', 'logistique_clients']
 
 const EXPORT_OPTIONS = [
   { id: 'inventaires', label: 'Saisies magasin', emoji: '📦' },
@@ -33,12 +37,54 @@ export default function Params() {
   const { data: factures } = useCollection('logistique_factures')
   const { data: prestations } = useCollection('logistique_prestations')
   const { data: demandes } = useCollection('logistique_demandes')
+  const saveMateriel = useLogistiqueStore((s) => s.saveMateriel)
 
   const [exportChoix, setExportChoix] = useState(new Set(['inventaires', 'factures', 'prestations', 'demandes']))
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const fileRef = useRef(null)
+
+  // Sauvegarde JSON complète (toutes les collections logistique + référentiel matériel).
+  async function exportJSON() {
+    try {
+      const dump = { exportedAt: new Date().toISOString() }
+      for (const c of JSON_COLS) dump[c] = await getAll(c)
+      dump.materiel = useLogistiqueStore.getState().materiel
+      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `termitiere-logistique-backup-${todayStr()}.json`
+      a.click()
+      toast.success('Sauvegarde JSON générée ✓')
+    } catch (e) { toast.error('Erreur export : ' + e.message) }
+  }
+
+  // Restauration depuis une sauvegarde JSON (réécrit chaque enregistrement → synchronisé).
+  function importJSON(e) {
+    if (!isFullAccessRole(role)) return toast.error('Action réservée à l\'administrateur')
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result)
+        let n = 0
+        for (const c of JSON_COLS) {
+          for (const row of data[c] || []) {
+            if (row && row.id) { await setItem(c, row.id, row); n++ }
+          }
+        }
+        for (const m of data.materiel || []) { if (m && m.id) { await saveMateriel(m); n++ } }
+        if (n === 0) return toast.error('Aucune donnée logistique reconnue dans ce fichier')
+        await audit('logistique', 'IMPORT', `Import JSON — ${n} enregistrement(s) restauré(s)`)
+        toast.success(`Import réussi ✓ — ${n} enregistrement(s) restauré(s)`)
+      } catch (err) { toast.error('Fichier invalide') }
+      finally { if (fileRef.current) fileRef.current.value = '' }
+    }
+    reader.readAsText(file)
+  }
 
   const toggleExport = (id) => setExportChoix((prev) => {
     const n = new Set(prev)
@@ -142,6 +188,23 @@ export default function Params() {
 
   return (
     <div className="space-y-4">
+      <Card title="Sauvegarde / Restauration (JSON)">
+        <p className="mb-3 text-sm text-gray-500">
+          Téléchargez une sauvegarde complète des données logistique (saisies, factures, prestations,
+          autorisations, retours, clients + référentiel matériel){isAdmin ? ', ou restaurez une sauvegarde en cas de perte' : ''}.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={exportJSON}><Download size={16} /> Sauvegarde JSON</Button>
+          {isAdmin && (
+            <>
+              <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload size={16} /> Importer une sauvegarde</Button>
+              <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={importJSON} />
+            </>
+          )}
+        </div>
+        {!isAdmin && <p className="mt-2 text-xs text-gray-400">L'import est réservé à l'administrateur.</p>}
+      </Card>
+
       <Card title="Export des données">
         <p className="mb-3 text-sm text-gray-500">Sélectionnez les sections à inclure dans l'export Excel.</p>
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

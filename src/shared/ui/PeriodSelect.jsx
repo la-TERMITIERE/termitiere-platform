@@ -34,7 +34,9 @@ export function usePeriodSelect(defaultPreset = '30') {
           value={preset}
           onChange={(e) => setPreset(e.target.value)}
         >
-          {PRESETS.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
+          {/* Couleurs explicites sur les options : restent lisibles même quand le
+              parent force un texte blanc (ex. barre sombre des Analyses). */}
+          {PRESETS.map((p) => <option key={p.v} value={p.v} className="bg-white text-gray-900">{p.label}</option>)}
         </select>
       </div>
       {preset === 'custom' && (
