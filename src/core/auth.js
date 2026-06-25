@@ -16,6 +16,10 @@ import {
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, setItem, addItem } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole } from './roles'
+import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
+
+// Cible auto-hébergée : authentification via Supabase Auth (identités réelles + RLS).
+const USE_SUPABASE_AUTH = import.meta.env.VITE_USE_SUPABASE === 'true'
 
 // Liste de référence de tous les modules de la plateforme.
 const ALL_MODULES = ['agro', 'logistique', 'evenementiel', 'foncier', 'rh']
@@ -112,9 +116,18 @@ export const useAuthStore = create((set, get) => ({
 
   // Restaure la session locale (par appareil) et amorce les comptes si besoin.
   init: () => {
-    if (isFirebaseConfigured) {
-      // Amorçage des comptes par défaut en tâche de fond (premier déploiement).
+    if (isFirebaseConfigured && !USE_SUPABASE_AUTH) {
+      // Amorçage des comptes par défaut en tâche de fond (premier déploiement Firebase).
       ensureSeed().catch((e) => console.warn('[auth] amorçage :', e?.message))
+    }
+    // Cible auto-hébergée : sans session Supabase valide, on déconnecte (base fermée par RLS).
+    if (USE_SUPABASE_AUTH && supabase) {
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data?.session) {
+          localStorage.removeItem(DEMO_SESSION_KEY)
+          set({ user: null, role: null, modules: [] })
+        }
+      }).catch(() => {})
     }
     try {
       const raw = localStorage.getItem(DEMO_SESSION_KEY)
@@ -135,6 +148,38 @@ export const useAuthStore = create((set, get) => ({
     if (!id || !pass) {
       set({ isLoading: false, error: 'Remplissez les deux champs' })
       return false
+    }
+
+    // ── Cible AUTO-HÉBERGÉE : authentification Supabase Auth (identités réelles + RLS) ──
+    if (USE_SUPABASE_AUTH && supabase) {
+      try {
+        const email = loginToEmailSupabase(id)
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass })
+        if (error || !data?.user) {
+          set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' })
+          return false
+        }
+        // Profil complet depuis tp_users (lecture autorisée car désormais authentifié).
+        let profile = await findByLogin(id)
+        if (!profile) {
+          profile = { login: id, nom: data.user.user_metadata?.nom || id, role: data.user.user_metadata?.role || 'agent', modules: [] }
+        }
+        if (profile.actif === false) {
+          await supabase.auth.signOut()
+          set({ isLoading: false, error: 'Compte désactivé par l\'administrateur' })
+          return false
+        }
+        const u = sessionFromProfile(profile)
+        localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
+        set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+        addItem('audit_global', {
+          userId: u.uid, userNom: u.nom, module: 'portail', action: 'CONNEXION', details: '', timestamp: Date.now()
+        }).catch(() => {})
+        return true
+      } catch (e) {
+        set({ isLoading: false, error: 'Connexion impossible — vérifiez le réseau' })
+        return false
+      }
     }
 
     // ── Mode DÉMO (aucune base) ──
@@ -220,8 +265,9 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
-    // Ferme aussi la session Firebase Auth (sinon le jeton resterait valide après
-    // déconnexion → accès possible aux données sous règles verrouillées).
+    // Ferme aussi la session du service d'auth (sinon le jeton resterait valide
+    // après déconnexion → accès possible aux données sous règles verrouillées / RLS).
+    if (USE_SUPABASE_AUTH && supabase) { try { await supabase.auth.signOut() } catch (e) { /* ignore */ } }
     if (auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
     localStorage.removeItem(DEMO_SESSION_KEY)
     set({ user: null, role: null, modules: [] })

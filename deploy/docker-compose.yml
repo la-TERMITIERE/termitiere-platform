@@ -1,0 +1,35 @@
+# Déploiement du FRONTEND La Termitière (app + reverse-proxy API) via Caddy.
+# Le BACKEND (PostgreSQL + Auth + API + Realtime) est fourni séparément par le stack
+# Supabase auto-hébergé officiel (voir GUIDE_INSTALLATION_VPS.md), exposé sur le port
+# hôte 8000 (Kong). Caddy proxifie {DOMAIN_API} → host.docker.internal:8000.
+#
+# Lancement :  cd deploy && cp .env.example .env  (puis éditer) &&  docker compose up -d --build
+
+services:
+  web:
+    build:
+      context: ..                      # racine du dépôt
+      dockerfile: deploy/Dockerfile
+      args:
+        VITE_USE_SUPABASE: "true"
+        VITE_SUPABASE_URL: "https://${DOMAIN_API}"
+        VITE_SUPABASE_ANON_KEY: "${VITE_SUPABASE_ANON_KEY}"
+    image: termitiere-web
+    container_name: termitiere-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN_APP: "${DOMAIN_APP}"
+      DOMAIN_API: "${DOMAIN_API}"
+    extra_hosts:
+      # Permet à Caddy (dans le conteneur) d'atteindre le Kong de Supabase sur l'hôte.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - caddy_data:/data       # certificats Let's Encrypt (persistés)
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

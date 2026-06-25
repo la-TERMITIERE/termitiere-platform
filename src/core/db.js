@@ -1,12 +1,17 @@
-// Couche de données de la plateforme → Firebase Realtime Database (db.firebase.js).
+// Aiguillage de la couche de données (backend interchangeable, même API publique).
 //
-// L'API publique (subscribeCollection, getAll, getOne, addItem, setItem, updateItem,
-// removeItem, ts) est volontairement isolée ici : aucun autre fichier de l'application
-// n'a besoin de connaître le backend. Les écritures sont assainies (sanitize.js) et
-// limitées en débit (rateLimit.js) au niveau de db.firebase.js.
+//   - PRODUCTION (défaut)                    → Firebase Realtime Database (db.firebase.js)
+//   - Cible auto-hébergée (VITE_USE_SUPABASE=true) → PostgreSQL / Supabase (db.supabase.js)
+//
+// Aucun autre fichier de l'app n'a besoin de savoir quel backend est utilisé. Les
+// garde-fous (sanitize, rateLimit) sont appliqués dans chaque implémentation.
 import * as firebaseImpl from './db.firebase'
+import * as supabaseImpl from './db.supabase'
 
-const impl = firebaseImpl
+const useSupabase = import.meta.env.VITE_USE_SUPABASE === 'true'
+const impl = useSupabase ? supabaseImpl : firebaseImpl
+
+if (useSupabase) console.info('[db] Backend de données : PostgreSQL / Supabase (auto-hébergé)')
 
 export const subscribeCollection = impl.subscribeCollection
 export const getAll = impl.getAll
