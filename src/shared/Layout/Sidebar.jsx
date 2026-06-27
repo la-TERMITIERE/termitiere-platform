@@ -48,38 +48,38 @@ export default function Sidebar({ open, onClose }) {
         style={{ background: activeModule?.sidebarGradient || `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
       >
         {/* En-tête marque */}
-        <div className="flex flex-col items-center px-4 pt-5 pb-3 gap-2">
-          <div className="flex w-full items-center justify-between">
-            {/* Logo rond avec bordure qui pulse — couleur selon le module actif */}
-            <div className="relative flex shrink-0 items-center justify-center">
-              <span className="absolute h-14 w-14 rounded-full animate-pulse"
-                style={{ boxShadow: `0 0 0 3px #ffffff, 0 0 14px 5px ${accentColor}88` }} />
+        <div className="px-4 pt-5 pb-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+
+            {/* Logo rond avec bordure qui clignote légèrement */}
+            <style>{`
+              @keyframes sb-glow {
+                0%   { box-shadow: 0 0 0 2px #ffffffaa, 0 0 6px 1px ${accentColor}44; }
+                50%  { box-shadow: 0 0 0 3px #ffffff,   0 0 12px 4px ${accentColor}88; }
+                100% { box-shadow: 0 0 0 2px #ffffffaa, 0 0 6px 1px ${accentColor}44; }
+              }
+            `}</style>
+            <div style={{ position: 'relative', flexShrink: 0, width: 48, height: 48 }}>
+              <span style={{
+                position: 'absolute', inset: -4, borderRadius: '50%',
+                animation: 'sb-glow 2.5s ease-in-out infinite'
+              }} />
               <img src="/termitiere-logo.png" alt="La Termitière"
                 onError={(e) => { e.target.src = '/logo-mark.png' }}
-                className="h-12 w-12 rounded-full object-cover bg-white p-1 shadow-lg"
-                style={{ ring: `2px solid #ffffff` }} />
+                style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.3)', display: 'block' }} />
             </div>
 
-            {/* Nom + module */}
-            <div className="min-w-0 flex-1 pl-3">
-              <p
-                className="truncate text-sm font-extrabold leading-tight"
-                style={{ background: `linear-gradient(90deg, #ffffff 0%, ${accentColor} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}
-              >
+            {/* Nom + module — sans truncate ni min-w-0 */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.2, letterSpacing: 0.5, color: '#ffffff', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
                 LA TERMITIÈRE
               </p>
-              {activeModule ? (
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-white/60 mt-0.5">
-                  {activeModule.nom}
-                </p>
-              ) : (
-                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-white/60 mt-0.5">
-                  Toujours dans l'action
-                </p>
-              )}
+              <p style={{ margin: 0, marginTop: 2, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,0.65)' }}>
+                {activeModule ? activeModule.nom : "Toujours dans l'action"}
+              </p>
             </div>
 
-            <button onClick={onClose} className="md:hidden shrink-0" aria-label="Fermer le menu">
+            <button onClick={onClose} className="md:hidden" aria-label="Fermer" style={{ flexShrink: 0 }}>
               <X size={20} />
             </button>
           </div>

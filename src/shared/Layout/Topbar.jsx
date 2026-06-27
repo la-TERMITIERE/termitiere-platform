@@ -1,27 +1,26 @@
-// Barre supérieure : logo + nom entreprise coloré selon le module actif.
+// Barre supérieure — styles inline pour garantir le rendu dès le 1er chargement.
 import { Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { getModule, MODULE_NAV } from '../modules'
 import NotificationBell from './NotificationBell'
 
-// Config visuelle complète par module (couleur principale + secondaire)
 const MODULE_THEME = {
-  agro:        { color: '#2EAA3F', color2: '#1a6e27', logo: '/maxi-agro-logo.png',       nom: 'MAXI AGRO',             showModuleLogo: true  },
-  logistique:  { color: '#BC3C31', color2: '#1A1A1A', logo: '/logo_maxi_logistique.png', nom: 'Maxi Logistique',       showModuleLogo: true  },
-  garderie:    { color: '#E8390E', color2: '#F5A800', logo: '/garderie-logo.png',         nom: 'Garderie La Termitière',showModuleLogo: true  },
-  evenementiel:{ color: '#7c3aed', color2: '#4c1d95', logo: null,                         nom: 'BRIQUETERIE',           showModuleLogo: false },
-  foncier:     { color: '#059669', color2: '#065f46', logo: null,                         nom: 'FONCIER',               showModuleLogo: false },
-  rh:          { color: '#ea580c', color2: '#9a3412', logo: null,                         nom: 'COMPTABILITÉ',          showModuleLogo: false },
-  default:     { color: '#BC3C31', color2: '#1A1A1A', logo: null,                         nom: 'LA TERMITIÈRE',         showModuleLogo: false }
+  agro:         { color: '#2EAA3F', color2: '#1a6e27', logo: '/maxi-agro-logo.png',        nom: 'MAXI AGRO'              },
+  logistique:   { color: '#BC3C31', color2: '#1A1A1A', logo: '/logo_maxi_logistique.png',  nom: 'Maxi Logistique'        },
+  garderie:     { color: '#E8390E', color2: '#F5A800', logo: '/garderie-logo.png',          nom: 'Garderie La Termitière' },
+  evenementiel: { color: '#7c3aed', color2: '#4c1d95', logo: null,                          nom: 'BRIQUETERIE'            },
+  foncier:      { color: '#059669', color2: '#065f46', logo: null,                          nom: 'FONCIER'                },
+  rh:           { color: '#ea580c', color2: '#9a3412', logo: null,                          nom: 'COMPTABILITÉ'           },
+  default:      { color: '#BC3C31', color2: '#1A1A1A', logo: null,                          nom: 'LA TERMITIÈRE'          }
 }
 
 export default function Topbar({ onMenuToggle, user }) {
   const location = useLocation()
   const seg = location.pathname.split('/')[1]
   const mod = getModule(seg)
-
   const theme = MODULE_THEME[seg] || MODULE_THEME.default
-  const { color, color2 } = theme
+  const { color, color2, logo, nom } = theme
+  const hasModuleLogo = !!logo
 
   // Rubrique active
   let subLabel = 'Accueil'
@@ -30,7 +29,7 @@ export default function Topbar({ onMenuToggle, user }) {
     const match = [...nav].sort((a, b) => b.to.length - a.to.length)
       .find((n) => location.pathname === n.to || (!n.end && location.pathname.startsWith(n.to)))
     const label = match?.label || ''
-    subLabel = (label === 'Dashboard' || label === 'Tableau de bord') ? mod.nom : label ? label : mod.nom
+    subLabel = (!label || label === 'Dashboard' || label === 'Tableau de bord') ? nom : label
   } else if (location.pathname === '/dashboard') {
     subLabel = 'Tableau de bord global'
   } else if (location.pathname === '/utilisateurs') {
@@ -40,76 +39,63 @@ export default function Topbar({ onMenuToggle, user }) {
   }
 
   return (
-    <header
-      className="z-30 flex h-14 shrink-0 items-center gap-3 px-4 shadow-sm border-b"
-      style={{
-        background: `linear-gradient(135deg, ${color}12 0%, ${color2}08 100%)`,
-        borderBottomColor: color + '40'
-      }}
-    >
-      <button
-        onClick={onMenuToggle}
-        className="rounded-lg p-1.5 hover:bg-black/5 md:hidden"
-        style={{ color }}
-        aria-label="Ouvrir le menu"
-      >
+    <header style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      height: 56, padding: '0 16px', flexShrink: 0, zIndex: 30,
+      background: `linear-gradient(135deg, ${color}14 0%, ${color2}08 100%)`,
+      borderBottom: `1px solid ${color}35`,
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
+    }}>
+
+      {/* Bouton menu mobile */}
+      <button onClick={onMenuToggle}
+        style={{ color, padding: 6, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+        className="md:hidden" aria-label="Menu">
         <Menu size={22} />
       </button>
 
-      <div className="flex flex-1 items-center gap-3 min-w-0">
-        {theme.showModuleLogo ? (
-          /* Modules avec leur propre logo */
-          <>
-            <img src={theme.logo} alt={theme.nom} className="h-9 w-auto object-contain" />
-            <div className="min-w-0">
-              <span
-                className="block truncate text-base font-extrabold leading-tight"
-                style={{ background: `linear-gradient(90deg, ${color} 0%, ${color2} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-              >
-                {theme.nom}
-              </span>
-              <span className="block text-[10px] font-semibold truncate" style={{ color: color + 'cc' }}>
-                {subLabel}
-              </span>
-            </div>
-          </>
-        ) : (
-          /* Portail + modules sans logo propre : logo La Termitière rond */
-          <>
-            <div className="relative shrink-0 flex items-center justify-center">
-              <span
-                className="absolute h-10 w-10 rounded-full animate-pulse"
-                style={{ boxShadow: `0 0 0 2px ${color}, 0 0 10px 4px ${color}44` }}
-              />
-              <img
-                src="/termitiere-logo.png"
-                alt="La Termitière"
-                onError={(e) => { e.target.src = '/logo-mark.png' }}
-                className="h-8 w-8 rounded-full object-cover bg-white p-0.5 shadow"
-              />
-            </div>
-            <div className="min-w-0">
-              <span
-                className="block truncate text-sm font-extrabold leading-tight"
-                style={{ background: `linear-gradient(90deg, ${color} 0%, ${color2} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-              >
-                LA TERMITIÈRE
-              </span>
-              <span className="block text-[10px] font-semibold truncate" style={{ color: color + 'bb' }}>
-                {subLabel}
-              </span>
-            </div>
-          </>
-        )}
+      {/* Logo + Nom module */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+
+        {/* Tous les logos dans un cercle avec bordure qui clignote légèrement */}
+        <style>{`
+          @keyframes border-glow {
+            0%   { box-shadow: 0 0 0 1.5px ${color}cc, 0 0 6px 1px ${color}33; }
+            50%  { box-shadow: 0 0 0 2.5px ${color}, 0 0 10px 3px ${color}55; }
+            100% { box-shadow: 0 0 0 1.5px ${color}cc, 0 0 6px 1px ${color}33; }
+          }
+        `}</style>
+        <div style={{ position: 'relative', flexShrink: 0, width: 38, height: 38 }}>
+          <span style={{
+            position: 'absolute', inset: -4, borderRadius: '50%',
+            animation: 'border-glow 2.5s ease-in-out infinite'
+          }} />
+          {hasModuleLogo ? (
+            <img src={logo} alt={nom}
+              style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 3, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', display: 'block' }} />
+          ) : (
+            <img src="/termitiere-logo.png" alt="La Termitière"
+              onError={(e) => { e.target.src = '/logo-mark.png' }}
+              style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 2, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', display: 'block' }} />
+          )}
+        </div>
+
+        {/* Texte */}
+        <div style={{ minWidth: 0, overflow: 'hidden' }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 800, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: color }}>
+            {nom}
+          </p>
+          <p style={{ margin: 0, marginTop: 1, fontSize: 10, fontWeight: 600, color: color, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {subLabel}
+          </p>
+        </div>
       </div>
 
+      {/* Cloche + utilisateur */}
       <NotificationBell />
-      <div className="hidden items-center gap-2 sm:flex">
-        <span className="text-sm font-medium text-gray-600">{user?.nom}</span>
-        <span
-          className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
-          style={{ background: color + '18', color }}
-        >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} className="hidden sm:flex">
+        <span style={{ fontSize: 14, fontWeight: 500, color: '#4b5563' }}>{user?.nom}</span>
+        <span style={{ background: color + '18', color, borderRadius: 9999, padding: '2px 8px', fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>
           {user?.role}
         </span>
       </div>

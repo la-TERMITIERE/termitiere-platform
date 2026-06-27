@@ -11,26 +11,23 @@ export default function PortalHome() {
   const navigate = useNavigate()
   const { user, hasModule, isAdmin } = useAuth()
 
-  // Petits KPI résumés par module
-  const { data: inventaires } = useCollection('agro_inventaires')
-  const { data: prestations } = useCollection('logistique_prestations')
-  const { data: demandesLog } = useCollection('logistique_demandes')
-  const { data: productions } = useCollection('evenementiel_productions')
-  const { data: demandesBriq } = useCollection('evenementiel_demandes')
-  const { data: dossiersFoncier } = useCollection('foncier_dossiers')
+  // KPI résumés — chaque collection n'est chargée que si l'utilisateur a le module
+  const { data: inventaires }   = useCollection(hasModule('agro')        ? 'agro_inventaires'        : null)
+  const { data: prestations }   = useCollection(hasModule('logistique')  ? 'logistique_prestations'  : null)
+  const { data: demandesLog }   = useCollection(hasModule('logistique')  ? 'logistique_demandes'     : null)
+  const { data: productions }   = useCollection(hasModule('evenementiel')? 'evenementiel_productions': null)
+  const { data: demandesBriq }  = useCollection(hasModule('evenementiel')? 'evenementiel_demandes'   : null)
+  const { data: dossiersFoncier}= useCollection(hasModule('foncier')     ? 'foncier_dossiers'        : null)
+  const { data: garderieEnfants}= useCollection(hasModule('garderie')    ? 'garderie_enfants'        : null)
 
-  const dernier = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
-  const totalAnimaux = dernier
-    ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)
-    : 0
-  const prestationsMois = prestations.filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).length
-  const autorisationsAttente = demandesLog.filter((d) => estActif(d.statut)).length
-  const prodMois = productions.filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).reduce((s, p) => s + (p.totalBriques || 0), 0)
-  const autorisationsBriq = demandesBriq.filter((d) => estActif(d.statut)).length
-  const dossiersActifs = dossiersFoncier.filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
-
-  const { data: garderieEnfants } = useCollection('garderie_enfants')
-  const enfantsActifs = garderieEnfants.filter((e) => e.statut === 'actif').length
+  const dernier = [...(inventaires||[])].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+  const totalAnimaux = dernier ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0) : 0
+  const prestationsMois = (prestations||[]).filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).length
+  const autorisationsAttente = (demandesLog||[]).filter((d) => estActif(d.statut)).length
+  const prodMois = (productions||[]).filter((p) => (p.date || '').startsWith(todayStr().slice(0, 7))).reduce((s, p) => s + (p.totalBriques || 0), 0)
+  const autorisationsBriq = (demandesBriq||[]).filter((d) => estActif(d.statut)).length
+  const dossiersActifs = (dossiersFoncier||[]).filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
+  const enfantsActifs = (garderieEnfants||[]).filter((e) => e.statut === 'actif').length
 
   const kpi = {
     agro: `${totalAnimaux} têtes`,
