@@ -37,7 +37,7 @@ export default function Factures() {
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
   const getArticle = useAgroStore((s) => s.getArticle)
-  const { generateFacturePDF } = usePDF()
+  const { generateFacturePDF } = usePDF('agro')
 
   const tousArticles = [...especes, ...aliments]
   const [recherche, setRecherche] = useState('')

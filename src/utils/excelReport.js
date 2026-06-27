@@ -116,12 +116,96 @@ function styledSheet({ title, subtitle, columns, rows = [], totals }) {
   return ws
 }
 
+// Styles spécifiques garderie (orange #E8390E + jaune #F5A800)
+const GARDERIE_ORANGE = 'E8390E'
+const GARDERIE_JAUNE  = 'F5A800'
+
+function styledSheetGarderie({ title, subtitle, columns, rows = [], totals }) {
+  const TITLE_G = {
+    font: { name: 'Calibri', sz: 16, bold: true, color: { rgb: GARDERIE_ORANGE } },
+    alignment: { horizontal: 'left', vertical: 'center' }
+  }
+  const HEADER_G = {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+    fill: { fgColor: { rgb: GARDERIE_ORANGE } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: { top: { style: 'thin', color: { rgb: GARDERIE_JAUNE } }, bottom: { style: 'thin', color: { rgb: GARDERIE_JAUNE } }, left: { style: 'thin', color: { rgb: GARDERIE_JAUNE } }, right: { style: 'thin', color: { rgb: GARDERIE_JAUNE } } }
+  }
+  const ZEBRA_G = 'FFF8F0'
+
+  const ncol = columns.length
+  const aoa = []
+  aoa.push(['🍼 Garderie La Termitière', ...Array(ncol - 1).fill('')])
+  aoa.push([title, ...Array(ncol - 1).fill('')])
+  aoa.push([subtitle || '', ...Array(ncol - 1).fill('')])
+  aoa.push(Array(ncol).fill(''))
+  aoa.push(columns.map((c) => c.label))
+  rows.forEach((row) => aoa.push(columns.map((c) => (row[c.key] ?? ''))))
+  const totalRowIdx = totals ? aoa.length : -1
+  if (totals) aoa.push(columns.map((c, i) => (i === 0 ? (totals.__label || 'TOTAL') : (totals[c.key] ?? ''))))
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: ncol - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: ncol - 1 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: ncol - 1 } }
+  ]
+  ws['!cols'] = columns.map((c) => ({ wch: c.width || 16 }))
+  ws['!rows'] = [{ hpt: 22 }, { hpt: 22 }, { hpt: 14 }, { hpt: 6 }, { hpt: 20 }]
+  ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
+
+  const HEADER_ROW = 4
+  const put = (r, c, s) => {
+    const a = XLSX.utils.encode_cell({ r, c })
+    if (!ws[a]) ws[a] = { t: 's', v: '' }
+    ws[a].s = s
+  }
+  // Ligne 0 : nom garderie en orange
+  put(0, 0, { font: { name: 'Calibri', sz: 18, bold: true, color: { rgb: GARDERIE_ORANGE } }, alignment: { horizontal: 'left', vertical: 'center' } })
+  // Ligne 1 : titre rapport en jaune
+  put(1, 0, { font: { name: 'Calibri', sz: 13, bold: true, color: { rgb: GARDERIE_JAUNE } }, alignment: { horizontal: 'left', vertical: 'center' } })
+  // Ligne 2 : sous-titre
+  put(2, 0, SUB_STYLE)
+  // En-têtes colonnes
+  for (let c = 0; c < ncol; c++) put(HEADER_ROW, c, HEADER_G)
+  // Données
+  rows.forEach((row, ri) => {
+    const r = HEADER_ROW + 1 + ri
+    columns.forEach((col, c) => {
+      const a = XLSX.utils.encode_cell({ r, c })
+      if (!ws[a]) ws[a] = { t: 's', v: '' }
+      const s = {
+        font: { name: 'Calibri', sz: 10, color: { rgb: GRIS_TXT } },
+        alignment: { horizontal: col.align || (col.type === 'number' || col.type === 'money' ? 'right' : 'left'), vertical: 'center' },
+        border: allBorders
+      }
+      if (ri % 2 === 1) s.fill = { fgColor: { rgb: ZEBRA_G } }
+      if (col.type === 'money') s.numFmt = MONEY_FMT
+      else if (col.type === 'number') s.numFmt = NUM_FMT
+      ws[a].s = s
+      if ((col.type === 'money' || col.type === 'number') && typeof row[col.key] === 'number') ws[a].t = 'n'
+    })
+  })
+  if (totals) {
+    for (let c = 0; c < ncol; c++) {
+      const a = XLSX.utils.encode_cell({ r: totalRowIdx, c })
+      if (!ws[a]) ws[a] = { t: 's', v: '' }
+      const ts = totalStyle(columns[c])
+      ts.border.top = { style: 'medium', color: { rgb: GARDERIE_ORANGE } }
+      ws[a].s = ts
+      if ((columns[c].type === 'money' || columns[c].type === 'number') && typeof totals[columns[c].key] === 'number') ws[a].t = 'n'
+    }
+  }
+  return ws
+}
+
 // Exporte un classeur multi-feuilles stylé. `sections` = tableau de définitions.
-export function exportRapportExcel({ filename = 'rapport.xlsx', sections = [] }) {
+// Passer `theme: 'garderie'` pour les exports du module garderie.
+export function exportRapportExcel({ filename = 'rapport.xlsx', sections = [], theme }) {
   const wb = XLSX.utils.book_new()
-  wb.Props = { Title: 'Rapport MAXI-AGRO', Company: 'LA TERMITIÈRE', CreatedDate: new Date() }
+  wb.Props = { Title: 'Rapport LA TERMITIÈRE', Company: 'LA TERMITIÈRE', CreatedDate: new Date() }
   sections.forEach((sec) => {
-    const ws = styledSheet(sec)
+    const ws = theme === 'garderie' ? styledSheetGarderie(sec) : styledSheet(sec)
     XLSX.utils.book_append_sheet(wb, ws, (sec.name || 'Feuille').slice(0, 31))
   })
   XLSX.writeFile(wb, filename)

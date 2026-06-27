@@ -45,20 +45,44 @@ export default function Sidebar({ open, onClose }) {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col text-white transition-transform duration-200
           md:static md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
-        style={{ background: `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
+        style={{ background: activeModule?.sidebarGradient || `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
       >
         {/* En-tête marque */}
-        <div className="flex items-center gap-3 px-4 py-4">
-          <img src="/logo-mark.png" alt="" className="h-10 w-10 rounded-lg bg-white p-1" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-extrabold leading-tight">LA TERMITIÈRE</p>
-            <p className="truncate text-[10px] font-medium uppercase tracking-wide text-white/70">
-              Toujours dans l'action
-            </p>
+        <div className="flex flex-col items-center px-4 pt-5 pb-3 gap-2">
+          <div className="flex w-full items-center justify-between">
+            {/* Logo rond avec bordure qui pulse — couleur selon le module actif */}
+            <div className="relative flex shrink-0 items-center justify-center">
+              <span className="absolute h-14 w-14 rounded-full animate-pulse"
+                style={{ boxShadow: `0 0 0 3px #ffffff, 0 0 14px 5px ${accentColor}88` }} />
+              <img src="/termitiere-logo.png" alt="La Termitière"
+                onError={(e) => { e.target.src = '/logo-mark.png' }}
+                className="h-12 w-12 rounded-full object-cover bg-white p-1 shadow-lg"
+                style={{ ring: `2px solid #ffffff` }} />
+            </div>
+
+            {/* Nom + module */}
+            <div className="min-w-0 flex-1 pl-3">
+              <p
+                className="truncate text-sm font-extrabold leading-tight"
+                style={{ background: `linear-gradient(90deg, #ffffff 0%, ${accentColor} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}
+              >
+                LA TERMITIÈRE
+              </p>
+              {activeModule ? (
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-white/60 mt-0.5">
+                  {activeModule.nom}
+                </p>
+              ) : (
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-white/60 mt-0.5">
+                  Toujours dans l'action
+                </p>
+              )}
+            </div>
+
+            <button onClick={onClose} className="md:hidden shrink-0" aria-label="Fermer le menu">
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={onClose} className="md:hidden" aria-label="Fermer le menu">
-            <X size={20} />
-          </button>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">

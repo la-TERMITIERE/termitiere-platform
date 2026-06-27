@@ -271,6 +271,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
+      {/* Header avec logo */}
+      <div className="rounded-xl p-4 text-white flex items-center gap-4"
+        style={{ background: 'linear-gradient(135deg, #2EAA3F 0%, #1a6e27 100%)' }}>
+        <img src="/maxi-agro-logo.png" alt="Maxi Agro"
+          className="h-16 w-auto object-contain rounded-lg bg-white p-1 shadow" />
+        <div>
+          <h2 className="text-lg font-extrabold drop-shadow">MAXI AGRO</h2>
+          <p className="text-sm text-green-100">Élevage · Stock · Facturation · Analyses</p>
+        </div>
+      </div>
+
       {/* Sélecteur de période */}
       <div className="flex flex-wrap items-end gap-3">
         <div>
