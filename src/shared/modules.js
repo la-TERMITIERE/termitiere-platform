@@ -1,8 +1,9 @@
 // Configuration centrale des modules de la plateforme et de leur navigation interne.
 import {
-  Leaf, Truck, BrickWall, Calculator, MapPin,
+  Leaf, Truck, BrickWall, Calculator, MapPin, Baby,
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
-  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History
+  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
+  Users, CreditCard, AlertTriangle, CalendarCheck
 } from 'lucide-react'
 
 export const MODULES = [
@@ -12,19 +13,22 @@ export const MODULES = [
     description: 'Élevage & gestion de stock',
     icon: Leaf,
     emoji: '🌿',
-    color: '#BC3C31',
+    color: '#2EAA3F',
     path: '/agro',
-    statut: 'actif'
+    statut: 'actif',
+    logo: '/maxi-agro-logo.png'
   },
   {
     id: 'logistique',
-    nom: 'LOGISTIQUE ET ÉVÉNEMENTIEL',
+    nom: 'MAXI LOGISTIQUE',
     description: 'Matériel, location & prestations',
     icon: Truck,
-    emoji: '🎪',
-    color: '#0284c7',
+    emoji: '🚛',
+    color: '#BC3C31',
+    sidebarGradient: 'linear-gradient(180deg, #BC3C31 0%, #6B1A10 50%, #1A1A1A 100%)',
     path: '/logistique',
-    statut: 'actif'
+    statut: 'actif',
+    logo: '/logo_maxi_logistique.png'
   },
   {
     id: 'evenementiel',
@@ -55,6 +59,17 @@ export const MODULES = [
     color: '#ea580c',
     path: '/rh',
     statut: 'bientot'
+  },
+  {
+    id: 'garderie',
+    nom: 'GARDERIE',
+    description: 'Enfants, personnel, présences & paiements',
+    icon: Baby,
+    emoji: '🍼',
+    color: '#E8390E',
+    path: '/garderie',
+    statut: 'actif',
+    logo: '/garderie-logo.png'
   }
 ]
 
@@ -104,5 +119,15 @@ export const MODULE_NAV = {
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
+  ],
+  garderie: [
+    { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
+    { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby },
+    { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users },
+    { label: 'Présences enfants',  to: '/garderie/presences', icon: CalendarCheck },
+    { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard },
+    { label: 'Incidents & Santé',  to: '/garderie/incidents', icon: AlertTriangle },
+    { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen },
+    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings }
   ]
 }

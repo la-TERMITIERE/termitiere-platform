@@ -29,12 +29,16 @@ export default function PortalHome() {
   const autorisationsBriq = demandesBriq.filter((d) => estActif(d.statut)).length
   const dossiersActifs = dossiersFoncier.filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
 
+  const { data: garderieEnfants } = useCollection('garderie_enfants')
+  const enfantsActifs = garderieEnfants.filter((e) => e.statut === 'actif').length
+
   const kpi = {
     agro: `${totalAnimaux} têtes`,
     logistique: autorisationsAttente ? `${autorisationsAttente} autorisation(s) en attente` : `${prestationsMois} prestation(s) ce mois`,
     evenementiel: autorisationsBriq ? `${autorisationsBriq} autorisation(s) en attente` : `${prodMois} briques produites ce mois`,
     foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
-    rh: 'En développement'
+    rh: 'En développement',
+    garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit'
   }
 
   return (
@@ -66,10 +70,13 @@ export default function PortalHome() {
               />
               <div className="flex items-start gap-4">
                 <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-2xl"
-                  style={{ background: m.color + '1a', color: m.color }}
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl overflow-hidden"
+                  style={{ background: m.logo ? 'transparent' : m.color + '1a', color: m.color }}
                 >
-                  <m.icon size={28} />
+                  {m.logo
+                    ? <img src={m.logo} alt={m.nom} className="h-14 w-14 object-contain" />
+                    : <m.icon size={28} />
+                  }
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

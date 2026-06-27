@@ -97,10 +97,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-sky-600 to-sky-800 p-4 text-white">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl p-4 text-white"
+        style={{ background: 'linear-gradient(135deg, #BC3C31 0%, #1A1A1A 100%)' }}>
+        <img src="/logo_maxi_logistique.png" alt="Maxi Logistique"
+          className="h-16 w-auto object-contain rounded-lg bg-white p-1 shadow" />
         <div>
-          <h2 className="text-lg font-extrabold">Logistique & Événementiel</h2>
-          <p className="text-sm text-sky-100">Matériel · Location · Prestations · Autorisations (validation à deux niveaux)</p>
+          <h2 className="text-lg font-extrabold">Maxi Logistique</h2>
+          <p className="text-sm text-gray-300">Matériel · Location · Prestations · Autorisations</p>
         </div>
         <div className="ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white [&_label]:font-bold">
           {periodNode}
