@@ -66,8 +66,23 @@ export default function Dashboard() {
     <div className="space-y-5">
       <div className="rounded-xl p-4 text-white flex items-center gap-4"
         style={{ background: 'linear-gradient(135deg, #E8390E 0%, #F5A800 100%)' }}>
-        <img src="/garderie-logo.png" alt="Garderie La Termitière"
-          className="h-16 w-auto object-contain rounded-lg bg-white p-1 shadow" />
+        {/* Logo garderie dans un cercle avec bordure qui pulse */}
+        <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
+          <style>{`
+            @keyframes gard-glow {
+              0%   { box-shadow: 0 0 0 2px #F5A800aa, 0 0 6px 2px #E8390E33; }
+              50%  { box-shadow: 0 0 0 4px #F5A800,   0 0 12px 4px #E8390E66; }
+              100% { box-shadow: 0 0 0 2px #F5A800aa, 0 0 6px 2px #E8390E33; }
+            }
+          `}</style>
+          <img src="/garderie-logo.png" alt="Garderie La Termitière"
+            style={{
+              width: 64, height: 64, borderRadius: '50%',
+              objectFit: 'cover', background: 'white', padding: 4,
+              animation: 'gard-glow 2.5s ease-in-out infinite',
+              display: 'block'
+            }} />
+        </div>
         <div>
           <h2 className="text-lg font-extrabold drop-shadow">{params.nom}</h2>
           <p className="text-sm text-orange-100">

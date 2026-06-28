@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Eye, Search } from 'lucide-react'
+import { Plus, Eye, Search, FilePen } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -9,7 +9,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem, updateItem } from '../../core/db'
+import { setItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
@@ -59,12 +59,12 @@ export default function Enfants() {
 
     if (modal.isNew) {
       const id = genId()
-      await addItem('garderie_enfants', { ...d, id })
+      await setItem('garderie_enfants', id, { ...d, id })
       audit('garderie', 'ENFANT_CREATE', `${d.prenom} ${d.nom}`, { groupe: d.groupe })
       notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/enfants' })
       toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓`)
     } else {
-      await updateItem('garderie_enfants', modal.id, d)
+      await setItem('garderie_enfants', modal.id, { ...d, id: modal.id })
       audit('garderie', 'ENFANT_EDIT', `${d.prenom} ${d.nom}`)
       toast.success('Fiche mise à jour ✓')
     }
@@ -140,7 +140,7 @@ export default function Enfants() {
                 <td className="px-3 py-2">
                   <div className="flex gap-1">
                     <button onClick={() => setDetail(e)} className="rounded p-1 hover:bg-gray-100"><Eye size={14} /></button>
-                    <button onClick={() => openEdit(e)} className="rounded p-1 text-orange-600 hover:bg-orange-50 text-xs font-semibold">Éditer</button>
+                    <button onClick={() => openEdit(e)} title="Modifier la fiche" className="rounded p-1 text-orange-600 hover:bg-orange-50"><FilePen size={14} /></button>
                   </div>
                 </td>
               </tr>

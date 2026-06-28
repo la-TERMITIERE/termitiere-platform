@@ -10,7 +10,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem, updateItem } from '../../core/db'
+import { setItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
@@ -67,12 +67,13 @@ export default function Paiements() {
     const payload = { ...d, statut, montantDu: Number(d.montantDu), montantPaye: Number(d.montantPaye) }
     if (modal.isNew) {
       const id = genId()
-      await addItem('garderie_paiements', { ...payload, id })
+      await setItem('garderie_paiements', id, { ...payload, id })
       audit('garderie', 'PAIEMENT_CREATE', d.enfantNom, { mois: d.mois, annee: d.annee, montant: d.montantPaye })
       notify({ type: 'info', title: `💰 Paiement reçu — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé' : statut === 'partiel' ? 'Partiel' : 'Impayé'}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
       toast.success('Paiement enregistré ✓')
     } else {
-      await updateItem('garderie_paiements', modal.id, payload)
+      const id = modal.id
+      await setItem('garderie_paiements', id, { ...payload, id })
       audit('garderie', 'PAIEMENT_EDIT', d.enfantNom)
       toast.success('Paiement mis à jour ✓')
     }

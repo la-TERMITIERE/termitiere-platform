@@ -5,9 +5,10 @@ import { subscribeCollection } from '../core/db'
 
 export function useCollection(name) {
   const [data, setData] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!name)
 
   useEffect(() => {
+    if (!name) { setData([]); setLoading(false); return }
     setLoading(true)
     const unsub = subscribeCollection(name, (rows) => {
       setData(rows)

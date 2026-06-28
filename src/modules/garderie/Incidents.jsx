@@ -9,7 +9,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem, updateItem } from '../../core/db'
+import { setItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
@@ -49,7 +49,7 @@ export default function Incidents() {
 
     if (modal.isNew) {
       const id = genId()
-      await addItem('garderie_incidents', { ...d, id, resolu: false })
+      await setItem('garderie_incidents', id, { ...d, id, resolu: false })
       audit('garderie', 'INCIDENT_CREATE', d.enfantNom, { type: d.type, gravite: d.gravite })
       const graviteLabel = d.gravite === 'grave' ? '🔴 GRAVE' : d.gravite === 'moyen' ? '🟠 Moyen' : '🟡 Faible'
       notify({
@@ -63,7 +63,7 @@ export default function Incidents() {
       })
       toast.success('Incident enregistré ✓')
     } else {
-      await updateItem('garderie_incidents', modal.id, d)
+      await setItem('garderie_incidents', modal.id, { ...d, id: modal.id })
       audit('garderie', 'INCIDENT_EDIT', d.enfantNom)
       toast.success('Incident mis à jour ✓')
     }
@@ -71,7 +71,7 @@ export default function Incidents() {
   }
 
   async function marquerResolu(i) {
-    await updateItem('garderie_incidents', i.id, { resolu: true })
+    await setItem('garderie_incidents', i.id, { ...i, resolu: true })
     audit('garderie', 'INCIDENT_RESOLU', i.enfantNom)
     notify({ type: 'info', title: `✅ Incident résolu — ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/incidents' })
     toast.success('Incident marqué comme résolu ✓')
