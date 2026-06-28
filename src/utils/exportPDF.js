@@ -13,10 +13,12 @@ const ENTREPRISE = {
 
 // Config visuelle par module
 const MODULE_CONFIG = {
-  agro:       { couleur: [46, 170, 63],  couleur2: [26, 110, 39],  logo: '/maxi-agro-logo.png',       nom: 'MAXI AGRO'       },
-  logistique: { couleur: [188, 60, 49],  couleur2: [26, 26, 26],   logo: '/logo_maxi_logistique.png', nom: 'MAXI LOGISTIQUE' },
-  garderie:   { couleur: [232, 57, 14],  couleur2: [245, 168, 0],  logo: '/garderie-logo.png',        nom: 'GARDERIE'        },
-  default:    { couleur: [188, 60, 49],  couleur2: [26, 26, 26],   logo: null,                        nom: 'LA TERMITIÈRE'   }
+  agro:         { couleur: [46, 170, 63],  couleur2: [26, 110, 39],  logo: '/maxi-agro-logo.png',       nom: 'MAXI AGRO'       },
+  logistique:   { couleur: [188, 60, 49],  couleur2: [26, 26, 26],   logo: '/logo_maxi_logistique.png', nom: 'MAXI LOGISTIQUE' },
+  evenementiel: { couleur: [124, 58, 237], couleur2: [49, 19, 102],  logo: null,                        nom: 'BRIQUETERIE'     },
+  foncier:      { couleur: [5, 150, 105],  couleur2: [4, 80, 60],    logo: null,                        nom: 'FONCIER'         },
+  garderie:     { couleur: [232, 57, 14],  couleur2: [245, 168, 0],  logo: '/garderie-logo.png',        nom: 'GARDERIE'        },
+  default:      { couleur: [188, 60, 49],  couleur2: [26, 26, 26],   logo: null,                        nom: 'LA TERMITIÈRE'   }
 }
 
 // Formatage montants sans espace insécable

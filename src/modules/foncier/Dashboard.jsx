@@ -7,7 +7,7 @@ import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
-import { TYPES_DOSSIER, STATUTS_DOSSIER, STATUTS_ETAPE } from './data'
+import { TYPES_DOSSIER, STATUTS_DOSSIER, STATUTS_ETAPE, VERDICTS_APPRECIATION } from './data'
 import { progressionDossier, etapeCourante } from './logic'
 import { useFoncierStore } from './store/referentielStore'
 import { formatDateShort } from '../../utils/formatters'
@@ -91,6 +91,9 @@ export default function Dashboard() {
                     </div>
                     <p className="font-semibold">{d.commune} — Lot {d.lot || '—'}</p>
                     <p className="text-xs text-gray-500">{d.proprietaire}</p>
+                    {d.type === 'vente_cession' && d.cession?.appreciation?.verdict && d.cession.appreciation.verdict !== 'en_attente' && (
+                      <span className="mt-1 inline-block"><Badge tone={VERDICTS_APPRECIATION[d.cession.appreciation.verdict]?.tone}>{VERDICTS_APPRECIATION[d.cession.appreciation.verdict]?.label}</Badge></span>
+                    )}
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-1.5 flex-1 rounded-full bg-gray-100">
                         <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
@@ -107,8 +110,9 @@ export default function Dashboard() {
       </div>
 
       <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        <strong>Procédure titre foncier (Togo) :</strong> Reçu d'achat → Plan parcellaire → Vérification cadastre →
-        Avis OTR → Acte notarié → Titre obtenu. Modes : héritage, donation/cession, achat.
+        <strong>Procédure titre foncier (Togo) :</strong> Levé topographique → Avis du Guichet Foncier Unique →
+        Acte notarié → Publication au Journal Officiel (opposition 3 mois) → Bornage contradictoire → Traitement OTR →
+        Titre établi par la Conservation Foncière. Cession, mutation, donation, héritage & lotissement gérés par dossier.
       </div>
 
       {/* Détail : liste de dossiers filtrée (cliquable jusqu'au dossier) */}

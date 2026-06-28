@@ -10,6 +10,7 @@
 // ré-encoder corromprait le texte. On neutralise ce qui est dangereux au stockage.
 
 const MAX_STRING = 8000      // longueur max d'une valeur texte
+const MAX_DATAURL = 7000000  // exception : pièces jointes encodées (data URL) ~5,2 Mo
 const MAX_KEY = 200          // longueur max d'une clé
 const MAX_DEPTH = 16         // profondeur max d'un objet
 
@@ -17,6 +18,11 @@ const MAX_DEPTH = 16         // profondeur max d'un objet
 // sans utiliser de caractère littéral dans le code source.
 function cleanString(s) {
   const str = String(s)
+  // Exception ciblée : les data URL (fichiers/pièces jointes encodés en base64)
+  // dépassent largement la limite texte. On les autorise jusqu'à ~5 Mo afin de
+  // ne PAS les tronquer (ce qui corromprait le fichier). Le nettoyage des
+  // caractères de contrôle reste appliqué ; un data URL n'en contient pas.
+  const cap = str.startsWith('data:') ? MAX_DATAURL : MAX_STRING
   let v = ''
   for (let i = 0; i < str.length; i++) {
     const c = str.charCodeAt(i)
@@ -24,7 +30,7 @@ function cleanString(s) {
     if (c < 32 && c !== 9 && c !== 10 && c !== 13) continue
     v += str[i]
   }
-  if (v.length > MAX_STRING) v = v.slice(0, MAX_STRING)
+  if (v.length > cap) v = v.slice(0, cap)
   return v
 }
 

@@ -51,16 +51,6 @@ export const MODULES = [
     statut: 'actif'
   },
   {
-    id: 'rh',
-    nom: 'COMPTABILITÉ',
-    description: 'Finances & suivi comptable',
-    icon: Calculator,
-    emoji: '📊',
-    color: '#ea580c',
-    path: '/rh',
-    statut: 'bientot'
-  },
-  {
     id: 'garderie',
     nom: 'GARDERIE',
     description: 'Enfants, personnel, présences & paiements',
@@ -70,6 +60,16 @@ export const MODULES = [
     path: '/garderie',
     statut: 'actif',
     logo: '/garderie-logo.png'
+  },
+  {
+    id: 'rh',
+    nom: 'COMPTABILITÉ',
+    description: 'Finances & suivi comptable',
+    icon: Calculator,
+    emoji: '📊',
+    color: '#ea580c',
+    path: '/rh',
+    statut: 'bientot'
   }
 ]
 
@@ -106,6 +106,7 @@ export const MODULE_NAV = {
     { label: 'Production', to: '/evenementiel/production', icon: Factory },
     { label: 'Stock briques', to: '/evenementiel/stock', icon: Package },
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
+    { label: 'Facturation', to: '/evenementiel/factures', icon: FileText },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
     { label: 'Journal', to: '/evenementiel/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
