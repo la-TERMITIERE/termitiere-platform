@@ -3,7 +3,7 @@ import {
   Leaf, Truck, BrickWall, Calculator, MapPin, Baby,
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
-  Users, CreditCard, AlertTriangle, CalendarCheck
+  Users, CreditCard, AlertTriangle, CalendarCheck, UtensilsCrossed, BarChart2
 } from 'lucide-react'
 
 export const MODULES = [
@@ -123,12 +123,14 @@ export const MODULE_NAV = {
   ],
   garderie: [
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
-    { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby },
-    { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users },
+    { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby,            roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur','tata'] },
+    { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users,           roles: ['super_admin','pau','ge','gerant','gerante_garderie'] },
     { label: 'Présences enfants',  to: '/garderie/presences', icon: CalendarCheck },
-    { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard },
+    { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard,      roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur'] },
+    { label: 'Cantine & Repas',    to: '/garderie/cantine',   icon: UtensilsCrossed },
     { label: 'Incidents & Santé',  to: '/garderie/incidents', icon: AlertTriangle },
-    { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen },
-    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings }
+    { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: ['super_admin','pau','ge','gerant','superviseur'] },
+    { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: ['super_admin','pau','ge','gerant','superviseur'] },
+    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ['super_admin','pau','ge'] }
   ]
 }

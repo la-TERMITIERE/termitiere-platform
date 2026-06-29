@@ -12,12 +12,14 @@
 // approbateur — d'où leur présence dans les groupes ci-dessous.
 
 export const ROLES = [
-  { value: 'super_admin', label: 'Super-admin', desc: 'Concepteur — contrôle total + technique' },
-  { value: 'pau', label: 'PAU', desc: 'Direction — contrôle total sur les applications' },
-  { value: 'ge', label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
-  { value: 'superviseur', label: 'Superviseur', desc: 'Consulte tout (lecture seule) — aucune action' },
-  { value: 'gerant', label: 'Gérant', desc: 'Approuve les sorties et les demandes' },
-  { value: 'agent', label: 'Agent', desc: 'Saisie des données + demandes d\'autorisation' }
+  { value: 'super_admin',      label: 'Super-admin',       desc: 'Concepteur — contrôle total + technique' },
+  { value: 'pau',              label: 'PAU',               desc: 'Direction — contrôle total sur les applications' },
+  { value: 'ge',               label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
+  { value: 'superviseur',      label: 'Superviseur',       desc: 'Consulte tout (lecture seule) — aucune action' },
+  { value: 'gerant',           label: 'Gérant',            desc: 'Approuve les sorties et les demandes' },
+  { value: 'agent',            label: 'Agent',             desc: 'Saisie des données + demandes d\'autorisation' },
+  { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres, journal et analyses)' },
+  { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie — présences, cantine, incidents' },
 ]
 
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
@@ -29,10 +31,19 @@ export const APPROVER_ROLES = ['super_admin', 'pau', 'ge', 'gerant', 'admin', 'c
 // 2e niveau : certification définitive (déclenche l'effet métier).
 export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'admin']
 
-export const isFullAccessRole = (r) => FULL_ACCESS_ROLES.includes(r)
-export const isViewAllRole = (r) => VIEW_ALL_ROLES.includes(r)
-export const isApproverRole = (r) => APPROVER_ROLES.includes(r)
-export const isCertifierRole = (r) => CERTIFIER_ROLES.includes(r)
+export const isFullAccessRole   = (r) => FULL_ACCESS_ROLES.includes(r)
+export const isViewAllRole      = (r) => VIEW_ALL_ROLES.includes(r)
+export const isApproverRole     = (r) => APPROVER_ROLES.includes(r)
+export const isCertifierRole    = (r) => CERTIFIER_ROLES.includes(r)
+
+// Rôles garderie
+export const isGeranteGarderie  = (r) => r === 'gerante_garderie'
+export const isTata             = (r) => r === 'tata'
+export const isRoleGarderie     = (r) => ['gerante_garderie', 'tata'].includes(r)
+
+// Droits garderie détaillés
+export const garderieCanEdit    = (r) => !['tata', 'superviseur'].includes(r) || FULL_ACCESS_ROLES.includes(r)
+export const garderieCanManage  = (r) => [...FULL_ACCESS_ROLES, 'gerante_garderie'].includes(r)
 
 const LEGACY_LABEL = { admin: 'Administrateur', controleur: 'Contrôleur' }
 
@@ -44,5 +55,7 @@ export const roleTone = (r) => {
   if (FULL_ACCESS_ROLES.includes(r)) return 'primary'
   if (r === 'superviseur') return 'info'
   if (r === 'gerant' || r === 'controleur') return 'info'
+  if (r === 'gerante_garderie') return 'warning'
+  if (r === 'tata') return 'success'
   return 'neutral'
 }

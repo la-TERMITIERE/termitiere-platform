@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CheckCircle2, XCircle, Clock, FileSpreadsheet, ChevronLeft, ChevronRight, LogOut, User, Search } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, FileSpreadsheet, ChevronLeft, ChevronRight, LogOut, User, Search, ExternalLink } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -9,12 +9,15 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { GROUPES_AGE, STATUTS_PRESENCE } from './data'
+import { useGarderieStore } from './store/garderieStore'
+import { journaliersActifsSurDate, enfantsSansRenouvellement } from './logic'
 import { exportRapportExcel } from '../../utils/excelReport'
 
 const heureNow = () => new Date().toTimeString().slice(0, 5)
@@ -38,8 +41,12 @@ function calcDuree(debut, fin) {
 
 export default function PresencesEnfants() {
   const { user } = useAuth()
-  const { data: enfants }   = useCollection('garderie_enfants')
-  const { data: presences } = useCollection('garderie_presences')
+  const navigate = useNavigate()
+  const { data: enfants }     = useCollection('garderie_enfants')
+  const { data: presences }   = useCollection('garderie_presences')
+  const { data: paiements }   = useCollection('garderie_paiements')
+  const { data: journaliers } = useCollection('garderie_journaliers')
+  const deletedEnfantIds      = useGarderieStore((s) => s.deletedEnfantIds)
 
   const today = todayStr()
   const [dateFiltre, setDateFiltre]   = useState(today)
@@ -48,7 +55,8 @@ export default function PresencesEnfants() {
   const [recherche, setRecherche]     = useState('')
   const [pointageModal, setPointageModal] = useState(null) // { enfant, presence, type }
   const [heureManuelle, setHeureManuelle] = useState('')
-  const [recupPar, setRecupPar]       = useState('')
+  const [recupPar, setRecupPar]         = useState('')
+  const [recupContact, setRecupContact] = useState('')
 
   // Cache optimiste — mise à jour immédiate sans attendre Firebase
   const [cache, setCache] = useState({})
@@ -70,9 +78,52 @@ export default function PresencesEnfants() {
   }
 
   const enfantsActifs = useMemo(
-    () => enfants.filter((e) => e.statut === 'actif'),
-    [enfants]
+    () => enfants.filter((e) => e.statut === 'actif' && !deletedEnfantIds.has(e.id)),
+    [enfants, deletedEnfantIds]
   )
+
+  // IDs des enfants sans renouvellement ce mois
+  const idsSansRenouvellement = useMemo(() => {
+    const liste = enfantsSansRenouvellement(enfantsActifs, paiements, presences)
+    return new Set(liste.map((e) => e.id))
+  }, [enfantsActifs, paiements, presences])
+
+  // Journaliers actifs ce jour (selon leur période date + nombreJours)
+  const journaliersJour = useMemo(
+    () => journaliersActifsSurDate(journaliers, dateFiltre),
+    [journaliers, dateFiltre]
+  )
+
+  const journaliersNoms = useMemo(
+    () => new Set(journaliersJour.map((j) => `${j.prenom} ${j.nom}`.toLowerCase())),
+    [journaliersJour]
+  )
+
+  // Clé et récupération de présence pour journaliers
+  const presKeyJo = (joId, date) => `jo_${joId}_${date}`
+  const getPresenceJo = (joId) => {
+    const key = presKeyJo(joId, dateFiltre)
+    if (cache[key]) return cache[key]
+    return presences.find((p) => p.journalierId === joId && p.date === dateFiltre)
+  }
+  function majCacheJo(joId, data) {
+    const key = presKeyJo(joId, dateFiltre)
+    setCache((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), ...data } }))
+  }
+
+  async function enregistrerJo(jo, champs) {
+    const pid = presKeyJo(jo.id, dateFiltre)
+    const existing = getPresenceJo(jo.id)
+    const newData = {
+      id: pid, journalierId: jo.id,
+      enfantNom: `${jo.prenom} ${jo.nom}`,
+      date: dateFiltre, statut: 'present',
+      heureArrivee: '', heureDepart: '', recupPar: '', recupContact: '',
+      ...(existing || {}), ...champs, id: pid
+    }
+    majCacheJo(jo.id, newData)
+    await setItem('garderie_presences', pid, newData)
+  }
 
   const liste = useMemo(() => {
     let rows = [...enfantsActifs]
@@ -99,8 +150,14 @@ export default function PresencesEnfants() {
     const absents    = enfantsActifs.filter((e) => getPresence(e.id)?.statut === 'absent').length
     const excuses    = enfantsActifs.filter((e) => getPresence(e.id)?.statut === 'excuse').length
     const nonPointes = enfantsActifs.filter((e) => !getPresence(e.id)).length
-    return { presents, absents, excuses, nonPointes, total: enfantsActifs.length }
-  }, [enfantsActifs, presences, cache, dateFiltre])
+    // Les journaliers actifs ce jour sont comptés comme présents
+    const joPresents = journaliersJour.filter((j) => getPresenceJo(j.id)?.statut === 'present').length
+    return {
+      presents: presents + joPresents,
+      absents, excuses, nonPointes,
+      total: enfantsActifs.length + journaliersJour.length
+    }
+  }, [enfantsActifs, journaliersJour, presences, cache, dateFiltre])
 
   async function enregistrer(enfant, champs) {
     const existing = getPresence(enfant.id)
@@ -155,14 +212,17 @@ export default function PresencesEnfants() {
               : ''
     setHeureManuelle(def)
     setRecupPar(pt?.recupPar || '')
+    setRecupContact(pt?.recupContact || '')
     setPointageModal({ enfant, presence: pt, type })
   }
 
   async function confirmerModal() {
     const { enfant, presence, type } = pointageModal
     if (type === 'recup') {
-      if (!recupPar.trim()) return toast.error('Indiquez le nom de la personne')
-      await enregistrer(enfant, { recupPar: recupPar.trim() })
+      if (!recupPar.trim()) return toast.error('Nom de la personne qui récupère requis')
+      if (!recupContact.trim()) return toast.error('Contact téléphonique requis')
+      await enregistrer(enfant, { recupPar: recupPar.trim(), recupContact: recupContact.trim() })
+      audit('garderie', 'PRESENCE_RECUP', `${enfant.prenom} ${enfant.nom}`, { recupPar: recupPar.trim(), date: dateFiltre })
       toast.success(`Récupéré par ${recupPar.trim()} ✓`)
     } else {
       if (!heureManuelle) return toast.error('Heure requise')
@@ -190,6 +250,7 @@ export default function PresencesEnfants() {
         Départ: p?.heureDepart || '—',
         Durée: p?.heureArrivee && p?.heureDepart ? (calcDuree(p.heureArrivee, p.heureDepart) || '—') : '—',
         'Récupéré par': p?.recupPar || '—',
+        'Contact récup.': p?.recupContact || '—',
         'Parent / Tuteur': e.parentNom || '—',
         Contact: e.parentContact || '—'
       }
@@ -207,6 +268,7 @@ export default function PresencesEnfants() {
           { key: 'Départ', label: 'Départ', width: 12 },
           { key: 'Durée', label: 'Durée', width: 10 },
           { key: 'Récupéré par', label: 'Récupéré par', width: 22 },
+          { key: 'Contact récup.', label: 'Contact récup.', width: 18 },
           { key: 'Parent / Tuteur', label: 'Parent', width: 22 },
           { key: 'Contact', label: 'Contact', width: 16 }
         ], rows }]
@@ -303,7 +365,24 @@ export default function PresencesEnfants() {
 
                   {/* Nom */}
                   <td className="px-3 py-3">
-                    <p className="font-semibold">{e.prenom} {e.nom}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold">{e.prenom} {e.nom}</p>
+                      {e.typeAbonnement === 'annuel' ? (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">Annuel</span>
+                      ) : journaliersNoms.has(`${e.prenom} ${e.nom}`.toLowerCase()) ? (
+                        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">Journalier</span>
+                      ) : (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">Mensuel</span>
+                      )}
+                      {idsSansRenouvellement.has(e.id) && (
+                        <button
+                          onClick={() => navigate('/garderie/paiements')}
+                          title="Disparaît dès que le paiement est versé · Cliquez pour enregistrer"
+                          className="rounded-full bg-red-100 border border-red-300 px-2 py-0.5 text-[10px] font-bold text-red-700 flex items-center gap-1 hover:bg-red-200 transition-colors cursor-pointer">
+                          ⚠️ Paiement non renouvelé <ExternalLink size={9} />
+                        </button>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400">{e.parentNom || '—'}</p>
                   </td>
 
@@ -384,6 +463,9 @@ export default function PresencesEnfants() {
                         <span className="flex items-center gap-1 text-xs font-semibold text-blue-600">
                           <User size={11} /> {p.recupPar}
                         </span>
+                        {p.recupContact && (
+                          <span className="text-[10px] text-gray-400">{p.recupContact}</span>
+                        )}
                         <button onClick={() => ouvrirModal(e, 'recup')}
                           className="text-[10px] text-gray-400 hover:text-orange-500 underline">modifier</button>
                       </div>
@@ -424,6 +506,83 @@ export default function PresencesEnfants() {
                 </tr>
               )
             })}
+
+            {/* ── Journaliers actifs ce jour ── */}
+            {journaliersJour.length > 0 && (
+              <>
+                <tr>
+                  <td colSpan={7} className="bg-orange-50 px-3 py-1.5 text-xs font-bold uppercase text-orange-600">
+                    🚪 Enfants journaliers — {journaliersJour.length} présent(s)
+                  </td>
+                </tr>
+                {journaliersJour.map((jo) => {
+                  const pJo = getPresenceJo(jo.id)
+                  const dureeJo = calcDuree(pJo?.heureArrivee, pJo?.heureDepart)
+                  const joursRestants = Math.floor((new Date(jo.date).setDate(new Date(jo.date).getDate() + Number(jo.nombreJours || 1) - 1) - new Date(dateFiltre)) / 86400000)
+                  return (
+                    <tr key={jo.id} className="bg-orange-50/40 transition-colors hover:bg-orange-50">
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold">{jo.prenom} {jo.nom}</p>
+                          <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">
+                            Journalier {Number(jo.nombreJours) > 1 ? `· J${Math.floor((new Date(dateFiltre) - new Date(jo.date)) / 86400000) + 1}/${jo.nombreJours}` : ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400">{jo.parentNom || '—'} · {jo.parentContact || ''}</p>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-gray-400">—</td>
+
+                      {/* Arrivée */}
+                      <td className="px-3 py-3 text-center">
+                        {pJo?.heureArrivee ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="flex items-center gap-1 font-bold text-green-600"><Clock size={13} /> {pJo.heureArrivee}</span>
+                          </div>
+                        ) : isToday ? (
+                          <button onClick={async () => { const h = new Date().toTimeString().slice(0,5); await enregistrerJo(jo, { statut: 'present', heureArrivee: h }); toast.success(`Arrivée à ${h} ✓`) }}
+                            className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 hover:bg-green-200">
+                            <CheckCircle2 size={12} /> Arrivée
+                          </button>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+
+                      {/* Départ */}
+                      <td className="px-3 py-3 text-center">
+                        {pJo?.heureDepart ? (
+                          <span className="flex items-center gap-1 font-bold text-red-500 justify-center"><LogOut size={13} /> {pJo.heureDepart}</span>
+                        ) : pJo?.heureArrivee && isToday ? (
+                          <button onClick={async () => { const h = new Date().toTimeString().slice(0,5); await enregistrerJo(jo, { heureDepart: h }); toast.success(`Départ à ${h} ✓`) }}
+                            className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-200">
+                            <LogOut size={12} /> Départ
+                          </button>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+
+                      {/* Durée */}
+                      <td className="px-3 py-3 text-center">
+                        {dureeJo ? <span className="font-bold text-orange-600 text-xs">{dureeJo}</span>
+                          : pJo?.heureArrivee ? <span className="text-xs italic text-gray-400">En cours…</span>
+                          : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+
+                      {/* Récupéré par */}
+                      <td className="px-3 py-3 text-center">
+                        {pJo?.recupPar ? (
+                          <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 justify-center"><User size={11} /> {pJo.recupPar}</span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+
+                      {/* Statut */}
+                      <td className="px-3 py-3 text-center">
+                        {pJo?.statut ? (
+                          <Badge tone={STATUTS_PRESENCE[pJo.statut]?.tone}>{STATUTS_PRESENCE[pJo.statut]?.label}</Badge>
+                        ) : <Badge tone="neutral">Non pointé</Badge>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </>
+            )}
           </tbody>
         </table>
       </Card>
@@ -452,14 +611,54 @@ export default function PresencesEnfants() {
             </div>
 
             {pointageModal.type === 'recup' ? (
-              <FormGroup label="Nom de la personne qui récupère l'enfant *">
-                <Input
-                  value={recupPar}
-                  onChange={(e) => setRecupPar(e.target.value)}
-                  placeholder="ex: Maman Kofi, Papa Ama, Tante Akosua…"
-                  autoFocus
-                />
-              </FormGroup>
+              <div className="space-y-3">
+                {/* Suggestions parents */}
+                {(pointageModal.enfant?.parentNom || pointageModal.enfant?.parentContact2) && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1">Suggestions :</p>
+                    <div className="flex flex-wrap gap-2">
+                      {pointageModal.enfant?.parentNom && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecupPar(pointageModal.enfant.parentNom)
+                            setRecupContact(pointageModal.enfant.parentContact || '')
+                          }}
+                          className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100">
+                          <User size={11} /> {pointageModal.enfant.parentNom}
+                          {pointageModal.enfant.parentContact && ` · ${pointageModal.enfant.parentContact}`}
+                        </button>
+                      )}
+                      {pointageModal.enfant?.parentContact2 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecupPar('Contact 2')
+                            setRecupContact(pointageModal.enfant.parentContact2)
+                          }}
+                          className="flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100">
+                          <User size={11} /> Contact 2 · {pointageModal.enfant.parentContact2}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <FormGroup label="Nom de la personne *">
+                  <Input
+                    value={recupPar}
+                    onChange={(e) => setRecupPar(e.target.value)}
+                    placeholder="ex: Maman Kofi, Tante Akosua…"
+                    autoFocus
+                  />
+                </FormGroup>
+                <FormGroup label="Contact (téléphone) *">
+                  <Input
+                    value={recupContact}
+                    onChange={(e) => setRecupContact(e.target.value)}
+                    placeholder="ex: +226 70 00 00 00"
+                  />
+                </FormGroup>
+              </div>
             ) : (
               <FormGroup label={pointageModal.type === 'arrivee' ? "Heure d'arrivée" : "Heure de départ"}>
                 <Input type="time" value={heureManuelle}
