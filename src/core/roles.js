@@ -31,19 +31,25 @@ export const APPROVER_ROLES = ['super_admin', 'pau', 'ge', 'gerant', 'admin', 'c
 // 2e niveau : certification définitive (déclenche l'effet métier).
 export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'admin']
 
-export const isFullAccessRole   = (r) => FULL_ACCESS_ROLES.includes(r)
-export const isViewAllRole      = (r) => VIEW_ALL_ROLES.includes(r)
-export const isApproverRole     = (r) => APPROVER_ROLES.includes(r)
-export const isCertifierRole    = (r) => CERTIFIER_ROLES.includes(r)
+// Rôles autorisés à voir les données FINANCIÈRES (chiffre d'affaires, montants)
+// et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
+export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'admin', 'superviseur', 'gerant', 'controleur']
+
+export const isFullAccessRole  = (r) => FULL_ACCESS_ROLES.includes(r)
+export const isViewAllRole     = (r) => VIEW_ALL_ROLES.includes(r)
+export const isApproverRole    = (r) => APPROVER_ROLES.includes(r)
+export const isCertifierRole   = (r) => CERTIFIER_ROLES.includes(r)
+export const canViewFinance    = (r) => FINANCE_VIEW_ROLES.includes(r)
+export const canViewPilotage   = (r) => FINANCE_VIEW_ROLES.includes(r)
 
 // Rôles garderie
-export const isGeranteGarderie  = (r) => r === 'gerante_garderie'
-export const isTata             = (r) => r === 'tata'
-export const isRoleGarderie     = (r) => ['gerante_garderie', 'tata'].includes(r)
+export const isGeranteGarderie = (r) => r === 'gerante_garderie'
+export const isTata            = (r) => r === 'tata'
+export const isRoleGarderie    = (r) => ['gerante_garderie', 'tata'].includes(r)
 
 // Droits garderie détaillés
-export const garderieCanEdit    = (r) => !['tata', 'superviseur'].includes(r) || FULL_ACCESS_ROLES.includes(r)
-export const garderieCanManage  = (r) => [...FULL_ACCESS_ROLES, 'gerante_garderie'].includes(r)
+export const garderieCanEdit   = (r) => !['tata', 'superviseur'].includes(r) || FULL_ACCESS_ROLES.includes(r)
+export const garderieCanManage = (r) => [...FULL_ACCESS_ROLES, 'gerante_garderie'].includes(r)
 
 const LEGACY_LABEL = { admin: 'Administrateur', controleur: 'Contrôleur' }
 

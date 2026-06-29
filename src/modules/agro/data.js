@@ -15,20 +15,46 @@ export const ESPECES = [
   { id: 'boucs', nom: 'Boucs', cat: 'CAPRINS', prix: 50000 },
   { id: 'chevres', nom: 'Chèvres', cat: 'CAPRINS', prix: 40000 },
   { id: 'chevreaux', nom: 'Chevreaux (≤8 mois)', cat: 'CAPRINS', prix: 20000 },
-  // VOLAILLES
-  { id: 'poulets_g', nom: 'Poulets Goliath', cat: 'VOLAILLES', prix: 8000 },
-  { id: 'poussins_g', nom: 'Poussins Goliath', cat: 'VOLAILLES', prix: 2500 },
-  { id: 'poulets_o', nom: 'Poulets Ordinaires', cat: 'VOLAILLES', prix: 4000 },
-  { id: 'poussins_o', nom: 'Poussins Ordinaires', cat: 'VOLAILLES', prix: 1500 },
-  { id: 'poulets_c', nom: 'Poulets de Chair', cat: 'VOLAILLES', prix: 5500 },
-  { id: 'poussins', nom: 'Poussins', cat: 'VOLAILLES', prix: 1200 },
-  { id: 'pintades', nom: 'Pintades', cat: 'VOLAILLES', prix: 7000 },
-  { id: 'pintadeaux', nom: 'Pintadeaux', cat: 'VOLAILLES', prix: 3500 },
-  { id: 'dindons', nom: 'Dindons', cat: 'VOLAILLES', prix: 15000 },
-  { id: 'dindonneaux', nom: 'Dindonneaux', cat: 'VOLAILLES', prix: 5000 },
-  { id: 'canards', nom: 'Canards', cat: 'VOLAILLES', prix: 6000 },
-  { id: 'cannetons', nom: 'Cannetons', cat: 'VOLAILLES', prix: 2500 }
+  // POULETS (poulets ordinaires, Goliath, de chair + poussins)
+  { id: 'poulets_g', nom: 'Poulets Goliath', cat: 'POULETS', prix: 8000 },
+  { id: 'poussins_g', nom: 'Poussins Goliath', cat: 'POULETS', prix: 2500 },
+  { id: 'poulets_o', nom: 'Poulets Ordinaires', cat: 'POULETS', prix: 4000 },
+  { id: 'poussins_o', nom: 'Poussins Ordinaires', cat: 'POULETS', prix: 1500 },
+  { id: 'poulets_c', nom: 'Poulets de Chair', cat: 'POULETS', prix: 5500 },
+  { id: 'poussins', nom: 'Poussins', cat: 'POULETS', prix: 1200 },
+  // PINTADES (pintades + pintadeaux)
+  { id: 'pintades', nom: 'Pintades', cat: 'PINTADES', prix: 7000 },
+  { id: 'pintadeaux', nom: 'Pintadeaux', cat: 'PINTADES', prix: 3500 },
+  // DINDONS (dindons + dindonneaux)
+  { id: 'dindons', nom: 'Dindons', cat: 'DINDONS', prix: 15000 },
+  { id: 'dindonneaux', nom: 'Dindonneaux', cat: 'DINDONS', prix: 5000 },
+  // CANARDS (canards + cannetons)
+  { id: 'canards', nom: 'Canards', cat: 'CANARDS', prix: 6000 },
+  { id: 'cannetons', nom: 'Cannetons', cat: 'CANARDS', prix: 2500 }
 ]
+
+// Migration : la catégorie globale « VOLAILLES » est éclatée en 4 catégories
+// autonomes. Cette table remappe chaque ancienne espèce volaille vers sa nouvelle
+// catégorie (utilisée par le store pour migrer le référentiel existant en base).
+export const VOLAILLE_MAP = {
+  poulets_g: 'POULETS', poussins_g: 'POULETS', poulets_o: 'POULETS',
+  poussins_o: 'POULETS', poulets_c: 'POULETS', poussins: 'POULETS',
+  pintades: 'PINTADES', pintadeaux: 'PINTADES',
+  dindons: 'DINDONS', dindonneaux: 'DINDONS',
+  canards: 'CANARDS', cannetons: 'CANARDS'
+}
+
+// Déduit la catégorie de volaille à partir du NOM de l'espèce (robuste aux
+// identifiants personnalisés : « Poulet Ordinaire », « Poulets de Chairs »…).
+// Renvoie null si le nom ne correspond à aucune volaille connue.
+export function categorieVolaille(nom) {
+  const s = (nom || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (s.includes('canard') || s.includes('caneton') || s.includes('canneton')) return 'CANARDS'
+  if (s.includes('dindon')) return 'DINDONS'          // dindon, dindonneau(x)
+  if (s.includes('pintad')) return 'PINTADES'         // pintade(s), pintadeau(x)
+  if (s.includes('poul') || s.includes('poussin')) return 'POULETS' // poule(t)s, poussin(s)
+  return null
+}
 
 export const ALIMENTS = [
   { id: 'tourteau_mais', nom: 'Tourteau de Maïs', cat: 'ALIMENTS', prix: 350, unite: 'kg' },
@@ -48,17 +74,36 @@ export const ALIMENTS = [
 
 export const UNITES_ALIMENT = ['kg', 'sacs', 'litres', 'unités', 'tonnes', 'balles']
 
-// Catégories de base et couleurs associées (pour graphiques / styles)
-export const CAT_ANIMAUX = ['OVINS', 'BOVINS', 'CAPRINS', 'VOLAILLES']
+// Catégories de base et couleurs associées (pour graphiques / styles).
+// « VOLAILLES » est désormais éclatée en CANARDS, DINDONS, PINTADES, POULETS.
+export const CAT_ANIMAUX = ['OVINS', 'BOVINS', 'CAPRINS', 'CANARDS', 'DINDONS', 'PINTADES', 'POULETS']
 export const CAT_ALIMENTS = ['ALIMENTS', 'DIVERS']
 export const CAT_COLORS = {
   OVINS: '#0284c7',
   BOVINS: '#7c3aed',
   CAPRINS: '#16a34a',
-  VOLAILLES: '#ea580c',
+  CANARDS: '#0891b2',
+  DINDONS: '#be123c',
+  PINTADES: '#d97706',
+  POULETS: '#ea580c',
+  VOLAILLES: '#ea580c', // conservé (compat anciennes données avant migration)
   ALIMENTS: '#0369a1',
   DIVERS: '#64748b'
 }
+
+// ─────────── Workflow de FACTURATION (sortie de stock) ───────────
+// brouillon → sortie_demandee → sortie_approuvee → certifiee
+//                    ↘ refusee            ↘ modif_demandee ↗ (ajustement hiérarchie)
+export const FACTURE_STATUTS = {
+  brouillon:        { label: 'Brouillon', tone: 'neutral' },
+  sortie_demandee:  { label: 'Sortie demandée', tone: 'warning' },
+  sortie_approuvee: { label: 'Sortie approuvée', tone: 'info' },
+  modif_demandee:   { label: 'Modification demandée', tone: 'warning' },
+  certifiee:        { label: 'Certifiée', tone: 'success' },
+  refusee:          { label: 'Refusée', tone: 'danger' }
+}
+// Les factures héritées (sans statut) sont considérées CERTIFIÉES (déjà émises).
+export const factureStatut = (f) => (f && f.statut) || 'certifiee'
 
 // Palette de secours pour les catégories personnalisées (créées par l'utilisateur).
 const EXTRA_COLORS = ['#0891b2', '#db2777', '#ca8a04', '#4f46e5', '#0d9488', '#be123c', '#7c3aed', '#15803d']

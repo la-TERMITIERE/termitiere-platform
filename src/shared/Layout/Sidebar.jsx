@@ -16,12 +16,12 @@ export default function Sidebar({ open, onClose }) {
   const seg = location.pathname.split('/')[1]
   const activeModule = getModule(seg)
 
-  // Badge demandes AGRO en attente
-  const { data: demandesAgro } = useCollection('agro_demandes')
+  // Badge demandes AGRO : factures en attente d'approbation ou d'ajustement d'écart.
+  const { data: facturesAgro } = useCollection('agro_factures')
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
   const badges = {
-    agroDemandes: demandesAgro.filter((d) => estActif(d.statut)).length,
+    agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
     logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
     briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
   }
@@ -132,7 +132,7 @@ export default function Sidebar({ open, onClose }) {
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
                 {activeModule.nom}
               </p>
-              {moduleNav.map((item) => (
+              {moduleNav.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
                   <item.icon size={18} /> {item.label}
                   {item.badgeKey && badges[item.badgeKey] > 0 && (

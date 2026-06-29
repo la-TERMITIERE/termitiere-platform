@@ -101,6 +101,9 @@ function sessionFromProfile(p) {
     role,
     // Les rôles « voit tout » (accès total + superviseur) reçoivent tous les modules.
     modules: isViewAllRole(role) ? ALL_MODULES : (p.modules || []),
+    // Droits de saisie par catégorie d'animaux (Maxi-Agro). null = aucune restriction
+    // (comptes hérités) ; tableau (même vide) = restriction explicite.
+    agroCategories: Array.isArray(p.agroCategories) ? p.agroCategories : null,
     secteur: p.secteur || '',
     actif: p.actif !== false
   }
