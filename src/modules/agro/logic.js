@@ -53,7 +53,9 @@ export const finAliment = ({ init, ent, sor }) =>
 // Types d'ENTRÉES pour les animaux (la naissance est un cas d'entrée biologique).
 // La « Mutation » n'est PAS saisie en entrée : elle est générée automatiquement
 // côté espèce de destination quand on enregistre la mutation en SORTIE de l'origine.
-export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Dons', 'Autres']
+// « Retour du marché » : réintégration au stock des animaux sortis mais non vendus
+// (généré automatiquement lors de l'ajustement d'un écart de facturation).
+export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Retour du marché', 'Dons', 'Autres']
 // Types de SORTIES pour les animaux. La « Mutation » porte une espèce de destination.
 export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', 'Perte', 'Dons', 'Autres']
 // Saisie directe : Ventes et Dons passent par le workflow « Demande » (approbation).

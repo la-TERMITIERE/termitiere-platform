@@ -67,6 +67,18 @@ export default function Dashboard() {
     [especes, scope]
   )
 
+  // Catégorie ACTUELLE d'un article (par id) — pour rattacher le CA des factures
+  // à la bonne catégorie même si la ligne porte un ancien `articleCat` (ex. VOLAILLES
+  // avant l'éclatement). On résout d'abord par le référentiel, sinon on retombe
+  // sur la valeur stockée.
+  const catById = useMemo(() => {
+    const m = {}
+    especes.forEach((e) => { m[e.id] = e.cat })
+    aliments.forEach((a) => { m[a.id] = a.cat })
+    return m
+  }, [especes, aliments])
+  const ligneCat = (l) => catById[l.articleId] || l.articleCat
+
   // Indicateurs du périmètre : effectif, base, malades, naissances, décès, taux.
   const ind = useMemo(() => {
     let effectif = 0, base = 0, malades = 0
@@ -106,14 +118,14 @@ export default function Dashboard() {
     const certifs = factures.filter((f) => factureStatut(f) === 'certifiee')
     const montant = (f) => scope === TOUTES
       ? (f.totalTTC || 0)
-      : (f.lignes || []).filter((l) => l.articleCat === scope).reduce((s, l) => s + (l.total || 0), 0)
+      : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((s, l) => s + (l.total || 0), 0)
     const sumIn = (s, e) => certifs.filter((f) => f.date >= s && f.date <= e).reduce((acc, f) => acc + montant(f), 0)
     const nbDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const prevEnd = addDays(start, -1)
     const prevStart = addDays(prevEnd, -(nbDays - 1))
     const liste = certifs.filter((f) => f.date >= start && f.date <= end && montant(f) > 0).sort((a, b) => (a.date < b.date ? 1 : -1))
     return { courant: sumIn(start, end), precedent: sumIn(prevStart, prevEnd), liste, prevStart, prevEnd }
-  }, [factures, start, end, scope])
+  }, [factures, start, end, scope, catById])
 
   // Série de morbidité (scope) + prévision 7 jours.
   const morbiditeSerie = useMemo(() => {
@@ -332,7 +344,7 @@ export default function Dashboard() {
         <Modal open={modalKey === 'ca'} onClose={() => setModalKey(null)} size="lg" title={`Chiffre d'affaires — ${scopeLabel}`}>
           <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{formatMoney(ca.courant)} — période préc. : {formatMoney(ca.precedent)}</p>
           <p className="my-2 text-xs italic text-gray-400">CA = factures <strong>certifiées</strong> uniquement{scope !== TOUTES ? ' (montant des lignes de cette catégorie)' : ''}.</p>
-          <DetailTable rows={ca.liste} cols={['Date', 'N°', 'Client', 'Montant']} render={(f) => [formatDateShort(f.date), f.numero || '—', f.client?.nom || '—', formatMoney(scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => l.articleCat === scope).reduce((s, l) => s + (l.total || 0), 0))]} empty="Aucune facture certifiée sur la période." />
+          <DetailTable rows={ca.liste} cols={['Date', 'N°', 'Client', 'Montant']} render={(f) => [formatDateShort(f.date), f.numero || '—', f.client?.nom || '—', formatMoney(scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((s, l) => s + (l.total || 0), 0))]} empty="Aucune facture certifiée sur la période." />
         </Modal>
       )}
     </div>

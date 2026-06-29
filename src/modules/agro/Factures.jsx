@@ -6,7 +6,7 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, Clock } from 'lucide-react'
+import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -19,13 +19,16 @@ import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
-import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
-import { APPROVER_ROLES } from '../../core/roles'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
-import { creerDemandesFacture, ajusterFactureEcart } from './factureStock'
+import EcartModal from './EcartModal'
+import {
+  lignesEffectives, calcTotaux,
+  demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
+  certifier as wfCertifier, signalerEcart as wfSignaler, appliquerAjustement as wfAjuster, rouvrir as wfRouvrir
+} from './factureWorkflow'
 
 const emptyFacture = () => ({
   date: todayStr(),
@@ -35,15 +38,6 @@ const emptyFacture = () => ({
   remise: 0,
   tva: 0
 })
-
-// Lignes effectives pour le calcul (réelles après écart, sinon facturées).
-const lignesEffectives = (f) => (f.lignesReelles?.length ? f.lignesReelles : f.lignes) || []
-const calcTotaux = (lignes, remise = 0, tva = 0) => {
-  const totalHT = (lignes || []).reduce((s, l) => s + (l.total || 0), 0)
-  const apresRemise = totalHT * (1 - (remise || 0) / 100)
-  const t = apresRemise * ((tva || 0) / 100)
-  return { totalHT, totalTTC: Math.round(apresRemise + t) }
-}
 
 export default function Factures() {
   const { user, role, canManage } = useAuth()
@@ -139,96 +133,43 @@ export default function Factures() {
     toast.success('Facture supprimée')
   }
 
-  // ─────────── Transitions du workflow ───────────
-  const horoNote = () => `${todayStr()} ${new Date().toTimeString().slice(0, 5)}`
+  // ─────────── Transitions du workflow (logique partagée dans factureWorkflow) ───────────
+  const run = async (fn, okMsg) => {
+    setBusy(true)
+    try { await fn(); if (okMsg) toast.success(okMsg) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+    finally { setBusy(false) }
+  }
 
   async function demanderSortie(f) {
     if (!confirm(`Soumettre la sortie de la facture ${f.numero} à la hiérarchie ?`)) return
-    setBusy(true)
-    try {
-      await updateItem('agro_factures', f.id, { statut: 'sortie_demandee', sortieDemandeeLe: horoNote(), sortieDemandeePar: user.nom })
-      await audit('agro', 'FACTURE_SORTIE_DEMANDE', `${f.numero} — ${formatMoney(f.totalTTC || 0)}`)
-      await notify({ type: 'demande', title: 'Sortie de stock à approuver 📦', body: `Facture ${f.numero} — ${f.client?.nom || ''} (${formatMoney(f.totalTTC || 0)})`, module: 'agro', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/agro/factures' })
-      toast.success('📤 Demande de sortie soumise à la hiérarchie ✓')
-    } finally { setBusy(false) }
+    run(() => wfDemander(f, user), '📤 Demande de sortie soumise à la hiérarchie ✓')
   }
-
   async function approuverSortie(f) {
-    if (!confirm(`Approuver la sortie de stock de la facture ${f.numero} ? Les quantités seront décomptées du stock.`)) return
-    setBusy(true)
-    try {
-      await creerDemandesFacture(f, user)
-      await updateItem('agro_factures', f.id, { statut: 'sortie_approuvee', sortieApprouveeLe: horoNote(), sortieApprouveePar: user.nom })
-      await audit('agro', 'FACTURE_SORTIE_APPROUVEE', `${f.numero} — sortie autorisée`)
-      await notify({ type: 'approuve', title: 'Sortie approuvée ✅', body: `Facture ${f.numero} — vous pouvez certifier ou signaler un écart`, module: 'agro', forUsers: [f.createdBy], excludeUid: user.uid, link: '/agro/factures' })
-      toast.success('✅ Sortie approuvée — stock décompté')
-    } catch (e) {
-      toast.error('Erreur : ' + e.message)
-    } finally { setBusy(false) }
+    if (!confirm(`Approuver la sortie de stock de la facture ${f.numero} ? Le stock sera décompté.`)) return
+    run(() => wfApprouver(f, user), '✅ Sortie approuvée — stock décompté')
   }
-
   async function refuserSortie(f) {
     const motif = prompt(`Refuser la sortie de la facture ${f.numero} ?\nMotif (optionnel) :`)
     if (motif === null) return
-    setBusy(true)
-    try {
-      await updateItem('agro_factures', f.id, { statut: 'refusee', refuseLe: horoNote(), refusePar: user.nom, refusMotif: motif.trim() })
-      await audit('agro', 'FACTURE_SORTIE_REFUSEE', `${f.numero}${motif.trim() ? ' — ' + motif.trim() : ''}`)
-      await notify({ type: 'refus', title: 'Sortie refusée ⛔', body: `Facture ${f.numero}${motif.trim() ? ' — ' + motif.trim() : ''}`, module: 'agro', forUsers: [f.createdBy], excludeUid: user.uid, link: '/agro/factures' })
-      toast.error('Sortie refusée')
-    } finally { setBusy(false) }
+    run(() => wfRefuser(f, user, motif), 'Sortie refusée')
   }
-
   async function certifier(f) {
-    const lignes = lignesEffectives(f)
-    const { totalHT, totalTTC } = calcTotaux(lignes, f.remise, f.tva)
+    const { totalTTC } = calcTotaux(lignesEffectives(f), f.remise, f.tva)
     if (!confirm(`Certifier la facture ${f.numero} pour ${formatMoney(totalTTC)} ? Elle deviendra définitive et imprimable.`)) return
-    setBusy(true)
-    try {
-      // Les lignes réelles deviennent les lignes facturées (impression + CA).
-      await updateItem('agro_factures', f.id, { statut: 'certifiee', lignes, totalHT, totalTTC, certifieeLe: horoNote(), certifieePar: user.nom })
-      await audit('agro', 'FACTURE_CERTIFIEE', `${f.numero} — ${formatMoney(totalTTC)} (CA enregistré)`)
-      await notify({ type: 'info', title: 'Facture certifiée ✅', body: `${f.numero} — ${formatMoney(totalTTC)}`, module: 'agro', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/agro/factures' })
-      toast.success('✅ Facture certifiée — CA enregistré, impression disponible')
-    } catch (e) {
-      toast.error('Erreur : ' + e.message)
-    } finally { setBusy(false) }
+    run(() => wfCertifier(f, user), '✅ Facture certifiée — CA enregistré, impression disponible')
   }
-
   async function signalerEcart(f) {
     const motif = prompt(`Signaler un écart sur la facture ${f.numero}\n(ex : reliquats retournés, pertes au marché)\nMessage à la hiérarchie :`)
     if (motif === null) return
-    setBusy(true)
-    try {
-      await updateItem('agro_factures', f.id, { statut: 'modif_demandee', ecartMotif: motif.trim(), ecartSignaleLe: horoNote(), ecartSignalePar: user.nom })
-      await audit('agro', 'FACTURE_ECART_DEMANDE', `${f.numero}${motif.trim() ? ' — ' + motif.trim() : ''}`)
-      await notify({ type: 'demande', title: 'Demande de modification 📝', body: `Facture ${f.numero} — écart à ajuster${motif.trim() ? ' : ' + motif.trim() : ''}`, module: 'agro', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/agro/factures' })
-      toast.success('📝 Demande de modification envoyée à la hiérarchie')
-    } finally { setBusy(false) }
+    run(() => wfSignaler(f, user, motif), '📝 Demande de modification envoyée à la hiérarchie')
   }
-
-  // Ajustement de l'écart par la hiérarchie (depuis EcartModal).
   async function appliquerAjustement(f, ajustements) {
-    setBusy(true)
-    try {
-      const lignesReelles = await ajusterFactureEcart(f, ajustements)
-      await updateItem('agro_factures', f.id, {
-        statut: 'sortie_approuvee',
-        lignesDemandees: f.lignesDemandees || f.lignes,
-        lignesReelles, ecartAjuste: true, ecartAjusteLe: horoNote(), ecartAjustePar: user.nom
-      })
-      await audit('agro', 'FACTURE_ECART_AJUSTE', `${f.numero} — quantités réelles ajustées`)
-      await notify({ type: 'approuve', title: 'Quantités ajustées ✅', body: `Facture ${f.numero} — vous pouvez certifier la facture ajustée`, module: 'agro', forUsers: [f.createdBy], excludeUid: user.uid, link: '/agro/factures' })
-      toast.success('✅ Quantités réelles ajustées — stock réajusté')
-      setEcart(null)
-    } catch (e) {
-      toast.error('Erreur : ' + e.message)
-    } finally { setBusy(false) }
+    await run(() => wfAjuster(f, user, ajustements), '✅ Quantités réelles ajustées — stock réajusté')
+    setEcart(null)
   }
-
   async function rouvrir(f) {
-    await updateItem('agro_factures', f.id, { statut: 'brouillon' })
-    toast.success('Facture rouverte en brouillon')
+    run(() => wfRouvrir(f), 'Facture rouverte en brouillon')
   }
 
   // Boutons contextuels selon statut + rôle.
@@ -400,74 +341,5 @@ export default function Factures() {
       {/* Modal écart : ajustement des quantités réelles par la hiérarchie */}
       <EcartModal facture={ecart} onClose={() => setEcart(null)} onSubmit={appliquerAjustement} busy={busy} />
     </div>
-  )
-}
-
-// Ajustement de l'écart (hiérarchie) : pour chaque ligne, quantités réellement
-// vendues + mortes au marché ; le reliquat est retourné au stock.
-function EcartModal({ facture, onClose, onSubmit, busy }) {
-  const lignes = (facture?.lignes || []).map((l, i) => ({ ...l, _idx: i })).filter((l) => l.articleId && (parseInt(l.qte) || 0) > 0)
-  const [vals, setVals] = useState({})
-
-  // Initialise (vendus = qté demandée, morts = 0) à l'ouverture.
-  const initIfNeeded = (idx, qte) => {
-    if (vals[idx]) return vals[idx]
-    return { sold: qte, dead: 0 }
-  }
-  const set = (idx, patch, qte) => setVals((v) => ({ ...v, [idx]: { ...initIfNeeded(idx, qte), ...patch } }))
-
-  function submit() {
-    const ajustements = lignes.map((l) => {
-      const cur = vals[l._idx] || { sold: parseInt(l.qte) || 0, dead: 0 }
-      const sold = Math.max(0, parseInt(cur.sold) || 0)
-      const dead = Math.max(0, parseInt(cur.dead) || 0)
-      return { ligneIdx: l._idx, sold, dead }
-    })
-    // Garde-fou : vendus + morts ne peut dépasser la quantité sortie.
-    for (const l of lignes) {
-      const aj = ajustements.find((a) => a.ligneIdx === l._idx)
-      if (aj.sold + aj.dead > (parseInt(l.qte) || 0)) {
-        return toast.error(`${l.article} : vendus + morts dépasse la quantité sortie (${l.qte})`)
-      }
-    }
-    onSubmit(facture, ajustements)
-  }
-
-  return (
-    <Modal open={!!facture} onClose={onClose} size="lg"
-      title={facture ? `Ajuster l'écart — ${facture.numero}` : ''}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={submit} loading={busy}><Check size={15} /> Appliquer & réajuster le stock</Button></>}>
-      {facture && (
-        <div className="space-y-3">
-          {facture.ecartMotif && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800"><Clock size={14} className="mr-1 inline" />Écart signalé par {facture.ecartSignalePar} : « {facture.ecartMotif} »</p>}
-          <p className="text-xs text-gray-500">Indiquez, pour chaque ligne, le nombre réellement <strong>vendu</strong> et le nombre <strong>mort au marché</strong>. Le reliquat (sortie − vendus − morts) est <strong>retourné au stock</strong>.</p>
-          <div className="overflow-x-auto rounded-lg border border-gray-100">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr><th className="px-3 py-2 text-left">Article</th><th className="px-2 py-2 text-center">Sortis</th><th className="px-2 py-2 text-center">Vendus</th><th className="px-2 py-2 text-center">Morts</th><th className="px-2 py-2 text-center">Retournés</th></tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {lignes.map((l) => {
-                  const cur = vals[l._idx] || { sold: parseInt(l.qte) || 0, dead: 0 }
-                  const sold = parseInt(cur.sold) || 0
-                  const dead = parseInt(cur.dead) || 0
-                  const ret = Math.max(0, (parseInt(l.qte) || 0) - sold - dead)
-                  return (
-                    <tr key={l._idx}>
-                      <td className="px-3 py-1.5 font-semibold">{l.article}</td>
-                      <td className="px-2 py-1.5 text-center font-bold">{l.qte}</td>
-                      <td className="px-2 py-1.5 text-center"><Input type="number" min="0" className="w-20" value={cur.sold} onChange={(e) => set(l._idx, { sold: e.target.value }, parseInt(l.qte) || 0)} /></td>
-                      <td className="px-2 py-1.5 text-center"><Input type="number" min="0" className="w-20" value={cur.dead} onChange={(e) => set(l._idx, { dead: e.target.value }, parseInt(l.qte) || 0)} /></td>
-                      <td className="px-2 py-1.5 text-center text-sky-700 font-semibold">{ret}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-gray-400">Le CA sera calculé sur les quantités <strong>vendues</strong> lors de la certification par l'agent.</p>
-        </div>
-      )}
-    </Modal>
   )
 }

@@ -16,12 +16,12 @@ export default function Sidebar({ open, onClose }) {
   const seg = location.pathname.split('/')[1]
   const activeModule = getModule(seg)
 
-  // Badge demandes AGRO en attente
-  const { data: demandesAgro } = useCollection('agro_demandes')
+  // Badge demandes AGRO : factures en attente d'approbation ou d'ajustement d'écart.
+  const { data: facturesAgro } = useCollection('agro_factures')
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
   const badges = {
-    agroDemandes: demandesAgro.filter((d) => estActif(d.statut)).length,
+    agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
     logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
     briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
   }

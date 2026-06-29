@@ -15,7 +15,7 @@
 // sont pilotées entièrement depuis la Facturation.
 import { getAll, addItem, updateItem, setItem } from '../../core/db'
 import { appliquerDemandeAuStock } from './applyDemande'
-import { getInventaire } from './logic'
+import { getInventaire, autoSorties, mutationsEntrantes, agregerAnimal } from './logic'
 
 // Lignes « stockables » d'une facture : article identifié + quantité > 0.
 function lignesStockables(facture) {
@@ -46,9 +46,14 @@ export async function creerDemandesFacture(facture, user) {
   }
 }
 
-// Applique un écart : pour chaque ligne, `sold` = réellement vendu, `dead` = morts au
-// marché. Le reliquat (qté − vendu − morts) est implicitement retourné en stock.
-// Renvoie les lignes réelles (qté = vendu) pour mise à jour de la facture.
+// Applique un écart. Pour chaque ligne (sortie de `qte` au marché) :
+//   sold  = réellement vendu      → sortie « Ventes »  (compte le CA)
+//   dead  = morts au marché       → sortie « Décès »   (mortalité)
+//   ret   = qte − sold − dead     → ENTRÉE « Retour du marché » (revient au stock)
+//                                   + sortie de reliquat (les 10 sont aussi partis
+//                                     avec le lot) pour que les comptes s'équilibrent.
+// Résultat net sur le stock : −(sold + dead). Toutes les lignes sont VISIBLES.
+// Renvoie les lignes réelles (qté = vendu) pour le calcul du CA.
 export async function ajusterFactureEcart(facture, ajustements) {
   const demandes = await getAll('agro_demandes')
   const byIdx = Object.fromEntries((ajustements || []).map((a) => [a.ligneIdx, a]))
@@ -56,22 +61,23 @@ export async function ajusterFactureEcart(facture, ajustements) {
   for (const l of lignesStockables(facture)) {
     const i = l._idx
     const aj = byIdx[i] || {}
+    const demande = parseInt(l.qte) || 0
     const sold = Math.max(0, parseInt(aj.sold) || 0)
     const dead = Math.max(0, parseInt(aj.dead) || 0)
+    const ret = Math.max(0, demande - sold - dead)
 
-    // 1) Ajuster la demande liée (ventes) à la quantité réellement vendue.
+    // 1) La demande liée (Ventes) passe à la quantité réellement VENDUE → CA + stock.
     const link = demandes.find((d) => d.factureId === facture.id && d.ligneIdx === i)
     if (link) {
       await updateItem('agro_demandes', link.id, { qte: sold })
       await appliquerDemandeAuStock({ ...link, qte: sold, statut: 'certifie' })
     }
-    // 2) Morts au marché → Décès sur l'inventaire (animaux uniquement).
+    // 2) Décès + Retour du marché (animaux uniquement) — lignes explicites & tracées.
     if ((l.articleType || 'animal') === 'animal') {
-      await appliquerDecesFacture(facture, i, l.articleId, dead)
+      await appliquerEcartInventaire(facture, i, l.articleId, dead, ret)
     }
   }
 
-  // Lignes réelles (facturées = vendues) pour le calcul du CA réel.
   return (facture.lignes || []).map((l, i) => {
     const aj = byIdx[i]
     if (!aj || !l.articleId) return l
@@ -80,36 +86,35 @@ export async function ajusterFactureEcart(facture, ajustements) {
   })
 }
 
-// Inscrit (idempotemment) une ligne de Décès « marché » sur l'inventaire de la date
-// de sortie, tagguée par la facture+ligne. Met à jour les agrégats (dec, fin).
-async function appliquerDecesFacture(facture, ligneIdx, articleId, dead) {
+// Inscrit (idempotemment) les lignes de Décès, de Retour du marché (entrée) et de
+// reliquat (sortie d'équilibre) tagguées par facture+ligne, puis RECALCULE
+// intégralement les agrégats du nœud à partir de ses listes (exact, sans dérive).
+async function appliquerEcartInventaire(facture, ligneIdx, articleId, dead, ret) {
   const inventaires = await getAll('agro_inventaires')
   const inv = getInventaire(inventaires, facture.date)
-  if (!inv) return // pas de saisie ce jour → la mortalité sera saisie manuellement
+  if (!inv) return // pas de saisie ce jour → à enregistrer manuellement
   const node = inv.animaux?.[articleId]
   if (!node) return
 
-  const tag = `facture:${facture.id}:${ligneIdx}`
-  const sorties = [...(node.sorties || [])]
-  const idx = sorties.findIndex((x) => x.agentId === tag && x.type === 'Décès')
-  const oldDead = idx >= 0 ? (parseInt(sorties[idx].qte) || 0) : 0
-  const delta = dead - oldDead
-  if (delta === 0 && idx >= 0) return
-  if (dead <= 0 && idx < 0) return
+  const num = facture.numero || 'facture'
+  const decTag = `fac-dec:${facture.id}:${ligneIdx}`   // décès
+  const relTag = `fac-relq:${facture.id}:${ligneIdx}`  // reliquat sorti (équilibre)
+  const retTag = `fac-ret:${facture.id}:${ligneIdx}`   // retour du marché (entrée)
 
-  const line = {
-    type: 'Décès', qte: dead, label: `Mortalité au marché — ${facture.numero || 'facture'}`,
-    agentId: tag, agentNom: 'Facturation'
+  // Retire les anciennes lignes tagguées de cette facture+ligne, puis réinsère.
+  const sorties = (node.sorties || []).filter((x) => x.agentId !== decTag && x.agentId !== relTag)
+  const entrees = (node.entrees || []).filter((x) => x.agentId !== retTag)
+  if (dead > 0) sorties.push({ type: 'Décès', qte: dead, label: `Mortalité au marché — ${num}`, agentId: decTag, agentNom: 'Facturation' })
+  if (ret > 0) {
+    sorties.push({ type: 'Autres', qte: ret, label: `Reliquat parti puis retourné — ${num}`, agentId: relTag, agentNom: 'Facturation' })
+    entrees.push({ type: 'Retour du marché', qte: ret, label: `Retour du marché — ${num}`, agentId: retTag, agentNom: 'Facturation' })
   }
-  if (idx >= 0) {
-    if (dead <= 0) sorties.splice(idx, 1); else sorties[idx] = line
-  } else {
-    sorties.push(line)
-  }
-  const newNode = {
-    ...node, sorties,
-    dec: Math.max(0, (node.dec || 0) + delta),
-    fin: Math.max(0, (node.fin || 0) - delta)
-  }
+
+  // Recalcul exact des agrégats (init + entrées + mutations − sorties − autoSor).
+  const demandes = await getAll('agro_demandes')
+  const autoSor = autoSorties(demandes, articleId, facture.date, 'animal')
+  const mutIn = mutationsEntrantes(inv.animaux)[articleId] || 0
+  const agg = agregerAnimal({ init: node.init || 0, entrees, sorties }, autoSor, mutIn)
+  const newNode = { ...node, ...agg, entrees, sorties, autoSor }
   await setItem('agro_inventaires', facture.date, { animaux: { ...(inv.animaux || {}), [articleId]: newNode } })
 }
