@@ -66,6 +66,24 @@ export const POSTES_PERSONNEL = [
   { id: 'autre',       label: 'Autre'                 }
 ]
 
+// Grille tarifaire selon l'âge de l'enfant (montant mensuel en FCFA)
+export const GRILLE_TARIFAIRE = [
+  { label: '6 mois – 1 an',  minMois: 6,  maxMois: 12, tarif: 35000 },
+  { label: '1 an – 3 ans',   minMois: 12, maxMois: 36, tarif: 45000 },
+  { label: '3 ans – 5 ans',  minMois: 36, maxMois: 60, tarif: 65000 },
+]
+
+export const TYPES_REPAS = {
+  menu:    { label: 'Menu du jour',  tone: 'success' },
+  special: { label: 'Repas spécial', tone: 'neutral' }
+}
+
+export const APPETITS = {
+  bien:  { label: 'Bien mangé',  tone: 'success' },
+  peu:   { label: 'Peu mangé',   tone: 'warning' },
+  refus: { label: 'Refus',       tone: 'danger'  }
+}
+
 export const JOURS_SEMAINE = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
 export const MOIS = [

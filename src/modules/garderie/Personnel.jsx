@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Clock, CheckCircle2, LogOut, FilePen, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -9,7 +9,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { setItem, updateItem } from '../../core/db'
+import { setItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
@@ -50,17 +50,23 @@ export default function Personnel() {
   const today = todayStr()
   const [dateFiltre, setDateFiltre] = useState(today)
   const [onglet, setOnglet]         = useState('pointage')
-  const [modal, setModal]           = useState(null)
+  const [modal, setModal]                 = useState(null)
   const [pointageModal, setPointageModal] = useState(null)
   const [heureManuelle, setHeureManuelle] = useState('')
+  const [toDelete, setToDelete]               = useState(null)
+  const [saving, setSaving]                   = useState(false)
+  const [deleting, setDeleting]               = useState(false)
+  const [deletedIds, setDeletedIds]           = useState(new Set())
+  const [absenceModal, setAbsenceModal]       = useState(null) // { p, pt }
+  const [justification, setJustification]     = useState('')
 
   // Cache optimiste : mis à jour immédiatement au clic, avant que Firebase réponde
   const [cache, setCache] = useState({})
 
   const personnelActif = useMemo(
-    () => [...personnel].filter((p) => p.statut === 'actif')
+    () => personnel.filter((p) => p.statut === 'actif' && !deletedIds.has(p.id))
       .sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1),
-    [personnel]
+    [personnel, deletedIds]
   )
 
   // Clé stable : une seule entrée par personnel par jour
@@ -88,20 +94,46 @@ export default function Personnel() {
   }, [presences, dateFiltre, personnelActif])
 
   async function handleSave() {
+    if (saving) return
     const d = modal.data
     if (!d.nom.trim() || !d.prenom.trim()) return toast.error('Nom et prénom requis')
     if (!d.poste) return toast.error('Poste requis')
-    if (modal.isNew) {
-      const id = genId()
-      await setItem('garderie_personnel', id, { ...d, id })
-      audit('garderie', 'PERSONNEL_CREATE', `${d.prenom} ${d.nom}`, { poste: d.poste })
-      toast.success('Membre du personnel ajouté ✓')
-    } else {
-      await updateItem('garderie_personnel', modal.id, d)
-      audit('garderie', 'PERSONNEL_EDIT', `${d.prenom} ${d.nom}`)
-      toast.success('Fiche mise à jour ✓')
+    setSaving(true)
+    try {
+      if (modal.isNew) {
+        const id = genId()
+        await setItem('garderie_personnel', id, { ...d, id })
+        audit('garderie', 'PERSONNEL_CREATE', `${d.prenom} ${d.nom}`, { poste: d.poste })
+        toast.success('Membre du personnel ajouté ✓')
+      } else {
+        await updateItem('garderie_personnel', modal.id, d)
+        audit('garderie', 'PERSONNEL_EDIT', `${d.prenom} ${d.nom}`)
+        toast.success('Fiche mise à jour ✓')
+      }
+      setModal(null)
+    } finally {
+      setSaving(false)
     }
-    setModal(null)
+  }
+
+  async function handleDelete() {
+    if (!toDelete || deleting) return
+    setDeleting(true)
+    setDeletedIds((prev) => new Set([...prev, toDelete.id]))
+    const target = toDelete
+    setToDelete(null)
+    try {
+      // Statut 'supprime' en Firebase → caché même après rechargement
+      await setItem('garderie_personnel', target.id, { ...target, statut: 'supprime', id: target.id })
+      await removeItem('garderie_personnel', target.id)
+      audit('garderie', 'PERSONNEL_DELETE', `${target.prenom} ${target.nom}`)
+      toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
+    } catch (err) {
+      audit('garderie', 'PERSONNEL_DELETE', `${target.prenom} ${target.nom}`)
+      toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function pointer(p, type) {
@@ -161,6 +193,19 @@ export default function Personnel() {
     setPointageModal(null)
   }
 
+  async function enregistrerAbsence() {
+    if (!absenceModal) return
+    const { p } = absenceModal
+    const pid = `pres_${p.id}_${dateFiltre}`
+    const payload = { id: pid, personnelId: p.id, date: dateFiltre, statut: 'absent', heureArrivee: '', heureDepart: '', justification: justification.trim() }
+    majCache(p.id, payload)
+    await setItem('garderie_presences', pid, payload)
+    audit('garderie', 'PERSONNEL_ABSENCE', `${p.prenom} ${p.nom}`, { date: dateFiltre, justification: justification.trim() })
+    toast.success(`Absence de ${p.prenom} enregistrée ✓`)
+    setAbsenceModal(null)
+    setJustification('')
+  }
+
   function exportXLSX() {
     const rows = personnelActif.map((p) => {
       const pt = getPointage(p.id)
@@ -171,7 +216,8 @@ export default function Personnel() {
         Arrivée: pt?.heureArrivee || '—',
         Départ: pt?.heureDepart || '—',
         Durée: pt?.heureArrivee && pt?.heureDepart ? (calcDuree(pt.heureArrivee, pt.heureDepart) || '—') : '—',
-        Statut: pt?.heureDepart ? 'Reparti' : pt?.heureArrivee ? 'Présent' : 'Absent'
+        Statut: pt?.statut === 'absent' ? 'Absente' : pt?.heureDepart ? 'Repartie' : pt?.heureArrivee ? 'Présente' : 'Non pointée',
+        Justification: pt?.statut === 'absent' ? (pt.justification || '—') : '—'
       }
     })
     exportRapportExcel({ theme: 'garderie',
@@ -186,7 +232,8 @@ export default function Personnel() {
           { key: 'Arrivée', label: 'Arrivée', width: 12 },
           { key: 'Départ', label: 'Départ', width: 12 },
           { key: 'Durée', label: 'Durée', width: 10 },
-          { key: 'Statut', label: 'Statut', width: 12 }
+          { key: 'Statut', label: 'Statut', width: 12 },
+          { key: 'Justification', label: 'Justification absence', width: 28 }
         ], rows }]
     })
   }
@@ -270,11 +317,12 @@ export default function Personnel() {
                   <th className="px-3 py-2 text-center">🟢 Arrivée</th>
                   <th className="px-3 py-2 text-center">🔴 Départ</th>
                   <th className="px-3 py-2 text-center">⏱ Durée</th>
+                  <th className="px-3 py-2 text-left">Absence / Justification</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {personnelActif.length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">Aucun personnel actif.</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Aucun personnel actif.</td></tr>
                 )}
                 {personnelActif.map((p) => {
                   const pt = getPointage(p.id)
@@ -355,6 +403,34 @@ export default function Personnel() {
                           <span className="text-gray-300 text-xs">—</span>
                         )}
                       </td>
+
+                      {/* Absence / Justification */}
+                      <td className="px-3 py-3">
+                        {pt?.statut === 'absent' ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="flex items-center gap-1 text-xs font-semibold text-red-600">
+                              <AlertCircle size={12} /> Absente
+                            </span>
+                            {pt.justification ? (
+                              <span className="text-xs text-gray-500 italic">{pt.justification}</span>
+                            ) : (
+                              <span className="text-xs text-gray-300 italic">Pas de justification</span>
+                            )}
+                            <button onClick={() => { setJustification(pt.justification || ''); setAbsenceModal({ p, pt }) }}
+                              className="text-[10px] text-orange-500 hover:underline text-left">
+                              modifier
+                            </button>
+                          </div>
+                        ) : !pt?.heureArrivee ? (
+                          <button
+                            onClick={() => { setJustification(''); setAbsenceModal({ p, pt: null }) }}
+                            className="flex items-center gap-1 rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-100">
+                            <AlertCircle size={12} /> Marquer absente
+                          </button>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
@@ -388,7 +464,7 @@ export default function Personnel() {
                 {personnel.length === 0 && (
                   <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucun membre du personnel.</td></tr>
                 )}
-                {[...personnel].sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1).map((p) => (
+                {[...personnel].filter((p) => !deletedIds.has(p.id)).sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1).map((p) => (
                   <tr key={p.id} className="hover:bg-orange-50 transition-colors">
                     <td className="px-3 py-2 font-semibold">{p.prenom} {p.nom}</td>
                     <td className="px-3 py-2 text-xs">{POSTES_PERSONNEL.find((x) => x.id === p.poste)?.label || p.poste}</td>
@@ -401,11 +477,18 @@ export default function Personnel() {
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
-                      <button title="Modifier la fiche"
-                        onClick={() => setModal({ data: { ...emptyPersonnel(), ...p }, isNew: false, id: p.id })}
-                        className="rounded p-1 text-orange-600 hover:bg-orange-50">
-                        <FilePen size={14} />
-                      </button>
+                      <div className="flex gap-1">
+                        <button title="Modifier la fiche"
+                          onClick={() => setModal({ data: { ...emptyPersonnel(), ...p }, isNew: false, id: p.id })}
+                          className="rounded p-1 text-orange-600 hover:bg-orange-50">
+                          <FilePen size={14} />
+                        </button>
+                        <button title="Supprimer"
+                          onClick={() => setToDelete(p)}
+                          className="rounded p-1 text-red-500 hover:bg-red-50">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -414,6 +497,38 @@ export default function Personnel() {
           </Card>
         </>
       )}
+
+      {/* Modal absence / justification */}
+      <Modal
+        open={!!absenceModal}
+        onClose={() => setAbsenceModal(null)}
+        size="sm"
+        title={absenceModal ? `🔴 Absence — ${absenceModal.p.prenom} ${absenceModal.p.nom}` : ''}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setAbsenceModal(null)}>Annuler</Button>
+            <Button variant="danger" onClick={enregistrerAbsence}>Enregistrer l'absence</Button>
+          </>
+        }
+      >
+        {absenceModal && (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              📅 {formatDateShort(dateFiltre)} · {absenceModal.p.prenom} {absenceModal.p.nom} sera marquée <strong>absente</strong>.
+            </div>
+            <FormGroup label="Motif / Justification (optionnel)">
+              <textarea
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                rows={3}
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="ex: Maladie, congé, raison personnelle…"
+                autoFocus
+              />
+            </FormGroup>
+          </div>
+        )}
+      </Modal>
 
       {/* Modal pointage manuel */}
       <Modal open={!!pointageModal} onClose={() => setPointageModal(null)} size="sm"
@@ -439,10 +554,31 @@ export default function Personnel() {
         )}
       </Modal>
 
+      {/* Modal confirmation suppression */}
+      <Modal
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        title="Supprimer ce membre du personnel ?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button>
+            <Button variant="danger" onClick={handleDelete} loading={deleting}>Supprimer définitivement</Button>
+          </>
+        }
+      >
+        {toDelete && (
+          <p className="text-sm text-gray-600">
+            Vous allez supprimer <span className="font-bold text-gray-900">{toDelete.prenom} {toDelete.nom}</span> ({POSTES_PERSONNEL.find((x) => x.id === toDelete.poste)?.label || toDelete.poste}) de la base de données.
+            Cette action est <span className="font-semibold text-red-600">irréversible</span>.
+          </p>
+        )}
+      </Modal>
+
       {/* Modal fiche personnel */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="md"
         title={modal?.isNew ? 'Ajouter un membre' : 'Modifier la fiche'}
-        footer={<><Button variant="outline" onClick={() => setModal(null)}>Annuler</Button><Button onClick={handleSave}>Enregistrer</Button></>}>
+        footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Ajouter' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">

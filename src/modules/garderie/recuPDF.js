@@ -8,7 +8,7 @@ const GRIS   = [90, 90, 90]
 
 const GARDERIE = {
   nom: 'Garderie La Termitière',
-  devise: 'Toujours dans l\'action',
+  devise: 'Là où vos enfants grandissent heureux',
   adresse: 'Agoe Daliko, Lomé — Togo',
   tel: '00228 96 09 49 49',
   email: 'latermitiere2021@gmail.com'
@@ -48,13 +48,31 @@ function placerImg(doc, imgData, x, y, maxW, maxH) {
 }
 
 export async function genererRecuPaiement(paiement, enfant) {
-  const [logoTermitiere, logoGarderie] = await Promise.all([
+  const [logoTermitiere, logoGarderie, imgEnfants] = await Promise.all([
     chargerImage('/termitiere-logo.png').then(r => r || chargerImage('/logo-mark.png')),
-    chargerImage('/garderie-logo.png')
+    chargerImage('/garderie-logo.png'),
+    chargerImage('/garderie-enfants.png')
   ])
 
   const doc = new jsPDF({ format: 'a5', orientation: 'portrait' })
   const W = 148 // largeur A5
+  const H = doc.internal.pageSize.getHeight()
+
+  // ── FILIGRANE : logo garderie en arrière-plan ─────────────────────────────
+  if (logoGarderie?.dataURL) {
+    doc.saveGraphicsState()
+    // Simuler la transparence via une couleur blanche par-dessus
+    // On dessine d'abord l'image normale puis on pose un rectangle blanc semi-opaque
+    const filiW = 70, filiH = 70
+    const filiX = (W - filiW) / 2
+    const filiY = (H - filiH) / 2 - 5
+    doc.addImage(logoGarderie.dataURL, 'PNG', filiX, filiY, filiW, filiH)
+    // Voile blanc pour réduire l'opacité (effet filigrane)
+    doc.setFillColor(255, 255, 255)
+    doc.setGState(doc.GState({ opacity: 0.88 }))
+    doc.rect(0, 0, W, H, 'F')
+    doc.restoreGraphicsState()
+  }
 
   // ── EN-TÊTE ──────────────────────────────────────────────────────────────
   // Fond blanc + bordure orange en bas
@@ -221,27 +239,36 @@ export async function genererRecuPaiement(paiement, enfant) {
     doc.setTextColor(220, 80, 30)
     doc.text(`Solde restant : ${fmtMontant(reste)}`, 10, y)
     y += 7
-  } else {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.setTextColor(22, 163, 74)
-    doc.text('✓ Paiement soldé', 10, y)
-    y += 7
   }
 
-  // ── STATUT ────────────────────────────────────────────────────────────────
-  const statutLabel = paiement.statut === 'paye' ? 'PAYÉ' : paiement.statut === 'partiel' ? 'PARTIEL' : 'IMPAYÉ'
-  const statutColor = paiement.statut === 'paye' ? [22, 163, 74] : paiement.statut === 'partiel' ? [217, 119, 6] : [220, 38, 38]
-  doc.setFillColor(...statutColor)
-  doc.roundedRect(W / 2 - 15, y, 30, 8, 2, 2, 'F')
-  doc.setTextColor(255, 255, 255)
+  // ── IMAGE ENFANTS + SLOGAN (calée avant le pied de page) ─────────────────
+  const footerH   = 22  // espace pied de page + mention légale
+  const sloganH   = 14  // slogan (2 lignes + marge)
+  const maxImgH   = H - footerH - sloganH - y - 2
+  const imgW      = Math.min(50, W - 20)
+
+  if (imgEnfants?.dataURL && maxImgH > 10) {
+    const ratio = imgEnfants.w / imgEnfants.h
+    const imgH  = Math.min(imgW / ratio, maxImgH)
+    const imgWf = imgH * ratio
+    const imgX  = (W - imgWf) / 2
+    doc.addImage(imgEnfants.dataURL, 'PNG', imgX, y, imgWf, imgH)
+    y += imgH + 2
+  }
+
+  // Slogan
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.text(statutLabel, W / 2, y + 5.5, { align: 'center' })
-  y += 14
+  doc.setFontSize(7.5)
+  doc.setTextColor(...ORANGE)
+  doc.text('GARDERIE LA TERMITIERE', W / 2, y, { align: 'center' })
+  y += 4.5
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...GRIS)
+  doc.text('Là où vos enfants grandissent heureux', W / 2, y, { align: 'center' })
+  y += 6
 
   // ── PIED DE PAGE ──────────────────────────────────────────────────────────
-  const H = doc.internal.pageSize.getHeight()
   doc.setFillColor(...ORANGE)
   doc.rect(0, H - 10, W, 10, 'F')
   doc.setTextColor(255, 255, 255)

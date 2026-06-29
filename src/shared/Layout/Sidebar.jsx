@@ -33,7 +33,9 @@ export default function Sidebar({ open, onClose }) {
   const navClass = ({ isActive }) =>
     `${linkBase} ${isActive ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`
 
-  const moduleNav = activeModule ? MODULE_NAV[activeModule.id] || [] : []
+  // Filtre les liens de navigation selon le rôle (propriété `roles` optionnelle)
+  const moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
+    .filter((item) => !item.roles || item.roles.includes(role))
 
   return (
     <>
