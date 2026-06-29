@@ -5,6 +5,7 @@ import {
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
   Users, CreditCard, AlertTriangle, CalendarCheck
 } from 'lucide-react'
+import { FINANCE_VIEW_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -80,7 +81,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
-    { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp },
+    { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
     { label: 'Historique', to: '/agro/historique', icon: History },

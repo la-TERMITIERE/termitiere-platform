@@ -40,6 +40,7 @@ export default function Saisie() {
   const { user, role } = useAuth()
   const { data: inventaires } = useCollection('agro_inventaires')
   const { data: demandes } = useCollection('agro_demandes')
+  const { data: usersAll } = useCollection('users')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
   const saveEspece = useAgroStore((s) => s.saveEspece)
@@ -65,6 +66,19 @@ export default function Saisie() {
   const peutSaisir = role === 'agent'
   // EF Initial : lecture seule pour tout le monde (reporté automatiquement de la veille).
   const peutEditerInit = false
+
+  // Droits de saisie par catégorie (matrice RBAC). On lit le profil EN DIRECT
+  // (collection users) pour que tout changement de droits soit pris en compte sans
+  // re-connexion. null = aucune restriction (comptes hérités / rôles non-agent).
+  const monProfil = useMemo(
+    () => usersAll.find((u) => u.uid === user?.uid || u.login === user?.login),
+    [usersAll, user]
+  )
+  const catsAutorisees = role === 'agent'
+    ? (Array.isArray(monProfil?.agroCategories) ? monProfil.agroCategories
+       : (Array.isArray(user?.agroCategories) ? user.agroCategories : null))
+    : null
+  const agentSansDroit = role === 'agent' && Array.isArray(catsAutorisees) && catsAutorisees.length === 0
 
   // (Re)construit l'état du formulaire quand la date / les données / le référentiel changent.
   useEffect(() => {
@@ -125,11 +139,13 @@ export default function Saisie() {
     })
   }
 
-  // Catégories présentes (base + personnalisées)
+  // Catégories présentes (base + personnalisées), filtrées par les droits de l'agent.
   const catsAnim = useMemo(() => {
     const custom = [...new Set(especes.map((e) => e.cat))].filter((c) => !CAT_ANIMAUX.includes(c))
-    return [...CAT_ANIMAUX, ...custom].filter((c) => especes.some((e) => e.cat === c))
-  }, [especes])
+    let list = [...CAT_ANIMAUX, ...custom].filter((c) => especes.some((e) => e.cat === c))
+    if (Array.isArray(catsAutorisees)) list = list.filter((c) => catsAutorisees.includes(c))
+    return list
+  }, [especes, catsAutorisees])
   const catsAlim = useMemo(() => {
     const custom = [...new Set(aliments.map((a) => a.cat))].filter((c) => !CAT_ALIMENTS.includes(c))
     return [...CAT_ALIMENTS, ...custom].filter((c) => aliments.some((a) => a.cat === c))
@@ -392,6 +408,13 @@ export default function Saisie() {
       {!peutSaisir && (
         <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 font-semibold">
           👁️ Mode consultation — seuls les agents peuvent saisir et enregistrer des données.
+        </div>
+      )}
+      {peutSaisir && Array.isArray(catsAutorisees) && (
+        <div className={`rounded-lg px-3 py-2 text-sm font-semibold ${agentSansDroit ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-800'}`}>
+          {agentSansDroit
+            ? '🔒 Aucune catégorie d’animaux ne vous est attribuée — contactez l’administrateur pour obtenir des droits de saisie.'
+            : `🔑 Vos catégories autorisées : ${catsAutorisees.join(', ')}.`}
         </div>
       )}
       {!dejaSaisi && draftSavedAt && (

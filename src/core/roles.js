@@ -29,10 +29,19 @@ export const APPROVER_ROLES = ['super_admin', 'pau', 'ge', 'gerant', 'admin', 'c
 // 2e niveau : certification définitive (déclenche l'effet métier).
 export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'admin']
 
+// Rôles autorisés à voir les données FINANCIÈRES (chiffre d'affaires, montants)
+// et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
+// (Un rôle inconnu ne voit PAS la finance — règle prudente par défaut.)
+export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'admin', 'superviseur', 'gerant', 'controleur']
+
 export const isFullAccessRole = (r) => FULL_ACCESS_ROLES.includes(r)
 export const isViewAllRole = (r) => VIEW_ALL_ROLES.includes(r)
 export const isApproverRole = (r) => APPROVER_ROLES.includes(r)
 export const isCertifierRole = (r) => CERTIFIER_ROLES.includes(r)
+// Voit le CA / les montants financiers (hiérarchie). Les agents en sont exclus.
+export const canViewFinance = (r) => FINANCE_VIEW_ROLES.includes(r)
+// Voit le menu/onglet « Pilotage & Analyses » (même périmètre que la finance).
+export const canViewPilotage = (r) => FINANCE_VIEW_ROLES.includes(r)
 
 const LEGACY_LABEL = { admin: 'Administrateur', controleur: 'Contrôleur' }
 

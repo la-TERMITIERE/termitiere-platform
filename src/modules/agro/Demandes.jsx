@@ -65,15 +65,19 @@ export default function Demandes() {
   const stock = dernierStock(inventaires, form.typeArticle, form.articleId || articles[0]?.id)
   const [commentaire, setCommentaire] = useState('')
 
+  // Les demandes générées par une facture (source:'facture') sont pilotées depuis
+  // la page Facturation — on les exclut d'ici pour éviter toute double-validation.
+  const demandesManuelles = useMemo(() => liste.filter((d) => d.source !== 'facture'), [liste])
+
   const filtrees = useMemo(
     () =>
-      [...liste]
+      [...demandesManuelles]
         .filter((d) => (filtre === 'tous' ? true : normaliserStatut(d.statut) === filtre))
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [liste, filtre]
+    [demandesManuelles, filtre]
   )
-  const nbAttente = liste.filter((d) => estActif(d.statut)).length
-  const nbACertifier = liste.filter((d) => normaliserStatut(d.statut) === 'approuve_n1').length
+  const nbAttente = demandesManuelles.filter((d) => estActif(d.statut)).length
+  const nbACertifier = demandesManuelles.filter((d) => normaliserStatut(d.statut) === 'approuve_n1').length
 
   function openCreate() {
     setForm({ typeArticle: 'animal', articleId: especes[0]?.id || '', qte: 1, dateSortie: todayStr(), motif: 'Vente', message: '' })

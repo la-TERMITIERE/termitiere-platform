@@ -15,8 +15,11 @@ import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
 import { MODULES } from '../shared/modules'
 import { ROLES, isViewAllRole, roleLabel, roleTone } from '../core/roles'
+import { CAT_ANIMAUX } from '../modules/agro/data'
 
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], secteur: '', telephone: '', actif: true })
+// Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
+// décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], secteur: '', telephone: '', actif: true })
 
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
@@ -31,6 +34,15 @@ export default function Utilisateurs() {
     setModal((m) => {
       const has = m.data.modules.includes(id)
       return { ...m, data: { ...m.data, modules: has ? m.data.modules.filter((x) => x !== id) : [...m.data.modules, id] } }
+    })
+  }
+
+  // Matrice de droits de saisie par catégorie d'animaux (Maxi-Agro).
+  function toggleAgroCat(cat) {
+    setModal((m) => {
+      const cur = m.data.agroCategories || []
+      const has = cur.includes(cat)
+      return { ...m, data: { ...m.data, agroCategories: has ? cur.filter((x) => x !== cat) : [...cur, cat] } }
     })
   }
 
@@ -155,6 +167,30 @@ export default function Utilisateurs() {
                 </div>
               )}
             </FormGroup>
+
+            {/* Matrice de droits de saisie par espèce (Maxi-Agro) — agents uniquement */}
+            {modal.data.role === 'agent' && modal.data.modules.includes('agro') && (
+              <FormGroup label="Droits de saisie par espèce (Maxi-Agro)"
+                hint="Cochez les catégories que cet agent peut saisir. Aucune cochée = l'agent ne saisit aucune espèce.">
+                <div className="flex flex-wrap gap-2">
+                  {CAT_ANIMAUX.map((cat) => {
+                    const active = (modal.data.agroCategories || []).includes(cat)
+                    return (
+                      <button key={cat} type="button" onClick={() => toggleAgroCat(cat)}
+                        className="rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors"
+                        style={active
+                          ? { background: '#2EAA3F', borderColor: '#2EAA3F', color: '#fff' }
+                          : { borderColor: '#e5e7eb', color: '#475569' }}>
+                        {active ? '✓ ' : ''}{cat}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Astuce : laissez tout décoché et l'agent n'aura accès à aucune saisie d'animaux ; cochez une ou plusieurs catégories pour l'autoriser.
+                </p>
+              </FormGroup>
+            )}
 
             <FormGroup label="Compte actif">
               <label className="flex items-center gap-2 text-sm">

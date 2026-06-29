@@ -130,7 +130,7 @@ export default function Sidebar({ open, onClose }) {
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
                 {activeModule.nom}
               </p>
-              {moduleNav.map((item) => (
+              {moduleNav.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
                   <item.icon size={18} /> {item.label}
                   {item.badgeKey && badges[item.badgeKey] > 0 && (

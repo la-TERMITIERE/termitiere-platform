@@ -1,18 +1,21 @@
-// Dashboard MAXI-AGRO.
-// - KPI par catégorie — cartes cliquables (détail par espèce + distribution visuelle).
-// - Mini-stats en bas : mortalité + naissances CLIQUABLES (détails + formule),
-//   saisie du jour CLIQUABLE (détails qui a fait quoi).
-// - Sélecteur de période : presets + plage personnalisée.
+// Dashboard MAXI-AGRO — pilotage par ESPÈCE.
+// - Filtre par catégorie (onglets dynamiques) : Toutes, Ovins, Bovins, Caprins,
+//   Canards, Dindons, Pintades, Poulets (+ catégories personnalisées).
+// - Pour la catégorie sélectionnée : Effectif, Mortalité, Morbidité, Croissance,
+//   Ventes (volume) et Chiffre d'affaires (réservé à la hiérarchie).
+// - Le CA n'est compté que sur les factures CERTIFIÉES.
 import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { ChevronRight, Layers, TrendingUp, TrendingDown, Stethoscope } from 'lucide-react'
+import { TrendingUp, TrendingDown, Boxes, HeartPulse, Stethoscope, Sprout, ShoppingCart, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import { canViewFinance } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
-import { CAT_ANIMAUX, catColor } from './data'
-import { mouvementsCategorie, agregerAchatsVentes, previsionSerie } from './logic'
+import { CAT_ANIMAUX, catColor, factureStatut } from './data'
+import { agregerAchatsVentes, previsionSerie } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const PRESETS = [
@@ -24,8 +27,11 @@ const PRESETS = [
   { v: '365', label: 'Cette année (1 an)' },
   { v: 'custom', label: 'Plage personnalisée…' }
 ]
+const TOUTES = '__TOUTES__'
 
 export default function Dashboard() {
+  const { role } = useAuth()
+  const showFinance = canViewFinance(role)
   const { data: inventaires, loading } = useCollection('agro_inventaires')
   const { data: factures } = useCollection('agro_factures')
   const especes = useAgroStore((s) => s.especes)
@@ -34,12 +40,8 @@ export default function Dashboard() {
   const [preset, setPreset] = useState('journalier')
   const [from, setFrom] = useState(addDays(todayStr(), -30))
   const [to, setTo] = useState(todayStr())
-  const [catDetail, setCatDetail] = useState(null)
-  const [morbiditeOpen, setMorbiditeOpen] = useState(false)
-  const [mortaliteOpen, setMortaliteOpen] = useState(false)
-  const [naissancesOpen, setNaissancesOpen] = useState(false)
-  const [caOpen, setCaOpen] = useState(false)
-  const [ventesOpen, setVentesOpen] = useState(false)
+  const [scope, setScope] = useState(TOUTES)
+  const [modalKey, setModalKey] = useState(null) // 'mortalite' | 'morbidite' | 'croissance' | 'ventes' | 'ca'
 
   const isDaily = preset === 'journalier'
 
@@ -51,142 +53,81 @@ export default function Dashboard() {
 
   const tri = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1)), [inventaires])
   const dernier = tri[0]
-  const veille = tri[1]
   const invPeriode = useMemo(() => tri.filter((i) => i.date >= start && i.date <= end), [tri, start, end])
 
-  // Catégories animales présentes (base + personnalisées)
+  // Catégories présentes (base + personnalisées).
   const cats = useMemo(() => {
     const custom = [...new Set(especes.map((e) => e.cat))].filter((c) => !CAT_ANIMAUX.includes(c))
     return [...CAT_ANIMAUX, ...custom].filter((c) => especes.some((e) => e.cat === c))
   }, [especes])
 
-  // Total + référence + entrées/sorties par catégorie.
-  // - Journalier : référence = HIER (effectif final de la veille), mouvements du jour.
-  // - Période    : référence = DÉBUT (effectif initial du début de période),
-  //                entrées/sorties cumulées sur toute la période.
-  const parCat = useMemo(() => {
-    const totalCatFin = (inv, cat) =>
-      especes.filter((e) => e.cat === cat).reduce((s, e) => s + (inv?.animaux?.[e.id]?.fin || 0), 0)
-    const totalCatInit = (inv, cat) =>
-      especes.filter((e) => e.cat === cat).reduce((s, e) => s + (inv?.animaux?.[e.id]?.init || 0), 0)
+  // Espèces du périmètre courant (toutes, ou une catégorie).
+  const especesScope = useMemo(
+    () => (scope === TOUTES ? especes : especes.filter((e) => e.cat === scope)),
+    [especes, scope]
+  )
 
-    const periodeAsc = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
-    const premierP = periodeAsc[0]
-    const dernierP = periodeAsc[periodeAsc.length - 1]
-
-    return cats.map((cat) => {
-      if (isDaily) {
-        const mJour = mouvementsCategorie(dernier, especes, cat)
-        return {
-          cat,
-          total: totalCatFin(dernier, cat),
-          reference: veille ? totalCatFin(veille, cat) : null,
-          refLabel: 'Hier',
-          entrees: mJour.entrees,
-          sorties: mJour.sorties,
-          color: catColor(cat)
-        }
-      }
-      let entrees = 0, sorties = 0
-      invPeriode.forEach((inv) => {
-        const m = mouvementsCategorie(inv, especes, cat)
-        entrees += m.entrees
-        sorties += m.sorties
-      })
-      return {
-        cat,
-        total: dernierP ? totalCatFin(dernierP, cat) : 0,
-        reference: premierP ? totalCatInit(premierP, cat) : null,
-        refLabel: 'Début',
-        entrees,
-        sorties,
-        color: catColor(cat)
-      }
+  // Indicateurs du périmètre : effectif, base, malades, naissances, décès, taux.
+  const ind = useMemo(() => {
+    let effectif = 0, base = 0, malades = 0
+    especesScope.forEach((e) => {
+      const a = dernier?.animaux?.[e.id]
+      effectif += a?.fin || 0; base += a?.init || 0; malades += a?.malades || 0
     })
-  }, [cats, especes, dernier, veille, invPeriode, isDaily])
+    let naiss = 0, dec = 0
+    invPeriode.forEach((inv) => especesScope.forEach((e) => {
+      const a = inv.animaux?.[e.id]
+      if (a) { naiss += a.naiss || 0; dec += a.dec || 0 }
+    }))
+    const baseSafe = base || 1
+    return {
+      effectif, base, malades, naiss, dec,
+      mortalite: (dec / baseSafe) * 100,
+      croissance: ((naiss - dec) / baseSafe) * 100,
+      morbidite: effectif ? (malades / effectif) * 100 : 0
+    }
+  }, [especesScope, dernier, invPeriode])
 
-  // Chiffre d'affaires (factures émises) sur la période + comparaison période précédente.
-  const ca = useMemo(() => {
-    const sumIn = (s, e) => factures
-      .filter((f) => f.date >= s && f.date <= e)
-      .reduce((acc, f) => acc + (f.totalTTC || 0), 0)
+  // Ventes (volume) du périmètre + comparaison période précédente.
+  const ventes = useMemo(() => {
     const nbDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const prevEnd = addDays(start, -1)
     const prevStart = addDays(prevEnd, -(nbDays - 1))
-    return {
-      courant: sumIn(start, end),
-      precedent: sumIn(prevStart, prevEnd),
-      refLabel: isDaily ? 'Hier' : 'Période préc.',
-      prevStart, prevEnd
-    }
-  }, [factures, start, end, isDaily])
+    const inScope = (v) => scope === TOUTES || v.cat === scope
+    const cur = agregerAchatsVentes(invPeriode, especes, aliments).ventes.filter(inScope)
+    const prevInv = tri.filter((i) => i.date >= prevStart && i.date <= prevEnd)
+    const prev = agregerAchatsVentes(prevInv, especes, aliments).ventes.filter(inScope)
+    const sum = (arr) => arr.reduce((s, v) => s + v.qte, 0)
+    return { courant: sum(cur), precedent: sum(prev), liste: cur.sort((a, b) => b.date.localeCompare(a.date)), prevStart, prevEnd }
+  }, [invPeriode, especes, aliments, tri, start, end, scope])
 
-  // Liste des factures de la période (pour la modale CA).
-  const facturesPeriode = useMemo(
-    () => factures.filter((f) => f.date >= start && f.date <= end).sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [factures, start, end]
-  )
+  // Chiffre d'affaires (factures CERTIFIÉES) du périmètre + comparaison.
+  const ca = useMemo(() => {
+    const certifs = factures.filter((f) => factureStatut(f) === 'certifiee')
+    const montant = (f) => scope === TOUTES
+      ? (f.totalTTC || 0)
+      : (f.lignes || []).filter((l) => l.articleCat === scope).reduce((s, l) => s + (l.total || 0), 0)
+    const sumIn = (s, e) => certifs.filter((f) => f.date >= s && f.date <= e).reduce((acc, f) => acc + montant(f), 0)
+    const nbDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+    const prevEnd = addDays(start, -1)
+    const prevStart = addDays(prevEnd, -(nbDays - 1))
+    const liste = certifs.filter((f) => f.date >= start && f.date <= end && montant(f) > 0).sort((a, b) => (a.date < b.date ? 1 : -1))
+    return { courant: sumIn(start, end), precedent: sumIn(prevStart, prevEnd), liste, prevStart, prevEnd }
+  }, [factures, start, end, scope])
 
-  // Ventes (sorties type « Ventes » + demandes approuvées) sur la période,
-  // avec comparaison période précédente — même logique que le chiffre d'affaires.
-  const ventesData = useMemo(() => {
-    const cur = agregerAchatsVentes(invPeriode, especes, aliments)
-    const invPrec = tri.filter((i) => i.date >= ca.prevStart && i.date <= ca.prevEnd)
-    const prev = agregerAchatsVentes(invPrec, especes, aliments)
-    return {
-      courant: cur.totalVentes,
-      precedent: prev.totalVentes,
-      liste: [...cur.ventes].sort((a, b) => b.date.localeCompare(a.date)),
-      refLabel: isDaily ? 'Hier' : 'Période préc.'
-    }
-  }, [invPeriode, especes, aliments, tri, ca, isDaily])
-
-  // ── TAUX DE MORBIDITÉ ──
-  // Morbidité = animaux MALADES / EFFECTIF (× 100). Référence = dernière saisie.
-  // Détail par catégorie + total. (Champ « malades » saisi dans la saisie journalière.)
-  const morbidite = useMemo(() => {
-    let totMal = 0, totEff = 0
-    const lignesCat = cats.map((cat) => {
-      let mal = 0, eff = 0
-      especes.filter((e) => e.cat === cat).forEach((e) => {
-        const a = dernier?.animaux?.[e.id]
-        mal += a?.malades || 0
-        eff += a?.fin || 0
-      })
-      totMal += mal; totEff += eff
-      return { cat, malades: mal, effectif: eff, taux: eff ? (mal / eff) * 100 : 0, color: catColor(cat) }
-    })
-    return { lignesCat, totMal, totEff, taux: totEff ? (totMal / totEff) * 100 : 0 }
-  }, [cats, especes, dernier])
-
-  // Détail par espèce (pour la modale).
-  const morbiditeEspeces = useMemo(() =>
-    especes.map((e) => {
-      const a = dernier?.animaux?.[e.id]
-      const mal = a?.malades || 0
-      const eff = a?.fin || 0
-      return { nom: e.nom, cat: e.cat, malades: mal, effectif: eff, taux: eff ? (mal / eff) * 100 : 0 }
-    }).filter((l) => l.effectif > 0 || l.malades > 0)
-       .sort((a, b) => b.taux - a.taux),
-  [especes, dernier])
-
-  // Série journalière de morbidité (%) sur la période → courbe + base de prévision.
+  // Série de morbidité (scope) + prévision 7 jours.
   const morbiditeSerie = useMemo(() => {
     const pts = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
     return {
       labels: pts.map((i) => i.date?.slice(5)),
       values: pts.map((inv) => {
         let mal = 0, eff = 0
-        Object.values(inv.animaux || {}).forEach((a) => { mal += a.malades || 0; eff += a.fin || 0 })
+        especesScope.forEach((e) => { const a = inv.animaux?.[e.id]; mal += a?.malades || 0; eff += a?.fin || 0 })
         return eff ? +((mal / eff) * 100).toFixed(2) : 0
       })
     }
-  }, [invPeriode])
-
-  // Prévision statistique des 7 prochains jours (tendance + moyenne mobile).
+  }, [invPeriode, especesScope])
   const morbiditePrevision = useMemo(() => previsionSerie(morbiditeSerie.values, 7), [morbiditeSerie])
-
-  // Données du graphique : historique (orange) + prévision (violet pointillé, raccordée).
   const morbiditeChart = useMemo(() => {
     const hist = morbiditeSerie.values
     const prev = morbiditePrevision.map((v) => +v.toFixed(2))
@@ -194,605 +135,256 @@ export default function Dashboard() {
     return {
       labels: [...morbiditeSerie.labels, ...prev.map((_, i) => `J+${i + 1}`)],
       datasets: [
-        {
-          label: 'Morbidité (%)',
-          data: [...hist, ...new Array(prev.length).fill(null)],
-          borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.12)', fill: true, tension: 0.3, pointRadius: 2
-        },
-        {
-          label: 'Prévision (%)',
-          data: [...new Array(Math.max(0, hist.length - 1)).fill(null), lastHist, ...prev],
-          borderColor: '#9333ea', borderDash: [5, 4], fill: false, tension: 0.3, pointRadius: 2
-        }
+        { label: 'Morbidité (%)', data: [...hist, ...new Array(prev.length).fill(null)], borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.12)', fill: true, tension: 0.3, pointRadius: 2 },
+        { label: 'Prévision (%)', data: [...new Array(Math.max(0, hist.length - 1)).fill(null), lastHist, ...prev], borderColor: '#9333ea', borderDash: [5, 4], fill: false, tension: 0.3, pointRadius: 2 }
       ]
     }
   }, [morbiditeSerie, morbiditePrevision])
 
-  const repartition = {
-    labels: parCat.map((p) => p.cat),
-    datasets: [{ data: parCat.map((p) => p.total), backgroundColor: parCat.map((p) => p.color) }]
-  }
+  // Répartition (effectif par catégorie) — toujours global.
+  const repartition = useMemo(() => {
+    const rows = cats.map((c) => ({
+      cat: c, color: catColor(c),
+      total: especes.filter((e) => e.cat === c).reduce((s, e) => s + (dernier?.animaux?.[e.id]?.fin || 0), 0)
+    }))
+    return { rows, data: { labels: rows.map((r) => r.cat), datasets: [{ data: rows.map((r) => r.total), backgroundColor: rows.map((r) => r.color) }] } }
+  }, [cats, especes, dernier])
 
-  // Taux mortalité / croissance sur la fenêtre
-  const taux = useMemo(() => {
+  // Détail par espèce du périmètre (table + barres).
+  const especeRows = useMemo(() => especesScope.map((e) => {
+    const a = dernier?.animaux?.[e.id] || {}
     let naiss = 0, dec = 0
-    invPeriode.forEach((i) => Object.values(i.animaux || {}).forEach((a) => { naiss += a.naiss || 0; dec += a.dec || 0 }))
-    const base = Object.values(dernier?.animaux || {}).reduce((s, a) => s + (a.init || 0), 0) || 1
-    return { mortalite: ((dec / base) * 100).toFixed(1), croissance: (((naiss - dec) / base) * 100).toFixed(1), naiss, dec, base }
-  }, [invPeriode, dernier])
+    invPeriode.forEach((inv) => { const x = inv.animaux?.[e.id]; if (x) { naiss += x.naiss || 0; dec += x.dec || 0 } })
+    return { nom: e.nom, cat: e.cat, init: a.init || 0, fin: a.fin || 0, malades: a.malades || 0, naiss, dec, prix: e.prix }
+  }), [especesScope, dernier, invPeriode])
 
-  // Détails décès sur la période (avec motifs)
+  // Détails décès / naissances (scope) pour les modales.
   const decesDetail = useMemo(() => {
-    const result = []
-    invPeriode.forEach((inv) => {
-      especes.forEach((e) => {
-        const a = inv.animaux?.[e.id]
-        if (!a) return
-        // Depuis les sorties détaillées
-        const sorties = a.sorties || []
-        const decSorties = sorties.filter((l) => l.type === 'Décès' && (parseInt(l.qte) || 0) > 0)
-        if (decSorties.length) {
-          decSorties.forEach((l) => result.push({
-            date: inv.date, espece: e.nom, cat: e.cat,
-            qte: parseInt(l.qte) || 0, motif: l.label || '—', agent: l.agentNom || inv.agentNom || '—'
-          }))
-        } else if ((a.dec || 0) > 0) {
-          // Fallback sur le total agrégé si pas de détail
-          result.push({ date: inv.date, espece: e.nom, cat: e.cat, qte: a.dec, motif: '—', agent: inv.agentNom || '—' })
-        }
-      })
-    })
-    return result.sort((a, b) => b.date.localeCompare(a.date))
-  }, [invPeriode, especes])
+    const out = []
+    invPeriode.forEach((inv) => especesScope.forEach((e) => {
+      const a = inv.animaux?.[e.id]; if (!a) return
+      const dl = (a.sorties || []).filter((l) => l.type === 'Décès' && (parseInt(l.qte) || 0) > 0)
+      if (dl.length) dl.forEach((l) => out.push({ date: inv.date, espece: e.nom, qte: parseInt(l.qte) || 0, motif: l.label || '—', agent: l.agentNom || inv.agentNom || '—' }))
+      else if ((a.dec || 0) > 0) out.push({ date: inv.date, espece: e.nom, qte: a.dec, motif: '—', agent: inv.agentNom || '—' })
+    }))
+    return out.sort((a, b) => b.date.localeCompare(a.date))
+  }, [invPeriode, especesScope])
 
-  // Détails naissances sur la période
   const naissancesDetail = useMemo(() => {
-    const result = []
-    invPeriode.forEach((inv) => {
-      especes.forEach((e) => {
-        const a = inv.animaux?.[e.id]
-        if (!a) return
-        const entrees = a.entrees || []
-        const naissEntrees = entrees.filter((l) => l.type === 'Naissance' && (parseInt(l.qte) || 0) > 0)
-        if (naissEntrees.length) {
-          naissEntrees.forEach((l) => result.push({
-            date: inv.date, espece: e.nom, cat: e.cat,
-            qte: parseInt(l.qte) || 0, agent: l.agentNom || inv.agentNom || '—'
-          }))
-        } else if ((a.naiss || 0) > 0) {
-          result.push({ date: inv.date, espece: e.nom, cat: e.cat, qte: a.naiss, agent: inv.agentNom || '—' })
-        }
-      })
-    })
-    return result.sort((a, b) => b.date.localeCompare(a.date))
-  }, [invPeriode, especes])
+    const out = []
+    invPeriode.forEach((inv) => especesScope.forEach((e) => {
+      const a = inv.animaux?.[e.id]; if (!a) return
+      const nl = (a.entrees || []).filter((l) => l.type === 'Naissance' && (parseInt(l.qte) || 0) > 0)
+      if (nl.length) nl.forEach((l) => out.push({ date: inv.date, espece: e.nom, qte: parseInt(l.qte) || 0, agent: l.agentNom || inv.agentNom || '—' }))
+      else if ((a.naiss || 0) > 0) out.push({ date: inv.date, espece: e.nom, qte: a.naiss, agent: inv.agentNom || '—' })
+    }))
+    return out.sort((a, b) => b.date.localeCompare(a.date))
+  }, [invPeriode, especesScope])
+
+  const scopeLabel = scope === TOUTES ? 'Toutes les catégories' : scope
 
   if (loading) return <LoadingSpinner />
 
   return (
     <div className="space-y-5">
-      {/* Header avec logo */}
-      <div className="rounded-xl p-4 text-white flex items-center gap-4"
-        style={{ background: 'linear-gradient(135deg, #2EAA3F 0%, #1a6e27 100%)' }}>
-        <img src="/maxi-agro-logo.png" alt="Maxi Agro"
-          className="h-16 w-auto object-contain rounded-lg bg-white p-1 shadow" />
+      <div className="rounded-xl p-4 text-white flex items-center gap-4" style={{ background: 'linear-gradient(135deg, #2EAA3F 0%, #1a6e27 100%)' }}>
+        <img src="/maxi-agro-logo.png" alt="Maxi Agro" className="h-16 w-auto object-contain rounded-lg bg-white p-1 shadow" />
         <div>
           <h2 className="text-lg font-extrabold drop-shadow">MAXI AGRO</h2>
           <p className="text-sm text-green-100">Élevage · Stock · Facturation · Analyses</p>
         </div>
       </div>
 
-      {/* Sélecteur de période */}
+      {/* Période */}
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Période</label>
-          <select
-            className="input-base w-auto font-semibold"
-            value={preset}
-            onChange={(e) => setPreset(e.target.value)}
-          >
+          <select className="input-base w-auto font-semibold" value={preset} onChange={(e) => setPreset(e.target.value)}>
             {PRESETS.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
           </select>
         </div>
         {preset === 'custom' && (
           <div className="flex items-end gap-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Du</label>
-              <input type="date" className="input-base w-auto" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Au</label>
-              <input type="date" className="input-base w-auto" value={to} min={from} max={todayStr()} onChange={(e) => setTo(e.target.value)} />
-            </div>
+            <div><label className="mb-1 block text-xs font-semibold text-gray-600">Du</label><input type="date" className="input-base w-auto" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></div>
+            <div><label className="mb-1 block text-xs font-semibold text-gray-600">Au</label><input type="date" className="input-base w-auto" value={to} min={from} max={todayStr()} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
         )}
-        <span className="ml-auto text-xs text-gray-400">
-          {formatDateShort(start)} → {formatDateShort(end)} · {invPeriode.length} saisie(s)
-        </span>
+        <span className="ml-auto text-xs text-gray-400">{formatDateShort(start)} → {formatDateShort(end)} · {invPeriode.length} saisie(s)</span>
       </div>
 
-      {/* KPI catégories — cliquables. Référence Hier (journalier) ou Début (période). */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {parCat.map((p) => {
-          const delta = p.reference !== null ? p.total - p.reference : null
-          return (
-            <button
-              key={p.cat}
-              onClick={() => setCatDetail(p.cat)}
-              className="card group flex items-center gap-4 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl" style={{ background: p.color + '1a', color: p.color }}>
-                <Layers size={24} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium uppercase tracking-wide text-gray-500">{p.cat}</p>
-                <div className="flex items-baseline gap-1">
-                  <p className="text-2xl font-extrabold text-gray-900">{formatNumber(p.total)}</p>
-                  {delta !== null && delta !== 0 && (
-                    <span className={`text-xs font-semibold ${delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {delta > 0 ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
-                      {delta > 0 ? '+' : ''}{delta}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
-                  {p.reference !== null && (
-                    <p className="text-gray-400">{p.refLabel} : <span className="font-semibold text-gray-600">{formatNumber(p.reference)}</span></p>
-                  )}
-                  <p className="font-medium text-sky-600">Entrées : {p.entrees}</p>
-                  <p className="font-medium text-amber-600">Sorties : {p.sorties}</p>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-gray-300 transition-colors group-hover:text-gray-500" />
-            </button>
-          )
-        })}
+      {/* Onglets par espèce / catégorie */}
+      <div className="flex flex-wrap gap-1.5">
+        <ScopeTab active={scope === TOUTES} color="#374151" onClick={() => setScope(TOUTES)}>Toutes</ScopeTab>
+        {cats.map((c) => (
+          <ScopeTab key={c} active={scope === c} color={catColor(c)} onClick={() => setScope(c)}>{c}</ScopeTab>
+        ))}
       </div>
 
-      {/* Mini-stats cliquables — remontées au-dessus des graphiques */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MiniStatBtn
-          title="Taux de mortalité"
-          value={`${taux.mortalite} %`}
-          sub={`${taux.dec} décès — cliquer pour détails`}
-          color="#dc2626"
-          onClick={() => setMortaliteOpen(true)}
-        />
-        <MiniStatBtn
-          title="Taux de croissance"
-          value={`${taux.croissance} %`}
-          sub={`${taux.naiss} naissances — cliquer pour détails`}
-          color="#16a34a"
-          onClick={() => setNaissancesOpen(true)}
-        />
-        <button
-          onClick={() => setVentesOpen(true)}
-          className="card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Ventes</p>
-          <div className="flex items-baseline gap-1">
-            <p className="text-xl font-extrabold text-emerald-700">{formatNumber(ventesData.courant)}</p>
-            {ventesData.courant !== ventesData.precedent && (
-              <span className={`text-sm font-bold ${ventesData.courant > ventesData.precedent ? 'text-green-600' : 'text-red-600'}`}>
-                {ventesData.courant > ventesData.precedent ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
-                {ventesData.courant > ventesData.precedent ? '+' : ''}{formatNumber(ventesData.courant - ventesData.precedent)}
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 text-[11px] text-gray-400">
-            {ventesData.refLabel} : <span className="font-semibold text-gray-600">{formatNumber(ventesData.precedent)}</span>
-          </p>
-          <p className="text-[11px] text-gray-400">{ventesData.liste.length} vente(s) — cliquer pour détails</p>
-        </button>
-        <button
-          onClick={() => setCaOpen(true)}
-          className="card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Chiffre d'affaires</p>
-          <div className="flex items-baseline gap-1">
-            <p className="text-xl font-extrabold text-purple-700">{formatMoney(ca.courant)}</p>
-            {ca.courant !== ca.precedent && (
-              <span className={`text-sm font-bold ${ca.courant > ca.precedent ? 'text-green-600' : 'text-red-600'}`}>
-                {ca.courant > ca.precedent ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
-                {ca.courant > ca.precedent ? '+' : ''}{formatMoney(ca.courant - ca.precedent)}
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 text-[11px] text-gray-400">
-            {ca.refLabel} : <span className="font-semibold text-gray-600">{formatMoney(ca.precedent)}</span>
-          </p>
-          <p className="text-[11px] text-gray-400">{facturesPeriode.length} facture(s) — cliquer pour détails</p>
-        </button>
+      {/* Indicateurs du périmètre */}
+      <div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs — {scopeLabel}</p>
+        <div className={`grid grid-cols-2 gap-3 ${showFinance ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+          <Indic title="Effectif en stock" value={formatNumber(ind.effectif)} icon={Boxes} color="#2563eb" sub={`${especesScope.length} espèce(s)`} />
+          <Indic title="Taux de mortalité" value={`${ind.mortalite.toFixed(1)} %`} icon={HeartPulse} color="#dc2626" sub={`${ind.dec} décès`} onClick={() => setModalKey('mortalite')} />
+          <Indic title="Taux de morbidité" value={`${ind.morbidite.toFixed(1)} %`} icon={Stethoscope} color="#d97706" sub={`${ind.malades} malade(s)`} onClick={() => setModalKey('morbidite')} />
+          <Indic title="Taux de croissance" value={`${ind.croissance.toFixed(1)} %`} icon={Sprout} color="#16a34a" sub={`${ind.naiss} naissance(s)`} onClick={() => setModalKey('croissance')} />
+          <Indic title="Ventes (volume)" value={formatNumber(ventes.courant)} icon={ShoppingCart} color="#0d9488" sub={`${ventes.liste.length} vente(s)`} delta={ventes.courant - ventes.precedent} onClick={() => setModalKey('ventes')} />
+          {showFinance && (
+            <Indic title="Chiffre d'affaires" value={formatMoney(ca.courant)} icon={Wallet} color="#7c3aed" sub={`${ca.liste.length} facture(s) certifiée(s)`} delta={ca.courant - ca.precedent} money onClick={() => setModalKey('ca')} />
+          )}
+        </div>
+        {!showFinance && (
+          <p className="mt-2 text-[11px] text-gray-400">💡 Les montants financiers (chiffre d'affaires) sont réservés à la hiérarchie.</p>
+        )}
       </div>
 
       {/* Graphiques */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <button
-          onClick={() => setMorbiditeOpen(true)}
-          className="card lg:col-span-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
+        <button onClick={() => setModalKey('morbidite')} className="card lg:col-span-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité</p>
-              <p className="text-3xl font-extrabold text-amber-600">{morbidite.taux.toFixed(1)} %</p>
-              <p className="mt-0.5 text-[11px] text-gray-400">
-                {morbidite.totMal} malade(s) / {formatNumber(morbidite.totEff)} têtes — cliquer pour la formule, le détail par catégorie &amp; la prévision
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité — {scopeLabel}</p>
+              <p className="text-3xl font-extrabold text-amber-600">{ind.morbidite.toFixed(1)} %</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">{ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes — courbe & prévision</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Stethoscope size={22} /></div>
           </div>
           <div className="mt-2 h-52">
             {morbiditeSerie.labels.length
               ? <Line data={morbiditeChart} options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + ' %' } } } }} />
-              : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période — saisissez les animaux « malades » dans la saisie journalière pour activer le suivi.</p>}
+              : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
           </div>
         </button>
         <Card title="Répartition par catégorie">
           <div className="h-72">
-            {parCat.some((p) => p.total > 0)
-              ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
+            {repartition.rows.some((r) => r.total > 0)
+              ? <Doughnut data={repartition.data} options={{ maintainAspectRatio: false }} />
               : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif.</p>}
           </div>
         </Card>
       </div>
 
-      {/* Détail catégorie */}
-      <CategorieDetail
-        cat={catDetail}
-        onClose={() => setCatDetail(null)}
-        especes={especes}
-        dernier={dernier}
-        invPeriode={invPeriode}
-      />
-
-      {/* Modal : détails morbidité (formule + par catégorie/espèce + prévision) */}
-      <Modal open={morbiditeOpen} onClose={() => setMorbiditeOpen(false)} size="lg" title="Détails — Taux de morbidité">
-        <div className="space-y-4">
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Taux de morbidité global : <strong>{morbidite.taux.toFixed(1)} %</strong> — {morbidite.totMal} animal/animaux malade(s) sur {formatNumber(morbidite.totEff)} têtes (dernière saisie)
-          </p>
-          <p className="text-xs italic text-gray-400">
-            Formule : Taux de morbidité = (Nombre d'animaux malades / Effectif) × 100<br />
-            Prévision : tendance linéaire (moindres carrés) + moyenne mobile sur la série journalière — projection à 7 jours.
-          </p>
-
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">Par catégorie</p>
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Catégorie</th><th className="px-2 py-2 text-center">Malades</th><th className="px-2 py-2 text-center">Effectif</th><th className="px-2 py-2 text-center">Morbidité</th></tr></thead>
-                <tbody className="divide-y divide-gray-100">
-                  {morbidite.lignesCat.map((p) => (
-                    <tr key={p.cat}>
-                      <td className="px-3 py-1.5 font-semibold" style={{ color: p.color }}>{p.cat}</td>
-                      <td className="px-2 py-1.5 text-center font-bold text-amber-600">{p.malades}</td>
-                      <td className="px-2 py-1.5 text-center">{formatNumber(p.effectif)}</td>
-                      <td className="px-2 py-1.5 text-center font-bold">{p.taux.toFixed(1)} %</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {morbiditeEspeces.some((l) => l.malades > 0) && (
-            <div>
-              <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">Espèces concernées</p>
-              <div className="overflow-x-auto rounded-lg border border-gray-100">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Espèce</th><th className="px-3 py-2 text-left">Catégorie</th><th className="px-2 py-2 text-center">Malades</th><th className="px-2 py-2 text-center">Effectif</th><th className="px-2 py-2 text-center">Morbidité</th></tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {morbiditeEspeces.filter((l) => l.malades > 0).map((l) => (
-                      <tr key={l.nom}>
-                        <td className="px-3 py-1.5 font-semibold">{l.nom}</td>
-                        <td className="px-3 py-1.5 text-gray-500">{l.cat}</td>
-                        <td className="px-2 py-1.5 text-center font-bold text-amber-600">{l.malades}</td>
-                        <td className="px-2 py-1.5 text-center">{formatNumber(l.effectif)}</td>
-                        <td className="px-2 py-1.5 text-center font-bold">{l.taux.toFixed(1)} %</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">Prévision (7 prochains jours)</p>
-            {morbiditePrevision.length ? (
-              <div className="flex flex-wrap gap-2">
-                {morbiditePrevision.map((v, i) => (
-                  <span key={i} className="rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">J+{i + 1} : {v.toFixed(1)} %</span>
-                ))}
-              </div>
-            ) : <p className="text-sm text-gray-400">Pas assez de données pour une prévision.</p>}
-            <p className="mt-2 text-[11px] text-gray-400">Estimation indicative basée sur la tendance récente — à confirmer par le suivi terrain.</p>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Modal : détails décès avec motifs */}
-      <Modal open={mortaliteOpen} onClose={() => setMortaliteOpen(false)} size="lg" title="Détails — Taux de mortalité">
-        <div className="space-y-4">
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
-            Taux mortalité : <strong>{taux.mortalite} %</strong> — {taux.dec} décès sur la période
-          </p>
-          <p className="text-xs text-gray-400 italic">
-            Formule : Taux de mortalité = (Nombre de décès / Effectif initial) × 100<br />
-            Effectif initial retenu : {formatNumber(taux.base)} têtes (EF initial de la dernière saisie)
-          </p>
-          {decesDetail.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-400">Aucun décès enregistré sur la période.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">Espèce</th>
-                    <th className="px-3 py-2 text-left">Catégorie</th>
-                    <th className="px-2 py-2 text-center">Qté</th>
-                    <th className="px-3 py-2 text-left">Motif</th>
-                    <th className="px-3 py-2 text-left">Agent</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {decesDetail.map((d, i) => (
-                    <tr key={i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
-                      <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(d.date)}</td>
-                      <td className="px-3 py-1.5 font-semibold">{d.espece}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{d.cat}</td>
-                      <td className="px-2 py-1.5 text-center font-bold text-red-600">{d.qte}</td>
-                      <td className="px-3 py-1.5 text-gray-700">{d.motif}</td>
-                      <td className="px-3 py-1.5 text-xs text-gray-400">{d.agent}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Modal : détails naissances */}
-      <Modal open={naissancesOpen} onClose={() => setNaissancesOpen(false)} size="lg" title="Détails — Naissances & Croissance">
-        <div className="space-y-4">
-          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
-            Taux de croissance : <strong>{taux.croissance} %</strong> — {taux.naiss} naissances sur la période
-          </p>
-          <p className="text-xs text-gray-400 italic">
-            Formule : Taux de croissance = ((Naissances − Décès) / Effectif initial) × 100<br />
-            Effectif initial retenu : {formatNumber(taux.base)} têtes (EF initial de la dernière saisie)
-          </p>
-          {naissancesDetail.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-400">Aucune naissance enregistrée sur la période.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">Espèce</th>
-                    <th className="px-3 py-2 text-left">Catégorie</th>
-                    <th className="px-2 py-2 text-center">Nés</th>
-                    <th className="px-3 py-2 text-left">Agent</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {naissancesDetail.map((n, i) => (
-                    <tr key={i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
-                      <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(n.date)}</td>
-                      <td className="px-3 py-1.5 font-semibold">{n.espece}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{n.cat}</td>
-                      <td className="px-2 py-1.5 text-center font-bold text-green-600">{n.qte}</td>
-                      <td className="px-3 py-1.5 text-xs text-gray-400">{n.agent}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Modal : détail des ventes sur la période */}
-      <Modal open={ventesOpen} onClose={() => setVentesOpen(false)} size="lg" title="Détails — Ventes">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-emerald-50 px-3 py-3 text-center">
-              <p className="text-xs text-emerald-600">{isDaily ? "Aujourd'hui" : 'Période courante'}</p>
-              <p className="text-lg font-extrabold text-emerald-800">{formatNumber(ventesData.courant)}</p>
-              <p className="text-[11px] text-emerald-500">{formatDateShort(start)} → {formatDateShort(end)}</p>
-            </div>
-            <div className="rounded-lg bg-gray-50 px-3 py-3 text-center">
-              <p className="text-xs text-gray-500">{ventesData.refLabel}</p>
-              <p className="text-lg font-extrabold text-gray-700">{formatNumber(ventesData.precedent)}</p>
-              <p className="text-[11px] text-gray-400">{formatDateShort(ca.prevStart)} → {formatDateShort(ca.prevEnd)}</p>
-            </div>
-          </div>
-          <p className="text-xs italic text-gray-400">
-            Ventes = sorties de type « Ventes » (animaux et aliments) + sorties issues de demandes approuvées.
-          </p>
-          {ventesData.liste.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-400">Aucune vente enregistrée sur la période.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">Article</th>
-                    <th className="px-3 py-2 text-left">Catégorie</th>
-                    <th className="px-2 py-2 text-center">Qté</th>
-                    <th className="px-3 py-2 text-left">Détail / Source</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {ventesData.liste.map((v, i) => (
-                    <tr key={i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
-                      <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(v.date)}</td>
-                      <td className="px-3 py-1.5 font-semibold">{v.article}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{v.cat}</td>
-                      <td className="px-2 py-1.5 text-center font-bold text-emerald-600">{v.qte}</td>
-                      <td className="px-3 py-1.5 text-xs text-gray-500">
-                        {v.label || (v.source === 'demande' ? 'Demande approuvée' : '—')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-200 bg-emerald-50/50">
-                    <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">Total vendu</td>
-                    <td className="px-2 py-2 text-center font-extrabold text-emerald-800">{formatNumber(ventesData.courant)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Modal : détail du chiffre d'affaires sur la période */}
-      <Modal open={caOpen} onClose={() => setCaOpen(false)} size="lg" title="Détails — Chiffre d'affaires">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-purple-50 px-3 py-3 text-center">
-              <p className="text-xs text-purple-600">{isDaily ? "Aujourd'hui" : 'Période courante'}</p>
-              <p className="text-lg font-extrabold text-purple-800">{formatMoney(ca.courant)}</p>
-              <p className="text-[11px] text-purple-500">{formatDateShort(start)} → {formatDateShort(end)}</p>
-            </div>
-            <div className="rounded-lg bg-gray-50 px-3 py-3 text-center">
-              <p className="text-xs text-gray-500">{ca.refLabel}</p>
-              <p className="text-lg font-extrabold text-gray-700">{formatMoney(ca.precedent)}</p>
-              <p className="text-[11px] text-gray-400">{formatDateShort(ca.prevStart)} → {formatDateShort(ca.prevEnd)}</p>
-            </div>
-          </div>
-          {facturesPeriode.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-400">Aucune facture émise sur la période.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">N° facture</th>
-                    <th className="px-3 py-2 text-left">Client</th>
-                    <th className="px-3 py-2 text-right">Total TTC</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {facturesPeriode.map((f, i) => (
-                    <tr key={f.id || i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
-                      <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(f.date)}</td>
-                      <td className="px-3 py-1.5 font-semibold">{f.numero || '—'}</td>
-                      <td className="px-3 py-1.5 text-gray-600">{f.client?.nom || f.clientNom || '—'}</td>
-                      <td className="px-3 py-1.5 text-right font-bold text-purple-700">{formatMoney(f.totalTTC || 0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-200 bg-purple-50/50">
-                    <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">Total</td>
-                    <td className="px-3 py-2 text-right font-extrabold text-purple-800">{formatMoney(ca.courant)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
-      </Modal>
-    </div>
-  )
-}
-
-function MiniStatBtn({ title, value, sub, color, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={!onClick}
-      className={`card p-4 text-left transition-all ${onClick ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : 'cursor-default'}`}
-    >
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{title}</p>
-      <p className="text-xl font-extrabold" style={{ color }}>{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
-    </button>
-  )
-}
-
-// Modal de détail d'une catégorie : tableau par espèce + distribution + mouvements période.
-function CategorieDetail({ cat, onClose, especes, dernier, invPeriode }) {
-  const data = useMemo(() => {
-    if (!cat) return null
-    const list = especes.filter((e) => e.cat === cat)
-    const lignes = list.map((e) => {
-      const d = dernier?.animaux?.[e.id] || {}
-      let naiss = 0, ent = 0, sor = 0, dec = 0
-      invPeriode.forEach((inv) => {
-        const a = inv.animaux?.[e.id]
-        if (a) { naiss += a.naiss || 0; ent += a.ent || 0; sor += a.sor || 0; dec += a.dec || 0 }
-      })
-      return { nom: e.nom, prix: e.prix, init: d.init || 0, fin: d.fin || 0, naiss, ent, sor, dec }
-    })
-    const totalFin = lignes.reduce((s, l) => s + l.fin, 0)
-    return { lignes, totalFin, color: catColor(cat) }
-  }, [cat, especes, dernier, invPeriode])
-
-  const distribution = data && {
-    labels: data.lignes.map((l) => l.nom),
-    datasets: [{
-      label: 'Effectif final',
-      data: data.lignes.map((l) => l.fin),
-      backgroundColor: data.color
-    }]
-  }
-
-  return (
-    <Modal open={!!cat} onClose={onClose} size="xl" title={`Détail — ${cat || ''}`}>
-      {data && (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Effectif total de la catégorie : <strong className="text-gray-800">{formatNumber(data.totalFin)} têtes</strong>
-            <span className="text-gray-400"> · répartis sur {data.lignes.length} espèce(s)</span>
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-gray-100">
+      {/* Détail par espèce du périmètre */}
+      <Card title={`Détail par espèce — ${scopeLabel}`}>
+        {especeRows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-400">Aucune espèce.</p>
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Espèce</th>
-                  <th className="px-2 py-2 text-center">EF Initial</th>
+                  {scope === TOUTES && <th className="px-2 py-2 text-left">Catégorie</th>}
+                  <th className="px-2 py-2 text-center">Effectif</th>
                   <th className="px-2 py-2 text-center">Naiss.</th>
-                  <th className="px-2 py-2 text-center">Entrées</th>
-                  <th className="px-2 py-2 text-center">Sorties</th>
                   <th className="px-2 py-2 text-center">Décès</th>
-                  <th className="px-2 py-2 text-center">EF Final</th>
+                  <th className="px-2 py-2 text-center">Malades</th>
+                  {showFinance && <th className="px-2 py-2 text-right">Prix unit.</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {data.lignes.map((l) => (
-                  <tr key={l.nom}>
-                    <td className="px-3 py-1.5 font-semibold">{l.nom}</td>
-                    <td className="px-2 py-1.5 text-center">{l.init}</td>
-                    <td className="px-2 py-1.5 text-center text-green-600">{l.naiss}</td>
-                    <td className="px-2 py-1.5 text-center text-sky-600">{l.ent}</td>
-                    <td className="px-2 py-1.5 text-center text-amber-600">{l.sor}</td>
-                    <td className="px-2 py-1.5 text-center text-red-600">{l.dec}</td>
-                    <td className="px-2 py-1.5 text-center font-bold" style={{ color: data.color }}>{l.fin}</td>
+                {especeRows.map((r) => (
+                  <tr key={r.nom}>
+                    <td className="px-3 py-1.5 font-semibold">{r.nom}</td>
+                    {scope === TOUTES && <td className="px-2 py-1.5 text-gray-500" style={{ color: catColor(r.cat) }}>{r.cat}</td>}
+                    <td className="px-2 py-1.5 text-center font-bold">{formatNumber(r.fin)}</td>
+                    <td className="px-2 py-1.5 text-center text-green-600">{r.naiss}</td>
+                    <td className="px-2 py-1.5 text-center text-red-600">{r.dec}</td>
+                    <td className="px-2 py-1.5 text-center text-amber-600">{r.malades}</td>
+                    {showFinance && <td className="px-2 py-1.5 text-right text-gray-500">{formatMoney(r.prix)}</td>}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Distribution des effectifs</p>
-            <div className="h-56">
-              {data.totalFin > 0
-                ? <Bar data={distribution} options={{ maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { precision: 0 } } } }} />
-                : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif enregistré pour cette catégorie.</p>}
-            </div>
+        )}
+      </Card>
+
+      {/* ─────── Modales détaillées (scope courant) ─────── */}
+      <Modal open={modalKey === 'mortalite'} onClose={() => setModalKey(null)} size="lg" title={`Mortalité — ${scopeLabel}`}>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Taux : <strong>{ind.mortalite.toFixed(1)} %</strong> — {ind.dec} décès / {formatNumber(ind.base)} têtes (effectif initial)</p>
+        <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Effectif initial) × 100</p>
+        <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
+      </Modal>
+
+      <Modal open={modalKey === 'croissance'} onClose={() => setModalKey(null)} size="lg" title={`Croissance & naissances — ${scopeLabel}`}>
+        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Taux : <strong>{ind.croissance.toFixed(1)} %</strong> — {ind.naiss} naissance(s)</p>
+        <p className="my-2 text-xs italic text-gray-400">Formule : ((Naissances − Décès) / Effectif initial) × 100</p>
+        <DetailTable rows={naissancesDetail} cols={['Date', 'Espèce', 'Nés', 'Agent']} render={(n) => [formatDateShort(n.date), n.espece, n.qte, n.agent]} empty="Aucune naissance sur la période." />
+      </Modal>
+
+      <Modal open={modalKey === 'morbidite'} onClose={() => setModalKey(null)} size="lg" title={`Morbidité — ${scopeLabel}`}>
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Taux : <strong>{ind.morbidite.toFixed(1)} %</strong> — {ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes</p>
+        <p className="my-2 text-xs italic text-gray-400">Formule : (Malades / Effectif) × 100 — prévision : tendance + moyenne mobile (7 jours)</p>
+        {morbiditePrevision.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {morbiditePrevision.map((v, i) => <span key={i} className="rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">J+{i + 1} : {v.toFixed(1)} %</span>)}
           </div>
-        </div>
+        )}
+      </Modal>
+
+      <Modal open={modalKey === 'ventes'} onClose={() => setModalKey(null)} size="lg" title={`Ventes (volume) — ${scopeLabel}`}>
+        <p className="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">{formatNumber(ventes.courant)} unité(s) vendue(s) — période préc. : {formatNumber(ventes.precedent)}</p>
+        <DetailTable rows={ventes.liste} cols={['Date', 'Article', 'Catégorie', 'Qté', 'Source']} render={(v) => [formatDateShort(v.date), v.article, v.cat, v.qte, v.source === 'demande' ? 'Demande/Facture' : 'Saisie']} empty="Aucune vente sur la période." />
+      </Modal>
+
+      {showFinance && (
+        <Modal open={modalKey === 'ca'} onClose={() => setModalKey(null)} size="lg" title={`Chiffre d'affaires — ${scopeLabel}`}>
+          <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{formatMoney(ca.courant)} — période préc. : {formatMoney(ca.precedent)}</p>
+          <p className="my-2 text-xs italic text-gray-400">CA = factures <strong>certifiées</strong> uniquement{scope !== TOUTES ? ' (montant des lignes de cette catégorie)' : ''}.</p>
+          <DetailTable rows={ca.liste} cols={['Date', 'N°', 'Client', 'Montant']} render={(f) => [formatDateShort(f.date), f.numero || '—', f.client?.nom || '—', formatMoney(scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => l.articleCat === scope).reduce((s, l) => s + (l.total || 0), 0))]} empty="Aucune facture certifiée sur la période." />
+        </Modal>
       )}
-    </Modal>
+    </div>
+  )
+}
+
+function ScopeTab({ active, color, onClick, children }) {
+  return (
+    <button onClick={onClick}
+      className="rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors"
+      style={active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' }}>
+      {children}
+    </button>
+  )
+}
+
+function Indic({ title, value, icon: Icon, color, sub, delta, money, onClick }) {
+  return (
+    <button onClick={onClick} disabled={!onClick}
+      className={`card p-3 text-left transition-all ${onClick ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{title}</p>
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: color + '1a', color }}><Icon size={15} /></span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <p className="text-xl font-extrabold" style={{ color }}>{value}</p>
+        {delta !== undefined && delta !== 0 && (
+          <span className={`text-xs font-bold ${delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {delta > 0 ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
+            {money ? formatMoney(Math.abs(delta)) : Math.abs(delta)}
+          </span>
+        )}
+      </div>
+      {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}{onClick ? ' — détails' : ''}</p>}
+    </button>
+  )
+}
+
+function DetailTable({ rows, cols, render, empty }) {
+  if (!rows.length) return <p className="py-6 text-center text-sm text-gray-400">{empty}</p>
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-100">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr>{cols.map((c) => <th key={c} className="px-3 py-2 text-left">{c}</th>)}</tr></thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((r, i) => (
+            <tr key={i} className={i % 2 === 1 ? 'bg-gray-50/50' : ''}>
+              {render(r).map((cell, j) => <td key={j} className="px-3 py-1.5">{cell}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

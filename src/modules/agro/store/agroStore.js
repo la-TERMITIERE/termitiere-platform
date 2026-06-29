@@ -9,12 +9,13 @@
 // Les getters restent synchrones (especes / aliments en state) pour ne rien casser
 // dans les composants ; ils sont alimentés par une souscription init().
 import { create } from 'zustand'
-import { ESPECES, ALIMENTS } from '../data'
+import { ESPECES, ALIMENTS, categorieVolaille } from '../data'
 import { subscribeCollection, getAll, setItem, removeItem } from '../../../core/db'
 
 const COL = 'agro_referentiel'
 let _unsub = null
 let _seeding = false
+let _migrating = false
 
 export const useAgroStore = create((set, get) => ({
   // Valeurs par défaut affichées immédiatement (remplacées par les données Firestore au boot).
@@ -32,6 +33,25 @@ export const useAgroStore = create((set, get) => ({
         await seedDefaults()
         _seeding = false
         return // la souscription se redéclenchera avec les données amorcées
+      }
+      // Migration / correction : classe chaque VOLAILLE dans sa catégorie d'après
+      // son NOM (CANARDS / DINDONS / PINTADES / POULETS). Robuste aux identifiants
+      // personnalisés et CORRIGE les espèces mal classées (ex. tout sous POULETS).
+      // Idempotent : ne réécrit que les espèces dont la catégorie diffère de la cible.
+      const POULTRY_CATS = ['VOLAILLES', 'CANARDS', 'DINDONS', 'PINTADES', 'POULETS']
+      const aMigrer = rows.filter((r) => {
+        if (r.type !== 'espece' || !POULTRY_CATS.includes(r.cat)) return false
+        const cible = categorieVolaille(r.nom)
+        return cible && cible !== r.cat
+      })
+      if (aMigrer.length && !_migrating) {
+        _migrating = true
+        try {
+          await Promise.all(aMigrer.map((r) =>
+            setItem(COL, r.id, { ...stripMeta(r), cat: categorieVolaille(r.nom), type: 'espece' })
+          ))
+        } finally { _migrating = false }
+        return // la souscription se redéclenchera avec les catégories à jour
       }
       const especes = rows.filter((r) => r.type === 'espece').map(stripMeta)
       const aliments = rows.filter((r) => r.type === 'aliment').map(stripMeta)
