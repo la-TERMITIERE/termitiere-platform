@@ -74,7 +74,8 @@ export default function Params() {
         tarifInscription: 5000,
         heureOuverture: '07:00',
         heureFermeture: '18:00',
-        capaciteMax: 40
+        capaciteMax: 40,
+        seuilAbsences: 3
       }
       await saveParams(defaut)
       setForm(defaut)
@@ -207,6 +208,9 @@ export default function Params() {
           </FormGroup>
           <FormGroup label="Frais d'inscription (FCFA)">
             <Input type="number" value={form.tarifInscription} onChange={(e) => set('tarifInscription', Number(e.target.value))} disabled={!canEdit} />
+          </FormGroup>
+          <FormGroup label="Alerte absences répétées (jours consécutifs)">
+            <Input type="number" min={1} max={30} value={form.seuilAbsences ?? 3} onChange={(e) => set('seuilAbsences', Number(e.target.value))} disabled={!canEdit} />
           </FormGroup>
         </div>
 

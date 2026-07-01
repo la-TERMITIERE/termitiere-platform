@@ -11,6 +11,7 @@ const MODULE_THEME = {
   evenementiel: { color: '#7c3aed', color2: '#4c1d95', logo: null,                          nom: 'BRIQUETERIE'            },
   foncier:      { color: '#059669', color2: '#065f46', logo: null,                          nom: 'FONCIER'                },
   rh:           { color: '#ea580c', color2: '#9a3412', logo: null,                          nom: 'COMPTABILITÉ'           },
+  projet:       { color: '#0d9488', color2: '#0f5450', logo: null,                          nom: 'GESTION DE PROJET'      },
   default:      { color: '#BC3C31', color2: '#1A1A1A', logo: null,                          nom: 'LA TERMITIÈRE'          }
 }
 
@@ -74,9 +75,14 @@ export default function Topbar({ onMenuToggle, user }) {
             <img src={logo} alt={nom}
               style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 3, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', display: 'block' }} />
           ) : (
-            <img src="/termitiere-logo.png" alt="La Termitière"
-              onError={(e) => { e.target.src = '/logo-mark.png' }}
-              style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 2, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', display: 'block' }} />
+            <div style={{
+              width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: color, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', flexShrink: 0
+            }}>
+              <span style={{ color: 'white', fontWeight: 800, fontSize: 13, letterSpacing: '-0.5px', textAlign: 'center', lineHeight: 1, padding: '0 2px' }}>
+                {nom.slice(0, 2).toUpperCase()}
+              </span>
+            </div>
           )}
         </div>
 

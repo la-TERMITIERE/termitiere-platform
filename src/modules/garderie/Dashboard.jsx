@@ -132,6 +132,55 @@ export default function Dashboard() {
     })
   }, [enfants, presences, nutrition, today, deletedEnfantIds, params, heureNow])
 
+  // ── Soldes partiels après le 15 du mois ──────────────────────────────────
+  const enfantsPartielsNonSoldes = useMemo(() => {
+    const jourDuMois = new Date().getDate()
+    if (jourDuMois < 15) return [] // alerte inactive avant le 15
+
+    const moisCourant = today.slice(0, 7) // "YYYY-MM"
+    return enfantsVisibles
+      .filter((e) => e.statut === 'actif')
+      .map((e) => {
+        const p = paiements.find(
+          (p) => p.enfantId === e.id &&
+          `${p.annee}-${String(p.mois).padStart(2, '0')}` === moisCourant &&
+          p.statut === 'partiel'
+        )
+        if (!p) return null
+        const reste = (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)
+        return reste > 0 ? { ...e, reste, montantPaye: p.montantPaye, montantDu: p.montantDu } : null
+      })
+      .filter(Boolean)
+  }, [enfantsVisibles, paiements, today])
+
+  // ── Absences répétées sans justification ─────────────────────────────────
+  const enfantsAbsentsRepetes = useMemo(() => {
+    const seuil = Number(params.seuilAbsences) || 3
+    return enfantsVisibles
+      .filter((e) => e.statut === 'actif')
+      .map((e) => {
+        // Remonter les X derniers jours calendaires (hors aujourd'hui)
+        let consecutifs = 0
+        for (let j = 1; j <= 30; j++) {
+          const d = new Date()
+          d.setDate(d.getDate() - j)
+          const dateStr = d.toISOString().slice(0, 10)
+          const p = presences.find((pr) => pr.enfantId === e.id && pr.date === dateStr && !pr.personnelId)
+          if (p && p.statut === 'absent') {
+            consecutifs++
+          } else if (p && p.statut !== 'absent') {
+            break // présent ou excusé — on arrête
+          }
+          // pas de pointage = on ne compte pas (jour non ouvert possible)
+          else if (!p) {
+            break
+          }
+        }
+        return consecutifs >= seuil ? { ...e, joursAbsents: consecutifs } : null
+      })
+      .filter(Boolean)
+  }, [enfantsVisibles, presences, params])
+
   // Alarmes actives : incidents non résolus avec alarme > 0, triés par niveau décroissant
   const alarmsActives = useMemo(
     () => incidents
@@ -250,6 +299,54 @@ export default function Dashboard() {
                 ⚠️ {enfantsNonPayes.length} enfant{enfantsNonPayes.length > 1 ? 's' : ''} non à jour ce mois
               </p>
               <p className="text-xs text-red-500">Cette alerte disparaît automatiquement dès que le paiement est enregistré · Cliquez pour régler</p>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* ── Alerte soldes partiels après le 15 ── */}
+      {enfantsPartielsNonSoldes.length > 0 && (
+        <button
+          onClick={() => navigate('/garderie/paiements')}
+          className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-left hover:bg-amber-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={18} className="text-amber-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-amber-700 text-sm">
+                🟡 {enfantsPartielsNonSoldes.length} enfant{enfantsPartielsNonSoldes.length > 1 ? 's' : ''} n'a pas soldé ce mois (après le 15)
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {enfantsPartielsNonSoldes.map((e) => (
+                  <span key={e.id} className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                    {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-amber-500 mt-1">Cliquez pour accéder aux paiements</p>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* ── Alerte absences répétées ── */}
+      {enfantsAbsentsRepetes.length > 0 && (
+        <button
+          onClick={() => navigate('/garderie/presences')}
+          className="w-full rounded-xl border border-orange-300 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={18} className="text-orange-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-orange-700 text-sm">
+                🟠 {enfantsAbsentsRepetes.length} enfant{enfantsAbsentsRepetes.length > 1 ? 's' : ''} absent{enfantsAbsentsRepetes.length > 1 ? 's' : ''} sans justification depuis {params.seuilAbsences ?? 3}+ jours
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {enfantsAbsentsRepetes.map((e) => (
+                  <span key={e.id} className="rounded-full bg-orange-100 border border-orange-300 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
+                    {e.prenom} {e.nom} — {e.joursAbsents}j consécutifs
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-orange-500 mt-1">Cliquez pour voir les présences</p>
             </div>
           </div>
         </button>

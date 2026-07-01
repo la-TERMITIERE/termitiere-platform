@@ -56,6 +56,9 @@ export const formatTaille = (octets) => {
   return `${(octets / 1024 / 1024).toFixed(1)} Mo`
 }
 
+// Compresse une image fichier et retourne directement le data URL.
+export const compresserImageFichier = (file) => compresserImage(file)
+
 // Lit un fichier en pièce jointe : { nom, type, taille, dataURL }.
 // Images → compressées. PDF/autres → lus tels quels (garde-fou de taille).
 export async function lireFichier(file) {
@@ -83,13 +86,38 @@ export async function lireFichier(file) {
 }
 
 // Ouvre une pièce jointe (data URL) dans un nouvel onglet.
+// Les PDF sont téléchargés via un lien temporaire (les navigateurs bloquent
+// l'ouverture directe d'un data URL PDF pour raisons de sécurité).
 export function ouvrirPiece(piece) {
   if (!piece?.dataURL) return
-  const w = window.open()
-  if (!w) return
   if ((piece.type || '').startsWith('image/')) {
-    w.document.write(`<img src="${piece.dataURL}" style="max-width:100%" alt="${piece.nom || ''}">`)
+    const w = window.open()
+    if (!w) return
+    w.document.write(`<img src="${piece.dataURL}" style="max-width:100%;margin:auto;display:block" alt="${piece.nom || ''}">`)
   } else {
-    w.location.href = piece.dataURL
+    // PDF ou autre : conversion data URL → Blob puis ouverture via URL.createObjectURL
+    try {
+      const [header, b64] = piece.dataURL.split(',')
+      const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf'
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: mime })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.target   = '_blank'
+      a.rel      = 'noopener noreferrer'
+      // Essaie d'abord d'ouvrir dans un onglet ; si bloqué → téléchargement
+      const w = window.open(url, '_blank')
+      if (!w) { a.download = piece.nom || 'document.pdf'; a.click() }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch {
+      // Fallback : téléchargement direct
+      const a = document.createElement('a')
+      a.href = piece.dataURL
+      a.download = piece.nom || 'document.pdf'
+      a.click()
+    }
   }
 }
