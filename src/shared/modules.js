@@ -1,9 +1,10 @@
 // Configuration centrale des modules de la plateforme et de leur navigation interne.
 import {
-  Leaf, Truck, BrickWall, Calculator, MapPin, Baby,
+  Leaf, Truck, BrickWall, Calculator, MapPin, Baby, FolderKanban,
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
-  Users, CreditCard, AlertTriangle, CalendarCheck, UtensilsCrossed, BarChart2
+  Users, CreditCard, AlertTriangle, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
+  MessageSquare, Wallet, ClipboardCheck, BellRing, FileDown, Gauge
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES } from '../core/roles'
 
@@ -71,6 +72,16 @@ export const MODULES = [
     color: '#ea580c',
     path: '/rh',
     statut: 'bientot'
+  },
+  {
+    id: 'projet',
+    nom: 'GESTION DE PROJET',
+    description: 'Projets, tâches, équipes & avancement',
+    icon: FolderKanban,
+    emoji: '📋',
+    color: '#0d9488',
+    path: '/projet',
+    statut: 'actif'
   }
 ]
 
@@ -121,6 +132,18 @@ export const MODULE_NAV = {
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
+  ],
+  projet: [
+    { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
+    { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge },
+    { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban },
+    { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks },
+    { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
+    { label: 'Documents',   to: '/projet/documents',   icon: Paperclip },
+    { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet },
+    { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
+    { label: 'Journal',     to: '/projet/journal',     icon: BookOpen },
+    { label: 'Paramètres',  to: '/projet/params',      icon: Settings }
   ],
   garderie: [
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
