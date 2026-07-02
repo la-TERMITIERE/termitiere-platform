@@ -26,9 +26,15 @@ jobs:
 
       - name: Build Docker image
         run: |
+          OWNER="${{ github.repository_owner }}"
+          OWNER_LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LOWER}/termitiere-platform:latest"
+
+          echo "Using image: $IMAGE"
+
           docker build \
             -f deploy/Dockerfile \
-            -t ghcr.io/${{ toLower(github.repository_owner) }}/termitiere-platform:latest \
+            -t "$IMAGE" \
             --build-arg VITE_USE_SUPABASE=true \
             --build-arg VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }} \
             --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }} \
@@ -36,4 +42,8 @@ jobs:
 
       - name: Push image
         run: |
-          docker push ghcr.io/${{ toLower(github.repository_owner) }}/termitiere-platform:latest
+          OWNER="${{ github.repository_owner }}"
+          OWNER_LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LOWER}/termitiere-platform:latest"
+
+          docker push "$IMAGE"
