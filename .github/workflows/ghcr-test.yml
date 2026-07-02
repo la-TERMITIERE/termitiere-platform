@@ -28,7 +28,7 @@ jobs:
         run: |
           docker build \
             -f deploy/Dockerfile \
-            -t ghcr.io/${{ github.repository_owner }}/termitiere-platform:latest \
+            -t ghcr.io/${{ toLower(github.repository_owner) }}/termitiere-platform:latest \
             --build-arg VITE_USE_SUPABASE=true \
             --build-arg VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }} \
             --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }} \
@@ -36,4 +36,4 @@ jobs:
 
       - name: Push image
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/termitiere-platform:latest
+          docker push ghcr.io/${{ toLower(github.repository_owner) }}/termitiere-platform:latest
