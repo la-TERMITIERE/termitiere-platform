@@ -1,0 +1,41 @@
+name: GHCR Test
+
+on:
+  push:
+    branches:
+      - vps-deploy
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test-ghcr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create test Dockerfile
+        run: |
+          cat <<EOF > Dockerfile
+          FROM alpine:latest
+          CMD ["echo", "GHCR test successful"]
+          EOF
+
+      - name: Build image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/ghcr-test:latest .
+
+      - name: Push image
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/ghcr-test:latest
