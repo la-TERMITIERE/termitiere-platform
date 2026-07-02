@@ -2,7 +2,6 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Dashboard from './Dashboard'
-import SaisieMatiere from './SaisieMatiere'
 import Production from './Production'
 import StockBriques from './StockBriques'
 import Ventes from './Ventes'
@@ -20,7 +19,6 @@ export default function EvenementielModule() {
   return (
     <Routes>
       <Route index element={<Dashboard />} />
-      <Route path="saisie" element={<SaisieMatiere />} />
       <Route path="production" element={<Production />} />
       <Route path="stock" element={<StockBriques />} />
       <Route path="ventes" element={<Ventes />} />

@@ -114,7 +114,6 @@ export const MODULE_NAV = {
   ],
   evenementiel: [
     { label: 'Dashboard', to: '/evenementiel', icon: LayoutDashboard, end: true },
-    { label: 'Saisie matières', to: '/evenementiel/saisie', icon: ClipboardList },
     { label: 'Production', to: '/evenementiel/production', icon: Factory },
     { label: 'Stock briques', to: '/evenementiel/stock', icon: Package },
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },

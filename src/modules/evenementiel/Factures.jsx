@@ -33,7 +33,14 @@ export default function Factures() {
   const peutFacturer = () => role === 'agent'
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: clients } = useCollection('evenementiel_clients')
+  const { data: ventes } = useCollection('evenementiel_ventes')
   const briques = useBriqueterieStore((s) => s.briques)
+
+  // Ventes approuvées (sortie certifiée) pas encore facturées : proposées à la facturation.
+  const ventesAFacturer = useMemo(
+    () => ventes.filter((v) => v.statut === 'autorisee' && !factures.some((f) => f.venteId === v.id)),
+    [ventes, factures]
+  )
 
   const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null) // { facture, editId }
@@ -73,8 +80,27 @@ export default function Factures() {
 
   const { generateFacturePDF } = usePDF('evenementiel')
 
-  function openCreate() { setModal({ facture: emptyFacture(), editId: null }) }
-  function openEdit(f) { setModal({ facture: structuredClone(f), editId: f.id }) }
+  function openCreate() { setModal({ facture: emptyFacture(), editId: null, venteId: null }) }
+  function openEdit(f) { setModal({ facture: structuredClone(f), editId: f.id, venteId: f.venteId || null }) }
+
+  // Pré-remplit la facture à partir d'une vente approuvée (client + lignes).
+  function pickVente(id) {
+    const v = ventes.find((x) => x.id === id)
+    if (!v) { setModal((m) => ({ ...m, venteId: null })); return }
+    const cli = clients.find((c) => c.id === v.clientId)
+    setModal((m) => ({
+      ...m,
+      venteId: v.id,
+      facture: {
+        ...m.facture,
+        client: { nom: v.clientNom || cli?.nom || '', tel: cli?.tel || '', email: cli?.email || '', adresse: cli?.adresse || '' },
+        lignes: (v.lignes || []).map((l) => ({
+          articleId: l.briqueId, article: l.briqueNom,
+          qte: l.qte, prixUnit: l.prixUnitaire, total: (parseInt(l.qte) || 0) * (parseFloat(l.prixUnitaire) || 0)
+        }))
+      }
+    }))
+  }
 
   function setLigne(i, patch) {
     setModal((m) => {
@@ -106,7 +132,7 @@ export default function Factures() {
     }
     const fClean = { ...f, lignes }
     const { totalHT, totalTTC } = calcTotaux(fClean)
-    const payload = { ...fClean, totalHT, totalTTC }
+    const payload = { ...fClean, totalHT, totalTTC, venteId: modal.venteId || null }
     try {
       if (modal.editId) {
         await updateItem('evenementiel_factures', modal.editId, payload)
@@ -115,6 +141,8 @@ export default function Factures() {
       } else {
         payload.numero = genNumero('FAC-BRIQ', factures.length)
         await addItem('evenementiel_factures', payload)
+        // Vente facturée : passe en « chargée / partie ».
+        if (modal.venteId) await updateItem('evenementiel_ventes', modal.venteId, { statut: 'chargee' })
         await audit('evenementiel', 'FACTURE', `${payload.numero} — ${formatMoney(totalTTC)}`)
         toast.success('Facture créée ✓')
       }
@@ -170,77 +198,143 @@ export default function Factures() {
       >
         {modal && (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
-              <FormGroup label="Client" required hint="Choisissez un client existant ou tapez un nouveau nom">
-                <Input
-                  list="clients-briq-list"
-                  value={modal.facture.client.nom}
-                  onChange={(e) => {
-                    const nom = e.target.value
-                    const connu = clientsConnus.find((c) => c.nom.toLowerCase() === nom.trim().toLowerCase())
-                    setModal((m) => ({
-                      ...m,
-                      facture: {
-                        ...m.facture,
-                        client: connu
-                          ? { ...m.facture.client, nom, tel: connu.tel, email: connu.email, adresse: connu.adresse }
-                          : { ...m.facture.client, nom }
-                      }
-                    }))
-                  }}
-                />
-                <datalist id="clients-briq-list">
-                  {clientsConnus.map((c) => <option key={c.nom} value={c.nom} />)}
-                </datalist>
-              </FormGroup>
-              <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
-              <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
-            </div>
-
-            {/* Lignes */}
-            <div className="mb-2 mt-2 overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr><th className="px-2 py-2 text-left">Article</th><th className="px-2 py-2">Qté</th><th className="px-2 py-2">Prix unit.</th><th className="px-2 py-2 text-right">Total</th><th></th></tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {modal.facture.lignes.map((l, i) => (
-                    <tr key={i}>
-                      <td className="px-2 py-1.5">
-                        <Select value={l.articleId} onChange={(e) => pickArticle(i, e.target.value)}>
-                          <option value="">— Choisir / libre —</option>
-                          {briques.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
-                        </Select>
-                        {!l.articleId && (
-                          <Input className="mt-1" placeholder="Désignation libre…" value={l.article} onChange={(e) => setLigne(i, { article: e.target.value })} />
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5"><Input type="number" min="1" className="w-20" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} /></td>
-                      <td className="px-2 py-1.5"><Input type="number" min="0" className="w-28" value={l.prixUnit} onChange={(e) => setLigne(i, { prixUnit: e.target.value })} /></td>
-                      <td className="px-2 py-1.5 text-right font-semibold">{formatMoney(l.total)}</td>
-                      <td className="px-2 py-1.5"><button onClick={() => removeLigne(i)} className="text-red-500 hover:text-red-700"><Trash2 size={15} /></button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Button variant="outline" size="sm" onClick={addLigne}><Plus size={14} /> Ajouter une ligne</Button>
-
-            {/* Totaux */}
-            <div className="mt-3 flex flex-col items-end gap-2">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-600">Remise %</label>
-                <Input type="number" min="0" max="100" className="w-20" value={modal.facture.remise} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, remise: parseFloat(e.target.value) || 0 } }))} />
-                <label className="text-sm text-gray-600">TVA %</label>
-                <Input type="number" min="0" max="100" className="w-20" value={modal.facture.tva} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, tva: parseFloat(e.target.value) || 0 } }))} />
+            {!modal.editId && (
+              <div className="mb-3 rounded-lg border border-violet-100 bg-violet-50 p-3">
+                <FormGroup label="Facturer une vente approuvée" hint="Sélectionnez une vente autorisée : le client et les lignes seront pré-remplis.">
+                  <Select value={modal.venteId || ''} onChange={(e) => pickVente(e.target.value)}>
+                    <option value="">— Nouvelle facture libre —</option>
+                    {ventesAFacturer.map((v) => (
+                      <option key={v.id} value={v.id}>{v.num} — {v.clientNom} ({formatMoney(v.total || 0)})</option>
+                    ))}
+                  </Select>
+                </FormGroup>
+                {!ventesAFacturer.length && (
+                  <p className="mt-1 text-xs text-gray-500">Aucune vente approuvée en attente de facturation.</p>
+                )}
               </div>
-              <p className="text-sm text-gray-600">Total HT : <strong>{formatMoney(totaux.totalHT)}</strong></p>
-              <p className="text-lg font-extrabold text-primary-dark">TOTAL TTC : {formatMoney(totaux.totalTTC)}</p>
-            </div>
+            )}
+            {modal.venteId ? (
+              /* Facture issue d'une vente déjà approuvée : lecture seule, on enregistre seulement. */
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
+                  <ReadField label="Client" value={modal.facture.client.nom} />
+                  <ReadField label="Téléphone" value={modal.facture.client.tel || '—'} />
+                  <ReadField label="Email" value={modal.facture.client.email || '—'} />
+                </div>
+
+                <div className="mb-2 mt-2 overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                      <tr><th className="px-2 py-2 text-left">Article</th><th className="px-2 py-2 text-center">Qté</th><th className="px-2 py-2 text-right">Prix unit.</th><th className="px-2 py-2 text-right">Total</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {modal.facture.lignes.map((l, i) => (
+                        <tr key={i}>
+                          <td className="px-2 py-1.5 font-medium">{l.article}</td>
+                          <td className="px-2 py-1.5 text-center">{l.qte}</td>
+                          <td className="px-2 py-1.5 text-right">{formatMoney(l.prixUnit)}</td>
+                          <td className="px-2 py-1.5 text-right font-semibold">{formatMoney(l.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-3 flex flex-col items-end gap-1">
+                  <p className="text-sm text-gray-600">Total HT : <strong>{formatMoney(totaux.totalHT)}</strong></p>
+                  <p className="text-lg font-extrabold text-primary-dark">TOTAL TTC : {formatMoney(totaux.totalTTC)}</p>
+                </div>
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Vente déjà approuvée — les informations ne sont pas modifiables. Cliquez sur <strong>Enregistrer</strong> pour émettre la facture, puis imprimez-la.
+                </p>
+              </>
+            ) : (
+              /* Facture libre : entièrement éditable. */
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
+                  <FormGroup label="Client" required hint="Choisissez un client existant ou tapez un nouveau nom">
+                    <Input
+                      list="clients-briq-list"
+                      value={modal.facture.client.nom}
+                      onChange={(e) => {
+                        const nom = e.target.value
+                        const connu = clientsConnus.find((c) => c.nom.toLowerCase() === nom.trim().toLowerCase())
+                        setModal((m) => ({
+                          ...m,
+                          facture: {
+                            ...m.facture,
+                            client: connu
+                              ? { ...m.facture.client, nom, tel: connu.tel, email: connu.email, adresse: connu.adresse }
+                              : { ...m.facture.client, nom }
+                          }
+                        }))
+                      }}
+                    />
+                    <datalist id="clients-briq-list">
+                      {clientsConnus.map((c) => <option key={c.nom} value={c.nom} />)}
+                    </datalist>
+                  </FormGroup>
+                  <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
+                  <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
+                </div>
+
+                {/* Lignes */}
+                <div className="mb-2 mt-2 overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                      <tr><th className="px-2 py-2 text-left">Article</th><th className="px-2 py-2">Qté</th><th className="px-2 py-2">Prix unit.</th><th className="px-2 py-2 text-right">Total</th><th></th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {modal.facture.lignes.map((l, i) => (
+                        <tr key={i}>
+                          <td className="px-2 py-1.5">
+                            <Select value={l.articleId} onChange={(e) => pickArticle(i, e.target.value)}>
+                              <option value="">— Choisir / libre —</option>
+                              {briques.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
+                            </Select>
+                            {!l.articleId && (
+                              <Input className="mt-1" placeholder="Désignation libre…" value={l.article} onChange={(e) => setLigne(i, { article: e.target.value })} />
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5"><Input type="number" min="1" className="w-20" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} /></td>
+                          <td className="px-2 py-1.5"><Input type="number" min="0" className="w-28" value={l.prixUnit} onChange={(e) => setLigne(i, { prixUnit: e.target.value })} /></td>
+                          <td className="px-2 py-1.5 text-right font-semibold">{formatMoney(l.total)}</td>
+                          <td className="px-2 py-1.5"><button onClick={() => removeLigne(i)} className="text-red-500 hover:text-red-700"><Trash2 size={15} /></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Button variant="outline" size="sm" onClick={addLigne}><Plus size={14} /> Ajouter une ligne</Button>
+
+                {/* Totaux */}
+                <div className="mt-3 flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-gray-600">Remise %</label>
+                    <Input type="number" min="0" max="100" className="w-20" value={modal.facture.remise} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, remise: parseFloat(e.target.value) || 0 } }))} />
+                    <label className="text-sm text-gray-600">TVA %</label>
+                    <Input type="number" min="0" max="100" className="w-20" value={modal.facture.tva} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, tva: parseFloat(e.target.value) || 0 } }))} />
+                  </div>
+                  <p className="text-sm text-gray-600">Total HT : <strong>{formatMoney(totaux.totalHT)}</strong></p>
+                  <p className="text-lg font-extrabold text-primary-dark">TOTAL TTC : {formatMoney(totaux.totalTTC)}</p>
+                </div>
+              </>
+            )}
           </>
         )}
       </Modal>
+    </div>
+  )
+}
+
+// Champ en lecture seule (facture issue d'une vente approuvée).
+function ReadField({ label, value }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold text-gray-600">{label}</label>
+      <div className="truncate rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800">{value}</div>
     </div>
   )
 }

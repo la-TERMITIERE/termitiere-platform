@@ -24,7 +24,7 @@ export default function Dashboard() {
   const briques = useBriqueterieStore((s) => s.briques)
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: productions } = useCollection('evenementiel_productions')
-  const { data: ventes } = useCollection('evenementiel_ventes')
+  const { data: factures } = useCollection('evenementiel_factures')
   const { data: demandes } = useCollection('evenementiel_demandes')
 
   const [detail, setDetail] = useState(null) // { titre, render }
@@ -47,9 +47,10 @@ export default function Dashboard() {
   const prodDuMois = productions.filter((p) => (p.date || '').startsWith(mois))
   const prodMois = prodDuMois.reduce((s, p) => s + (p.totalBriques || 0), 0)
   const prodMoisPrec = productions.filter((p) => (p.date || '').startsWith(moisPrec)).reduce((s, p) => s + (p.totalBriques || 0), 0)
-  const ventesDuMois = ventes.filter((v) => (v.date || '').startsWith(mois))
-  const caMois = ventesDuMois.reduce((s, v) => s + (v.total || 0), 0)
-  const caMoisPrec = ventes.filter((v) => (v.date || '').startsWith(moisPrec)).reduce((s, v) => s + (v.total || 0), 0)
+  // CA = factures émises (issues des ventes approuvées).
+  const facturesDuMois = factures.filter((f) => (f.date || '').startsWith(mois))
+  const caMois = facturesDuMois.reduce((s, f) => s + (f.totalTTC || 0), 0)
+  const caMoisPrec = factures.filter((f) => (f.date || '').startsWith(moisPrec)).reduce((s, f) => s + (f.totalTTC || 0), 0)
   const demandesActives = demandes.filter((d) => estActif(d.statut))
 
   const parType = useMemo(() => {
@@ -112,14 +113,14 @@ export default function Dashboard() {
           sub="5–6 jours · cliquer" onClick={() => setDetail({ titre: 'Briques en séchage', render: tableStock('sechage') })} />
         <StatCard title="CA du mois" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
           variation={caMois - caMoisPrec} variationLabel={`mois préc. : ${formatMoney(caMoisPrec)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Ventes du mois', render: (
+          onClick={() => setDetail({ titre: 'Factures du mois', render: (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total</th></tr></thead>
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {[...ventesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((v) => (
-                  <tr key={v.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(v.date)}</td><td className="px-3 py-1.5">{v.clientNom || '—'}</td><td className="px-3 py-1.5 text-right font-bold text-sky-700">{formatMoney(v.total || 0)}</td></tr>
+                {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f) => (
+                  <tr key={f.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(f.date)}</td><td className="px-3 py-1.5">{f.client?.nom || '—'}</td><td className="px-3 py-1.5 text-right font-bold text-sky-700">{formatMoney(f.totalTTC || 0)}</td></tr>
                 ))}
-                {!ventesDuMois.length && <tr><td colSpan={3} className="py-4 text-center text-gray-400">Aucune vente ce mois.</td></tr>}
+                {!facturesDuMois.length && <tr><td colSpan={3} className="py-4 text-center text-gray-400">Aucune facture ce mois.</td></tr>}
               </tbody>
             </table>
           ) })} />
