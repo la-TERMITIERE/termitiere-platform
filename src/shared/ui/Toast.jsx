@@ -12,7 +12,7 @@ const CONF = {
 export default function ToastContainer() {
   const { toasts, dismiss } = useNotifStore()
   return (
-    <div className="fixed bottom-4 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
+    <div className="fixed left-1/2 top-3 z-[60] flex w-[calc(100vw-1.5rem)] max-w-sm -translate-x-1/2 flex-col gap-2 sm:bottom-4 sm:left-auto sm:right-4 sm:top-auto sm:translate-x-0">
       {toasts.map((t) => {
         const c = CONF[t.type] || CONF.info
         const Icon = c.icon
@@ -20,7 +20,7 @@ export default function ToastContainer() {
           <div
             key={t.id}
             role="alert"
-            className={`toast-enter flex items-start gap-3 rounded-lg border-l-4 bg-white p-3 shadow-md ${c.cls}`}
+            className={`toast-enter flex items-start gap-3 rounded-lg border-l-4 bg-white p-3 shadow-lg ${c.cls}`}
           >
             <Icon size={20} className="mt-0.5 shrink-0" />
             <p className="flex-1 text-sm font-medium">{t.message}</p>

@@ -7,7 +7,7 @@ import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
-import { TYPES_DOSSIER, STATUTS_DOSSIER, STATUTS_ETAPE } from './data'
+import { TYPES_DOSSIER, STATUTS_DOSSIER, STATUTS_ETAPE, VERDICTS_APPRECIATION } from './data'
 import { progressionDossier, etapeCourante } from './logic'
 import { useFoncierStore } from './store/referentielStore'
 import { formatDateShort } from '../../utils/formatters'
@@ -42,9 +42,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-800 p-4 text-white">
-        <h2 className="text-lg font-extrabold">Gestion Foncière</h2>
-        <p className="text-sm text-emerald-100">Titres fonciers · Morcellement · Mutation · Suivi administratif (Togo)</p>
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(5,150,105,0.35),0_8px_20px_-8px_rgba(5,150,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(5,150,105,0.85) 0%, rgba(6,95,70,0.8) 100%)' }}>
+        <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#059669', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
+          }}>
+            <span style={{ color: 'white', fontWeight: 800, fontSize: 20, letterSpacing: '-0.5px' }}>FO</span>
+          </div>
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Gestion Foncière</h2>
+          <p className="text-sm text-white/80">Titres fonciers · Morcellement · Mutation · Suivi administratif (Togo)</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -91,6 +102,9 @@ export default function Dashboard() {
                     </div>
                     <p className="font-semibold">{d.commune} — Lot {d.lot || '—'}</p>
                     <p className="text-xs text-gray-500">{d.proprietaire}</p>
+                    {d.type === 'vente_cession' && d.cession?.appreciation?.verdict && d.cession.appreciation.verdict !== 'en_attente' && (
+                      <span className="mt-1 inline-block"><Badge tone={VERDICTS_APPRECIATION[d.cession.appreciation.verdict]?.tone}>{VERDICTS_APPRECIATION[d.cession.appreciation.verdict]?.label}</Badge></span>
+                    )}
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-1.5 flex-1 rounded-full bg-gray-100">
                         <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
@@ -107,8 +121,9 @@ export default function Dashboard() {
       </div>
 
       <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        <strong>Procédure titre foncier (Togo) :</strong> Reçu d'achat → Plan parcellaire → Vérification cadastre →
-        Avis OTR → Acte notarié → Titre obtenu. Modes : héritage, donation/cession, achat.
+        <strong>Procédure titre foncier (Togo) :</strong> Levé topographique → Avis du Guichet Foncier Unique →
+        Acte notarié → Publication au Journal Officiel (opposition 3 mois) → Bornage contradictoire → Traitement OTR →
+        Titre établi par la Conservation Foncière. Cession, mutation, donation, héritage & lotissement gérés par dossier.
       </div>
 
       {/* Détail : liste de dossiers filtrée (cliquable jusqu'au dossier) */}

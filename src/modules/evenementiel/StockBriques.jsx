@@ -22,6 +22,14 @@ const TRANSITIONS = [
   { from: 'sechage', to: 'pret', label: 'Prêtes à vendre' }
 ]
 
+// Casse pendant la manutention : les briques cassées quittent leur état et
+// s'ajoutent au total caillasses (vendues séparément).
+const CASSE_TRANSITIONS = [
+  { from: 'appatam', to: 'caillasses' },
+  { from: 'sechage', to: 'caillasses' },
+  { from: 'pret', to: 'caillasses' }
+]
+
 export default function StockBriques() {
   const { user, role } = useAuth()
   const { data: inventaires } = useCollection('evenementiel_inventaires')
@@ -102,14 +110,15 @@ export default function StockBriques() {
       }
     }
 
-    setStock((s) => ({
-      ...s,
-      [briqueId]: {
-        ...s[briqueId],
-        [from]: (s[briqueId][from] || 0) - q,
-        [to]: (s[briqueId][to] || 0) + q
+    setStock((s) => {
+      const src = { ...s[briqueId], [from]: (s[briqueId][from] || 0) - q }
+      // Casse : la quantité s'ajoute au total caillasses (ligne « caillasses »).
+      if (to === 'caillasses') {
+        const cc = s.caillasses || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+        return { ...s, [briqueId]: src, caillasses: { ...cc, caillasses: (cc.caillasses || 0) + q } }
       }
-    }))
+      return { ...s, [briqueId]: { ...src, [to]: (s[briqueId][to] || 0) + q } }
+    })
 
     await addItem('evenementiel_transferts', {
       date: todayStr(), briqueId,
@@ -163,10 +172,16 @@ export default function StockBriques() {
                     <EtatCell value={d.pret} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#15803d" onChange={(v) => setEtat(b.id, 'pret', v)} />
                     <EtatCell value={d.caillasses} editable={peutSaisir && b.id === 'caillasses'} disabled={b.id !== 'caillasses'} color="#4b5563" onChange={(v) => setEtat(b.id, 'caillasses', v)} />
                     <td className="px-2 py-2">
-                      {b.id !== 'caillasses' && TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
+                      {b.id !== 'caillasses' && peutSaisir && TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
                         <button key={t.to} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: t.to, qte: 1, dateSechage: '' })}
-                          className="mr-1 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold hover:bg-violet-100">
+                          className="mr-1 mb-1 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold hover:bg-violet-100">
                           {t.from}→{t.to}
+                        </button>
+                      ))}
+                      {b.id !== 'caillasses' && peutSaisir && CASSE_TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
+                        <button key={'casse-' + t.from} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: 'caillasses', qte: 1, dateSechage: '' })}
+                          className="mr-1 mb-1 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-amber-100">
+                          {t.from}→caillasses
                         </button>
                       ))}
                     </td>

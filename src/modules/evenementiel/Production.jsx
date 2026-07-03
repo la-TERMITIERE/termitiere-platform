@@ -38,11 +38,6 @@ export default function Production() {
     setOpen(true)
   }
 
-  const consoPreview = useMemo(() => {
-    if (!form) return null
-    return calcConsommationProduction(form.quantites, recettes)
-  }, [form, recettes])
-
   const totalBriques = useMemo(() => {
     if (!form) return 0
     return Object.values(form.quantites).reduce((s, q) => s + (parseInt(q) || 0), 0)
@@ -152,17 +147,7 @@ export default function Production() {
             <FormGroup label="Caillasses (cassées)">
               <Input type="number" min="0" value={form.caillasses} onChange={(e) => setForm((f) => ({ ...f, caillasses: e.target.value }))} />
             </FormGroup>
-            {consoPreview && (
-              <div className="rounded-lg bg-gray-50 p-3 text-sm">
-                <p className="mb-2 font-bold text-gray-700">Consommation matières estimée :</p>
-                <div className="flex flex-wrap gap-4">
-                  <span>Ciment : <strong>{consoPreview.ciment.toFixed(1)}</strong> sacs</span>
-                  <span>Concassé : <strong>{consoPreview.concasse.toFixed(1)}</strong> m³</span>
-                  <span>Sable : <strong>{consoPreview.sable.toFixed(1)}</strong> m³</span>
-                </div>
-                <p className="mt-2 text-xs text-gray-500">Total : {formatNumber(totalBriques)} briques</p>
-              </div>
-            )}
+            <p className="text-right text-xs text-gray-500">Total : {formatNumber(totalBriques)} briques</p>
           </div>
         )}
       </Modal>

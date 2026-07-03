@@ -4,6 +4,7 @@
 // - Auto-dismiss 5 min après lecture.
 // - Dismiss manuel possible (cache localement la notification).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useCollection } from './useFirestore'
 import { useAuth } from './useAuth'
 import { updateItem } from '../core/db'
@@ -23,9 +24,20 @@ function isFor(n, user, role) {
   return false
 }
 
+// Chaque application n'affiche que SES notifications : à l'intérieur d'un module,
+// on masque celles des autres modules pour ne pas mélanger les acteurs.
+// Sur le portail (aucun module actif), tout est visible (vue d'ensemble).
+function matchesModule(n, activeModule) {
+  if (!activeModule) return true
+  if (!n.module) return true // notifs globales (compte, système…)
+  return n.module === activeModule
+}
+
 export function useNotifications() {
   const { user, role } = useAuth()
   const { data } = useCollection('notifications')
+  const location = useLocation()
+  const activeModule = location.pathname.split('/')[1] || '' // '' = portail
   const shownRef = useRef(new Set())
 
   // IDs dismissés manuellement (état local, disparaît au rechargement)
@@ -36,9 +48,9 @@ export function useNotifications() {
   const mine = useMemo(
     () =>
       data
-        .filter((n) => isFor(n, user, role) && !dismissed.has(n.id))
+        .filter((n) => isFor(n, user, role) && matchesModule(n, activeModule) && !dismissed.has(n.id))
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-    [data, user, role, dismissed]
+    [data, user, role, activeModule, dismissed]
   )
 
   // Notifications non-lues (non dismissées)

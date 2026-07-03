@@ -23,7 +23,10 @@ export function initEtapes(typeId) {
     dateDebut: '',
     dateFin: '',
     notes: '',
-    responsable: ''
+    responsable: '',
+    personnel: e.personnel || '',   // intervenant type (Géomètre, OTR, Notaire…)
+    cout: e.cout || '',             // référence de coût liée à l'étape
+    montant: ''                     // montant réel payé (saisi par l'agent)
   }))
 }
 
@@ -41,8 +44,10 @@ export function etapeCourante(etapes) {
 }
 
 export function statutAutoDossier(dossier) {
+  // Verdict d'appréciation négatif (cession) → dossier rejeté/annulé.
+  if (dossier.cession?.appreciation?.verdict === 'annulee') return 'rejete'
   const pct = progressionDossier(dossier.etapes)
-  if (dossier.statut === 'suspendu' || dossier.statut === 'cloture') return dossier.statut
+  if (['suspendu', 'cloture', 'rejete'].includes(dossier.statut)) return dossier.statut
   if (pct === 100) {
     if (dossier.type === 'morcellement') return 'morcellement'
     if (dossier.type === 'mutation') return 'mutation'

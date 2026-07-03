@@ -83,3 +83,19 @@ export function dernierStockBriques(inventaires, briqueId, etat = 'pret') {
   const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
   return tri[0]?.briques?.[briqueId]?.[etat] || 0
 }
+
+// Décrémente le stock (prêt, ou caillasses pour les caillasses) des lignes d'une
+// vente sur le dernier inventaire connu. Renvoie l'inventaire mis à jour à persister
+// ({ date, inv, briques }) ou null si aucun inventaire n'existe encore.
+export function retirerVenteDuStock(inventaires, vente) {
+  const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
+  const inv = tri[0]
+  if (!inv) return null
+  const briques = { ...(inv.briques || {}) }
+  ;(vente?.lignes || []).forEach((l) => {
+    const etat = l.briqueId === 'caillasses' ? 'caillasses' : 'pret'
+    const cur = briques[l.briqueId] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+    briques[l.briqueId] = { ...cur, [etat]: Math.max(0, (cur[etat] || 0) - (parseInt(l.qte) || 0)) }
+  })
+  return { date: inv.date, inv, briques }
+}

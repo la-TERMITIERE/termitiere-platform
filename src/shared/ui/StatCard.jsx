@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 
 export default function StatCard({
   title, value, sub, variation, variationLabel,
-  icon: Icon, accent = '#16a34a', onClick
+  icon: Icon, accent = '#16a34a', onClick, valueColor
 }) {
   const hasVar = variation !== undefined && variation !== null && variation !== ''
   const up = Number(variation) >= 0
@@ -15,8 +15,8 @@ export default function StatCard({
     <Comp
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`card group flex w-full items-center gap-4 p-4 text-left ${
-        onClick ? 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md' : ''
+      className={`card group flex w-full items-center gap-4 p-4 text-left transition-all ${
+        onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]' : ''
       }`}
     >
       {Icon && (
@@ -38,7 +38,7 @@ export default function StatCard({
             <span className="text-sm font-semibold text-gray-400">{value}</span>
           </div>
         ) : (
-          <p className="text-2xl font-extrabold text-gray-900">{value}</p>
+          <p className="text-2xl font-extrabold" style={{ color: valueColor || '#111827' }}>{value}</p>
         )}
         {(variationLabel || sub) && (
           <p className="mt-0.5 truncate text-xs text-gray-400">{variationLabel || sub}</p>
