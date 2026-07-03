@@ -244,7 +244,7 @@ export default function Paiements() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
 
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">

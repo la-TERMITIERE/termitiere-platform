@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Plus, Eye, Search, FilePen, Trash2, UserPlus } from 'lucide-react'
+import { useMemo, useState, useRef } from 'react'
+import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert } from 'lucide-react'
+import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -15,7 +16,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { GROUPES_AGE, STATUTS_ENFANT } from './data'
-import { calcAge, groupeRecommande, tarifSuggere } from './logic'
+import { calcAge, groupeRecommande, tarifSuggere, aImpayes } from './logic'
 import { useGarderieStore } from './store/garderieStore'
 
 const emptyJournalier = () => ({
@@ -25,7 +26,7 @@ const emptyJournalier = () => ({
 })
 
 const empty = () => ({
-  nom: '', prenom: '', dateNaissance: '', ageSaisi: '', sexe: 'F',
+  nom: '', prenom: '', photo: '', dateNaissance: '', ageSaisi: '', sexe: 'F',
   groupe: '', statut: 'actif',
   typeAbonnement: 'mensuel',
   allergies: '', infoMedicale: '',
@@ -40,6 +41,9 @@ export default function Enfants() {
   const { data: enfants }     = useCollection('garderie_enfants')
   const { data: parents }     = useCollection('garderie_parents')
   const { data: journaliers } = useCollection('garderie_journaliers')
+  const { data: presences }   = useCollection('garderie_presences')
+  const { data: incidents }   = useCollection('garderie_incidents')
+  const { data: paiements }   = useCollection('garderie_paiements')
 
   const [onglet, setOnglet]   = useState('inscrits')
   const [recherche, setRecherche] = useState('')
@@ -133,6 +137,65 @@ export default function Enfants() {
 
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
+  // ── Photo de profil ──
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const photoInputRef = useRef(null)
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) return toast.error('Choisissez une image')
+    setPhotoUploading(true)
+    try {
+      const dataURL = await compresserPhotoProfil(file)
+      set('photo', dataURL)
+    } catch (err) {
+      toast.error(err.message || 'Erreur lors du traitement de la photo')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  // ── Photo de profil depuis la fiche détail (modification directe) ──
+  const [detailPhotoUploading, setDetailPhotoUploading] = useState(false)
+  const detailPhotoInputRef = useRef(null)
+
+  async function handleDetailPhotoChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !detail) return
+    if (!file.type.startsWith('image/')) return toast.error('Choisissez une image')
+    setDetailPhotoUploading(true)
+    try {
+      const dataURL = await compresserPhotoProfil(file)
+      await updateItem('garderie_enfants', detail.id, { photo: dataURL })
+      setDetail((d) => ({ ...d, photo: dataURL }))
+      toast.success('Photo mise à jour ✓')
+    } catch (err) {
+      toast.error(err.message || 'Erreur lors du traitement de la photo')
+    } finally {
+      setDetailPhotoUploading(false)
+    }
+  }
+
+  // ── Statistiques de l'enfant affiché dans la fiche détail ──
+  const detailStats = useMemo(() => {
+    if (!detail) return null
+    const presEnfant = presences.filter((p) => p.enfantId === detail.id)
+    const joursPresents = presEnfant.filter((p) => p.statut === 'present').length
+    const joursAbsents  = presEnfant.filter((p) => p.statut === 'absent').length
+    const joursExcuses   = presEnfant.filter((p) => p.statut === 'excuse').length
+    const incidentsEnfant = incidents.filter((i) => i.enfantId === detail.id)
+    const incidentsOuverts = incidentsEnfant.filter((i) => !i.resolu).length
+    return {
+      joursPresents, joursAbsents, joursExcuses,
+      incidentsTotal: incidentsEnfant.length,
+      incidentsOuverts,
+      impaye: aImpayes(paiements, detail.id)
+    }
+  }, [detail, presences, incidents, paiements])
+
   // ── Journaliers ──
   const [joModal, setJoModal]   = useState(null)
   const [joSaving, setJoSaving] = useState(false)
@@ -191,7 +254,7 @@ export default function Enfants() {
   const setJo = (k, v) => setJoModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
 
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">
@@ -382,8 +445,19 @@ export default function Enfants() {
               <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucun enfant trouvé.</td></tr>
             )}
             {liste.map((e) => (
-              <tr key={e.id} className="hover:bg-orange-50 transition-colors">
-                <td className="px-3 py-2 font-semibold">{e.prenom} {e.nom}</td>
+              <tr key={e.id} onClick={() => setDetail(e)} className="cursor-pointer hover:bg-orange-50 transition-colors">
+                <td className="px-3 py-2 font-semibold">
+                  <div className="flex items-center gap-2">
+                    {e.photo ? (
+                      <img src={e.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
+                        {(e.prenom?.[0] || '?').toUpperCase()}
+                      </div>
+                    )}
+                    {e.prenom} {e.nom}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-gray-600">{calcAge(e.dateNaissance) || e.ageSaisi || '—'}</td>
                 <td className="px-3 py-2">{GROUPES_AGE.find((g) => g.id === e.groupe)?.label || '—'}</td>
                 <td className="px-3 py-2">
@@ -402,7 +476,7 @@ export default function Enfants() {
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
                   <div className="flex gap-1">
                     <button onClick={() => setDetail(e)} title="Voir la fiche" className="rounded p-1 hover:bg-gray-100"><Eye size={14} /></button>
                     {!lectureSeule && (
@@ -499,6 +573,34 @@ export default function Enfants() {
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Inscrire' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-4">
+            {/* Photo de profil */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+                {modal.data.photo ? (
+                  <img src={modal.data.photo} alt="Photo de profil" className="h-full w-full object-cover" />
+                ) : (
+                  <Camera size={24} className="text-gray-300" />
+                )}
+                {modal.data.photo && (
+                  <button
+                    type="button"
+                    onClick={() => set('photo', '')}
+                    title="Retirer la photo"
+                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div>
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                <Button type="button" variant="outline" onClick={() => photoInputRef.current?.click()} loading={photoUploading}>
+                  <Camera size={16} /> {modal.data.photo ? 'Changer la photo' : 'Ajouter une photo'}
+                </Button>
+                <p className="mt-1 text-[11px] text-gray-400">JPG ou PNG, recadrée automatiquement en carré</p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Prénom *">
                 <Input value={modal.data.prenom} onChange={(e) => set('prenom', e.target.value)} />
@@ -628,25 +730,95 @@ export default function Enfants() {
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
         title={detail ? `${detail.prenom} ${detail.nom}` : ''}>
         {detail && (
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2">
-              <div><span className="font-semibold text-gray-500">Âge :</span> {calcAge(detail.dateNaissance) || detail.ageSaisi || '—'}</div>
-              <div><span className="font-semibold text-gray-500">Sexe :</span> {detail.sexe === 'F' ? 'Fille' : 'Garçon'}</div>
-              <div><span className="font-semibold text-gray-500">Groupe :</span> {GROUPES_AGE.find((g) => g.id === detail.groupe)?.label || '—'}</div>
-              <div><span className="font-semibold text-gray-500">Inscription :</span> {formatDateShort(detail.dateInscription)}</div>
-              <div><span className="font-semibold text-gray-500">Abonnement :</span> {detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}</div>
-              <div><span className="font-semibold text-gray-500">Parent :</span> {detail.parentNom || '—'}</div>
-              <div><span className="font-semibold text-gray-500">Contact :</span> {detail.parentContact || '—'}</div>
-              {detail.parentContact2 && <div><span className="font-semibold text-gray-500">Contact 2 :</span> {detail.parentContact2}</div>}
-              <div><span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}</div>
+          <div className="space-y-4 text-sm">
+            {/* En-tête : photo (modifiable) centrée en haut + identité */}
+            <div className="flex flex-col items-center text-center">
+              <div className="relative h-28 w-28 shrink-0">
+                {detail.photo ? (
+                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-28 w-28 rounded-full border border-gray-200 object-cover" />
+                ) : (
+                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-orange-100 text-3xl font-bold text-orange-600">
+                    {(detail.prenom?.[0] || '?').toUpperCase()}
+                  </div>
+                )}
+                <input ref={detailPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleDetailPhotoChange} />
+                <button
+                  type="button"
+                  onClick={() => detailPhotoInputRef.current?.click()}
+                  disabled={detailPhotoUploading}
+                  title="Changer la photo"
+                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+                >
+                  {detailPhotoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                </button>
+              </div>
+              <h3 className="mt-2 text-lg font-extrabold text-gray-900">{detail.prenom} {detail.nom}</h3>
+              <p className="text-sm text-gray-500">
+                {calcAge(detail.dateNaissance) || detail.ageSaisi || '—'} · {GROUPES_AGE.find((g) => g.id === detail.groupe)?.label || '—'}
+              </p>
+              <div className="mt-1"><Badge tone={STATUTS_ENFANT[detail.statut]?.tone}>{STATUTS_ENFANT[detail.statut]?.label}</Badge></div>
             </div>
-            {(detail.allergies || detail.infoMedicale) && (
-              <div className="rounded-lg border border-orange-100 bg-orange-50 p-3">
-                {detail.allergies && <p><span className="font-semibold">Allergies :</span> {detail.allergies}</p>}
-                {detail.infoMedicale && <p><span className="font-semibold">Info médicale :</span> {detail.infoMedicale}</p>}
+
+            {/* Statistiques */}
+            {detailStats && (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <UserCheck size={16} className="mx-auto text-green-600" />
+                  <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.joursPresents}</p>
+                  <p className="text-[11px] text-gray-500">Jours présents</p>
+                </div>
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <UserX size={16} className="mx-auto text-red-500" />
+                  <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.joursAbsents}</p>
+                  <p className="text-[11px] text-gray-500">Absences{detailStats.joursExcuses > 0 ? ` (${detailStats.joursExcuses} exc.)` : ''}</p>
+                </div>
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <CreditCard size={16} className={`mx-auto ${detailStats.impaye ? 'text-red-500' : 'text-green-600'}`} />
+                  <p className={`mt-1 text-lg font-extrabold ${detailStats.impaye ? 'text-red-600' : 'text-gray-900'}`}>
+                    {detailStats.impaye ? 'Impayé' : 'À jour'}
+                  </p>
+                  <p className="text-[11px] text-gray-500">Paiement ce mois</p>
+                </div>
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <ShieldAlert size={16} className={`mx-auto ${detailStats.incidentsOuverts > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+                  <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.incidentsTotal}</p>
+                  <p className="text-[11px] text-gray-500">Incident(s){detailStats.incidentsOuverts > 0 ? ` (${detailStats.incidentsOuverts} ouvert)` : ''}</p>
+                </div>
               </div>
             )}
-            {detail.notes && <p className="text-gray-500 italic">{detail.notes}</p>}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card title="📋 Informations">
+                <div className="space-y-1.5">
+                  <div><span className="font-semibold text-gray-500">Sexe :</span> {detail.sexe === 'F' ? 'Fille' : 'Garçon'}</div>
+                  <div><span className="font-semibold text-gray-500">Inscription :</span> {formatDateShort(detail.dateInscription)}</div>
+                  <div><span className="font-semibold text-gray-500">Abonnement :</span> {detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}</div>
+                  <div><span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}</div>
+                </div>
+              </Card>
+              <Card title="👪 Parent / Tuteur">
+                <div className="space-y-1.5">
+                  <div><span className="font-semibold text-gray-500">Nom :</span> {detail.parentNom || '—'}</div>
+                  <div><span className="font-semibold text-gray-500">Contact :</span> {detail.parentContact || '—'}</div>
+                  {detail.parentContact2 && <div><span className="font-semibold text-gray-500">Contact 2 :</span> {detail.parentContact2}</div>}
+                </div>
+              </Card>
+            </div>
+
+            {(detail.allergies || detail.infoMedicale) && (
+              <Card title="🏥 Santé & allergies" className="border-orange-200">
+                <div className="space-y-1">
+                  {detail.allergies && <p><span className="font-semibold">Allergies :</span> {detail.allergies}</p>}
+                  {detail.infoMedicale && <p><span className="font-semibold">Info médicale :</span> {detail.infoMedicale}</p>}
+                </div>
+              </Card>
+            )}
+
+            {detail.notes && (
+              <Card title="📝 Notes">
+                <p className="italic text-gray-500">{detail.notes}</p>
+              </Card>
+            )}
           </div>
         )}
       </Modal>

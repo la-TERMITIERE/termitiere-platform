@@ -15,8 +15,8 @@ export default function StatCard({
     <Comp
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`card group flex w-full items-center gap-4 p-4 text-left ${
-        onClick ? 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md' : ''
+      className={`card group flex w-full items-center gap-4 p-4 text-left transition-all ${
+        onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]' : ''
       }`}
     >
       {Icon && (

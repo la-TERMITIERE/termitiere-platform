@@ -335,7 +335,7 @@ export default function Cantine() {
   const setMenu = (k, v) => setMenuModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
 
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">

@@ -102,7 +102,7 @@ export default function Journal() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
         {periodNode}
         <div>

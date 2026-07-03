@@ -57,8 +57,10 @@ export default function PortalHome() {
               key={m.id}
               disabled={!clickable}
               onClick={() => clickable && navigate(m.path)}
-              className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition-all
-                ${clickable ? 'cursor-pointer bg-white shadow-sm hover:-translate-y-0.5 hover:shadow-md' : 'cursor-not-allowed bg-gray-50 opacity-70'}`}
+              className={`group relative overflow-hidden rounded-3xl border p-5 text-left backdrop-blur-xl backdrop-saturate-150 transition-all
+                ${clickable
+                  ? 'cursor-pointer bg-white/40 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]'
+                  : 'cursor-not-allowed bg-white/20 opacity-70 shadow-[0_12px_24px_-12px_rgba(26,26,26,0.1)]'}`}
               style={{ borderColor: clickable ? m.color + '40' : undefined }}
             >
               <div
@@ -107,7 +109,7 @@ export default function PortalHome() {
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Administration</p>
           <button
             onClick={() => navigate('/utilisateurs')}
-            className="flex w-full items-center gap-4 rounded-2xl border border-primary/30 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="flex w-full items-center gap-4 rounded-3xl border border-primary/30 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <ShieldCheck size={26} />

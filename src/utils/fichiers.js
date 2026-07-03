@@ -59,6 +59,35 @@ export const formatTaille = (octets) => {
 // Compresse une image fichier et retourne directement le data URL.
 export const compresserImageFichier = (file) => compresserImage(file)
 
+// Compresse une photo de profil (portrait carré, plus petite/légère qu'une
+// pièce jointe classique) : recadrage centré + redimensionnement 320x320.
+const PHOTO_PROFIL_DIM = 320
+const PHOTO_PROFIL_QUALITY = 0.8
+
+export const compresserPhotoProfil = (file) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const taille = Math.min(img.width, img.height)
+        const sx = (img.width - taille) / 2
+        const sy = (img.height - taille) / 2
+        const canvas = document.createElement('canvas')
+        canvas.width = PHOTO_PROFIL_DIM
+        canvas.height = PHOTO_PROFIL_DIM
+        canvas.getContext('2d').drawImage(img, sx, sy, taille, taille, 0, 0, PHOTO_PROFIL_DIM, PHOTO_PROFIL_DIM)
+        try {
+          resolve(canvas.toDataURL('image/jpeg', PHOTO_PROFIL_QUALITY))
+        } catch (e) { reject(new Error('Compression photo impossible')) }
+      }
+      img.onerror = () => reject(new Error('Image illisible'))
+      img.src = r.result
+    }
+    r.onerror = () => reject(new Error('Lecture du fichier impossible'))
+    r.readAsDataURL(file)
+  })
+
 // Lit un fichier en pièce jointe : { nom, type, taille, dataURL }.
 // Images → compressées. PDF/autres → lus tels quels (garde-fou de taille).
 export async function lireFichier(file) {

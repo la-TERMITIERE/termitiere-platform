@@ -1,7 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Baby, Users, CreditCard, AlertTriangle, UserCheck, Clock, ShieldAlert, BellRing } from 'lucide-react'
-import StatCard from '../../shared/ui/StatCard'
-import Card from '../../shared/ui/Card'
+import { Baby, Users, CreditCard, AlertTriangle, UserCheck, Clock, ShieldAlert, BellRing, ChevronRight } from 'lucide-react'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
@@ -223,82 +221,106 @@ export default function Dashboard() {
     [enfantsVisibles, presencesAujourdhui]
   )
 
+  const incidentsAccent = urgences.length > 0 ? '#1A1A1A' : alertes.length > 0 ? '#E8390E' : '#F5A800'
+
   return (
     <div className="space-y-5">
-      <div className="rounded-xl p-4 text-white flex items-center gap-4"
-        style={{ background: 'linear-gradient(135deg, #E8390E 0%, #F5A800 100%)' }}>
-        {/* Logo garderie dans un cercle avec bordure qui pulse */}
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        {/* Logo garderie dans un cercle avec bordure blanche fixe (pas d'animation) */}
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
-          <style>{`
-            @keyframes gard-glow {
-              0%   { box-shadow: 0 0 0 2px #F5A800aa, 0 0 6px 2px #E8390E33; }
-              50%  { box-shadow: 0 0 0 4px #F5A800,   0 0 12px 4px #E8390E66; }
-              100% { box-shadow: 0 0 0 2px #F5A800aa, 0 0 6px 2px #E8390E33; }
-            }
-          `}</style>
           <img src="/garderie-logo.png" alt="Garderie La Termitière"
             style={{
               width: 64, height: 64, borderRadius: '50%',
               objectFit: 'cover', background: 'white', padding: 4,
-              animation: 'gard-glow 2.5s ease-in-out infinite',
+              boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55',
               display: 'block'
             }} />
         </div>
         <div>
           <h2 className="text-lg font-extrabold drop-shadow">{params.nom}</h2>
-          <p className="text-sm text-orange-100">
+          <p className="text-sm text-orange-50/90">
             Enfants · Personnel · Présences · Paiements · Incidents — {formatDateShort(today)}
           </p>
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — verre dépoli, même disposition qu'avant (4 tuiles égales), couleurs du logo + ombres douces */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          title="Enfants inscrits"
-          value={enfantsVisibles.filter((e) => e.statut === 'actif').length}
-          icon={Baby} accent="#E8390E"
-          sub={`+ ${journaliersAujourdhui.length} journalier(s) aujourd'hui`}
+        <button
           onClick={() => setModal('enfants')}
-        />
-        <StatCard
-          title="Présents aujourd'hui"
-          value={stats.presents}
-          icon={UserCheck} accent="#16a34a"
-          sub={`${stats.absents} absent(s) · ${stats.excuses} excusé(s)${journaliersAujourdhui.length > 0 ? ` · ${journaliersAujourdhui.length} journalier(s)` : ''}`}
+          className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#E8390E1a', color: '#E8390E' }}>
+            <Baby size={24} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium uppercase tracking-wide text-[#1A1A1A]/50">Enfants inscrits</p>
+            <p className="text-2xl font-extrabold text-[#1A1A1A]">{enfantsVisibles.filter((e) => e.statut === 'actif').length}</p>
+            <p className="mt-0.5 truncate text-xs text-[#1A1A1A]/40">+ {journaliersAujourdhui.length} journalier(s) aujourd'hui</p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-[#1A1A1A]/20 transition-colors group-hover:text-[#1A1A1A]/50" />
+        </button>
+
+        <button
           onClick={() => setModal('presences')}
-        />
-        <StatCard
-          title="Impayés ce mois"
-          value={enfantsNonPayes.length}
-          icon={CreditCard} accent="#dc2626"
-          sub={`${enfantsNonPayes.filter(e => e._raisonImpaye === 'impaye').length} déclaré(s) · ${enfantsNonPayes.filter(e => e._raisonImpaye === 'non_renouvele').length} non renouvelé(s)`}
+          className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#F5A8001a', color: '#F5A800' }}>
+            <UserCheck size={24} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium uppercase tracking-wide text-[#1A1A1A]/50">Présents aujourd'hui</p>
+            <p className="text-2xl font-extrabold text-[#1A1A1A]">{stats.presents}</p>
+            <p className="mt-0.5 truncate text-xs text-[#1A1A1A]/40">{stats.absents} absent(s) · {stats.excuses} excusé(s){journaliersAujourdhui.length > 0 ? ` · ${journaliersAujourdhui.length} journalier(s)` : ''}</p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-[#1A1A1A]/20 transition-colors group-hover:text-[#1A1A1A]/50" />
+        </button>
+
+        <button
           onClick={() => setModal('impayes')}
-        />
-        <StatCard
-          title="Incidents ouverts"
-          value={incidents.filter((i) => !i.resolu).length}
-          icon={alarmsActives.length > 0 ? ShieldAlert : AlertTriangle}
-          accent={urgences.length > 0 ? '#dc2626' : alertes.length > 0 ? '#ea580c' : '#d97706'}
-          sub={alarmsActives.length > 0
-            ? `${urgences.length > 0 ? `🔴 ${urgences.length} urgence(s)` : ''} ${alertes.length > 0 ? `🟠 ${alertes.length} alerte(s)` : ''} ${surveillances.length > 0 ? `🟡 ${surveillances.length}` : ''}`.trim()
-            : 'aucune alarme active'}
+          className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#E8390E1a', color: '#E8390E' }}>
+            <CreditCard size={24} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium uppercase tracking-wide text-[#1A1A1A]/50">Impayés ce mois</p>
+            <p className="text-2xl font-extrabold text-[#1A1A1A]">{enfantsNonPayes.length}</p>
+            <p className="mt-0.5 truncate text-xs text-[#1A1A1A]/40">{enfantsNonPayes.filter(e => e._raisonImpaye === 'impaye').length} déclaré(s) · {enfantsNonPayes.filter(e => e._raisonImpaye === 'non_renouvele').length} non renouvelé(s)</p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-[#1A1A1A]/20 transition-colors group-hover:text-[#1A1A1A]/50" />
+        </button>
+
+        <button
           onClick={() => setModal('incidents')}
-        />
+          className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: incidentsAccent + '1a', color: incidentsAccent }}>
+            {alarmsActives.length > 0 ? <ShieldAlert size={24} /> : <AlertTriangle size={24} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium uppercase tracking-wide text-[#1A1A1A]/50">Incidents ouverts</p>
+            <p className="text-2xl font-extrabold text-[#1A1A1A]">{incidents.filter((i) => !i.resolu).length}</p>
+            <p className="mt-0.5 truncate text-xs text-[#1A1A1A]/40">
+              {alarmsActives.length > 0
+                ? `${urgences.length > 0 ? `🔴 ${urgences.length} urgence(s)` : ''} ${alertes.length > 0 ? `🟠 ${alertes.length} alerte(s)` : ''} ${surveillances.length > 0 ? `🟡 ${surveillances.length}` : ''}`.trim()
+                : 'aucune alarme active'}
+            </p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-[#1A1A1A]/20 transition-colors group-hover:text-[#1A1A1A]/50" />
+        </button>
       </div>
 
       {/* ── Alerte renouvellement paiement (compact) ── */}
       {enfantsNonPayes.length > 0 && (
         <button
           onClick={() => setModal('impayes')}
-          className="w-full rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-left hover:bg-red-100 transition-colors">
+          className="w-full rounded-2xl border px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors"
+          style={{ borderColor: '#E8390E4d', background: '#E8390E14' }}>
           <div className="flex items-center gap-3">
-            <AlertTriangle size={18} className="text-red-500 shrink-0" />
+            <AlertTriangle size={18} className="shrink-0" style={{ color: '#E8390E' }} />
             <div>
-              <p className="font-bold text-red-700 text-sm">
+              <p className="font-bold text-sm" style={{ color: '#E8390E' }}>
                 ⚠️ {enfantsNonPayes.length} enfant{enfantsNonPayes.length > 1 ? 's' : ''} non à jour ce mois
               </p>
-              <p className="text-xs text-red-500">Cette alerte disparaît automatiquement dès que le paiement est enregistré · Cliquez pour régler</p>
+              <p className="text-xs" style={{ color: '#E8390Ecc' }}>Cette alerte disparaît automatiquement dès que le paiement est enregistré · Cliquez pour régler</p>
             </div>
           </div>
         </button>
@@ -308,7 +330,7 @@ export default function Dashboard() {
       {enfantsPartielsNonSoldes.length > 0 && (
         <button
           onClick={() => navigate('/garderie/paiements')}
-          className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-left hover:bg-amber-100 transition-colors">
+          className="w-full rounded-2xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-amber-50/70">
           <div className="flex items-center gap-3">
             <AlertTriangle size={18} className="text-amber-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -317,7 +339,7 @@ export default function Dashboard() {
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsPartielsNonSoldes.map((e) => (
-                  <span key={e.id} className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                  <span key={e.id} className="rounded-full border border-amber-300/70 bg-amber-100/70 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                     {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
                   </span>
                 ))}
@@ -332,7 +354,7 @@ export default function Dashboard() {
       {enfantsAbsentsRepetes.length > 0 && (
         <button
           onClick={() => navigate('/garderie/presences')}
-          className="w-full rounded-xl border border-orange-300 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100 transition-colors">
+          className="w-full rounded-2xl border border-orange-200/60 bg-orange-50/50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-orange-50/70">
           <div className="flex items-center gap-3">
             <AlertTriangle size={18} className="text-orange-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -341,7 +363,7 @@ export default function Dashboard() {
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsAbsentsRepetes.map((e) => (
-                  <span key={e.id} className="rounded-full bg-orange-100 border border-orange-300 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
+                  <span key={e.id} className="rounded-full border border-orange-300/70 bg-orange-100/70 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
                     {e.prenom} {e.nom} — {e.joursAbsents}j consécutifs
                   </span>
                 ))}
@@ -356,21 +378,22 @@ export default function Dashboard() {
       {rappelsNourrissons.length > 0 && (
         <button
           onClick={() => navigate('/garderie/cantine')}
-          className="w-full rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-left hover:bg-blue-100 transition-colors flex items-center gap-3">
+          className="flex w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors"
+          style={{ borderColor: '#F5A8004d', background: '#F5A80014' }}>
           <span className="text-lg shrink-0">🍼</span>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-blue-700">
+            <p className="text-xs font-bold" style={{ color: '#8a5c00' }}>
               Biberon requis pour {rappelsNourrissons.length} nourrisson{rappelsNourrissons.length > 1 ? 's' : ''}
             </p>
             <div className="flex flex-wrap gap-2 mt-0.5">
               {rappelsNourrissons.map((e) => (
-                <span key={e.id} className="text-[10px] text-blue-600 font-semibold">
+                <span key={e.id} className="text-[10px] font-semibold" style={{ color: '#a3720a' }}>
                   {e.prenom} {e.dernierBiberon ? `(dernier : ${e.dernierBiberon})` : '(aucun aujourd\'hui)'}
                 </span>
               ))}
             </div>
           </div>
-          <span className="text-xs text-blue-400 shrink-0">→ Cantine</span>
+          <span className="text-xs shrink-0" style={{ color: '#c99128' }}>→ Cantine</span>
         </button>
       )}
 
@@ -378,45 +401,50 @@ export default function Dashboard() {
       {alarmsActives.length > 0 && (
         <button
           onClick={() => { setModal(null); navigate('/garderie/incidents') }}
-          className="w-full rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 text-left hover:bg-red-100 transition-colors"
-          style={{ animation: urgences.length > 0 ? 'pulse 1.5s infinite' : 'none' }}>
+          className="w-full rounded-2xl border-2 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors"
+          style={{
+            borderColor: incidentsAccent + '80',
+            background: incidentsAccent + '14',
+            animation: urgences.length > 0 ? 'pulse 1.5s infinite' : 'none'
+          }}>
           <div className="flex items-start gap-3">
-            <ShieldAlert size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <ShieldAlert size={20} className="shrink-0 mt-0.5" style={{ color: incidentsAccent }} />
             <div className="flex-1">
-              <p className="font-bold text-red-700 text-sm flex items-center gap-2">
-                {urgences.length > 0 && `🔴 ${urgences.length} URGENCE(S)`}
+              <p className="font-bold text-sm flex items-center gap-2" style={{ color: incidentsAccent }}>
+                {urgences.length > 0 && `⚫ ${urgences.length} URGENCE(S)`}
                 {alertes.length > 0 && `  🟠 ${alertes.length} ALERTE(S)`}
                 {surveillances.length > 0 && `  🟡 ${surveillances.length} SURVEILLANCE(S)`}
               </p>
-              <p className="text-xs text-red-500 mt-0.5">
+              <p className="text-xs mt-0.5" style={{ color: incidentsAccent + 'cc' }}>
                 Ces alarmes disparaîtront uniquement quand les incidents seront résolus · Cliquez pour gérer
               </p>
               <div className="flex flex-wrap gap-2 mt-2">
-                {alarmsActives.map((i) => (
-                  <span key={i.id} className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${
-                    (i.alarme || 0) === 3 ? 'bg-red-100 border-red-300 text-red-800' :
-                    (i.alarme || 0) === 2 ? 'bg-orange-100 border-orange-300 text-orange-800' :
-                    'bg-yellow-100 border-yellow-300 text-yellow-800'
-                  }`}>
-                    {(i.alarme || 0) === 3 ? '🔴' : (i.alarme || 0) === 2 ? '🟠' : '🟡'} {i.enfantNom}
-                  </span>
-                ))}
+                {alarmsActives.map((i) => {
+                  const c = (i.alarme || 0) === 3 ? '#1A1A1A' : (i.alarme || 0) === 2 ? '#E8390E' : '#F5A800'
+                  return (
+                    <span key={i.id} className="rounded-full border px-2 py-0.5 text-xs font-semibold"
+                      style={{ background: c + '1a', borderColor: c + '55', color: c }}>
+                      {(i.alarme || 0) === 3 ? '⚫' : (i.alarme || 0) === 2 ? '🟠' : '🟡'} {i.enfantNom}
+                    </span>
+                  )
+                })}
               </div>
             </div>
-            <BellRing size={16} className="text-red-400 shrink-0" />
+            <BellRing size={16} className="shrink-0" style={{ color: incidentsAccent + 'aa' }} />
           </div>
         </button>
       )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* Présences du jour */}
-        <Card title="Présences du jour" className="lg:col-span-2">
+        <div className="rounded-3xl border border-white/50 bg-white/40 p-4 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 md:p-5 lg:col-span-2">
+          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Présences du jour</h3>
           {presentsAujourdhui.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">Aucun enfant actif enregistré.</p>
           ) : (
             <div className="max-h-72 overflow-y-auto space-y-1">
               {presentsAujourdhui.map((e) => (
-                <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                <div key={e.id} className="flex items-center justify-between rounded-2xl bg-white/50 px-3 py-2 text-sm">
                   <div>
                     <span className="font-semibold">{e.prenom} {e.nom}</span>
                     <span className="ml-2 text-xs text-gray-400">{calcAge(e.dateNaissance)}</span>
@@ -441,13 +469,14 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Répartition par groupe */}
-        <Card title="Groupes d'âge">
+        <div className="rounded-3xl border border-white/50 bg-white/40 p-4 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 md:p-5">
+          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Groupes d'âge</h3>
           <div className="space-y-2">
             {parGroupe.map((g) => (
-              <div key={g.id} className="flex items-center justify-between rounded-lg bg-orange-50 px-3 py-2 text-sm">
+              <div key={g.id} className="flex items-center justify-between rounded-2xl bg-orange-50/60 px-3 py-2 text-sm">
                 <div>
                   <p className="font-semibold text-orange-900">{g.label}</p>
                   <p className="text-xs text-orange-500">{g.desc}</p>
@@ -456,18 +485,19 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Personnel du jour */}
-        <Card title="Personnel — pointage du jour">
+        <div className="rounded-3xl border border-white/50 bg-white/40 p-4 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 md:p-5">
+          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Personnel — pointage du jour</h3>
           {personnelAujourdhui.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">Aucun membre du personnel actif.</p>
           ) : (
             <div className="space-y-1">
               {personnelAujourdhui.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                <div key={p.id} className="flex items-center justify-between rounded-2xl bg-white/50 px-3 py-2 text-sm">
                   <div>
                     <span className="font-semibold">{p.prenom} {p.nom}</span>
                     <span className="ml-2 text-xs text-gray-400">{p.poste}</span>
@@ -485,16 +515,17 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Incidents récents */}
-        <Card title="Incidents récents">
+        <div className="rounded-3xl border border-white/50 bg-white/40 p-4 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 md:p-5">
+          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Incidents récents</h3>
           {incidentsRecents.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">Aucun incident enregistré.</p>
           ) : (
             <div className="space-y-1">
               {incidentsRecents.map((i) => (
-                <div key={i.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                <div key={i.id} className="flex items-center justify-between rounded-2xl bg-white/50 px-3 py-2 text-sm">
                   <div>
                     <p className="font-semibold">{i.enfantNom || '—'}</p>
                     <p className="text-xs text-gray-500">{i.type} · {formatDateShort(i.date)}</p>
@@ -507,9 +538,8 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </Card>
+        </div>
       </div>
-
 
       {/* ── Modal : Enfants inscrits + journaliers ── */}
       <Modal
