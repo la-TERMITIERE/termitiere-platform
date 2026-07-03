@@ -75,3 +75,5 @@ jobs:
 
             echo "Restart containers..."
             docker compose -f deploy/docker-compose.yml up -d --remove-orphans
+
+            echo "Succès"
