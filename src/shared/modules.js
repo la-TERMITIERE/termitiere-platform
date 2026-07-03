@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
   Users, CreditCard, AlertTriangle, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  MessageSquare, Wallet, ClipboardCheck, BellRing, FileDown, Gauge
+  MessageSquare, Wallet, ClipboardCheck, BellRing, FileDown, Gauge, Receipt, Stamp
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES } from '../core/roles'
 
@@ -82,6 +82,16 @@ export const MODULES = [
     color: '#0d9488',
     path: '/projet',
     statut: 'actif'
+  },
+  {
+    id: 'depense',
+    nom: 'DÉPENSES',
+    description: 'Budget mensuel et suivi des dépenses par secteur',
+    icon: Receipt,
+    emoji: '💰',
+    color: '#4F46E5',
+    path: '/depense',
+    statut: 'actif'
   }
 ]
 
@@ -155,5 +165,16 @@ export const MODULE_NAV = {
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: ['super_admin','pau','ge','gerant','superviseur'] },
     { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: ['super_admin','pau','ge','gerant','superviseur'] },
     { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ['super_admin','pau','ge'] }
+  ],
+  depense: [
+    { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
+    { label: 'Budgets',                      to: '/depense/budgets',      icon: Receipt,         roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet },
+    { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
+    { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: FINANCE_VIEW_ROLES },
+    { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
+    { label: 'Historique',                   to: '/depense/historique',  icon: History,         roles: FINANCE_VIEW_ROLES },
+    { label: 'Journal',                      to: '/depense/journal',      icon: BookOpen,        roles: FINANCE_VIEW_ROLES },
+    { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: FINANCE_VIEW_ROLES }
   ]
 }

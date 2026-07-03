@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 
 export default function StatCard({
   title, value, sub, variation, variationLabel,
-  icon: Icon, accent = '#16a34a', onClick
+  icon: Icon, accent = '#16a34a', onClick, valueColor
 }) {
   const hasVar = variation !== undefined && variation !== null && variation !== ''
   const up = Number(variation) >= 0
@@ -38,7 +38,7 @@ export default function StatCard({
             <span className="text-sm font-semibold text-gray-400">{value}</span>
           </div>
         ) : (
-          <p className="text-2xl font-extrabold text-gray-900">{value}</p>
+          <p className="text-2xl font-extrabold" style={{ color: valueColor || '#111827' }}>{value}</p>
         )}
         {(variationLabel || sub) && (
           <p className="mt-0.5 truncate text-xs text-gray-400">{variationLabel || sub}</p>

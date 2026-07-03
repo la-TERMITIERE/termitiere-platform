@@ -19,7 +19,7 @@ import { CAT_ANIMAUX } from '../modules/agro/data'
 
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], secteur: '', telephone: '', actif: true })
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], secteur: '', poste: '', telephone: '', actif: true })
 
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
@@ -93,6 +93,7 @@ export default function Utilisateurs() {
         <Table
           columns={[
             { key: 'nom', label: 'Nom' },
+            { key: 'poste', label: 'Poste', render: (r) => r.poste || <span className="text-xs text-gray-400">—</span> },
             { key: 'login', label: 'Identifiant', render: (r) => <span className="font-mono text-xs">{r.login}</span> },
             { key: 'role', label: 'Rôle', render: (r) => <Badge tone={roleTone(r.role)}>{roleLabel(r.role)}</Badge> },
             { key: 'modules', label: 'Accès modules', render: (r) => (
@@ -137,6 +138,9 @@ export default function Utilisateurs() {
               </FormGroup>
               <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
               <FormGroup label="Secteur"><Input value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} /></FormGroup>
+              <FormGroup label="Poste (fonction dans l'entreprise)" className="col-span-2" hint="Ex. Comptable, Responsable RH, Gérant… — affiché notamment quand cette personne est choisie comme bénéficiaire d'un décaissement.">
+                <Input value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} placeholder="ex: Comptable" />
+              </FormGroup>
               <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 — pour les alertes WhatsApp">
                 <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />
               </FormGroup>
