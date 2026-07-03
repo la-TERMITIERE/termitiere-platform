@@ -20,6 +20,7 @@ const FoncierModule = lazy(() => import('./modules/foncier/index.jsx'))
 const RhModule       = lazy(() => import('./modules/rh/index.jsx'))
 const GarderieModule = lazy(() => import('./modules/garderie/index.jsx'))
 const ProjetModule   = lazy(() => import('./modules/projet/index.jsx'))
+const DepenseModule  = lazy(() => import('./modules/depense/index.jsx'))
 
 // Route protégée : exige une session active.
 function Protected({ children }) {
@@ -140,6 +141,16 @@ export default function App() {
               <ModuleGuard moduleId="projet">
                 <Suspense fallback={<LoadingSpinner />}>
                   <ProjetModule />
+                </Suspense>
+              </ModuleGuard>
+            }
+          />
+          <Route
+            path="depense/*"
+            element={
+              <ModuleGuard moduleId="depense">
+                <Suspense fallback={<LoadingSpinner />}>
+                  <DepenseModule />
                 </Suspense>
               </ModuleGuard>
             }
