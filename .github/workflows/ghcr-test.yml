@@ -82,12 +82,12 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
 
             echo "Pull image..."
-            docker compose -f deploy/docker-compose.yml pull
+            docker compose -f deploy/docker-compose.prod.yml pull
 
             echo "Restart containers..."
-            docker compose -f deploy/docker-compose.yml up -d --remove-orphans
+            docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
             echo "Containers status..."
-            docker compose -f deploy/docker-compose.yml ps
+            docker compose -f deploy/docker-compose.prod.yml ps
 
             echo "Waiting 10 seconds..."
             sleep 10
