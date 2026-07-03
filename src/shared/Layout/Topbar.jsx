@@ -12,7 +12,7 @@ const MODULE_THEME = {
   foncier:      { color: '#059669', color2: '#065f46', logo: null,                          nom: 'FONCIER'                },
   rh:           { color: '#ea580c', color2: '#9a3412', logo: null,                          nom: 'COMPTABILITÉ'           },
   projet:       { color: '#0d9488', color2: '#0f5450', logo: null,                          nom: 'GESTION DE PROJET'      },
-  default:      { color: '#BC3C31', color2: '#1A1A1A', logo: null,                          nom: 'LA TERMITIÈRE'          }
+  default:      { color: '#BC3C31', color2: '#1A1A1A', logo: '/termitiere-logo.png',         nom: 'LA TERMITIÈRE'          }
 }
 
 export default function Topbar({ onMenuToggle, user }) {
@@ -40,12 +40,14 @@ export default function Topbar({ onMenuToggle, user }) {
   }
 
   return (
-    <header style={{
+    <header className="backdrop-blur-xl backdrop-saturate-150" style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      height: 56, padding: '0 16px', flexShrink: 0, zIndex: 30,
-      background: `linear-gradient(135deg, ${color}14 0%, ${color2}08 100%)`,
-      borderBottom: `1px solid ${color}35`,
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
+      height: 68, padding: '0 20px', flexShrink: 0, zIndex: 30,
+      margin: '12px 16px 6px',
+      borderRadius: 24,
+      background: `linear-gradient(135deg, ${color}22 0%, ${color2}14 100%)`,
+      border: `1px solid ${color}45`,
+      boxShadow: `0 14px 28px -10px ${color}40, 0 4px 10px -4px ${color}30, inset 0 1px 0 0 rgba(255,255,255,0.5)`
     }}>
 
       {/* Bouton menu mobile */}

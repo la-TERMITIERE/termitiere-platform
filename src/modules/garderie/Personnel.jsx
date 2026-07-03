@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle } from 'lucide-react'
+import { useMemo, useState, useRef } from 'react'
+import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle, Eye, Camera, X, Loader2, UserCheck, UserX, CalendarDays } from 'lucide-react'
+import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -37,7 +38,7 @@ function addDays(dateStr, n) {
 }
 
 const emptyPersonnel = () => ({
-  nom: '', prenom: '', poste: 'tata', telephone: '',
+  nom: '', prenom: '', photo: '', poste: 'tata', telephone: '',
   dateEmbauche: todayStr(), horaire: '07:00 – 17:00',
   statut: 'actif', notes: ''
 })
@@ -51,6 +52,7 @@ export default function Personnel() {
   const [dateFiltre, setDateFiltre] = useState(today)
   const [onglet, setOnglet]         = useState('pointage')
   const [modal, setModal]                 = useState(null)
+  const [detail, setDetail]               = useState(null)
   const [pointageModal, setPointageModal] = useState(null)
   const [heureManuelle, setHeureManuelle] = useState('')
   const [toDelete, setToDelete]               = useState(null)
@@ -241,8 +243,73 @@ export default function Personnel() {
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
   const isToday = dateFiltre === today
 
+  // ── Photo de profil ──
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const photoInputRef = useRef(null)
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) return toast.error('Choisissez une image')
+    setPhotoUploading(true)
+    try {
+      const dataURL = await compresserPhotoProfil(file)
+      set('photo', dataURL)
+    } catch (err) {
+      toast.error(err.message || 'Erreur lors du traitement de la photo')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  // ── Photo de profil depuis la fiche détail (modification directe) ──
+  const [detailPhotoUploading, setDetailPhotoUploading] = useState(false)
+  const detailPhotoInputRef = useRef(null)
+
+  async function handleDetailPhotoChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !detail) return
+    if (!file.type.startsWith('image/')) return toast.error('Choisissez une image')
+    setDetailPhotoUploading(true)
+    try {
+      const dataURL = await compresserPhotoProfil(file)
+      await updateItem('garderie_personnel', detail.id, { photo: dataURL })
+      setDetail((d) => ({ ...d, photo: dataURL }))
+      toast.success('Photo mise à jour ✓')
+    } catch (err) {
+      toast.error(err.message || 'Erreur lors du traitement de la photo')
+    } finally {
+      setDetailPhotoUploading(false)
+    }
+  }
+
+  // ── Statistiques de la tata affichée dans la fiche détail ──
+  function ancienneteLabel(dateEmbauche) {
+    if (!dateEmbauche) return '—'
+    const debut = new Date(dateEmbauche)
+    const now = new Date()
+    let annees = now.getFullYear() - debut.getFullYear()
+    let mois = now.getMonth() - debut.getMonth()
+    if (mois < 0) { annees--; mois += 12 }
+    if (annees === 0) return `${mois} mois`
+    if (mois === 0) return `${annees} an${annees > 1 ? 's' : ''}`
+    return `${annees} an${annees > 1 ? 's' : ''} ${mois} mois`
+  }
+
+  const detailStats = useMemo(() => {
+    if (!detail) return null
+    const presPersonnel = presences.filter((p) => p.personnelId === detail.id)
+    return {
+      joursPresents: presPersonnel.filter((p) => p.statut === 'present').length,
+      joursAbsents: presPersonnel.filter((p) => p.statut === 'absent').length,
+      anciennete: ancienneteLabel(detail.dateEmbauche)
+    }
+  }, [detail, presences])
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
 
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">
@@ -330,8 +397,19 @@ export default function Personnel() {
                   return (
                     <tr key={p.id} className={`transition-colors ${pt?.heureDepart ? 'bg-gray-50' : pt?.heureArrivee ? 'bg-green-50/60' : ''}`}>
                       <td className="px-3 py-3">
-                        <p className="font-semibold">{p.prenom} {p.nom}</p>
-                        <p className="text-xs text-gray-400">{p.horaire}</p>
+                        <div className="flex items-center gap-2">
+                          {p.photo ? (
+                            <img src={p.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
+                              {(p.prenom?.[0] || '?').toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold">{p.prenom} {p.nom}</p>
+                            <p className="text-xs text-gray-400">{p.horaire}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-xs text-gray-500">
                         {POSTES_PERSONNEL.find((x) => x.id === p.poste)?.label || p.poste}
@@ -465,8 +543,19 @@ export default function Personnel() {
                   <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucun membre du personnel.</td></tr>
                 )}
                 {[...personnel].filter((p) => !deletedIds.has(p.id)).sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1).map((p) => (
-                  <tr key={p.id} className="hover:bg-orange-50 transition-colors">
-                    <td className="px-3 py-2 font-semibold">{p.prenom} {p.nom}</td>
+                  <tr key={p.id} onClick={() => setDetail(p)} className="cursor-pointer hover:bg-orange-50 transition-colors">
+                    <td className="px-3 py-2 font-semibold">
+                      <div className="flex items-center gap-2">
+                        {p.photo ? (
+                          <img src={p.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
+                            {(p.prenom?.[0] || '?').toUpperCase()}
+                          </div>
+                        )}
+                        {p.prenom} {p.nom}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-xs">{POSTES_PERSONNEL.find((x) => x.id === p.poste)?.label || p.poste}</td>
                     <td className="px-3 py-2 text-gray-500">{p.telephone || '—'}</td>
                     <td className="px-3 py-2 text-xs text-gray-500">{p.horaire || '—'}</td>
@@ -476,8 +565,12 @@ export default function Personnel() {
                         {p.statut === 'actif' ? 'Actif' : 'Inactif'}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
                       <div className="flex gap-1">
+                        <button title="Voir la fiche" onClick={() => setDetail(p)}
+                          className="rounded p-1 hover:bg-gray-100">
+                          <Eye size={14} />
+                        </button>
                         <button title="Modifier la fiche"
                           onClick={() => setModal({ data: { ...emptyPersonnel(), ...p }, isNew: false, id: p.id })}
                           className="rounded p-1 text-orange-600 hover:bg-orange-50">
@@ -581,6 +674,33 @@ export default function Personnel() {
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Ajouter' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-3">
+            {/* Photo de profil */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+                {modal.data.photo ? (
+                  <img src={modal.data.photo} alt="Photo de profil" className="h-full w-full object-cover" />
+                ) : (
+                  <Camera size={24} className="text-gray-300" />
+                )}
+                {modal.data.photo && (
+                  <button
+                    type="button"
+                    onClick={() => set('photo', '')}
+                    title="Retirer la photo"
+                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div>
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                <Button type="button" variant="outline" onClick={() => photoInputRef.current?.click()} loading={photoUploading}>
+                  <Camera size={16} /> {modal.data.photo ? 'Changer la photo' : 'Ajouter une photo'}
+                </Button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Prénom *"><Input value={modal.data.prenom} onChange={(e) => set('prenom', e.target.value)} /></FormGroup>
               <FormGroup label="Nom *"><Input value={modal.data.nom} onChange={(e) => set('nom', e.target.value)} /></FormGroup>
@@ -603,6 +723,79 @@ export default function Personnel() {
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 rows={2} value={modal.data.notes} onChange={(e) => set('notes', e.target.value)} />
             </FormGroup>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal détail */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        title={detail ? `${detail.prenom} ${detail.nom}` : ''}>
+        {detail && (
+          <div className="space-y-4 text-sm">
+            {/* En-tête : photo (modifiable) centrée en haut + identité */}
+            <div className="flex flex-col items-center text-center">
+              <div className="relative h-28 w-28 shrink-0">
+                {detail.photo ? (
+                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-28 w-28 rounded-full border border-gray-200 object-cover" />
+                ) : (
+                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-orange-100 text-3xl font-bold text-orange-600">
+                    {(detail.prenom?.[0] || '?').toUpperCase()}
+                  </div>
+                )}
+                <input ref={detailPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleDetailPhotoChange} />
+                <button
+                  type="button"
+                  onClick={() => detailPhotoInputRef.current?.click()}
+                  disabled={detailPhotoUploading}
+                  title="Changer la photo"
+                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+                >
+                  {detailPhotoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                </button>
+              </div>
+              <h3 className="mt-2 text-lg font-extrabold text-gray-900">{detail.prenom} {detail.nom}</h3>
+              <p className="text-sm text-gray-500">{POSTES_PERSONNEL.find((x) => x.id === detail.poste)?.label || detail.poste}</p>
+              <div className="mt-1">
+                <Badge tone={detail.statut === 'actif' ? 'success' : 'neutral'}>
+                  {detail.statut === 'actif' ? 'Actif' : 'Inactif'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Statistiques */}
+            {detailStats && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <UserCheck size={16} className="mx-auto text-green-600" />
+                  <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.joursPresents}</p>
+                  <p className="text-[11px] text-gray-500">Jours présents</p>
+                </div>
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <UserX size={16} className="mx-auto text-red-500" />
+                  <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.joursAbsents}</p>
+                  <p className="text-[11px] text-gray-500">Absences</p>
+                </div>
+                <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
+                  <CalendarDays size={16} className="mx-auto text-orange-500" />
+                  <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.anciennete}</p>
+                  <p className="text-[11px] text-gray-500">Ancienneté</p>
+                </div>
+              </div>
+            )}
+
+            <Card title="📋 Informations">
+              <div className="space-y-1.5">
+                <div><span className="font-semibold text-gray-500">Téléphone :</span> {detail.telephone || '—'}</div>
+                <div><span className="font-semibold text-gray-500">Horaire habituel :</span> {detail.horaire || '—'}</div>
+                <div><span className="font-semibold text-gray-500">Date d'embauche :</span> {formatDateShort(detail.dateEmbauche)}</div>
+              </div>
+            </Card>
+
+            {detail.notes && (
+              <Card title="📝 Notes">
+                <p className="italic text-gray-500">{detail.notes}</p>
+              </Card>
+            )}
           </div>
         )}
       </Modal>

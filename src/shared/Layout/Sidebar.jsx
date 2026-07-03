@@ -29,9 +29,12 @@ export default function Sidebar({ open, onClose }) {
   const accentColor = activeModule?.color || '#BC3C31'
 
   const linkBase =
-    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors'
+    'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all'
   const navClass = ({ isActive }) =>
-    `${linkBase} ${isActive ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`
+    `${linkBase} ${isActive
+      ? 'bg-white/20 text-white shadow-[0_16px_32px_-12px_rgba(0,0,0,0.45),0_4px_10px_-4px_rgba(0,0,0,0.3)]'
+      : 'text-white/80 hover:bg-white/10 hover:text-white hover:shadow-[0_12px_24px_-12px_rgba(0,0,0,0.35)]'
+    }`
 
   // Filtre les liens de navigation selon le rôle (propriété `roles` optionnelle)
   const moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
@@ -50,7 +53,15 @@ export default function Sidebar({ open, onClose }) {
         style={{ background: activeModule?.sidebarGradient || `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
       >
         {/* En-tête marque */}
-        <div className="px-4 pt-5 pb-3">
+        <div
+          className="mx-3 mt-3 rounded-2xl px-4 pt-5 pb-3"
+          style={{
+            position: 'relative', zIndex: 1,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 14px 24px -12px rgba(0,0,0,0.45)'
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
 
             {/* Logo rond avec bordure qui clignote légèrement */}
@@ -159,7 +170,7 @@ export default function Sidebar({ open, onClose }) {
           </div>
           <button
             onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/25"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-2 text-sm font-semibold shadow-[0_10px_20px_-10px_rgba(0,0,0,0.4)] transition-all hover:bg-white/25"
           >
             <LogOut size={16} /> Déconnexion
           </button>

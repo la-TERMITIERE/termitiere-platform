@@ -1,4 +1,4 @@
-// Conteneur "carte" blanc avec coins arrondis.
+// Conteneur "carte" en verre dépoli (glassmorphism) avec coins arrondis et ombre douce.
 export default function Card({ children, className = '', title, action, ...props }) {
   return (
     <div className={`card p-4 md:p-5 ${className}`} {...props}>

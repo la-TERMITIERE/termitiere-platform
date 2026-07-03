@@ -262,7 +262,7 @@ export default function Analyses() {
   const [vue, setVue] = useState('mensuel')
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
       {/* ── En-tête + onglets + sélecteur ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
