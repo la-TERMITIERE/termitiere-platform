@@ -24,7 +24,7 @@ export default function Dashboard() {
   const briques = useBriqueterieStore((s) => s.briques)
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: productions } = useCollection('evenementiel_productions')
-  const { data: ventes } = useCollection('evenementiel_ventes')
+  const { data: factures } = useCollection('evenementiel_factures')
   const { data: demandes } = useCollection('evenementiel_demandes')
 
   const [detail, setDetail] = useState(null) // { titre, render }
@@ -47,9 +47,10 @@ export default function Dashboard() {
   const prodDuMois = productions.filter((p) => (p.date || '').startsWith(mois))
   const prodMois = prodDuMois.reduce((s, p) => s + (p.totalBriques || 0), 0)
   const prodMoisPrec = productions.filter((p) => (p.date || '').startsWith(moisPrec)).reduce((s, p) => s + (p.totalBriques || 0), 0)
-  const ventesDuMois = ventes.filter((v) => (v.date || '').startsWith(mois))
-  const caMois = ventesDuMois.reduce((s, v) => s + (v.total || 0), 0)
-  const caMoisPrec = ventes.filter((v) => (v.date || '').startsWith(moisPrec)).reduce((s, v) => s + (v.total || 0), 0)
+  // CA = factures émises (issues des ventes approuvées).
+  const facturesDuMois = factures.filter((f) => (f.date || '').startsWith(mois))
+  const caMois = facturesDuMois.reduce((s, f) => s + (f.totalTTC || 0), 0)
+  const caMoisPrec = factures.filter((f) => (f.date || '').startsWith(moisPrec)).reduce((s, f) => s + (f.totalTTC || 0), 0)
   const demandesActives = demandes.filter((d) => estActif(d.statut))
 
   const parType = useMemo(() => {
@@ -87,9 +88,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-800 p-4 text-white">
-        <h2 className="text-lg font-extrabold">Briqueterie La Termitière</h2>
-        <p className="text-sm text-violet-100">Matières premières · Production · Séchage · Ventes · Autorisations (validation à deux niveaux)</p>
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+        <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
+          }}>
+            <span style={{ color: 'white', fontWeight: 800, fontSize: 20, letterSpacing: '-0.5px' }}>BR</span>
+          </div>
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Briqueterie La Termitière</h2>
+          <p className="text-sm text-white/80">Matières premières · Production · Séchage · Ventes · Autorisations (validation à deux niveaux)</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -112,14 +124,14 @@ export default function Dashboard() {
           sub="5–6 jours · cliquer" onClick={() => setDetail({ titre: 'Briques en séchage', render: tableStock('sechage') })} />
         <StatCard title="CA du mois" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
           variation={caMois - caMoisPrec} variationLabel={`mois préc. : ${formatMoney(caMoisPrec)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Ventes du mois', render: (
+          onClick={() => setDetail({ titre: 'Factures du mois', render: (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total</th></tr></thead>
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {[...ventesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((v) => (
-                  <tr key={v.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(v.date)}</td><td className="px-3 py-1.5">{v.clientNom || '—'}</td><td className="px-3 py-1.5 text-right font-bold text-sky-700">{formatMoney(v.total || 0)}</td></tr>
+                {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f) => (
+                  <tr key={f.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(f.date)}</td><td className="px-3 py-1.5">{f.client?.nom || '—'}</td><td className="px-3 py-1.5 text-right font-bold text-sky-700">{formatMoney(f.totalTTC || 0)}</td></tr>
                 ))}
-                {!ventesDuMois.length && <tr><td colSpan={3} className="py-4 text-center text-gray-400">Aucune vente ce mois.</td></tr>}
+                {!facturesDuMois.length && <tr><td colSpan={3} className="py-4 text-center text-gray-400">Aucune facture ce mois.</td></tr>}
               </tbody>
             </table>
           ) })} />

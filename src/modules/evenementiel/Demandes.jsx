@@ -11,13 +11,12 @@ import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { useBriqueterieStore } from './store/referentielStore'
-import { addItem, updateItem, ts } from '../../core/db'
+import { addItem, updateItem, setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney } from '../../utils/formatters'
-import { dernierStockBriques } from './logic'
+import { dernierStockBriques, retirerVenteDuStock } from './logic'
 import { APPROVER_ROLES, CERTIFIER_ROLES } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande } from '../../shared/workflow'
 
@@ -28,7 +27,6 @@ export default function Demandes() {
   const { data: demandes } = useCollection('evenementiel_demandes')
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
-  const briques = useBriqueterieStore((s) => s.briques)
   const isManager = canManage()
   const isCertifier = canCertify()
 
@@ -36,21 +34,20 @@ export default function Demandes() {
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null)
   const [commentaire, setCommentaire] = useState('')
-  const [form, setForm] = useState({ venteId: '', briqueId: '', qte: 1, dateSortie: todayStr(), message: '' })
+  const [form, setForm] = useState({ venteId: '', dateSortie: todayStr(), message: '' })
 
   const ventesBrouillon = ventes.filter((v) => ['brouillon', 'en_attente'].includes(v.statut))
+  // Vente sélectionnée : ses informations (client, briques, quantités) remplissent la demande.
+  const selectedVente = ventes.find((v) => v.id === form.venteId) || null
   const filtrees = useMemo(() =>
     [...demandes].filter((d) => filtre === 'tous' || normaliserStatut(d.statut) === filtre).sort((a, b) => (a.date < b.date ? 1 : -1)),
   [demandes, filtre])
 
   function openCreate() {
     const v = ventesBrouillon[0]
-    const l = v?.lignes?.[0]
     setForm({
       venteId: v?.id || '',
       venteNum: v?.num || '',
-      briqueId: l?.briqueId || briques.find((b) => b.id !== 'caillasses')?.id || '',
-      qte: l?.qte || 1,
       dateSortie: v?.dateChargement || todayStr(),
       message: ''
     })
@@ -58,20 +55,29 @@ export default function Demandes() {
   }
 
   async function submitDemande() {
-    if (!form.venteId || !form.message.trim()) return toast.error('Vente et motif obligatoires')
-    const m = briques.find((x) => x.id === form.briqueId)
     const vte = ventes.find((v) => v.id === form.venteId)
-    const etat = form.briqueId === 'caillasses' ? 'caillasses' : 'pret'
-    const stock = dernierStockBriques(inventaires, form.briqueId, etat)
-    if ((parseInt(form.qte) || 0) > stock) return toast.error(`Stock insuffisant (${stock} disponible)`)
+    if (!vte) return toast.error('Sélectionnez une vente')
+    if (!form.message.trim()) return toast.error('Motif obligatoire')
+    const lignes = vte.lignes || []
+    if (!lignes.length) return toast.error('Cette vente ne contient aucune ligne')
 
+    // Contrôle du stock disponible pour chaque brique de la vente.
+    for (const l of lignes) {
+      const etat = l.briqueId === 'caillasses' ? 'caillasses' : 'pret'
+      const stock = dernierStockBriques(inventaires, l.briqueId, etat)
+      if ((parseInt(l.qte) || 0) > stock) return toast.error(`Stock insuffisant pour ${l.briqueNom} (${stock} disponible)`)
+    }
+
+    const totalQte = lignes.reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
+    const resume = lignes.length === 1 ? lignes[0].briqueNom : `${lignes.length} types de briques`
     const num = genNumero('AUT-BRIQ', demandes.length)
     await addItem('evenementiel_demandes', {
       num, date: todayStr(), heure: nowHM(),
       demandeur: user.login, demandeurNom: user.nom,
-      venteId: form.venteId, venteNum: vte?.num, clientNom: vte?.clientNom,
-      briqueId: m?.id, briqueNom: m?.nom,
-      qte: parseInt(form.qte) || 0, dateSortie: form.dateSortie,
+      venteId: vte.id, venteNum: vte.num, clientNom: vte.clientNom,
+      briqueId: lignes[0].briqueId, briqueNom: resume,
+      qte: totalQte, lignes,
+      dateSortie: form.dateSortie || vte.dateChargement || todayStr(),
       message: form.message.trim(),
       statut: 'en_attente'
     })
@@ -79,7 +85,7 @@ export default function Demandes() {
     await notify({
       type: 'demande',
       title: 'Autorisation sortie briques',
-      body: `${form.qte} × ${m?.nom} — vente ${vte?.num} — par ${user.nom}`,
+      body: `${totalQte} brique(s) — ${resume} — vente ${vte.num} — par ${user.nom}`,
       module: 'evenementiel',
       forRoles: APPROVER_ROLES,
       excludeUid: user.uid,
@@ -106,6 +112,15 @@ export default function Demandes() {
 
     if (statut === 'certifie') {
       await updateItem('evenementiel_ventes', d.venteId, { statut: 'autorisee' })
+      // Sortie autorisée : on décrémente le stock prêt (ou caillasses) des briques vendues.
+      const vente = ventes.find((v) => v.id === d.venteId)
+      const maj = vente && retirerVenteDuStock(inventaires, vente)
+      if (maj) {
+        await setItem('evenementiel_inventaires', maj.date, {
+          ...maj.inv, date: maj.date, briques: maj.briques, savedAt: ts(),
+          agentId: user.uid, agentNom: user.nom
+        })
+      }
       await notify({
         type: 'success', title: 'Sortie briques autorisée ✅',
         body: `${d.qte} × ${d.briqueNom} — chargement ${d.dateSortie}`,
@@ -205,7 +220,7 @@ export default function Demandes() {
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Demande d'autorisation de sortie"
         footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}>Soumettre</Button></>}>
-        <FormGroup label="Vente liée" required>
+        <FormGroup label="Vente liée" required hint="Le client, les briques et les quantités sont repris automatiquement de la vente.">
           <Select value={form.venteId} onChange={(e) => {
             const v = ventes.find((x) => x.id === e.target.value)
             setForm((s) => ({ ...s, venteId: e.target.value, venteNum: v?.num, dateSortie: v?.dateChargement || todayStr() }))
@@ -213,17 +228,34 @@ export default function Demandes() {
             {ventesBrouillon.map((v) => <option key={v.id} value={v.id}>{v.num} — {v.clientNom} ({formatMoney(v.total)})</option>)}
           </Select>
         </FormGroup>
-        <FormGroup label="Type de brique">
-          <Select value={form.briqueId} onChange={(e) => setForm((s) => ({ ...s, briqueId: e.target.value }))}>
-            {briques.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
-          </Select>
-        </FormGroup>
-        <div className="grid grid-cols-2 gap-3">
-          <FormGroup label="Quantité"><Input type="number" min="1" value={form.qte} onChange={(e) => setForm((s) => ({ ...s, qte: e.target.value }))} /></FormGroup>
-          <FormGroup label="Date chargement"><Input type="date" value={form.dateSortie} onChange={(e) => setForm((s) => ({ ...s, dateSortie: e.target.value }))} /></FormGroup>
-        </div>
+
+        {/* Détail repris automatiquement de la vente (non modifiable par l'agent). */}
+        {selectedVente && (
+          <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm">
+            <p className="mb-2 text-xs font-bold uppercase text-gray-500">Contenu de la vente (automatique)</p>
+            <p className="mb-2">Client : <strong>{selectedVente.clientNom || '—'}</strong></p>
+            <table className="w-full">
+              <thead className="text-xs uppercase text-gray-400">
+                <tr><th className="pb-1 text-left">Brique</th><th className="pb-1 text-right">Quantité</th></tr>
+              </thead>
+              <tbody>
+                {(selectedVente.lignes || []).map((l, i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    <td className="py-1 font-medium">{l.briqueNom}</td>
+                    <td className="py-1 text-right font-semibold">{l.qte}</td>
+                  </tr>
+                ))}
+                {!(selectedVente.lignes || []).length && (
+                  <tr><td colSpan={2} className="py-2 text-center text-gray-400">Aucune ligne.</td></tr>
+                )}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-gray-500">Chargement prévu : {selectedVente.dateChargement || '—'}</p>
+          </div>
+        )}
+
         <FormGroup label="Motif / justification" required>
-          <Input value={form.message} onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))} placeholder="Client, destination, véhicule…" />
+          <Input value={form.message} onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))} placeholder="Destination, véhicule…" />
         </FormGroup>
       </Modal>
 
@@ -238,7 +270,18 @@ export default function Demandes() {
         </>}>
         {decision && (
           <>
-            <p className="mb-1 text-sm">{decision.demande.qte} × <strong>{decision.demande.briqueNom}</strong> — Vente {decision.demande.venteNum}</p>
+            <p className="mb-1 text-sm">Vente <strong>{decision.demande.venteNum}</strong> — {decision.demande.clientNom}</p>
+            {decision.demande.lignes?.length ? (
+              <div className="mb-3 rounded-lg bg-gray-50 p-2 text-sm">
+                {decision.demande.lignes.map((l, i) => (
+                  <div key={i} className="flex justify-between border-t border-gray-100 py-1 first:border-t-0">
+                    <span>{l.briqueNom}</span><strong>{l.qte}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mb-1 text-sm">{decision.demande.qte} × <strong>{decision.demande.briqueNom}</strong></p>
+            )}
             <p className="mb-3"><Badge tone={STATUTS[normaliserStatut(decision.demande.statut)]?.tone}>{STATUTS[normaliserStatut(decision.demande.statut)]?.label}</Badge></p>
             <FormGroup label="Commentaire"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
           </>

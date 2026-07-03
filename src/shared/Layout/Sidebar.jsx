@@ -16,12 +16,12 @@ export default function Sidebar({ open, onClose }) {
   const seg = location.pathname.split('/')[1]
   const activeModule = getModule(seg)
 
-  // Badge demandes AGRO en attente
-  const { data: demandesAgro } = useCollection('agro_demandes')
+  // Badge demandes AGRO : factures en attente d'approbation ou d'ajustement d'écart.
+  const { data: facturesAgro } = useCollection('agro_factures')
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
   const badges = {
-    agroDemandes: demandesAgro.filter((d) => estActif(d.statut)).length,
+    agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
     logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
     briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
   }
@@ -29,11 +29,16 @@ export default function Sidebar({ open, onClose }) {
   const accentColor = activeModule?.color || '#BC3C31'
 
   const linkBase =
-    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors'
+    'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all'
   const navClass = ({ isActive }) =>
-    `${linkBase} ${isActive ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`
+    `${linkBase} ${isActive
+      ? 'bg-white/20 text-white shadow-[0_16px_32px_-12px_rgba(0,0,0,0.45),0_4px_10px_-4px_rgba(0,0,0,0.3)]'
+      : 'text-white/80 hover:bg-white/10 hover:text-white hover:shadow-[0_12px_24px_-12px_rgba(0,0,0,0.35)]'
+    }`
 
-  const moduleNav = activeModule ? MODULE_NAV[activeModule.id] || [] : []
+  // Filtre les liens de navigation selon le rôle (propriété `roles` optionnelle)
+  const moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
+    .filter((item) => !item.roles || item.roles.includes(role))
 
   return (
     <>
@@ -45,20 +50,52 @@ export default function Sidebar({ open, onClose }) {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col text-white transition-transform duration-200
           md:static md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
-        style={{ background: `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
+        style={{ background: activeModule?.sidebarGradient || `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
       >
         {/* En-tête marque */}
-        <div className="flex items-center gap-3 px-4 py-4">
-          <img src="/logo-mark.png" alt="" className="h-10 w-10 rounded-lg bg-white p-1" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-extrabold leading-tight">LA TERMITIÈRE</p>
-            <p className="truncate text-[10px] font-medium uppercase tracking-wide text-white/70">
-              Toujours dans l'action
-            </p>
+        <div
+          className="mx-3 mt-3 rounded-2xl px-4 pt-5 pb-3"
+          style={{
+            position: 'relative', zIndex: 1,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 14px 24px -12px rgba(0,0,0,0.45)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+
+            {/* Logo rond avec bordure qui clignote légèrement */}
+            <style>{`
+              @keyframes sb-glow {
+                0%   { box-shadow: 0 0 0 2px #ffffffaa, 0 0 6px 1px ${accentColor}44; }
+                50%  { box-shadow: 0 0 0 3px #ffffff,   0 0 12px 4px ${accentColor}88; }
+                100% { box-shadow: 0 0 0 2px #ffffffaa, 0 0 6px 1px ${accentColor}44; }
+              }
+            `}</style>
+            <div style={{ position: 'relative', flexShrink: 0, width: 48, height: 48 }}>
+              <span style={{
+                position: 'absolute', inset: -4, borderRadius: '50%',
+                animation: 'sb-glow 2.5s ease-in-out infinite'
+              }} />
+              <img src="/termitiere-logo.png" alt="La Termitière"
+                onError={(e) => { e.target.src = '/logo-mark.png' }}
+                style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.3)', display: 'block' }} />
+            </div>
+
+            {/* Nom + module — sans truncate ni min-w-0 */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.2, letterSpacing: 0.5, color: '#ffffff', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+                LA TERMITIÈRE
+              </p>
+              <p style={{ margin: 0, marginTop: 2, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,0.65)' }}>
+                {activeModule ? activeModule.nom : "Toujours dans l'action"}
+              </p>
+            </div>
+
+            <button onClick={onClose} className="md:hidden" aria-label="Fermer" style={{ flexShrink: 0 }}>
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={onClose} className="md:hidden" aria-label="Fermer le menu">
-            <X size={20} />
-          </button>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
@@ -106,7 +143,7 @@ export default function Sidebar({ open, onClose }) {
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
                 {activeModule.nom}
               </p>
-              {moduleNav.map((item) => (
+              {moduleNav.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
                   <item.icon size={18} /> {item.label}
                   {item.badgeKey && badges[item.badgeKey] > 0 && (
@@ -133,7 +170,7 @@ export default function Sidebar({ open, onClose }) {
           </div>
           <button
             onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/25"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-2 text-sm font-semibold shadow-[0_10px_20px_-10px_rgba(0,0,0,0.4)] transition-all hover:bg-white/25"
           >
             <LogOut size={16} /> Déconnexion
           </button>

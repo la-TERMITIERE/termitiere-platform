@@ -27,14 +27,15 @@ export default function Params() {
     setExporting(true)
     try {
       const rows = dossiers.map((d) => ({
-        Référence: d.ref || '—',
+        Référence: d.num || '—',
         Type: TYPES_DOSSIER.find((t) => t.id === d.type)?.label || d.type || '—',
-        Localisation: d.localisation || '—',
+        Localisation: [d.commune, d.quartier, d.lot && `Lot ${d.lot}`].filter(Boolean).join(' · ') || '—',
+        'Propriétaire / Cédant': d.proprietaire || '—',
         'Date ouverture': formatDateShort(d.dateOuverture),
         Statut: STATUTS_DOSSIER[d.statut]?.label || d.statut || '—',
         'Mode acquisition': d.modeAcquisition || '—',
-        Superficie: d.superficie ? `${d.superficie} ha` : '—',
-        'Responsable dossier': d.responsable || '—',
+        'N° Titre Foncier': d.parcelle?.numTitre || d.reference || '—',
+        Superficie: d.superficie ? `${d.superficie} m²` : '—',
         Notes: d.notes || ''
       }))
       await exportRapportExcel({
@@ -46,12 +47,13 @@ export default function Params() {
           columns: [
             { key: 'Référence', label: 'Référence', width: 16 },
             { key: 'Type', label: 'Type de dossier', width: 34 },
-            { key: 'Localisation', label: 'Localisation', width: 28 },
+            { key: 'Localisation', label: 'Localisation', width: 30 },
+            { key: 'Propriétaire / Cédant', label: 'Propriétaire / Cédant', width: 24 },
             { key: 'Date ouverture', label: 'Date ouverture', width: 16 },
             { key: 'Statut', label: 'Statut', width: 20 },
             { key: 'Mode acquisition', label: 'Mode acquisition', width: 22 },
+            { key: 'N° Titre Foncier', label: 'N° Titre Foncier', width: 20 },
             { key: 'Superficie', label: 'Superficie', width: 14 },
-            { key: 'Responsable dossier', label: 'Responsable', width: 22 },
             { key: 'Notes', label: 'Notes', width: 40 }
           ],
           rows

@@ -14,6 +14,8 @@ const EVENTS = {
   DOSSIER_EDIT:   { label: 'Dossier modifié', emoji: '✏️' },
   DOSSIER_DELETE: { label: 'Dossier supprimé', emoji: '🗑️' },
   ETAPE_UPDATE:   { label: 'Étape mise à jour', emoji: '✅' },
+  APPRECIATION:   { label: 'Appréciation cession', emoji: '⚖️' },
+  PIECE_AJOUT:    { label: 'Pièce jointe ajoutée', emoji: '📎' },
   STATUT:         { label: 'Changement de statut', emoji: '🔁' },
   RESET:          { label: 'Réinitialisation', emoji: '♻️' }
 }

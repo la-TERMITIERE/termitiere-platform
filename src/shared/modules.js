@@ -1,9 +1,12 @@
 // Configuration centrale des modules de la plateforme et de leur navigation interne.
 import {
-  Leaf, Truck, BrickWall, Calculator, MapPin,
+  Leaf, Truck, BrickWall, Calculator, MapPin, Baby, FolderKanban,
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
-  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History
+  Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
+  Users, CreditCard, AlertTriangle, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
+  MessageSquare, Wallet, ClipboardCheck, BellRing, FileDown, Gauge, Receipt, Stamp
 } from 'lucide-react'
+import { FINANCE_VIEW_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -12,19 +15,22 @@ export const MODULES = [
     description: 'Élevage & gestion de stock',
     icon: Leaf,
     emoji: '🌿',
-    color: '#BC3C31',
+    color: '#2EAA3F',
     path: '/agro',
-    statut: 'actif'
+    statut: 'actif',
+    logo: '/maxi-agro-logo.png'
   },
   {
     id: 'logistique',
-    nom: 'LOGISTIQUE ET ÉVÉNEMENTIEL',
+    nom: 'MAXI LOGISTIQUE',
     description: 'Matériel, location & prestations',
     icon: Truck,
-    emoji: '🎪',
-    color: '#0284c7',
+    emoji: '🚛',
+    color: '#BC3C31',
+    sidebarGradient: 'linear-gradient(180deg, #BC3C31 0%, #6B1A10 50%, #1A1A1A 100%)',
     path: '/logistique',
-    statut: 'actif'
+    statut: 'actif',
+    logo: '/logo_maxi_logistique.png'
   },
   {
     id: 'evenementiel',
@@ -47,6 +53,17 @@ export const MODULES = [
     statut: 'actif'
   },
   {
+    id: 'garderie',
+    nom: 'GARDERIE',
+    description: 'Enfants, personnel, présences & paiements',
+    icon: Baby,
+    emoji: '🍼',
+    color: '#E8390E',
+    path: '/garderie',
+    statut: 'actif',
+    logo: '/garderie-logo.png'
+  },
+  {
     id: 'rh',
     nom: 'COMPTABILITÉ',
     description: 'Finances & suivi comptable',
@@ -55,6 +72,26 @@ export const MODULES = [
     color: '#ea580c',
     path: '/rh',
     statut: 'bientot'
+  },
+  {
+    id: 'projet',
+    nom: 'GESTION DE PROJET',
+    description: 'Projets, tâches, équipes & avancement',
+    icon: FolderKanban,
+    emoji: '📋',
+    color: '#0d9488',
+    path: '/projet',
+    statut: 'actif'
+  },
+  {
+    id: 'depense',
+    nom: 'DÉPENSES',
+    description: 'Budget mensuel et suivi des dépenses par secteur',
+    icon: Receipt,
+    emoji: '💰',
+    color: '#4F46E5',
+    path: '/depense',
+    statut: 'actif'
   }
 ]
 
@@ -65,7 +102,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
-    { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp },
+    { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
     { label: 'Historique', to: '/agro/historique', icon: History },
@@ -87,10 +124,10 @@ export const MODULE_NAV = {
   ],
   evenementiel: [
     { label: 'Dashboard', to: '/evenementiel', icon: LayoutDashboard, end: true },
-    { label: 'Saisie matières', to: '/evenementiel/saisie', icon: ClipboardList },
     { label: 'Production', to: '/evenementiel/production', icon: Factory },
     { label: 'Stock briques', to: '/evenementiel/stock', icon: Package },
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
+    { label: 'Facturation', to: '/evenementiel/factures', icon: FileText },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
     { label: 'Journal', to: '/evenementiel/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
@@ -104,5 +141,40 @@ export const MODULE_NAV = {
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
+  ],
+  projet: [
+    { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
+    { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge },
+    { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban },
+    { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks },
+    { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
+    { label: 'Documents',   to: '/projet/documents',   icon: Paperclip },
+    { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet },
+    { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
+    { label: 'Journal',     to: '/projet/journal',     icon: BookOpen },
+    { label: 'Paramètres',  to: '/projet/params',      icon: Settings }
+  ],
+  garderie: [
+    { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
+    { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby,            roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur','tata'] },
+    { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users,           roles: ['super_admin','pau','ge','gerant','gerante_garderie'] },
+    { label: 'Présences enfants',  to: '/garderie/presences', icon: CalendarCheck },
+    { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard,      roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur'] },
+    { label: 'Cantine & Repas',    to: '/garderie/cantine',   icon: UtensilsCrossed },
+    { label: 'Incidents & Santé',  to: '/garderie/incidents', icon: AlertTriangle },
+    { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: ['super_admin','pau','ge','gerant','superviseur'] },
+    { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: ['super_admin','pau','ge','gerant','superviseur'] },
+    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ['super_admin','pau','ge'] }
+  ],
+  depense: [
+    { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
+    { label: 'Budgets',                      to: '/depense/budgets',      icon: Receipt,         roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet },
+    { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
+    { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: FINANCE_VIEW_ROLES },
+    { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
+    { label: 'Historique',                   to: '/depense/historique',  icon: History,         roles: FINANCE_VIEW_ROLES },
+    { label: 'Journal',                      to: '/depense/journal',      icon: BookOpen,        roles: FINANCE_VIEW_ROLES },
+    { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: FINANCE_VIEW_ROLES }
   ]
 }

@@ -22,9 +22,44 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#faf6f5] to-[#f1d9d4] p-4">
       <div className="w-full max-w-md">
         {/* Logo + marque */}
-        <div className="mb-6 text-center">
-          <img src="/logo-full.png" alt="LA TERMITIÈRE" className="mx-auto mb-2 h-28 w-auto" />
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+        <div className="mb-6 flex flex-col items-center">
+          <style>{`
+            @keyframes pulse-ring {
+              0%   { box-shadow: 0 0 0 0px #BC3C31cc, 0 0 0 4px #ffffff88; }
+              50%  { box-shadow: 0 0 0 8px #BC3C3144, 0 0 0 14px #ffffff22; }
+              100% { box-shadow: 0 0 0 0px #BC3C31cc, 0 0 0 4px #ffffff88; }
+            }
+            .logo-pulse {
+              animation: pulse-ring 2s ease-in-out infinite;
+            }
+          `}</style>
+
+          {/* Cercle dégradé rouge→blanc avec logo */}
+          <div
+            className="logo-pulse relative mb-4 flex items-center justify-center rounded-full bg-white"
+            style={{
+              width: 112, height: 112,
+              background: 'linear-gradient(135deg, #ffffff 0%, #fde8e4 50%, #BC3C31 100%)',
+              padding: 4
+            }}
+          >
+            <div className="flex h-full w-full items-center justify-center rounded-full bg-white">
+              <img
+                src="/termitiere-logo.png"
+                alt="LA TERMITIÈRE"
+                onError={(e) => { e.target.src = '/logo-full.png' }}
+                className="h-24 w-24 rounded-full object-cover"
+              />
+            </div>
+          </div>
+
+          <p
+            className="text-base font-extrabold tracking-wide"
+            style={{ background: 'linear-gradient(90deg, #BC3C31 0%, #1A1A1A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+          >
+            LA TERMITIÈRE
+          </p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mt-0.5">
             Toujours dans l'action
           </p>
         </div>
