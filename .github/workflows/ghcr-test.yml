@@ -75,47 +75,37 @@ jobs:
 
             cd ~/termitiere-platform
 
-            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-            SHA=${{ github.sha }}
-            SHA_SHORT=${SHA::7}
+            OWNER=$(echo "la-TERMITIERE" | tr '[:upper:]' '[:lower:]')
+            SHA_SHORT=${{ github.sha::7 }}
 
-            echo "======================================="
             echo "Deploy commit : $SHA_SHORT"
-            echo "======================================="
 
             echo "Login GHCR..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
 
-            echo "Saving current running image..."
-            OLD_IMAGE=$(docker inspect termitiere-web --format '{{.Config.Image}}' || true)
-
-            echo "Old image: $OLD_IMAGE"
+            echo "Saving current image..."
+            OLD_IMAGE=$(docker inspect termitiere-web --format '{{.Config.Image}}')
 
             echo "Pull new image..."
-            docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT || {
-              echo "❌ Pull failed"
-              exit 1
-            }
+            docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT
 
-            echo "Updating docker-compose to new tag..."
-            sed -i "s|termitiere-platform:latest|termitiere-platform:$SHA_SHORT|g" deploy/docker-compose.prod.yml
+            echo "Restart containers with new image (no compose edit)..."
+            docker compose -f deploy/docker-compose.prod.yml up -d --force-recreate
 
-            echo "Restart containers..."
-            docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
-
-            echo "Waiting app startup..."
+            echo "Waiting..."
             sleep 10
 
             echo "Health check..."
             if curl -f -s https://app.latermitiere.com > /dev/null; then
               echo "✅ Deploy OK"
             else
-              echo "❌ Health check failed → rollback"
+              echo "❌ Rollback triggered"
 
-              if [ ! -z "$OLD_IMAGE" ]; then
-                sed -i "s|termitiere-platform:$SHA_SHORT|$OLD_IMAGE|g" deploy/docker-compose.prod.yml
-                docker compose -f deploy/docker-compose.prod.yml up -d
-              fi
+              echo "Reverting to previous image: $OLD_IMAGE"
+
+              docker tag $OLD_IMAGE ghcr.io/$OWNER/termitiere-platform:latest
+
+              docker compose -f deploy/docker-compose.prod.yml up -d --force-recreate
 
               exit 1
             fi
