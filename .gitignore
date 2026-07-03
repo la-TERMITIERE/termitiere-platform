@@ -17,3 +17,6 @@ serviceAccountKey.json
 .firebase
 firebase-debug.log
 *.serviceaccount.json
+.env.auth
+cert.pem
+*.copi
