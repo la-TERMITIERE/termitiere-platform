@@ -18,10 +18,6 @@
 | 2 | **Clés JWT** | Générer des clés symétriques (HS256) basées sur `JWT_SECRET` | Générer des clés **asymétriques (ES256)** via `add-new-auth-keys.sh`. Obligatoire pour Auth, PostgREST et Realtime |
 | 3 | **Déploiement Frontend** | `docker compose up -d --build` (déploiement unique) | Le build local a été utilisé pour le bootstrap (Phase A). Ensuite, une architecture **CI/CD via GHCR** a été ajoutée (Phase B) nécessitant `docker-compose.prod.yml` et un fichier `.env.deploy`. |
 | 4 | **Node.js pour les scripts de migration** | Non mentionné | **Node.js 20+** est obligatoire. Node 18 et inférieures causent des erreurs silencieuses avec `@supabase/supabase-js` |
-| 5 | **SSL dans les scripts de migration** | `export SUPABASE_URL='https://api.latermitiere.com'` | Les scripts Node échouent sur un certificat auto-signé local. Workaround : `NODE_TLS_REJECT_UNAUTHORIZED=0 node auth-migrate.mjs`. ⚠️ Uniquement pour les outils d'admin, **jamais en production** |
-| 6 | **Permissions utilisateur (bawa)** | Le guide suppose un accès root ou sudo | L'utilisateur `bawa` n'a **pas les droits sudo**. Utiliser `su` pour passer root si nécessaire : `su -` |
-| 7 | **Mémoire RAM (Swap)** | Non mentionné | Sur un VPS 4 Go RAM, le service `Realtime` est tué par l'OOM Killer. **Un Swap de 2 à 4 Go est obligatoire** en production (voir section 4.2) |
-| 8 | **Coupures SSH** | Non mentionné | Les sessions SSH se coupent après inactivité (`Connection reset`). Ajouter dans `~/.ssh/config` local : `ServerAliveInterval 60` |
 
 ---
 
@@ -211,7 +207,10 @@ ssh-copy-id bawa@31.207.37.96
 
 *Si tu es sur **Windows (PowerShell)**, utilise celle-ci :*
 ```powershell
-Get-Content $HOME\.ssh\id_ed25519.pub | ssh bawa@31.207.37.96 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+$cmd = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && " +
+       "cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+       
+Get-Content $HOME\.ssh\id_ed25519.pub | ssh bawa@31.207.37.96 $cmd
 ```
 
 **Étape 3 — Tester la connexion sans mot de passe**
@@ -369,7 +368,8 @@ graph LR
 
 ```bash
 # Depuis le dossier termitiere-platform sur le VPS
-cat migration/supabase/schema.sql | docker exec -i supabase-db psql -U postgres -d postgres
+cat migration/supabase/schema.sql | \
+  docker exec -i supabase-db psql -U postgres -d postgres
 
 # Vérifier les tables créées
 docker exec -i supabase-db psql -U postgres -d postgres -c '\dt public.*'
@@ -382,7 +382,8 @@ docker exec -i supabase-db psql -U postgres -d postgres -c '\dt public.*'
 cd migration/supabase
 npm install
 
-export DATABASE_URL='postgresql://postgres:TON_POSTGRES_PASSWORD@localhost:5432/postgres'
+export DATABASE_URL=\
+'postgresql://postgres:TON_POSTGRES_PASSWORD@localhost:5432/postgres'
 node import.mjs
 
 # → Le script affiche le nombre de lignes importées par table.
@@ -413,10 +414,12 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 node auth-migrate.mjs
 ⚠️ **À faire en DERNIER.** Une fois activé, seuls les utilisateurs authentifiés peuvent lire les données.
 
 ```bash
-cat migration/supabase/secure-auth.sql | docker exec -i supabase-db psql -U postgres -d postgres
+cat migration/supabase/secure-auth.sql | \
+  docker exec -i supabase-db psql -U postgres -d postgres
 
 # Vérifier que le RLS est actif sur les tables tp_*
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public';"
+docker exec -i supabase-db psql -U postgres -d postgres -c \
+  "SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public';"
 # → rowsecurity doit être 't' (true) pour toutes les tables tp_*
 ```
 
@@ -436,7 +439,8 @@ docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT tablename, ro
 /home/bawa/termitiere-platform/
 ├── deploy/
 │   ├── Dockerfile              # Multi-Stage Build (Node 20 → Caddy)
-│   ├── docker-compose.prod.yml # Stack Frontend (Caddy)
+│   ├── docker-compose.yml      # Stack Frontend (local)
+│   ├── docker-compose.prod.yml # Stack Frontend (CI/CD)
 │   ├── Caddyfile               # Routing SPA + Reverse Proxy API
 │   └── .env                    # DOMAIN_APP, DOMAIN_API, IMAGE_TAG
 ├── .github/

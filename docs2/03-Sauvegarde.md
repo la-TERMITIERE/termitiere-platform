@@ -31,7 +31,8 @@ C'est la méthode recommandée pour faire un "snapshot" complet de toute l'insta
 
 ```bash
 # Lancer la sauvegarde et la compresser directement
-docker exec supabase-db pg_dumpall -c -U postgres | gzip > /home/bawa/backups/backup_termitiere_$(date +%Y%m%d_%H%M%S).sql.gz
+docker exec supabase-db pg_dumpall -c -U postgres | \
+  gzip > /home/bawa/backups/backup_termitiere_$(date +%Y%m%d_%H%M%S).sql.gz
 
 # Vérifier que le fichier a bien été créé et n'est pas vide
 ls -lh /home/bawa/backups/
@@ -43,24 +44,47 @@ ls -lh /home/bawa/backups/
 Si vous ne voulez sauvegarder que vos tables métier (`tp_*`) :
 
 ```bash
-docker exec supabase-db pg_dump -U postgres -d postgres -n public | gzip > /home/bawa/backups/backup_public_$(date +%Y%m%d).sql.gz
+docker exec supabase-db pg_dump -U postgres -d postgres -n public | \
+  gzip > /home/bawa/backups/backup_public_$(date +%Y%m%d).sql.gz
 ```
 
 ## 2.4 Automatisation (Cron Job)
 
-Pour ne pas oublier, il faut configurer une tâche automatisée (cron) qui fait un backup tous les jours à 3h du matin.
+Pour ne pas oublier, il faut automatiser la sauvegarde (tous les jours à 3h du matin).
+Comme la commande est longue, la bonne pratique est de créer un petit script.
 
+**Étape 1 : Créer le script de sauvegarde**
 ```bash
-# Éditer la crontab de l'utilisateur bawa (pas besoin de sudo)
+nano /home/bawa/backups/backup.sh
+```
+
+Collez ce contenu dedans :
+```bash
+#!/bin/bash
+# 1. Générer et compresser la sauvegarde
+docker exec supabase-db pg_dumpall -c -U postgres | \
+  gzip > /home/bawa/backups/backup_$(date +\%Y\%m\%d).sql.gz
+
+# 2. Nettoyer (supprimer les backups de plus de 7 jours)
+find /home/bawa/backups/ -type f -name "*.sql.gz" -mtime +7 -delete
+```
+*(Sauvegardez : `Ctrl+X` puis `Y` puis `Entrée`)*
+
+**Étape 2 : Rendre le script exécutable**
+```bash
+chmod +x /home/bawa/backups/backup.sh
+```
+
+**Étape 3 : L'ajouter aux tâches planifiées (Cron)**
+```bash
 crontab -e
 ```
 *(Si on te demande de choisir un éditeur, tape "1" pour nano).*
 
-Ajouter cette ligne tout en bas du fichier :
+Ajoute cette ligne très courte tout en bas du fichier :
 ```bash
-0 3 * * * docker exec supabase-db pg_dumpall -c -U postgres | gzip > /home/bawa/backups/backup_$(date +\%Y\%m\%d).sql.gz && find /home/bawa/backups/ -type f -name "*.sql.gz" -mtime +7 -delete
+0 3 * * * /home/bawa/backups/backup.sh
 ```
-*(Cette commande crée un backup compressé et supprime automatiquement ceux qui ont plus de 7 jours pour ne pas saturer le disque).*
 
 Sauvegarder et quitter l'éditeur : `Ctrl+X`, puis `Y`, puis `Entrée`.
 
@@ -83,7 +107,8 @@ En cas de problème (données effacées par erreur, ou migration ratée), voici 
 2. Injecter le fichier `.sql.gz` dans la base de données :
    ```bash
    # Remplace "20260704_120000" par la date exacte de ton fichier
-   zcat /home/bawa/backups/backup_termitiere_20260704_120000.sql.gz | docker exec -i supabase-db psql -U postgres -d postgres
+   zcat /home/bawa/backups/backup_termitiere_20260704_120000.sql.gz | \
+     docker exec -i supabase-db psql -U postgres -d postgres
    ```
 
 3. Redémarrer les services :

@@ -76,7 +76,8 @@ Sur le VPS, il faut s'authentifier une fois pour toutes auprès du registre.
 
 *(Remplace `ghp_TON_TOKEN_PAT` par ton vrai token, et `TON_USER_GITHUB` par ton nom d'utilisateur GitHub en minuscules)* :
 ```bash
-echo "ghp_TON_TOKEN_PAT" | docker login ghcr.io -u TON_USER_GITHUB --password-stdin
+echo "ghp_TON_TOKEN_PAT" | \
+  docker login ghcr.io -u TON_USER_GITHUB --password-stdin
 ```
 *(Le VPS est maintenant autorisé à télécharger les mises à jour privées).*
 
@@ -91,7 +92,8 @@ echo "ghp_TON_TOKEN_PAT" | docker login ghcr.io -u TON_USER_GITHUB --password-st
 2. Met à jour le secret `CR_PAT` dans les paramètres Actions du dépôt.
 3. Connecte-toi au VPS via SSH et relance l'authentification :
    ```bash
-   echo "ghp_NOUVEAU_TOKEN" | docker login ghcr.io -u TON_USER_GITHUB --password-stdin
+   echo "ghp_NOUVEAU_TOKEN" | \
+     docker login ghcr.io -u TON_USER_GITHUB --password-stdin
    ```
 4. Relance le job GitHub Actions qui avait échoué.
 

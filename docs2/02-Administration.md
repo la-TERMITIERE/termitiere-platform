@@ -30,11 +30,12 @@ cd /home/bawa/termitiere-platform/migration/supabase
 npm install
 
 # Exporter les variables nécessaires
-export DATABASE_URL='postgresql://postgres:TON_POSTGRES_PASSWORD@localhost:5432/postgres'
+export DATABASE_URL=\
+'postgresql://postgres:TON_POSTGRES_PASSWORD@localhost:5432/postgres'
 export SUPABASE_URL='https://api.latermitiere.com'
 export SUPABASE_SERVICE_KEY='TA_SERVICE_ROLE_KEY'
 
-# Lancer le script (avec le bypass SSL si HTTPS n'est pas encore actif localement)
+# Lancer le script (avec le bypass SSL)
 NODE_TLS_REJECT_UNAUTHORIZED=0 node import.mjs
 ```
 
@@ -61,7 +62,8 @@ Une fois **à l'intérieur** du conteneur (ton terminal affichera `root@xxxx:/ap
 npm install
 
 # 2. Configurer la variable d'environnement
-export DATABASE_URL='postgresql://postgres:TON_POSTGRES_PASSWORD@db:5432/postgres'
+export DATABASE_URL=\
+'postgresql://postgres:TON_POSTGRES_PASSWORD@db:5432/postgres'
 
 # 3. Lancer le script
 node import.mjs
@@ -214,7 +216,8 @@ Pour l'appliquer en production, la méthode la plus robuste (sans interface web 
 3. Injectez le script dans la base de données :
    ```bash
    # ⚠️ Remplace "002_add_factures.sql" par le vrai nom de ton fichier !
-   cat migration/supabase/002_add_factures.sql | docker exec -i supabase-db psql -U postgres -d postgres
+   cat migration/supabase/002_add_factures.sql | \
+     docker exec -i supabase-db psql -U postgres -d postgres
    ```
 *(Cette méthode garantit une traçabilité parfaite des opérations sur la BDD, car aucun clic aléatoire n'est fait sur une interface web).*
 

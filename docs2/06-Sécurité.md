@@ -29,7 +29,10 @@ Ce script SQL est **vital**. Il parcourt toutes les tables métier (qui commence
 -- Fermer toutes les tables tp_* : accès réservé aux comptes authentifiés
 execute format('alter table public.%I enable row level security;', t);
 execute format('drop policy if exists %I on public.%I;', t||'_test_all', t);
-execute format('create policy %I on public.%I for all to authenticated using (true) with check (true);', t||'_auth_all', t);
+execute format(
+  'create policy %I on public.%I for all to authenticated using (true) with check (true);',
+  t||'_auth_all', t
+);
 execute format('revoke all on public.%I from anon;', t);
 execute format('grant all on public.%I to authenticated;', t);
 ```
