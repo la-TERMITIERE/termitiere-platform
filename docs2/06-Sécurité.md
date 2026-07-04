@@ -71,9 +71,63 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 node auth-migrate.mjs
 
 ---
 
-# 4. Bonnes Pratiques de Sécurité Quotidiennes
+# 4. Configuration du Pare-feu (UFW)
+
+## 4.1 Installation (UFW n'est pas préinstallé sur Debian minimal)
+
+Les images Debian fournies par les hébergeurs VPS sont souvent "minimales" : UFW n'est pas inclus par défaut. Voici comment l'installer et le configurer :
+
+```bash
+# 1. Installer UFW
+sudo apt update && sudo apt install ufw -y
+
+# 2. ⚠️ VITAL : Autoriser SSH en PREMIER (sinon tu te coupes l'accès !)
+sudo ufw allow ssh
+
+# 3. Autoriser le trafic web public (pour Caddy)
+sudo ufw allow http
+sudo ufw allow https
+
+# 4. Activer le pare-feu
+sudo ufw enable
+```
+*(Réponds `y` quand UFW avertit que ça peut couper les connexions. Tu as autorisé SSH juste avant, donc c'est sécurisé).*
+
+Vérification :
+```bash
+sudo ufw status
+```
+
+## 4.2 Le Piège Docker + UFW (Critique à comprendre)
+
+> ⚠️ **UFW seul ne suffit pas à protéger les ports Docker !**
+
+Docker modifie directement les règles `iptables` (le pare-feu bas niveau de Linux) avec une priorité **supérieure** à UFW. Conséquence : même si tu fais `ufw deny 5432`, Docker peut quand même exposer ce port à internet.
+
+**La vraie solution : binder les ports sensibles sur `127.0.0.1` dans Docker.**
+
+Dans le fichier `/home/bawa/supabase/docker/docker-compose.yml`, les ports PostgreSQL sont configurés ainsi :
+
+```yaml
+# ✅ CORRECT (accessible uniquement en local) :
+- 127.0.0.1:${POSTGRES_PORT}:5432
+- 127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543
+
+# ❌ DANGEREUX (accessible depuis internet entier) :
+- ${POSTGRES_PORT}:5432
+```
+
+Cette configuration a déjà été appliquée sur ce VPS. Pour vérifier :
+```bash
+docker compose ps supavisor
+# Tu dois voir : 127.0.0.1:5432->5432/tcp (et non 0.0.0.0:5432)
+```
+
+---
+
+# 5. Bonnes Pratiques de Sécurité Quotidiennes
 
 1. **Ne jamais commiter de fichier `.env`.**
 2. **Ne jamais partager la `SERVICE_ROLE_KEY`.** Elle donne un accès "Dieu" (bypass RLS) à toute la base de données.
-3. Le port `5432` (PostgreSQL) ne doit **jamais** être accessible depuis internet (Bloqué par UFW ou bind sur `127.0.0.1`).
+3. Le port `5432` (PostgreSQL) ne doit **jamais** être accessible depuis internet. Double protection : **UFW + bind sur `127.0.0.1`** dans Docker (voir Section 4.2).
 4. Les tokens générés pour le CI/CD (GitHub PAT) doivent avoir une durée de vie limitée (90 jours max) avec les permissions strictes minimales (`read:packages` uniquement).

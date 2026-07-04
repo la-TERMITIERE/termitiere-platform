@@ -251,7 +251,8 @@ Aujourd'hui, la logique métier côté serveur de La Termitière est gérée via
    ```
 3. Lancez le script en suivant la **Section 2.1** de ce document (installation des dépendances, variables d'environnement, exécution avec Node).
 
-> 💡 **Note sur les Edge Functions (Fonctionnalité future) :**
-> Supabase propose une fonctionnalité appelée **Edge Functions** (des mini-programmes serveurs écrits en TypeScript/Deno qui tournent en permanence et répondent à des appels HTTP, comme "envoyer un email à chaque nouvelle inscription").
-> **Ce n'est pas encore utilisé sur ce projet.** Si l'équipe décide d'en développer à l'avenir, cela nécessitera un document dédié car c'est un sujet à part entière.
+> 💡 **Note sur les Edge Functions :**
+> Le conteneur `supabase-edge-functions` est **actif et opérationnel** sur ce VPS (visible dans `docker compose ps`). Cela signifie que l'infrastructure est prête.
+> Cependant, **aucune Edge Function personnalisée n'a encore été développée pour La Termitière**. C'est une fonctionnalité qui permet de faire tourner du code TypeScript côté serveur (ex: envoyer un email automatique, générer un PDF à la demande).
+> Si l'équipe décide d'en créer, cela nécessitera un document dédié car c'est un sujet à part entière.
 
