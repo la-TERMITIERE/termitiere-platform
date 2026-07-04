@@ -51,7 +51,7 @@ function genererAlertes(projets, taches) {
 
     // Projet actif sans avancement depuis plus d'une semaine
     if (!['termine', 'annule'].includes(p.statut) && p.createdAt && (now - p.createdAt) > SEMAINE) {
-      const avancement = avancementProjet(tachesProjet)
+      const avancement = avancementProjet(tachesProjet, p)
       if (avancement === 0 && tachesProjet.length > 0) {
         alertes.push({
           id: `zero_${p.id}`,

@@ -1,6 +1,6 @@
 // Liste des dépenses — saisie, filtres, justificatif.
-import { useMemo, useState } from 'react'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -26,6 +26,64 @@ const empty = () => ({
   description: '', piece: null, recurrente: false, imprevue: false,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: ''
 })
+
+// ── Champ bénéficiaire (membre de l'entreprise) : saisie libre + suggestions ──
+function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
+  const [open, setOpen]     = useState(false)
+  const [filtre, setFiltre] = useState('')
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const suggestions = useMemo(() => {
+    const q = filtre.toLowerCase()
+    return users.filter((u) => u.actif !== false && (u.nom || u.login || '').toLowerCase().includes(q)).slice(0, 10)
+  }, [users, filtre])
+
+  const choisir = (u) => { onSelectUser(u); setFiltre(''); setOpen(false) }
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex gap-1">
+        <input
+          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder="Nom du bénéficiaire…"
+          value={open ? filtre : value}
+          onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+        />
+        <button type="button" onClick={() => setOpen((o) => !o)}
+          className="rounded-lg border border-gray-200 px-2 text-gray-400 hover:text-primary"><ChevronDown size={14} /></button>
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+          {!suggestions.length
+            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur — votre saisie sera utilisée.</p>
+            : <ul className="max-h-48 overflow-y-auto py-1">
+                {suggestions.map((u) => (
+                  <li key={u.uid}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-primary/10"
+                    onMouseDown={(e) => { e.preventDefault(); choisir(u) }}>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary-dark">
+                      {(u.nom || '?').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">{u.nom}</p>
+                      {u.poste && <p className="text-[10px] text-gray-400">{u.poste}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+          }
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Depenses() {
   const { user, role } = useAuth()
@@ -311,27 +369,39 @@ export default function Depenses() {
               </div>
 
               {modal.data.beneficiaireType === 'externe' ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="Nom de la personne" />
-                  <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="Profession / fonction" />
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Nom de la personne</label>
+                    <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Profession / fonction</label>
+                    <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Maçon" />
+                  </div>
                 </div>
               ) : (
-                <Select value={modal.data.beneficiaireUid} onChange={(e) => {
-                  const u = users.find((x) => x.uid === e.target.value)
-                  set('beneficiaireUid', e.target.value)
-                  set('beneficiaireNom', u?.nom || '')
-                  set('beneficiaireFonction', u?.poste || '')
-                }}>
-                  <option value="">— Aucun —</option>
-                  {users.filter((u) => u.actif !== false).sort((a, b) => (a.nom || '') < (b.nom || '') ? -1 : 1).map((u) => (
-                    <option key={u.uid} value={u.uid}>{u.nom}{u.poste ? ` — ${u.poste}` : ''}</option>
-                  ))}
-                </Select>
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Nom du bénéficiaire</label>
+                    <ChampBeneficiaire
+                      value={modal.data.beneficiaireNom}
+                      onChange={(v) => { set('beneficiaireNom', v); set('beneficiaireUid', '') }}
+                      onSelectUser={(u) => { set('beneficiaireUid', u.uid); set('beneficiaireNom', u.nom || ''); set('beneficiaireFonction', u.poste || '') }}
+                      users={users}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Fonction (optionnel)</label>
+                    <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Comptable" />
+                  </div>
+                </div>
               )}
               <p className="mt-1 text-xs text-gray-400">
                 {modal.data.beneficiaireType === 'externe'
                   ? 'Bénéficiaire externe : pas de notification automatique (aucun compte sur la plateforme).'
-                  : 'Membre de l\'entreprise : recevra une notification dans l\'application pour confirmer la réception.'}
+                  : modal.data.beneficiaireUid
+                    ? 'Membre de l\'entreprise : recevra une notification dans l\'application pour confirmer la réception.'
+                    : 'Nom saisi librement, sans compte associé : pas de notification automatique.'}
               </p>
             </FormGroup>
             {modal.isNew && (

@@ -11,7 +11,7 @@ const MODULE_THEME = {
   evenementiel: { color: '#7c3aed', color2: '#4c1d95', logo: null,                          nom: 'BRIQUETERIE'            },
   foncier:      { color: '#059669', color2: '#065f46', logo: null,                          nom: 'FONCIER'                },
   rh:           { color: '#ea580c', color2: '#9a3412', logo: null,                          nom: 'COMPTABILITÉ'           },
-  projet:       { color: '#0d9488', color2: '#0f5450', logo: null,                          nom: 'GESTION DE PROJET'      },
+  projet:       { color: '#0d9488', color2: '#0f5450', logo: null,                          nom: 'E-G.Pro'                },
   depense:      { color: '#4F46E5', color2: '#3730A3', logo: null,                          nom: 'DÉPENSES'               },
   default:      { color: '#BC3C31', color2: '#1A1A1A', logo: '/termitiere-logo.png',         nom: 'LA TERMITIÈRE'          }
 }

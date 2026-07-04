@@ -1,5 +1,5 @@
 // Suivi des dépenses détaillé par projet.
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import Card from '../../shared/ui/Card'
@@ -13,7 +13,7 @@ import { useAuthStore } from '../../core/auth'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { STATUTS_PROJET } from './data'
-import { FULL_ACCESS_ROLES } from '../../core/roles'
+import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier } from './prestataire'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -28,12 +28,10 @@ const CATEGORIES = [
   { id: 'autre',        label: 'Autre'            }
 ]
 
-const VIDE = { projetId: '', date: '', montant: '', categorie: '', description: '', fournisseur: '', statut: 'en_attente' }
-
-const STATUTS_DEP = {
-  en_attente: { label: 'En attente',  tone: 'warning' },
-  approuvee:  { label: 'Approuvée',   tone: 'success' },
-  rejetee:    { label: 'Rejetée',     tone: 'danger'  },
+const VIDE = {
+  projetId: '', tacheId: '', date: '', montant: '', categorie: '', description: '',
+  fournisseur: '', prestataireMetier: '', prestataireTelephone: '',
+  typePaiement: 'total'
 }
 
 // ── Champ catégorie : liste prédéfinie + saisie libre ──────────────────────
@@ -76,14 +74,12 @@ function ChampCategorie({ value, onChange }) {
 export default function Depenses() {
   const { data: projets }  = useCollection('projets')
   const { data: depenses } = useCollection('projet_depenses')
+  const { data: taches }   = useCollection('projet_taches')
   const { data: notes }    = useCollection('projet_depenses_notes')
   const { user } = useAuthStore()
 
-  const canApprove = FULL_ACCESS_ROLES.includes(user?.role)
-
   const [filtreProjet, setFiltreProjet]     = useState('')
   const [filtreCategorie, setFiltreCateg]   = useState('')
-  const [filtreStatutDep, setFiltreStatutDep] = useState('')
   const [modal, setModal]     = useState(false)
   const [form, setForm]       = useState(VIDE)
   const [editing, setEditing] = useState(null)
@@ -118,9 +114,8 @@ export default function Depenses() {
     depenses
       .filter((d) => !filtreProjet    || d.projetId  === filtreProjet)
       .filter((d) => !filtreCategorie || d.categorie === filtreCategorie)
-      .filter((d) => !filtreStatutDep || (d.statut || 'en_attente') === filtreStatutDep)
       .sort((a, b) => (b.date || 0) - (a.date || 0)),
-  [depenses, filtreProjet, filtreCategorie, filtreStatutDep])
+  [depenses, filtreProjet, filtreCategorie])
 
   const totalFiltre = useMemo(() => liste.reduce((s, d) => s + (Number(d.montant) || 0), 0), [liste])
 
@@ -138,17 +133,44 @@ export default function Depenses() {
     return CATEGORIES.filter((c) => map[c.id]).map((c) => ({ ...c, total: map[c.id] }))
   }, [liste])
 
+  // Dépenses regroupées par tâche (suivi tâche → prestataire)
+  const groupesParTache = useMemo(() => {
+    const map = {}
+    liste.forEach((d) => {
+      const key = d.tacheId || '__aucune__'
+      if (!map[key]) map[key] = []
+      map[key].push(d)
+    })
+    const groups = Object.entries(map).map(([key, deps]) => {
+      const tache = key === '__aucune__' ? null : taches.find((t) => t.id === key)
+      const totalVerse = deps.reduce((s, d) => s + (Number(d.montant) || 0), 0)
+      const prevu = tache ? (Number(tache.montantPrevu) || 0) : 0
+      return { key, tache, deps, totalVerse, prevu, reste: prevu - totalVerse }
+    })
+    // Tâches d'abord (par titre), « Dépenses générales » en dernier
+    groups.sort((a, b) => {
+      if (a.key === '__aucune__') return 1
+      if (b.key === '__aucune__') return -1
+      return (a.tache?.titre || '').localeCompare(b.tache?.titre || '')
+    })
+    return groups
+  }, [liste, taches])
+
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
   const openCreate = () => { setForm({ ...VIDE, projetId: filtreProjet }); setEditing(null); setModal(true) }
   const openEdit   = (d) => {
     setForm({
       projetId:    d.projetId    || '',
+      tacheId:     d.tacheId     || '',
       date:        d.date ? new Date(d.date).toISOString().slice(0, 10) : '',
       montant:     d.montant     ?? '',
       categorie:   d.categorie   || 'autre',
       description: d.description || '',
-      fournisseur: d.fournisseur || ''
+      fournisseur: d.fournisseur || '',
+      prestataireMetier:    d.prestataireMetier    || '',
+      prestataireTelephone: d.prestataireTelephone || '',
+      typePaiement:         d.typePaiement         || 'total'
     })
     setEditing(d); setModal(true)
   }
@@ -166,8 +188,13 @@ export default function Depenses() {
       }
       if (editing) {
         await setItem('projet_depenses', editing.id, { ...editing, ...payload })
+        // Recalculer le total dépenses du projet (le montant a pu changer)
+        const totalProjet = depenses
+          .filter((d) => d.id !== editing.id && d.projetId === form.projetId)
+          .reduce((s, d) => s + (Number(d.montant) || 0), 0) + Number(form.montant)
+        await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
       } else {
-        await addItem('projet_depenses', { ...payload, statut: 'en_attente', createdAt: now, ajoutePar: user?.nom || user?.login || null })
+        await addItem('projet_depenses', { ...payload, createdAt: now, ajoutePar: user?.nom || user?.login || null })
         // Mettre à jour le total dépenses du projet
         const projet = projets.find((p) => p.id === form.projetId)
         if (projet) {
@@ -196,27 +223,20 @@ export default function Depenses() {
     }
   }
 
-  const approuver = async (d) => {
-    await updateItem('projet_depenses', d.id, { statut: 'approuvee', approuvePar: user?.nom || user?.login, approuveAt: Date.now() })
-    await audit('projet', 'depense_approuvee', `${formatMoney(d.montant)} — ${d.description || d.categorie}`)
-  }
-
-  const rejeter = async (d) => {
-    await updateItem('projet_depenses', d.id, { statut: 'rejetee', rejetePar: user?.nom || user?.login, rejeteAt: Date.now() })
-    await audit('projet', 'depense_rejetee', `${formatMoney(d.montant)} — ${d.description || d.categorie}`)
-  }
-
   const catLabel = (id) => CATEGORIES.find((c) => c.id === id)?.label || id
 
   const exportExcel = () => {
     const rows = liste.map((d) => ({
       Date:        d.date ? new Date(d.date).toLocaleDateString('fr-FR') : '',
       Projet:      projets.find((p) => p.id === d.projetId)?.nom || d.projetId,
+      Tâche:       taches.find((t) => t.id === d.tacheId)?.titre || '',
       Catégorie:   catLabel(d.categorie),
       Description: d.description || '',
-      Fournisseur: d.fournisseur || '',
+      Prestataire: d.fournisseur || '',
+      Métier:      METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier || '',
+      Téléphone:   d.prestataireTelephone || '',
+      'Type paiement': TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale',
       'Montant (FCFA)': Number(d.montant) || 0,
-      Statut:      STATUTS_DEP[d.statut || 'en_attente']?.label || d.statut || 'En attente',
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
@@ -232,15 +252,18 @@ export default function Depenses() {
     doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')} — Total : ${formatMoney(totalFiltre)}`, 14, 21)
     autoTable(doc, {
       startY: 26,
-      head: [['Date', 'Projet', 'Catégorie', 'Description', 'Fournisseur', 'Montant (FCFA)', 'Statut']],
+      head: [['Date', 'Projet', 'Tâche', 'Catégorie', 'Description', 'Prestataire', 'Métier', 'Téléphone', 'Type', 'Montant (FCFA)']],
       body: liste.map((d) => [
         d.date ? new Date(d.date).toLocaleDateString('fr-FR') : '',
         projets.find((p) => p.id === d.projetId)?.nom || '',
+        taches.find((t) => t.id === d.tacheId)?.titre || '',
         catLabel(d.categorie),
         d.description || '',
         d.fournisseur || '',
+        METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier || '',
+        d.prestataireTelephone || '',
+        TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale',
         (Number(d.montant) || 0).toLocaleString('fr-FR'),
-        STATUTS_DEP[d.statut || 'en_attente']?.label || 'En attente',
       ]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [13, 148, 136] },
@@ -271,11 +294,6 @@ export default function Depenses() {
           value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
           <option value="">Toutes catégories</option>
           {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </select>
-        <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-          value={filtreStatutDep} onChange={(e) => setFiltreStatutDep(e.target.value)}>
-          <option value="">Tous les statuts</option>
-          {Object.entries(STATUTS_DEP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
         <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouvelle dépense</Button>
         {liste.length > 0 && (
@@ -326,16 +344,39 @@ export default function Depenses() {
                 <th className="px-3 py-2">Projet</th>
                 <th className="px-3 py-2">Catégorie</th>
                 <th className="px-3 py-2">Description</th>
-                <th className="px-3 py-2">Fournisseur</th>
+                <th className="px-3 py-2">Prestataire</th>
                 <th className="px-3 py-2 text-right">Montant</th>
-                <th className="px-3 py-2">Statut</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
-              {liste.map((d) => {
-                const projet = projets.find((p) => p.id === d.projetId)
-                return (
+              {groupesParTache.map((g) => (
+                <Fragment key={g.key}>
+                  {/* En-tête de groupe : tâche + suivi budget */}
+                  <tr className="border-y border-teal-100 bg-teal-50/70">
+                    <td colSpan={7} className="px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-bold text-teal-800">
+                          {g.tache ? `📋 ${g.tache.titre}` : '📁 Dépenses générales (sans tâche)'}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                          {g.prevu > 0 && <span>Arrêté <b className="text-gray-800">{formatMoney(g.prevu)}</b></span>}
+                          <span>Versé <b className="text-teal-700">{formatMoney(g.totalVerse)}</b></span>
+                          {g.prevu > 0 && <span>Reste <b className={g.reste > 0 ? 'text-amber-600' : 'text-green-600'}>{formatMoney(g.reste > 0 ? g.reste : 0)}</b></span>}
+                          {g.prevu > 0 && (
+                            g.reste <= 0
+                              ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">✓ Soldé</span>
+                              : g.totalVerse > 0
+                                ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Tranche versée</span>
+                                : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">Non payé</span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {g.deps.map((d) => {
+                    const projet = projets.find((p) => p.id === d.projetId)
+                    return (
                   <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{formatDateShort(d.date)}</td>
                     <td className="px-3 py-2">
@@ -345,15 +386,18 @@ export default function Depenses() {
                       <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">{catLabel(d.categorie)}</span>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 max-w-xs truncate">{d.description}</td>
-                    <td className="px-3 py-2 text-xs text-gray-500">{d.fournisseur}</td>
-                    <td className="px-3 py-2 text-right font-mono font-bold text-gray-700">{formatMoney(d.montant)}</td>
-                    <td className="px-3 py-2">
-                      {(() => {
-                        const s = d.statut || 'en_attente'
-                        const cfg = STATUTS_DEP[s]
-                        const colors = { warning: 'bg-amber-50 text-amber-700 border border-amber-200', success: 'bg-green-50 text-green-700 border border-green-200', danger: 'bg-red-50 text-red-700 border border-red-200' }
-                        return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${colors[cfg?.tone] || ''}`}>{cfg?.label || s}</span>
-                      })()}
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {d.fournisseur && <p className="font-semibold text-gray-700">{d.fournisseur}</p>}
+                      {d.prestataireMetier && (
+                        <p className="text-gray-400">{METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier}</p>
+                      )}
+                      {d.prestataireTelephone && <p className="text-gray-400">{d.prestataireTelephone}</p>}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <p className="font-mono font-bold text-gray-700">{formatMoney(d.montant)}</p>
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${d.typePaiement === 'avance' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                        {TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale'}
+                      </span>
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1 items-center">
@@ -367,14 +411,6 @@ export default function Depenses() {
                             </span>
                           )}
                         </button>
-                        {canApprove && (d.statut || 'en_attente') !== 'approuvee' && (
-                          <button onClick={() => approuver(d)} title="Approuver"
-                            className="rounded px-2 py-1 text-xs font-bold bg-green-500 text-white hover:bg-green-600 shadow-sm">✓</button>
-                        )}
-                        {canApprove && (d.statut || 'en_attente') !== 'rejetee' && (
-                          <button onClick={() => rejeter(d)} title="Rejeter"
-                            className="rounded px-2 py-1 text-xs font-bold bg-red-500 text-white hover:bg-red-600 shadow-sm">✗</button>
-                        )}
                         <button onClick={() => openEdit(d)} className="rounded p-1 text-gray-400 hover:text-teal-600"><Pencil size={13} /></button>
                         <button onClick={() => handleDelete(d)} className="rounded p-1 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
                       </div>
@@ -382,6 +418,8 @@ export default function Depenses() {
                   </tr>
                 )
               })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
@@ -444,11 +482,38 @@ export default function Depenses() {
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Projet *</label>
             <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-              value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
+              value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value, tacheId: '' }))}>
               <option value="">— Sélectionner —</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </div>
+          {form.projetId && (() => {
+            const tachesDuProjet = taches.filter((t) => t.projetId === form.projetId)
+            return (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Tâche liée</label>
+                <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.tacheId}
+                  onChange={(e) => {
+                    const tache = tachesDuProjet.find((t) => t.id === e.target.value)
+                    setForm((f) => ({
+                      ...f,
+                      tacheId: e.target.value,
+                      // Pré-remplit les coordonnées du prestataire depuis la tâche (évite de les ressaisir à chaque tranche)
+                      fournisseur:           f.fournisseur           || tache?.prestataireNom       || '',
+                      prestataireMetier:     f.prestataireMetier     || tache?.prestataireMetier     || '',
+                      prestataireTelephone:  f.prestataireTelephone  || tache?.prestataireTelephone  || ''
+                    }))
+                  }}>
+                  <option value="">— Aucune (dépense générale du projet) —</option>
+                  {tachesDuProjet.map((t) => <option key={t.id} value={t.id}>{t.titre}</option>)}
+                </select>
+                {!tachesDuProjet.length && (
+                  <p className="mt-1 text-[11px] text-gray-400">Aucune tâche pour ce projet — créez-en une dans l'onglet Tâches.</p>
+                )}
+              </div>
+            )
+          })()}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Date</label>
@@ -467,17 +532,45 @@ export default function Depenses() {
                 onChange={(v) => setForm((f) => ({ ...f, categorie: v }))}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Fournisseur</label>
-              <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.fournisseur} onChange={(e) => setForm((f) => ({ ...f, fournisseur: e.target.value }))} />
-            </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
             <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
               value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           </div>
+
+          <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-3">
+            <p className="text-xs font-bold uppercase text-teal-700">Coordonnées du prestataire</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire</label>
+                <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="ex: Kofi Adjovi"
+                  value={form.fournisseur} onChange={(e) => setForm((f) => ({ ...f, fournisseur: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Téléphone</label>
+                <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="ex: 90 00 00 00"
+                  value={form.prestataireTelephone} onChange={(e) => setForm((f) => ({ ...f, prestataireTelephone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Métier / Spécialité</label>
+                <ChampMetier
+                  value={form.prestataireMetier}
+                  onChange={(v) => setForm((f) => ({ ...f, prestataireMetier: v }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Type de paiement</label>
+                <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.typePaiement} onChange={(e) => setForm((f) => ({ ...f, typePaiement: e.target.value }))}>
+                  {Object.entries(TYPES_PAIEMENT_PRESTA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
             <Button onClick={handleSave} disabled={saving || !form.montant || !form.projetId}>

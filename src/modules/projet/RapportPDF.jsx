@@ -23,7 +23,7 @@ async function genererPDF(projet, taches, depenses, commentaires, checklists) {
   const depensesProjet     = depenses.filter((d) => d.projetId === projet.id)
   const commProjet         = commentaires.filter((c) => c.projetId === projet.id)
   const checkProjet        = checklists.filter((c) => c.projetId === projet.id)
-  const avancement         = avancementProjet(tachesProjet)
+  const avancement         = avancementProjet(tachesProjet, projet)
   const retard             = tachesEnRetard(tachesProjet)
   const totalDepenses      = depensesProjet.reduce((s, d) => s + (Number(d.montant) || 0), 0)
   const budget             = Number(projet.budget) || 0
@@ -40,7 +40,7 @@ async function genererPDF(projet, taches, depenses, commentaires, checklists) {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, MARGIN, 20)
-  doc.text('GESTION DE PROJET — LA TERMITIÈRE', W - MARGIN, 20, { align: 'right' })
+  doc.text('E-G.Pro — LA TERMITIÈRE', W - MARGIN, 20, { align: 'right' })
 
   y = 36
 
@@ -56,7 +56,8 @@ async function genererPDF(projet, taches, depenses, commentaires, checklists) {
   const statut = STATUTS_PROJET[projet.statut]?.label || projet.statut || '—'
   doc.text(`Statut : ${statut}   |   Responsable : ${projet.responsable || '—'}   |   Type : ${projet.type || '—'}`, MARGIN, y)
   y += 5
-  doc.text(`Début : ${formatDateShort(projet.dateDebut)}   |   Fin prévue : ${formatDateShort(projet.dateFin)}${projetEnRetard(projet) ? '   ⚠ EN RETARD' : ''}`, MARGIN, y)
+  const finTexte = projet.dureeIndeterminee ? 'Durée indéterminée' : formatDateShort(projet.dateFin)
+  doc.text(`Début : ${formatDateShort(projet.dateDebut)}   |   Fin prévue : ${finTexte}${projetEnRetard(projet) ? '   ⚠ EN RETARD' : ''}`, MARGIN, y)
   y += 8
 
   if (projet.description) {
@@ -233,7 +234,7 @@ async function genererPDF(projet, taches, depenses, commentaires, checklists) {
     doc.setFontSize(7)
     doc.setTextColor(...GRAY)
     doc.text(`Page ${i} / ${pages}`, W / 2, 290, { align: 'center' })
-    doc.text('GESTION DE PROJET — LA TERMITIÈRE', MARGIN, 290)
+    doc.text('E-G.Pro — LA TERMITIÈRE', MARGIN, 290)
     doc.text(new Date().toLocaleDateString('fr-FR'), W - MARGIN, 290, { align: 'right' })
   }
 
@@ -279,7 +280,7 @@ export default function RapportPDF() {
           {projetsActifs.map((p) => {
             const tachesP    = taches.filter((t) => t.projetId === p.id)
             const depensesP  = depenses.filter((d) => d.projetId === p.id)
-            const avancement = avancementProjet(tachesP)
+            const avancement = avancementProjet(tachesP, p)
             const statut     = STATUTS_PROJET[p.statut]
             return (
               <Card key={p.id}>

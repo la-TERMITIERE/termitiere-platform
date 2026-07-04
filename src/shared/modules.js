@@ -75,7 +75,7 @@ export const MODULES = [
   },
   {
     id: 'projet',
-    nom: 'GESTION DE PROJET',
+    nom: 'E-G.Pro',
     description: 'Projets, tâches, équipes & avancement',
     icon: FolderKanban,
     emoji: '📋',

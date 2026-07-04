@@ -115,7 +115,7 @@ export default function Dashboard() {
           </div>
         </div>
         <div>
-          <h2 className="text-lg font-extrabold">Gestion de Projet</h2>
+          <h2 className="text-lg font-extrabold">E-G.Pro</h2>
           <p className="text-sm text-white/80">Suivi des projets · Tâches · Équipes · Avancement</p>
         </div>
       </div>
@@ -168,7 +168,7 @@ export default function Dashboard() {
             <div className="space-y-2">
               {recents.map((p) => {
                 const tachesDuProjet = taches.filter((t) => t.projetId === p.id)
-                const pct = avancementProjet(tachesDuProjet)
+                const pct = avancementProjet(tachesDuProjet, p)
                 return (
                   <div key={p.id} className="rounded-lg border border-gray-100 px-3 py-2 text-sm">
                     <div className="flex items-center justify-between">
@@ -177,7 +177,9 @@ export default function Dashboard() {
                     </div>
                     <p className="font-semibold">{p.nom}</p>
                     {p.responsable && <p className="text-xs text-gray-500">Resp. : {p.responsable}</p>}
-                    {p.dateFin && <p className="text-xs text-gray-400">Échéance : {formatDateShort(p.dateFin)}</p>}
+                    {p.dureeIndeterminee
+                      ? <p className="text-xs italic text-gray-400">Durée indéterminée</p>
+                      : p.dateFin && <p className="text-xs text-gray-400">Échéance : {formatDateShort(p.dateFin)}</p>}
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-1.5 flex-1 rounded-full bg-gray-100">
                         <div className="h-1.5 rounded-full bg-teal-500" style={{ width: `${pct}%` }} />
