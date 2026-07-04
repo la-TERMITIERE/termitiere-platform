@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from 'react'
-import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert } from 'lucide-react'
+import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert, MapPin } from 'lucide-react'
 import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -22,7 +22,8 @@ import { useGarderieStore } from './store/garderieStore'
 const emptyJournalier = () => ({
   nom: '', prenom: '', ageApprox: '',
   parentNom: '', parentContact: '',
-  date: todayStr(), nombreJours: '1', notes: ''
+  date: todayStr(), nombreJours: '1', notes: '',
+  apporteRepas: false
 })
 
 const empty = () => ({
@@ -31,7 +32,8 @@ const empty = () => ({
   typeAbonnement: 'mensuel',
   allergies: '', infoMedicale: '',
   parentId: '', parentNom: '', parentContact: '',
-  parentContact2: '', adresse: '',
+  parentContact2: '', parentProfession: '', adresse: '',
+  gpsLat: '', gpsLng: '',
   dateInscription: todayStr(), notes: ''
 })
 
@@ -57,6 +59,7 @@ export default function Enfants() {
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [locating, setLocating] = useState(false)
   const deletedEnfantIds    = useGarderieStore((s) => s.deletedEnfantIds)
   const markEnfantDeleted   = useGarderieStore((s) => s.markEnfantDeleted)
   const unmarkEnfantDeleted = useGarderieStore((s) => s.unmarkEnfantDeleted)
@@ -115,6 +118,7 @@ export default function Enfants() {
     if (!d.groupe) return toast.error('Groupe requis')
     if (!d.parentNom?.trim()) return toast.error('Nom du parent / tuteur requis')
     if (!d.parentContact?.trim()) return toast.error('Contact principal du parent requis')
+    if (!d.adresse?.trim()) return toast.error('Adresse requise')
 
     setSaving(true)
     try {
@@ -136,6 +140,25 @@ export default function Enfants() {
   }
 
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
+
+  // Capture la position GPS actuelle (celle de l'appareil utilisé pour la saisie, ex: chez le parent)
+  function handleLocaliser() {
+    if (!navigator.geolocation) return toast.error('Géolocalisation non disponible sur cet appareil')
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        set('gpsLat', String(pos.coords.latitude))
+        set('gpsLng', String(pos.coords.longitude))
+        setLocating(false)
+        toast.success('Position GPS enregistrée ✓')
+      },
+      () => {
+        setLocating(false)
+        toast.error('Impossible de récupérer la position — vérifiez les autorisations de localisation')
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
 
   // ── Photo de profil ──
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -315,7 +338,12 @@ export default function Enfants() {
                 {journaliersFiltre.map((j) => (
                   <tr key={j.id} className="hover:bg-orange-50 transition-colors">
                     <td className="px-3 py-2 text-xs text-gray-500">{formatDateShort(j.date)}</td>
-                    <td className="px-3 py-2 font-semibold">{j.prenom} {j.nom}</td>
+                    <td className="px-3 py-2 font-semibold">
+                      {j.prenom} {j.nom}
+                      {j.apporteRepas && (
+                        <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">🍱 repas apporté</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-xs text-gray-500">{j.ageApprox ? `~${j.ageApprox}` : '—'}</td>
                     <td className="px-3 py-2">
                       <p>{j.parentNom || '—'}</p>
@@ -539,6 +567,13 @@ export default function Enfants() {
               </div>
             </div>
 
+            <label className="flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800 cursor-pointer">
+              <input type="checkbox" checked={!!joModal.data.apporteRepas}
+                onChange={(e) => setJo('apporteRepas', e.target.checked)}
+                className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-400" />
+              🍱 Apporte son propre repas (pas de frais de cuisine)
+            </label>
+
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
               💡 Le paiement se fait dans le volet <strong>Paiements → Journaliers</strong>
             </div>
@@ -663,8 +698,29 @@ export default function Enfants() {
               <FormGroup label="Date d'inscription">
                 <Input type="date" value={modal.data.dateInscription} onChange={(e) => set('dateInscription', e.target.value)} />
               </FormGroup>
-              <FormGroup label="Adresse">
-                <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} />
+              <FormGroup label="Adresse *">
+                <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Quartier, ville…" />
+              </FormGroup>
+              <FormGroup label="Localisation GPS de l'adresse">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={handleLocaliser} disabled={locating}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-60">
+                    {locating ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
+                    {locating ? 'Localisation…' : 'Capturer ma position'}
+                  </button>
+                  {modal.data.gpsLat && modal.data.gpsLng && (
+                    <a href={`https://www.google.com/maps?q=${modal.data.gpsLat},${modal.data.gpsLng}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:underline truncate">
+                      📍 Voir sur la carte
+                    </a>
+                  )}
+                </div>
+                {modal.data.gpsLat && modal.data.gpsLng && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    {Number(modal.data.gpsLat).toFixed(5)}, {Number(modal.data.gpsLng).toFixed(5)}
+                  </p>
+                )}
               </FormGroup>
             </div>
 
@@ -679,6 +735,9 @@ export default function Enfants() {
                 </FormGroup>
                 <FormGroup label="Contact secondaire">
                   <Input value={modal.data.parentContact2} onChange={(e) => set('parentContact2', e.target.value)} />
+                </FormGroup>
+                <FormGroup label="Profession du parent / tuteur">
+                  <Input value={modal.data.parentProfession} onChange={(e) => set('parentProfession', e.target.value)} placeholder="ex: Commerçant, Enseignant…" />
                 </FormGroup>
               </div>
             </div>
@@ -733,11 +792,11 @@ export default function Enfants() {
           <div className="space-y-4 text-sm">
             {/* En-tête : photo (modifiable) centrée en haut + identité */}
             <div className="flex flex-col items-center text-center">
-              <div className="relative h-28 w-28 shrink-0">
+              <div className="relative h-40 w-40 shrink-0">
                 {detail.photo ? (
-                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-28 w-28 rounded-full border border-gray-200 object-cover" />
+                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-40 w-40 rounded-full border border-gray-200 object-cover" />
                 ) : (
-                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-orange-100 text-3xl font-bold text-orange-600">
+                  <div className="flex h-40 w-40 items-center justify-center rounded-full bg-orange-100 text-5xl font-bold text-orange-600">
                     {(detail.prenom?.[0] || '?').toUpperCase()}
                   </div>
                 )}
@@ -747,9 +806,9 @@ export default function Enfants() {
                   onClick={() => detailPhotoInputRef.current?.click()}
                   disabled={detailPhotoUploading}
                   title="Changer la photo"
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+                  className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
                 >
-                  {detailPhotoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  {detailPhotoUploading ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
                 </button>
               </div>
               <h3 className="mt-2 text-lg font-extrabold text-gray-900">{detail.prenom} {detail.nom}</h3>
@@ -793,7 +852,16 @@ export default function Enfants() {
                   <div><span className="font-semibold text-gray-500">Sexe :</span> {detail.sexe === 'F' ? 'Fille' : 'Garçon'}</div>
                   <div><span className="font-semibold text-gray-500">Inscription :</span> {formatDateShort(detail.dateInscription)}</div>
                   <div><span className="font-semibold text-gray-500">Abonnement :</span> {detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}</div>
-                  <div><span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}</div>
+                  <div>
+                    <span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}
+                    {detail.gpsLat && detail.gpsLng && (
+                      <a href={`https://www.google.com/maps?q=${detail.gpsLat},${detail.gpsLng}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="ml-2 text-xs font-semibold text-blue-600 hover:underline">
+                        📍 Voir sur la carte
+                      </a>
+                    )}
+                  </div>
                 </div>
               </Card>
               <Card title="👪 Parent / Tuteur">
@@ -801,6 +869,7 @@ export default function Enfants() {
                   <div><span className="font-semibold text-gray-500">Nom :</span> {detail.parentNom || '—'}</div>
                   <div><span className="font-semibold text-gray-500">Contact :</span> {detail.parentContact || '—'}</div>
                   {detail.parentContact2 && <div><span className="font-semibold text-gray-500">Contact 2 :</span> {detail.parentContact2}</div>}
+                  <div><span className="font-semibold text-gray-500">Profession :</span> {detail.parentProfession || '—'}</div>
                 </div>
               </Card>
             </div>

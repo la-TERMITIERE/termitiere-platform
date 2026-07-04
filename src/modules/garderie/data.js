@@ -57,6 +57,42 @@ export const GRAVITES_INCIDENT = {
   grave:   { label: 'Grave',   tone: 'danger'  }
 }
 
+// ── Infirmerie & Soins ──
+export const TYPES_SOIN = [
+  { id: 'medicament',  label: '💊 Médicament administré' },
+  { id: 'temperature', label: '🌡️ Prise de température'   },
+  { id: 'bobo',        label: '🩹 Petit soin (bobo, désinfection)' },
+  { id: 'vaccination', label: '💉 Vaccination'            },
+  { id: 'visite',      label: '🩺 Visite médicale'        },
+  { id: 'autre',       label: 'Autre soin'                }
+]
+
+export const STATUTS_SOIN = {
+  effectue: { label: 'Effectué', tone: 'success' },
+  a_suivre: { label: 'À suivre', tone: 'warning' }
+}
+
+// Calendrier vaccinal standard (PEV — Programme Élargi de Vaccination, Togo)
+export const VACCINS_STANDARD = [
+  { id: 'bcg',        label: 'BCG (tuberculose)',              age: 'Naissance'   },
+  { id: 'polio0',     label: 'Polio 0',                        age: 'Naissance'   },
+  { id: 'penta1',     label: 'Penta 1 (DTC-HepB-Hib)',         age: '6 semaines'  },
+  { id: 'polio1',     label: 'Polio 1',                        age: '6 semaines'  },
+  { id: 'pneumo1',    label: 'Pneumocoque 1',                  age: '6 semaines'  },
+  { id: 'rota1',      label: 'Rotavirus 1',                    age: '6 semaines'  },
+  { id: 'penta2',     label: 'Penta 2 (DTC-HepB-Hib)',         age: '10 semaines' },
+  { id: 'polio2',     label: 'Polio 2',                        age: '10 semaines' },
+  { id: 'pneumo2',    label: 'Pneumocoque 2',                  age: '10 semaines' },
+  { id: 'rota2',      label: 'Rotavirus 2',                    age: '10 semaines' },
+  { id: 'penta3',     label: 'Penta 3 (DTC-HepB-Hib)',         age: '14 semaines' },
+  { id: 'polio3',     label: 'Polio 3',                        age: '14 semaines' },
+  { id: 'pneumo3',    label: 'Pneumocoque 3',                  age: '14 semaines' },
+  { id: 'fievrejaune',label: 'Fièvre jaune',                   age: '9 mois'      },
+  { id: 'rougeole1',  label: 'Rougeole-Rubéole (1ère dose)',   age: '9 mois'      },
+  { id: 'meningiteA', label: 'Méningite A',                    age: '9 mois'      },
+  { id: 'rougeole2',  label: 'Rougeole-Rubéole (2e dose)',     age: '15 mois'     }
+]
+
 export const POSTES_PERSONNEL = [
   { id: 'tata',        label: 'Tata (puéricultrice)' },
   { id: 'responsable', label: 'Responsable de salle'  },
@@ -75,7 +111,8 @@ export const GRILLE_TARIFAIRE = [
 
 export const TYPES_REPAS = {
   menu:    { label: 'Menu du jour',  tone: 'success' },
-  special: { label: 'Repas spécial', tone: 'neutral' }
+  special: { label: 'Repas spécial', tone: 'neutral' },
+  apporte: { label: 'Repas apporté', tone: 'neutral' }
 }
 
 export const APPETITS = {

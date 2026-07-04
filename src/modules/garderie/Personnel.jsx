@@ -734,11 +734,11 @@ export default function Personnel() {
           <div className="space-y-4 text-sm">
             {/* En-tête : photo (modifiable) centrée en haut + identité */}
             <div className="flex flex-col items-center text-center">
-              <div className="relative h-28 w-28 shrink-0">
+              <div className="relative h-40 w-40 shrink-0">
                 {detail.photo ? (
-                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-28 w-28 rounded-full border border-gray-200 object-cover" />
+                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-40 w-40 rounded-full border border-gray-200 object-cover" />
                 ) : (
-                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-orange-100 text-3xl font-bold text-orange-600">
+                  <div className="flex h-40 w-40 items-center justify-center rounded-full bg-orange-100 text-5xl font-bold text-orange-600">
                     {(detail.prenom?.[0] || '?').toUpperCase()}
                   </div>
                 )}
@@ -748,9 +748,9 @@ export default function Personnel() {
                   onClick={() => detailPhotoInputRef.current?.click()}
                   disabled={detailPhotoUploading}
                   title="Changer la photo"
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+                  className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
                 >
-                  {detailPhotoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  {detailPhotoUploading ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
                 </button>
               </div>
               <h3 className="mt-2 text-lg font-extrabold text-gray-900">{detail.prenom} {detail.nom}</h3>

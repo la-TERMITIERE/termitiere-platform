@@ -22,10 +22,12 @@ import { useGarderieStore } from './store/garderieStore'
 import { exportRapportExcel } from '../../utils/excelReport'
 
 const now = new Date()
+// Types de paiement pour lesquels les frais de cuisine (payés à part par les parents) s'appliquent.
+const TYPES_AVEC_CUISINE = ['inscription', 'mensuel']
 const empty = () => ({
   enfantId: '', enfantNom: '',
   type: 'mensuel', mois: now.getMonth() + 1, annee: now.getFullYear(),
-  montantDu: '', montantPaye: '', modePaiement: 'espece',
+  montantDu: '', montantPaye: '', montantCuisine: '', modePaiement: 'espece',
   statut: 'paye', date: todayStr(), notes: ''
 })
 
@@ -94,16 +96,19 @@ export default function Paiements() {
   }, 0), [liste])
 
   function openCreate() {
-    setModal({ data: { ...empty(), montantDu: params.tarifMensuel }, isNew: true })
+    setModal({ data: { ...empty(), montantDu: params.tarifMensuel, montantCuisine: params.fraisCuisine || '' }, isNew: true })
   }
 
   async function handleSave() {
     const d = modal.data
     if (!d.enfantId) return toast.error('Sélectionnez un enfant')
     if (!d.montantDu || !d.montantPaye) return toast.error('Montants requis')
-    const statut = Number(d.montantPaye) >= Number(d.montantDu) ? 'paye'
+    const avecCuisine = TYPES_AVEC_CUISINE.includes(d.type)
+    const montantCuisine = avecCuisine ? (Number(d.montantCuisine) || 0) : 0
+    const montantDu = Number(d.montantDu) + montantCuisine
+    const statut = Number(d.montantPaye) >= montantDu ? 'paye'
                  : Number(d.montantPaye) > 0 ? 'partiel' : 'impaye'
-    const payload = { ...d, statut, montantDu: Number(d.montantDu), montantPaye: Number(d.montantPaye) }
+    const payload = { ...d, statut, montantDu, montantCuisine, montantPaye: Number(d.montantPaye) }
     if (modal.isNew) {
       const id = genId()
       await setItem('garderie_paiements', id, { ...payload, id })
@@ -128,7 +133,20 @@ export default function Paiements() {
         ...m.data,
         enfantId: id,
         enfantNom: e ? `${e.prenom} ${e.nom}` : '',
-        montantDu: tarif ? String(tarif.tarif) : m.data.montantDu
+        montantDu: tarif ? String(tarif.tarif) : m.data.montantDu,
+        montantCuisine: m.data.montantCuisine || (TYPES_AVEC_CUISINE.includes(m.data.type) ? String(params.fraisCuisine || '') : '')
+      }
+    }))
+  }
+
+  // Bascule le type de paiement — pré-remplit les frais de cuisine s'ils s'appliquent.
+  function onTypeChange(type) {
+    setModal((m) => ({
+      ...m,
+      data: {
+        ...m.data,
+        type,
+        montantCuisine: m.data.montantCuisine || (TYPES_AVEC_CUISINE.includes(type) ? String(params.fraisCuisine || '') : '')
       }
     }))
   }
@@ -213,6 +231,7 @@ export default function Paiements() {
       Type: TYPES_PAIEMENT.find((t) => t.id === p.type)?.label || p.type,
       Période: `${MOIS[(p.mois || 1) - 1]} ${p.annee}`,
       'Montant dû': p.montantDu,
+      'Dont cuisine': p.montantCuisine || 0,
       'Montant payé': p.montantPaye,
       'Reste à payer': Math.max(0, (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)),
       Mode: MODES_PAIEMENT.find((m) => m.id === p.modePaiement)?.label || p.modePaiement,
@@ -231,6 +250,7 @@ export default function Paiements() {
           { key: 'Type', label: 'Type', width: 20 },
           { key: 'Période', label: 'Période', width: 16 },
           { key: 'Montant dû', label: 'Montant dû (FCFA)', width: 18 },
+          { key: 'Dont cuisine', label: 'Dont cuisine (FCFA)', width: 16 },
           { key: 'Montant payé', label: 'Montant payé (FCFA)', width: 18 },
           { key: 'Reste à payer', label: 'Reste à payer (FCFA)', width: 18 },
           { key: 'Mode', label: 'Mode paiement', width: 16 },
@@ -429,7 +449,14 @@ export default function Paiements() {
                       </button>
                     )}
                     <div className="flex gap-1">
-                  <button onClick={() => setModal({ data: { ...empty(), ...p }, isNew: false, id: p.id })}
+                  <button onClick={() => setModal({
+                    data: {
+                      ...empty(), ...p,
+                      montantCuisine: p.montantCuisine || '',
+                      montantDu: Number(p.montantDu || 0) - Number(p.montantCuisine || 0)
+                    },
+                    isNew: false, id: p.id
+                  })}
                     className="rounded px-2 py-1 text-xs text-orange-600 hover:bg-orange-50 font-semibold">Éditer</button>
                   <button
                     onClick={() => {
@@ -641,7 +668,7 @@ export default function Paiements() {
             </FormGroup>
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Type de paiement">
-                <Select value={modal.data.type} onChange={(e) => set('type', e.target.value)}>
+                <Select value={modal.data.type} onChange={(e) => onTypeChange(e.target.value)}>
                   {TYPES_PAIEMENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </Select>
               </FormGroup>
@@ -670,6 +697,12 @@ export default function Paiements() {
               <FormGroup label="Montant dû (FCFA) *">
                 <Input type="number" value={modal.data.montantDu} onChange={(e) => set('montantDu', e.target.value)} />
               </FormGroup>
+              {TYPES_AVEC_CUISINE.includes(modal.data.type) && (
+                <FormGroup label="Frais de cuisine (FCFA)">
+                  <Input type="number" min="0" value={modal.data.montantCuisine} onChange={(e) => set('montantCuisine', e.target.value)} placeholder="0" />
+                  <p className="mt-1 text-xs text-gray-400">Payés à part par les parents — ajoutés au montant dû</p>
+                </FormGroup>
+              )}
               <FormGroup label="Montant payé (FCFA) *">
                 <Input type="number" value={modal.data.montantPaye} onChange={(e) => set('montantPaye', e.target.value)} />
               </FormGroup>
@@ -677,6 +710,11 @@ export default function Paiements() {
                 <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
               </FormGroup>
             </div>
+            {TYPES_AVEC_CUISINE.includes(modal.data.type) && Number(modal.data.montantCuisine) > 0 && (
+              <p className="rounded-lg bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
+                💰 Total dû (dont {formatMoney(Number(modal.data.montantCuisine))} de cuisine) : {formatMoney(Number(modal.data.montantDu || 0) + Number(modal.data.montantCuisine || 0))}
+              </p>
+            )}
             <FormGroup label="Notes">
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 rows={2} value={modal.data.notes} onChange={(e) => set('notes', e.target.value)} />

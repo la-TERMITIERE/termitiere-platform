@@ -3,7 +3,7 @@ import {
   Leaf, Truck, BrickWall, Calculator, MapPin, Baby, FolderKanban,
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
-  Users, CreditCard, AlertTriangle, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
+  Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   MessageSquare, Wallet, ClipboardCheck, BellRing, FileDown, Gauge, Receipt, Stamp
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES } from '../core/roles'
@@ -161,7 +161,8 @@ export const MODULE_NAV = {
     { label: 'Présences enfants',  to: '/garderie/presences', icon: CalendarCheck },
     { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard,      roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur'] },
     { label: 'Cantine & Repas',    to: '/garderie/cantine',   icon: UtensilsCrossed },
-    { label: 'Incidents & Santé',  to: '/garderie/incidents', icon: AlertTriangle },
+    { label: 'Santé & Infirmerie', to: '/garderie/incidents', icon: Stethoscope },
+    { label: 'Tâches',             to: '/garderie/taches',    icon: ListChecks },
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: ['super_admin','pau','ge','gerant','superviseur'] },
     { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: ['super_admin','pau','ge','gerant','superviseur'] },
     { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ['super_admin','pau','ge'] }
