@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from 'react'
-import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert, MapPin } from 'lucide-react'
+import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert } from 'lucide-react'
 import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -33,7 +33,6 @@ const empty = () => ({
   allergies: '', infoMedicale: '',
   parentId: '', parentNom: '', parentContact: '',
   parentContact2: '', parentProfession: '', adresse: '',
-  gpsLat: '', gpsLng: '',
   dateInscription: todayStr(), notes: ''
 })
 
@@ -59,7 +58,6 @@ export default function Enfants() {
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [locating, setLocating] = useState(false)
   const deletedEnfantIds    = useGarderieStore((s) => s.deletedEnfantIds)
   const markEnfantDeleted   = useGarderieStore((s) => s.markEnfantDeleted)
   const unmarkEnfantDeleted = useGarderieStore((s) => s.unmarkEnfantDeleted)
@@ -140,25 +138,6 @@ export default function Enfants() {
   }
 
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
-
-  // Capture la position GPS actuelle (celle de l'appareil utilisé pour la saisie, ex: chez le parent)
-  function handleLocaliser() {
-    if (!navigator.geolocation) return toast.error('Géolocalisation non disponible sur cet appareil')
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        set('gpsLat', String(pos.coords.latitude))
-        set('gpsLng', String(pos.coords.longitude))
-        setLocating(false)
-        toast.success('Position GPS enregistrée ✓')
-      },
-      () => {
-        setLocating(false)
-        toast.error('Impossible de récupérer la position — vérifiez les autorisations de localisation')
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  }
 
   // ── Photo de profil ──
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -701,27 +680,6 @@ export default function Enfants() {
               <FormGroup label="Adresse *">
                 <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Quartier, ville…" />
               </FormGroup>
-              <FormGroup label="Localisation GPS de l'adresse">
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={handleLocaliser} disabled={locating}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-60">
-                    {locating ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
-                    {locating ? 'Localisation…' : 'Capturer ma position'}
-                  </button>
-                  {modal.data.gpsLat && modal.data.gpsLng && (
-                    <a href={`https://www.google.com/maps?q=${modal.data.gpsLat},${modal.data.gpsLng}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="text-xs font-semibold text-blue-600 hover:underline truncate">
-                      📍 Voir sur la carte
-                    </a>
-                  )}
-                </div>
-                {modal.data.gpsLat && modal.data.gpsLng && (
-                  <p className="mt-1 text-xs text-gray-400">
-                    {Number(modal.data.gpsLat).toFixed(5)}, {Number(modal.data.gpsLng).toFixed(5)}
-                  </p>
-                )}
-              </FormGroup>
             </div>
 
             <div className="rounded-lg border border-pink-100 bg-orange-50 p-3">
@@ -852,16 +810,7 @@ export default function Enfants() {
                   <div><span className="font-semibold text-gray-500">Sexe :</span> {detail.sexe === 'F' ? 'Fille' : 'Garçon'}</div>
                   <div><span className="font-semibold text-gray-500">Inscription :</span> {formatDateShort(detail.dateInscription)}</div>
                   <div><span className="font-semibold text-gray-500">Abonnement :</span> {detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}</div>
-                  <div>
-                    <span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}
-                    {detail.gpsLat && detail.gpsLng && (
-                      <a href={`https://www.google.com/maps?q=${detail.gpsLat},${detail.gpsLng}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="ml-2 text-xs font-semibold text-blue-600 hover:underline">
-                        📍 Voir sur la carte
-                      </a>
-                    )}
-                  </div>
+                  <div><span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}</div>
                 </div>
               </Card>
               <Card title="👪 Parent / Tuteur">
