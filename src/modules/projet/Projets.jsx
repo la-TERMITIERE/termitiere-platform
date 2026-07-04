@@ -8,7 +8,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES } from './data'
 import { avancementProjet, genererNumProjet } from './logic'
-import { formatDateShort } from '../../utils/formatters'
+import { formatDateShort, formatMoney } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
@@ -93,7 +93,7 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', dateDebut: '', dateFin: '', budget: '', depenses: '', description: '', avancementManuel: 0 }
+const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', depenses: '', description: '' }
 
 export default function Projets() {
   const { data: projets } = useCollection('projets')
@@ -128,8 +128,8 @@ export default function Projets() {
         return (ordre[a.priorite] ?? 9) - (ordre[b.priorite] ?? 9)
       }); break
       case 'avancement': result = [...result].sort((a, b) => {
-        const pctA = avancementProjet(taches.filter((t) => t.projetId === a.id))
-        const pctB = avancementProjet(taches.filter((t) => t.projetId === b.id))
+        const pctA = avancementProjet(taches.filter((t) => t.projetId === a.id), a)
+        const pctB = avancementProjet(taches.filter((t) => t.projetId === b.id), b)
         return pctB - pctA
       }); break
       case 'budget_desc': result = [...result].sort((a, b) => (Number(b.budget) || 0) - (Number(a.budget) || 0)); break
@@ -144,8 +144,8 @@ export default function Projets() {
       priorite: p.priorite || 'normale', responsable: p.responsable || '',
       dateDebut: p.dateDebut ? new Date(p.dateDebut).toISOString().slice(0,10) : '',
       dateFin:   p.dateFin   ? new Date(p.dateFin).toISOString().slice(0,10)   : '',
-      budget: p.budget ?? '', depenses: p.depenses ?? '', description: p.description || '',
-      avancementManuel: p.avancementManuel ?? 0
+      dureeIndeterminee: !!p.dureeIndeterminee,
+      budget: p.budget ?? '', depenses: p.depenses ?? '', description: p.description || ''
     })
     setEditing(p)
     setModal(true)
@@ -161,7 +161,7 @@ export default function Projets() {
           ...editing,
           ...form,
           dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
-          dateFin:   form.dateFin   ? new Date(form.dateFin).getTime()   : null,
+          dateFin:   (!form.dureeIndeterminee && form.dateFin) ? new Date(form.dateFin).getTime() : null,
           budget:   form.budget   !== '' ? Number(form.budget)   : null,
           depenses: form.depenses !== '' ? Number(form.depenses) : null,
           updatedAt: now
@@ -173,7 +173,7 @@ export default function Projets() {
         await setItem('projets', id, {
           id, num, ...form,
           dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
-          dateFin:   form.dateFin   ? new Date(form.dateFin).getTime()   : null,
+          dateFin:   (!form.dureeIndeterminee && form.dateFin) ? new Date(form.dateFin).getTime() : null,
           budget: form.budget !== '' ? Number(form.budget) : null,
           createdAt: now, updatedAt: now,
           createdBy: null
@@ -254,7 +254,7 @@ export default function Projets() {
         <div className="space-y-2">
           {liste.map((p) => {
             const tachesDuProjet = taches.filter((t) => t.projetId === p.id)
-            const pct = avancementProjet(tachesDuProjet)
+            const pct = avancementProjet(tachesDuProjet, p)
             return (
               <Card key={p.id}>
                 <div className="flex items-start justify-between gap-2">
@@ -269,14 +269,20 @@ export default function Projets() {
                     <div className="mt-1 flex flex-wrap gap-4 text-xs text-gray-500">
                       {p.responsable && <span>Resp. : {p.responsable}</span>}
                       {p.dateDebut   && <span>Début : {formatDateShort(p.dateDebut)}</span>}
-                      {p.dateFin     && <span>Fin : {formatDateShort(p.dateFin)}</span>}
+                      {p.dureeIndeterminee
+                        ? <span className="italic text-gray-400">Durée indéterminée</span>
+                        : p.dateFin && <span>Fin : {formatDateShort(p.dateFin)}</span>}
                       {p.budget      && <span>Budget : {Number(p.budget).toLocaleString('fr-FR')} FCFA</span>}
                     </div>
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-1.5 flex-1 rounded-full bg-gray-100">
                         <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="text-[10px] font-bold text-gray-500">{pct}% — {tachesDuProjet.filter(t=>t.statut==='terminee').length}/{tachesDuProjet.length} tâches</span>
+                      <span className="text-[10px] font-bold text-gray-500">
+                        {tachesDuProjet.length > 0
+                          ? `${pct}% — ${tachesDuProjet.filter(t=>t.statut==='terminee').length}/${tachesDuProjet.length} tâches`
+                          : `${pct}% — versé ${formatMoney(p.depenses)} / ${formatMoney(p.budget)}`}
+                      </span>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
@@ -347,8 +353,16 @@ export default function Projets() {
                 value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Date fin prévue</label>
-              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+              <div className="mb-1 flex items-center justify-between">
+                <label className="block text-xs font-medium text-gray-600">Date fin prévue</label>
+                <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                  <input type="checkbox" checked={form.dureeIndeterminee}
+                    onChange={(e) => setForm((f) => ({ ...f, dureeIndeterminee: e.target.checked, dateFin: e.target.checked ? '' : f.dateFin }))} />
+                  Durée indéterminée
+                </label>
+              </div>
+              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                disabled={form.dureeIndeterminee}
                 value={form.dateFin} onChange={(e) => setForm((f) => ({ ...f, dateFin: e.target.value }))} />
             </div>
           </div>
@@ -368,20 +382,6 @@ export default function Projets() {
             <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
             <textarea rows={3} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
               value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-          </div>
-          <div className="rounded-xl border border-teal-100 bg-teal-50 p-3">
-            <label className="mb-2 block text-xs font-medium text-gray-600">
-              Avancement manuel — <span className="font-bold text-teal-700">{form.avancementManuel ?? 0}%</span>
-              <span className="ml-1 text-gray-400">(utilisé uniquement si aucune tâche n'est créée)</span>
-            </label>
-            <input type="range" min={0} max={100} step={5}
-              className="w-full accent-teal-600"
-              value={form.avancementManuel ?? 0}
-              onChange={(e) => setForm((f) => ({ ...f, avancementManuel: Number(e.target.value) }))}
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-gray-400">
-              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-            </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>

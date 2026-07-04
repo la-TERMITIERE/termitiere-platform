@@ -66,7 +66,7 @@ function KPI({ label, value, sub, icon: Icon, color, trend }) {
 // ── Indicateur de santé ───────────────────────────────────────────────────────
 function Sante({ projet, taches, depenses }) {
   const tp       = taches.filter((t) => t.projetId === projet.id)
-  const av       = avancementProjet(tp)
+  const av       = avancementProjet(tp, projet)
   const retard   = projetEnRetard(projet)
   const budget   = Number(projet.budget) || 0
   const totalDep = depenses
@@ -152,7 +152,7 @@ export default function Pilotage() {
 
   const tauxAvancement = useMemo(() => {
     if (!actifs.length) return 0
-    const sum = actifs.reduce((s, p) => s + avancementProjet(taches.filter((t) => t.projetId === p.id)), 0)
+    const sum = actifs.reduce((s, p) => s + avancementProjet(taches.filter((t) => t.projetId === p.id), p), 0)
     return Math.round(sum / actifs.length)
   }, [actifs, taches])
 
@@ -336,7 +336,7 @@ export default function Pilotage() {
           <div className="space-y-2">
             {aRisque.map((p) => {
               const tp       = taches.filter((t) => t.projetId === p.id)
-              const av       = avancementProjet(tp)
+              const av       = avancementProjet(tp, p)
               const tRet     = tachesEnRetard(tp).length
               const surBudg  = (Number(p.depenses)||0) > (Number(p.budget)||0) && Number(p.budget) > 0
               const pRet     = projetEnRetard(p)
@@ -345,7 +345,7 @@ export default function Pilotage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-bold text-red-800 text-sm">{p.nom}</p>
-                      <p className="text-xs text-gray-500">Responsable : {p.responsable || '—'} · Fin prévue : {formatDateShort(p.dateFin)}</p>
+                      <p className="text-xs text-gray-500">Responsable : {p.responsable || '—'} · {p.dureeIndeterminee ? 'Durée indéterminée' : `Fin prévue : ${formatDateShort(p.dateFin)}`}</p>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs">
                         {pRet    && <span className="rounded-full bg-red-200 px-2 py-0.5 text-red-700 font-bold">Projet en retard</span>}
                         {surBudg && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-amber-800 font-bold">Budget dépassé</span>}

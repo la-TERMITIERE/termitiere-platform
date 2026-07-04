@@ -66,7 +66,7 @@ async function exporterExcel(projets, taches, depenses) {
       'Priorité':      PRIORITES[p.priorite]?.label || p.priorite || '',
       'Responsable':   p.responsable || '',
       'Date début':    p.dateDebut ? formatDateShort(p.dateDebut) : '',
-      'Date fin':      p.dateFin   ? formatDateShort(p.dateFin)   : '',
+      'Date fin':      p.dureeIndeterminee ? 'Durée indéterminée' : (p.dateFin ? formatDateShort(p.dateFin) : ''),
       'Budget (FCFA)': Number(p.budget)   || 0,
       'Dépenses (FCFA)': Number(p.depenses) || 0,
       'Écart (FCFA)':  (Number(p.budget) || 0) - (Number(p.depenses) || 0),
@@ -124,7 +124,7 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
   doc.setFillColor(...TEAL_C)
   doc.rect(0, 0, W, 28, 'F')
   doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold')
-  doc.text('RAPPORT GLOBAL — GESTION DE PROJET', M, 12)
+  doc.text('RAPPORT GLOBAL — E-G.Pro', M, 12)
   doc.setFontSize(9); doc.setFont('helvetica','normal')
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, M, 20)
   y = 36
@@ -146,7 +146,8 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
     y += 18
 
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...GRAY_C)
-    doc.text(`Statut : ${SP[projet.statut]?.label||projet.statut||'—'}  |  Responsable : ${projet.responsable||'—'}  |  Fin : ${fmtD(projet.dateFin)}${pRetard(projet)?' ⚠ EN RETARD':''}`, M, y)
+    const finTexte = projet.dureeIndeterminee ? 'Durée indéterminée' : fmtD(projet.dateFin)
+    doc.text(`Statut : ${SP[projet.statut]?.label||projet.statut||'—'}  |  Responsable : ${projet.responsable||'—'}  |  Fin : ${finTexte}${pRetard(projet)?' ⚠ EN RETARD':''}`, M, y)
     y += 5
 
     // Barre
@@ -240,9 +241,9 @@ export default function Rapports() {
       labels: ps.map((p) => p.nom.length > 22 ? p.nom.slice(0, 22) + '…' : p.nom),
       datasets: [{
         label: 'Avancement (%)',
-        data: ps.map((p) => avancementProjet(taches.filter((t) => t.projetId === p.id))),
+        data: ps.map((p) => avancementProjet(taches.filter((t) => t.projetId === p.id), p)),
         backgroundColor: ps.map((p) => {
-          const pct = avancementProjet(taches.filter((t) => t.projetId === p.id))
+          const pct = avancementProjet(taches.filter((t) => t.projetId === p.id), p)
           return pct >= 100 ? GREEN : pct >= 50 ? TEAL : AMBER
         }),
         borderRadius: 6,
