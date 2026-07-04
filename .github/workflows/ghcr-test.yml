@@ -97,7 +97,7 @@ jobs:
             docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT
 
             echo "Creating deploy env..."
-            echo "IMAGE_TAG=$SHA_SHORT" > deploy/.env.deploy
+            echo "IMAGE_TAG=$SHA_SHORT" >> deploy/.env.deploy
 
             echo "Restart containers..."
             docker compose \
@@ -116,7 +116,7 @@ jobs:
               echo "❌ Health check failed"
               echo "Rollback to $OLD_TAG"
 
-              echo "IMAGE_TAG=$OLD_TAG" > deploy/.env.deploy
+              echo "IMAGE_TAG=$OLD_TAG" >> deploy/.env.deploy
 
               docker compose \
                 --env-file deploy/.env.deploy \
