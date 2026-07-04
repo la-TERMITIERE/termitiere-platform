@@ -16,6 +16,7 @@ export const useGarderieStore = create((set, get) => ({
     nom: 'Garderie La Termitière',
     tarifMensuel: 15000,
     tarifInscription: 5000,
+    fraisCuisine: 0,
     heureOuverture: '07:00',
     heureFermeture: '18:00',
     capaciteMax: 40
