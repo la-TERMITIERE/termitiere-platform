@@ -71,26 +71,39 @@ jobs:
           envs: GHCR_TOKEN
           script: |
 
+
             set -e
 
             cd ~/termitiere-platform
 
-            OWNER=$(echo "la-TERMITIERE" | tr '[:upper:]' '[:lower:]')
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
             SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
 
+            echo "======================================="
             echo "Deploy commit : $SHA_SHORT"
+            echo "======================================="
 
             echo "Login GHCR..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
 
             echo "Saving current image..."
             OLD_IMAGE=$(docker inspect termitiere-web --format '{{.Config.Image}}')
+            OLD_TAG=$(echo "$OLD_IMAGE" | cut -d':' -f2)
+
+            echo "Current image : $OLD_IMAGE"
+            echo "Current tag   : $OLD_TAG"
 
             echo "Pull new image..."
             docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT
 
-            echo "Restart containers with new image"
-            docker compose -f deploy/docker-compose.prod.yml up -d --force-recreate
+            echo "Creating deploy env..."
+            echo "IMAGE_TAG=$SHA_SHORT" > deploy/.env.deploy
+
+            echo "Restart containers..."
+            docker compose \
+              --env-file deploy/.env.deploy \
+              -f deploy/docker-compose.prod.yml \
+              up -d --force-recreate
 
             echo "Waiting..."
             sleep 10
@@ -98,14 +111,21 @@ jobs:
             echo "Health check..."
             if curl -f -s https://app.latermitiere.com > /dev/null; then
               echo "✅ Deploy OK"
+
             else
-              echo "❌ Rollback triggered"
+              echo "❌ Health check failed"
+              echo "Rollback to $OLD_TAG"
 
-              echo "Reverting to previous image: $OLD_IMAGE"
+              echo "IMAGE_TAG=$OLD_TAG" > deploy/.env.deploy
 
-              docker tag $OLD_IMAGE ghcr.io/$OWNER/termitiere-platform:latest
+              docker compose \
+                --env-file deploy/.env.deploy \
+                -f deploy/docker-compose.prod.yml \
+                up -d --force-recreate
 
-              docker compose -f deploy/docker-compose.prod.yml up -d --force-recreate
+              echo "✅ Rollback completed"
 
               exit 1
             fi
+
+
