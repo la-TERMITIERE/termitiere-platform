@@ -6,10 +6,11 @@ import { Paperclip, Eye, Trash2, Loader2, FileText, Image as ImageIcon } from 'l
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { toast } from '../../core/notifications'
 
-export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, label = 'Pièces jointes', rubriques = null }) {
+export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, label = 'Pièces jointes', rubriques = null, withProprietaire = false }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [rubrique, setRubrique] = useState('')
+  const [proprietaire, setProprietaire] = useState('')
 
   async function handleFiles(fileList) {
     const files = Array.from(fileList || [])
@@ -19,13 +20,14 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
       for (const f of files) {
         try {
           const piece = await lireFichier(f)
-          await onAdd?.({ ...piece, rubrique: rubrique || '' })
+          await onAdd?.({ ...piece, rubrique: rubrique || '', proprietaire: proprietaire.trim() })
         } catch (e) {
           toast.error(`${f.name} : ${e.message}`)
         }
       }
     } finally {
       setBusy(false)
+      setProprietaire('')
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -40,6 +42,11 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
             <option value="">— Rubrique —</option>
             {rubriques.map((r) => <option key={r.id || r} value={r.id || r}>{r.label || r}</option>)}
           </select>
+        )}
+        {!readOnly && withProprietaire && (
+          <input value={proprietaire} onChange={(e) => setProprietaire(e.target.value)}
+            placeholder="Nom du propriétaire de la pièce"
+            className="rounded border border-gray-200 px-2 py-1 text-xs" />
         )}
         {!readOnly && (
           <>
@@ -63,7 +70,10 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
             return (
               <li key={p.id} className="flex items-center gap-2 px-2.5 py-1.5 text-sm">
                 {estImage ? <ImageIcon size={15} className="shrink-0 text-sky-500" /> : <FileText size={15} className="shrink-0 text-red-500" />}
-                <span className="flex-1 truncate" title={p.nom}>{p.nom}</span>
+                <span className="flex-1 truncate" title={p.nom}>
+                  {p.nom}
+                  {p.proprietaire && <span className="ml-1 text-[11px] text-gray-500">· {p.proprietaire}</span>}
+                </span>
                 {p.rubrique && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">{p.rubriqueLabel || p.rubrique}</span>}
                 <span className="text-[10px] text-gray-400">{formatTaille(p.taille)}</span>
                 <button type="button" title="Voir" onClick={() => ouvrirPiece(p)} className="rounded p-1 text-gray-500 hover:bg-gray-100"><Eye size={15} /></button>

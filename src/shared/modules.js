@@ -34,7 +34,7 @@ export const MODULES = [
   },
   {
     id: 'evenementiel',
-    nom: 'BRIQUETERIE',
+    nom: 'E-BRIQUETERIE',
     description: 'Production & vente de briques',
     icon: BrickWall,
     emoji: '🧱',
@@ -44,7 +44,7 @@ export const MODULES = [
   },
   {
     id: 'foncier',
-    nom: 'FONCIER',
+    nom: 'E-FONCIER',
     description: 'Titres fonciers, morcellement & mutation',
     icon: MapPin,
     emoji: '📍',
@@ -54,7 +54,7 @@ export const MODULES = [
   },
   {
     id: 'garderie',
-    nom: 'GARDERIE',
+    nom: 'E-GARDERIE',
     description: 'Enfants, personnel, présences & paiements',
     icon: Baby,
     emoji: '🍼',

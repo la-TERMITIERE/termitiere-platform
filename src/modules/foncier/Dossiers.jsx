@@ -19,7 +19,7 @@ import { todayStr, genNumero, genId, formatMoney } from '../../utils/formatters'
 import {
   TYPES_DOSSIER, MODES_ACQUISITION, STATUTS_DOSSIER, STATUTS_ETAPE,
   ACTEURS_ROLES, CESSION_CATEGORIES, APPRECIATION_CRITERES, VERDICTS_APPRECIATION,
-  PIECES_ACTEUR, PIECES_PARCELLE, COUTS_REFERENCE
+  PIECES_ACTEUR, PIECES_PARCELLE, COUTS_REFERENCE, PLAN_VISE_OPTIONS, planViseLabel
 } from './data'
 import { initEtapesPour, progressionDossier, etapeCourante, peutPasserSuivante, statutAutoDossier } from './logic'
 import { useFoncierStore } from './store/referentielStore'
@@ -36,7 +36,7 @@ const coutLabel = (id) => COUTS_REFERENCE.find((c) => c.id === id)?.label || ''
 
 const emptyParcelle = () => ({
   numRequisition: '', numTitre: '', numLeve: '', attestationCoutumiere: '', planParcellaire: '',
-  prefecture: '', commune: '', quartier: '', lot: '', superficie: ''
+  prefecture: '', commune: '', quartier: '', lot: '', hectares: '', superficie: ''
 })
 const newActeur = () => ({ id: genId(), role: 'proprietaire', nom: '', contact: '', nif: '', notes: '' })
 const emptyDossier = () => ({
@@ -72,6 +72,8 @@ export default function Dossiers() {
 
   const [filtreType, setFiltreType] = useState('tous')
   const [recherche, setRecherche] = useState('')
+  const [dateDebut, setDateDebut] = useState('')
+  const [dateFin, setDateFin] = useState('')
   const [modal, setModal] = useState(null)
   const [detailId, setDetailId] = useState(null)
   const [typeModal, setTypeModal] = useState(false)
@@ -96,13 +98,21 @@ export default function Dossiers() {
   const liste = useMemo(() => {
     let rows = [...dossiers]
     if (filtreType !== 'tous') rows = rows.filter((d) => d.type === filtreType)
+    if (dateDebut) rows = rows.filter((d) => (d.dateOuverture || '') >= dateDebut)
+    if (dateFin) rows = rows.filter((d) => (d.dateOuverture || '') <= dateFin)
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
       rows = rows.filter((d) => [d.num, d.commune, d.lot, d.proprietaire, d.reference, d.parcelle?.numTitre]
         .join(' ').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.dateOuverture < b.dateOuverture ? 1 : -1))
-  }, [dossiers, filtreType, recherche])
+  }, [dossiers, filtreType, recherche, dateDebut, dateFin])
+
+  // Coût total dépensé sur les dossiers de la période/filtre courant.
+  const totalPeriode = useMemo(
+    () => liste.reduce((s, d) => s + (d.etapes || []).reduce((t, e) => t + (parseFloat(e.montant) || 0), 0), 0),
+    [liste]
+  )
 
   function openCreate() { setModal({ data: emptyDossier(), isNew: true }) }
   function openEdit(d) {
@@ -196,10 +206,24 @@ export default function Dossiers() {
           <option value="tous">Tous les types</option>
           {typesAll.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </Select>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-500">Période&nbsp;:</span>
+          <Input type="date" className="w-auto text-xs" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} title="Date d'ouverture — début" />
+          <span className="text-xs text-gray-400">→</span>
+          <Input type="date" className="w-auto text-xs" value={dateFin} onChange={(e) => setDateFin(e.target.value)} title="Date d'ouverture — fin" />
+          {(dateDebut || dateFin) && (
+            <button onClick={() => { setDateDebut(''); setDateFin('') }} className="text-xs text-gray-400 underline hover:text-gray-600">effacer</button>
+          )}
+        </div>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" onClick={() => setTypeModal(true)}><Plus size={16} /> Ajouter un type</Button>
           <Button onClick={openCreate}><Plus size={16} /> Nouveau dossier</Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+        <span><strong className="text-gray-700">{liste.length}</strong> dossier(s){(dateDebut || dateFin) ? ' sur la période' : ''}</span>
+        {totalPeriode > 0 && <span>Total dépensé : <strong className="text-emerald-700">{formatMoney(totalPeriode)}</strong></span>}
       </div>
 
       <Card className="p-0">
@@ -278,13 +302,18 @@ export default function Dossiers() {
                 <FormGroup label="Commune" required><Input value={modal.data.parcelle.commune} onChange={(e) => setParcelle({ commune: e.target.value })} placeholder="Ex : Golfe 4" /></FormGroup>
                 <FormGroup label="Préfecture"><Input value={modal.data.parcelle.prefecture} onChange={(e) => setParcelle({ prefecture: e.target.value })} /></FormGroup>
                 <FormGroup label="Quartier / Canton"><Input value={modal.data.parcelle.quartier} onChange={(e) => setParcelle({ quartier: e.target.value })} /></FormGroup>
-                <FormGroup label="Lot / Section"><Input value={modal.data.parcelle.lot} onChange={(e) => setParcelle({ lot: e.target.value })} /></FormGroup>
+                <FormGroup label="Référence — Lot" hint="Facultatif"><Input value={modal.data.parcelle.lot} onChange={(e) => setParcelle({ lot: e.target.value })} placeholder="Ex : Lot 128" /></FormGroup>
+                <FormGroup label="Référence — Hectare(s)" hint="Facultatif"><Input value={modal.data.parcelle.hectares} onChange={(e) => setParcelle({ hectares: e.target.value })} placeholder="Ex : 2,5 ha" /></FormGroup>
                 <FormGroup label="Superficie (m²)"><Input value={modal.data.parcelle.superficie} onChange={(e) => setParcelle({ superficie: e.target.value })} /></FormGroup>
                 <FormGroup label="N° levé topographique"><Input value={modal.data.parcelle.numLeve} onChange={(e) => setParcelle({ numLeve: e.target.value })} /></FormGroup>
                 <FormGroup label="N° de réquisition"><Input value={modal.data.parcelle.numRequisition} onChange={(e) => setParcelle({ numRequisition: e.target.value })} /></FormGroup>
                 <FormGroup label="N° Titre Foncier"><Input value={modal.data.parcelle.numTitre} onChange={(e) => setParcelle({ numTitre: e.target.value })} /></FormGroup>
                 <FormGroup label="Attestation coutumière"><Input value={modal.data.parcelle.attestationCoutumiere} onChange={(e) => setParcelle({ attestationCoutumiere: e.target.value })} placeholder="Réf. / détenteur" /></FormGroup>
-                <FormGroup label="Plan parcellaire visé" className="col-span-2 md:col-span-1"><Input value={modal.data.parcelle.planParcellaire} onChange={(e) => setParcelle({ planParcellaire: e.target.value })} /></FormGroup>
+                <FormGroup label="Plan visé" className="col-span-2 md:col-span-1">
+                  <Select value={modal.data.parcelle.planParcellaire} onChange={(e) => setParcelle({ planParcellaire: e.target.value })}>
+                    {PLAN_VISE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </Select>
+                </FormGroup>
               </div>
             </section>
 
@@ -331,6 +360,29 @@ export default function Dossiers() {
               <span className="text-xs text-gray-500">· {labelType(detail.type)}</span>
               <button onClick={() => openEdit(detail)} className="ml-auto text-xs text-secondary underline">Modifier infos</button>
             </div>
+
+            {/* Informations du dossier */}
+            <section>
+              <p className="mb-2 text-xs font-bold uppercase text-gray-500">Informations du dossier</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-gray-100 p-3 text-sm sm:grid-cols-3">
+                <InfoField label="Type" value={labelType(detail.type)} />
+                <InfoField label="Mode d'acquisition" value={MODES_ACQUISITION.find((m) => m.id === detail.modeAcquisition)?.label} />
+                <InfoField label="Date d'ouverture" value={detail.dateOuverture} />
+                <InfoField label="Commune" value={detail.parcelle?.commune} />
+                <InfoField label="Préfecture" value={detail.parcelle?.prefecture} />
+                <InfoField label="Quartier / Canton" value={detail.parcelle?.quartier} />
+                <InfoField label="Lot" value={detail.parcelle?.lot} />
+                <InfoField label="Hectare(s)" value={detail.parcelle?.hectares} />
+                <InfoField label="Superficie (m²)" value={detail.parcelle?.superficie} />
+                <InfoField label="N° levé topographique" value={detail.parcelle?.numLeve} />
+                <InfoField label="N° de réquisition" value={detail.parcelle?.numRequisition} />
+                <InfoField label="N° Titre Foncier" value={detail.parcelle?.numTitre} />
+                <InfoField label="Attestation coutumière" value={detail.parcelle?.attestationCoutumiere} />
+                <InfoField label="Plan visé" value={planViseLabel(detail.parcelle?.planParcellaire)} />
+                {detail.montantAchat && <InfoField label="Montant d'achat" value={formatMoney(parseFloat(detail.montantAchat) || 0)} />}
+              </div>
+              {detail.notes && <p className="mt-2 text-sm text-gray-600"><span className="font-semibold">Notes :</span> {detail.notes}</p>}
+            </section>
 
             {/* Acteurs */}
             <section>
@@ -394,7 +446,7 @@ export default function Dossiers() {
 
             {/* Pièces jointes */}
             <section>
-              <PiecesJointes pieces={piecesDetail} onAdd={ajouterPiece} onRemove={supprimerPiece} rubriques={RUBRIQUES} label="Pièces jointes (PDF / images)" />
+              <PiecesJointes pieces={piecesDetail} onAdd={ajouterPiece} onRemove={supprimerPiece} rubriques={RUBRIQUES} withProprietaire label="Pièces jointes (PDF / images)" />
               <p className="mt-1 text-[11px] text-gray-400">Images compressées automatiquement · PDF jusqu'à 4 Mo.</p>
             </section>
 
@@ -408,6 +460,16 @@ export default function Dossiers() {
       </Modal>
 
       <AddTypeModal open={typeModal} onClose={() => setTypeModal(false)} onSave={handleAddType} />
+    </div>
+  )
+}
+
+// ─────────── Champ d'affichage (lecture seule) pour la fiche d'informations ───────────
+function InfoField({ label, value }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase text-gray-400">{label}</p>
+      <p className="font-medium text-gray-800">{value || '—'}</p>
     </div>
   )
 }
