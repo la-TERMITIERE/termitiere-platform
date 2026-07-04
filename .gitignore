@@ -3,6 +3,7 @@ dist
 dist-test
 dist-ssr
 .env
+.env.deploy
 .env.test
 .env.local
 *.local
