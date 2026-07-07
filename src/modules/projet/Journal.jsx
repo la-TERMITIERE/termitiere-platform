@@ -21,7 +21,6 @@ const EVENTS = {
   document_ajoute:   { label: 'Document ajouté',    emoji: '📎' },
   photo_ajoutee:     { label: 'Photo ajoutée',      emoji: '📷' },
   depense_ajoutee:   { label: 'Dépense enregistrée',emoji: '💰' },
-  checklist_cree:    { label: 'Checklist créée',    emoji: '☑️' },
   rapport_pdf_genere:{ label: 'Rapport PDF généré', emoji: '📄' },
   commentaire_ajoute:{ label: 'Commentaire ajouté', emoji: '💬' }
 }

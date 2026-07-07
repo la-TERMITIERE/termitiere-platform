@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Dashboard from './Dashboard'
 import Projets from './Projets'
 import Taches from './Taches'
@@ -9,13 +9,21 @@ import Galerie from './Galerie'
 import Rapports from './Rapports'
 import Commentaires from './Commentaires'
 import Depenses from './Depenses'
-import Checklists from './Checklists'
+import Prestataires from './Prestataires'
 import Pilotage from './Pilotage'
 import Alertes from './Alertes'
-import RapportPDF from './RapportPDF'
 import Journal from './Journal'
 import Params from './Params'
 import { useProjetStore } from './store/projetStore'
+import { useAuth } from '../../hooks/useAuth'
+import { PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES } from '../../core/roles'
+
+// Garde : redirige vers le dashboard si le rôle n'est pas autorisé (ex. secrétaire → Pilotage/Journal/Paramètres)
+function ProjetGuard({ roles, children }) {
+  const { role } = useAuth()
+  if (roles && !roles.includes(role)) return <Navigate to="/projet" replace />
+  return children
+}
 
 export default function ProjetModule() {
   const init = useProjetStore((s) => s.init)
@@ -32,12 +40,11 @@ export default function ProjetModule() {
       <Route path="rapports"     element={<Rapports />} />
       <Route path="commentaires" element={<Commentaires />} />
       <Route path="depenses"     element={<Depenses />} />
-      <Route path="checklists"   element={<Checklists />} />
-      <Route path="pilotage"     element={<Pilotage />} />
-      <Route path="alertes"      element={<Alertes />} />
-      <Route path="rapport-pdf"  element={<RapportPDF />} />
-      <Route path="journal" element={<Journal />} />
-      <Route path="params" element={<Params />} />
+      <Route path="prestataires" element={<Prestataires />} />
+      <Route path="pilotage"     element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Pilotage /></ProjetGuard>} />
+      <Route path="alertes"      element={<ProjetGuard roles={PROJET_ALERTES_ROLES}><Alertes /></ProjetGuard>} />
+      <Route path="journal" element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Journal /></ProjetGuard>} />
+      <Route path="params" element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Params /></ProjetGuard>} />
     </Routes>
   )
 }

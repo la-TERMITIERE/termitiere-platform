@@ -4,9 +4,9 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  MessageSquare, Wallet, ClipboardCheck, BellRing, FileDown, Gauge, Receipt, Stamp
+  MessageSquare, Wallet, BellRing, Gauge, Receipt, Stamp
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -144,15 +144,19 @@ export const MODULE_NAV = {
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
-    { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge },
-    { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban },
-    { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks },
+    { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge, roles: PROJET_VOLETS_RESTREINTS_ROLES },
+    { label: 'Alertes',     to: '/projet/alertes',     icon: BellRing, roles: PROJET_ALERTES_ROLES },
+    { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban, badgeKey: 'projetProjets' },
+    { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks, badgeKey: 'projetTaches' },
     { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
-    { label: 'Documents',   to: '/projet/documents',   icon: Paperclip },
-    { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet },
+    { label: 'Documents',   to: '/projet/documents',   icon: Paperclip, badgeKey: 'projetDocuments' },
+    { label: 'Galerie photos', to: '/projet/galerie',  icon: Images, badgeKey: 'projetGalerie' },
+    { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet, badgeKey: 'projetDepenses' },
+    { label: 'Commentaires', to: '/projet/commentaires', icon: MessageSquare, badgeKey: 'projetCommentaires' },
+    { label: 'Prestataires', to: '/projet/prestataires', icon: UserCircle },
     { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
-    { label: 'Journal',     to: '/projet/journal',     icon: BookOpen },
-    { label: 'Paramètres',  to: '/projet/params',      icon: Settings }
+    { label: 'Journal',     to: '/projet/journal',     icon: BookOpen, roles: PROJET_VOLETS_RESTREINTS_ROLES },
+    { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: PROJET_VOLETS_RESTREINTS_ROLES }
   ],
   garderie: [
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },

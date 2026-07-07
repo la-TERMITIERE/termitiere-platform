@@ -1,110 +1,42 @@
 // Notifications & alertes automatiques du module Projet.
 import { useMemo } from 'react'
-import { AlertTriangle, Clock, Wallet, CheckCircle, Bell } from 'lucide-react'
+import { AlertTriangle, Clock, Wallet, CheckCircle, Bell, X } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
-import { formatDateShort } from '../../utils/formatters'
-import { avancementProjet, tachesEnRetard, projetEnRetard } from './logic'
-import { PRIORITES } from './data'
+import { setItem } from '../../core/db'
+import { genererAlertes } from './logic'
+import { PRIORITES, SEUILS_DEFAUT } from './data'
 
 const TYPE_CONFIG = {
   projet_retard:   { icon: Clock,         color: '#ef4444', bg: 'bg-red-50',    border: 'border-red-200',    label: 'Projet en retard'      },
   budget_depasse:  { icon: Wallet,        color: '#f59e0b', bg: 'bg-amber-50',  border: 'border-amber-200',  label: 'Budget dépassé'         },
+  tache_depassee:  { icon: Wallet,        color: '#f59e0b', bg: 'bg-amber-50',  border: 'border-amber-200',  label: 'Tâche en dépassement'   },
   tache_retard:    { icon: AlertTriangle, color: '#f59e0b', bg: 'bg-amber-50',  border: 'border-amber-200',  label: 'Tâche en retard'        },
   avancement_zero: { icon: Clock,         color: '#6366f1', bg: 'bg-indigo-50', border: 'border-indigo-200', label: 'Aucun avancement'       },
   termine:         { icon: CheckCircle,   color: '#16a34a', bg: 'bg-green-50',  border: 'border-green-200',  label: 'Projet terminé'         }
 }
 
-function genererAlertes(projets, taches) {
-  const alertes = []
-  const now = Date.now()
-  const SEMAINE = 7 * 24 * 3600 * 1000
-
-  projets.forEach((p) => {
-    const tachesProjet = taches.filter((t) => t.projetId === p.id)
-
-    // Projet en retard
-    if (projetEnRetard(p)) {
-      const joursRetard = Math.floor((now - p.dateFin) / (24 * 3600 * 1000))
-      alertes.push({
-        id: `retard_${p.id}`,
-        type: 'projet_retard',
-        projetNom: p.nom,
-        message: `Ce projet aurait dû se terminer le ${formatDateShort(p.dateFin)} (${joursRetard} jour${joursRetard > 1 ? 's' : ''} de retard).`,
-        date: p.dateFin,
-        priorite: p.priorite
-      })
-    }
-
-    // Budget dépassé
-    if (p.budget && p.depenses && Number(p.depenses) > Number(p.budget)) {
-      const depassement = Number(p.depenses) - Number(p.budget)
-      alertes.push({
-        id: `budget_${p.id}`,
-        type: 'budget_depasse',
-        projetNom: p.nom,
-        message: `Budget dépassé de ${depassement.toLocaleString('fr-FR')} FCFA (prévu : ${Number(p.budget).toLocaleString('fr-FR')}, réel : ${Number(p.depenses).toLocaleString('fr-FR')}).`,
-        date: now,
-        priorite: p.priorite
-      })
-    }
-
-    // Projet actif sans avancement depuis plus d'une semaine
-    if (!['termine', 'annule'].includes(p.statut) && p.createdAt && (now - p.createdAt) > SEMAINE) {
-      const avancement = avancementProjet(tachesProjet, p)
-      if (avancement === 0 && tachesProjet.length > 0) {
-        alertes.push({
-          id: `zero_${p.id}`,
-          type: 'avancement_zero',
-          projetNom: p.nom,
-          message: `Ce projet a ${tachesProjet.length} tâche(s) mais aucune n'est terminée depuis plus d'une semaine.`,
-          date: p.createdAt,
-          priorite: p.priorite
-        })
-      }
-    }
-
-    // Tâches en retard
-    const enRetard = tachesEnRetard(tachesProjet)
-    enRetard.forEach((t) => {
-      const joursRetard = Math.floor((now - t.echeance) / (24 * 3600 * 1000))
-      alertes.push({
-        id: `tache_${t.id}`,
-        type: 'tache_retard',
-        projetNom: p.nom,
-        message: `Tâche "${t.titre}" — échéance dépassée de ${joursRetard} jour${joursRetard > 1 ? 's' : ''} (assignée à : ${t.assignee || 'non assignée'}).`,
-        date: t.echeance,
-        priorite: t.priorite
-      })
-    })
-
-    // Projet récemment terminé (dans les 7 derniers jours)
-    if (p.statut === 'termine' && p.updatedAt && (now - p.updatedAt) < SEMAINE) {
-      alertes.push({
-        id: `termine_${p.id}`,
-        type: 'termine',
-        projetNom: p.nom,
-        message: `Projet marqué comme terminé le ${formatDateShort(p.updatedAt)}. Félicitations !`,
-        date: p.updatedAt,
-        priorite: p.priorite
-      })
-    }
-  })
-
-  // Trier : retards d'abord, puis budget, puis reste
-  const ordre = { projet_retard: 0, budget_depasse: 1, tache_retard: 2, avancement_zero: 3, termine: 4 }
-  return alertes.sort((a, b) => (ordre[a.type] ?? 9) - (ordre[b.type] ?? 9))
-}
-
 export default function Alertes() {
-  const { data: projets } = useCollection('projets')
-  const { data: taches }  = useCollection('projet_taches')
+  const { data: projets }  = useCollection('projets')
+  const { data: taches }   = useCollection('projet_taches')
+  const { data: depenses } = useCollection('projet_depenses')
+  const { data: fermees }  = useCollection('projet_alertes_fermees')
+  const { data: configs }  = useCollection('projet_params')
+  const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
 
-  const alertes = useMemo(() => genererAlertes(projets, taches), [projets, taches])
+  // Seul "Projet terminé" peut être fermé définitivement — les autres alertes
+  // ne disparaissent que lorsque le problème qui les déclenche est réellement résolu.
+  const idsFermes = useMemo(() => new Set(fermees.map((f) => f.id)), [fermees])
+
+  const alertes = useMemo(() =>
+    genererAlertes(projets, taches, depenses, seuils).filter((a) => a.type !== 'termine' || !idsFermes.has(a.id)),
+  [projets, taches, depenses, seuils, idsFermes])
+
+  const fermer = (id) => setItem('projet_alertes_fermees', id, { id, fermeLe: Date.now() })
 
   const counts = useMemo(() => ({
     critique: alertes.filter((a) => ['projet_retard', 'budget_depasse'].includes(a.type)).length,
-    warning:  alertes.filter((a) => ['tache_retard', 'avancement_zero'].includes(a.type)).length,
+    warning:  alertes.filter((a) => ['tache_depassee', 'tache_retard', 'avancement_zero'].includes(a.type)).length,
     info:     alertes.filter((a) => a.type === 'termine').length
   }), [alertes])
 
@@ -157,6 +89,12 @@ export default function Alertes() {
                   </div>
                   <p className="text-sm text-gray-700">{alerte.message}</p>
                 </div>
+                {alerte.type === 'termine' && (
+                  <button onClick={() => fermer(alerte.id)} title="Fermer"
+                    className="shrink-0 rounded p-1 text-green-400 hover:bg-green-100 hover:text-green-700">
+                    <X size={15} />
+                  </button>
+                )}
               </div>
             )
           })}
