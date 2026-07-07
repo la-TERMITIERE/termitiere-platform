@@ -4,12 +4,10 @@ import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
-import { TYPES_PROJET, STATUTS_PROJET, PRIORITES, STATUTS_TACHE } from './data'
+import { TYPES_PROJET, STATUTS_PROJET, PRIORITES, STATUTS_TACHE, SEUILS_DEFAUT } from './data'
 import { getAll, removeItem, setItem } from '../../core/db'
 import { useCollection } from '../../hooks/useFirestore'
 import { audit } from '../../core/audit'
-
-export const SEUILS_DEFAUT = { budget: 100, inactivite: 7 }
 
 const COLLECTIONS_PROJET = [
   { id: 'projets',            label: 'Projets'            },
@@ -17,7 +15,6 @@ const COLLECTIONS_PROJET = [
   { id: 'projet_depenses',    label: 'Dépenses'           },
   { id: 'projet_commentaires',label: 'Commentaires'       },
   { id: 'projet_documents',   label: 'Documents'          },
-  { id: 'projet_checklists',  label: 'Checklists'         },
 ]
 
 async function viderCollection(name) {

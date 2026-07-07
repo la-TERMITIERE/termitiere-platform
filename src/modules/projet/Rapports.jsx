@@ -2,12 +2,12 @@ import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { TrendingUp, Wallet, CheckSquare, Clock, FileDown, Loader2, Table2 } from 'lucide-react'
-import InfoBulle from '../../shared/ui/InfoBulle'
 
 const Titre = ({ label, formule, description }) => (
   <div>
-    <span className="flex items-center gap-1">{label} <InfoBulle texte={formule} /></span>
-    {description && <p className="mt-0.5 text-[11px] font-normal text-gray-400">{description}</p>}
+    <span className="font-bold">{label}</span>
+    {description && <p className="mt-0.5 text-[11px] font-normal text-gray-500">{description}</p>}
+    {formule && <p className="mt-0.5 text-[10px] font-normal italic text-gray-400">📐 {formule}</p>}
   </div>
 )
 import Card from '../../shared/ui/Card'
@@ -110,7 +110,7 @@ async function exporterExcel(projets, taches, depenses) {
   XLSX.writeFile(wb, `rapport_projet_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-async function telechargerPDF(projets, taches, depenses, commentaires, checklists) {
+async function telechargerPDF(projets, taches, depenses, commentaires) {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
   const { formatMoney: fmtM, formatDateShort: fmtD } = await import('../../utils/formatters')
@@ -134,7 +134,6 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
     const tp = taches.filter((t) => t.projetId === projet.id)
     const dp = depenses.filter((d) => d.projetId === projet.id)
     const cp = commentaires.filter((c) => c.projetId === projet.id)
-    const ch = checklists.filter((c) => c.projetId === projet.id)
     const av = avPct(tp)
     const budget = Number(projet.budget) || 0
     const totalDep = dp.reduce((s,d) => s+(Number(d.montant)||0), 0)
@@ -202,14 +201,13 @@ export default function Rapports() {
   const { data: taches }       = useCollection('projet_taches')
   const { data: depenses }     = useCollection('projet_depenses')
   const { data: commentaires } = useCollection('projet_commentaires')
-  const { data: checklists }   = useCollection('projet_checklists')
   const [periode, setPeriode]      = useState('6')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [xlsLoading, setXlsLoading] = useState(false)
 
   const handlePDF = async () => {
     setPdfLoading(true)
-    try { await telechargerPDF(projets, taches, depenses, commentaires, checklists) }
+    try { await telechargerPDF(projets, taches, depenses, commentaires) }
     catch(e) { console.error(e); alert('Erreur lors de la génération du PDF.') }
     finally { setPdfLoading(false) }
   }
@@ -393,30 +391,35 @@ export default function Rapports() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleExcel} disabled={xlsLoading}
-            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
-            {xlsLoading ? <Loader2 size={13} className="animate-spin" /> : <Table2 size={13} />}
-            {xlsLoading ? 'Export…' : 'Export Excel'}
-          </button>
-          <button onClick={handlePDF} disabled={pdfLoading}
-            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors">
-            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-            {pdfLoading ? 'Génération…' : 'Télécharger PDF'}
-          </button>
+        <div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleExcel} disabled={xlsLoading}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
+              {xlsLoading ? <Loader2 size={13} className="animate-spin" /> : <Table2 size={13} />}
+              {xlsLoading ? 'Export…' : 'Export Excel'}
+            </button>
+            <button onClick={handlePDF} disabled={pdfLoading}
+              className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors">
+              {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+              {pdfLoading ? 'Génération…' : 'Télécharger PDF'}
+            </button>
+          </div>
+          <p className="mt-1 text-right text-[10px] italic text-gray-400">
+            Excel : 3 feuilles (Projets, Tâches, Dépenses) · PDF : un rapport par projet (avancement, tâches, dépenses, budget)
+          </p>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title={<span className="flex items-center gap-1">Projets actifs <InfoBulle texte="Projets dont le statut est 'En cours'." /></span>}
-          value={kpis.actifs} icon={TrendingUp} accent={TEAL} />
-        <StatCard title={<span className="flex items-center gap-1">Projets terminés <InfoBulle texte="Projets dont le statut est 'Terminé'." /></span>}
-          value={kpis.termines} icon={CheckSquare} accent={GREEN} />
-        <StatCard title={<span className="flex items-center gap-1">Avancement global <InfoBulle texte="Tâches terminées ÷ total tâches × 100, sur l'ensemble du module." /></span>}
-          value={`${kpis.tauxGlobal}%`} icon={TrendingUp} accent={TEAL2} />
-        <StatCard title={<span className="flex items-center gap-1">Tâches en retard <InfoBulle texte="Tâches non terminées dont l'échéance est dépassée." /></span>}
-          value={kpis.enRetard} icon={Clock} accent={RED} />
+        <StatCard title="Projets actifs" value={kpis.actifs} icon={TrendingUp} accent={TEAL}
+          sub="Projets au statut 'En cours'" />
+        <StatCard title="Projets terminés" value={kpis.termines} icon={CheckSquare} accent={GREEN}
+          sub="Projets au statut 'Terminé'" />
+        <StatCard title="Avancement global" value={`${kpis.tauxGlobal}%`} icon={TrendingUp} accent={TEAL2}
+          sub="Tâches terminées ÷ total tâches × 100" />
+        <StatCard title="Tâches en retard" value={kpis.enRetard} icon={Clock} accent={RED}
+          sub="Non terminées, échéance dépassée" />
       </div>
 
       {/* Budget total */}
@@ -427,6 +430,7 @@ export default function Rapports() {
             <div>
               <p className="text-xs text-gray-500">Budget total engagé (tous projets)</p>
               <p className="text-xl font-extrabold text-teal-700">{formatMoney(kpis.budgetTotal)}</p>
+              <p className="mt-0.5 text-[10px] italic text-gray-400">📐 Somme du budget prévu de tous les projets, tous statuts confondus.</p>
             </div>
           </div>
         </Card>

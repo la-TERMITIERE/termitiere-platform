@@ -1,5 +1,5 @@
 // Suivi des dépenses détaillé par projet.
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useEffect, Fragment } from 'react'
 import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import Card from '../../shared/ui/Card'
@@ -13,7 +13,8 @@ import { useAuthStore } from '../../core/auth'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { STATUTS_PROJET } from './data'
-import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier } from './prestataire'
+import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
+import { marquerVoletVu } from './vues'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -77,6 +78,7 @@ export default function Depenses() {
   const { data: taches }   = useCollection('projet_taches')
   const { data: notes }    = useCollection('projet_depenses_notes')
   const { user } = useAuthStore()
+  useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
   const [filtreProjet, setFiltreProjet]     = useState('')
   const [filtreCategorie, setFiltreCateg]   = useState('')
@@ -89,6 +91,9 @@ export default function Depenses() {
   const [noteSaving, setNoteSaving] = useState(false)
 
   const notesDeDepense = (depId) => notes.filter((n) => n.depenseId === depId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+
+  const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
+  const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])
 
   const envoyerNote = async () => {
     if (!noteTexte.trim() || !noteDepId) return
@@ -544,9 +549,22 @@ export default function Depenses() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire</label>
-                <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                <input list="prestataires-connus" autoComplete="off"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   placeholder="ex: Kofi Adjovi"
-                  value={form.fournisseur} onChange={(e) => setForm((f) => ({ ...f, fournisseur: e.target.value }))} />
+                  value={form.fournisseur}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const coord = coordPrestataires.get(val.trim().toLowerCase())
+                    setForm((f) => ({
+                      ...f, fournisseur: val,
+                      prestataireTelephone: f.prestataireTelephone || coord?.telephone || f.prestataireTelephone,
+                      prestataireMetier:    f.prestataireMetier    || coord?.metier    || f.prestataireMetier
+                    }))
+                  }} />
+                <datalist id="prestataires-connus">
+                  {prestatairesConnus.map((n) => <option key={n} value={n} />)}
+                </datalist>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Téléphone</label>

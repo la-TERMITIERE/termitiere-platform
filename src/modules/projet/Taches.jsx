@@ -6,10 +6,11 @@ import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, addItem, updateItem, removeItem } from '../../core/db'
-import { STATUTS_TACHE, PRIORITES } from './data'
+import { STATUTS_TACHE, PRIORITES, tachesSuggestions, etapesDefaut, libelleEtape } from './data'
 import { ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
-import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier } from './prestataire'
+import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
+import { marquerVoletVu } from './vues'
 
 function ChampAssignee({ value, onChange, users }) {
   const [open, setOpen]     = useState(false)
@@ -77,7 +78,7 @@ import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 
 const VIDE_TACHE = {
-  titre: '', projetId: '', assignee: '', priorite: 'normale', statut: 'a_faire', echeance: '', montantPrevu: '', note: '',
+  titre: '', projetId: '', phase: '', assignee: '', priorite: 'normale', statut: 'a_faire', echeance: '', montantPrevu: '', note: '',
   prestataireNom: '', prestataireMetier: '', prestataireTelephone: '',
   versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr()
 }
@@ -86,6 +87,9 @@ const VIDE_TACHE = {
 
 function OngletTaches({ taches, projets, users, depenses }) {
   const { user }              = useAuthStore()
+
+  const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
+  const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])
 
   // Somme des dépenses rattachées à chaque tâche (par tacheId)
   const verseParTache = useMemo(() => {
@@ -101,22 +105,28 @@ function OngletTaches({ taches, projets, users, depenses }) {
   const [saving, setSaving]   = useState(false)
   const [filtreProjet, setFiltreProjet] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
+  const [filtrePhase, setFiltrePhase]   = useState('')
   const [mesTaches, setMesTaches]       = useState(false)
   const [detail, setDetail]             = useState(null)
 
   const nomConnecte = user?.nom || user?.login || ''
 
+  const phasesDisponibles = useMemo(() =>
+    [...new Set(taches.map((t) => t.phase).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  [taches])
+
   const liste = useMemo(() => taches
     .filter((t) => !filtreProjet || t.projetId === filtreProjet)
     .filter((t) => !filtreStatut || t.statut === filtreStatut)
+    .filter((t) => !filtrePhase || t.phase === filtrePhase)
     .filter((t) => !mesTaches || !nomConnecte || t.assignee === nomConnecte)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-  [taches, filtreProjet, filtreStatut, mesTaches, nomConnecte])
+  [taches, filtreProjet, filtreStatut, filtrePhase, mesTaches, nomConnecte])
 
   const openCreate = () => { setForm({ ...VIDE_TACHE, versementDate: todayStr() }); setEditing(null); setModal(true) }
   const openEdit   = (t) => {
     setForm({
-      titre: t.titre||'', projetId: t.projetId||'', assignee: t.assignee||'',
+      titre: t.titre||'', projetId: t.projetId||'', phase: t.phase||'', assignee: t.assignee||'',
       priorite: t.priorite||'normale', statut: t.statut||'a_faire',
       echeance: t.echeance ? new Date(t.echeance).toISOString().slice(0,10) : '',
       montantPrevu: t.montantPrevu ?? '', note: t.note||'',
@@ -126,8 +136,12 @@ function OngletTaches({ taches, projets, users, depenses }) {
     setEditing(t); setModal(true)
   }
 
+  const montantValide = form.montantPrevu !== '' && Number(form.montantPrevu) > 0
+  const noteValide    = form.note.trim() !== ''
+  const formValide    = form.titre.trim() !== '' && montantValide && noteValide
+
   const handleSave = async () => {
-    if (!form.titre.trim()) return
+    if (!formValide) return
     setSaving(true)
     try {
       const now = Date.now()
@@ -149,7 +163,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
         // Versement initial optionnel — enregistre directement la dépense liée,
         // pour éviter de ressaisir la même chose dans le volet Dépenses.
         const montantVerse = Number(versementMontant) || 0
-        if (versementActif && montantVerse > 0) {
+        if (montantVerse > 0) {
           await addItem('projet_depenses', {
             projetId: form.projetId, tacheId: id,
             date: versementDate ? new Date(versementDate).getTime() : now,
@@ -222,6 +236,13 @@ function OngletTaches({ taches, projets, users, depenses }) {
           <option value="">Tous les statuts</option>
           {Object.entries(STATUTS_TACHE).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
+        {phasesDisponibles.length > 0 && (
+          <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+            value={filtrePhase} onChange={(e) => setFiltrePhase(e.target.value)}>
+            <option value="">Toutes les phases</option>
+            {phasesDisponibles.map((ph) => <option key={ph} value={ph}>{ph}</option>)}
+          </select>
+        )}
         {nomConnecte && (
           <button
             onClick={() => setMesTaches((v) => !v)}
@@ -265,7 +286,10 @@ function OngletTaches({ taches, projets, users, depenses }) {
 
                 <div className="min-w-0 flex-1">
                   <p className="mt-1 font-semibold text-gray-800">{t.titre}</p>
-                  {projet && <p className="text-xs text-teal-600">{projet.nom}</p>}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {projet && <p className="text-xs text-teal-600">{projet.nom}</p>}
+                    {t.phase && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{t.phase}</span>}
+                  </div>
                   <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
                     {t.assignee && <span>Assigné à : {t.assignee}</span>}
                     {t.echeance && <span className={enRetard ? 'text-red-500 font-semibold' : ''}>Échéance : {formatDateShort(t.echeance)}</span>}
@@ -346,16 +370,39 @@ function OngletTaches({ taches, projets, users, depenses }) {
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Titre *</label>
-            <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            <input list="taches-suggestions" autoComplete="off"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              placeholder="Choisir une suggestion ou saisir…"
               value={form.titre} onChange={(e) => setForm((f) => ({ ...f, titre: e.target.value }))} />
+            <datalist id="taches-suggestions">
+              {tachesSuggestions(projets.find((p) => p.id === form.projetId)?.type).map((s) => <option key={s} value={s} />)}
+            </datalist>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Projet</label>
-            <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-              value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
-              <option value="">— Sélectionner un projet —</option>
-              {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Projet</label>
+              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
+                <option value="">— Sélectionner un projet —</option>
+                {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+              </select>
+            </div>
+            {(() => {
+              const typeProjet = projets.find((p) => p.id === form.projetId)?.type
+              const suggestions = etapesDefaut(typeProjet)
+              return (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">{libelleEtape(typeProjet)}</label>
+                  <input list="phases-suggestions" autoComplete="off"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder={suggestions[0] ? `ex : ${suggestions[0]}` : 'Regroupement libre'}
+                    value={form.phase} onChange={(e) => setForm((f) => ({ ...f, phase: e.target.value }))} />
+                  <datalist id="phases-suggestions">
+                    {suggestions.map((s) => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+              )
+            })()}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -386,16 +433,23 @@ function OngletTaches({ taches, projets, users, depenses }) {
                 value={form.echeance} onChange={(e) => setForm((f) => ({ ...f, echeance: e.target.value }))} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Montant arrêté (FCFA)</label>
-              <input type="number" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              <label className="mb-1 block text-xs font-medium text-gray-600">Montant arrêté (FCFA) *</label>
+              <input type="number" min="0"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantPrevu !== '' && !montantValide ? 'border-red-300' : 'border-gray-200'}`}
                 placeholder="Montant total convenu avec le prestataire"
                 value={form.montantPrevu} onChange={(e) => setForm((f) => ({ ...f, montantPrevu: e.target.value }))} />
+              {form.montantPrevu !== '' && !montantValide && (
+                <p className="mt-1 text-[11px] text-red-500">Le montant doit être supérieur à 0.</p>
+              )}
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Note</label>
-            <textarea rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+            <label className="mb-1 block text-xs font-medium text-gray-600">Note (détails) *</label>
+            <textarea rows={3}
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${!noteValide && form.note !== '' ? 'border-red-300' : 'border-gray-200'}`}
+              placeholder="Décris les détails de la tâche : nature exacte des travaux, conditions, matériaux, remarques…"
               value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+            <p className="mt-1 text-[11px] text-gray-400">Champ obligatoire — précise ici tout ce qui doit être retenu sur cette tâche.</p>
           </div>
 
           <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-3">
@@ -403,9 +457,22 @@ function OngletTaches({ taches, projets, users, depenses }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire</label>
-                <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                <input list="prestataires-connus-taches" autoComplete="off"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   placeholder="ex: Kofi Adjovi"
-                  value={form.prestataireNom} onChange={(e) => setForm((f) => ({ ...f, prestataireNom: e.target.value }))} />
+                  value={form.prestataireNom}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const coord = coordPrestataires.get(val.trim().toLowerCase())
+                    setForm((f) => ({
+                      ...f, prestataireNom: val,
+                      prestataireTelephone: f.prestataireTelephone || coord?.telephone || f.prestataireTelephone,
+                      prestataireMetier:    f.prestataireMetier    || coord?.metier    || f.prestataireMetier
+                    }))
+                  }} />
+                <datalist id="prestataires-connus-taches">
+                  {prestatairesConnus.map((n) => <option key={n} value={n} />)}
+                </datalist>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Téléphone</label>
@@ -424,42 +491,40 @@ function OngletTaches({ taches, projets, users, depenses }) {
           </div>
 
           {!editing && (
-            <div className="rounded-xl border border-gray-200 p-3 space-y-3">
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={form.versementActif}
-                  onChange={(e) => setForm((f) => ({ ...f, versementActif: e.target.checked }))} />
-                <Wallet size={14} className="text-teal-600" /> Enregistrer un versement dès maintenant
-              </label>
-              <p className="text-[11px] text-gray-400 -mt-2">
-                Évite d'avoir à ressaisir la dépense dans le volet Dépenses — celle-ci s'y ajoutera automatiquement, liée à cette tâche.
+            <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <Wallet size={14} className="text-teal-600" /> Versement initial
+                <span className="text-xs font-normal text-gray-400">(optionnel)</span>
+              </div>
+              <p className="text-[11px] text-gray-500 -mt-1">
+                Renseigne un montant pour enregistrer tout de suite un premier versement — il s'ajoutera automatiquement au volet Dépenses, lié à cette tâche. Laisse à 0 (ou vide) s'il n'y a pas encore de paiement.
               </p>
-              {form.versementActif && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Montant versé (FCFA)</label>
-                    <input type="number" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                      value={form.versementMontant} onChange={(e) => setForm((f) => ({ ...f, versementMontant: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Type de paiement</label>
-                    <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                      value={form.versementType} onChange={(e) => setForm((f) => ({ ...f, versementType: e.target.value }))}>
-                      {Object.entries(TYPES_PAIEMENT_PRESTA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Date du versement</label>
-                    <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                      value={form.versementDate} onChange={(e) => setForm((f) => ({ ...f, versementDate: e.target.value }))} />
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Montant versé (FCFA)</label>
+                  <input type="number" min="0" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="0"
+                    value={form.versementMontant} onChange={(e) => setForm((f) => ({ ...f, versementMontant: e.target.value }))} />
                 </div>
-              )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Type de paiement</label>
+                  <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                    value={form.versementType} onChange={(e) => setForm((f) => ({ ...f, versementType: e.target.value }))}>
+                    {Object.entries(TYPES_PAIEMENT_PRESTA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Date du versement</label>
+                  <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                    value={form.versementDate} onChange={(e) => setForm((f) => ({ ...f, versementDate: e.target.value }))} />
+                </div>
+              </div>
             </div>
           )}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.titre.trim()}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
+            <Button onClick={handleSave} disabled={saving || !formValide}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
           </div>
         </div>
       </Modal>
@@ -486,6 +551,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {projet && <div><span className="text-gray-500">Projet : </span><span className="font-semibold text-teal-700">{projet.nom}</span></div>}
+                {detail.phase && <div><span className="text-gray-500">{libelleEtape(projet?.type)} : </span><span className="font-semibold">{detail.phase}</span></div>}
                 <div><span className="text-gray-500">Assigné à : </span><span className="font-semibold">{detail.assignee || '—'}</span></div>
                 <div><span className="text-gray-500">Échéance : </span><span className={`font-semibold ${enRetard ? 'text-red-500' : ''}`}>{detail.echeance ? formatDateShort(detail.echeance) : '—'}</span></div>
                 <div><span className="text-gray-500">Créée le : </span><span className="font-semibold">{detail.createdAt ? formatDateShort(detail.createdAt) : '—'}</span></div>
@@ -681,6 +747,8 @@ export default function Taches() {
   const { data: projets } = useCollection('projets')
   const { data: users }   = useCollection('users')
   const { data: depenses } = useCollection('projet_depenses')
+  const { user } = useAuthStore()
+  useEffect(() => { marquerVoletVu(user?.uid, 'projetTaches') }, [user?.uid])
   const [onglet, setOnglet] = useState('taches')
 
   return (

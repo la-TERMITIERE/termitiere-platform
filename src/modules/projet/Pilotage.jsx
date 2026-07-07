@@ -1,21 +1,23 @@
 // Pilotage — Vue d'ensemble stratégique pour le Directeur Général.
 import '../../utils/chartSetup'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock, Wallet, Users, Target } from 'lucide-react'
-import InfoBulle from '../../shared/ui/InfoBulle'
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock, Wallet, Users, Target, BellRing, ArrowRight } from 'lucide-react'
 
-const TitreGraphe = ({ label, description }) => (
+const TitreGraphe = ({ label, description, formule }) => (
   <div>
     <span>{label}</span>
     {description && <p className="mt-0.5 text-[11px] font-normal text-gray-400">{description}</p>}
+    {formule && <p className="mt-0.5 text-[10px] font-normal italic text-gray-400">📐 {formule}</p>}
   </div>
 )
 import Card from '../../shared/ui/Card'
+import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
-import { formatMoney, formatDateShort } from '../../utils/formatters'
-import { avancementProjet, tachesEnRetard, projetEnRetard } from './logic'
-import { STATUTS_PROJET } from './data'
+import { formatMoney } from '../../utils/formatters'
+import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from './logic'
+import { STATUTS_PROJET, SEUILS_DEFAUT } from './data'
 
 const TEAL  = '#0d9488'
 const GREEN = '#16a34a'
@@ -24,11 +26,11 @@ const RED   = '#ef4444'
 const GRAY  = '#94a3b8'
 
 // ── Jauge circulaire SVG ──────────────────────────────────────────────────────
-function Jauge({ pct, label, color = TEAL, size = 88 }) {
+function Jauge({ pct, label, formule, color = TEAL, size = 88 }) {
   const r = 36, circ = 2 * Math.PI * r
   const dash = (pct / 100) * circ
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1 max-w-[140px]">
       <svg width={size} height={size} viewBox="0 0 88 88">
         <circle cx="44" cy="44" r={r} fill="none" stroke="#e2e8f0" strokeWidth="8" />
         <circle cx="44" cy="44" r={r} fill="none" stroke={color} strokeWidth="8"
@@ -37,12 +39,13 @@ function Jauge({ pct, label, color = TEAL, size = 88 }) {
         <text x="44" y="48" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>{pct}%</text>
       </svg>
       <span className="text-xs text-gray-500 text-center leading-tight">{label}</span>
+      {formule && <span className="text-[10px] italic text-gray-400 text-center leading-tight">{formule}</span>}
     </div>
   )
 }
 
 // ── Carte KPI ─────────────────────────────────────────────────────────────────
-function KPI({ label, value, sub, icon: Icon, color, trend }) {
+function KPI({ label, value, sub, formule, icon: Icon, color, trend }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-4 flex items-start gap-3 shadow-sm">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: color + '18' }}>
@@ -52,6 +55,7 @@ function KPI({ label, value, sub, icon: Icon, color, trend }) {
         <p className="text-xs text-gray-500 font-medium">{label}</p>
         <p className="text-xl font-extrabold text-gray-800 leading-tight">{value}</p>
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+        {formule && <p className="text-[10px] italic text-gray-400 mt-0.5">📐 {formule}</p>}
       </div>
       {trend !== undefined && (
         <div className={`ml-auto shrink-0 flex items-center gap-0.5 text-xs font-bold ${trend >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -108,9 +112,13 @@ function Sante({ projet, taches, depenses }) {
 
 // ── Page principale ───────────────────────────────────────────────────────────
 export default function Pilotage() {
+  const navigate = useNavigate()
+  const [onglet, setOnglet] = useState('pilotage')
   const { data: projets }  = useCollection('projets')
   const { data: taches }   = useCollection('projet_taches')
   const { data: depenses } = useCollection('projet_depenses')
+  const { data: configs }  = useCollection('projet_params')
+  const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
 
   const actifs = useMemo(() => projets.filter((p) => !['annule'].includes(p.statut)), [projets])
 
@@ -191,16 +199,12 @@ export default function Pilotage() {
     return Object.entries(map).sort((a, b) => b[1].projets - a[1].projets).slice(0, 5)
   }, [projets])
 
-  // ── Projets à risque ─────────────────────────────────────────────────────
-  const aRisque = useMemo(() =>
-    actifs
-      .filter((p) => p.statut !== 'termine' && (
-        projetEnRetard(p) ||
-        (Number(p.depenses) || 0) > (Number(p.budget) || Infinity) ||
-        tachesEnRetard(taches.filter((t) => t.projetId === p.id)).length > 0
-      ))
-      .slice(0, 5),
-  [actifs, taches])
+  // ── Alertes — même source que l'onglet Alertes, ici en simple résumé ────────
+  const alertes = useMemo(() => genererAlertes(projets, taches, depenses, seuils), [projets, taches, depenses, seuils])
+  const alertesResume = useMemo(() => ({
+    critiques:      alertes.filter((a) => ['projet_retard', 'budget_depasse'].includes(a.type)).length,
+    avertissements: alertes.filter((a) => ['tache_depassee', 'tache_retard', 'avancement_zero'].includes(a.type)).length
+  }), [alertes])
 
   const chartOpts = {
     responsive: true, maintainAspectRatio: false,
@@ -230,42 +234,117 @@ export default function Pilotage() {
         </div>
       </div>
 
+      {/* Onglets */}
+      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        {[
+          { id: 'pilotage', label: '📊 Pilotage', sub: 'Vue stratégique' },
+          { id: 'controle', label: '🎯 Contrôle',  sub: 'À traiter maintenant', badge: alertesResume.critiques + alertesResume.avertissements }
+        ].map((o) => (
+          <button key={o.id} onClick={() => setOnglet(o.id)}
+            className={`relative flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {o.label}
+            {o.badge > 0 && (
+              <span className="ml-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{o.badge}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {onglet === 'controle' ? (
+        <div className="space-y-5">
+          {/* Alertes — résumé, détail complet dans l'onglet Alertes */}
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <BellRing size={18} className={alertesResume.critiques ? 'text-red-500' : 'text-amber-500'} />
+                <div>
+                  <p className="text-sm font-bold text-gray-800">
+                    {!alertesResume.critiques && !alertesResume.avertissements
+                      ? <span className="text-green-600">Tout est sous contrôle</span>
+                      : (
+                        <>
+                          {alertesResume.critiques > 0 && <span className="text-red-600">{alertesResume.critiques} critique{alertesResume.critiques > 1 ? 's' : ''}</span>}
+                          {alertesResume.critiques > 0 && alertesResume.avertissements > 0 && ' · '}
+                          {alertesResume.avertissements > 0 && <span className="text-amber-600">{alertesResume.avertissements} avertissement{alertesResume.avertissements > 1 ? 's' : ''}</span>}
+                        </>
+                      )}
+                  </p>
+                  <p className="text-xs text-gray-400">Retards, dépassements de budget et de tâches à traiter.</p>
+                  <p className="mt-0.5 text-[10px] italic text-gray-400">
+                    📐 Critique = projet en retard ou budget global dépassé. Avertissement = tâche en dépassement (&gt; 1000 FCFA), tâche en retard, ou projet actif sans tâche terminée depuis 7 jours.
+                  </p>
+                </div>
+              </div>
+              {alertes.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => navigate('/projet/alertes')}>
+                  Voir toutes les alertes <ArrowRight size={14} className="ml-1.5" />
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {/* Santé des projets actifs */}
+          <Card title={<TitreGraphe label="Santé des projets actifs"
+            description="Évaluer rapidement l'état de chaque projet en cours — Sain, Attention ou Critique selon retard et budget."
+            formule="Score sur 100 : -40 si en retard, -30 si budget approuvé dépassé, -10 par tâche en retard (max -30). Sain ≥ 70, Attention ≥ 40, sinon Critique." />}>
+            {!actifs.filter((p) => p.statut !== 'termine').length ? (
+              <p className="py-8 text-center text-sm text-gray-400">Aucun projet actif.</p>
+            ) : (
+              <div className="space-y-2">
+                {actifs.filter((p) => p.statut !== 'termine').map((p) => (
+                  <Sante key={p.id} projet={p} taches={taches} depenses={depenses} />
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : (
+      <>
       {/* KPIs stratégiques — chiffres clés */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KPI label={<span className="flex items-center gap-1">Budget total <InfoBulle texte="Somme des budgets prévus de tous les projets." /></span>} value={formatMoney(kpis.budgetTotal)} icon={Wallet} color={TEAL} />
-        <KPI label={<span className="flex items-center gap-1">Dépenses approuvées <InfoBulle texte="Somme des dépenses dont le statut est 'Approuvée'. Les dépenses en attente ou rejetées ne sont pas comptées." /></span>}
+        <KPI label="Budget total" value={formatMoney(kpis.budgetTotal)} icon={Wallet} color={TEAL}
+          formule="Somme des budgets prévus de tous les projets." />
+        <KPI label="Dépenses approuvées"
           value={formatMoney(kpis.depTotal)} icon={TrendingDown} color={AMBER}
-          sub={kpis.depEnAttente > 0 ? `+ ${formatMoney(kpis.depEnAttente)} en attente` : 'Tout validé'} />
-        <KPI label={<span className="flex items-center gap-1">Solde budgétaire <InfoBulle texte="Budget total − Dépenses approuvées. Négatif = dépassement global sur les dépenses validées." /></span>}
+          sub={kpis.depEnAttente > 0 ? `+ ${formatMoney(kpis.depEnAttente)} en attente` : 'Tout validé'}
+          formule="Somme des dépenses au statut 'Approuvée' (hors en attente/rejetées)." />
+        <KPI label="Solde budgétaire"
           value={formatMoney(kpis.ecart)} icon={Wallet} color={kpis.ecart >= 0 ? GREEN : RED}
-          sub={kpis.ecart < 0 ? 'Budget dépassé !' : 'Sous contrôle'} />
-        <KPI label={<span className="flex items-center gap-1">Taux de complétion <InfoBulle texte="Projets terminés ÷ total projets × 100. Mesure combien de projets ont été clôturés." /></span>}
+          sub={kpis.ecart < 0 ? 'Budget dépassé !' : 'Sous contrôle'}
+          formule="Budget total − Dépenses approuvées." />
+        <KPI label="Taux de complétion"
           value={`${projets.length ? Math.round((kpis.termines / projets.length) * 100) : 0}%`}
           icon={CheckCircle2} color={GREEN}
-          sub={`${kpis.termines} / ${projets.length} projets`} />
-        <KPI label={<span className="flex items-center gap-1">Projets en cours <InfoBulle texte="Projets dont le statut est 'En cours'." /></span>} value={kpis.enCours} icon={Clock} color={AMBER} />
-        <KPI label={<span className="flex items-center gap-1">Projets en retard <InfoBulle texte="Projets actifs dont la date de fin prévue est dépassée." /></span>} value={kpis.enRetard} icon={AlertTriangle} color={RED} />
-        <KPI label={<span className="flex items-center gap-1">Tâches en retard <InfoBulle texte="Tâches non terminées dont l'échéance est dépassée." /></span>} value={kpis.tRetard} icon={AlertTriangle} color={RED} />
-        <KPI label={<span className="flex items-center gap-1">Responsables actifs <InfoBulle texte="Nombre de responsables distincts assignés à au moins un projet." /></span>} value={kpis.responsables} icon={Users} color={TEAL} />
+          sub={`${kpis.termines} / ${projets.length} projets`}
+          formule="Projets terminés ÷ total projets × 100." />
+        <KPI label="Projets en cours" value={kpis.enCours} icon={Clock} color={AMBER}
+          formule="Projets au statut 'En cours'." />
+        <KPI label="Projets en retard" value={kpis.enRetard} icon={AlertTriangle} color={RED}
+          formule="Projets actifs dont la date de fin prévue est dépassée." />
+        <KPI label="Tâches en retard" value={kpis.tRetard} icon={AlertTriangle} color={RED}
+          formule="Tâches non terminées dont l'échéance est dépassée." />
+        <KPI label="Responsables actifs" value={kpis.responsables} icon={Users} color={TEAL}
+          formule="Nombre de responsables distincts assignés à au moins un projet." />
       </div>
 
       {/* Jauges synthétiques — indicateurs qualité */}
-      <Card title={<TitreGraphe label={<span className="flex items-center gap-1">Indicateurs de qualité <InfoBulle texte="Chaque jauge mesure une dimension de la performance : délais, budget, avancement." /></span>} description="Trois angles complémentaires pour évaluer la santé du portefeuille — délais, budget et progression terrain." />}>
+      <Card title={<TitreGraphe label="Indicateurs de qualité"
+        description="Trois angles complémentaires pour évaluer la santé du portefeuille — délais, budget et progression terrain." />}>
         <div className="flex flex-wrap justify-around gap-6 py-2">
           {tauxDelai !== null
             ? <Jauge pct={tauxDelai} color={tauxDelai >= 70 ? GREEN : tauxDelai >= 40 ? AMBER : RED}
-                label={<span className="flex items-center gap-1 justify-center">Respect des délais <InfoBulle texte="Projets terminés dans les délais ÷ total projets terminés × 100." /></span>} />
+                label="Respect des délais" formule="Projets terminés à temps ÷ total projets terminés × 100." />
             : <Jauge pct={0} color={GRAY}
-                label={<span className="flex items-center gap-1 justify-center">Respect des délais <InfoBulle texte="Disponible dès qu'un projet est terminé." /></span>} />
+                label="Respect des délais" formule="Disponible dès qu'un projet est terminé." />
           }
           {tauxBudget !== null
             ? <Jauge pct={tauxBudget} color={tauxBudget >= 70 ? GREEN : tauxBudget >= 40 ? AMBER : RED}
-                label={<span className="flex items-center gap-1 justify-center">Maîtrise du budget <InfoBulle texte="Projets dont les dépenses ne dépassent pas le budget ÷ total projets avec budget × 100." /></span>} />
+                label="Maîtrise du budget" formule="Projets sous budget ÷ total projets avec budget × 100." />
             : <Jauge pct={0} color={GRAY}
-                label={<span className="flex items-center gap-1 justify-center">Maîtrise du budget <InfoBulle texte="Disponible dès qu'un projet a un budget renseigné." /></span>} />
+                label="Maîtrise du budget" formule="Disponible dès qu'un projet a un budget renseigné." />
           }
           <Jauge pct={tauxAvancement} color={tauxAvancement >= 70 ? GREEN : tauxAvancement >= 40 ? TEAL : AMBER}
-            label={<span className="flex items-center gap-1 justify-center">Avancement terrain <InfoBulle texte="Moyenne des avancements de tous les projets actifs, basée sur les tâches terminées." /></span>} />
+            label="Avancement terrain" formule="Moyenne d'avancement des projets actifs (tâches terminées)." />
         </div>
       </Card>
 
@@ -289,83 +368,32 @@ export default function Pilotage() {
         </Card>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Santé des projets actifs */}
-        <Card title={<TitreGraphe label="Santé des projets actifs" description="Évaluer rapidement l'état de chaque projet en cours — Sain, Attention ou Critique selon retard et budget." />}>
-          {!actifs.filter((p) => p.statut !== 'termine').length ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucun projet actif.</p>
-          ) : (
-            <div className="space-y-2">
-              {actifs.filter((p) => p.statut !== 'termine').map((p) => (
-                <Sante key={p.id} projet={p} taches={taches} depenses={depenses} />
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Top responsables */}
-        <Card title={<TitreGraphe label="Responsables de projets" description="Voir qui gère le plus de projets et identifier les responsables les plus sollicités." />}>
-          {!topResp.length ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucun responsable renseigné.</p>
-          ) : (
-            <div className="space-y-3">
-              {topResp.map(([nom, s]) => (
-                <div key={nom} className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
-                    {nom.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-700 truncate">{nom}</p>
-                    <p className="text-xs text-gray-400">{s.projets} projet(s) · {s.termines} terminé(s){s.enRetard > 0 ? ` · ${s.enRetard} en retard` : ''}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <span className={`text-xs font-bold ${s.enRetard > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                      {s.enRetard > 0 ? `⚠ ${s.enRetard}` : '✓ OK'}
-                    </span>
-                  </div>
+      {/* Top responsables */}
+      <Card title={<TitreGraphe label="Responsables de projets" description="Voir qui gère le plus de projets et identifier les responsables les plus sollicités." />}>
+        {!topResp.length ? (
+          <p className="py-8 text-center text-sm text-gray-400">Aucun responsable renseigné.</p>
+        ) : (
+          <div className="space-y-3">
+            {topResp.map(([nom, s]) => (
+              <div key={nom} className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
+                  {nom.slice(0, 2).toUpperCase()}
                 </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Projets à risque */}
-      {aRisque.length > 0 && (
-        <Card title={<span className="flex items-center gap-2 text-red-600"><AlertTriangle size={15} />Projets nécessitant une attention immédiate</span>}>
-          <div className="space-y-2">
-            {aRisque.map((p) => {
-              const tp       = taches.filter((t) => t.projetId === p.id)
-              const av       = avancementProjet(tp, p)
-              const tRet     = tachesEnRetard(tp).length
-              const surBudg  = (Number(p.depenses)||0) > (Number(p.budget)||0) && Number(p.budget) > 0
-              const pRet     = projetEnRetard(p)
-              return (
-                <div key={p.id} className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-red-800 text-sm">{p.nom}</p>
-                      <p className="text-xs text-gray-500">Responsable : {p.responsable || '—'} · {p.dureeIndeterminee ? 'Durée indéterminée' : `Fin prévue : ${formatDateShort(p.dateFin)}`}</p>
-                      <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                        {pRet    && <span className="rounded-full bg-red-200 px-2 py-0.5 text-red-700 font-bold">Projet en retard</span>}
-                        {surBudg && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-amber-800 font-bold">Budget dépassé</span>}
-                        {tRet > 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-orange-700">{tRet} tâche(s) en retard</span>}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-2xl font-extrabold text-red-700">{av}%</p>
-                      <p className="text-[10px] text-gray-400">avancement</p>
-                    </div>
-                  </div>
-                  {/* Barre */}
-                  <div className="mt-2 rounded-full bg-red-200 h-1.5">
-                    <div className="h-1.5 rounded-full bg-red-500 transition-all" style={{ width: `${av}%` }} />
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-gray-700 truncate">{nom}</p>
+                  <p className="text-xs text-gray-400">{s.projets} projet(s) · {s.termines} terminé(s){s.enRetard > 0 ? ` · ${s.enRetard} en retard` : ''}</p>
                 </div>
-              )
-            })}
+                <div className="shrink-0 text-right">
+                  <span className={`text-xs font-bold ${s.enRetard > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                    {s.enRetard > 0 ? `⚠ ${s.enRetard}` : '✓ OK'}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        </Card>
+        )}
+      </Card>
+      </>
       )}
     </div>
   )

@@ -1,63 +1,25 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing } from 'lucide-react'
+import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing, X } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
-import { STATUTS_PROJET, PRIORITES } from './data'
-import { avancementProjet, tachesEnRetard, projetEnRetard } from './logic'
+import { setItem } from '../../core/db'
+import { STATUTS_PROJET, PRIORITES, SEUILS_DEFAUT } from './data'
+import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from './logic'
 import { formatDateShort } from '../../utils/formatters'
-import { SEUILS_DEFAUT } from './Params'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
 const TYPE_ALERTE = {
-  projet_retard:   { color: 'text-red-600',    bg: 'border-red-200 bg-red-50',       label: 'Projet en retard'   },
-  budget_depasse:  { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Budget dépassé'     },
-  tache_retard:    { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Tâche en retard'    },
-  avancement_zero: { color: 'text-indigo-600', bg: 'border-indigo-200 bg-indigo-50', label: 'Aucun avancement'   },
-  termine:         { color: 'text-green-600',  bg: 'border-green-200 bg-green-50',   label: 'Terminé ✓'          }
-}
-
-function genAlertes(projets, taches, seuils, depenses = []) {
-  const alertes = [], now = Date.now()
-  const seuilBudget     = (seuils?.budget    ?? SEUILS_DEFAUT.budget)    / 100
-  const seuilInactivite = (seuils?.inactivite ?? SEUILS_DEFAUT.inactivite) * 24 * 3600 * 1000
-  const SEMAINE = 7*24*3600*1000
-
-  projets.forEach((p) => {
-    const tp = taches.filter((t) => t.projetId === p.id)
-    if (projetEnRetard(p)) {
-      const j = Math.floor((now - p.dateFin) / (24*3600*1000))
-      alertes.push({ id:`r_${p.id}`, type:'projet_retard', projetNom:p.nom, message:`${j}j de retard (fin : ${formatDateShort(p.dateFin)})` })
-    }
-    // Alerte budget : utilise la somme réelle des dépenses du module
-    const totalDepenses = depenses
-      .filter((d) => d.projetId === p.id)
-      .reduce((s, d) => s + (Number(d.montant) || 0), 0)
-    if (p.budget && totalDepenses > 0 && totalDepenses >= Number(p.budget) * seuilBudget) {
-      const pct = Math.round((totalDepenses / Number(p.budget)) * 100)
-      alertes.push({ id:`b_${p.id}`, type:'budget_depasse', projetNom:p.nom, message:`${pct}% du budget utilisé (${totalDepenses.toLocaleString('fr-FR')} / ${Number(p.budget).toLocaleString('fr-FR')} FCFA)` })
-    }
-    tp.filter((t) =>
-      !['terminee','annulee'].includes(t.statut) &&
-      (t.updatedAt || t.createdAt) &&
-      (now - (t.updatedAt || t.createdAt)) > seuilInactivite
-    ).forEach((t) => {
-      const j = Math.floor((now - (t.updatedAt || t.createdAt)) / (24*3600*1000))
-      alertes.push({ id:`z_${t.id}`, type:'avancement_zero', projetNom:p.nom, message:`"${t.titre}" — inactive depuis ${j}j` })
-    })
-    tachesEnRetard(tp).forEach((t) => {
-      const j = Math.floor((now - t.echeance) / (24*3600*1000))
-      alertes.push({ id:`t_${t.id}`, type:'tache_retard', projetNom:p.nom, message:`"${t.titre}" — ${j}j de retard` })
-    })
-    if (p.statut==='termine' && p.updatedAt && (now-p.updatedAt)<SEMAINE)
-      alertes.push({ id:`fin_${p.id}`, type:'termine', projetNom:p.nom, message:`Terminé le ${formatDateShort(p.updatedAt)}` })
-  })
-  const ordre = { projet_retard:0, budget_depasse:1, tache_retard:2, avancement_zero:3, termine:4 }
-  return alertes.sort((a,b)=>(ordre[a.type]??9)-(ordre[b.type]??9))
+  projet_retard:   { color: 'text-red-600',    bg: 'border-red-200 bg-red-50',       label: 'Projet en retard'      },
+  budget_depasse:  { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Budget dépassé'        },
+  tache_depassee:  { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Tâche en dépassement'  },
+  tache_retard:    { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Tâche en retard'       },
+  avancement_zero: { color: 'text-indigo-600', bg: 'border-indigo-200 bg-indigo-50', label: 'Aucun avancement'      },
+  termine:         { color: 'text-green-600',  bg: 'border-green-200 bg-green-50',   label: 'Terminé ✓'             }
 }
 
 export default function Dashboard() {
@@ -65,13 +27,16 @@ export default function Dashboard() {
   const { data: taches }   = useCollection('projet_taches')
   const { data: configs }  = useCollection('projet_params')
   const { data: depenses } = useCollection('projet_depenses')
+  const { data: fermeesDashboard } = useCollection('projet_alertes_dashboard_fermees')
   const [detail, setDetail] = useState(null)
   const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
   const alertesRef = useRef(new Set())
+  const idsFermesDashboard = useMemo(() => new Set(fermeesDashboard.map((f) => f.id)), [fermeesDashboard])
+  const fermerSurDashboard = (id) => setItem('projet_alertes_dashboard_fermees', id, { id, fermeLe: Date.now() })
 
   // Notifications temps réel — envoie une notif pour chaque nouvelle alerte critique
   useEffect(() => {
-    const alertes = genAlertes(projets, taches, seuils, depenses)
+    const alertes = genererAlertes(projets, taches, depenses, seuils)
     const critiques = alertes.filter((a) => ['projet_retard', 'budget_depasse'].includes(a.type))
     critiques.forEach((a) => {
       if (!alertesRef.current.has(a.id)) {
@@ -133,7 +98,9 @@ export default function Dashboard() {
 
       {/* ── Alertes ────────────────────────────────────────────────────────── */}
       {(() => {
-        const alertes = genAlertes(projets, taches, seuils, depenses)
+        // Fermer ici ne retire l'alerte que de ce widget — elle reste visible dans l'onglet Alertes
+        // tant que le problème n'est pas résolu.
+        const alertes = genererAlertes(projets, taches, depenses, seuils).filter((a) => !idsFermesDashboard.has(a.id))
         if (!alertes.length) return null
         const critiques = alertes.filter((a) => ['projet_retard','budget_depasse'].includes(a.type)).length
         return (
@@ -148,10 +115,14 @@ export default function Dashboard() {
               {alertes.map((a) => {
                 const cfg = TYPE_ALERTE[a.type]
                 return (
-                  <div key={a.id} className={`flex gap-2 rounded-lg border px-3 py-2 text-xs ${cfg.bg}`}>
+                  <div key={a.id} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${cfg.bg}`}>
                     <span className={`shrink-0 font-bold ${cfg.color}`}>{cfg.label}</span>
                     <span className="font-semibold text-gray-600">{a.projetNom}</span>
-                    <span className="text-gray-500">{a.message}</span>
+                    <span className="flex-1 text-gray-500">{a.message}</span>
+                    <button onClick={() => fermerSurDashboard(a.id)} title="Retirer de ce widget"
+                      className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-white/70 hover:text-gray-700">
+                      <X size={13} />
+                    </button>
                   </div>
                 )
               })}
