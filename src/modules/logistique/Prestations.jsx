@@ -18,6 +18,7 @@ import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { isApproverRole } from '../../core/roles'
 import { catColor } from './data'
+import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const STATUTS = {
   brouillon: { label: 'Brouillon', tone: 'neutral' },
@@ -29,11 +30,16 @@ const STATUTS = {
 
 export default function Prestations() {
   const { user, role } = useAuth()
-  const peutApprouver = isApproverRole(role) // gérant / direction : autorisent la facturation
-  const { data: prestations } = useCollection('logistique_prestations')
+  const site = useSite()
+  const peutApprouver = isApproverRole(role) // gérant / direction : valident la prestation
+  const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: clients } = useCollection('logistique_clients')
-  const { data: retours } = useCollection('logistique_retours')
+  const { data: allRetours } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
+
+  // Cloisonnement par site (sous-application Lomé / Kara).
+  const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
+  const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
 
   // Retours enregistrés par prestation (pour l'état « retour OK / en attente »).
   const retoursParPresta = useMemo(() => {
@@ -138,7 +144,7 @@ export default function Prestations() {
     if (!form.clientNom?.trim() && !form.clientId) return toast.error('Client requis')
     if (!form.lignes.length) return toast.error('Ajoutez au moins une ligne')
     const client = clients.find((c) => c.id === form.clientId)
-    const num = genNumero('PREST', prestations.length)
+    const num = genNumero(`PREST-${site.toUpperCase()}`, prestations.length)
     const lignes = form.lignes.map((l) => {
       const qte = parseInt(l.qte) || 0
       const tarif = parseFloat(l.tarif) || 0
@@ -157,14 +163,14 @@ export default function Prestations() {
     const totalFraisSave = frais.reduce((s, x) => s + x.montant, 0)
     const total = totalMateriel + totalFraisSave
     await addItem('logistique_prestations', {
-      num, date: todayStr(),
+      num, date: todayStr(), site,
       clientId: form.clientId, clientNom: client?.nom || form.clientNom,
       dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
       lignes, frais, total, statut: 'brouillon',
       agentId: user.uid, agentNom: user.nom
     })
-    await audit('logistique', 'PRESTATION', `${num} — ${formatMoney(total)}`)
-    toast.success('Prestation créée ✓ — en attente d\'approbation avant facturation')
+    await audit('logistique', 'PRESTATION', `${siteLabel(site)} — ${num} — ${formatMoney(total)}`)
+    toast.success('Prestation enregistrée ✓ — en attente d\'approbation, facturable dès à présent')
     setOpen(false)
   }
 

@@ -13,14 +13,23 @@ import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { catColor, CAT_MATERIEL } from './data'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
+import { useSite, matchSite, siteLabel } from './site/useSite'
 
 export default function Dashboard() {
   const materiel = useLogistiqueStore((s) => s.materiel)
-  const { data: inventaires } = useCollection('logistique_inventaires')
-  const { data: prestations } = useCollection('logistique_prestations')
-  const { data: factures } = useCollection('logistique_factures')
-  const { data: demandes } = useCollection('logistique_demandes')
-  const { data: retours } = useCollection('logistique_retours')
+  const site = useSite()
+  const { data: allInventaires } = useCollection('logistique_inventaires')
+  const { data: allPrestations } = useCollection('logistique_prestations')
+  const { data: allFactures } = useCollection('logistique_factures')
+  const { data: allDemandes } = useCollection('logistique_demandes')
+  const { data: allRetours } = useCollection('logistique_retours')
+
+  // Cloisonnement par site (sous-application Lomé / Kara).
+  const inventaires = useMemo(() => allInventaires.filter((i) => matchSite(i, site)), [allInventaires, site])
+  const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
+  const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
+  const demandes = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
+  const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
 
   const [detail, setDetail] = useState(null) // { titre, render }
   const { start, end, node: periodNode } = usePeriodSelect('30')
@@ -37,7 +46,8 @@ export default function Dashboard() {
     return materiel.reduce((s, m) => s + (dernier.materiels?.[m.id]?.fin || 0) * (m.coutAchat || 0), 0)
   }, [dernier, materiel])
 
-  const facturesMois = factures.filter((f) => dansPeriode(f.date))
+  // CA = factures APPROUVÉES (autorisation de sortie certifiée) de la période.
+  const facturesMois = factures.filter((f) => f.statut === 'approuvee' && dansPeriode(f.date))
   const caMois = facturesMois.reduce((s, f) => s + (f.totalTTC || 0), 0)
   const demandesActives = demandes.filter((d) => estActif(d.statut))
   const prestationsActivesList = prestations.filter((p) => ['facturee', 'en_cours'].includes(p.statut))
@@ -109,7 +119,7 @@ export default function Dashboard() {
             }} />
         </div>
         <div>
-          <h2 className="text-lg font-extrabold">Maxi Logistique</h2>
+          <h2 className="text-lg font-extrabold">Maxi Logistique · {siteLabel(site)}</h2>
           <p className="text-sm text-white/80">Matériel · Location · Prestations · Autorisations</p>
         </div>
         <div className="ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white [&_label]:font-bold">
@@ -131,8 +141,8 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
-          onClick={() => setDetail({ titre: 'Factures de la période', render: (
+        <StatCard title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) approuvée(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
+          onClick={() => setDetail({ titre: 'Factures approuvées (CA) — période', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
               <tbody className="divide-y divide-gray-100">

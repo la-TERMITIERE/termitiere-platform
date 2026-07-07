@@ -20,11 +20,17 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatDateShort } from '../../utils/formatters'
+import { useSite, matchSite } from './site/useSite'
 
 export default function Retours() {
   const { user } = useAuth()
-  const { data: retours } = useCollection('logistique_retours')
-  const { data: prestations } = useCollection('logistique_prestations')
+  const site = useSite()
+  const { data: allRetours } = useCollection('logistique_retours')
+  const { data: allPrestations } = useCollection('logistique_prestations')
+
+  // Cloisonnement par site (sous-application Lomé / Kara).
+  const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
+  const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
 
   const [prestationId, setPrestationId] = useState('')
   const [etats, setEtats] = useState({}) // { materielId: { etat, qte, motif } }
@@ -72,9 +78,9 @@ export default function Retours() {
       for (const { l, st } of aTraiter) {
         // OK → tout le restant revient ; Cassé/Perdu → quantité saisie (bornée au restant).
         const qte = st.etat === 'OK' ? l.restant : Math.min(l.restant, Math.max(1, parseInt(st.qte) || 0))
-        const num = genNumero('RET', retours.length + n)
+        const num = genNumero(`RET-${site.toUpperCase()}`, retours.length + n)
         await addItem('logistique_retours', {
-          num, date: todayStr(),
+          num, date: todayStr(), site,
           prestationId: prestation.id, prestationNum: prestation.num, clientNom: prestation.clientNom,
           materielId: l.materielId, materielNom: l.materielNom,
           type: st.etat, qte, motif: (st.motif || '').trim(),

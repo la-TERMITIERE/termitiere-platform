@@ -16,10 +16,12 @@ import { toast } from '../core/notifications'
 import { MODULES } from '../shared/modules'
 import { ROLES, isViewAllRole, roleLabel, roleTone } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
+import { SITES } from '../modules/logistique/site/useSite'
 
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], secteur: '', poste: '', telephone: '', actif: true })
+// De même, un compte Maxi Logistique accède par défaut aux deux sites (Lomé & Kara).
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), secteur: '', poste: '', telephone: '', actif: true })
 
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
@@ -43,6 +45,15 @@ export default function Utilisateurs() {
       const cur = m.data.agroCategories || []
       const has = cur.includes(cat)
       return { ...m, data: { ...m.data, agroCategories: has ? cur.filter((x) => x !== cat) : [...cur, cat] } }
+    })
+  }
+
+  // Sites Maxi Logistique autorisés (Lomé / Kara).
+  function toggleLogSite(id) {
+    setModal((m) => {
+      const cur = m.data.logistiqueSites || []
+      const has = cur.includes(id)
+      return { ...m, data: { ...m.data, logistiqueSites: has ? cur.filter((x) => x !== id) : [...cur, id] } }
     })
   }
 
@@ -193,6 +204,27 @@ export default function Utilisateurs() {
                 <p className="mt-1 text-[11px] text-gray-400">
                   Astuce : laissez tout décoché et l'agent n'aura accès à aucune saisie d'animaux ; cochez une ou plusieurs catégories pour l'autoriser.
                 </p>
+              </FormGroup>
+            )}
+
+            {/* Sites Maxi Logistique (Lomé / Kara) — rôles non « voit tout » ayant le module */}
+            {!isViewAllRole(modal.data.role) && modal.data.modules.includes('logistique') && (
+              <FormGroup label="Sites Maxi Logistique autorisés"
+                hint="Choisissez le(s) site(s) auxquels ce compte a accès. Aucun coché = accès à aucun site logistique.">
+                <div className="flex flex-wrap gap-2">
+                  {SITES.map((s) => {
+                    const active = (modal.data.logistiqueSites || []).includes(s.id)
+                    return (
+                      <button key={s.id} type="button" onClick={() => toggleLogSite(s.id)}
+                        className="rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors"
+                        style={active
+                          ? { background: s.accent, borderColor: s.accent, color: '#fff' }
+                          : { borderColor: '#e5e7eb', color: '#475569' }}>
+                        {active ? '✓ ' : ''}{s.emoji} {s.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </FormGroup>
             )}
 

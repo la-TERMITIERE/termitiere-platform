@@ -13,8 +13,12 @@ export default function Sidebar({ open, onClose }) {
   const { user, role, hasModule, isAdmin, logout } = useAuth()
 
   // Module actif déduit du premier segment de l'URL
-  const seg = location.pathname.split('/')[1]
+  const parts = location.pathname.split('/')
+  const seg = parts[1]
   const activeModule = getModule(seg)
+  // Maxi Logistique : sous-application (site) déduite du 2e segment.
+  const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
+  const logSite = activeModule?.id === 'logistique' && LOG_SITES[parts[2]] ? parts[2] : null
 
   // Badge demandes AGRO : factures en attente d'approbation ou d'ajustement d'écart.
   const { data: facturesAgro } = useCollection('agro_factures')
@@ -22,7 +26,7 @@ export default function Sidebar({ open, onClose }) {
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
-    logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
+    logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut) && (!logSite || (d.site || 'lome') === logSite)).length,
     briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
   }
 
@@ -37,8 +41,21 @@ export default function Sidebar({ open, onClose }) {
     }`
 
   // Filtre les liens de navigation selon le rôle (propriété `roles` optionnelle)
-  const moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
+  let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
     .filter((item) => !item.roles || item.roles.includes(role))
+
+  // Maxi Logistique : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
+  // On préfixe alors chaque destination par /logistique/<site>/…
+  if (activeModule?.id === 'logistique') {
+    moduleNav = logSite
+      ? moduleNav.map((item) => ({
+          ...item,
+          to: item.to === '/logistique' ? `/logistique/${logSite}` : item.to.replace('/logistique/', `/logistique/${logSite}/`)
+        }))
+      : []
+  }
+
+  const moduleTitle = activeModule ? (logSite ? `${activeModule.nom} · ${LOG_SITES[logSite]}` : activeModule.nom) : "Toujours dans l'action"
 
   return (
     <>
@@ -88,7 +105,7 @@ export default function Sidebar({ open, onClose }) {
                 LA TERMITIÈRE
               </p>
               <p style={{ margin: 0, marginTop: 2, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,0.65)' }}>
-                {activeModule ? activeModule.nom : "Toujours dans l'action"}
+                {moduleTitle}
               </p>
             </div>
 
@@ -141,7 +158,7 @@ export default function Sidebar({ open, onClose }) {
           {activeModule && moduleNav.length > 0 && (
             <>
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
-                {activeModule.nom}
+                {moduleTitle}
               </p>
               {moduleNav.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>

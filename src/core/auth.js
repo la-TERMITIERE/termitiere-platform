@@ -104,6 +104,9 @@ function sessionFromProfile(p) {
     // Droits de saisie par catégorie d'animaux (Maxi-Agro). null = aucune restriction
     // (comptes hérités) ; tableau (même vide) = restriction explicite.
     agroCategories: Array.isArray(p.agroCategories) ? p.agroCategories : null,
+    // Sites Maxi Logistique autorisés (Lomé / Kara). null = aucune restriction
+    // (comptes hérités = les deux) ; tableau (même vide) = restriction explicite.
+    logistiqueSites: Array.isArray(p.logistiqueSites) ? p.logistiqueSites : null,
     secteur: p.secteur || '',
     actif: p.actif !== false
   }

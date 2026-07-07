@@ -16,6 +16,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateTime, genId } from '../../utils/formatters'
 import { CAT_MATERIEL, catColor } from './data'
+import { useSite, matchSite } from './site/useSite'
 import {
   previousInventoryDate, getInventaire, autoSorties, agregerMateriel, sommeMouvements,
   mouvementsDepuisSaisie, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent,
@@ -24,11 +25,17 @@ import {
 
 export default function SaisieMagasin() {
   const { user, role } = useAuth()
-  const { data: inventaires } = useCollection('logistique_inventaires')
-  const { data: demandes } = useCollection('logistique_demandes')
-  const { data: retoursCol } = useCollection('logistique_retours')
+  const site = useSite()
+  const { data: allInventaires } = useCollection('logistique_inventaires')
+  const { data: allDemandes } = useCollection('logistique_demandes')
+  const { data: allRetoursCol } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
   const saveMateriel = useLogistiqueStore((s) => s.saveMateriel)
+
+  // Cloisonnement par site : chaque magasin (Lomé / Kara) a son propre stock.
+  const inventaires = useMemo(() => allInventaires.filter((i) => matchSite(i, site)), [allInventaires, site])
+  const demandes = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
+  const retoursCol = useMemo(() => allRetoursCol.filter((r) => matchSite(r, site)), [allRetoursCol, site])
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
@@ -115,10 +122,10 @@ export default function SaisieMagasin() {
           autoSor
         }
       })
-      await setItem('logistique_inventaires', date, {
-        date, agentId: user.uid, agentNom: user.nom, savedAt: ts(), materiels
+      await setItem('logistique_inventaires', `${site}__${date}`, {
+        date, site, agentId: user.uid, agentNom: user.nom, savedAt: ts(), materiels
       })
-      await audit('logistique', 'SAISIE_MAGASIN', `Saisie magasin du ${date}`)
+      await audit('logistique', 'SAISIE_MAGASIN', `${site === 'lome' ? 'Lomé' : 'Kara'} — saisie magasin du ${date}`)
       toast.success('Saisie enregistrée ✓')
     } catch (e) {
       toast.error(e.message)
@@ -145,7 +152,7 @@ export default function SaisieMagasin() {
         </div>
         <div className="ml-auto flex gap-2">
           {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un matériel</Button>}
-          <Link to="/logistique/demandes"><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
+          <Link to={`/logistique/${site}/demandes`}><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
           {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
       </div>
