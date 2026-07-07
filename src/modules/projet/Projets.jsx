@@ -1,17 +1,19 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, X, Play, CheckCircle2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, X, Play, CheckCircle2, FileDown, Loader2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem } from '../../core/db'
-import { STATUTS_PROJET, TYPES_PROJET, PRIORITES } from './data'
+import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, UNITES_SUPERFICIE, uniteSuperficie } from './data'
 import { avancementProjet, genererNumProjet } from './logic'
 import { formatDateShort, formatMoney } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
+import { genererRapportProjetPDF } from './rapportPdf'
+import { marquerVoletVu } from './vues'
 
 // ── Champ responsable : liste utilisateurs + saisie libre ────────────────────
 function ChampResponsable({ value, onChange, users }) {
@@ -93,13 +95,25 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', depenses: '', description: '' }
+const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
 
 export default function Projets() {
-  const { data: projets } = useCollection('projets')
-  const { data: taches }  = useCollection('projet_taches')
-  const { data: users }   = useCollection('users')
-  const { user }          = useAuthStore()
+  const { data: projets }      = useCollection('projets')
+  const { data: taches }       = useCollection('projet_taches')
+  const { data: depenses }     = useCollection('projet_depenses')
+  const { data: commentaires } = useCollection('projet_commentaires')
+  const { data: users }        = useCollection('users')
+  const [generatingPdf, setGeneratingPdf] = useState(null)
+
+  // Total dépensé par projet — recalculé en temps réel à chaque dépense saisie.
+  const depenseParProjet = useMemo(() => {
+    const map = {}
+    depenses.forEach((d) => { if (d.projetId) map[d.projetId] = (map[d.projetId] || 0) + (Number(d.montant) || 0) })
+    return map
+  }, [depenses])
+  const { user, role }    = useAuthStore()
+  const lectureSeule      = role === 'chef_projet'
+  useEffect(() => { marquerVoletVu(user?.uid, 'projetProjets') }, [user?.uid])
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState(VIDE)
   const [editing, setEditing] = useState(null)
@@ -108,6 +122,7 @@ export default function Projets() {
   const [filtreStatut, setFiltreStatut] = useState('')
   const [tri, setTri]               = useState('date_desc')
   const [mesProjets, setMesProjets] = useState(false)
+  const [detail, setDetail]         = useState(null)
 
   const nomConnecte = user?.nom || user?.login || ''
 
@@ -145,14 +160,17 @@ export default function Projets() {
       dateDebut: p.dateDebut ? new Date(p.dateDebut).toISOString().slice(0,10) : '',
       dateFin:   p.dateFin   ? new Date(p.dateFin).toISOString().slice(0,10)   : '',
       dureeIndeterminee: !!p.dureeIndeterminee,
-      budget: p.budget ?? '', depenses: p.depenses ?? '', description: p.description || ''
+      budget: p.budget ?? '', description: p.description || '',
+      superficie: p.superficie ?? '', superficieUnite: p.superficieUnite || 'ha'
     })
     setEditing(p)
     setModal(true)
   }
 
+  const budgetValide = form.budget !== '' && Number(form.budget) > 0
+
   const handleSave = async () => {
-    if (!form.nom.trim()) return
+    if (!form.nom.trim() || !budgetValide) return
     setSaving(true)
     try {
       const now = Date.now()
@@ -163,7 +181,7 @@ export default function Projets() {
           dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
           dateFin:   (!form.dureeIndeterminee && form.dateFin) ? new Date(form.dateFin).getTime() : null,
           budget:   form.budget   !== '' ? Number(form.budget)   : null,
-          depenses: form.depenses !== '' ? Number(form.depenses) : null,
+          superficie: (form.type === 'agricole' && form.superficie !== '') ? Number(form.superficie) : null,
           updatedAt: now
         })
         await audit('projet', 'projet_modifie', `${form.nom} (${editing.id})`)
@@ -175,6 +193,7 @@ export default function Projets() {
           dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
           dateFin:   (!form.dureeIndeterminee && form.dateFin) ? new Date(form.dateFin).getTime() : null,
           budget: form.budget !== '' ? Number(form.budget) : null,
+          superficie: (form.type === 'agricole' && form.superficie !== '') ? Number(form.superficie) : null,
           createdAt: now, updatedAt: now,
           createdBy: null
         })
@@ -201,6 +220,19 @@ export default function Projets() {
     if (!window.confirm(`Marquer "${p.nom}" comme terminé ?`)) return
     await setItem('projets', p.id, { ...p, statut: 'termine', updatedAt: Date.now() })
     await audit('projet', 'projet_modifie', `${p.nom} — terminé`)
+  }
+
+  const telechargerPDF = async (p) => {
+    setGeneratingPdf(p.id)
+    try {
+      await genererRapportProjetPDF(p, taches, depenses, commentaires)
+      await audit('projet', 'rapport_pdf_genere', p.nom)
+    } catch (e) {
+      console.error(e)
+      alert('Erreur lors de la génération du PDF.')
+    } finally {
+      setGeneratingPdf(null)
+    }
   }
 
   return (
@@ -245,8 +277,19 @@ export default function Projets() {
             Mes projets
           </button>
         )}
-        <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouveau projet</Button>
+        {!lectureSeule && (
+          <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouveau projet</Button>
+        )}
       </div>
+
+      {liste.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5">
+          <span className="text-lg">💡</span>
+          <p className="text-sm font-semibold text-teal-800">
+            Clique sur un projet pour voir tous ses détails et télécharger son rapport PDF.
+          </p>
+        </div>
+      )}
 
       {!liste.length ? (
         <Card><p className="py-10 text-center text-sm text-gray-400">Aucun projet trouvé.</p></Card>
@@ -254,9 +297,16 @@ export default function Projets() {
         <div className="space-y-2">
           {liste.map((p) => {
             const tachesDuProjet = taches.filter((t) => t.projetId === p.id)
-            const pct = avancementProjet(tachesDuProjet, p)
+            const depense    = depenseParProjet[p.id] || 0
+            const budget     = Number(p.budget) || 0
+            const reste      = budget - depense
+            const pctBudget  = budget > 0 ? Math.round((depense / budget) * 100) : 0
+            const superficie = Number(p.superficie) || 0
+            const coutParUnite = (p.type === 'agricole' && superficie > 0 && depense > 0) ? depense / superficie : null
+            // Avancement basé sur les tâches ; sans tâche, on retombe sur le taux de consommation du budget.
+            const pct = avancementProjet(tachesDuProjet, { ...p, depenses: depense })
             return (
-              <Card key={p.id}>
+              <Card key={p.id} className="cursor-pointer" onClick={() => setDetail(p)}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -272,20 +322,46 @@ export default function Projets() {
                       {p.dureeIndeterminee
                         ? <span className="italic text-gray-400">Durée indéterminée</span>
                         : p.dateFin && <span>Fin : {formatDateShort(p.dateFin)}</span>}
-                      {p.budget      && <span>Budget : {Number(p.budget).toLocaleString('fr-FR')} FCFA</span>}
+                      {p.type === 'agricole' && superficie > 0 && (
+                        <span className="font-medium text-green-700">🌱 {superficie} {uniteSuperficie(p.superficieUnite)}</span>
+                      )}
                     </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="h-1.5 flex-1 rounded-full bg-gray-100">
-                        <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
+
+                    {/* Suivi budgétaire — le reste diminue à chaque dépense */}
+                    {budget > 0 && (
+                      <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
+                          <span className="text-gray-500">Budget : <b className="text-gray-700">{formatMoney(budget)}</b></span>
+                          <span className="text-gray-500">Dépensé : <b className="text-amber-600">{formatMoney(depense)}</b></span>
+                          <span className="text-gray-500">Reste : <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-gray-200">
+                          <div className={`h-1.5 rounded-full transition-all ${pctBudget >= 100 ? 'bg-red-500' : 'bg-amber-500'}`}
+                            style={{ width: `${Math.min(100, pctBudget)}%` }} />
+                        </div>
+                        {reste < 0 && (
+                          <p className="mt-1 text-[10px] font-bold text-red-600">⚠ Budget dépassé de {formatMoney(-reste)}</p>
+                        )}
+                        {coutParUnite !== null && (
+                          <p className="mt-1 text-[10px] font-semibold text-green-700">Coût par {uniteSuperficie(p.superficieUnite)} : {formatMoney(coutParUnite)}</p>
+                        )}
                       </div>
-                      <span className="text-[10px] font-bold text-gray-500">
-                        {tachesDuProjet.length > 0
-                          ? `${pct}% — ${tachesDuProjet.filter(t=>t.statut==='terminee').length}/${tachesDuProjet.length} tâches`
-                          : `${pct}% — versé ${formatMoney(p.depenses)} / ${formatMoney(p.budget)}`}
-                      </span>
-                    </div>
+                    )}
+
+                    {/* Avancement des tâches */}
+                    {tachesDuProjet.length > 0 && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 rounded-full bg-gray-100">
+                          <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-500">
+                          {pct}% — {tachesDuProjet.filter(t=>t.statut==='terminee').length}/{tachesDuProjet.length} tâches
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
+                  {!lectureSeule && (
+                  <div className="flex shrink-0 flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
                       <button onClick={() => openEdit(p)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-teal-600"><Pencil size={15} /></button>
                       <button onClick={() => handleDelete(p)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
@@ -303,6 +379,7 @@ export default function Projets() {
                       </button>
                     )}
                   </div>
+                  )}
                 </div>
               </Card>
             )
@@ -366,17 +443,31 @@ export default function Projets() {
                 value={form.dateFin} onChange={(e) => setForm((f) => ({ ...f, dateFin: e.target.value }))} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA)</label>
-              <input type="number" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
+          {form.type === 'agricole' && (
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-green-100 bg-green-50 p-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Superficie cultivée</label>
+                <input type="number" step="any" min="0" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                  placeholder="ex : 2.5"
+                  value={form.superficie} onChange={(e) => setForm((f) => ({ ...f, superficie: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Unité</label>
+                <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                  value={form.superficieUnite} onChange={(e) => setForm((f) => ({ ...f, superficieUnite: e.target.value }))}>
+                  {Object.entries(UNITES_SUPERFICIE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Dépenses réelles (FCFA)</label>
-              <input type="number" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.depenses} onChange={(e) => setForm((f) => ({ ...f, depenses: e.target.value }))} />
-            </div>
+          )}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA) *</label>
+            <input type="number" min="0" required
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.budget !== '' && !budgetValide ? 'border-red-300' : 'border-gray-200'}`}
+              value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
+            {form.budget !== '' && !budgetValide
+              ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
+              : <p className="mt-1 text-[11px] text-gray-400">Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
@@ -385,9 +476,105 @@ export default function Projets() {
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.nom.trim()}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
+            <Button onClick={handleSave} disabled={saving || !form.nom.trim() || !budgetValide}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* ── Fiche détail d'un projet ── */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.nom || ''}>
+        {detail && (() => {
+          const d = detail
+          const tachesDuProjet = taches.filter((t) => t.projetId === d.id)
+          const depense    = depenseParProjet[d.id] || 0
+          const budget     = Number(d.budget) || 0
+          const reste      = budget - depense
+          const pctBudget  = budget > 0 ? Math.round((depense / budget) * 100) : 0
+          const superficie = Number(d.superficie) || 0
+          const coutParUnite = (d.type === 'agricole' && superficie > 0 && depense > 0) ? depense / superficie : null
+          const pct = avancementProjet(tachesDuProjet, { ...d, depenses: depense })
+          const typeLabel = TYPES_PROJET.find((t) => t.id === d.type)?.label || d.type || '—'
+
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-gray-400">{d.num}</span>
+                <Badge tone={STATUTS_PROJET[d.statut]?.tone}>{STATUTS_PROJET[d.statut]?.label}</Badge>
+                <Badge tone={PRIORITES[d.priorite]?.tone}>{PRIORITES[d.priorite]?.label}</Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-500">Type : </span><span className="font-semibold">{typeLabel}</span></div>
+                <div><span className="text-gray-500">Responsable : </span><span className="font-semibold">{d.responsable || '—'}</span></div>
+                <div><span className="text-gray-500">Début : </span><span className="font-semibold">{d.dateDebut ? formatDateShort(d.dateDebut) : '—'}</span></div>
+                <div>
+                  <span className="text-gray-500">Fin prévue : </span>
+                  <span className="font-semibold">{d.dureeIndeterminee ? 'Durée indéterminée' : (d.dateFin ? formatDateShort(d.dateFin) : '—')}</span>
+                </div>
+                {d.type === 'agricole' && superficie > 0 && (
+                  <div><span className="text-gray-500">Superficie : </span><span className="font-semibold text-green-700">🌱 {superficie} {uniteSuperficie(d.superficieUnite)}</span></div>
+                )}
+              </div>
+
+              {d.description && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Description</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.description}</p>
+                </div>
+              )}
+
+              {/* Suivi budgétaire */}
+              {budget > 0 && (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="mb-2 text-xs font-bold uppercase text-gray-500">Suivi budgétaire</p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                    <span className="text-gray-500">Budget : <b className="text-gray-700">{formatMoney(budget)}</b></span>
+                    <span className="text-gray-500">Dépensé : <b className="text-amber-600">{formatMoney(depense)}</b></span>
+                    <span className="text-gray-500">Reste : <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-gray-200">
+                    <div className={`h-1.5 rounded-full transition-all ${pctBudget >= 100 ? 'bg-red-500' : 'bg-amber-500'}`}
+                      style={{ width: `${Math.min(100, pctBudget)}%` }} />
+                  </div>
+                  {reste < 0 && (
+                    <p className="mt-1 text-xs font-bold text-red-600">⚠ Budget dépassé de {formatMoney(-reste)}</p>
+                  )}
+                  {coutParUnite !== null && (
+                    <p className="mt-1 text-xs font-semibold text-green-700">Coût par {uniteSuperficie(d.superficieUnite)} : {formatMoney(coutParUnite)}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Avancement des tâches */}
+              {tachesDuProjet.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Avancement des tâches</p>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 rounded-full bg-gray-100">
+                      <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500">
+                      {pct}% — {tachesDuProjet.filter(t => t.statut === 'terminee').length}/{tachesDuProjet.length} tâches
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Export PDF — bien visible en bas de la fiche */}
+              <div className="border-t border-gray-100 pt-4">
+                <Button onClick={() => telechargerPDF(d)} disabled={generatingPdf === d.id} className="w-full justify-center">
+                  {generatingPdf === d.id
+                    ? <><Loader2 size={15} className="mr-2 animate-spin" />Génération du PDF…</>
+                    : <><FileDown size={15} className="mr-2" />Télécharger le rapport PDF</>
+                  }
+                </Button>
+                <p className="mt-2 text-center text-[11px] text-gray-400">
+                  Ce PDF reprend toutes les informations ci-dessus, ainsi que le détail complet des tâches, dépenses et du journal de bord du projet.
+                </p>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )

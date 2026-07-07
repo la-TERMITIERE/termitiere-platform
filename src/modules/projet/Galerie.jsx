@@ -12,6 +12,8 @@ import { STATUTS_PROJET } from './data'
 import { formatDateShort } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
+import { useAuthStore } from '../../core/auth'
+import { marquerVoletVu } from './vues'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,6 +29,8 @@ function formatTaille(octets) {
 
 export default function Galerie() {
   const { data: projets } = useCollection('projets')
+  const { user } = useAuthStore()
+  useEffect(() => { marquerVoletVu(user?.uid, 'projetGalerie') }, [user?.uid])
   const [filtreProjet, setFiltreProjet] = useState('')
   const [legende, setLegende]           = useState('')
   const [uploading, setUploading]       = useState(false)

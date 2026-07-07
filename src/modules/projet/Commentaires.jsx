@@ -1,5 +1,5 @@
 // Commentaires & journal de bord par projet.
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Send, Trash2, MessageSquare } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -10,11 +10,13 @@ import { useAuth } from '../../hooks/useAuth'
 import { STATUTS_PROJET } from './data'
 import { formatDateTime } from '../../utils/formatters'
 import { audit } from '../../core/audit'
+import { marquerVoletVu } from './vues'
 
 export default function Commentaires() {
   const { data: projets }      = useCollection('projets')
   const { data: commentaires } = useCollection('projet_commentaires')
   const { user } = useAuth()
+  useEffect(() => { marquerVoletVu(user?.uid, 'projetCommentaires') }, [user?.uid])
 
   const [projetId, setProjetId] = useState('')
   const [texte, setTexte]       = useState('')

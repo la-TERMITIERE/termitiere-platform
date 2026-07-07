@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
 import { roleLabel } from '../../core/roles'
 import { estActif } from '../workflow'
+import { ACTIONS_PAR_VOLET } from '../../modules/projet/vues'
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
@@ -20,10 +21,26 @@ export default function Sidebar({ open, onClose }) {
   const { data: facturesAgro } = useCollection('agro_factures')
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
+
+  // Badges "nouveauté" E-G.Pro : ce que d'autres ont ajouté depuis ma dernière visite du volet.
+  const { data: auditProjet }  = useCollection('audit_global')
+  const { data: derniereVues } = useCollection('projet_dernieres_vues')
+  const projetBadges = {}
+  if (activeModule?.id === 'projet') {
+    const monUid = user?.uid
+    Object.entries(ACTIONS_PAR_VOLET).forEach(([cle, actions]) => {
+      const vu = derniereVues.find((v) => v.userId === monUid && v.section === cle)?.vu || 0
+      projetBadges[cle] = auditProjet.filter((a) =>
+        a.module === 'projet' && actions.includes(a.action) && a.userId !== monUid && a.timestamp > vu
+      ).length
+    })
+  }
+
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
     logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
-    briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
+    briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length,
+    ...projetBadges
   }
 
   const accentColor = activeModule?.color || '#BC3C31'
