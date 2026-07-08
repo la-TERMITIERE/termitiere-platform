@@ -1,6 +1,6 @@
 // Gestion des utilisateurs de la plateforme (portail, admin uniquement).
 // Permet d'attribuer à chaque utilisateur ses droits d'accès aux modules.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Pencil, ShieldCheck } from 'lucide-react'
 import Card from '../shared/ui/Card'
 import Button from '../shared/ui/Button'
@@ -23,11 +23,24 @@ import { SITES } from '../modules/logistique/site/useSite'
 // De même, un compte Maxi Logistique accède par défaut aux deux sites (Lomé & Kara).
 const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), secteur: '', poste: '', telephone: '', actif: true })
 
+// Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
+// Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
+const SECTEURS_DEFAUT = MODULES.map((m) => m.nom)
+const POSTES_DEFAUT = ['Gérant', 'Comptable', 'Responsable RH', 'Chef de projet', 'Chef de chantier', 'Secrétaire', 'Agent de saisie', 'Superviseur', 'Tata', 'Chauffeur', 'Magasinier']
+
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
   const [modal, setModal] = useState(null) // { data, isNew }
 
   useEffect(() => { load() }, [load])
+
+  // Suggestions Secteur/Poste : valeurs par défaut + celles déjà saisies par d'autres comptes.
+  const secteursSuggestions = useMemo(() =>
+    [...new Set([...SECTEURS_DEFAUT, ...users.map((u) => u.secteur).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
+  [users])
+  const postesSuggestions = useMemo(() =>
+    [...new Set([...POSTES_DEFAUT, ...users.map((u) => u.poste).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
+  [users])
 
   function openNew() { setModal({ data: empty(), isNew: true }) }
   function openEdit(u) { setModal({ data: { ...empty(), ...u, pass: u.pass || '' }, isNew: false }) }
@@ -148,9 +161,19 @@ export default function Utilisateurs() {
                 <Input value={modal.data.login} disabled={!modal.isNew} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, login: e.target.value.trim() } }))} />
               </FormGroup>
               <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
-              <FormGroup label="Secteur"><Input value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} /></FormGroup>
+              <FormGroup label="Secteur">
+                <Input list="secteurs-suggestions" autoComplete="off"
+                  value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} />
+                <datalist id="secteurs-suggestions">
+                  {secteursSuggestions.map((s) => <option key={s} value={s} />)}
+                </datalist>
+              </FormGroup>
               <FormGroup label="Poste (fonction dans l'entreprise)" className="col-span-2" hint="Ex. Comptable, Responsable RH, Gérant… — affiché notamment quand cette personne est choisie comme bénéficiaire d'un décaissement.">
-                <Input value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} placeholder="ex: Comptable" />
+                <Input list="postes-suggestions" autoComplete="off"
+                  value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} placeholder="ex: Comptable" />
+                <datalist id="postes-suggestions">
+                  {postesSuggestions.map((p) => <option key={p} value={p} />)}
+                </datalist>
               </FormGroup>
               <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 — pour les alertes WhatsApp">
                 <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />

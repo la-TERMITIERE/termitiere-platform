@@ -1,6 +1,24 @@
 // Gestion de Projet — logique métier.
 import { SEUILS_DEFAUT } from './data'
 import { formatDateShort } from '../../utils/formatters'
+import { PROJET_ROLES_CLOISONNES } from '../../core/roles'
+
+// Cloisonnement par projet : un rôle cloisonné (ex. chef de projet) ne voit que les
+// projets dont il est désigné « Responsable » (p.responsableUid). Les autres rôles
+// voient tout, comme aujourd'hui.
+export function projetsVisibles(projets = [], user, role) {
+  if (!PROJET_ROLES_CLOISONNES.includes(role)) return projets
+  const uid = user?.uid
+  if (!uid) return []
+  return projets.filter((p) => p.responsableUid === uid)
+}
+
+// Sous-ensemble d'une collection liée à des projets (tâches, dépenses, documents…)
+// via `projetId`, restreint à un ensemble de projets déjà filtré par projetsVisibles().
+export function scopeParProjets(items = [], projetsAutorises = []) {
+  const ids = new Set(projetsAutorises.map((p) => p.id))
+  return items.filter((it) => ids.has(it.projetId))
+}
 
 export function avancementProjet(taches = [], projet = null) {
   // Projet AVEC tâches : avancement = tâches terminées / total des tâches.

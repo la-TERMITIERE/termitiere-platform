@@ -11,6 +11,7 @@ import { ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 function ChampAssignee({ value, onChange, users }) {
   const [open, setOpen]     = useState(false)
@@ -86,7 +87,12 @@ const VIDE_TACHE = {
 // ─── Onglet Tâches ────────────────────────────────────────────────────────────
 
 function OngletTaches({ taches, projets, users, depenses }) {
-  const { user }              = useAuthStore()
+  const { user, role }        = useAuthStore()
+  // La secrétaire peut démarrer une tâche, mais ne soumet ni ne valide (décision terrain).
+  const peutSoumettreValider  = role !== 'secretaire'
+  // Le chef de projet n'a pas la main sur l'argent : pas de saisie de montant ni de versement
+  // (il garde en revanche la lecture du suivi financier déjà saisi par d'autres).
+  const peutSaisirMontant     = role !== 'chef_projet'
 
   const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
   const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])
@@ -136,7 +142,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
     setEditing(t); setModal(true)
   }
 
-  const montantValide = form.montantPrevu !== '' && Number(form.montantPrevu) > 0
+  const montantValide = !peutSaisirMontant || (form.montantPrevu !== '' && Number(form.montantPrevu) > 0)
   const noteValide    = form.note.trim() !== ''
   const formValide    = form.titre.trim() !== '' && montantValide && noteValide
 
@@ -280,7 +286,9 @@ function OngletTaches({ taches, projets, users, depenses }) {
                   </div>
                   <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => openEdit(t)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-teal-600"><Pencil size={15} /></button>
-                    <button onClick={() => handleDelete(t)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                    {role !== 'secretaire' && (
+                      <button onClick={() => handleDelete(t)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                    )}
                   </div>
                 </div>
 
@@ -347,7 +355,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                  {PROGRESSION[t.statut] && (
+                  {PROGRESSION[t.statut] && (peutSoumettreValider || t.statut === 'a_faire') && (
                     <button onClick={() => avancer(t)}
                       className={`flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold text-white transition-colors ${COLOR_BTN[t.statut]}`}>
                       {ICONE_BTN[t.statut]}{LABEL_BTN[t.statut]}
@@ -432,16 +440,18 @@ function OngletTaches({ taches, projets, users, depenses }) {
               <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
                 value={form.echeance} onChange={(e) => setForm((f) => ({ ...f, echeance: e.target.value }))} />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Montant arrêté (FCFA) *</label>
-              <input type="number" min="0"
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantPrevu !== '' && !montantValide ? 'border-red-300' : 'border-gray-200'}`}
-                placeholder="Montant total convenu avec le prestataire"
-                value={form.montantPrevu} onChange={(e) => setForm((f) => ({ ...f, montantPrevu: e.target.value }))} />
-              {form.montantPrevu !== '' && !montantValide && (
-                <p className="mt-1 text-[11px] text-red-500">Le montant doit être supérieur à 0.</p>
-              )}
-            </div>
+            {peutSaisirMontant && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Montant arrêté (FCFA) *</label>
+                <input type="number" min="0"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantPrevu !== '' && !montantValide ? 'border-red-300' : 'border-gray-200'}`}
+                  placeholder="Montant total convenu avec le prestataire"
+                  value={form.montantPrevu} onChange={(e) => setForm((f) => ({ ...f, montantPrevu: e.target.value }))} />
+                {form.montantPrevu !== '' && !montantValide && (
+                  <p className="mt-1 text-[11px] text-red-500">Le montant doit être supérieur à 0.</p>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Note (détails) *</label>
@@ -490,7 +500,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
             </div>
           </div>
 
-          {!editing && (
+          {!editing && peutSaisirMontant && (
             <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                 <Wallet size={14} className="text-teal-600" /> Versement initial
@@ -743,13 +753,18 @@ function OngletHistorique({ projets }) {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export default function Taches() {
-  const { data: taches }  = useCollection('projet_taches')
-  const { data: projets } = useCollection('projets')
-  const { data: users }   = useCollection('users')
-  const { data: depenses } = useCollection('projet_depenses')
-  const { user } = useAuthStore()
+  const { data: tachesTous }   = useCollection('projet_taches')
+  const { data: projetsTous }  = useCollection('projets')
+  const { data: users }        = useCollection('users')
+  const { data: depensesTous } = useCollection('projet_depenses')
+  const { user, role } = useAuthStore()
   useEffect(() => { marquerVoletVu(user?.uid, 'projetTaches') }, [user?.uid])
   const [onglet, setOnglet] = useState('taches')
+
+  // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches/dépenses.
+  const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
+  const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
 
   return (
     <div className="space-y-4">

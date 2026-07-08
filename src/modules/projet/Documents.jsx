@@ -12,6 +12,7 @@ import { audit } from '../../core/audit'
 import { STATUTS_PROJET } from './data'
 import { useAuthStore } from '../../core/auth'
 import { marquerVoletVu } from './vues'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 const RUBRIQUES = [
   { id: 'cahier_charges', label: 'Cahier des charges' },
@@ -135,10 +136,14 @@ function OngletDocuments({ projets, taches }) {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export default function Documents() {
-  const { data: projets } = useCollection('projets')
-  const { data: taches }  = useCollection('projet_taches')
-  const { user } = useAuthStore()
+  const { data: projetsTous } = useCollection('projets')
+  const { data: tachesTous }  = useCollection('projet_taches')
+  const { user, role } = useAuthStore()
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDocuments') }, [user?.uid])
+
+  // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches.
+  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const taches  = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
 
   return <OngletDocuments projets={projets} taches={taches} />
 }

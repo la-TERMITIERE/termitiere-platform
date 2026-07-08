@@ -1,12 +1,17 @@
 // Fonctions utilitaires de formatage — monnaie FCFA, dates FR, identifiants.
 
+// L'espace insécable fine (U+202F) utilisée par défaut comme séparateur de milliers en
+// locale fr-FR n'est pas supportée par les polices standard de jsPDF (Helvetica…) — elle
+// s'affiche alors bien trop large dans les PDF générés. On la remplace par une espace normale.
+const espacerMilliers = (s) => s.replace(/[  ]/g, ' ')
+
 // Formate un montant en FCFA (entier, sans décimales).
 export const formatMoney = (amount) =>
-  new Intl.NumberFormat('fr-FR').format(Math.round(Number(amount) || 0)) + ' FCFA'
+  espacerMilliers(new Intl.NumberFormat('fr-FR').format(Math.round(Number(amount) || 0))) + ' FCFA'
 
 // Formate un nombre simple (séparateur de milliers FR).
 export const formatNumber = (n) =>
-  new Intl.NumberFormat('fr-FR').format(Number(n) || 0)
+  espacerMilliers(new Intl.NumberFormat('fr-FR').format(Number(n) || 0))
 
 // Date longue : "01 juin 2026". Accepte string 'YYYY-MM-DD' ou Date.
 export const formatDate = (dateStr) => {

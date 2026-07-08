@@ -11,12 +11,17 @@ import { STATUTS_PROJET } from './data'
 import { formatDateTime } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { marquerVoletVu } from './vues'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 export default function Commentaires() {
-  const { data: projets }      = useCollection('projets')
-  const { data: commentaires } = useCollection('projet_commentaires')
-  const { user } = useAuth()
+  const { data: projetsTous }      = useCollection('projets')
+  const { data: commentairesTous } = useCollection('projet_commentaires')
+  const { user, role } = useAuth()
   useEffect(() => { marquerVoletVu(user?.uid, 'projetCommentaires') }, [user?.uid])
+
+  // Cloisonnement : un chef de projet ne voit que les commentaires de ses projets.
+  const projets      = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const commentaires = useMemo(() => scopeParProjets(commentairesTous, projets), [commentairesTous, projets])
 
   const [projetId, setProjetId] = useState('')
   const [texte, setTexte]       = useState('')

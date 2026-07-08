@@ -49,6 +49,16 @@ export const PROJET_ALERTES_ROLES = ROLES.map((r) => r.value)
   .filter((v) => v !== 'chef_projet')
   .concat(['admin', 'controleur'])
 
+// E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les
+// projets dont ils sont désignés « Responsable » (cf. logic.js → projetsVisibles).
+export const PROJET_ROLES_CLOISONNES = ['chef_projet']
+
+// E-G.Pro : volet Dépenses — tout le monde SAUF le chef de projet (ne saisit pas
+// d'argent ; il garde toutefois la lecture du suivi financier sur les tâches).
+export const PROJET_DEPENSES_ROLES = ROLES.map((r) => r.value)
+  .filter((v) => v !== 'chef_projet')
+  .concat(['admin', 'controleur'])
+
 export const isFullAccessRole  = (r) => FULL_ACCESS_ROLES.includes(r)
 export const isViewAllRole     = (r) => VIEW_ALL_ROLES.includes(r)
 export const isApproverRole    = (r) => APPROVER_ROLES.includes(r)

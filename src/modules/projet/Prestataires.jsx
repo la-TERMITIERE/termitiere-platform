@@ -5,11 +5,19 @@ import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { METIERS_PRESTATAIRE, annuairePrestataires } from './prestataire'
+import { useAuthStore } from '../../core/auth'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 export default function Prestataires() {
-  const { data: depenses } = useCollection('projet_depenses')
-  const { data: taches }   = useCollection('projet_taches')
-  const { data: projets }  = useCollection('projets')
+  const { data: depensesTous } = useCollection('projet_depenses')
+  const { data: tachesTous }   = useCollection('projet_taches')
+  const { data: projetsTous }  = useCollection('projets')
+  const { user, role } = useAuthStore()
+
+  // Cloisonnement : un chef de projet ne voit que les prestataires de ses projets.
+  const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
+  const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
 
   const [search, setSearch]     = useState('')
   const [selection, setSelection] = useState(null)

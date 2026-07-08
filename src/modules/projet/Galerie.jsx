@@ -14,6 +14,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { useAuthStore } from '../../core/auth'
 import { marquerVoletVu } from './vues'
+import { projetsVisibles } from './logic'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -28,9 +29,11 @@ function formatTaille(octets) {
 // ───────────────────────────────────────────────────────────────────────────
 
 export default function Galerie() {
-  const { data: projets } = useCollection('projets')
-  const { user } = useAuthStore()
+  const { data: projetsTous } = useCollection('projets')
+  const { user, role } = useAuthStore()
   useEffect(() => { marquerVoletVu(user?.uid, 'projetGalerie') }, [user?.uid])
+  // Cloisonnement : un chef de projet ne voit que la galerie de ses projets.
+  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
   const [filtreProjet, setFiltreProjet] = useState('')
   const [legende, setLegende]           = useState('')
   const [uploading, setUploading]       = useState(false)

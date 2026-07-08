@@ -12,6 +12,8 @@ import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from
 import { formatDateShort } from '../../utils/formatters'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
+import { useAuthStore } from '../../core/auth'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 const TYPE_ALERTE = {
   projet_retard:   { color: 'text-red-600',    bg: 'border-red-200 bg-red-50',       label: 'Projet en retard'      },
@@ -23,11 +25,18 @@ const TYPE_ALERTE = {
 }
 
 export default function Dashboard() {
-  const { data: projets }  = useCollection('projets')
-  const { data: taches }   = useCollection('projet_taches')
-  const { data: configs }  = useCollection('projet_params')
-  const { data: depenses } = useCollection('projet_depenses')
+  const { data: projetsTous }  = useCollection('projets')
+  const { data: tachesTous }   = useCollection('projet_taches')
+  const { data: configs }      = useCollection('projet_params')
+  const { data: depensesTous } = useCollection('projet_depenses')
   const { data: fermeesDashboard } = useCollection('projet_alertes_dashboard_fermees')
+  const { user: utilisateur, role } = useAuthStore()
+
+  // Cloisonnement : un chef de projet ne voit que ses projets sur le Dashboard.
+  const projets  = useMemo(() => projetsVisibles(projetsTous, utilisateur, role), [projetsTous, utilisateur, role])
+  const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
+  const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
+
   const [detail, setDetail] = useState(null)
   const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
   const alertesRef = useRef(new Set())
