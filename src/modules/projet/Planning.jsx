@@ -10,6 +10,8 @@ import {
   format, differenceInDays, startOfDay, addDays
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useAuthStore } from '../../core/auth'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 const TABS = [
   { id: 'gantt',     label: 'Diagramme de Gantt', icon: BarChart3 },
@@ -25,8 +27,12 @@ const BARRE_COULEUR = {
 }
 
 export default function Planning() {
-  const { data: projets } = useCollection('projets')
-  const { data: taches }  = useCollection('projet_taches')
+  const { data: projetsTous } = useCollection('projets')
+  const { data: tachesTous }  = useCollection('projet_taches')
+  const { user, role } = useAuthStore()
+  // Cloisonnement : un chef de projet ne voit que le planning de ses projets.
+  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const taches  = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
   const [tab, setTab] = useState('gantt')
 
   return (

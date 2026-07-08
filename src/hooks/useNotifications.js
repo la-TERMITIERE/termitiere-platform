@@ -26,7 +26,8 @@ function isFor(n, user, role) {
 
 // Chaque application n'affiche que SES notifications : à l'intérieur d'un module,
 // on masque celles des autres modules pour ne pas mélanger les acteurs.
-// Sur le portail (aucun module actif), tout est visible (vue d'ensemble).
+// Sur le portail (aucun module actif), tout est visible (vue d'ensemble) — mais
+// jamais un module auquel l'utilisateur n'a pas accès (cf. hasModule ci-dessous).
 function matchesModule(n, activeModule) {
   if (!activeModule) return true
   if (!n.module) return true // notifs globales (compte, système…)
@@ -34,7 +35,7 @@ function matchesModule(n, activeModule) {
 }
 
 export function useNotifications() {
-  const { user, role } = useAuth()
+  const { user, role, hasModule } = useAuth()
   const { data } = useCollection('notifications')
   const location = useLocation()
   const activeModule = location.pathname.split('/')[1] || '' // '' = portail
@@ -48,9 +49,14 @@ export function useNotifications() {
   const mine = useMemo(
     () =>
       data
-        .filter((n) => isFor(n, user, role) && matchesModule(n, activeModule) && !dismissed.has(n.id))
+        .filter((n) =>
+          isFor(n, user, role) &&
+          matchesModule(n, activeModule) &&
+          (!n.module || hasModule(n.module)) &&
+          !dismissed.has(n.id)
+        )
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-    [data, user, role, activeModule, dismissed]
+    [data, user, role, activeModule, dismissed, hasModule]
   )
 
   // Notifications non-lues (non dismissées)

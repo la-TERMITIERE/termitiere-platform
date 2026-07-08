@@ -1,5 +1,5 @@
 // Génération du rapport PDF d'avancement d'un projet — utilisé depuis l'onglet Projets.
-import { formatMoney, formatDateShort } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { avancementProjet, tachesEnRetard, projetEnRetard } from './logic'
 import { STATUTS_PROJET, PRIORITES, STATUTS_TACHE } from './data'
 
@@ -143,9 +143,9 @@ export async function genererRapportProjetPDF(projet, taches, depenses, commenta
           d.categorie || '—',
           d.description || '—',
           d.fournisseur || '—',
-          Number(d.montant || 0).toLocaleString('fr-FR')
+          formatNumber(d.montant || 0)
         ]),
-        ['', '', '', 'TOTAL', totalDepenses.toLocaleString('fr-FR')]
+        ['', '', '', 'TOTAL', formatNumber(totalDepenses)]
       ],
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: TEAL, textColor: 255, fontStyle: 'bold', fontSize: 8 },

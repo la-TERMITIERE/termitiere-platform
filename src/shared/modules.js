@@ -6,7 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   MessageSquare, Wallet, BellRing, Gauge, Receipt, Stamp
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES, PROJET_DEPENSES_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -151,7 +151,7 @@ export const MODULE_NAV = {
     { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
     { label: 'Documents',   to: '/projet/documents',   icon: Paperclip, badgeKey: 'projetDocuments' },
     { label: 'Galerie photos', to: '/projet/galerie',  icon: Images, badgeKey: 'projetGalerie' },
-    { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet, badgeKey: 'projetDepenses' },
+    { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet, badgeKey: 'projetDepenses', roles: PROJET_DEPENSES_ROLES },
     { label: 'Commentaires', to: '/projet/commentaires', icon: MessageSquare, badgeKey: 'projetCommentaires' },
     { label: 'Prestataires', to: '/projet/prestataires', icon: UserCircle },
     { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },

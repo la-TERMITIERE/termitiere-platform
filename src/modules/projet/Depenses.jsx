@@ -10,11 +10,12 @@ import StatCard from '../../shared/ui/StatCard'
 import { useCollection } from '../../hooks/useFirestore'
 import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuthStore } from '../../core/auth'
-import { formatMoney, formatDateShort } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { STATUTS_PROJET } from './data'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
+import { projetsVisibles, scopeParProjets } from './logic'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -73,12 +74,17 @@ function ChampCategorie({ value, onChange }) {
 }
 
 export default function Depenses() {
-  const { data: projets }  = useCollection('projets')
-  const { data: depenses } = useCollection('projet_depenses')
-  const { data: taches }   = useCollection('projet_taches')
-  const { data: notes }    = useCollection('projet_depenses_notes')
-  const { user } = useAuthStore()
+  const { data: projetsTous }  = useCollection('projets')
+  const { data: depensesTous } = useCollection('projet_depenses')
+  const { data: tachesTous }   = useCollection('projet_taches')
+  const { data: notes }        = useCollection('projet_depenses_notes')
+  const { user, role } = useAuthStore()
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
+
+  // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.
+  const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
+  const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
 
   const [filtreProjet, setFiltreProjet]     = useState('')
   const [filtreCategorie, setFiltreCateg]   = useState('')
@@ -268,7 +274,7 @@ export default function Depenses() {
         METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier || '',
         d.prestataireTelephone || '',
         TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale',
-        (Number(d.montant) || 0).toLocaleString('fr-FR'),
+        formatNumber(d.montant || 0),
       ]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [13, 148, 136] },

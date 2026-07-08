@@ -1,7 +1,7 @@
 // Page d'accueil du portail : grille de cartes de modules cliquables.
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, ShieldCheck, ChevronRight, CheckCircle2 } from 'lucide-react'
+import { ShieldCheck, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
@@ -98,10 +98,9 @@ export default function PortalHome() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {MODULES.map((m) => {
-          const allowed = hasModule(m.id)
+        {MODULES.filter((m) => hasModule(m.id)).map((m) => {
           const bientot = m.statut === 'bientot'
-          const clickable = allowed && !bientot
+          const clickable = !bientot
           return (
             <button
               key={m.id}
@@ -134,17 +133,15 @@ export default function PortalHome() {
                       <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-500">
                         Bientôt
                       </span>
-                    ) : allowed ? (
+                    ) : (
                       <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">
                         Actif
                       </span>
-                    ) : (
-                      <Lock size={14} className="text-gray-400" />
                     )}
                   </div>
                   <p className="text-sm text-gray-500">{m.description}</p>
                   <p className="mt-2 text-sm font-semibold" style={{ color: m.color }}>
-                    {allowed ? kpi[m.id] : 'Accès non autorisé'}
+                    {kpi[m.id]}
                   </p>
                 </div>
               </div>

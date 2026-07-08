@@ -15,10 +15,11 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, formatNumber } from '../../utils/formatters'
-import { avancementProjet, tachesEnRetard } from './logic'
+import { avancementProjet, tachesEnRetard, projetsVisibles, scopeParProjets } from './logic'
 import { STATUTS_PROJET, PRIORITES } from './data'
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useAuthStore } from '../../core/auth'
 
 const TEAL   = '#0d9488'
 const TEAL2  = '#0f766e'
@@ -113,7 +114,7 @@ async function exporterExcel(projets, taches, depenses) {
 async function telechargerPDF(projets, taches, depenses, commentaires) {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const { formatMoney: fmtM, formatDateShort: fmtD } = await import('../../utils/formatters')
+  const { formatMoney: fmtM, formatNumber: fmtN, formatDateShort: fmtD } = await import('../../utils/formatters')
   const { avancementProjet: avPct, tachesEnRetard: tRetard, projetEnRetard: pRetard } = await import('./logic')
   const { STATUTS_PROJET: SP, PRIORITES: PR, STATUTS_TACHE: ST } = await import('./data')
 
@@ -173,8 +174,8 @@ async function telechargerPDF(projets, taches, depenses, commentaires) {
       autoTable(doc, {
         startY: y,
         head: [['Date','Catégorie','Description','Montant (FCFA)']],
-        body: [...dp.map((d) => [fmtD(d.date), d.categorie||'—', d.description||'—', Number(d.montant||0).toLocaleString('fr-FR')]),
-               ['','','TOTAL', totalDep.toLocaleString('fr-FR')]],
+        body: [...dp.map((d) => [fmtD(d.date), d.categorie||'—', d.description||'—', fmtN(d.montant||0)]),
+               ['','','TOTAL', fmtN(totalDep)]],
         styles:{ fontSize:7, cellPadding:1.5 },
         headStyles:{ fillColor:TEAL_C, textColor:255, fontSize:7 },
         margin:{ left:M, right:M }
@@ -197,10 +198,18 @@ async function telechargerPDF(projets, taches, depenses, commentaires) {
 }
 
 export default function Rapports() {
-  const { data: projets }      = useCollection('projets')
-  const { data: taches }       = useCollection('projet_taches')
-  const { data: depenses }     = useCollection('projet_depenses')
-  const { data: commentaires } = useCollection('projet_commentaires')
+  const { data: projetsTous }      = useCollection('projets')
+  const { data: tachesTous }       = useCollection('projet_taches')
+  const { data: depensesTous }     = useCollection('projet_depenses')
+  const { data: commentairesTous } = useCollection('projet_commentaires')
+  const { user, role } = useAuthStore()
+
+  // Cloisonnement : un chef de projet ne voit les rapports que de ses projets.
+  const projets      = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const taches       = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
+  const depenses     = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
+  const commentaires = useMemo(() => scopeParProjets(commentairesTous, projets), [commentairesTous, projets])
+
   const [periode, setPeriode]      = useState('6')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [xlsLoading, setXlsLoading] = useState(false)

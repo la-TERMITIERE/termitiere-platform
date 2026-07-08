@@ -16,7 +16,7 @@ import Journal from './Journal'
 import Params from './Params'
 import { useProjetStore } from './store/projetStore'
 import { useAuth } from '../../hooks/useAuth'
-import { PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES } from '../../core/roles'
+import { PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES, PROJET_DEPENSES_ROLES } from '../../core/roles'
 
 // Garde : redirige vers le dashboard si le rôle n'est pas autorisé (ex. secrétaire → Pilotage/Journal/Paramètres)
 function ProjetGuard({ roles, children }) {
@@ -39,7 +39,7 @@ export default function ProjetModule() {
       <Route path="galerie"    element={<Galerie />} />
       <Route path="rapports"     element={<Rapports />} />
       <Route path="commentaires" element={<Commentaires />} />
-      <Route path="depenses"     element={<Depenses />} />
+      <Route path="depenses"     element={<ProjetGuard roles={PROJET_DEPENSES_ROLES}><Depenses /></ProjetGuard>} />
       <Route path="prestataires" element={<Prestataires />} />
       <Route path="pilotage"     element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Pilotage /></ProjetGuard>} />
       <Route path="alertes"      element={<ProjetGuard roles={PROJET_ALERTES_ROLES}><Alertes /></ProjetGuard>} />

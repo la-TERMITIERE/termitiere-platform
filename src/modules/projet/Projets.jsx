@@ -7,7 +7,7 @@ import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, UNITES_SUPERFICIE, uniteSuperficie } from './data'
-import { avancementProjet, genererNumProjet } from './logic'
+import { avancementProjet, genererNumProjet, projetsVisibles } from './logic'
 import { formatDateShort, formatMoney } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { ROLES } from '../../core/roles'
@@ -16,6 +16,8 @@ import { genererRapportProjetPDF } from './rapportPdf'
 import { marquerVoletVu } from './vues'
 
 // ── Champ responsable : liste utilisateurs + saisie libre ────────────────────
+// onChange(nom, uid) — uid vide si saisie libre (le projet ne sera alors visible
+// par aucun rôle cloisonné tant qu'un vrai compte n'est pas choisi dans la liste).
 function ChampResponsable({ value, onChange, users }) {
   const [open, setOpen]     = useState(false)
   const [filtre, setFiltre] = useState('')
@@ -35,7 +37,7 @@ function ChampResponsable({ value, onChange, users }) {
   }, [users, filtre])
 
   const choisir = (u) => {
-    onChange(u.nom || u.login || '')
+    onChange(u.nom || u.login || '', u.uid || u.login || '')
     setFiltre('')
     setOpen(false)
   }
@@ -49,11 +51,11 @@ function ChampResponsable({ value, onChange, users }) {
           className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           placeholder="Nom ou saisie libre…"
           value={open ? filtre : value}
-          onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value); setOpen(true) }}
+          onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value, ''); setOpen(true) }}
           onFocus={() => setOpen(true)}
         />
         {value && (
-          <button type="button" onClick={() => { onChange(''); setFiltre('') }}
+          <button type="button" onClick={() => { onChange('', ''); setFiltre('') }}
             className="rounded-lg border border-gray-200 px-2 text-gray-400 hover:text-red-400">
             <X size={14} />
           </button>
@@ -95,15 +97,21 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
+const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
 
 export default function Projets() {
-  const { data: projets }      = useCollection('projets')
+  const { data: projetsTous }  = useCollection('projets')
   const { data: taches }       = useCollection('projet_taches')
   const { data: depenses }     = useCollection('projet_depenses')
   const { data: commentaires } = useCollection('projet_commentaires')
   const { data: users }        = useCollection('users')
   const [generatingPdf, setGeneratingPdf] = useState(null)
+  const { user, role }    = useAuthStore()
+  const lectureSeule      = role === 'chef_projet'
+  // La secrétaire crée/modifie, mais ne supprime pas et ne décide pas du lancement/clôture d'un projet.
+  const sansActionsDecision = role === 'secretaire'
+  // Cloisonnement : un chef de projet ne voit que les projets dont il est responsable.
+  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
 
   // Total dépensé par projet — recalculé en temps réel à chaque dépense saisie.
   const depenseParProjet = useMemo(() => {
@@ -111,8 +119,6 @@ export default function Projets() {
     depenses.forEach((d) => { if (d.projetId) map[d.projetId] = (map[d.projetId] || 0) + (Number(d.montant) || 0) })
     return map
   }, [depenses])
-  const { user, role }    = useAuthStore()
-  const lectureSeule      = role === 'chef_projet'
   useEffect(() => { marquerVoletVu(user?.uid, 'projetProjets') }, [user?.uid])
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState(VIDE)
@@ -156,7 +162,7 @@ export default function Projets() {
   const openEdit   = (p) => {
     setForm({
       nom: p.nom || '', type: p.type || 'autre', statut: p.statut || 'planification',
-      priorite: p.priorite || 'normale', responsable: p.responsable || '',
+      priorite: p.priorite || 'normale', responsable: p.responsable || '', responsableUid: p.responsableUid || '',
       dateDebut: p.dateDebut ? new Date(p.dateDebut).toISOString().slice(0,10) : '',
       dateFin:   p.dateFin   ? new Date(p.dateFin).toISOString().slice(0,10)   : '',
       dureeIndeterminee: !!p.dureeIndeterminee,
@@ -364,15 +370,17 @@ export default function Projets() {
                   <div className="flex shrink-0 flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
                       <button onClick={() => openEdit(p)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-teal-600"><Pencil size={15} /></button>
-                      <button onClick={() => handleDelete(p)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                      {!sansActionsDecision && (
+                        <button onClick={() => handleDelete(p)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                      )}
                     </div>
-                    {p.statut === 'planification' && (
+                    {!sansActionsDecision && p.statut === 'planification' && (
                       <button onClick={() => demarrer(p)}
                         className="mt-1 flex items-center gap-1 rounded-full bg-teal-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-teal-600 transition-colors">
                         <Play size={11} />Démarrer
                       </button>
                     )}
-                    {p.statut === 'en_cours' && (
+                    {!sansActionsDecision && p.statut === 'en_cours' && (
                       <button onClick={() => terminer(p)}
                         className="mt-1 flex items-center gap-1 rounded-full bg-green-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-green-600 transition-colors">
                         <CheckCircle2 size={11} />Terminer
@@ -420,9 +428,12 @@ export default function Projets() {
               <label className="mb-1 block text-xs font-medium text-gray-600">Responsable</label>
               <ChampResponsable
                 value={form.responsable}
-                onChange={(v) => setForm((f) => ({ ...f, responsable: v }))}
+                onChange={(nom, uid) => setForm((f) => ({ ...f, responsable: nom, responsableUid: uid }))}
                 users={users}
               />
+              {form.responsable && !form.responsableUid && (
+                <p className="mt-1 text-[11px] text-amber-500">⚠ Nom libre — choisissez un compte dans la liste pour que ce projet soit visible par un chef de projet cloisonné.</p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Date début</label>

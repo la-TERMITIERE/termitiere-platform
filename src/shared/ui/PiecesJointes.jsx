@@ -10,6 +10,7 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [rubrique, setRubrique] = useState('')
+  const [rubriqueLibre, setRubriqueLibre] = useState(false)
   const [proprietaire, setProprietaire] = useState('')
 
   async function handleFiles(fileList) {
@@ -37,11 +38,22 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold uppercase text-gray-500">{label}</span>
         {!readOnly && rubriques?.length > 0 && (
-          <select value={rubrique} onChange={(e) => setRubrique(e.target.value)}
-            className="rounded border border-gray-200 px-2 py-1 text-xs">
-            <option value="">— Rubrique —</option>
-            {rubriques.map((r) => <option key={r.id || r} value={r.id || r}>{r.label || r}</option>)}
-          </select>
+          rubriqueLibre ? (
+            <input value={rubrique} onChange={(e) => setRubrique(e.target.value)}
+              autoFocus placeholder="Nom de la rubrique…"
+              className="rounded border border-teal-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400" />
+          ) : (
+            <select value={rubrique}
+              onChange={(e) => {
+                if (e.target.value === '__libre__') { setRubriqueLibre(true); setRubrique('') }
+                else setRubrique(e.target.value)
+              }}
+              className="rounded border border-gray-200 px-2 py-1 text-xs">
+              <option value="">— Rubrique —</option>
+              {rubriques.map((r) => <option key={r.id || r} value={r.id || r}>{r.label || r}</option>)}
+              <option value="__libre__">✏️ Saisir une rubrique…</option>
+            </select>
+          )
         )}
         {!readOnly && withProprietaire && (
           <input value={proprietaire} onChange={(e) => setProprietaire(e.target.value)}
