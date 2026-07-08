@@ -43,8 +43,6 @@ export default function Sidebar({ open, onClose }) {
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
     logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut) && (!logSite || (d.site || 'lome') === logSite)).length,
-    briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
-    logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
     briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length,
     ...projetBadges
   }
