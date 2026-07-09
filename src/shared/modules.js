@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Stamp, Waves, PackagePlus
+  Wallet, Gauge, Receipt, Stamp, Waves, PackagePlus, Handshake
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_DEPENSES_ROLES } from '../core/roles'
 
@@ -106,6 +106,7 @@ export const MODULE_NAV = {
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
     { label: 'Historique', to: '/agro/historique', icon: History },
+    { label: 'Partenaires', to: '/agro/partenaires', icon: Handshake, perm: 'partenaires' },
     { label: 'Journal', to: '/agro/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/agro/params', icon: Settings }
   ],
@@ -119,6 +120,7 @@ export const MODULE_NAV = {
     { label: 'Référentiel matériel', to: '/logistique/referentiel', icon: Boxes },
     { label: 'Clients', to: '/logistique/clients', icon: UserCircle },
     { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory },
+    { label: 'Partenaires', to: '/logistique/partenaires', icon: Handshake, perm: 'partenaires' },
     { label: 'Journal', to: '/logistique/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/logistique/params', icon: Settings }
   ],
@@ -131,11 +133,13 @@ export const MODULE_NAV = {
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
     { label: 'Journal', to: '/evenementiel/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
-    { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle }
+    { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle },
+    { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires' }
   ],
   foncier: [
     { label: 'Dashboard', to: '/foncier', icon: LayoutDashboard, end: true },
     { label: 'Dossiers fonciers', to: '/foncier/dossiers', icon: FileText },
+    { label: 'Partenaires', to: '/foncier/partenaires', icon: Handshake, perm: 'partenaires' },
     { label: 'Journal', to: '/foncier/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/foncier/params', icon: Settings }
   ],
@@ -153,6 +157,7 @@ export const MODULE_NAV = {
     { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet, badgeKey: 'projetDepenses', roles: PROJET_DEPENSES_ROLES },
     { label: 'Besoins',      to: '/projet/besoins',      icon: PackagePlus, badgeKey: 'projetBesoins' },
     { label: 'Prestataires', to: '/projet/prestataires', icon: UserCircle },
+    { label: 'Partenaires', to: '/projet/partenaires', icon: Handshake, perm: 'partenaires' },
     { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
     { label: 'Journal',     to: '/projet/journal',     icon: BookOpen, roles: PROJET_VOLETS_RESTREINTS_ROLES },
     { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: PROJET_VOLETS_RESTREINTS_ROLES }
@@ -167,6 +172,7 @@ export const MODULE_NAV = {
     { label: 'Santé & Infirmerie', to: '/garderie/incidents', icon: Stethoscope },
     { label: 'Tâches',             to: '/garderie/taches',    icon: ListChecks },
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: ['super_admin','pau','ge','gerant','superviseur'] },
+    { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires' },
     { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: ['super_admin','pau','ge','gerant','superviseur'] },
     { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ['super_admin','pau','ge'] }
   ],
@@ -179,6 +185,7 @@ export const MODULE_NAV = {
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
     { label: 'Historique',                   to: '/depense/historique',  icon: History,         roles: FINANCE_VIEW_ROLES },
+    { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
     { label: 'Journal',                      to: '/depense/journal',      icon: BookOpen,        roles: FINANCE_VIEW_ROLES },
     { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: FINANCE_VIEW_ROLES }
   ]

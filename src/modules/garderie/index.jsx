@@ -11,6 +11,7 @@ import Taches from './Taches'
 import Cantine from './Cantine'
 import Journal from './Journal'
 import Params from './Params'
+import Partenaires from '../../shared/partenaires/Partenaires'
 import { useGarderieStore } from './store/garderieStore'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -51,6 +52,7 @@ export default function GarderieModule() {
       <Route path="analyses" element={
         <GarderieGuard roles={ROLES_DIRECTION}><Analyses /></GarderieGuard>
       } />
+      <Route path="partenaires" element={<Partenaires module="garderie" />} />
       <Route path="journal" element={
         <GarderieGuard roles={ROLES_DIRECTION}><Journal /></GarderieGuard>
       } />

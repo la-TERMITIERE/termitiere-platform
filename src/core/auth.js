@@ -143,6 +143,8 @@ function sessionFromProfile(p) {
     // Sites Maxi Logistique autorisés (Lomé / Kara). null = aucune restriction
     // (comptes hérités = les deux) ; tableau (même vide) = restriction explicite.
     logistiqueSites: Array.isArray(p.logistiqueSites) ? p.logistiqueSites : null,
+    // Droit de gérer l'onglet « Partenaires » (contacts externes) sur les plateformes.
+    gerePartenaires: p.gerePartenaires === true,
     secteur: p.secteur || '',
     actif: p.actif !== false
   }

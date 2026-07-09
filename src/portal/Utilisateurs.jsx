@@ -21,7 +21,7 @@ import { SITES } from '../modules/logistique/site/useSite'
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
 // De même, un compte Maxi Logistique accède par défaut aux deux sites (Lomé & Kara).
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), secteur: '', poste: '', telephone: '', actif: true })
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gerePartenaires: false, secteur: '', poste: '', telephone: '', actif: true })
 
 // Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
 // Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
@@ -248,6 +248,17 @@ export default function Utilisateurs() {
                     )
                   })}
                 </div>
+              </FormGroup>
+            )}
+
+            {/* Droit de gérer l'onglet « Partenaires » (contacts externes) — hors rôles « voit tout » qui l'ont déjà */}
+            {!isViewAllRole(modal.data.role) && (
+              <FormGroup label="Gestion des partenaires"
+                hint="Donne la main à cet utilisateur pour créer / modifier les partenaires (contacts externes) dans ses modules. Ce ne sont pas des employés.">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={modal.data.gerePartenaires === true} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, gerePartenaires: e.target.checked } }))} />
+                  Autoriser la gestion des partenaires
+                </label>
               </FormGroup>
             )}
 

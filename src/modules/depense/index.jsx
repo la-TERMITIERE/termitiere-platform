@@ -10,6 +10,7 @@ import Flux from './Flux'
 import Historique from './Historique'
 import Journal from './Journal'
 import Params from './Params'
+import Partenaires from '../../shared/partenaires/Partenaires'
 
 export default function DepenseModule() {
   return (
@@ -22,6 +23,7 @@ export default function DepenseModule() {
       <Route path="rentabilite" element={<Rentabilite />} />
       <Route path="flux" element={<Flux />} />
       <Route path="historique" element={<Historique />} />
+      <Route path="partenaires" element={<Partenaires module="depense" />} />
       <Route path="journal" element={<Journal />} />
       <Route path="params" element={<Params />} />
     </Routes>
