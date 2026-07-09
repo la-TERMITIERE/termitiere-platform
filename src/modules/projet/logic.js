@@ -4,13 +4,14 @@ import { formatDateShort } from '../../utils/formatters'
 import { PROJET_ROLES_CLOISONNES } from '../../core/roles'
 
 // Cloisonnement par projet : un rôle cloisonné (ex. chef de projet) ne voit que les
-// projets dont il est désigné « Responsable » (p.responsableUid). Les autres rôles
-// voient tout, comme aujourd'hui.
+// projets dont il est désigné « Responsable » (p.responsableUid) OU ajouté comme
+// « Collaborateur » (p.collaborateurs[].uid) — un collaborateur a le même accès
+// complet au projet qu'un responsable. Les autres rôles voient tout, comme aujourd'hui.
 export function projetsVisibles(projets = [], user, role) {
   if (!PROJET_ROLES_CLOISONNES.includes(role)) return projets
   const uid = user?.uid
   if (!uid) return []
-  return projets.filter((p) => p.responsableUid === uid)
+  return projets.filter((p) => p.responsableUid === uid || (p.collaborateurs || []).some((c) => c.uid === uid))
 }
 
 // Sous-ensemble d'une collection liée à des projets (tâches, dépenses, documents…)

@@ -1,19 +1,22 @@
 // Pilotage — Vue d'ensemble stratégique pour le Directeur Général.
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock, Wallet, Users, Target, BellRing } from 'lucide-react'
+import { TrendingDown, AlertTriangle, CheckCircle2, Clock, Wallet, Users, BellRing } from 'lucide-react'
 
-const TitreGraphe = ({ label, description, formule }) => (
+const TitreGraphe = ({ label, description }) => (
   <div>
     <span>{label}</span>
     {description && <p className="mt-0.5 text-[11px] font-normal text-gray-400">{description}</p>}
-    {formule && <p className="mt-0.5 text-[10px] font-normal italic text-gray-400">📐 {formule}</p>}
   </div>
 )
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
+import Badge from '../../shared/ui/Badge'
+import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
-import { formatMoney } from '../../utils/formatters'
+import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from './logic'
 import { STATUTS_PROJET, SEUILS_DEFAUT } from './data'
 
@@ -24,11 +27,11 @@ const RED   = '#ef4444'
 const GRAY  = '#94a3b8'
 
 // ── Jauge circulaire SVG ──────────────────────────────────────────────────────
-function Jauge({ pct, label, formule, color = TEAL, size = 88 }) {
+function Jauge({ pct, label, color = TEAL, size = 88 }) {
   const r = 36, circ = 2 * Math.PI * r
   const dash = (pct / 100) * circ
   return (
-    <div className="flex flex-col items-center gap-1 max-w-[140px]">
+    <div className="flex flex-col items-center gap-1.5 max-w-[140px]">
       <svg width={size} height={size} viewBox="0 0 88 88">
         <circle cx="44" cy="44" r={r} fill="none" stroke="#e2e8f0" strokeWidth="8" />
         <circle cx="44" cy="44" r={r} fill="none" stroke={color} strokeWidth="8"
@@ -36,31 +39,7 @@ function Jauge({ pct, label, formule, color = TEAL, size = 88 }) {
           strokeLinecap="round" style={{ transition: 'stroke-dasharray .5s' }} />
         <text x="44" y="48" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>{pct}%</text>
       </svg>
-      <span className="text-xs text-gray-500 text-center leading-tight">{label}</span>
-      {formule && <span className="text-[10px] italic text-gray-400 text-center leading-tight">{formule}</span>}
-    </div>
-  )
-}
-
-// ── Carte KPI ─────────────────────────────────────────────────────────────────
-function KPI({ label, value, sub, formule, icon: Icon, color, trend }) {
-  return (
-    <div className="card flex items-start gap-3 p-4">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: color + '18' }}>
-        <Icon size={20} style={{ color }} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-500 font-medium">{label}</p>
-        <p className="text-xl font-extrabold text-gray-800 leading-tight">{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-        {formule && <p className="text-[10px] italic text-gray-400 mt-0.5">📐 {formule}</p>}
-      </div>
-      {trend !== undefined && (
-        <div className={`ml-auto shrink-0 flex items-center gap-0.5 text-xs font-bold ${trend >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-          {trend >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-          {Math.abs(trend)}%
-        </div>
-      )}
+      <span className="text-xs font-medium text-gray-600 text-center leading-tight">{label}</span>
     </div>
   )
 }
@@ -72,7 +51,7 @@ function Sante({ projet, taches, depenses }) {
   const retard   = projetEnRetard(projet)
   const budget   = Number(projet.budget) || 0
   const totalDep = depenses
-    .filter((d) => d.projetId === projet.id && (d.statut || 'en_attente') === 'approuvee')
+    .filter((d) => d.projetId === projet.id)
     .reduce((s, d) => s + (Number(d.montant) || 0), 0)
   const surBudget = budget > 0 && totalDep > budget
   const tRetard  = tachesEnRetard(tp).length
@@ -110,7 +89,9 @@ function Sante({ projet, taches, depenses }) {
 
 // ── Page principale ───────────────────────────────────────────────────────────
 export default function Pilotage() {
+  const navigate = useNavigate()
   const [onglet, setOnglet] = useState('pilotage')
+  const [detail, setDetail] = useState(null) // { titre, type: 'projets' | 'taches' | 'responsables', liste }
   const { data: projets }  = useCollection('projets')
   const { data: taches }   = useCollection('projet_taches')
   const { data: depenses } = useCollection('projet_depenses')
@@ -124,20 +105,16 @@ export default function Pilotage() {
     const enCours   = projets.filter((p) => p.statut === 'en_cours')
     const termines  = projets.filter((p) => p.statut === 'termine')
     const enRetard  = projets.filter((p) => projetEnRetard(p))
+    const tachesRetardListe = tachesEnRetard(taches)
     const budgetTotal   = projets.reduce((s, p) => s + (Number(p.budget) || 0), 0)
-    const depTotal      = depenses
-      .filter((d) => (d.statut || 'en_attente') === 'approuvee')
-      .reduce((s, d) => s + (Number(d.montant) || 0), 0)
-    const depEnAttente  = depenses
-      .filter((d) => (d.statut || 'en_attente') === 'en_attente')
-      .reduce((s, d) => s + (Number(d.montant) || 0), 0)
+    const depTotal      = depenses.reduce((s, d) => s + (Number(d.montant) || 0), 0)
     const tachesTot     = taches.length
     const tachesTermees = taches.filter((t) => t.statut === 'terminee').length
     const tauxGlobal    = tachesTot ? Math.round((tachesTermees / tachesTot) * 100) : 0
-    const tRetard       = tachesEnRetard(taches).length
     const responsables  = [...new Set(projets.map((p) => p.responsable).filter(Boolean))].length
-    return { enCours: enCours.length, termines: termines.length, enRetard: enRetard.length,
-             budgetTotal, depTotal, depEnAttente, ecart: budgetTotal - depTotal, tauxGlobal, tRetard, responsables }
+    return { enCours, termines, enRetard, tachesRetardListe,
+             enCoursN: enCours.length, terminesN: termines.length, enRetardN: enRetard.length,
+             budgetTotal, depTotal, ecart: budgetTotal - depTotal, tauxGlobal, tRetard: tachesRetardListe.length, responsables }
   }, [projets, taches, depenses])
 
   // ── Taux de réussite délais / budget ─────────────────────────────────────
@@ -151,9 +128,12 @@ export default function Pilotage() {
   const tauxBudget = useMemo(() => {
     const avecBudget = projets.filter((p) => Number(p.budget) > 0)
     if (!avecBudget.length) return null
-    const ok = avecBudget.filter((p) => (Number(p.depenses) || 0) <= Number(p.budget)).length
+    const ok = avecBudget.filter((p) => {
+      const totalDep = depenses.filter((d) => d.projetId === p.id).reduce((s, d) => s + (Number(d.montant) || 0), 0)
+      return totalDep <= Number(p.budget)
+    }).length
     return Math.round((ok / avecBudget.length) * 100)
-  }, [projets])
+  }, [projets, depenses])
 
   const tauxAvancement = useMemo(() => {
     if (!actifs.length) return 0
@@ -178,7 +158,7 @@ export default function Pilotage() {
       labels: ps.map((p) => p.nom.length > 18 ? p.nom.slice(0, 18) + '…' : p.nom),
       datasets: [
         { label: 'Budget', data: ps.map((p) => Number(p.budget) || 0), backgroundColor: TEAL + 'cc', borderRadius: 4 },
-        { label: 'Dépenses approuvées', data: ps.map((p) => depenses.filter((d) => d.projetId === p.id && (d.statut || 'en_attente') === 'approuvee').reduce((s, d) => s + (Number(d.montant) || 0), 0)), backgroundColor: AMBER + 'cc', borderRadius: 4 }
+        { label: 'Dépenses', data: ps.map((p) => depenses.filter((d) => d.projetId === p.id).reduce((s, d) => s + (Number(d.montant) || 0), 0)), backgroundColor: AMBER + 'cc', borderRadius: 4 }
       ]
     }
   }, [actifs])
@@ -274,9 +254,7 @@ export default function Pilotage() {
           </Card>
 
           {/* Santé des projets actifs */}
-          <Card title={<TitreGraphe label="Santé des projets actifs"
-            description="Évaluer rapidement l'état de chaque projet en cours — Sain, Attention ou Critique selon retard et budget."
-            formule="Score sur 100 : -40 si en retard, -30 si budget approuvé dépassé, -10 par tâche en retard (max -30). Sain ≥ 70, Attention ≥ 40, sinon Critique." />}>
+          <Card title={<TitreGraphe label="Santé des projets actifs" />}>
             {!actifs.filter((p) => p.statut !== 'termine').length ? (
               <p className="py-8 text-center text-sm text-gray-400">Aucun projet actif.</p>
             ) : (
@@ -290,31 +268,29 @@ export default function Pilotage() {
         </div>
       ) : (
       <>
-      {/* KPIs stratégiques — chiffres clés */}
+      {/* KPIs stratégiques — chiffres clés (cliquables pour voir le détail) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KPI label="Budget total" value={formatMoney(kpis.budgetTotal)} icon={Wallet} color={TEAL}
-          formule="Somme des budgets prévus de tous les projets." />
-        <KPI label="Dépenses approuvées"
-          value={formatMoney(kpis.depTotal)} icon={TrendingDown} color={AMBER}
-          sub={kpis.depEnAttente > 0 ? `+ ${formatMoney(kpis.depEnAttente)} en attente` : 'Tout validé'}
-          formule="Somme des dépenses au statut 'Approuvée' (hors en attente/rejetées)." />
-        <KPI label="Solde budgétaire"
-          value={formatMoney(kpis.ecart)} icon={Wallet} color={kpis.ecart >= 0 ? GREEN : RED}
-          sub={kpis.ecart < 0 ? 'Budget dépassé !' : 'Sous contrôle'}
-          formule="Budget total − Dépenses approuvées." />
-        <KPI label="Taux de complétion"
-          value={`${projets.length ? Math.round((kpis.termines / projets.length) * 100) : 0}%`}
-          icon={CheckCircle2} color={GREEN}
-          sub={`${kpis.termines} / ${projets.length} projets`}
-          formule="Projets terminés ÷ total projets × 100." />
-        <KPI label="Projets en cours" value={kpis.enCours} icon={Clock} color={AMBER}
-          formule="Projets au statut 'En cours'." />
-        <KPI label="Projets en retard" value={kpis.enRetard} icon={AlertTriangle} color={RED}
-          formule="Projets actifs dont la date de fin prévue est dépassée." />
-        <KPI label="Tâches en retard" value={kpis.tRetard} icon={AlertTriangle} color={RED}
-          formule="Tâches non terminées dont l'échéance est dépassée." />
-        <KPI label="Responsables actifs" value={kpis.responsables} icon={Users} color={TEAL}
-          formule="Nombre de responsables distincts assignés à au moins un projet." />
+        <StatCard title="Budget total" value={formatMoney(kpis.budgetTotal)} icon={Wallet} accent={TEAL}
+          sub="cliquer pour la liste" onClick={() => setDetail({ titre: 'Tous les projets', type: 'projets', liste: projets })} />
+        <StatCard title="Dépenses"
+          value={formatMoney(kpis.depTotal)} icon={TrendingDown} accent={AMBER}
+          sub="voir le détail" onClick={() => navigate('/projet/depenses')} />
+        <StatCard title="Solde budgétaire"
+          value={formatMoney(kpis.ecart)} icon={Wallet} accent={kpis.ecart >= 0 ? GREEN : RED}
+          sub={kpis.ecart < 0 ? 'Budget dépassé !' : 'Sous contrôle'} onClick={() => navigate('/projet/depenses')} />
+        <StatCard title="Taux de complétion"
+          value={`${projets.length ? Math.round((kpis.terminesN / projets.length) * 100) : 0}%`}
+          icon={CheckCircle2} accent={GREEN}
+          sub={`${kpis.terminesN} / ${projets.length} projets`}
+          onClick={() => setDetail({ titre: 'Projets terminés', type: 'projets', liste: kpis.termines })} />
+        <StatCard title="Projets en cours" value={kpis.enCoursN} icon={Clock} accent={AMBER}
+          sub="cliquer pour la liste" onClick={() => setDetail({ titre: 'Projets en cours', type: 'projets', liste: kpis.enCours })} />
+        <StatCard title="Projets en retard" value={kpis.enRetardN} icon={AlertTriangle} accent={RED}
+          sub="cliquer pour la liste" onClick={() => setDetail({ titre: 'Projets en retard', type: 'projets', liste: kpis.enRetard })} />
+        <StatCard title="Tâches en retard" value={kpis.tRetard} icon={AlertTriangle} accent={RED}
+          sub="cliquer pour la liste" onClick={() => setDetail({ titre: 'Tâches en retard', type: 'taches', liste: kpis.tachesRetardListe })} />
+        <StatCard title="Responsables actifs" value={kpis.responsables} icon={Users} accent={TEAL}
+          sub="cliquer pour la liste" onClick={() => setDetail({ titre: 'Responsables', type: 'responsables', liste: topResp })} />
       </div>
 
       {/* Jauges synthétiques — indicateurs qualité */}
@@ -323,18 +299,16 @@ export default function Pilotage() {
         <div className="flex flex-wrap justify-around gap-6 py-2">
           {tauxDelai !== null
             ? <Jauge pct={tauxDelai} color={tauxDelai >= 70 ? GREEN : tauxDelai >= 40 ? AMBER : RED}
-                label="Respect des délais" formule="Projets terminés à temps ÷ total projets terminés × 100." />
-            : <Jauge pct={0} color={GRAY}
-                label="Respect des délais" formule="Disponible dès qu'un projet est terminé." />
+                label="Respect des délais" />
+            : <Jauge pct={0} color={GRAY} label="Respect des délais" />
           }
           {tauxBudget !== null
             ? <Jauge pct={tauxBudget} color={tauxBudget >= 70 ? GREEN : tauxBudget >= 40 ? AMBER : RED}
-                label="Maîtrise du budget" formule="Projets sous budget ÷ total projets avec budget × 100." />
-            : <Jauge pct={0} color={GRAY}
-                label="Maîtrise du budget" formule="Disponible dès qu'un projet a un budget renseigné." />
+                label="Maîtrise du budget" />
+            : <Jauge pct={0} color={GRAY} label="Maîtrise du budget" />
           }
           <Jauge pct={tauxAvancement} color={tauxAvancement >= 70 ? GREEN : tauxAvancement >= 40 ? TEAL : AMBER}
-            label="Avancement terrain" formule="Moyenne d'avancement des projets actifs (tâches terminées)." />
+            label="Avancement terrain" />
         </div>
       </Card>
 
@@ -385,6 +359,71 @@ export default function Pilotage() {
       </Card>
       </>
       )}
+
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.titre || ''}>
+        {detail?.type === 'projets' && (
+          !detail.liste.length ? (
+            <p className="py-8 text-center text-sm text-gray-400">Aucun projet.</p>
+          ) : (
+            <div className="space-y-2">
+              {detail.liste.map((p) => (
+                <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-700">{p.nom}</p>
+                    <p className="font-mono text-xs text-gray-400">{p.num}</p>
+                    {p.responsable && <p className="text-xs text-gray-400">Resp. {p.responsable}</p>}
+                  </div>
+                  <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label || p.statut}</Badge>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+        {detail?.type === 'taches' && (
+          !detail.liste.length ? (
+            <p className="py-8 text-center text-sm text-gray-400">Aucune tâche en retard.</p>
+          ) : (
+            <div className="space-y-2">
+              {detail.liste.map((t) => {
+                const proj = projets.find((p) => p.id === t.projetId)
+                return (
+                  <div key={t.id} className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-700">{t.titre}</p>
+                      <p className="text-xs text-gray-400">{proj?.nom || 'Projet inconnu'}</p>
+                    </div>
+                    <p className="shrink-0 text-xs font-semibold text-red-500">
+                      {t.echeance ? formatDateShort(t.echeance) : '—'}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+        {detail?.type === 'responsables' && (
+          !detail.liste.length ? (
+            <p className="py-8 text-center text-sm text-gray-400">Aucun responsable renseigné.</p>
+          ) : (
+            <div className="space-y-2">
+              {detail.liste.map(([nom, s]) => (
+                <div key={nom} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
+                    {nom.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-700 truncate">{nom}</p>
+                    <p className="text-xs text-gray-400">{s.projets} projet(s) · {s.termines} terminé(s){s.enRetard > 0 ? ` · ${s.enRetard} en retard` : ''}</p>
+                  </div>
+                  <span className={`shrink-0 text-xs font-bold ${s.enRetard > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                    {s.enRetard > 0 ? `⚠ ${s.enRetard}` : '✓ OK'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </Modal>
     </div>
   )
 }

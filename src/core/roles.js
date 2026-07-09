@@ -22,7 +22,7 @@ export const ROLES = [
   { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres, journal et analyses)' },
   { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie — présences, cantine, incidents' },
   { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif — E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
-  { value: 'chef_projet',    label: 'Chef de projet',  desc: 'Terrain E-G.Pro — tâches, dépenses, photos, planning, rapports ; projets en consultation seule' },
+  { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro — accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },
 ]
 
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
@@ -38,20 +38,32 @@ export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin'
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
 export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur']
 
-// E-G.Pro : volets Pilotage & Contrôle / Journal / Paramètres — tout le monde SAUF
-// la secrétaire (administratif) et le chef de projet (terrain).
+// E-G.Pro : volet Paramètres — tout le monde SAUF la secrétaire (administratif)
+// et le chef de projet (terrain).
 export const PROJET_VOLETS_RESTREINTS_ROLES = ROLES.map((r) => r.value)
   .filter((v) => !['secretaire', 'chef_projet'].includes(v))
   .concat(['admin', 'controleur'])
 
+// E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
+// secrétaire (administratif) et le chef de projet (terrain, cloisonné à ses projets).
+export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)
+  .filter((v) => !['secretaire', 'chef_projet'].includes(v))
+  .concat(['admin', 'controleur'])
+
+// E-G.Pro : volet Journal — historique global des actions, en lecture seule pour
+// tout le monde SAUF le chef de projet (terrain). La secrétaire y a accès (utile
+// pour vérifier ce qui a été fait) même si elle ne peut rien y modifier.
+export const PROJET_JOURNAL_ROLES = ROLES.map((r) => r.value)
+  .filter((v) => v !== 'chef_projet')
+  .concat(['admin', 'controleur'])
+
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les
-// projets dont ils sont désignés « Responsable » (cf. logic.js → projetsVisibles).
+// projets dont ils sont désignés « Responsable » (p.responsableUid) ou « Collaborateur »
+// (p.collaborateurs[]) (cf. logic.js → projetsVisibles).
 export const PROJET_ROLES_CLOISONNES = ['chef_projet']
 
-// E-G.Pro : volet Dépenses — tout le monde SAUF le chef de projet (ne saisit pas
-// d'argent ; il garde toutefois la lecture du suivi financier sur les tâches).
+// E-G.Pro : volet Dépenses — accès complet à tous les rôles E-G.Pro.
 export const PROJET_DEPENSES_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => v !== 'chef_projet')
   .concat(['admin', 'controleur'])
 
 // Gestion des « Partenaires » (contacts externes : vétérinaires, techniciens,

@@ -12,6 +12,7 @@ import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuth } from '../../hooks/useAuth'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { STATUTS_PROJET, PRIORITES } from './data'
 import { marquerVoletVu } from './vues'
@@ -41,6 +42,8 @@ export default function Besoins() {
   const { data: projetsTous } = useCollection('projets')
   const { data: besoinsTous } = useCollection('projet_besoins')
   const { user, role } = useAuth()
+  // Le superviseur crée/modifie/traite les besoins, mais ne les supprime pas.
+  const peutSupprimer = role !== 'superviseur'
   useEffect(() => { marquerVoletVu(user?.uid, 'projetBesoins') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que les besoins de ses projets.
@@ -79,19 +82,30 @@ export default function Besoins() {
   }
 
   // Le besoin est adressé au responsable du projet — notification directe à la création.
+  // Si le créateur EST le responsable (cas le plus fréquent pour un chef de projet),
+  // il n'y a personne à notifier côté projet : on remonte plutôt à la direction.
   async function notifierResponsable(projetId, titre) {
     const projet = projets.find((p) => p.id === projetId)
-    if (!projet?.responsableUid || projet.responsableUid === user?.uid) return
-    await notify({
-      type: 'info',
-      title: `📦 Nouveau besoin — ${projet.nom}`,
-      body: titre,
-      module: 'projet', forUsers: [projet.responsableUid], link: '/projet/besoins'
-    }).catch(() => {})
+    if (!projet) return
+    if (projet.responsableUid && projet.responsableUid !== user?.uid) {
+      await notify({
+        type: 'info',
+        title: `📦 Nouveau besoin — ${projet.nom}`,
+        body: titre,
+        module: 'projet', forUsers: [projet.responsableUid], link: '/projet/besoins'
+      }).catch(() => {})
+    } else {
+      await notify({
+        type: 'info',
+        title: `📦 Nouveau besoin — ${projet.nom}`,
+        body: titre,
+        module: 'projet', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/projet/besoins'
+      }).catch(() => {})
+    }
   }
 
   const handleSave = async () => {
-    if (!form.titre.trim() || !form.projetId) return
+    if (!form.titre.trim() || !form.projetId || !form.quantite.trim()) return
     setSaving(true)
     try {
       const now = Date.now()
@@ -117,6 +131,7 @@ export default function Besoins() {
   }
 
   const handleDelete = async (b) => {
+    if (!peutSupprimer) return
     if (!window.confirm('Supprimer ce besoin ?')) return
     await removeItem('projet_besoins', b.id)
   }
@@ -128,8 +143,27 @@ export default function Besoins() {
 
   const catLabel = (id) => CATEGORIES_BESOIN.find((c) => c.id === id)?.label || id
 
+  const enAttente = besoins.filter((b) => b.statut === 'a_traiter' || b.statut === 'en_cours').length
+
   return (
     <div className="space-y-4">
+      {/* En-tête */}
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),0_8px_20px_-8px_rgba(13,148,136,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,84,80,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#0d9488', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <PackagePlus size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Besoins</h2>
+          <p className="text-sm text-white/80">
+            {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} — matériaux, main d'œuvre, équipement
+          </p>
+        </div>
+      </div>
+
       {/* Filtres + compteurs */}
       <div className="flex flex-wrap items-center gap-2">
         <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
@@ -199,8 +233,10 @@ export default function Besoins() {
                       <XCircle size={13} /> Annuler
                     </Button>
                   )}
-                  <button onClick={() => openEdit(b)} className="ml-auto rounded p-1.5 text-gray-400 hover:text-teal-600"><Pencil size={14} /></button>
-                  <button onClick={() => handleDelete(b)} className="rounded p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+                  <button onClick={() => openEdit(b)} className="ml-auto rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
+                  {peutSupprimer && (
+                    <button onClick={() => handleDelete(b)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
+                  )}
                 </div>
               </Card>
             )
@@ -236,7 +272,7 @@ export default function Besoins() {
                 {Object.entries(PRIORITES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </FormGroup>
-            <FormGroup label="Quantité" hint="Optionnel">
+            <FormGroup label="Quantité" required>
               <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                 placeholder="ex : 50 sacs"
                 value={form.quantite} onChange={(e) => setForm((f) => ({ ...f, quantite: e.target.value }))} />
@@ -253,7 +289,7 @@ export default function Besoins() {
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.titre.trim() || !form.projetId}>
+            <Button onClick={handleSave} disabled={saving || !form.titre.trim() || !form.projetId || !form.quantite.trim()}>
               {saving ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
           </div>

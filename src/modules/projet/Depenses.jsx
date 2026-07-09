@@ -80,6 +80,8 @@ export default function Depenses() {
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: notes }        = useCollection('projet_depenses_notes')
   const { user, role } = useAuthStore()
+  // Le chef de projet, la secrétaire et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
+  const peutSupprimer = !['chef_projet', 'secretaire', 'superviseur'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.
@@ -235,6 +237,7 @@ export default function Depenses() {
   }
 
   const handleDelete = async (d) => {
+    if (!peutSupprimer) return
     if (!window.confirm('Supprimer cette dépense ?')) return
     await removeItem('projet_depenses', d.id)
     // Recalculer le total du projet
@@ -435,8 +438,10 @@ export default function Depenses() {
                             </span>
                           )}
                         </button>
-                        <button onClick={() => openEdit(d)} className="rounded p-1 text-gray-400 hover:text-teal-600"><Pencil size={13} /></button>
-                        <button onClick={() => handleDelete(d)} className="rounded p-1 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                        <button onClick={() => openEdit(d)} className="rounded-lg border border-teal-200 bg-teal-50 p-1 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={13} /></button>
+                        {peutSupprimer && (
+                          <button onClick={() => handleDelete(d)} className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={13} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -481,7 +486,7 @@ export default function Depenses() {
                             <p className="text-sm text-gray-600">{n.texte}</p>
                             <p className="text-[10px] text-gray-400">{n.createdAt ? new Date(n.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}</p>
                           </div>
-                          <button onClick={() => supprimerNote(n)} className="text-gray-300 hover:text-red-400"><Trash2 size={12} /></button>
+                          <button onClick={() => supprimerNote(n)} className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-500 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={12} /></button>
                         </div>
                       ))}
                     </div>

@@ -27,6 +27,8 @@ export default function Documents() {
   const { data: projetsTous } = useCollection('projets')
   const { data: tachesTous }  = useCollection('projet_taches')
   const { user, role } = useAuthStore()
+  // Le superviseur ajoute/consulte des documents, mais ne les supprime pas.
+  const peutSupprimer = role !== 'superviseur'
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDocuments') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches.
@@ -58,7 +60,7 @@ export default function Documents() {
   }
 
   const handleRemove = async (piece) => {
-    if (!projet) return
+    if (!peutSupprimer || !projet) return
     if (!window.confirm(`Supprimer "${piece.nom}" ?`)) return
     const pieces = (projet.pieces || []).filter((p) => p.id !== piece.id)
     await updateItem('projets', projet.id, { pieces, updatedAt: Date.now() })
@@ -66,13 +68,17 @@ export default function Documents() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100/60 px-4 py-3.5 shadow-sm">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-teal-600 shadow-sm">
-          <FileText size={20} />
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),0_8px_20px_-8px_rgba(13,148,136,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,84,80,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#0d9488', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <FileText size={28} color="white" />
         </div>
         <div>
-          <p className="text-sm font-bold text-teal-900">{totalDocs} document{totalDocs !== 1 ? 's' : ''} attaché{totalDocs !== 1 ? 's' : ''}</p>
-          <p className="text-xs text-teal-600">PDF, images, contrats, plans…</p>
+          <h2 className="text-lg font-extrabold">Documents</h2>
+          <p className="text-sm text-white/80">{totalDocs} document{totalDocs !== 1 ? 's' : ''} attaché{totalDocs !== 1 ? 's' : ''} — PDF, images, contrats, plans</p>
         </div>
       </div>
 
@@ -118,6 +124,7 @@ export default function Documents() {
               pieces={piecesFiltrees}
               onAdd={handleAdd}
               onRemove={handleRemove}
+              noDelete={!peutSupprimer}
               rubriques={RUBRIQUES}
               label={`Documents — ${projet.nom}`}
               withLegende

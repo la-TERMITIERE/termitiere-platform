@@ -90,9 +90,9 @@ function OngletTaches({ taches, projets, users, depenses }) {
   const { user, role }        = useAuthStore()
   // La secrétaire peut démarrer une tâche, mais ne soumet ni ne valide (décision terrain).
   const peutSoumettreValider  = role !== 'secretaire'
-  // Le chef de projet n'a pas la main sur l'argent : pas de saisie de montant ni de versement
-  // (il garde en revanche la lecture du suivi financier déjà saisi par d'autres).
-  const peutSaisirMontant     = role !== 'chef_projet'
+  const peutSaisirMontant     = true
+  // Le superviseur crée/modifie/suit les tâches, mais ne les supprime pas.
+  const peutSupprimer         = !['secretaire', 'superviseur'].includes(role)
 
   const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
   const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])
@@ -197,6 +197,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
   }
 
   const handleDelete = async (t) => {
+    if (!peutSupprimer) return
     if (!window.confirm(`Supprimer la tâche "${t.titre}" ?`)) return
     await removeItem('projet_taches', t.id)
     await audit('projet', 'tache_supprimee', t.titre)
@@ -277,7 +278,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
             const pctPaye = prevu > 0 ? Math.min(100, Math.round((verse / prevu) * 100)) : 0
             const aSuivi = prevu > 0 || verse > 0
             return (
-              <Card key={t.id} className="flex h-full cursor-pointer flex-col" onClick={() => setDetail(t)}>
+              <Card key={t.id} className="card-hover flex h-full flex-col" onClick={() => setDetail(t)}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={STATUTS_TACHE[t.statut]?.tone}>{STATUTS_TACHE[t.statut]?.label}</Badge>
@@ -285,9 +286,9 @@ function OngletTaches({ taches, projets, users, depenses }) {
                     {enRetard && <Badge tone="danger">En retard</Badge>}
                   </div>
                   <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => openEdit(t)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-teal-600"><Pencil size={15} /></button>
-                    {role !== 'secretaire' && (
-                      <button onClick={() => handleDelete(t)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                    <button onClick={() => openEdit(t)} className="rounded-lg border border-teal-200 bg-teal-50 p-1 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={15} /></button>
+                    {peutSupprimer && (
+                      <button onClick={() => handleDelete(t)} className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={15} /></button>
                     )}
                   </div>
                 </div>
@@ -540,7 +541,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
       </Modal>
 
       {/* ── Fiche détail d'une tâche ── */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.titre || ''}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de la tâche">
         {detail && (() => {
           const projet = projets.find((p) => p.id === detail.projetId)
           const enRetard = detail.echeance && detail.statut !== 'terminee' && detail.statut !== 'annulee' && detail.echeance < Date.now()
@@ -553,10 +554,23 @@ function OngletTaches({ taches, projets, users, depenses }) {
             .sort((a, b) => (b.date || 0) - (a.date || 0))
           return (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={STATUTS_TACHE[detail.statut]?.tone}>{STATUTS_TACHE[detail.statut]?.label}</Badge>
-                <Badge tone={PRIORITES[detail.priorite]?.tone}>{PRIORITES[detail.priorite]?.label}</Badge>
-                {enRetard && <Badge tone="danger">En retard</Badge>}
+              {/* En-tête glassmorphism — nom de la tâche bien visible */}
+              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.92) 0%, rgba(15,84,80,0.88) 100%)' }}>
+                <p className="text-lg font-extrabold leading-snug">{detail.titre}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {STATUTS_TACHE[detail.statut]?.label}
+                  </span>
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {PRIORITES[detail.priorite]?.label}
+                  </span>
+                  {enRetard && (
+                    <span className="rounded-full border border-red-200/50 bg-red-500/80 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm">
+                      En retard
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -575,7 +589,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
               )}
 
               {(detail.prestataireNom || detail.prestataireMetier || detail.prestataireTelephone) && (
-                <div className="rounded-xl border border-teal-100 bg-teal-50 p-3">
+                <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3 shadow-sm backdrop-blur-sm">
                   <p className="mb-1 text-xs font-bold uppercase text-teal-700">Prestataire</p>
                   <p className="text-sm text-gray-700">
                     {detail.prestataireNom || '—'}
@@ -586,7 +600,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
               )}
 
               {(prevu > 0 || verse > 0) && (
-                <div className="rounded-xl border border-teal-100 bg-teal-50/60 p-3">
+                <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3 shadow-sm backdrop-blur-sm">
                   <p className="mb-2 text-xs font-bold uppercase text-teal-700">Suivi financier</p>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                     <span className="text-gray-600">Arrêté : <span className="font-semibold text-gray-800">{formatMoney(prevu)}</span></span>

@@ -6,7 +6,7 @@ import { Paperclip, Eye, Trash2, Loader2, FileText, Image as ImageIcon, ChevronD
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { toast } from '../../core/notifications'
 
-export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, label = 'Pièces jointes', rubriques = null, withProprietaire = false, withLegende = false }) {
+export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, noDelete = false, label = 'Pièces jointes', rubriques = null, withProprietaire = false, withLegende = false }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [rubrique, setRubrique] = useState('')
@@ -112,12 +112,12 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
                   </div>
                   {p.legende && <p className="mt-0.5 truncate text-[11px] italic text-teal-700" title={p.legende}>« {p.legende} »</p>}
                 </div>
-                <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                <div className="flex shrink-0 items-center gap-1">
                   <button type="button" title="Voir" onClick={() => ouvrirPiece(p)}
-                    className="rounded-lg p-1.5 text-gray-400 hover:bg-teal-50 hover:text-teal-600"><Eye size={15} /></button>
-                  {!readOnly && (
+                    className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Eye size={15} /></button>
+                  {!readOnly && !noDelete && (
                     <button type="button" title="Supprimer" onClick={() => onRemove?.(p)}
-                      className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"><Trash2 size={15} /></button>
+                      className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={15} /></button>
                   )}
                 </div>
               </div>

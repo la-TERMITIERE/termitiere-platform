@@ -8,12 +8,15 @@ import { TYPES_PROJET, STATUTS_PROJET, PRIORITES, STATUTS_TACHE, SEUILS_DEFAUT }
 import { getAll, removeItem, setItem } from '../../core/db'
 import { useCollection } from '../../hooks/useFirestore'
 import { audit } from '../../core/audit'
+import { useAuthStore } from '../../core/auth'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 
 const COLLECTIONS_PROJET = [
   { id: 'projets',            label: 'Projets'            },
   { id: 'projet_taches',      label: 'Tâches'             },
   { id: 'projet_depenses',    label: 'Dépenses'           },
   { id: 'projet_besoins',     label: 'Besoins'            },
+  { id: 'projet_materiels',  label: 'Matériel'           },
   { id: 'projet_documents',   label: 'Documents'          },
   { id: 'projet_prestataires_masques', label: 'Prestataires masqués' },
 ]
@@ -24,6 +27,8 @@ async function viderCollection(name) {
 }
 
 function SectionSeuils() {
+  const { role } = useAuthStore()
+  const peutModifier = !['chef_projet', 'superviseur'].includes(role)
   const { data: configs } = useCollection('projet_params')
   const [form, setForm]   = useState(SEUILS_DEFAUT)
   const [saving, setSaving] = useState(false)
@@ -35,6 +40,7 @@ function SectionSeuils() {
   }, [configs])
 
   const handleSave = async () => {
+    if (!peutModifier) return
     setSaving(true)
     try {
       await setItem('projet_params', 'seuils', { id: 'seuils', ...form, updatedAt: Date.now() })
@@ -53,8 +59,8 @@ function SectionSeuils() {
           <p className="mt-0.5 text-xs text-amber-600">Déclencher l'alerte quand les dépenses atteignent X% du budget</p>
           <div className="mt-3 flex items-center gap-2">
             <input
-              type="number" min={1} max={200}
-              className="w-24 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              type="number" min={1} max={200} disabled={!peutModifier}
+              className="w-24 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-gray-100 disabled:text-gray-500"
               value={form.budget}
               onChange={(e) => setForm((f) => ({ ...f, budget: Number(e.target.value) }))}
             />
@@ -70,8 +76,8 @@ function SectionSeuils() {
           <p className="mt-0.5 text-xs text-indigo-600">Déclencher l'alerte si une tâche n'a pas été mise à jour depuis X jours</p>
           <div className="mt-3 flex items-center gap-2">
             <input
-              type="number" min={1} max={365}
-              className="w-24 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              type="number" min={1} max={365} disabled={!peutModifier}
+              className="w-24 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-100 disabled:text-gray-500"
               value={form.inactivite}
               onChange={(e) => setForm((f) => ({ ...f, inactivite: Number(e.target.value) }))}
             />
@@ -83,23 +89,30 @@ function SectionSeuils() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? <><RotateCcw size={14} className="mr-1.5 animate-spin" />Enregistrement…</> : <><Save size={14} className="mr-1.5" />Enregistrer les seuils</>}
-        </Button>
-        {saved && <span className="text-xs font-semibold text-green-600">✓ Seuils enregistrés</span>}
-      </div>
+      {peutModifier ? (
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><RotateCcw size={14} className="mr-1.5 animate-spin" />Enregistrement…</> : <><Save size={14} className="mr-1.5" />Enregistrer les seuils</>}
+          </Button>
+          {saved && <span className="text-xs font-semibold text-green-600">✓ Seuils enregistrés</span>}
+        </div>
+      ) : (
+        <p className="mt-4 text-xs italic text-gray-400">Lecture seule pour votre rôle.</p>
+      )}
     </Card>
   )
 }
 
 export default function Params() {
+  const { role } = useAuthStore()
+  const peutReinitialiser = FULL_ACCESS_ROLES.includes(role)
   const [modal, setModal]   = useState(false)
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone]     = useState(false)
 
   const handleReset = async () => {
+    if (!peutReinitialiser) return
     if (confirm !== 'REINITIALISER') return
     setLoading(true)
     try {
@@ -155,7 +168,8 @@ export default function Params() {
 
       <SectionSeuils />
 
-      {/* ── Zone danger ───────────────────────────────────────────────────── */}
+      {/* ── Zone danger — réservée à la direction (accès total) ─────────────── */}
+      {peutReinitialiser && (
       <Card title={<span className="flex items-center gap-2 text-red-600"><AlertTriangle size={15} />Zone de danger</span>}>
         <div className="rounded-2xl border border-red-200/60 bg-red-50/70 p-4 backdrop-blur-sm">
           <p className="text-sm font-semibold text-red-700">Réinitialiser toutes les données</p>
@@ -179,6 +193,7 @@ export default function Params() {
           </div>
         </div>
       </Card>
+      )}
 
       <Modal open={modal} onClose={() => setModal(false)} title="Confirmer la réinitialisation">
         <div className="space-y-4">
