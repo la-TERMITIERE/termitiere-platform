@@ -11,6 +11,9 @@
 // Tant que le token n'est pas renseigné, la fonction répond proprement (no-op)
 // pour ne rien casser côté application.
 
+import { initializeApp, cert, getApps } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
+
 // Limite de débit PAR IP (anti-abus). Cet endpoint déclenche des envois WhatsApp
 // PAYANTS : sans garde-fou, un bot pourrait le marteler et générer des coûts. La
 // fenêtre est en mémoire (par instance serverless) : 1re barrière, simple et utile.
@@ -26,6 +29,26 @@ function rateLimited(ip) {
   return false
 }
 
+function ensureAdmin() {
+  if (getApps().length) return true
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT
+  if (!raw) return false
+  try { initializeApp({ credential: cert(JSON.parse(raw)) }); return true }
+  catch { return false }
+}
+
+// 2e garde-fou (en plus du rate-limit) : n'accepte que les appels d'un utilisateur
+// authentifié de l'app — évite qu'un tiers qui découvre l'URL fasse envoyer des
+// messages WhatsApp payants via ce compte. `null` = SDK Admin pas encore
+// configuré → repli sur le rate-limit seul (comportement actuel, transitoire).
+async function verifyCaller(event) {
+  if (!ensureAdmin()) return null
+  const authz = event.headers['authorization'] || event.headers['Authorization'] || ''
+  const token = authz.startsWith('Bearer ') ? authz.slice(7) : ''
+  if (!token) return false
+  try { return await getAuth().verifyIdToken(token) } catch { return false }
+}
+
 export async function handler(event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ ok: false, error: 'Method Not Allowed' }) }
@@ -36,6 +59,10 @@ export async function handler(event) {
     || 'unknown'
   if (rateLimited(ip)) {
     return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de requêtes — réessayez dans une minute.' }) }
+  }
+  const caller = await verifyCaller(event)
+  if (caller === false) {
+    return { statusCode: 401, body: JSON.stringify({ ok: false, error: 'Authentification requise' }) }
   }
 
   let payload = {}

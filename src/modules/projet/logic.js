@@ -4,13 +4,14 @@ import { formatDateShort } from '../../utils/formatters'
 import { PROJET_ROLES_CLOISONNES } from '../../core/roles'
 
 // Cloisonnement par projet : un rôle cloisonné (ex. chef de projet) ne voit que les
-// projets dont il est désigné « Responsable » (p.responsableUid). Les autres rôles
-// voient tout, comme aujourd'hui.
+// projets dont il est désigné « Responsable » (p.responsableUid) OU ajouté comme
+// « Collaborateur » (p.collaborateurs[].uid) — un collaborateur a le même accès
+// complet au projet qu'un responsable. Les autres rôles voient tout, comme aujourd'hui.
 export function projetsVisibles(projets = [], user, role) {
   if (!PROJET_ROLES_CLOISONNES.includes(role)) return projets
   const uid = user?.uid
   if (!uid) return []
-  return projets.filter((p) => p.responsableUid === uid)
+  return projets.filter((p) => p.responsableUid === uid || (p.collaborateurs || []).some((c) => c.uid === uid))
 }
 
 // Sous-ensemble d'une collection liée à des projets (tâches, dépenses, documents…)
@@ -72,6 +73,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
       alertes.push({
         id: `retard_${p.id}`,
         type: 'projet_retard',
+        projetId: p.id,
         projetNom: p.nom,
         message: `Ce projet aurait dû se terminer le ${formatDateShort(p.dateFin)} (${joursRetard} jour${joursRetard > 1 ? 's' : ''} de retard).`,
         date: p.dateFin,
@@ -87,6 +89,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
       alertes.push({
         id: `budget_${p.id}`,
         type: 'budget_depasse',
+        projetId: p.id,
         projetNom: p.nom,
         message: `${pct}% du budget utilisé (${totalDepenses.toLocaleString('fr-FR')} / ${budget.toLocaleString('fr-FR')} FCFA).`,
         date: now,
@@ -102,6 +105,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         alertes.push({
           id: `tache_depassee_${t.id}`,
           type: 'tache_depassee',
+          projetId: p.id,
           projetNom: p.nom,
           message: `Tâche "${t.titre}" dépassée de ${(verse - prevu).toLocaleString('fr-FR')} FCFA (arrêté : ${prevu.toLocaleString('fr-FR')}, versé : ${verse.toLocaleString('fr-FR')}).`,
           date: now,
@@ -117,6 +121,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         alertes.push({
           id: `zero_${p.id}`,
           type: 'avancement_zero',
+          projetId: p.id,
           projetNom: p.nom,
           message: `Ce projet a ${tachesProjet.length} tâche(s) mais aucune n'est terminée depuis plus d'une semaine.`,
           date: p.createdAt,
@@ -131,6 +136,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
       alertes.push({
         id: `tache_${t.id}`,
         type: 'tache_retard',
+        projetId: p.id,
         projetNom: p.nom,
         message: `Tâche "${t.titre}" — échéance dépassée de ${joursRetard} jour${joursRetard > 1 ? 's' : ''} (assignée à : ${t.assignee || 'non assignée'}).`,
         date: t.echeance,
@@ -143,6 +149,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
       alertes.push({
         id: `termine_${p.id}`,
         type: 'termine',
+        projetId: p.id,
         projetNom: p.nom,
         message: `Projet marqué comme terminé le ${formatDateShort(p.updatedAt)}. Félicitations !`,
         date: p.updatedAt,

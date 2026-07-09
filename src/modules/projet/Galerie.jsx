@@ -31,6 +31,8 @@ function formatTaille(octets) {
 export default function Galerie() {
   const { data: projetsTous } = useCollection('projets')
   const { user, role } = useAuthStore()
+  // Le superviseur ajoute des photos, mais ne les supprime pas.
+  const peutSupprimer = role !== 'superviseur'
   useEffect(() => { marquerVoletVu(user?.uid, 'projetGalerie') }, [user?.uid])
   // Cloisonnement : un chef de projet ne voit que la galerie de ses projets.
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
@@ -182,6 +184,7 @@ export default function Galerie() {
   // ── Suppression ────────────────────────────────────────────────────────
 
   const supprimerImage = async (projetId, imgId) => {
+    if (!peutSupprimer) return
     if (!window.confirm('Supprimer cette photo ?')) return
     const projet = projets.find((p) => p.id === projetId)
     if (!projet) return
@@ -208,13 +211,28 @@ export default function Galerie() {
   return (
     <div className="space-y-4" onKeyDown={onKey} tabIndex={-1}>
 
+      {/* En-tête */}
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),0_8px_20px_-8px_rgba(13,148,136,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,84,80,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#0d9488', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <ImageIcon size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Galerie photos</h2>
+          <p className="text-sm text-white/80">{toutesImages.length} photo{toutesImages.length !== 1 ? 's' : ''} — avancement de chantier</p>
+        </div>
+      </div>
+
       {/* Sélecteur projet + actions upload */}
       <Card>
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Projet concerné</label>
             <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}
             >
               <option value="">— Voir toute la galerie —</option>
@@ -227,7 +245,7 @@ export default function Galerie() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Légende (optionnel)</label>
                 <input
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   placeholder="Ex : Coulage dalle RDC — 30 juin 2026"
                   value={legende} onChange={(e) => setLegende(e.target.value)}
                 />
@@ -276,7 +294,7 @@ export default function Galerie() {
                 images={p.galerie}
                 projetId={p.id}
                 onOpen={(idx) => openLightbox(p.galerie, idx)}
-                onDelete={(imgId) => supprimerImage(p.id, imgId)}
+                onDelete={peutSupprimer ? (imgId) => supprimerImage(p.id, imgId) : null}
               />
             </div>
           ))}
@@ -296,7 +314,7 @@ export default function Galerie() {
             images={projetActif.galerie || []}
             projetId={projetActif.id}
             onOpen={(idx) => openLightbox(projetActif.galerie, idx)}
-            onDelete={(imgId) => supprimerImage(projetActif.id, imgId)}
+            onDelete={peutSupprimer ? (imgId) => supprimerImage(projetActif.id, imgId) : null}
           />
         ) : (
           <Card>
@@ -438,14 +456,16 @@ function GrilleImages({ images, projetId, onOpen, onDelete }) {
           {/* Overlay au hover */}
           <div className="absolute inset-0 flex flex-col justify-between bg-black/0 p-2 transition-colors group-hover:bg-black/40">
             {/* Bouton supprimer */}
-            <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(img.id) }}
-                className="rounded-full bg-red-500/80 p-1.5 text-white hover:bg-red-600"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
+            {onDelete && (
+              <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(img.id) }}
+                  className="rounded-full bg-red-500/80 p-1.5 text-white hover:bg-red-600"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            )}
 
             {/* Légende + zoom */}
             <div className="opacity-0 transition-opacity group-hover:opacity-100">

@@ -16,7 +16,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
-import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
+import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
 import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole } from '../../core/roles'
@@ -24,6 +24,7 @@ import { isFullAccessRole } from '../../core/roles'
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
+  natureFlux: natureFluxDefaut,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: ''
 })
 
@@ -95,6 +96,7 @@ export default function Depenses() {
   const [recherche, setRecherche] = useState('')
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('')
+  const [filtreNature, setFiltreNature] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
   const [toDelete, setToDelete] = useState(null)
@@ -106,13 +108,14 @@ export default function Depenses() {
     let rows = [...depenses]
     if (filtreSecteur)   rows = rows.filter((d) => d.secteurId === filtreSecteur)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
+    if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
     if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
       rows = rows.filter((d) => (d.description || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreCategorie, filtreMois, recherche])
+  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreMois, recherche])
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
@@ -246,6 +249,13 @@ export default function Depenses() {
             {categoriesPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
           </Select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Nature du flux</label>
+          <Select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)}>
+            <option value="">Toutes</option>
+            {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </Select>
+        </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
           <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>
@@ -273,6 +283,7 @@ export default function Depenses() {
             {liste.map((d) => {
               const secteur = SECTEURS.find((s) => s.id === d.secteurId)
               const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
+              const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
               const modifiable = isAdmin || d.statut === 'en_attente' || !d.statut
               return (
                 <tr key={d.id} className="hover:bg-gray-50 transition-colors">
@@ -280,7 +291,10 @@ export default function Depenses() {
                   <td className="px-3 py-2">
                     <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-xs text-gray-600">{d.categorie || '—'}</td>
+                  <td className="px-3 py-2 text-xs text-gray-600">
+                    {d.categorie || '—'}
+                    <span className="mt-0.5 block"><Badge tone={nature.tone}>{nature.label}</Badge></span>
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{d.description || '—'}</td>
                   <td className="px-3 py-2 text-right font-semibold">{Number(d.montant).toLocaleString('fr-FR')} FCFA</td>
                   <td className="px-3 py-2">
@@ -347,6 +361,17 @@ export default function Depenses() {
                 <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
               </FormGroup>
             </div>
+            <FormGroup label="Nature du flux" hint="Sert au calcul du solde de trésorerie (voir l'onglet Flux de trésorerie).">
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(NATURES_FLUX).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => set('natureFlux', k)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    title={v.desc}>
+                    {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
+                  </button>
+                ))}
+              </div>
+            </FormGroup>
             <FormGroup label="Description">
               <textarea
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"

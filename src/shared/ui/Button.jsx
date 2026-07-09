@@ -32,7 +32,8 @@ export default function Button({
       type={type}
       disabled={disabled || loading}
       className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold
-        transition-colors disabled:opacity-60 disabled:cursor-not-allowed
+        shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm
+        disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-sm
         ${VARIANTS[variant] || VARIANTS.primary} ${SIZES[size]} ${className}`}
       {...props}
     >

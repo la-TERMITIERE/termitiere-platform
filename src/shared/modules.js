@@ -4,9 +4,9 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package, History,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  MessageSquare, Wallet, BellRing, Gauge, Receipt, Stamp, Handshake
+  Wallet, Gauge, Receipt, Stamp, Waves, PackagePlus, Handshake, Wrench
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES, PROJET_DEPENSES_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_PILOTAGE_ROLES, PROJET_JOURNAL_ROLES, PROJET_DEPENSES_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -148,19 +148,18 @@ export const MODULE_NAV = {
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
-    { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge, roles: PROJET_VOLETS_RESTREINTS_ROLES },
-    { label: 'Alertes',     to: '/projet/alertes',     icon: BellRing, roles: PROJET_ALERTES_ROLES },
+    { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge, roles: PROJET_PILOTAGE_ROLES },
     { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban, badgeKey: 'projetProjets' },
     { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks, badgeKey: 'projetTaches' },
     { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
     { label: 'Documents',   to: '/projet/documents',   icon: Paperclip, badgeKey: 'projetDocuments' },
     { label: 'Galerie photos', to: '/projet/galerie',  icon: Images, badgeKey: 'projetGalerie' },
     { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet, badgeKey: 'projetDepenses', roles: PROJET_DEPENSES_ROLES },
-    { label: 'Commentaires', to: '/projet/commentaires', icon: MessageSquare, badgeKey: 'projetCommentaires' },
+    { label: 'Besoins',      to: '/projet/besoins',      icon: PackagePlus, badgeKey: 'projetBesoins' },
+    { label: 'Matériel',    to: '/projet/materiel',    icon: Wrench, badgeKey: 'projetMateriel' },
     { label: 'Prestataires', to: '/projet/prestataires', icon: UserCircle },
-    { label: 'Partenaires', to: '/projet/partenaires', icon: Handshake, perm: 'partenaires' },
     { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
-    { label: 'Journal',     to: '/projet/journal',     icon: BookOpen, roles: PROJET_VOLETS_RESTREINTS_ROLES },
+    { label: 'Journal',     to: '/projet/journal',     icon: BookOpen, roles: PROJET_JOURNAL_ROLES },
     { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: PROJET_VOLETS_RESTREINTS_ROLES }
   ],
   garderie: [
@@ -184,6 +183,7 @@ export const MODULE_NAV = {
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: FINANCE_VIEW_ROLES },
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
+    { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
     { label: 'Historique',                   to: '/depense/historique',  icon: History,         roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
     { label: 'Journal',                      to: '/depense/journal',      icon: BookOpen,        roles: FINANCE_VIEW_ROLES },

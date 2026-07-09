@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing, X } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import StatCard from '../../shared/ui/StatCard'
@@ -10,8 +10,6 @@ import { setItem } from '../../core/db'
 import { STATUTS_PROJET, PRIORITES, SEUILS_DEFAUT } from './data'
 import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from './logic'
 import { formatDateShort } from '../../utils/formatters'
-import { notify } from '../../core/notify'
-import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
 import { projetsVisibles, scopeParProjets } from './logic'
 
@@ -39,28 +37,8 @@ export default function Dashboard() {
 
   const [detail, setDetail] = useState(null)
   const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
-  const alertesRef = useRef(new Set())
   const idsFermesDashboard = useMemo(() => new Set(fermeesDashboard.map((f) => f.id)), [fermeesDashboard])
   const fermerSurDashboard = (id) => setItem('projet_alertes_dashboard_fermees', id, { id, fermeLe: Date.now() })
-
-  // Notifications temps réel — envoie une notif pour chaque nouvelle alerte critique
-  useEffect(() => {
-    const alertes = genererAlertes(projets, taches, depenses, seuils)
-    const critiques = alertes.filter((a) => ['projet_retard', 'budget_depasse'].includes(a.type))
-    critiques.forEach((a) => {
-      if (!alertesRef.current.has(a.id)) {
-        alertesRef.current.add(a.id)
-        notify({
-          type: 'warning',
-          title: a.type === 'projet_retard' ? 'Projet en retard' : 'Budget dépassé',
-          body: `${a.projetNom} — ${a.message}`,
-          module: 'projet',
-          forRoles: FULL_ACCESS_ROLES,
-          link: '/projet',
-        })
-      }
-    })
-  }, [projets, taches, depenses, seuils])
 
   const stats = useMemo(() => {
     const actifs    = projets.filter((p) => p.statut === 'en_cours')
@@ -107,8 +85,8 @@ export default function Dashboard() {
 
       {/* ── Alertes ────────────────────────────────────────────────────────── */}
       {(() => {
-        // Fermer ici ne retire l'alerte que de ce widget — elle reste visible dans l'onglet Alertes
-        // tant que le problème n'est pas résolu.
+        // Fermer ici ne retire l'alerte que de ce widget (repli visuel local) — les
+        // responsables et la direction continuent d'être notifiés tant que ce n'est pas résolu.
         const alertes = genererAlertes(projets, taches, depenses, seuils).filter((a) => !idsFermesDashboard.has(a.id))
         if (!alertes.length) return null
         const critiques = alertes.filter((a) => ['projet_retard','budget_depasse'].includes(a.type)).length
@@ -124,12 +102,12 @@ export default function Dashboard() {
               {alertes.map((a) => {
                 const cfg = TYPE_ALERTE[a.type]
                 return (
-                  <div key={a.id} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${cfg.bg}`}>
+                  <div key={a.id} className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs backdrop-blur-sm ${cfg.bg}`}>
                     <span className={`shrink-0 font-bold ${cfg.color}`}>{cfg.label}</span>
                     <span className="font-semibold text-gray-600">{a.projetNom}</span>
                     <span className="flex-1 text-gray-500">{a.message}</span>
                     <button onClick={() => fermerSurDashboard(a.id)} title="Retirer de ce widget"
-                      className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-white/70 hover:text-gray-700">
+                      className="shrink-0 rounded-lg p-0.5 text-gray-400 hover:bg-white/70 hover:text-gray-700">
                       <X size={13} />
                     </button>
                   </div>
@@ -150,19 +128,19 @@ export default function Dashboard() {
                 const tachesDuProjet = taches.filter((t) => t.projetId === p.id)
                 const pct = avancementProjet(tachesDuProjet, p)
                 return (
-                  <div key={p.id} className="rounded-lg border border-gray-100 px-3 py-2 text-sm">
+                  <div key={p.id} className="rounded-2xl bg-white/50 px-3 py-2.5 text-sm shadow-sm transition-colors hover:bg-white/70">
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs text-gray-400">{p.num}</span>
                       <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label || p.statut}</Badge>
                     </div>
-                    <p className="font-semibold">{p.nom}</p>
+                    <p className="font-semibold text-gray-800">{p.nom}</p>
                     {p.responsable && <p className="text-xs text-gray-500">Resp. : {p.responsable}</p>}
                     {p.dureeIndeterminee
                       ? <p className="text-xs italic text-gray-400">Durée indéterminée</p>
                       : p.dateFin && <p className="text-xs text-gray-400">Échéance : {formatDateShort(p.dateFin)}</p>}
                     <div className="mt-2 flex items-center gap-2">
-                      <div className="h-1.5 flex-1 rounded-full bg-gray-100">
-                        <div className="h-1.5 rounded-full bg-teal-500" style={{ width: `${pct}%` }} />
+                      <div className="h-1.5 flex-1 rounded-full bg-gray-200/70">
+                        <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
                       </div>
                       <span className="text-[10px] font-bold text-gray-500">{pct}%</span>
                     </div>
@@ -181,7 +159,7 @@ export default function Dashboard() {
               {stats.tRetard.slice(0, 8).map((t) => {
                 const projet = projets.find((p) => p.id === t.projetId)
                 return (
-                  <div key={t.id} className="flex items-start justify-between rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm">
+                  <div key={t.id} className="flex items-start justify-between rounded-2xl border border-red-200/60 bg-red-50/60 px-3 py-2.5 text-sm backdrop-blur-sm">
                     <div>
                       <p className="font-semibold text-red-800">{t.titre}</p>
                       {projet && <p className="text-xs text-gray-500">{projet.nom}</p>}
@@ -202,7 +180,7 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-2">
             {detail.liste.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm">
+              <div key={p.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2.5 text-sm">
                 <div>
                   <p className="font-semibold">{p.nom} <span className="font-mono text-xs text-gray-400">{p.num}</span></p>
                   {p.responsable && <p className="text-xs text-gray-500">Resp. : {p.responsable}</p>}

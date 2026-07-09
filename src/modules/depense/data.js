@@ -23,6 +23,15 @@ export const CATEGORIES_DEPENSE = [
   { id: 'autre',         label: 'Autre' }
 ]
 
+// Nature comptable du flux — indépendante de la catégorie. Sert à établir le solde
+// de trésorerie par type de flux (exploitation / investissement / perte).
+export const NATURES_FLUX = {
+  exploitation:   { label: 'Exploitation',   tone: 'info',    desc: 'Fonctionnement courant : salaires, achats, loyer, transport…' },
+  investissement: { label: 'Investissement', tone: 'success', desc: 'Achat d\'actif durable : terrain, bâtiment, véhicule, gros équipement…' },
+  perte:          { label: 'Perte',          tone: 'danger',  desc: 'Argent perdu sans contrepartie : casse, mortalité, créance irrécouvrable…' }
+}
+export const natureFluxDefaut = 'exploitation'
+
 // Circuit d'autorisation de décaissement (2 niveaux) :
 //   en_attente → approuvee → decaissee (argent réellement sorti, compté dans le budget)
 //   ou refusee à n'importe quelle étape.
