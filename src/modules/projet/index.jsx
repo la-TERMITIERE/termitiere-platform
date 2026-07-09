@@ -14,6 +14,7 @@ import Pilotage from './Pilotage'
 import Alertes from './Alertes'
 import Journal from './Journal'
 import Params from './Params'
+import Partenaires from '../../shared/partenaires/Partenaires'
 import { useProjetStore } from './store/projetStore'
 import { useAuth } from '../../hooks/useAuth'
 import { PROJET_VOLETS_RESTREINTS_ROLES, PROJET_ALERTES_ROLES, PROJET_DEPENSES_ROLES } from '../../core/roles'
@@ -41,6 +42,7 @@ export default function ProjetModule() {
       <Route path="commentaires" element={<Commentaires />} />
       <Route path="depenses"     element={<ProjetGuard roles={PROJET_DEPENSES_ROLES}><Depenses /></ProjetGuard>} />
       <Route path="prestataires" element={<Prestataires />} />
+      <Route path="partenaires"  element={<Partenaires module="projet" />} />
       <Route path="pilotage"     element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Pilotage /></ProjetGuard>} />
       <Route path="alertes"      element={<ProjetGuard roles={PROJET_ALERTES_ROLES}><Alertes /></ProjetGuard>} />
       <Route path="journal" element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Journal /></ProjetGuard>} />

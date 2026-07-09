@@ -15,6 +15,7 @@ import Clients from './Clients'
 import Fournisseurs from './Fournisseurs'
 import Journal from './Journal'
 import Params from './Params'
+import Partenaires from '../../shared/partenaires/Partenaires'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
 import { useLogistiqueStore } from './store/referentielStore'
@@ -52,6 +53,7 @@ function SiteApp() {
         <Route path="referentiel" element={<Referentiel />} />
         <Route path="clients" element={<Clients />} />
         <Route path="fournisseurs" element={<Fournisseurs />} />
+        <Route path="partenaires" element={<Partenaires module="logistique" />} />
         <Route path="journal" element={<Journal />} />
         <Route path="params" element={<Params />} />
         <Route path="*" element={<Navigate to="." replace />} />

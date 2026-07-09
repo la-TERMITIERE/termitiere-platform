@@ -5,7 +5,7 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, X } from 'lucide-reac
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel } from '../../core/roles'
+import { roleLabel, canManagePartenaires } from '../../core/roles'
 import { estActif } from '../workflow'
 import { ACTIONS_PAR_VOLET } from '../../modules/projet/vues'
 
@@ -57,9 +57,12 @@ export default function Sidebar({ open, onClose }) {
       : 'text-white/80 hover:bg-white/10 hover:text-white hover:shadow-[0_12px_24px_-12px_rgba(0,0,0,0.35)]'
     }`
 
-  // Filtre les liens de navigation selon le rôle (propriété `roles` optionnelle)
-  let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
-    .filter((item) => !item.roles || item.roles.includes(role))
+  // Filtre les liens de navigation selon le rôle (`roles`) et les permissions
+  // par utilisateur (`perm`, ex. « partenaires » = accès donné par la direction).
+  const canSeeNav = (item) =>
+    (!item.roles || item.roles.includes(role)) &&
+    (!item.perm || (item.perm === 'partenaires' && canManagePartenaires(role, user)))
+  let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
 
   // Maxi Logistique : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
   // On préfixe alors chaque destination par /logistique/<site>/…
@@ -177,7 +180,7 @@ export default function Sidebar({ open, onClose }) {
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
                 {moduleTitle}
               </p>
-              {moduleNav.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
+              {moduleNav.map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
                   <item.icon size={18} /> {item.label}
                   {item.badgeKey && badges[item.badgeKey] > 0 && (

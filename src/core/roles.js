@@ -59,6 +59,13 @@ export const PROJET_DEPENSES_ROLES = ROLES.map((r) => r.value)
   .filter((v) => v !== 'chef_projet')
   .concat(['admin', 'controleur'])
 
+// Gestion des « Partenaires » (contacts externes : vétérinaires, techniciens,
+// prestataires… — PAS des employés). Réservée aux rôles à accès total ET à tout
+// utilisateur interne à qui la direction a explicitement « donné la main »
+// (champ `gerePartenaires` du profil). L'onglet n'apparaît que pour ces personnes.
+export const canManagePartenaires = (role, user) =>
+  FULL_ACCESS_ROLES.includes(role) || user?.gerePartenaires === true
+
 export const isFullAccessRole  = (r) => FULL_ACCESS_ROLES.includes(r)
 export const isViewAllRole     = (r) => VIEW_ALL_ROLES.includes(r)
 export const isApproverRole    = (r) => APPROVER_ROLES.includes(r)

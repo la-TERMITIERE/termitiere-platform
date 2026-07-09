@@ -10,6 +10,7 @@ import Demandes from './Demandes'
 import Params from './Params'
 import Clients from './Clients'
 import Journal from './Journal'
+import Partenaires from '../../shared/partenaires/Partenaires'
 import { useBriqueterieStore } from './store/referentielStore'
 
 export default function EvenementielModule() {
@@ -26,6 +27,7 @@ export default function EvenementielModule() {
       <Route path="demandes" element={<Demandes />} />
       <Route path="params" element={<Params />} />
       <Route path="clients" element={<Clients />} />
+      <Route path="partenaires" element={<Partenaires module="evenementiel" />} />
       <Route path="journal" element={<Journal />} />
     </Routes>
   )
