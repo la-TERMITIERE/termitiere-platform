@@ -44,11 +44,6 @@ export const PROJET_VOLETS_RESTREINTS_ROLES = ROLES.map((r) => r.value)
   .filter((v) => !['secretaire', 'chef_projet'].includes(v))
   .concat(['admin', 'controleur'])
 
-// E-G.Pro : volet Alertes — tout le monde SAUF le chef de projet (la secrétaire y a accès).
-export const PROJET_ALERTES_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => v !== 'chef_projet')
-  .concat(['admin', 'controleur'])
-
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les
 // projets dont ils sont désignés « Responsable » (cf. logic.js → projetsVisibles).
 export const PROJET_ROLES_CLOISONNES = ['chef_projet']

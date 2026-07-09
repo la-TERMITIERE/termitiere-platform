@@ -12,6 +12,7 @@ import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuthStore } from '../../core/auth'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { audit } from '../../core/audit'
+import { notify } from '../../core/notify'
 import { STATUTS_PROJET } from './data'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
@@ -105,12 +106,24 @@ export default function Depenses() {
     if (!noteTexte.trim() || !noteDepId) return
     setNoteSaving(true)
     try {
+      const texte = noteTexte.trim()
       await addItem('projet_depenses_notes', {
         depenseId: noteDepId,
-        texte: noteTexte.trim(),
+        texte,
         auteur: user?.nom || user?.login || 'Anonyme',
         createdAt: Date.now()
       })
+      // Le commentaire est adressé au responsable du projet — notification directe.
+      const dep = depenses.find((d) => d.id === noteDepId)
+      const projet = dep ? projets.find((p) => p.id === dep.projetId) : null
+      if (projet?.responsableUid && projet.responsableUid !== user?.uid) {
+        await notify({
+          type: 'info',
+          title: `💬 Commentaire — ${projet.nom}`,
+          body: `${user?.nom || user?.login || 'Quelqu\'un'} : ${texte.slice(0, 140)}`,
+          module: 'projet', forUsers: [projet.responsableUid], link: '/projet/depenses'
+        }).catch(() => {})
+      }
       setNoteTexte('')
     } finally { setNoteSaving(false) }
   }
@@ -296,12 +309,12 @@ export default function Depenses() {
 
       {/* Filtres + bouton */}
       <div className="flex flex-wrap items-center gap-2">
-        <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+        <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
           value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
           <option value="">Tous les projets</option>
           {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
         </select>
-        <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+        <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
           value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
           <option value="">Toutes catégories</option>
           {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
@@ -347,7 +360,7 @@ export default function Depenses() {
       {!liste.length ? (
         <Card><p className="py-10 text-center text-sm text-gray-400">Aucune dépense enregistrée.</p></Card>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white">
+        <div className="overflow-x-auto rounded-3xl border border-white/50 bg-white/70 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] backdrop-blur-xl backdrop-saturate-150">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500">
@@ -436,54 +449,60 @@ export default function Depenses() {
         </div>
       )}
 
-      {/* Panneau commentaires dépense */}
-      {noteDepId && (() => {
-        const dep = liste.find((d) => d.id === noteDepId)
-        const nsListe = notesDeDepense(noteDepId)
-        if (!dep) return null
-        const projet = projets.find((p) => p.id === dep.projetId)
+      {/* Fenêtre commentaires dépense */}
+      {(() => {
+        const dep = noteDepId ? liste.find((d) => d.id === noteDepId) : null
+        const nsListe = noteDepId ? notesDeDepense(noteDepId) : []
+        const projet = dep ? projets.find((p) => p.id === dep.projetId) : null
         return (
-          <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-teal-800">Commentaires — {dep.description || catLabel(dep.categorie)}</p>
-                {projet && <p className="text-xs text-teal-600">{projet.nom} · {formatMoney(dep.montant)}</p>}
-              </div>
-              <button onClick={() => { setNoteDepId(null); setNoteTexte('') }}
-                className="rounded p-1 text-teal-400 hover:text-teal-700">✕</button>
-            </div>
-            {!nsListe.length
-              ? <p className="mb-3 text-xs text-teal-500 italic">Aucun commentaire — soyez le premier à commenter.</p>
-              : <div className="mb-3 space-y-2">
-                  {nsListe.map((n) => (
-                    <div key={n.id} className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 shadow-sm">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-[10px] font-bold text-teal-700">
-                        {(n.auteur || '?').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold text-gray-700">{n.auteur}</p>
-                        <p className="text-sm text-gray-600">{n.texte}</p>
-                        <p className="text-[10px] text-gray-400">{n.createdAt ? new Date(n.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}</p>
-                      </div>
-                      <button onClick={() => supprimerNote(n)} className="text-gray-300 hover:text-red-400"><Trash2 size={12} /></button>
+          <Modal
+            open={!!noteDepId}
+            onClose={() => { setNoteDepId(null); setNoteTexte('') }}
+            title={dep ? `Commentaires — ${dep.description || catLabel(dep.categorie)}` : 'Commentaires'}
+          >
+            {dep && (
+              <>
+                {projet && (
+                  <p className="mb-3 text-xs text-teal-600">
+                    {projet.nom} · {formatMoney(dep.montant)}
+                    {projet.responsable && <span className="ml-1 text-gray-400">· Responsable : {projet.responsable}</span>}
+                  </p>
+                )}
+                {!nsListe.length
+                  ? <p className="mb-3 text-xs text-gray-400 italic">Aucun commentaire — soyez le premier à commenter.</p>
+                  : <div className="mb-3 space-y-2">
+                      {nsListe.map((n) => (
+                        <div key={n.id} className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-[10px] font-bold text-teal-700">
+                            {(n.auteur || '?').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold text-gray-700">{n.auteur}</p>
+                            <p className="text-sm text-gray-600">{n.texte}</p>
+                            <p className="text-[10px] text-gray-400">{n.createdAt ? new Date(n.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}</p>
+                          </div>
+                          <button onClick={() => supprimerNote(n)} className="text-gray-300 hover:text-red-400"><Trash2 size={12} /></button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                }
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="Ajouter un commentaire… (envoyé au responsable du projet)"
+                    value={noteTexte}
+                    onChange={(e) => setNoteTexte(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyerNote() } }}
+                  />
+                  <button onClick={envoyerNote} disabled={noteSaving || !noteTexte.trim()}
+                    className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-40">
+                    <Send size={13} />
+                  </button>
                 </div>
-            }
-            <div className="flex gap-2">
-              <input
-                className="flex-1 rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                placeholder="Ajouter un commentaire…"
-                value={noteTexte}
-                onChange={(e) => setNoteTexte(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyerNote() } }}
-              />
-              <button onClick={envoyerNote} disabled={noteSaving || !noteTexte.trim()}
-                className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-40">
-                <Send size={13} />
-              </button>
-            </div>
-          </div>
+              </>
+            )}
+          </Modal>
         )
       })()}
 

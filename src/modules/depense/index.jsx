@@ -6,6 +6,7 @@ import Depenses from './Depenses'
 import Autorisations from './Autorisations'
 import Analyses from './Analyses'
 import Rentabilite from './Rentabilite'
+import Flux from './Flux'
 import Historique from './Historique'
 import Journal from './Journal'
 import Params from './Params'
@@ -19,6 +20,7 @@ export default function DepenseModule() {
       <Route path="autorisations" element={<Autorisations />} />
       <Route path="analyses" element={<Analyses />} />
       <Route path="rentabilite" element={<Rentabilite />} />
+      <Route path="flux" element={<Flux />} />
       <Route path="historique" element={<Historique />} />
       <Route path="journal" element={<Journal />} />
       <Route path="params" element={<Params />} />

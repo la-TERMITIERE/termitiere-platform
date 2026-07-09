@@ -11,7 +11,7 @@ export const ACTIONS_PAR_VOLET = {
   projetDocuments:    ['document_ajoute'],
   projetGalerie:      ['photos_ajoutees'],
   projetDepenses:     ['depense_ajoutee'],
-  projetCommentaires: ['commentaire_ajoute']
+  projetBesoins:      ['besoin_cree']
 }
 
 // Marque le volet comme vu par l'utilisateur courant (fait disparaître son badge).

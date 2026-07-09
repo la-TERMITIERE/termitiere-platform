@@ -1,5 +1,5 @@
 // Calculs budget / dépenses par secteur et par mois.
-import { SECTEURS } from './data'
+import { SECTEURS, natureFluxDefaut } from './data'
 
 // Budget alloué à un secteur pour un mois donné (0 si non défini).
 export function budgetSecteur(budgets, secteurId, annee, mois) {
@@ -68,4 +68,38 @@ export function derniersMois(n, moisLabels) {
 // Le mois précédent une paire (année, mois) donnée.
 export function moisPrecedent(annee, mois) {
   return mois === 1 ? { annee: annee - 1, mois: 12 } : { annee, mois: mois - 1 }
+}
+
+// Nature comptable d'une dépense (défaut "exploitation" pour les entrées antérieures
+// à l'ajout de ce champ).
+export function natureFlux(d) {
+  return d.natureFlux || natureFluxDefaut
+}
+
+// Dépenses décaissées d'une nature donnée sur un mois, tous secteurs confondus.
+export function depensesNatureMois(depenses, nature, annee, mois) {
+  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+  return depenses.filter((d) => (d.date || '').startsWith(prefixe) && estDecaissee(d) && natureFlux(d) === nature)
+}
+
+// Solde de trésorerie d'un mois : exploitation (revenus − dépenses d'exploitation),
+// investissement et pertes (purs flux sortants), et le solde global qui les cumule.
+export function soldesFluxMois(depenses, revenuExploitation, annee, mois) {
+  const depExploitation   = totalDepenses(depensesNatureMois(depenses, 'exploitation', annee, mois))
+  const depInvestissement = totalDepenses(depensesNatureMois(depenses, 'investissement', annee, mois))
+  const depPerte          = totalDepenses(depensesNatureMois(depenses, 'perte', annee, mois))
+  const soldeExploitation   = revenuExploitation - depExploitation
+  const soldeInvestissement = -depInvestissement
+  const soldePerte          = -depPerte
+  return {
+    revenuExploitation, depExploitation, depInvestissement, depPerte,
+    soldeExploitation, soldeInvestissement, soldePerte,
+    soldeGlobal: soldeExploitation + soldeInvestissement + soldePerte
+  }
+}
+
+// Taux de croissance du solde global entre deux mois (null si non calculable).
+export function croissance(soldeActuel, soldePrecedent) {
+  if (soldePrecedent === 0) return null
+  return Math.round(((soldeActuel - soldePrecedent) / Math.abs(soldePrecedent)) * 100)
 }

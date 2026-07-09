@@ -1,9 +1,8 @@
 // Pilotage — Vue d'ensemble stratégique pour le Directeur Général.
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock, Wallet, Users, Target, BellRing, ArrowRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock, Wallet, Users, Target, BellRing } from 'lucide-react'
 
 const TitreGraphe = ({ label, description, formule }) => (
   <div>
@@ -13,7 +12,6 @@ const TitreGraphe = ({ label, description, formule }) => (
   </div>
 )
 import Card from '../../shared/ui/Card'
-import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney } from '../../utils/formatters'
 import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from './logic'
@@ -47,7 +45,7 @@ function Jauge({ pct, label, formule, color = TEAL, size = 88 }) {
 // ── Carte KPI ─────────────────────────────────────────────────────────────────
 function KPI({ label, value, sub, formule, icon: Icon, color, trend }) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4 flex items-start gap-3 shadow-sm">
+    <div className="card flex items-start gap-3 p-4">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: color + '18' }}>
         <Icon size={20} style={{ color }} />
       </div>
@@ -88,7 +86,7 @@ function Sante({ projet, taches, depenses }) {
   const label = score >= 70 ? 'Sain' : score >= 40 ? 'Attention' : 'Critique'
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3">
+    <div className="card flex items-center gap-3 px-4 py-3">
       <div className="w-2 h-10 rounded-full shrink-0" style={{ background: color }} />
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-gray-800 text-sm truncate">{projet.nom}</p>
@@ -112,7 +110,6 @@ function Sante({ projet, taches, depenses }) {
 
 // ── Page principale ───────────────────────────────────────────────────────────
 export default function Pilotage() {
-  const navigate = useNavigate()
   const [onglet, setOnglet] = useState('pilotage')
   const { data: projets }  = useCollection('projets')
   const { data: taches }   = useCollection('projet_taches')
@@ -252,34 +249,27 @@ export default function Pilotage() {
 
       {onglet === 'controle' ? (
         <div className="space-y-5">
-          {/* Alertes — résumé, détail complet dans l'onglet Alertes */}
+          {/* Alertes — résumé ; le détail est désormais poussé par notification aux responsables + direction */}
           <Card>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <BellRing size={18} className={alertesResume.critiques ? 'text-red-500' : 'text-amber-500'} />
-                <div>
-                  <p className="text-sm font-bold text-gray-800">
-                    {!alertesResume.critiques && !alertesResume.avertissements
-                      ? <span className="text-green-600">Tout est sous contrôle</span>
-                      : (
-                        <>
-                          {alertesResume.critiques > 0 && <span className="text-red-600">{alertesResume.critiques} critique{alertesResume.critiques > 1 ? 's' : ''}</span>}
-                          {alertesResume.critiques > 0 && alertesResume.avertissements > 0 && ' · '}
-                          {alertesResume.avertissements > 0 && <span className="text-amber-600">{alertesResume.avertissements} avertissement{alertesResume.avertissements > 1 ? 's' : ''}</span>}
-                        </>
-                      )}
-                  </p>
-                  <p className="text-xs text-gray-400">Retards, dépassements de budget et de tâches à traiter.</p>
-                  <p className="mt-0.5 text-[10px] italic text-gray-400">
-                    📐 Critique = projet en retard ou budget global dépassé. Avertissement = tâche en dépassement (&gt; 1000 FCFA), tâche en retard, ou projet actif sans tâche terminée depuis 7 jours.
-                  </p>
-                </div>
+            <div className="flex items-center gap-3">
+              <BellRing size={18} className={alertesResume.critiques ? 'text-red-500' : 'text-amber-500'} />
+              <div>
+                <p className="text-sm font-bold text-gray-800">
+                  {!alertesResume.critiques && !alertesResume.avertissements
+                    ? <span className="text-green-600">Tout est sous contrôle</span>
+                    : (
+                      <>
+                        {alertesResume.critiques > 0 && <span className="text-red-600">{alertesResume.critiques} critique{alertesResume.critiques > 1 ? 's' : ''}</span>}
+                        {alertesResume.critiques > 0 && alertesResume.avertissements > 0 && ' · '}
+                        {alertesResume.avertissements > 0 && <span className="text-amber-600">{alertesResume.avertissements} avertissement{alertesResume.avertissements > 1 ? 's' : ''}</span>}
+                      </>
+                    )}
+                </p>
+                <p className="text-xs text-gray-400">Retards, dépassements de budget et de tâches — notifiés au responsable du projet et à la direction.</p>
+                <p className="mt-0.5 text-[10px] italic text-gray-400">
+                  📐 Critique = projet en retard ou budget global dépassé. Avertissement = tâche en dépassement (&gt; 1000 FCFA), tâche en retard, ou projet actif sans tâche terminée depuis 7 jours.
+                </p>
               </div>
-              {alertes.length > 0 && (
-                <Button size="sm" variant="ghost" onClick={() => navigate('/projet/alertes')}>
-                  Voir toutes les alertes <ArrowRight size={14} className="ml-1.5" />
-                </Button>
-              )}
             </div>
           </Card>
 

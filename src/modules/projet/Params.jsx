@@ -13,8 +13,9 @@ const COLLECTIONS_PROJET = [
   { id: 'projets',            label: 'Projets'            },
   { id: 'projet_taches',      label: 'Tâches'             },
   { id: 'projet_depenses',    label: 'Dépenses'           },
-  { id: 'projet_commentaires',label: 'Commentaires'       },
+  { id: 'projet_besoins',     label: 'Besoins'            },
   { id: 'projet_documents',   label: 'Documents'          },
+  { id: 'projet_prestataires_masques', label: 'Prestataires masqués' },
 ]
 
 async function viderCollection(name) {
@@ -47,7 +48,7 @@ function SectionSeuils() {
     <Card title={<span className="flex items-center gap-2"><Bell size={15} className="text-amber-500" />Seuils des alertes</span>}>
       <p className="mb-4 text-xs text-gray-500">Définissez à partir de quand les alertes se déclenchent.</p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+        <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 p-4 backdrop-blur-sm">
           <p className="text-sm font-semibold text-amber-700">Alerte budget</p>
           <p className="mt-0.5 text-xs text-amber-600">Déclencher l'alerte quand les dépenses atteignent X% du budget</p>
           <div className="mt-3 flex items-center gap-2">
@@ -64,7 +65,7 @@ function SectionSeuils() {
           </p>
         </div>
 
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+        <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/70 p-4 backdrop-blur-sm">
           <p className="text-sm font-semibold text-indigo-700">Alerte tâche inactive</p>
           <p className="mt-0.5 text-xs text-indigo-600">Déclencher l'alerte si une tâche n'a pas été mise à jour depuis X jours</p>
           <div className="mt-3 flex items-center gap-2">
@@ -117,7 +118,7 @@ export default function Params() {
       <Card title="Types de projets">
         <div className="space-y-2">
           {TYPES_PROJET.map((t) => (
-            <div key={t.id} className="flex items-start justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+            <div key={t.id} className="flex items-start justify-between rounded-2xl bg-gray-50 px-3 py-2.5 text-sm">
               <div>
                 <p className="font-semibold">{t.label}</p>
                 <p className="text-xs text-gray-500">{t.description}</p>
@@ -156,7 +157,7 @@ export default function Params() {
 
       {/* ── Zone danger ───────────────────────────────────────────────────── */}
       <Card title={<span className="flex items-center gap-2 text-red-600"><AlertTriangle size={15} />Zone de danger</span>}>
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <div className="rounded-2xl border border-red-200/60 bg-red-50/70 p-4 backdrop-blur-sm">
           <p className="text-sm font-semibold text-red-700">Réinitialiser toutes les données</p>
           <p className="mt-1 text-xs text-red-500">
             Supprime définitivement tous les projets, tâches, dépenses, commentaires et documents du module.

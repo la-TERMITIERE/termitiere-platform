@@ -7,7 +7,7 @@
 //   réel se fait via la console Firebase ; ici on gère les profils/droits.
 import { create } from 'zustand'
 import { isFirebaseConfigured } from './firebase'
-import { DEFAULT_USERS, hashPassword } from './auth'
+import { DEFAULT_USERS, hashPassword, newSalt } from './auth'
 import { getAll, setItem, removeItem } from './db'
 import { audit } from './audit'
 import { genId } from '../utils/formatters'
@@ -20,14 +20,20 @@ import { genId } from '../utils/formatters'
 const RTDB_BAD = new RegExp('[.#$\\[\\]/\\s]', 'g')
 export const safeKey = (s) => (s || '').toString().replace(RTDB_BAD, '_') || ('u_' + genId().toLowerCase())
 
-// Prépare le profil à enregistrer : hache le mot de passe s'il est fourni et ne
-// stocke JAMAIS le mot de passe en clair. Si `pass` est vide (édition sans
-// changement), on n'inclut pas `passHash` → l'existant est conservé (fusion).
+// Sépare le profil (public, lisible par tout utilisateur connecté — annuaire de
+// l'app) du secret d'authentification (hash + sel salé, collection à part
+// `users_secret`, lisible uniquement par son propriétaire — cf. database.rules.json).
+// Si `pass` est vide (édition sans changement de mot de passe), aucun secret
+// n'est renvoyé → l'existant est conservé tel quel.
 async function toProfile(u) {
-  const { pass, passHash, ...rest } = u
+  const { pass, passHash, salt, ...rest } = u
   const profile = { ...rest }
-  if (pass) profile.passHash = await hashPassword(pass)
-  return profile
+  let secret = null
+  if (pass) {
+    const s = newSalt()
+    secret = { salt: s, passHash: await hashPassword(pass, s) }
+  }
+  return { profile, secret }
 }
 
 const KEY = 'termitiere_demo_users'
@@ -84,8 +90,9 @@ export const useUsersStore = create((set, get) => ({
       }
     }
     const existed = get().users.some((x) => (x.uid || x.login) === id || x.login === u.login)
-    const profile = await toProfile({ ...u, uid: id })
+    const { profile, secret } = await toProfile({ ...u, uid: id })
     await setItem('users', id, profile)
+    if (secret) await setItem('users_secret', id, secret)
     await audit('portail', existed ? 'USER_EDIT' : 'USER_CREATE', `${u.login} — ${u.role}`)
     await get().load()
   },

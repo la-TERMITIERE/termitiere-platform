@@ -313,7 +313,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
 
                   {/* Suivi financier prestataire */}
                   {aSuivi && (
-                    <div className="mt-2 rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-2">
+                    <div className="mt-2 rounded-2xl border border-teal-100/60 bg-teal-50/60 px-3 py-2.5 backdrop-blur-sm">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                         <span className="text-gray-600">Arrêté : <span className="font-semibold text-gray-800">{formatMoney(prevu)}</span></span>
                         <span className="text-gray-600">Versé : <span className="font-semibold text-teal-700">{formatMoney(verse)}</span></span>

@@ -10,7 +10,8 @@ import Badge from '../shared/ui/Badge'
 import { useAuth } from '../hooks/useAuth'
 import { useUsersStore } from '../core/users'
 import { updatePassword } from 'firebase/auth'
-import { hashPassword } from '../core/auth'
+import { hashPassword, legacyHashPassword } from '../core/auth'
+import { getOne } from '../core/db'
 import { roleLabel, roleTone } from '../core/roles'
 import { isFirebaseConfigured, auth } from '../core/firebase'
 import { toast } from '../core/notifications'
@@ -47,8 +48,16 @@ export default function MonCompte() {
       if (passNouveau !== passConfirm) return toast.error('Les mots de passe ne correspondent pas')
 
       if (isFirebaseConfigured) {
-        const hash = await hashPassword(passActuel)
-        if (profile.passHash !== hash) return toast.error('Mot de passe actuel incorrect')
+        const secret = await getOne('users_secret', profile.uid || profile.id)
+        let ok = false
+        if (secret?.salt && secret?.passHash) {
+          ok = (await hashPassword(passActuel, secret.salt)) === secret.passHash
+        } else {
+          // Compte pas encore migré vers le hachage salé (ancien schéma).
+          const legacy = secret?.passHash || profile.passHash
+          ok = Boolean(legacy) && (await legacyHashPassword(passActuel)) === legacy
+        }
+        if (!ok) return toast.error('Mot de passe actuel incorrect')
       } else if (profile.pass !== passActuel) {
         return toast.error('Mot de passe actuel incorrect')
       }

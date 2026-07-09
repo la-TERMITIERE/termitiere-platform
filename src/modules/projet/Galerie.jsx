@@ -214,7 +214,7 @@ export default function Galerie() {
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Projet concerné</label>
             <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}
             >
               <option value="">— Voir toute la galerie —</option>
@@ -227,7 +227,7 @@ export default function Galerie() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Légende (optionnel)</label>
                 <input
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   placeholder="Ex : Coulage dalle RDC — 30 juin 2026"
                   value={legende} onChange={(e) => setLegende(e.target.value)}
                 />
