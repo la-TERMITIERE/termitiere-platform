@@ -14,6 +14,7 @@ import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useGarderieStore } from './store/garderieStore'
 import { useAuth } from '../../hooks/useAuth'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 
 // Guard : redirige vers le dashboard si le rôle n'est pas autorisé
 function GarderieGuard({ roles, children }) {
@@ -22,9 +23,10 @@ function GarderieGuard({ roles, children }) {
   return children
 }
 
-const ROLES_GESTION   = ['super_admin', 'pau', 'ge', 'gerant', 'gerante_garderie', 'superviseur']
-const ROLES_DIRECTION = ['super_admin', 'pau', 'ge', 'gerant', 'superviseur']
-const ROLES_ADMIN     = ['super_admin', 'pau', 'ge']
+// Les rôles à accès total (super_admin, pau, ge, directeur, admin) voient toujours tout.
+const ROLES_GESTION   = [...FULL_ACCESS_ROLES, 'gerant', 'gerante_garderie', 'superviseur']
+const ROLES_DIRECTION = [...FULL_ACCESS_ROLES, 'gerant', 'superviseur']
+const ROLES_ADMIN     = [...FULL_ACCESS_ROLES]
 
 export default function GarderieModule() {
   const init = useGarderieStore((s) => s.init)

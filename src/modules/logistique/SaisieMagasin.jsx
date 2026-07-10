@@ -298,7 +298,7 @@ function AddMaterielModal({ open, existingCats = [], onClose, onSave }) {
           </FormGroup>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <FormGroup label="Unité">
           <Select value={unite} onChange={(e) => setUnite(e.target.value)}>
             {['unités', 'lots', 'm', 'm²', 'kg'].map((u) => <option key={u} value={u}>{u}</option>)}

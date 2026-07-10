@@ -124,8 +124,8 @@ export default function Ventes() {
               <FormGroup label="Date chargement"><Input type="date" value={form.dateChargement} onChange={(e) => setForm((f) => ({ ...f, dateChargement: e.target.value }))} /></FormGroup>
             </div>
             {form.lignes.map((l, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 rounded-lg border p-2">
-                <Select className="col-span-5" value={l.briqueId} onChange={(e) => {
+              <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border p-2 md:grid-cols-12">
+                <Select className="col-span-2 md:col-span-5" value={l.briqueId} onChange={(e) => {
                   const b = briques.find((x) => x.id === e.target.value)
                   setForm((f) => {
                     const lignes = [...f.lignes]
@@ -135,13 +135,13 @@ export default function Ventes() {
                 }}>
                   {briques.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
                 </Select>
-                <Input className="col-span-2" type="number" min="1" value={l.qte} onChange={(e) => {
+                <Input className="md:col-span-2" type="number" min="1" value={l.qte} onChange={(e) => {
                   setForm((f) => { const lignes = [...f.lignes]; lignes[i] = { ...lignes[i], qte: e.target.value }; return { ...f, lignes } })
                 }} />
-                <Input className="col-span-2" type="number" min="0" value={l.prixUnitaire} onChange={(e) => {
+                <Input className="md:col-span-2" type="number" min="0" value={l.prixUnitaire} onChange={(e) => {
                   setForm((f) => { const lignes = [...f.lignes]; lignes[i] = { ...lignes[i], prixUnitaire: e.target.value }; return { ...f, lignes } })
                 }} />
-                <div className="col-span-3 flex items-center justify-end font-bold">{formatMoney((parseInt(l.qte) || 0) * (parseFloat(l.prixUnitaire) || 0))}</div>
+                <div className="col-span-2 flex items-center justify-end font-bold md:col-span-3">{formatMoney((parseInt(l.qte) || 0) * (parseFloat(l.prixUnitaire) || 0))}</div>
               </div>
             ))}
             <Button variant="outline" size="sm" onClick={() => setForm((f) => ({ ...f, lignes: [...f.lignes, { briqueId: briques[0]?.id, qte: 100, prixUnitaire: briques[0]?.tarifVente || 0 }] }))}>

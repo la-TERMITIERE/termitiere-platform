@@ -226,7 +226,7 @@ export default function Dossiers() {
         {totalPeriode > 0 && <span>Total dépensé : <strong className="text-emerald-700">{formatMoney(totalPeriode)}</strong></span>}
       </div>
 
-      <Card className="p-0">
+      <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>

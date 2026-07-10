@@ -38,16 +38,16 @@ export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin'
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
 export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur']
 
-// E-G.Pro : volet Paramètres — tout le monde SAUF la secrétaire (administratif)
+// E-G.Pro : volet Paramètres — tout le monde SAUF la secrétaire/l'agent (administratif)
 // et le chef de projet (terrain).
 export const PROJET_VOLETS_RESTREINTS_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => !['secretaire', 'chef_projet'].includes(v))
+  .filter((v) => !['secretaire', 'agent', 'chef_projet'].includes(v))
   .concat(['admin', 'controleur'])
 
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
-// secrétaire (administratif) et le chef de projet (terrain, cloisonné à ses projets).
+// secrétaire/l'agent (administratif) et le chef de projet (terrain, cloisonné à ses projets).
 export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => !['secretaire', 'chef_projet'].includes(v))
+  .filter((v) => !['secretaire', 'agent', 'chef_projet'].includes(v))
   .concat(['admin', 'controleur'])
 
 // E-G.Pro : volet Journal — historique global des actions, en lecture seule pour

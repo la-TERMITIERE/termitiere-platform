@@ -126,7 +126,7 @@ export default function Production() {
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={enregistrer}><Factory size={16} /> Enregistrer</Button></>}>
         {form && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FormGroup label="Date"><Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></FormGroup>
               <FormGroup label="Durée cycle">
                 <Select value={form.duree} onChange={(e) => setForm((f) => ({ ...f, duree: parseInt(e.target.value) }))}>

@@ -9,7 +9,7 @@ const SIZES = {
   xl: 'max-w-4xl'
 }
 
-export default function Modal({ open, onClose, title, children, footer, size = 'md' }) {
+export default function Modal({ open, onClose, title, children, footer, size = 'md', panelClassName = 'bg-white' }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => e.key === 'Escape' && onClose?.()
@@ -31,7 +31,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
       aria-modal="true"
     >
       <div
-        className={`w-full ${SIZES[size]} bg-white rounded-t-2xl sm:rounded-2xl shadow-xl
+        className={`w-full ${SIZES[size]} ${panelClassName} rounded-t-2xl sm:rounded-2xl shadow-xl
           max-h-[92vh] flex flex-col`}
       >
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">

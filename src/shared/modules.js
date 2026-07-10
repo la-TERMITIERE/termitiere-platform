@@ -6,7 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   Wallet, Gauge, Receipt, Stamp, Waves, PackagePlus, Handshake, Wrench
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_PILOTAGE_ROLES, PROJET_JOURNAL_ROLES, PROJET_DEPENSES_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_PILOTAGE_ROLES, PROJET_JOURNAL_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -164,17 +164,17 @@ export const MODULE_NAV = {
   ],
   garderie: [
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
-    { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby,            roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur','tata'] },
-    { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users,           roles: ['super_admin','pau','ge','gerant','gerante_garderie'] },
+    { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby,            roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','tata'] },
+    { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users,           roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie'] },
     { label: 'Présences enfants',  to: '/garderie/presences', icon: CalendarCheck },
-    { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard,      roles: ['super_admin','pau','ge','gerant','gerante_garderie','superviseur'] },
+    { label: 'Paiements',          to: '/garderie/paiements', icon: CreditCard,      roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur'] },
     { label: 'Cantine & Repas',    to: '/garderie/cantine',   icon: UtensilsCrossed },
     { label: 'Santé & Infirmerie', to: '/garderie/incidents', icon: Stethoscope },
     { label: 'Tâches',             to: '/garderie/taches',    icon: ListChecks },
-    { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: ['super_admin','pau','ge','gerant','superviseur'] },
+    { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur'] },
     { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires' },
-    { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: ['super_admin','pau','ge','gerant','superviseur'] },
-    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ['super_admin','pau','ge'] }
+    { label: 'Journal',            to: '/garderie/journal',   icon: BookOpen,        roles: [...FULL_ACCESS_ROLES,'gerant','superviseur'] },
+    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: [...FULL_ACCESS_ROLES] }
   ],
   depense: [
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },

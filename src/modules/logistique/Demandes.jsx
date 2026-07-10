@@ -190,7 +190,7 @@ export default function Demandes() {
         </div>
       )}
 
-      <Card className="p-0">
+      <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
@@ -245,6 +245,7 @@ export default function Demandes() {
           <div className="mt-2 rounded-lg border border-gray-200 p-3">
             <p className="mb-1 text-xs font-bold uppercase text-gray-500">Matériel de la prestation {formPresta.num}</p>
             {formLignes.length ? (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase text-gray-400"><tr><th className="py-1 text-left">Matériel</th><th className="py-1 text-center">Qté</th><th className="py-1 text-center">Stock</th></tr></thead>
                 <tbody>
@@ -261,6 +262,7 @@ export default function Demandes() {
                   })}
                 </tbody>
               </table>
+              </div>
             ) : <p className="text-sm text-gray-400">Aucun matériel du référentiel dans cette prestation.</p>}
           </div>
         )}

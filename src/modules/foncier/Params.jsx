@@ -66,7 +66,7 @@ export default function Params() {
   }
 
   async function resetDonnees() {
-    if (role !== 'admin') return toast.error('Action réservée à l\'administrateur')
+    if (!isFullAccessRole(role)) return toast.error('Action réservée à l\'administrateur')
     setResetting(true)
     try {
       for (const d of dossiers) await removeItem('foncier_dossiers', d.id)

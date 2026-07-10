@@ -18,6 +18,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
+import { APPROVER_ROLES } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatDateShort } from '../../utils/formatters'
 import { useSite, matchSite } from './site/useSite'
@@ -93,7 +94,7 @@ export default function Retours() {
             title: `Retour matériel — ${st.etat}`,
             body: `${qte} × ${l.materielNom} (${st.etat})${st.motif ? ` — ${st.motif}` : ''} · prestation ${prestation.num}`,
             module: 'logistique',
-            forRoles: ['admin', 'controleur'],
+            forRoles: APPROVER_ROLES,
             link: '/logistique/retours'
           })
         }
@@ -150,10 +151,10 @@ export default function Retours() {
                     </Select>
                   </div>
                   {(st.etat === 'Cassé' || st.etat === 'Perdu') && (
-                    <div className="mt-2 grid grid-cols-12 gap-2">
-                      <Input className="col-span-3" type="number" min="1" max={l.restant} value={st.qte ?? l.restant}
+                    <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-12">
+                      <Input className="md:col-span-3" type="number" min="1" max={l.restant} value={st.qte ?? l.restant}
                         onChange={(e) => setEtat(l.materielId, { qte: e.target.value })} placeholder="Qté" />
-                      <Input className="col-span-9" value={st.motif || ''} onChange={(e) => setEtat(l.materielId, { motif: e.target.value })}
+                      <Input className="col-span-2 md:col-span-9" value={st.motif || ''} onChange={(e) => setEtat(l.materielId, { motif: e.target.value })}
                         placeholder="Motif (détail de la casse / perte)" />
                     </div>
                   )}
@@ -165,7 +166,7 @@ export default function Retours() {
         )}
       </Card>
 
-      <Card title="Historique des retours" className="p-0">
+      <Card title="Historique des retours" className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>

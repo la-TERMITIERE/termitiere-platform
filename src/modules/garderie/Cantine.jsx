@@ -446,7 +446,7 @@ export default function Cantine() {
           )}
 
           {enfantsActifs.length > 0 && (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { label: 'Enfants à table',  val: stats.total,      color: 'text-orange-600' },
                 { label: 'Menu du jour',     val: stats.menuNormal, color: 'text-green-600'  },

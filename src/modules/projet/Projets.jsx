@@ -150,7 +150,7 @@ function ChampResponsable({ value, onChange, users }) {
           placeholder="Nom ou saisie libre…"
           value={open ? filtre : value}
           onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value, ''); setOpen(true) }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { setFiltre(value || ''); setOpen(true) }}
         />
         {value && (
           <button type="button" onClick={() => { onChange('', ''); setFiltre('') }}
@@ -205,11 +205,11 @@ export default function Projets() {
   const { data: users }        = useCollection('users')
   const [generatingPdf, setGeneratingPdf] = useState(null)
   const { user, role }    = useAuthStore()
-  // La secrétaire est en lecture seule sur les projets.
-  const lectureSeule      = role === 'secretaire'
-  const sansActionsDecision = role === 'secretaire'
+  // La secrétaire et l'agent (mêmes droits) sont en lecture seule sur les projets.
+  const lectureSeule      = ['secretaire', 'agent'].includes(role)
+  const sansActionsDecision = ['secretaire', 'agent'].includes(role)
   // Le chef de projet et le superviseur créent/modifient/suivent les projets, mais ne les suppriment pas.
-  const peutSupprimer = !['secretaire', 'chef_projet', 'superviseur'].includes(role)
+  const peutSupprimer = !['secretaire', 'agent', 'chef_projet', 'superviseur'].includes(role)
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
 
   // Total dépensé par projet — recalculé en temps réel à chaque dépense saisie.
@@ -275,7 +275,9 @@ export default function Projets() {
     setModal(true)
   }
 
-  const budgetValide = form.budget !== '' && Number(form.budget) > 0
+  // Le budget est optionnel — un projet peut être créé avant que le budget soit établi.
+  // S'il est saisi, il doit être positif.
+  const budgetValide = form.budget === '' || Number(form.budget) > 0
 
   const handleSave = async () => {
     if (!form.nom.trim() || !budgetValide) return
@@ -623,13 +625,14 @@ export default function Projets() {
             </div>
           )}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA) *</label>
-            <input type="number" min="0" required
+            <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA)</label>
+            <input type="number" min="0"
+              placeholder="Laisser vide si le budget n'est pas encore établi"
               className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.budget !== '' && !budgetValide ? 'border-red-300' : 'border-gray-200'}`}
               value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
             {form.budget !== '' && !budgetValide
               ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
-              : <p className="mt-1 text-[11px] text-gray-400">Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
+              : <p className="mt-1 text-[11px] text-gray-400">Optionnel — peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
@@ -644,7 +647,7 @@ export default function Projets() {
       </Modal>
 
       {/* ── Fiche détail d'un projet ── */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.nom || ''}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail du projet">
         {detail && (() => {
           const d = detail
           const tachesDuProjet = taches.filter((t) => t.projetId === d.id)
@@ -659,10 +662,19 @@ export default function Projets() {
 
           return (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs text-gray-400">{d.num}</span>
-                <Badge tone={STATUTS_PROJET[d.statut]?.tone}>{STATUTS_PROJET[d.statut]?.label}</Badge>
-                <Badge tone={PRIORITES[d.priorite]?.tone}>{PRIORITES[d.priorite]?.label}</Badge>
+              {/* En-tête glassmorphism — nom du projet bien visible */}
+              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.92) 0%, rgba(15,84,80,0.88) 100%)' }}>
+                <p className="font-mono text-xs text-white/70">{d.num}</p>
+                <p className="mt-0.5 text-lg font-extrabold leading-snug">{d.nom}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {STATUTS_PROJET[d.statut]?.label}
+                  </span>
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {PRIORITES[d.priorite]?.label}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -697,8 +709,8 @@ export default function Projets() {
 
               {/* Suivi budgétaire */}
               {budget > 0 && (
-                <div className="rounded-2xl bg-gray-50 p-3.5 shadow-sm">
-                  <p className="mb-2 text-xs font-bold uppercase text-gray-500">Suivi budgétaire</p>
+                <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3.5 shadow-sm backdrop-blur-sm">
+                  <p className="mb-2 text-xs font-bold uppercase text-teal-700">Suivi budgétaire</p>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                     <span className="text-gray-500">Budget : <b className="text-gray-700">{formatMoney(budget)}</b></span>
                     <span className="text-gray-500">Dépensé : <b className="text-amber-600">{formatMoney(depense)}</b></span>

@@ -19,7 +19,7 @@ import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
 import { notifierBeneficiaire } from './notifications'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, FULL_ACCESS_ROLES } from '../../core/roles'
 
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
@@ -195,7 +195,7 @@ export default function Depenses() {
       type: statut.key === 'depasse' ? 'danger' : 'warning',
       title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${secteur?.label || d.secteurId}` : `🟠 Budget en alerte — ${secteur?.label || d.secteurId}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
-      module: 'depense', forRoles: ['super_admin', 'pau', 'ge'], excludeUid: user?.uid, link: '/depense'
+      module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
   }
 

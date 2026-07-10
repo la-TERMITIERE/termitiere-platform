@@ -172,7 +172,7 @@ export default function Demandes() {
         )}
       </div>
 
-      <Card className="p-0">
+      <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
@@ -234,6 +234,7 @@ export default function Demandes() {
           <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm">
             <p className="mb-2 text-xs font-bold uppercase text-gray-500">Contenu de la vente (automatique)</p>
             <p className="mb-2">Client : <strong>{selectedVente.clientNom || '—'}</strong></p>
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="text-xs uppercase text-gray-400">
                 <tr><th className="pb-1 text-left">Brique</th><th className="pb-1 text-right">Quantité</th></tr>
@@ -250,6 +251,7 @@ export default function Demandes() {
                 )}
               </tbody>
             </table>
+            </div>
             <p className="mt-2 text-xs text-gray-500">Chargement prévu : {selectedVente.dateChargement || '—'}</p>
           </div>
         )}

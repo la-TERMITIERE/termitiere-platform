@@ -13,10 +13,11 @@ import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 
 // Rôles habilités à programmer / modifier / supprimer des tâches (la direction + la gérante garderie).
-const ROLES_CREATION = ['super_admin', 'pau', 'ge', 'gerant', 'gerante_garderie']
+const ROLES_CREATION = [...FULL_ACCESS_ROLES, 'gerant', 'gerante_garderie']
 
 const ASSIGNATIONS = [
   { id: 'tous',             label: 'Tatas + Gérante garderie' },
@@ -166,7 +167,7 @@ export default function Taches() {
         title: `✅ Tâche effectuée — ${t.titre}`,
         body: `Cochée par ${user.nom}`,
         module: 'garderie',
-        forRoles: ['super_admin','pau','ge','gerant'],
+        forRoles: [...FULL_ACCESS_ROLES,'gerant'],
         excludeUid: user.uid,
         link: '/garderie/taches'
       })

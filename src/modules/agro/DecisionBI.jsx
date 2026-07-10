@@ -389,7 +389,7 @@ export default function DecisionBI({
         </Card>
 
         <Card title="Stocks aliments — état critique en premier">
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-64 overflow-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
