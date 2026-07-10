@@ -88,11 +88,11 @@ const VIDE_TACHE = {
 
 function OngletTaches({ taches, projets, users, depenses }) {
   const { user, role }        = useAuthStore()
-  // La secrétaire peut démarrer une tâche, mais ne soumet ni ne valide (décision terrain).
-  const peutSoumettreValider  = role !== 'secretaire'
+  // La secrétaire et l'agent (mêmes droits) peuvent démarrer une tâche, mais ne soumettent ni ne valident (décision terrain).
+  const peutSoumettreValider  = !['secretaire', 'agent'].includes(role)
   const peutSaisirMontant     = true
   // Le superviseur crée/modifie/suit les tâches, mais ne les supprime pas.
-  const peutSupprimer         = !['secretaire', 'superviseur'].includes(role)
+  const peutSupprimer         = !['secretaire', 'agent', 'superviseur'].includes(role)
 
   const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
   const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])

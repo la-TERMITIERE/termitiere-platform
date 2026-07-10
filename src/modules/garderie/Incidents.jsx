@@ -13,6 +13,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { TYPES_INCIDENT, GRAVITES_INCIDENT, TYPES_SOIN, VACCINS_STANDARD } from './data'
 import { useGarderieStore } from './store/garderieStore'
@@ -150,7 +151,7 @@ export default function Incidents() {
         title: `⚠️ Incident ${graviteLabel} — ${d.enfantNom}`,
         body: d.description?.slice(0, 80) || d.type,
         module: 'garderie',
-        forRoles: d.gravite === 'grave' ? ['super_admin','pau','ge','gerant','agent'] : ['super_admin','pau','ge','gerant'],
+        forRoles: d.gravite === 'grave' ? [...FULL_ACCESS_ROLES,'gerant','agent'] : [...FULL_ACCESS_ROLES,'gerant'],
         excludeUid: user.uid,
         link: '/garderie/incidents'
       })
@@ -166,7 +167,7 @@ export default function Incidents() {
   async function marquerResolu(i) {
     await setItem('garderie_incidents', i.id, { ...i, resolu: true, alarme: 0 })
     audit('garderie', 'INCIDENT_RESOLU', i.enfantNom)
-    notify({ type: 'info', title: `✅ Incident résolu — ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/incidents' })
+    notify({ type: 'info', title: `✅ Incident résolu — ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/incidents' })
     toast.success('Incident résolu — alarme désactivée ✓')
   }
 
@@ -185,7 +186,7 @@ export default function Incidents() {
         title: `${n.badge} Alarme ${n.label} — ${i.enfantNom}`,
         body: i.description?.slice(0, 80) || i.type,
         module: 'garderie',
-        forRoles: niveau === 3 ? ['super_admin','pau','ge','gerant','agent'] : ['super_admin','pau','ge','gerant'],
+        forRoles: niveau === 3 ? [...FULL_ACCESS_ROLES,'gerant','agent'] : [...FULL_ACCESS_ROLES,'gerant'],
         excludeUid: user.uid,
         link: '/garderie/incidents'
       })
@@ -236,7 +237,7 @@ export default function Incidents() {
         title: `🩺 Soin enregistré — ${d.enfantNom}`,
         body: `${TYPES_SOIN.find((t) => t.id === d.type)?.label || d.type} — ${d.description.slice(0, 60)}`,
         module: 'garderie',
-        forRoles: ['super_admin','pau','ge','gerant'],
+        forRoles: [...FULL_ACCESS_ROLES,'gerant'],
         excludeUid: user.uid,
         link: '/garderie/incidents'
       })

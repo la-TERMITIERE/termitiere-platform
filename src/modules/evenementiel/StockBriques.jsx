@@ -193,7 +193,7 @@ export default function StockBriques() {
         </div>
       </Card>
 
-      <Card title="Historique des transferts" className="p-0">
+      <Card title="Historique des transferts" className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">Brique</th><th className="px-3 py-2">Mouvement</th><th className="px-3 py-2">Qté</th><th className="px-3 py-2">Agent</th></tr>

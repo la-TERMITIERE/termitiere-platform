@@ -80,8 +80,8 @@ export default function Depenses() {
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: notes }        = useCollection('projet_depenses_notes')
   const { user, role } = useAuthStore()
-  // Le chef de projet, la secrétaire et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
-  const peutSupprimer = !['chef_projet', 'secretaire', 'superviseur'].includes(role)
+  // Le chef de projet, la secrétaire, l'agent et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
+  const peutSupprimer = !['chef_projet', 'secretaire', 'agent', 'superviseur'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.

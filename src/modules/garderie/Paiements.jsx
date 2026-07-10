@@ -14,6 +14,7 @@ import { setItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { formatMoney } from '../../utils/formatters'
 import { TYPES_PAIEMENT, MODES_PAIEMENT, STATUTS_PAIEMENT, MOIS } from './data'
@@ -113,7 +114,7 @@ export default function Paiements() {
       const id = genId()
       await setItem('garderie_paiements', id, { ...payload, id })
       audit('garderie', 'PAIEMENT_CREATE', d.enfantNom, { mois: d.mois, annee: d.annee, montant: d.montantPaye })
-      notify({ type: 'info', title: `💰 Paiement reçu — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé' : statut === 'partiel' ? 'Partiel' : 'Impayé'}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
+      notify({ type: 'info', title: `💰 Paiement reçu — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé' : statut === 'partiel' ? 'Partiel' : 'Impayé'}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
       toast.success('Paiement enregistré ✓')
     } else {
       const id = modal.id
@@ -187,7 +188,7 @@ export default function Paiements() {
         notes: ''
       })
       audit('garderie', 'JOURNALIER_PAIEMENT', d.enfantNom, { montant: Number(d.montantPaye) })
-      notify({ type: 'info', title: `💰 Paiement journalier — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
+      notify({ type: 'info', title: `💰 Paiement journalier — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
       toast.success('Paiement enregistré ✓')
       setJoPayModal(null)
     } finally {
@@ -217,7 +218,7 @@ export default function Paiements() {
         id: paiement.id
       })
       audit('garderie', 'PAIEMENT_SOLDE', paiement.enfantNom, { complement, statut })
-      notify({ type: 'info', title: `💰 Paiement soldé — ${paiement.enfantNom}`, body: `Complément de ${complement.toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé ✓' : 'Partiel'}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
+      notify({ type: 'info', title: `💰 Paiement soldé — ${paiement.enfantNom}`, body: `Complément de ${complement.toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé ✓' : 'Partiel'}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
       toast.success(statut === 'paye' ? 'Paiement soldé ✓' : `Complément enregistré — reste ${formatMoney(reste - complement)} FCFA`)
       setSoldeModal(null)
     } finally {

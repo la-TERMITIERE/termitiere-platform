@@ -234,14 +234,14 @@ export default function Prestations() {
             <p className="text-xs font-bold uppercase text-gray-500">Matériel loué</p>
             {form.lignes.map((l, i) => (
               <div key={i} className="rounded-lg border p-2">
-                <div className="grid grid-cols-12 gap-2">
-                  <Select className="col-span-5" value={l.materielId} onChange={(e) => setLigne(i, { materielId: e.target.value })}>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-12">
+                  <Select className="col-span-2 md:col-span-5" value={l.materielId} onChange={(e) => setLigne(i, { materielId: e.target.value })}>
                     {materiel.map((m) => <option key={m.id} value={m.id}>{m.nom} ({m.cat})</option>)}
                     <option value="__autre__">➕ Autre (à préciser)…</option>
                   </Select>
-                  <Input className="col-span-2" type="number" min="1" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} placeholder="Qté" />
-                  <Input className="col-span-2" type="number" min="0" value={l.tarif} onChange={(e) => setLigne(i, { tarif: e.target.value })} placeholder="Tarif/u" />
-                  <div className="col-span-3 flex items-center justify-end font-bold text-secondary">
+                  <Input className="md:col-span-2" type="number" min="1" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} placeholder="Qté" />
+                  <Input className="md:col-span-2" type="number" min="0" value={l.tarif} onChange={(e) => setLigne(i, { tarif: e.target.value })} placeholder="Tarif/u" />
+                  <div className="col-span-2 flex items-center justify-end font-bold text-secondary md:col-span-3">
                     {formatMoney((parseInt(l.qte) || 0) * (parseFloat(l.tarif) || 0))}
                   </div>
                 </div>
@@ -257,10 +257,10 @@ export default function Prestations() {
             <div className="mt-2">
               <p className="text-xs font-bold uppercase text-gray-500">Frais supplémentaires</p>
               {(form.frais || []).map((x, i) => (
-                <div key={i} className="mt-1 grid grid-cols-12 gap-2">
-                  <Input className="col-span-7" value={x.label} onChange={(e) => setFrais(i, { label: e.target.value })} placeholder="Intitulé (ex : Transport, Lieu, Montage…)" />
-                  <Input className="col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setFrais(i, { montant: e.target.value })} placeholder="Montant" />
-                  <button type="button" onClick={() => removeFrais(i)} className="col-span-1 flex items-center justify-center text-red-500 hover:text-red-700"><Trash2 size={15} /></button>
+                <div key={i} className="mt-1 grid grid-cols-2 gap-2 md:grid-cols-12">
+                  <Input className="col-span-2 md:col-span-7" value={x.label} onChange={(e) => setFrais(i, { label: e.target.value })} placeholder="Intitulé (ex : Transport, Lieu, Montage…)" />
+                  <Input className="md:col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setFrais(i, { montant: e.target.value })} placeholder="Montant" />
+                  <button type="button" onClick={() => removeFrais(i)} className="flex items-center justify-center text-red-500 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
                 </div>
               ))}
               <Button variant="outline" size="sm" className="mt-1" onClick={addFrais}><Plus size={14} /> Frais</Button>
@@ -298,7 +298,8 @@ export default function Prestations() {
             <p><strong>Client :</strong> {detail.clientNom}</p>
             <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
             {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
-            <table className="mt-2 w-full text-sm">
+            <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Matériel</th><th className="p-2">Qté</th><th className="p-2">Tarif</th><th className="p-2 text-right">Montant</th></tr></thead>
               <tbody>
                 {(detail.lignes || []).map((l, i) => (
@@ -309,6 +310,7 @@ export default function Prestations() {
                 ))}
               </tbody>
             </table>
+            </div>
             <p className="text-right font-extrabold">Total : {formatMoney(detail.total)}</p>
 
             <div className="mt-2 rounded-lg bg-gray-50 p-3">

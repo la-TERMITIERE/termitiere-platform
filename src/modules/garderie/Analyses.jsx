@@ -725,7 +725,7 @@ export default function Analyses() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-1 gap-2 text-center sm:grid-cols-3">
                   <div className="rounded-xl bg-gray-50 p-3">
                     <p className="text-xs text-gray-400">Attendu</p>
                     <p className="text-sm font-extrabold text-gray-700">{formatMoney(kpis.totalDu)}</p>
