@@ -224,6 +224,8 @@ export default function Projets() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving]   = useState(false)
   const [search, setSearch]         = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef(null)
   const [filtreStatut, setFiltreStatut] = useState('')
   const [tri, setTri]               = useState('date_desc')
   const [mesProjets, setMesProjets] = useState(false)
@@ -232,6 +234,20 @@ export default function Projets() {
   const [commSending, setCommSending] = useState(false)
 
   const nomConnecte = user?.nom || user?.login || ''
+
+  // Suggestions de recherche — liste des projets déjà inscrits correspondant à la saisie.
+  const searchSuggestions = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return projets
+      .filter((p) => !q || p.nom?.toLowerCase().includes(q) || p.num?.toLowerCase().includes(q))
+      .slice(0, 8)
+  }, [projets, search])
+
+  useEffect(() => {
+    const handler = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const liste = useMemo(() => {
     let result = projets
@@ -388,11 +404,32 @@ export default function Projets() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="flex-1 rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          placeholder="Rechercher un projet…"
-          value={search} onChange={(e) => setSearch(e.target.value)}
-        />
+        <div ref={searchRef} className="relative flex-1 min-w-[200px]">
+          <input
+            className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            placeholder="Rechercher un projet…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setSearchOpen(true) }}
+            onFocus={() => setSearchOpen(true)}
+          />
+          {searchOpen && searchSuggestions.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+              <ul className="max-h-64 overflow-y-auto py-1">
+                {searchSuggestions.map((p) => (
+                  <li key={p.id}
+                    className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-teal-50"
+                    onMouseDown={(e) => { e.preventDefault(); setSearch(p.nom); setSearchOpen(false) }}>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-700">{p.nom}</p>
+                      <p className="font-mono text-[10px] text-gray-400">{p.num}</p>
+                    </div>
+                    <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label}</Badge>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
         <select
           className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
           value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}
