@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Plus, Pencil, Trash2, History, ChevronDown, Play, Eye, CheckCircle2, CalendarClock, Wallet } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, Play, Eye, CheckCircle2, CalendarClock, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -79,7 +79,7 @@ import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 
 const VIDE_TACHE = {
-  titre: '', projetId: '', phase: '', assignee: '', priorite: 'normale', statut: 'a_faire', echeance: '', montantPrevu: '', note: '',
+  titre: '', projetId: '', phase: '', assignee: '', priorite: 'normale', statut: 'a_faire', dateDebut: '', echeance: '', montantPrevu: '', note: '',
   prestataireNom: '', prestataireMetier: '', prestataireTelephone: '',
   versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr()
 }
@@ -134,6 +134,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
     setForm({
       titre: t.titre||'', projetId: t.projetId||'', phase: t.phase||'', assignee: t.assignee||'',
       priorite: t.priorite||'normale', statut: t.statut||'a_faire',
+      dateDebut: t.dateDebut ? new Date(t.dateDebut).toISOString().slice(0,10) : '',
       echeance: t.echeance ? new Date(t.echeance).toISOString().slice(0,10) : '',
       montantPrevu: t.montantPrevu ?? '', note: t.note||'',
       prestataireNom: t.prestataireNom||'', prestataireMetier: t.prestataireMetier||'', prestataireTelephone: t.prestataireTelephone||'',
@@ -154,6 +155,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
       const { versementActif, versementMontant, versementType, versementDate, ...tacheForm } = form
       const payload = {
         ...tacheForm,
+        dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
         echeance: form.echeance ? new Date(form.echeance).getTime() : null,
         montantPrevu: form.montantPrevu !== '' ? Number(form.montantPrevu) : null,
         updatedAt: now
@@ -217,6 +219,33 @@ function OngletTaches({ taches, projets, users, depenses }) {
 
   const [reportId, setReportId]     = useState(null)
   const [nouvelleDate, setNouvelleDate] = useState('')
+
+  // Révision du montant arrêté — garde une trace (ancien/nouveau/motif) au lieu
+  // d'écraser silencieusement la valeur, utile en cas de litige ou de contrôle budgétaire.
+  const [revision, setRevision]   = useState(null)
+  const [revMontant, setRevMontant] = useState('')
+  const [revMotif, setRevMotif]     = useState('')
+  const [revSaving, setRevSaving]   = useState(false)
+
+  const ouvrirRevision = (t) => { setRevision(t); setRevMontant(String(t.montantPrevu ?? '')); setRevMotif('') }
+
+  const confirmerRevision = async () => {
+    if (!revision) return
+    const nouveau = Number(revMontant)
+    if (!nouveau || nouveau <= 0 || !revMotif.trim()) return
+    setRevSaving(true)
+    try {
+      const ancien = Number(revision.montantPrevu) || 0
+      const revisions = [
+        ...(revision.revisionsMontant || []),
+        { id: `rev_${Date.now()}`, ancien, nouveau, motif: revMotif.trim(), date: Date.now(), auteur: user?.nom || user?.login || null }
+      ]
+      await setItem('projet_taches', revision.id, { ...revision, montantPrevu: nouveau, revisionsMontant: revisions, updatedAt: Date.now() })
+      await audit('projet', 'tache_montant_revise', `${revision.titre} — ${formatMoney(ancien)} → ${formatMoney(nouveau)} (${revMotif.trim()})`)
+      setRevision(null)
+      setDetail((d) => (d && d.id === revision.id ? { ...d, montantPrevu: nouveau, revisionsMontant: revisions } : d))
+    } finally { setRevSaving(false) }
+  }
 
   const ouvrirReport = (t) => {
     setReportId(t.id)
@@ -301,6 +330,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
                   </div>
                   <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
                     {t.assignee && <span>Assigné à : {t.assignee}</span>}
+                    {t.dateDebut && <span>Début : {formatDateShort(t.dateDebut)}</span>}
                     {t.echeance && <span className={enRetard ? 'text-red-500 font-semibold' : ''}>Échéance : {formatDateShort(t.echeance)}</span>}
                     {t.prestataireNom && (
                       <span>
@@ -398,7 +428,10 @@ function OngletTaches({ taches, projets, users, depenses }) {
             </div>
             {(() => {
               const typeProjet = projets.find((p) => p.id === form.projetId)?.type
-              const suggestions = etapesDefaut(typeProjet)
+              // Les étapes déjà utilisées sur CE projet passent en premier dans les suggestions —
+              // évite de retaper une variante/typo (ex: "demarage" vs "demarrage") pour la même étape.
+              const phasesDuProjet = [...new Set(taches.filter((t) => t.projetId === form.projetId).map((t) => t.phase).filter(Boolean))]
+              const suggestions = [...new Set([...phasesDuProjet, ...etapesDefaut(typeProjet)])]
               return (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-600">{libelleEtape(typeProjet)}</label>
@@ -435,6 +468,11 @@ function OngletTaches({ taches, projets, users, depenses }) {
                 onChange={(v) => setForm((f) => ({ ...f, assignee: v }))}
                 users={users}
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Date de début</label>
+              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Échéance</label>
@@ -541,7 +579,8 @@ function OngletTaches({ taches, projets, users, depenses }) {
       </Modal>
 
       {/* ── Fiche détail d'une tâche ── */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de la tâche">
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de la tâche"
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (() => {
           const projet = projets.find((p) => p.id === detail.projetId)
           const enRetard = detail.echeance && detail.statut !== 'terminee' && detail.statut !== 'annulee' && detail.echeance < Date.now()
@@ -577,6 +616,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
                 {projet && <div><span className="text-gray-500">Projet : </span><span className="font-semibold text-teal-700">{projet.nom}</span></div>}
                 {detail.phase && <div><span className="text-gray-500">{libelleEtape(projet?.type)} : </span><span className="font-semibold">{detail.phase}</span></div>}
                 <div><span className="text-gray-500">Assigné à : </span><span className="font-semibold">{detail.assignee || '—'}</span></div>
+                <div><span className="text-gray-500">Date de début : </span><span className="font-semibold">{detail.dateDebut ? formatDateShort(detail.dateDebut) : '—'}</span></div>
                 <div><span className="text-gray-500">Échéance : </span><span className={`font-semibold ${enRetard ? 'text-red-500' : ''}`}>{detail.echeance ? formatDateShort(detail.echeance) : '—'}</span></div>
                 <div><span className="text-gray-500">Créée le : </span><span className="font-semibold">{detail.createdAt ? formatDateShort(detail.createdAt) : '—'}</span></div>
               </div>
@@ -601,7 +641,15 @@ function OngletTaches({ taches, projets, users, depenses }) {
 
               {(prevu > 0 || verse > 0) && (
                 <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3 shadow-sm backdrop-blur-sm">
-                  <p className="mb-2 text-xs font-bold uppercase text-teal-700">Suivi financier</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase text-teal-700">Suivi financier</p>
+                    {peutSaisirMontant && (
+                      <button onClick={() => ouvrirRevision(detail)}
+                        className="rounded-lg border border-teal-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 shadow-sm transition-all duration-200 hover:bg-teal-50 hover:shadow-[0_0_14px_2px_rgba(13,148,136,0.55)]">
+                        Réviser le montant
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                     <span className="text-gray-600">Arrêté : <span className="font-semibold text-gray-800">{formatMoney(prevu)}</span></span>
                     <span className="text-gray-600">Versé : <span className="font-semibold text-teal-700">{formatMoney(verse)}</span></span>
@@ -635,6 +683,22 @@ function OngletTaches({ taches, projets, users, depenses }) {
                       ))}
                     </div>
                   )}
+
+                  {(detail.revisionsMontant || []).length > 0 && (
+                    <div className="mt-3 space-y-1.5 border-t border-teal-100 pt-2">
+                      <p className="text-xs font-semibold text-gray-500">Historique des révisions du montant arrêté</p>
+                      {[...detail.revisionsMontant].sort((a, b) => (b.date || 0) - (a.date || 0)).map((r) => (
+                        <div key={r.id} className="rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500">{formatMoney(r.ancien)} → <span className="font-mono font-bold text-gray-700">{formatMoney(r.nouveau)}</span></span>
+                            <span className="text-gray-400">{formatDateShort(r.date)}</span>
+                          </div>
+                          <p className="mt-0.5 text-gray-600">{r.motif}</p>
+                          <p className="text-[10px] text-gray-400">par {r.auteur || '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -646,125 +710,43 @@ function OngletTaches({ taches, projets, users, depenses }) {
           )
         })()}
       </Modal>
-    </div>
-  )
-}
 
-// ─── Onglet Historique ────────────────────────────────────────────────────────
-
-const ACTIONS_TACHE = new Set(['tache_creee', 'tache_modifiee', 'tache_supprimee'])
-
-const CFG_ACTION = {
-  tache_creee:     { label: 'Tâche créée',     color: 'bg-teal-100 text-teal-700'  },
-  tache_modifiee:  { label: 'Tâche modifiée',  color: 'bg-amber-100 text-amber-700' },
-  tache_supprimee: { label: 'Tâche supprimée', color: 'bg-red-100 text-red-700'    },
-}
-
-function OngletHistorique({ projets }) {
-  const { data: audit_global } = useCollection('audit_global')
-  const [filtreProjet, setFiltreProjet] = useState('')
-  const [filtreAction, setFiltreAction] = useState('')
-
-  const lignes = useMemo(() => {
-    let result = audit_global
-      .filter((e) => ACTIONS_TACHE.has(e.action))
-      .filter((e) => !filtreAction || e.action === filtreAction)
-    if (filtreProjet) {
-      const p = projets.find((x) => x.id === filtreProjet)
-      if (p) result = result.filter((e) => (e.details || '').includes(p.nom) || (e.details || '').includes(filtreProjet))
-    }
-    return result.sort((a, b) => (b.ts || 0) - (a.ts || 0))
-  }, [audit_global, filtreProjet, filtreAction, projets])
-
-  const parJour = useMemo(() => {
-    const groupes = {}
-    lignes.forEach((e) => {
-      const d = new Date(e.ts || 0)
-      const cle = d.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
-      if (!groupes[cle]) groupes[cle] = []
-      groupes[cle].push(e)
-    })
-    return Object.entries(groupes)
-  }, [lignes])
-
-  const heureStr = (ts) => {
-    if (!ts) return '—'
-    return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-  }
-
-  const estAujourdhui = (label) => {
-    const auj = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
-    return label === auj
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-          value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
-          <option value="">Tous les projets</option>
-          {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
-        </select>
-        <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-          value={filtreAction} onChange={(e) => setFiltreAction(e.target.value)}>
-          <option value="">Toutes les actions</option>
-          {Object.entries(CFG_ACTION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-        {lignes.length > 0 && (
-          <span className="ml-auto text-xs text-gray-400">{lignes.length} événement{lignes.length > 1 ? 's' : ''}</span>
-        )}
-      </div>
-
-      {!lignes.length ? (
-        <Card>
-          <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
-            <History size={32} className="opacity-30" />
-            <p className="text-sm">Aucun historique de tâche pour le moment.</p>
-            <p className="text-xs">Les modifications apparaîtront ici au fur et à mesure.</p>
-          </div>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {parJour.map(([jour, evenements]) => (
-            <div key={jour}>
-              {/* ── En-tête du jour ── */}
-              <div className="mb-3 flex items-center gap-3">
-                <div className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${estAujourdhui(jour) ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                  {estAujourdhui(jour) ? "Aujourd'hui" : jour}
-                </div>
-                <div className="h-px flex-1 bg-gray-100" />
-                <span className="text-[10px] text-gray-400">{evenements.length} action{evenements.length > 1 ? 's' : ''}</span>
-              </div>
-
-              {/* ── Timeline du jour ── */}
-              <div className="ml-2 border-l-2 border-gray-100 pl-4 space-y-3">
-                {evenements.map((e) => {
-                  const cfg = CFG_ACTION[e.action] || { label: e.action, color: 'bg-gray-100 text-gray-600' }
-                  return (
-                    <div key={e.id || e.ts} className="relative flex items-start gap-3">
-                      {/* point sur la ligne */}
-                      <div className="absolute -left-[21px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-gray-300" />
-                      <div className="min-w-0 flex-1 rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${cfg.color}`}>{cfg.label}</span>
-                          <span className="shrink-0 text-[11px] font-semibold text-gray-400">{heureStr(e.ts)}</span>
-                        </div>
-                        {e.details && <p className="mt-1 text-sm font-medium text-gray-700">{e.details}</p>}
-                        {e.user && <p className="mt-0.5 text-[11px] text-gray-400">par <span className="font-semibold text-gray-500">{e.user}</span></p>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+      {/* Révision du montant arrêté */}
+      <Modal open={!!revision} onClose={() => setRevision(null)} title={revision ? `Réviser le montant — ${revision.titre}` : 'Réviser le montant'}>
+        {revision && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Montant actuel : <b className="text-gray-700">{formatMoney(revision.montantPrevu)}</b>
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Nouveau montant arrêté (FCFA) *</label>
+              <input type="number" min="0" autoFocus
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                value={revMontant} onChange={(e) => setRevMontant(e.target.value)} />
             </div>
-          ))}
-        </div>
-      )}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Motif de la révision *</label>
+              <textarea rows={2}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                placeholder="ex : Ajout de main d'œuvre suite à la visite du 15/07 (détails supplémentaires constatés sur site)"
+                value={revMotif} onChange={(e) => setRevMotif(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setRevision(null)}>Annuler</Button>
+              <Button onClick={confirmerRevision} disabled={revSaving || !revMontant || Number(revMontant) <= 0 || !revMotif.trim()}>
+                {revSaving ? 'Enregistrement…' : 'Confirmer la révision'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
 
 // ─── Page principale ──────────────────────────────────────────────────────────
+// (L'historique des tâches vit désormais dans le volet Journal, qui couvre toute
+// l'activité du module — pas seulement les tâches.)
 
 export default function Taches() {
   const { data: tachesTous }   = useCollection('projet_taches')
@@ -773,31 +755,11 @@ export default function Taches() {
   const { data: depensesTous } = useCollection('projet_depenses')
   const { user, role } = useAuthStore()
   useEffect(() => { marquerVoletVu(user?.uid, 'projetTaches') }, [user?.uid])
-  const [onglet, setOnglet] = useState('taches')
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches/dépenses.
   const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
   const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
   const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
 
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
-        {[
-          { id: 'taches',      label: '✅ Tâches'     },
-          { id: 'historique',  label: '🕐 Historique' }
-        ].map((o) => (
-          <button key={o.id} onClick={() => setOnglet(o.id)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet===o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-
-      {onglet === 'taches'
-        ? <OngletTaches taches={taches} projets={projets} users={users} depenses={depenses} />
-        : <OngletHistorique projets={projets} />
-      }
-    </div>
-  )
+  return <OngletTaches taches={taches} projets={projets} users={users} depenses={depenses} />
 }

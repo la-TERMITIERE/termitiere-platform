@@ -1,8 +1,12 @@
+// Journal d'activité Garderie. Deux vues complémentaires : « Journal » = recherche
+// par période/type/utilisateur avec export Excel (existant, inchangé) ;
+// « Historique » = archive complète en timeline par jour, sans limite de période.
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Select from '../../shared/forms/Select'
+import HistoriqueTimeline from '../../shared/ui/HistoriqueTimeline'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -23,7 +27,12 @@ const EVENTS = {
   INCIDENT_CREATE:            { label: 'Incident signalé',        emoji: '⚠️' },
   INCIDENT_EDIT:              { label: 'Incident modifié',        emoji: '✏️' },
   INCIDENT_RESOLU:            { label: 'Incident résolu',         emoji: '✅' },
-  PARAMS_SAVE:                { label: 'Paramètres modifiés',     emoji: '⚙️' }
+  PARAMS_SAVE:                { label: 'Paramètres modifiés',     emoji: '⚙️' },
+  TACHE_ROUTINE_COCHEE:       { label: 'Tâche routinière vérifiée', emoji: '✅' },
+  TACHE_ROUTINE_CREATE:       { label: 'Tâche routinière ajoutée',  emoji: '➕' },
+  TACHE_ROUTINE_EDIT:         { label: 'Tâche routinière modifiée', emoji: '✏️' },
+  TACHE_ROUTINE_DELETE:       { label: 'Tâche routinière supprimée', emoji: '🗑️' },
+  TACHES_ROUTINE_SEED:        { label: 'Tâches routinières importées', emoji: '📥' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))
@@ -43,17 +52,11 @@ const safeStr = (v) => {
   return '—'
 }
 
-export default function Journal() {
-  const { data: events, loading } = useCollection('audit_global')
+function OngletJournal({ evenements, loading }) {
   const [type, setType] = useState('')
   const [who, setWho]   = useState('')
   const [openRow, setOpenRow] = useState(null)
   const { start, end, node: periodNode } = usePeriodSelect('30')
-
-  const evenements = useMemo(
-    () => events.filter((e) => e.module === 'garderie' && e.action !== 'CONNEXION'),
-    [events]
-  )
 
   const typesPresents = useMemo(
     () => [...new Set(evenements.map((e) => e.action).filter(Boolean))].sort(),
@@ -187,6 +190,39 @@ export default function Journal() {
           </tbody>
         </table>
       </Card>
+    </div>
+  )
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
+
+export default function Journal() {
+  const { data: events, loading } = useCollection('audit_global')
+  const [onglet, setOnglet] = useState('journal')
+
+  const evenements = useMemo(
+    () => events.filter((e) => e.module === 'garderie' && e.action !== 'CONNEXION'),
+    [events]
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        {[
+          { id: 'journal',     label: '📰 Journal' },
+          { id: 'historique',  label: '🕐 Historique' }
+        ].map((o) => (
+          <button key={o.id} onClick={() => setOnglet(o.id)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {onglet === 'journal'
+        ? <OngletJournal evenements={evenements} loading={loading} />
+        : <HistoriqueTimeline evenements={evenements} evInfo={evInfo} />
+      }
     </div>
   )
 }

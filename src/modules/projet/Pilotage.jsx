@@ -360,7 +360,8 @@ export default function Pilotage() {
       </>
       )}
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.titre || ''}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.titre || ''}
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail?.type === 'projets' && (
           !detail.liste.length ? (
             <p className="py-8 text-center text-sm text-gray-400">Aucun projet.</p>

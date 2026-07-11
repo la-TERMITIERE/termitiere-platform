@@ -51,10 +51,11 @@ export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)
   .concat(['admin', 'controleur'])
 
 // E-G.Pro : volet Journal — historique global des actions, en lecture seule pour
-// tout le monde SAUF le chef de projet (terrain). La secrétaire y a accès (utile
-// pour vérifier ce qui a été fait) même si elle ne peut rien y modifier.
+// tout le monde SAUF le chef de projet (terrain) et la secrétaire. La secrétaire
+// est exclue volontairement : ce volet trace notamment son niveau de fiabilité
+// (saisies, corrections…) et elle ne doit pas pouvoir consulter ce suivi sur elle-même.
 export const PROJET_JOURNAL_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => v !== 'chef_projet')
+  .filter((v) => !['chef_projet', 'secretaire'].includes(v))
   .concat(['admin', 'controleur'])
 
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les

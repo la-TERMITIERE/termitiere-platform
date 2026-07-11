@@ -4,7 +4,8 @@ export const TYPES_PROJET = [
   { id: 'construction', label: 'Construction / BTP', description: 'Chantiers, bâtiments, infrastructures' },
   { id: 'amenagement', label: 'Aménagement', description: 'Aménagement de terrain ou d\'espace' },
   { id: 'informatique', label: 'Informatique / Digital', description: 'Développement, outils, systèmes' },
-  { id: 'agricole', label: 'Projet agricole', description: 'Culture, élevage, exploitation rurale' },
+  { id: 'agricole', label: 'Projet agricole', description: 'Culture, exploitation rurale' },
+  { id: 'elevage', label: 'Élevage', description: 'Élevage d\'animaux, production animale' },
   { id: 'commercial', label: 'Commercial / Marketing', description: 'Lancement produit, campagne, vente' },
   { id: 'evenementiel', label: 'Événementiel', description: 'Organisation d\'événements' },
   { id: 'autre', label: 'Autre', description: 'Projet ne rentrant pas dans les catégories ci-dessus' }
@@ -56,6 +57,7 @@ export const ETAPES_PAR_TYPE = {
   amenagement:  ['Terrassement', 'Viabilisation', 'Espaces verts', 'Finitions'],
   informatique: ['Analyse & cadrage', 'Conception', 'Développement', 'Tests & recette', 'Déploiement'],
   agricole:     ['Préparation du sol', 'Semis / Plantation', 'Entretien', 'Récolte', 'Commercialisation'],
+  elevage:      ['Préparation de l\'enclos/bâtiment', 'Acquisition des animaux', 'Alimentation & entretien', 'Suivi sanitaire', 'Reproduction', 'Vente / commercialisation'],
   commercial:   ['Étude de marché', 'Production', 'Promotion', 'Vente'],
   evenementiel: ['Préparation', 'Logistique', 'Animation', 'Clôture'],
   autre:        []
@@ -67,6 +69,7 @@ export const LIBELLE_ETAPE_SINGULIER = {
   amenagement:  'Phase d\'aménagement',
   informatique: 'Phase du projet',
   agricole:     'Étape de culture',
+  elevage:      'Étape d\'élevage',
   commercial:   'Phase commerciale',
   evenementiel: 'Phase de l\'événement',
   autre:        'Étape du projet'
@@ -78,6 +81,7 @@ export const TACHES_SUGGESTIONS_PAR_TYPE = {
   amenagement:  ['Débroussaillage', 'Terrassement', 'Nivellement', 'Drainage', 'Pose de bordures', 'Plantation', 'Engazonnement', 'Éclairage extérieur', 'Finitions'],
   informatique: ['Recueil des besoins', 'Cahier des charges', 'Maquettage', 'Développement', 'Intégration', 'Tests', 'Correction de bugs', 'Déploiement', 'Formation utilisateurs', 'Documentation'],
   agricole:     ['Préparation du sol', 'Labour', 'Semis / plantation', 'Fertilisation', 'Désherbage', 'Traitement phytosanitaire', 'Arrosage / irrigation', 'Récolte', 'Conditionnement', 'Transport / vente'],
+  elevage:      ['Construction/aménagement de l\'enclos', 'Achat des animaux', 'Alimentation quotidienne', 'Abreuvement', 'Nettoyage des locaux', 'Vaccination', 'Suivi sanitaire', 'Pesée / suivi de croissance', 'Reproduction', 'Transport des animaux', 'Vente / commercialisation'],
   commercial:   ['Étude de marché', 'Prospection', 'Production', 'Conditionnement', 'Campagne publicitaire', 'Négociation', 'Vente', 'Suivi client'],
   evenementiel: ['Réservation du lieu', 'Location matériel', 'Restauration / traiteur', 'Sonorisation', 'Décoration', 'Invitations', 'Sécurité', 'Animation', 'Rangement'],
   autre:        []

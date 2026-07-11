@@ -6,7 +6,7 @@
 // (livraison) augmente le stock, chaque sortie (utilisation) le diminue. Le
 // stock actuel = somme des entrées − somme des sorties (jamais négatif).
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, ChevronDown, ChevronUp, Ban } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -55,6 +55,16 @@ function calculerStock(mouvements = []) {
   return Math.max(0, total)
 }
 
+// Total cumulé des sorties (quantité déjà utilisée/consommée) — affiché à côté du reste.
+function calculerSorties(mouvements = []) {
+  return mouvements.reduce((s, mv) => s + (mv.type === 'sortie' ? Number(mv.quantite) || 0 : 0), 0)
+}
+
+// Total cumulé des entrées (quantité livrée/reçue depuis le début).
+function calculerEntrees(mouvements = []) {
+  return mouvements.reduce((s, mv) => s + (mv.type === 'entree' ? Number(mv.quantite) || 0 : 0), 0)
+}
+
 export default function Materiel() {
   const { data: projetsTous }   = useCollection('projets')
   const { data: materielsTous } = useCollection('projet_materiels')
@@ -78,6 +88,7 @@ export default function Materiel() {
   const [mvtQte, setMvtQte]         = useState('')
   const [mvtNote, setMvtNote]       = useState('')
   const [historiqueOuvert, setHistoriqueOuvert] = useState(null) // id du matériel dont l'historique est ouvert
+  const [detail, setDetail] = useState(null)
 
   const liste = useMemo(() =>
     materiels
@@ -186,6 +197,21 @@ export default function Materiel() {
     await audit('projet', 'materiel_mouvement_supprime', `${materiel.nom} — ${mv.quantite} ${materiel.unite || ''}`)
   }
 
+  // Pour les consommables en vrac (sable, gravier…) dont la quantité restante ne peut
+  // pas être estimée précisément : déclaration directe "il n'y en a plus", sans avoir
+  // à saisir une quantité exacte — ramène le stock à 0.
+  const marquerEpuise = async (m) => {
+    const stockActuel = calculerStock(m.mouvements || [])
+    if (stockActuel <= 0) return
+    if (!window.confirm(`Déclarer "${m.nom}" comme épuisé ? Le stock sera ramené à 0.`)) return
+    const mouvements = [
+      ...(m.mouvements || []),
+      { id: `mvt_${Date.now()}`, type: 'sortie', quantite: stockActuel, note: 'Déclaré épuisé', date: Date.now(), auteur: user?.nom || user?.login || null }
+    ]
+    await updateItem('projet_materiels', m.id, { quantite: 0, mouvements, updatedAt: Date.now() })
+    await audit('projet', 'materiel_epuise', m.nom)
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),0_8px_20px_-8px_rgba(13,148,136,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
@@ -197,7 +223,7 @@ export default function Materiel() {
           <Wrench size={28} color="white" />
         </div>
         <div>
-          <h2 className="text-lg font-extrabold">Matériel</h2>
+          <h2 className="text-lg font-extrabold">Matériel & Matériaux</h2>
           <p className="text-sm text-white/80">{compteur('sur_site')} matériel(s) sur site — Consommables (stock), outillage, véhicules, gros équipement</p>
         </div>
       </div>
@@ -241,9 +267,10 @@ export default function Materiel() {
             const et = ETATS_MATERIEL[m.etat] || ETATS_MATERIEL.bon_etat
             const mvts = [...(m.mouvements || [])].sort((a, b) => (b.date || 0) - (a.date || 0))
             const stock = calculerStock(m.mouvements || [])
+            const sorti = calculerSorties(m.mouvements || [])
             const historiqueVisible = historiqueOuvert === m.id
             return (
-              <Card key={m.id} className="space-y-2">
+              <Card key={m.id} className="card-hover space-y-2" onClick={() => setDetail(m)}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-bold text-gray-800 truncate">{m.nom}</p>
@@ -261,30 +288,45 @@ export default function Materiel() {
                 {/* Stock — toujours affiché, quelle que soit la catégorie */}
                 <div className="rounded-2xl bg-white/60 px-3 py-2.5 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">En stock</p>
-                        <p className="text-2xl font-extrabold text-teal-700">
-                          {stock} <span className="text-sm font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
-                        </p>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">En stock</p>
+                          <p className="text-2xl font-extrabold text-teal-700">
+                            {stock} <span className="text-sm font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
+                          </p>
+                        </div>
+                        {sorti > 0 && (
+                          <div>
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Sorti</p>
+                            <p className="text-lg font-bold text-amber-600">
+                              {sorti} <span className="text-xs font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <Button size="sm" variant="success" onClick={() => ouvrirMouvement(m, 'entree')}>
                           <PlusCircle size={14} /> Entrée
                         </Button>
                         <Button size="sm" variant="danger" onClick={() => ouvrirMouvement(m, 'sortie')}>
                           <MinusCircle size={14} /> Sortie
                         </Button>
+                        {stock > 0 && (
+                          <Button size="sm" variant="outline" onClick={() => marquerEpuise(m)} title="À utiliser quand la quantité restante ne peut pas être estimée (sable, gravier…)">
+                            <Ban size={14} /> Épuisé
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {mvts.length > 0 && (
-                      <button onClick={() => setHistoriqueOuvert(historiqueVisible ? null : m.id)}
+                      <button onClick={(e) => { e.stopPropagation(); setHistoriqueOuvert(historiqueVisible ? null : m.id) }}
                         className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-teal-600 hover:text-teal-800">
                         {historiqueVisible ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                         {historiqueVisible ? 'Masquer' : 'Voir'} l'historique ({mvts.length} mouvement{mvts.length > 1 ? 's' : ''})
                       </button>
                     )}
                     {historiqueVisible && (
-                      <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto border-t border-gray-100 pt-2">
+                      <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto border-t border-gray-100 pt-2" onClick={(e) => e.stopPropagation()}>
                         {mvts.map((mv) => (
                           <div key={mv.id} className="flex items-center justify-between gap-2 text-[11px]">
                             <div className="min-w-0">
@@ -313,30 +355,34 @@ export default function Materiel() {
                   Suivi par {m.responsable || '—'}{m.createdAt ? ` · ${formatDateTime(m.createdAt)}` : ''}
                 </p>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {m.etat !== 'bon_etat' && (
-                    <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'bon_etat')}>
-                      <CheckCircle2 size={13} /> Bon état
-                    </Button>
-                  )}
-                  {m.etat === 'bon_etat' && (
-                    <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'a_reparer')}>
-                      <AlertTriangle size={13} /> À réparer
-                    </Button>
-                  )}
-                  {m.etat !== 'hors_service' && (
-                    <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'hors_service')}>
-                      <XCircle size={13} /> Hors service
-                    </Button>
-                  )}
-                  {m.statut === 'sur_site' ? (
-                    <Button size="sm" variant="outline" onClick={() => changerStatut(m, 'retourne')}>
-                      <RotateCcw size={13} /> Retourné
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => changerStatut(m, 'sur_site')}>
-                      Remettre sur site
-                    </Button>
+                <div className="flex flex-wrap gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                  {m.categorie !== 'consommable' && (
+                    <>
+                      {m.etat !== 'bon_etat' && (
+                        <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'bon_etat')}>
+                          <CheckCircle2 size={13} /> Bon état
+                        </Button>
+                      )}
+                      {m.etat === 'bon_etat' && (
+                        <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'a_reparer')}>
+                          <AlertTriangle size={13} /> À réparer
+                        </Button>
+                      )}
+                      {m.etat !== 'hors_service' && (
+                        <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'hors_service')}>
+                          <XCircle size={13} /> Hors service
+                        </Button>
+                      )}
+                      {m.statut === 'sur_site' ? (
+                        <Button size="sm" variant="outline" onClick={() => changerStatut(m, 'retourne')}>
+                          <RotateCcw size={13} /> Retourné
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => changerStatut(m, 'sur_site')}>
+                          Remettre sur site
+                        </Button>
+                      )}
+                    </>
                   )}
                   <button onClick={() => openEdit(m)} className="ml-auto rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
                   {peutSupprimer && (
@@ -348,6 +394,88 @@ export default function Materiel() {
           })}
         </div>
       )}
+
+      {/* Détail matériel/matériau */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail"
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        {detail && (() => {
+          const d = detail
+          const projet = projets.find((p) => p.id === d.projetId)
+          const st = STATUTS_MATERIEL[d.statut] || STATUTS_MATERIEL.sur_site
+          const et = ETATS_MATERIEL[d.etat] || ETATS_MATERIEL.bon_etat
+          const mvts = [...(d.mouvements || [])].sort((a, b) => (b.date || 0) - (a.date || 0))
+          const stock = calculerStock(d.mouvements || [])
+          const sorti = calculerSorties(d.mouvements || [])
+          const entre = calculerEntrees(d.mouvements || [])
+          return (
+            <div className="space-y-4">
+              {/* En-tête glassmorphism — nom bien visible */}
+              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.92) 0%, rgba(15,84,80,0.88) 100%)' }}>
+                <p className="font-mono text-xs text-white/70">{catLabel(d.categorie)}</p>
+                <p className="mt-0.5 text-lg font-extrabold leading-snug">{d.nom}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {st.label}
+                  </span>
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {et.label}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="col-span-2"><span className="text-gray-500">Projet : </span><span className="font-semibold">{projet?.nom || '—'}</span></div>
+                <div><span className="text-gray-500">Unité : </span><span className="font-semibold">{d.unite || 'unité(s)'}</span></div>
+                <div><span className="text-gray-500">Arrivé le : </span><span className="font-semibold">{d.dateEntree ? formatDateShort(d.dateEntree) : '—'}</span></div>
+                <div className="col-span-2"><span className="text-gray-500">Suivi par : </span><span className="font-semibold">{d.responsable || '—'}{d.createdAt ? ` · ${formatDateTime(d.createdAt)}` : ''}</span></div>
+              </div>
+
+              {d.note && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Note</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">« {d.note} »</p>
+                </div>
+              )}
+
+              {/* Suivi du stock */}
+              <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3.5 shadow-sm backdrop-blur-sm">
+                <p className="mb-2 text-xs font-bold uppercase text-teal-700">Suivi du stock</p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <span className="text-gray-500">Reçu : <b className="text-gray-700">{entre} {d.unite || 'unité(s)'}</b></span>
+                  <span className="text-gray-500">Sorti : <b className="text-amber-600">{sorti} {d.unite || 'unité(s)'}</b></span>
+                  <span className="text-gray-500">Reste : <b className="text-green-600">{stock} {d.unite || 'unité(s)'}</b></span>
+                </div>
+              </div>
+
+              {/* Historique complet des mouvements */}
+              {mvts.length > 0 && (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Historique des mouvements</p>
+                  <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                    {mvts.map((mv) => (
+                      <div key={mv.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
+                        <div className="min-w-0">
+                          <span className={mv.type === 'entree' ? 'font-semibold text-green-600' : 'font-semibold text-red-500'}>
+                            {mv.type === 'entree' ? '+ ' : '− '}{mv.quantite} {d.unite || ''} {mv.note ? `— ${mv.note}` : ''}
+                          </span>
+                          <span className="ml-1 text-gray-400">· {formatDateShort(mv.date)} · {mv.auteur || '—'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+                <Button onClick={() => { setDetail(null); openEdit(d) }}>
+                  <Pencil size={14} className="mr-1" />Modifier
+                </Button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Modal création/édition */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier le matériel' : 'Ajouter du matériel'}>
