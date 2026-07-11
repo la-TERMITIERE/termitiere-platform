@@ -752,7 +752,7 @@ export default function Enfants() {
 
       {/* Modal détail */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
-        panelClassName="bg-white/90 backdrop-blur-xl backdrop-saturate-150"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
         title={detail ? `${detail.prenom} ${detail.nom}` : ''}>
         {detail && (
           <div className="space-y-4 text-sm">

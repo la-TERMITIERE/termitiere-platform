@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing, X, Clock3, Wallet2, HandCoins, TimerOff, PartyPopper } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
@@ -7,22 +8,52 @@ import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem } from '../../core/db'
-import { STATUTS_PROJET, PRIORITES, SEUILS_DEFAUT } from './data'
-import { avancementProjet, tachesEnRetard, projetEnRetard, genererAlertes } from './logic'
-import { formatDateShort } from '../../utils/formatters'
+import { STATUTS_PROJET, SEUILS_DEFAUT } from './data'
+import { avancementProjet, projetEnRetard, genererAlertes } from './logic'
+import { formatDateShort, todayStr } from '../../utils/formatters'
 import { useAuthStore } from '../../core/auth'
 import { projetsVisibles, scopeParProjets } from './logic'
 
+// Réapparition d'une alerte fermée sur le Dashboard : au bout de 2 min, tant que le
+// quota quotidien n'est pas atteint. Après 5 fermetures dans la même journée, elle
+// se tait jusqu'au lendemain (reset automatique, cf. visibiliteAlerte ci-dessous).
+const REAPPARITION_MS  = 2 * 60 * 1000
+const MAX_FERMETURES   = 5
+
+function visibiliteAlerte(alerteId, fermetures) {
+  const f = fermetures.find((x) => x.id === alerteId)
+  if (!f) return true
+  if (f.jour !== todayStr()) return true // nouveau jour → on repart de zéro
+  if ((f.compteur || 0) >= MAX_FERMETURES) return false // quota atteint → silence jusqu'à demain
+  return Date.now() - (f.dernierFermeture || 0) >= REAPPARITION_MS
+}
+
 const TYPE_ALERTE = {
-  projet_retard:   { color: 'text-red-600',    bg: 'border-red-200 bg-red-50',       label: 'Projet en retard'      },
-  budget_depasse:  { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Budget dépassé'        },
-  tache_depassee:  { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Tâche en dépassement'  },
-  tache_retard:    { color: 'text-amber-600',  bg: 'border-amber-200 bg-amber-50',   label: 'Tâche en retard'       },
-  avancement_zero: { color: 'text-indigo-600', bg: 'border-indigo-200 bg-indigo-50', label: 'Aucun avancement'      },
-  termine:         { color: 'text-green-600',  bg: 'border-green-200 bg-green-50',   label: 'Terminé ✓'             }
+  projet_retard:   { color: 'text-red-600',    ring: 'ring-red-200',    bg: 'bg-red-50/80',    icon: Clock3,     label: 'Projet en retard'      },
+  budget_depasse:  { color: 'text-amber-600',  ring: 'ring-amber-200',  bg: 'bg-amber-50/80',  icon: Wallet2,    label: 'Budget dépassé'        },
+  tache_depassee:  { color: 'text-amber-600',  ring: 'ring-amber-200',  bg: 'bg-amber-50/80',  icon: HandCoins,  label: 'Tâche en dépassement'  },
+  tache_retard:    { color: 'text-orange-600', ring: 'ring-orange-200', bg: 'bg-orange-50/80', icon: TimerOff,   label: 'Tâche en retard'       },
+  avancement_zero: { color: 'text-indigo-600', ring: 'ring-indigo-200', bg: 'bg-indigo-50/80', icon: AlertTriangle, label: 'Aucun avancement'   },
+  termine:         { color: 'text-green-600',  ring: 'ring-green-200',  bg: 'bg-green-50/80',  icon: PartyPopper, label: 'Terminé ✓'            }
+}
+
+// Couleur de la barre empilée pour la répartition par statut (assortie au ton du Badge).
+const TONE_BAR = {
+  info: 'bg-sky-400', warning: 'bg-amber-400', neutral: 'bg-gray-300', success: 'bg-green-400', danger: 'bg-red-400'
+}
+
+// Volet à ouvrir au clic sur une alerte — celui où l'action de correction se fait.
+const VOLET_ALERTE = {
+  projet_retard:   '/projet/projets',
+  budget_depasse:  '/projet/depenses',
+  tache_depassee:  '/projet/taches',
+  tache_retard:    '/projet/taches',
+  avancement_zero: '/projet/taches',
+  termine:         '/projet/projets'
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const { data: projetsTous }  = useCollection('projets')
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: configs }      = useCollection('projet_params')
@@ -37,22 +68,47 @@ export default function Dashboard() {
 
   const [detail, setDetail] = useState(null)
   const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
-  const idsFermesDashboard = useMemo(() => new Set(fermeesDashboard.map((f) => f.id)), [fermeesDashboard])
-  const fermerSurDashboard = (id) => setItem('projet_alertes_dashboard_fermees', id, { id, fermeLe: Date.now() })
+
+  // Revérifie périodiquement si une alerte fermée doit réapparaître (délai de 2 min écoulé).
+  const [, relancerVerif] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => relancerVerif((n) => n + 1), 15 * 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const fermerSurDashboard = (a) => {
+    const jour = todayStr()
+    const existant = fermeesDashboard.find((f) => f.id === a.id)
+    const compteur = (existant?.jour === jour ? (existant.compteur || 0) : 0) + 1
+    setItem('projet_alertes_dashboard_fermees', a.id, { id: a.id, compteur, dernierFermeture: Date.now(), jour })
+  }
 
   const stats = useMemo(() => {
     const actifs    = projets.filter((p) => p.statut === 'en_cours')
     const termines  = projets.filter((p) => p.statut === 'termine')
     const enRetard  = projets.filter((p) => projetEnRetard(p))
-    const tRetard   = tachesEnRetard(taches)
-    return { actifs, termines, enRetard, tRetard }
-  }, [projets, taches])
+    return { actifs, termines, enRetard }
+  }, [projets])
 
   const recents = useMemo(() =>
     [...projets]
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
       .slice(0, 8),
   [projets])
+
+  // Vue d'ensemble — répartition par statut + avancement moyen, informatif pour
+  // tous les rôles (pas seulement ceux qui gèrent budget/tâches).
+  const repartitionStatuts = useMemo(() =>
+    Object.entries(STATUTS_PROJET)
+      .map(([key, cfg]) => ({ key, label: cfg.label, tone: cfg.tone, count: projets.filter((p) => p.statut === key).length }))
+      .filter((s) => s.count > 0),
+  [projets])
+
+  const avancementMoyen = useMemo(() => {
+    if (!projets.length) return 0
+    const total = projets.reduce((s, p) => s + avancementProjet(taches.filter((t) => t.projetId === p.id), p), 0)
+    return Math.round(total / projets.length)
+  }, [projets, taches])
 
   return (
     <div className="space-y-5">
@@ -85,9 +141,11 @@ export default function Dashboard() {
 
       {/* ── Alertes ────────────────────────────────────────────────────────── */}
       {(() => {
-        // Fermer ici ne retire l'alerte que de ce widget (repli visuel local) — les
-        // responsables et la direction continuent d'être notifiés tant que ce n'est pas résolu.
-        const alertes = genererAlertes(projets, taches, depenses, seuils).filter((a) => !idsFermesDashboard.has(a.id))
+        // Fermer une alerte ici la masque 2 min (elle réapparaît ensuite si toujours
+        // active), jusqu'à 5 fermetures par jour — au-delà, silence jusqu'au lendemain.
+        // Le chef de projet concerné et la direction continuent d'être notifiés via la
+        // cloche pendant ce temps, indépendamment de ce widget.
+        const alertes = genererAlertes(projets, taches, depenses, seuils).filter((a) => visibiliteAlerte(a.id, fermeesDashboard))
         if (!alertes.length) return null
         const critiques = alertes.filter((a) => ['projet_retard','budget_depasse'].includes(a.type)).length
         return (
@@ -96,19 +154,34 @@ export default function Dashboard() {
               <BellRing size={15} className={critiques ? 'text-red-500' : 'text-amber-500'} />
               Alertes
               {critiques > 0 && <span className="ml-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{critiques}</span>}
+              <span className="ml-auto text-[11px] font-normal text-gray-400">{alertes.length} active{alertes.length > 1 ? 's' : ''}</span>
             </span>
           }>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {alertes.map((a) => {
                 const cfg = TYPE_ALERTE[a.type]
+                const Icone = cfg.icon
+                const responsable = projets.find((p) => p.id === a.projetId)?.responsable
                 return (
-                  <div key={a.id} className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs backdrop-blur-sm ${cfg.bg}`}>
-                    <span className={`shrink-0 font-bold ${cfg.color}`}>{cfg.label}</span>
-                    <span className="font-semibold text-gray-600">{a.projetNom}</span>
-                    <span className="flex-1 text-gray-500">{a.message}</span>
-                    <button onClick={() => fermerSurDashboard(a.id)} title="Retirer de ce widget"
-                      className="shrink-0 rounded-lg p-0.5 text-gray-400 hover:bg-white/70 hover:text-gray-700">
-                      <X size={13} />
+                  <div key={a.id} onClick={() => navigate(VOLET_ALERTE[a.type] || '/projet')}
+                    title="Aller corriger"
+                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border border-white/60 px-3 py-2.5 shadow-sm ring-1 backdrop-blur-sm transition-all hover:shadow-md hover:brightness-95 ${cfg.bg} ${cfg.ring}`}>
+                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm ${cfg.color}`}>
+                      <Icone size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</span>
+                        <span className="text-xs font-semibold text-gray-600">— {a.projetNom}</span>
+                        {responsable && (
+                          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Resp. : {responsable}</span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">{a.message}</p>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); fermerSurDashboard(a) }} title="Masquer 2 min"
+                      className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/80 hover:text-gray-700">
+                      <X size={14} />
                     </button>
                   </div>
                 )
@@ -118,7 +191,7 @@ export default function Dashboard() {
         )
       })()}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid items-start gap-5 lg:grid-cols-2">
         <Card title="Projets récents">
           {!recents.length ? (
             <p className="py-8 text-center text-sm text-gray-400">Aucun projet — créez-en un dans l'onglet Projets</p>
@@ -151,30 +224,41 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card title="Tâches en retard">
-          {!stats.tRetard.length ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucune tâche en retard</p>
-          ) : (
-            <div className="space-y-2">
-              {stats.tRetard.slice(0, 8).map((t) => {
-                const projet = projets.find((p) => p.id === t.projetId)
-                return (
-                  <div key={t.id} className="flex items-start justify-between rounded-2xl border border-red-200/60 bg-red-50/60 px-3 py-2.5 text-sm backdrop-blur-sm">
-                    <div>
-                      <p className="font-semibold text-red-800">{t.titre}</p>
-                      {projet && <p className="text-xs text-gray-500">{projet.nom}</p>}
-                      <p className="text-xs text-red-500">Échue le {formatDateShort(t.echeance)}</p>
-                    </div>
-                    <Badge tone={PRIORITES[t.priorite]?.tone}>{PRIORITES[t.priorite]?.label || t.priorite}</Badge>
-                  </div>
-                )
-              })}
+        {projets.length > 0 && (
+          <Card title="Vue d'ensemble">
+            <div className="space-y-4">
+              <div>
+                <div className="flex h-3 overflow-hidden rounded-full bg-gray-100">
+                  {repartitionStatuts.map((s) => (
+                    <div key={s.key} className={TONE_BAR[s.tone] || 'bg-gray-300'}
+                      style={{ width: `${(s.count / projets.length) * 100}%` }} title={`${s.label} : ${s.count}`} />
+                  ))}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                  {repartitionStatuts.map((s) => (
+                    <span key={s.key} className="flex items-center gap-1.5 text-xs text-gray-600">
+                      <span className={`h-2 w-2 rounded-full ${TONE_BAR[s.tone] || 'bg-gray-300'}`} />
+                      {s.label} <b className="text-gray-800">{s.count}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="border-t border-gray-100 pt-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-wide text-gray-500">Avancement moyen</span>
+                  <span className="font-bold text-teal-700">{avancementMoyen}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-gray-100">
+                  <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${avancementMoyen}%` }} />
+                </div>
+              </div>
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (detail.liste.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Aucun projet.</p>
         ) : (

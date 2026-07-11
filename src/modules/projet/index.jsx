@@ -11,6 +11,7 @@ import Besoins from './Besoins'
 import Materiel from './Materiel'
 import Depenses from './Depenses'
 import Prestataires from './Prestataires'
+import Partenaires from '../../shared/partenaires/Partenaires'
 import Pilotage from './Pilotage'
 import Journal from './Journal'
 import Params from './Params'
@@ -42,6 +43,7 @@ export default function ProjetModule() {
       <Route path="materiel" element={<Materiel />} />
       <Route path="depenses"     element={<ProjetGuard roles={PROJET_DEPENSES_ROLES}><Depenses /></ProjetGuard>} />
       <Route path="prestataires" element={<Prestataires />} />
+      <Route path="partenaires"  element={<Partenaires module="projet" />} />
       <Route path="pilotage"     element={<ProjetGuard roles={PROJET_PILOTAGE_ROLES}><Pilotage /></ProjetGuard>} />
       <Route path="journal" element={<ProjetGuard roles={PROJET_JOURNAL_ROLES}><Journal /></ProjetGuard>} />
       <Route path="params" element={<ProjetGuard roles={PROJET_VOLETS_RESTREINTS_ROLES}><Params /></ProjetGuard>} />

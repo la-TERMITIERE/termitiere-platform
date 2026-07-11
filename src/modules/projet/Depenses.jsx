@@ -80,7 +80,9 @@ export default function Depenses() {
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: notes }        = useCollection('projet_depenses_notes')
   const { user, role } = useAuthStore()
-  // Le chef de projet, la secrétaire, l'agent et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
+  // Le chef de projet ne fait que consulter les dépenses — c'est la secrétaire qui les renseigne.
+  const peutModifier = role !== 'chef_projet'
+  // La secrétaire, l'agent et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
   const peutSupprimer = !['chef_projet', 'secretaire', 'agent', 'superviseur'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
@@ -98,6 +100,7 @@ export default function Depenses() {
   const [noteDepId, setNoteDepId] = useState(null)
   const [noteTexte, setNoteTexte] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [detail, setDetail] = useState(null)
 
   const notesDeDepense = (depId) => notes.filter((n) => n.depenseId === depId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
 
@@ -322,7 +325,9 @@ export default function Depenses() {
           <option value="">Toutes catégories</option>
           {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
-        <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouvelle dépense</Button>
+        {peutModifier && (
+          <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouvelle dépense</Button>
+        )}
         {liste.length > 0 && (
           <>
             <span className="ml-auto text-sm font-bold text-gray-700">Total : {formatMoney(totalFiltre)}</span>
@@ -366,81 +371,93 @@ export default function Depenses() {
         <div className="overflow-x-auto rounded-3xl border border-white/50 bg-white/70 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] backdrop-blur-xl backdrop-saturate-150">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500">
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">Projet</th>
-                <th className="px-3 py-2">Catégorie</th>
-                <th className="px-3 py-2">Description</th>
-                <th className="px-3 py-2">Prestataire</th>
-                <th className="px-3 py-2 text-right">Montant</th>
-                <th className="px-3 py-2" />
+              <tr className="border-b border-gray-100 bg-gray-50/60 text-left text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Projet</th>
+                <th className="px-4 py-3">Catégorie</th>
+                <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3">Prestataire</th>
+                <th className="px-4 py-3 text-right">Montant</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {groupesParTache.map((g) => (
                 <Fragment key={g.key}>
                   {/* En-tête de groupe : tâche + suivi budget */}
-                  <tr className="border-y border-teal-100 bg-teal-50/70">
-                    <td colSpan={7} className="px-3 py-2">
+                  <tr className="border-y border-teal-100/80 bg-gradient-to-r from-teal-50/90 to-teal-50/40">
+                    <td colSpan={7} className="px-4 py-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-sm font-bold text-teal-800">
-                          {g.tache ? `📋 ${g.tache.titre}` : '📁 Dépenses générales (sans tâche)'}
+                        <span className="flex items-center gap-1.5 text-sm font-bold text-teal-800">
+                          {g.tache ? <>📋 {g.tache.titre}</> : <span className="text-gray-500">📁 Dépenses générales (sans tâche)</span>}
                         </span>
-                        <span className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                          {g.prevu > 0 && <span>Arrêté <b className="text-gray-800">{formatMoney(g.prevu)}</b></span>}
-                          <span>Versé <b className="text-teal-700">{formatMoney(g.totalVerse)}</b></span>
-                          {g.prevu > 0 && <span>Reste <b className={g.reste > 0 ? 'text-amber-600' : 'text-green-600'}>{formatMoney(g.reste > 0 ? g.reste : 0)}</b></span>}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {g.prevu > 0 && (
+                            <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                              Arrêté <b className="text-gray-800">{formatMoney(g.prevu)}</b>
+                            </span>
+                          )}
+                          <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                            Versé <b className="text-teal-700">{formatMoney(g.totalVerse)}</b>
+                          </span>
+                          {g.prevu > 0 && (
+                            <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                              Reste <b className={g.reste > 0 ? 'text-amber-600' : 'text-green-600'}>{formatMoney(g.reste > 0 ? g.reste : 0)}</b>
+                            </span>
+                          )}
                           {g.prevu > 0 && (
                             g.reste <= 0
-                              ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">✓ Soldé</span>
+                              ? <span className="rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-bold text-green-700 shadow-sm">✓ Soldé</span>
                               : g.totalVerse > 0
-                                ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Tranche versée</span>
-                                : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">Non payé</span>
+                                ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm">Tranche versée</span>
+                                : <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500 shadow-sm">Non payé</span>
                           )}
-                        </span>
+                        </div>
                       </div>
                     </td>
                   </tr>
                   {g.deps.map((d) => {
                     const projet = projets.find((p) => p.id === d.projetId)
                     return (
-                  <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{formatDateShort(d.date)}</td>
-                    <td className="px-3 py-2">
+                  <tr key={d.id} onClick={() => setDetail(d)} className="group cursor-pointer border-b border-gray-50 transition-colors odd:bg-white/40 even:bg-transparent hover:bg-teal-50/50">
+                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDateShort(d.date)}</td>
+                    <td className="px-4 py-3">
                       {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
                     </td>
-                    <td className="px-3 py-2">
-                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">{catLabel(d.categorie)}</span>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700">{catLabel(d.categorie)}</span>
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600 max-w-xs truncate">{d.description}</td>
-                    <td className="px-3 py-2 text-xs text-gray-500">
+                    <td className="px-4 py-3 text-xs text-gray-600 max-w-xs truncate">{d.description}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
                       {d.fournisseur && <p className="font-semibold text-gray-700">{d.fournisseur}</p>}
                       {d.prestataireMetier && (
                         <p className="text-gray-400">{METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier}</p>
                       )}
                       {d.prestataireTelephone && <p className="text-gray-400">{d.prestataireTelephone}</p>}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <p className="font-mono font-bold text-gray-700">{formatMoney(d.montant)}</p>
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${d.typePaiement === 'avance' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                    <td className="px-4 py-3 text-right">
+                      <p className="font-mono text-[15px] font-bold text-gray-800">{formatMoney(d.montant)}</p>
+                      <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${d.typePaiement === 'avance' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
                         {TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale'}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-1 items-center">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
                         <button onClick={() => setNoteDepId(noteDepId === d.id ? null : d.id)}
                           title="Commentaires"
-                          className={`relative rounded px-2 py-1 shadow-sm transition-colors ${noteDepId === d.id ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-teal-500 hover:text-white'}`}>
+                          className={`relative rounded-lg p-1.5 shadow-sm transition-all hover:scale-105 ${noteDepId === d.id ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-teal-500 hover:text-white'}`}>
                           <MessageSquare size={13} />
                           {notesDeDepense(d.id).length > 0 && (
-                            <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[8px] font-bold text-white">
+                            <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[8px] font-bold text-white">
                               {notesDeDepense(d.id).length}
                             </span>
                           )}
                         </button>
-                        <button onClick={() => openEdit(d)} className="rounded-lg border border-teal-200 bg-teal-50 p-1 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={13} /></button>
+                        {peutModifier && (
+                          <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 shadow-sm transition-all hover:scale-105 hover:border-teal-300 hover:bg-teal-100"><Pencil size={13} /></button>
+                        )}
                         {peutSupprimer && (
-                          <button onClick={() => handleDelete(d)} className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={13} /></button>
+                          <button onClick={() => handleDelete(d)} title="Supprimer" className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 shadow-sm transition-all hover:scale-105 hover:border-red-300 hover:bg-red-100"><Trash2 size={13} /></button>
                         )}
                       </div>
                     </td>
@@ -453,6 +470,62 @@ export default function Depenses() {
           </table>
         </div>
       )}
+
+      {/* Détail dépense */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de la dépense"
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        {detail && (() => {
+          const d = detail
+          const projet = projets.find((p) => p.id === d.projetId)
+          const tache  = taches.find((t) => t.id === d.tacheId)
+          const metierLabel = METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier
+          return (
+            <div className="space-y-4">
+              {/* En-tête glassmorphism — montant bien visible */}
+              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.92) 0%, rgba(15,84,80,0.88) 100%)' }}>
+                <p className="font-mono text-xs text-white/70">{formatDateShort(d.date)}</p>
+                <p className="mt-0.5 text-lg font-extrabold leading-snug">{formatMoney(d.montant)}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {catLabel(d.categorie)}
+                  </span>
+                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="col-span-2"><span className="text-gray-500">Projet : </span><span className="font-semibold">{projet?.nom || '—'}</span></div>
+                <div className="col-span-2"><span className="text-gray-500">Tâche liée : </span><span className="font-semibold">{tache?.titre || '— (dépense générale)'}</span></div>
+                <div><span className="text-gray-500">Prestataire : </span><span className="font-semibold">{d.fournisseur || '—'}</span></div>
+                <div><span className="text-gray-500">Téléphone : </span><span className="font-semibold">{d.prestataireTelephone || '—'}</span></div>
+                <div><span className="text-gray-500">Métier : </span><span className="font-semibold">{metierLabel || '—'}</span></div>
+                <div><span className="text-gray-500">Ajouté par : </span><span className="font-semibold">{d.ajoutePar || '—'}</span></div>
+              </div>
+
+              {d.description && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Description</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.description}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+                <Button variant="ghost" onClick={() => { setDetail(null); setNoteDepId(d.id) }}>
+                  <MessageSquare size={14} className="mr-1" />Commentaires
+                </Button>
+                {peutModifier && (
+                  <Button onClick={() => { setDetail(null); openEdit(d) }}>
+                    <Pencil size={14} className="mr-1" />Modifier
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Fenêtre commentaires dépense */}
       {(() => {

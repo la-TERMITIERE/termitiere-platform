@@ -16,7 +16,7 @@ const COLLECTIONS_PROJET = [
   { id: 'projet_taches',      label: 'Tâches'             },
   { id: 'projet_depenses',    label: 'Dépenses'           },
   { id: 'projet_besoins',     label: 'Besoins'            },
-  { id: 'projet_materiels',  label: 'Matériel'           },
+  { id: 'projet_materiels',  label: 'Matériel & Matériaux' },
   { id: 'projet_documents',   label: 'Documents'          },
   { id: 'projet_prestataires_masques', label: 'Prestataires masqués' },
 ]

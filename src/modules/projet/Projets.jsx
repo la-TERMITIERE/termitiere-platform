@@ -233,6 +233,33 @@ export default function Projets() {
   const [commTexte, setCommTexte]   = useState('')
   const [commSending, setCommSending] = useState(false)
 
+  // Révision du budget — garde une trace (ancien/nouveau/motif) au lieu d'écraser
+  // silencieusement la valeur, utile en cas de litige ou de contrôle budgétaire.
+  const [revision, setRevision]     = useState(null)
+  const [revMontant, setRevMontant] = useState('')
+  const [revMotif, setRevMotif]     = useState('')
+  const [revSaving, setRevSaving]   = useState(false)
+
+  const ouvrirRevision = (p) => { setRevision(p); setRevMontant(String(p.budget ?? '')); setRevMotif('') }
+
+  const confirmerRevision = async () => {
+    if (!revision) return
+    const nouveau = Number(revMontant)
+    if (!nouveau || nouveau <= 0 || !revMotif.trim()) return
+    setRevSaving(true)
+    try {
+      const ancien = Number(revision.budget) || 0
+      const revisions = [
+        ...(revision.revisionsBudget || []),
+        { id: `rev_${Date.now()}`, ancien, nouveau, motif: revMotif.trim(), date: Date.now(), auteur: user?.nom || user?.login || null }
+      ]
+      await setItem('projets', revision.id, { ...revision, budget: nouveau, revisionsBudget: revisions, updatedAt: Date.now() })
+      await audit('projet', 'projet_budget_revise', `${revision.nom} — ${formatMoney(ancien)} → ${formatMoney(nouveau)} (${revMotif.trim()})`)
+      setRevision(null)
+      setDetail((d) => (d && d.id === revision.id ? { ...d, budget: nouveau, revisionsBudget: revisions } : d))
+    } finally { setRevSaving(false) }
+  }
+
   const nomConnecte = user?.nom || user?.login || ''
 
   // Suggestions de recherche — liste des projets déjà inscrits correspondant à la saisie.
@@ -684,7 +711,8 @@ export default function Projets() {
       </Modal>
 
       {/* ── Fiche détail d'un projet ── */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail du projet">
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail du projet"
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (() => {
           const d = detail
           const tachesDuProjet = taches.filter((t) => t.projetId === d.id)
@@ -747,7 +775,13 @@ export default function Projets() {
               {/* Suivi budgétaire */}
               {budget > 0 && (
                 <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3.5 shadow-sm backdrop-blur-sm">
-                  <p className="mb-2 text-xs font-bold uppercase text-teal-700">Suivi budgétaire</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase text-teal-700">Suivi budgétaire</p>
+                    <button onClick={() => ouvrirRevision(d)}
+                      className="rounded-lg border border-teal-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 shadow-sm transition-all duration-200 hover:bg-teal-50 hover:shadow-[0_0_14px_2px_rgba(13,148,136,0.55)]">
+                      Réviser le budget
+                    </button>
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                     <span className="text-gray-500">Budget : <b className="text-gray-700">{formatMoney(budget)}</b></span>
                     <span className="text-gray-500">Dépensé : <b className="text-amber-600">{formatMoney(depense)}</b></span>
@@ -762,6 +796,21 @@ export default function Projets() {
                   )}
                   {coutParUnite !== null && (
                     <p className="mt-1 text-xs font-semibold text-green-700">Coût par {uniteSuperficie(d.superficieUnite)} : {formatMoney(coutParUnite)}</p>
+                  )}
+                  {(d.revisionsBudget || []).length > 0 && (
+                    <div className="mt-3 space-y-1.5 border-t border-teal-100 pt-2">
+                      <p className="text-xs font-semibold text-gray-500">Historique des révisions du budget</p>
+                      {[...d.revisionsBudget].sort((a, b) => (b.date || 0) - (a.date || 0)).map((r) => (
+                        <div key={r.id} className="rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500">{formatMoney(r.ancien)} → <span className="font-mono font-bold text-gray-700">{formatMoney(r.nouveau)}</span></span>
+                            <span className="text-gray-400">{formatDateShort(r.date)}</span>
+                          </div>
+                          <p className="mt-0.5 text-gray-600">{r.motif}</p>
+                          <p className="text-[10px] text-gray-400">par {r.auteur || '—'}</p>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
@@ -851,6 +900,36 @@ export default function Projets() {
             </div>
           )
         })()}
+      </Modal>
+
+      {/* Révision du budget */}
+      <Modal open={!!revision} onClose={() => setRevision(null)} title={revision ? `Réviser le budget — ${revision.nom}` : 'Réviser le budget'}>
+        {revision && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Budget actuel : <b className="text-gray-700">{formatMoney(revision.budget)}</b>
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Nouveau budget (FCFA) *</label>
+              <input type="number" min="0" autoFocus
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                value={revMontant} onChange={(e) => setRevMontant(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Motif de la révision *</label>
+              <textarea rows={2}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                placeholder="ex : Ajout de travaux supplémentaires constatés lors de la visite du 15/07"
+                value={revMotif} onChange={(e) => setRevMotif(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setRevision(null)}>Annuler</Button>
+              <Button onClick={confirmerRevision} disabled={revSaving || !revMontant || Number(revMontant) <= 0 || !revMotif.trim()}>
+                {revSaving ? 'Enregistrement…' : 'Confirmer la révision'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

@@ -1,6 +1,6 @@
 // Notifications automatiques des alertes E-G.Pro — remplace l'ancien onglet Alertes.
 // Destinataires : le responsable du projet concerné + les membres de la direction.
-// Une alerte non résolue relance une notification toutes les minutes, jusqu'à
+// Une alerte non résolue relance une notification toutes les 2 minutes, jusqu'à
 // 5 fois ; passé ce quota, elle se tait jusqu'au lendemain (nouveau cycle de 5).
 // « Projet terminé » est une bonne nouvelle : une seule notification, jamais répétée.
 //
@@ -16,9 +16,9 @@ import { genererAlertes } from '../modules/projet/logic'
 import { SEUILS_DEFAUT } from '../modules/projet/data'
 import { todayStr } from '../utils/formatters'
 
-const REPEAT_MS    = 60 * 1000 // 1 minute entre deux relances
-const MAX_REPEATS  = 5         // 5 relances max par jour
-const CHECK_MS     = 20 * 1000 // fréquence de vérification (assez fine pour ne pas rater le créneau d'1 min)
+const REPEAT_MS    = 2 * 60 * 1000 // 2 minutes entre deux relances
+const MAX_REPEATS  = 5             // 5 relances max par jour
+const CHECK_MS     = 20 * 1000 // fréquence de vérification (assez fine pour ne pas rater le créneau de 2 min)
 
 const TITRES = {
   projet_retard:   '⏰ Projet en retard',
