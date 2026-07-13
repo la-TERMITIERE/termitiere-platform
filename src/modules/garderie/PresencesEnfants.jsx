@@ -14,6 +14,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { GROUPES_AGE, STATUTS_PRESENCE } from './data'
 import { useGarderieStore } from './store/garderieStore'
@@ -185,7 +186,7 @@ export default function PresencesEnfants() {
     const heure = heureNow()
     await enregistrer(enfant, { statut: 'present', heureArrivee: heure })
     audit('garderie', 'PRESENCE_ARRIVEE', `${enfant.prenom} ${enfant.nom}`, { date: dateFiltre, heure })
-    notify({ type: 'info', title: `✅ Arrivée — ${enfant.prenom} ${enfant.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/presences' })
+    notify({ type: 'info', title: `✅ Arrivée — ${enfant.prenom} ${enfant.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/presences' })
     toast.success(`Arrivée de ${enfant.prenom} à ${heure} ✓`)
   }
 
@@ -201,7 +202,7 @@ export default function PresencesEnfants() {
   async function marquerAbsent(enfant, statut) {
     await enregistrer(enfant, { statut, heureArrivee: '', heureDepart: '' })
     audit('garderie', 'PRESENCE_STATUT', `${enfant.prenom} ${enfant.nom}`, { statut, date: dateFiltre })
-    notify({ type: 'info', title: `📋 ${enfant.prenom} ${enfant.nom}`, body: statut === 'absent' ? 'Marqué(e) absent(e)' : 'Marqué(e) excusé(e)', module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/presences' })
+    notify({ type: 'info', title: `📋 ${enfant.prenom} ${enfant.nom}`, body: statut === 'absent' ? 'Marqué(e) absent(e)' : 'Marqué(e) excusé(e)', module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/presences' })
     toast.success('Statut mis à jour ✓')
   }
 

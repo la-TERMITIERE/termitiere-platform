@@ -31,10 +31,31 @@ body {
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; }
 
+@layer base {
+  /* Effet de survol/focus doux sur tous les champs et menus déroulants de
+     l'application — rectangles interactifs les plus fréquents de l'UI. */
+  select, input, textarea {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+  select:hover:not(:disabled), input:hover:not(:disabled), textarea:hover:not(:disabled) {
+    border-color: #99a3af;
+  }
+  select:focus, input:focus, textarea:focus {
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+  }
+}
+
 @layer components {
   .card {
-    @apply rounded-3xl border border-white/50 bg-white/40 backdrop-blur-xl backdrop-saturate-150
-           shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)];
+    @apply rounded-3xl border border-gray-100 bg-white/90 backdrop-blur-xl backdrop-saturate-150
+           shadow-[0_24px_48px_-16px_rgba(26,26,26,0.22),0_8px_20px_-6px_rgba(26,26,26,0.12),inset_0_1px_0_0_rgba(255,255,255,0.7)]
+           transition-shadow duration-200;
+  }
+  /* Variante pour les cartes cliquables (ouvrent un détail, une fiche…) —
+     ajoute un léger soulèvement au survol, en plus de l'ombre du verre dépoli. */
+  .card-hover {
+    @apply cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:border-teal-100
+           hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.32),0_12px_24px_-6px_rgba(26,26,26,0.16),inset_0_1px_0_0_rgba(255,255,255,0.7)];
   }
   .input-base {
     @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm

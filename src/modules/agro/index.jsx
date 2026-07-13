@@ -10,10 +10,10 @@ import Factures from './Factures'
 import Analyses from './Analyses'
 import Sante from './Sante'
 import Demandes from './Demandes'
-import Historique from './Historique'
 import Journal from './Journal'
 import Params from './Params'
 import AutoCarryForward from './AutoCarryForward'
+import Partenaires from '../../shared/partenaires/Partenaires'
 import { useAgroStore } from './store/agroStore'
 import { useAuth } from '../../hooks/useAuth'
 import { canViewPilotage } from '../../core/roles'
@@ -45,7 +45,7 @@ export default function AgroModule() {
       <Route path="analyses" element={canViewPilotage(role) ? <Analyses /> : <AccesRefuse />} />
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />
-      <Route path="historique" element={<Historique />} />
+      <Route path="partenaires" element={<Partenaires module="agro" />} />
       <Route path="journal" element={<Journal />} />
       <Route path="params" element={<Params />} />
     </Routes>

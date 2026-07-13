@@ -2,6 +2,9 @@
 // se passe sur l'application (saisies, factures, demandes, santé, utilisateurs,
 // connexions, logistique, événementiel…), avec sélecteur de période (calendrier
 // + plage personnalisée) et filtre par type d'événement.
+// Deux vues distinctes réunies dans un seul volet : « Journal » = log des actions
+// (ci-dessous, inchangé) ; « Historique » = historique des mouvements de stock
+// (entrées/sorties/décès), importé tel quel depuis ./Historique.jsx.
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -12,6 +15,7 @@ import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateTime, formatDateShort } from '../../utils/formatters'
+import Historique from './Historique'
 
 // Libellé + icône par type d'événement.
 const EVENTS = {
@@ -49,20 +53,11 @@ const moduleLabel = (m) => MODULES_LBL[m] || m || '—'
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))
 const dayOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '')
 
-export default function Journal() {
-  const { data: events } = useCollection('audit_global')
-
+function OngletJournal({ evenements }) {
   const [type, setType] = useState('')      // filtre type d'événement
   const [who, setWho] = useState('')         // filtre utilisateur
   const [openRow, setOpenRow] = useState(null) // ligne dépliée (détails)
   const { start, end, node: periodNode } = usePeriodSelect('30')
-
-  // On filtre : uniquement les événements du module AGRO (pas les autres modules).
-  // On ignore aussi les connexions (non pertinentes pour le journal métier).
-  const evenements = useMemo(
-    () => events.filter((e) => e.module === 'agro' && e.action !== 'CONNEXION'),
-    [events]
-  )
 
   // Types présents dans les données (pour alimenter le filtre).
   const typesPresents = useMemo(
@@ -217,4 +212,39 @@ function metaToText(meta) {
   return Object.entries(meta)
     .map(([k, v]) => `${k}: ${v && typeof v === 'object' ? Object.entries(v).map(([a, b]) => `${a}=${b}`).join('; ') : v}`)
     .join(' | ')
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
+
+export default function Journal() {
+  const { data: events } = useCollection('audit_global')
+  const [onglet, setOnglet] = useState('journal')
+
+  // On filtre : uniquement les événements du module AGRO (pas les autres modules).
+  // On ignore aussi les connexions (non pertinentes pour le journal métier).
+  const evenements = useMemo(
+    () => events.filter((e) => e.module === 'agro' && e.action !== 'CONNEXION'),
+    [events]
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        {[
+          { id: 'journal',     label: '📰 Journal' },
+          { id: 'historique',  label: '🕐 Historique' }
+        ].map((o) => (
+          <button key={o.id} onClick={() => setOnglet(o.id)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {onglet === 'journal'
+        ? <OngletJournal evenements={evenements} />
+        : <Historique />
+      }
+    </div>
+  )
 }

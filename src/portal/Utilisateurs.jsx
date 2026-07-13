@@ -1,6 +1,6 @@
 // Gestion des utilisateurs de la plateforme (portail, admin uniquement).
 // Permet d'attribuer à chaque utilisateur ses droits d'accès aux modules.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Pencil, ShieldCheck } from 'lucide-react'
 import Card from '../shared/ui/Card'
 import Button from '../shared/ui/Button'
@@ -16,16 +16,31 @@ import { toast } from '../core/notifications'
 import { MODULES } from '../shared/modules'
 import { ROLES, isViewAllRole, roleLabel, roleTone } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
+import { SITES } from '../modules/logistique/site/useSite'
 
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], secteur: '', poste: '', telephone: '', actif: true })
+// De même, un compte Maxi Logistique accède par défaut aux deux sites (Lomé & Kara).
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gerePartenaires: false, secteur: '', poste: '', telephone: '', actif: true })
+
+// Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
+// Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
+const SECTEURS_DEFAUT = MODULES.map((m) => m.nom)
+const POSTES_DEFAUT = ['Gérant', 'Comptable', 'Responsable RH', 'Chef de projet', 'Chef de chantier', 'Secrétaire', 'Agent de saisie', 'Superviseur', 'Tata', 'Chauffeur', 'Magasinier']
 
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
   const [modal, setModal] = useState(null) // { data, isNew }
 
   useEffect(() => { load() }, [load])
+
+  // Suggestions Secteur/Poste : valeurs par défaut + celles déjà saisies par d'autres comptes.
+  const secteursSuggestions = useMemo(() =>
+    [...new Set([...SECTEURS_DEFAUT, ...users.map((u) => u.secteur).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
+  [users])
+  const postesSuggestions = useMemo(() =>
+    [...new Set([...POSTES_DEFAUT, ...users.map((u) => u.poste).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
+  [users])
 
   function openNew() { setModal({ data: empty(), isNew: true }) }
   function openEdit(u) { setModal({ data: { ...empty(), ...u, pass: u.pass || '' }, isNew: false }) }
@@ -43,6 +58,15 @@ export default function Utilisateurs() {
       const cur = m.data.agroCategories || []
       const has = cur.includes(cat)
       return { ...m, data: { ...m.data, agroCategories: has ? cur.filter((x) => x !== cat) : [...cur, cat] } }
+    })
+  }
+
+  // Sites Maxi Logistique autorisés (Lomé / Kara).
+  function toggleLogSite(id) {
+    setModal((m) => {
+      const cur = m.data.logistiqueSites || []
+      const has = cur.includes(id)
+      return { ...m, data: { ...m.data, logistiqueSites: has ? cur.filter((x) => x !== id) : [...cur, id] } }
     })
   }
 
@@ -137,9 +161,19 @@ export default function Utilisateurs() {
                 <Input value={modal.data.login} disabled={!modal.isNew} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, login: e.target.value.trim() } }))} />
               </FormGroup>
               <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
-              <FormGroup label="Secteur"><Input value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} /></FormGroup>
+              <FormGroup label="Secteur">
+                <Input list="secteurs-suggestions" autoComplete="off"
+                  value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} />
+                <datalist id="secteurs-suggestions">
+                  {secteursSuggestions.map((s) => <option key={s} value={s} />)}
+                </datalist>
+              </FormGroup>
               <FormGroup label="Poste (fonction dans l'entreprise)" className="col-span-2" hint="Ex. Comptable, Responsable RH, Gérant… — affiché notamment quand cette personne est choisie comme bénéficiaire d'un décaissement.">
-                <Input value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} placeholder="ex: Comptable" />
+                <Input list="postes-suggestions" autoComplete="off"
+                  value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} placeholder="ex: Comptable" />
+                <datalist id="postes-suggestions">
+                  {postesSuggestions.map((p) => <option key={p} value={p} />)}
+                </datalist>
               </FormGroup>
               <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 — pour les alertes WhatsApp">
                 <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />
@@ -150,6 +184,12 @@ export default function Utilisateurs() {
             </div>
 
             <FormGroup label="Accès aux modules">
+              {modal.data.role === 'partenaire' && (
+                <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  🤝 <strong>Partenaire</strong> : lecture seule stricte. Il consultera uniquement les modules cochés
+                  ci-dessous (tableaux de bord, pilotage, historiques) sans pouvoir rien créer, modifier ou approuver.
+                </p>
+              )}
               {isViewAllRole(modal.data.role) ? (
                 <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary-dark">
                   Ce rôle ({roleLabel(modal.data.role)}) voit tous les modules{modal.data.role === 'superviseur' ? ' (en lecture seule)' : ''}.
@@ -193,6 +233,38 @@ export default function Utilisateurs() {
                 <p className="mt-1 text-[11px] text-gray-400">
                   Astuce : laissez tout décoché et l'agent n'aura accès à aucune saisie d'animaux ; cochez une ou plusieurs catégories pour l'autoriser.
                 </p>
+              </FormGroup>
+            )}
+
+            {/* Sites Maxi Logistique (Lomé / Kara) — rôles non « voit tout » ayant le module */}
+            {!isViewAllRole(modal.data.role) && modal.data.modules.includes('logistique') && (
+              <FormGroup label="Sites Maxi Logistique autorisés"
+                hint="Choisissez le(s) site(s) auxquels ce compte a accès. Aucun coché = accès à aucun site logistique.">
+                <div className="flex flex-wrap gap-2">
+                  {SITES.map((s) => {
+                    const active = (modal.data.logistiqueSites || []).includes(s.id)
+                    return (
+                      <button key={s.id} type="button" onClick={() => toggleLogSite(s.id)}
+                        className="rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors"
+                        style={active
+                          ? { background: s.accent, borderColor: s.accent, color: '#fff' }
+                          : { borderColor: '#e5e7eb', color: '#475569' }}>
+                        {active ? '✓ ' : ''}{s.emoji} {s.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </FormGroup>
+            )}
+
+            {/* Droit de gérer l'onglet « Partenaires » (contacts externes) — hors rôles « voit tout » qui l'ont déjà */}
+            {!isViewAllRole(modal.data.role) && (
+              <FormGroup label="Gestion des partenaires"
+                hint="Donne la main à cet utilisateur pour créer / modifier les partenaires (contacts externes) dans ses modules. Ce ne sont pas des employés.">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={modal.data.gerePartenaires === true} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, gerePartenaires: e.target.checked } }))} />
+                  Autoriser la gestion des partenaires
+                </label>
               </FormGroup>
             )}
 

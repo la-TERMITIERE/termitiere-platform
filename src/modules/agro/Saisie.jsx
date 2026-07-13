@@ -43,6 +43,7 @@ export default function Saisie() {
   const { data: usersAll } = useCollection('users')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
+  const referentielReady = useAgroStore((s) => s.ready)
   const saveEspece = useAgroStore((s) => s.saveEspece)
   const saveAliment = useAgroStore((s) => s.saveAliment)
 
@@ -157,7 +158,7 @@ export default function Saisie() {
   const mutIn = useMemo(() => mutationsEntrantes(anim), [anim])
 
   // Mémorise les dernières valeurs pour l'auto-enregistrement (lues dans le timeout).
-  draftRef.current = { especes, aliments, anim, alim, autoSorOf, mutIn, user, inventaires, date, peutSaisir }
+  draftRef.current = { especes, aliments, anim, alim, autoSorOf, mutIn, user, inventaires, date, peutSaisir, referentielReady }
 
   // Repart « propre » quand on change de jour (formulaire rechargé).
   useEffect(() => { dirtyRef.current = false }, [date])
@@ -176,6 +177,9 @@ export default function Saisie() {
       if (!finDeJournee && Date.now() - (lastSaveRef.current || 0) < UNE_HEURE) return
       const d = draftRef.current
       if (!d.user) return
+      // ⚠️ Ne JAMAIS enregistrer avec le référentiel par défaut (non synchronisé) :
+      // cela écraserait l'inventaire avec une liste d'espèces incomplète → perte.
+      if (!d.referentielReady) return
       const aDuContenu =
         d.especes.some((e) => (d.anim[e.id]?.entrees?.length || d.anim[e.id]?.sorties?.length || (d.anim[e.id]?.malades || 0) > 0)) ||
         d.aliments.some((x) => (d.alim[x.id]?.entrees?.length || d.alim[x.id]?.sorties?.length))
@@ -217,6 +221,7 @@ export default function Saisie() {
   async function save() {
     if (!date) return toast.error('Choisissez une date')
     if (!user) return toast.error('Session expirée — reconnectez-vous')
+    if (!referentielReady) return toast.error('Référentiel en cours de chargement — patientez quelques secondes puis réessayez')
     // Validation : tout mouvement « Autres » ou « Décès » doit être précisé.
     const articleManquant = (coll, src) => {
       for (const e of coll) {

@@ -47,7 +47,7 @@ export default function Dashboard() {
   }, [])
 
   const enfantsVisibles = useMemo(
-    () => enfants.filter((e) => !deletedEnfantIds.has(e.id)),
+    () => enfants.filter((e) => !deletedEnfantIds.has(e.id) && e.statut !== 'supprime'),
     [enfants, deletedEnfantIds]
   )
 

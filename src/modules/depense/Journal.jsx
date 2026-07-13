@@ -1,4 +1,7 @@
 // Journal d'activité Dépenses — événements filtrés sur module === 'depense'.
+// Deux vues distinctes réunies dans un seul volet : « Journal » = log des actions
+// (ci-dessous, inchangé) ; « Historique » = frise des dépenses (création → approbation
+// → certification), importée telle quelle depuis ./Historique.jsx.
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -8,6 +11,7 @@ import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateTime, formatDateShort } from '../../utils/formatters'
+import Historique from './Historique'
 
 const EVENTS = {
   BUDGET_SET:            { label: 'Budgets définis',              emoji: '💰' },
@@ -24,17 +28,11 @@ const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))
 const dayOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '')
 
-export default function Journal() {
-  const { data: events } = useCollection('audit_global')
+function OngletJournal({ evenements }) {
   const [type, setType] = useState('')
   const [who, setWho] = useState('')
   const [openRow, setOpenRow] = useState(null)
   const { start, end, node: periodNode } = usePeriodSelect('30')
-
-  const evenements = useMemo(
-    () => events.filter((e) => e.module === 'depense' && e.action !== 'CONNEXION'),
-    [events]
-  )
 
   const typesPresents = useMemo(
     () => [...new Set(evenements.map((e) => e.action).filter(Boolean))].sort(),
@@ -159,6 +157,39 @@ export default function Journal() {
           </tbody>
         </table>
       </Card>
+    </div>
+  )
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
+
+export default function Journal() {
+  const { data: events } = useCollection('audit_global')
+  const [onglet, setOnglet] = useState('journal')
+
+  const evenements = useMemo(
+    () => events.filter((e) => e.module === 'depense' && e.action !== 'CONNEXION'),
+    [events]
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        {[
+          { id: 'journal',     label: '📰 Journal' },
+          { id: 'historique',  label: '🕐 Historique' }
+        ].map((o) => (
+          <button key={o.id} onClick={() => setOnglet(o.id)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {onglet === 'journal'
+        ? <OngletJournal evenements={evenements} />
+        : <Historique />
+      }
     </div>
   )
 }

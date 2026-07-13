@@ -16,8 +16,9 @@ import { addItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { isApproverRole } from '../../core/roles'
+import { isApproverRole, isReadOnlyRole } from '../../core/roles'
 import { catColor } from './data'
+import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const STATUTS = {
   brouillon: { label: 'Brouillon', tone: 'neutral' },
@@ -29,11 +30,16 @@ const STATUTS = {
 
 export default function Prestations() {
   const { user, role } = useAuth()
-  const peutApprouver = isApproverRole(role) // gérant / direction : autorisent la facturation
-  const { data: prestations } = useCollection('logistique_prestations')
+  const site = useSite()
+  const peutApprouver = isApproverRole(role) // gérant / direction : valident la prestation
+  const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: clients } = useCollection('logistique_clients')
-  const { data: retours } = useCollection('logistique_retours')
+  const { data: allRetours } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
+
+  // Cloisonnement par site (sous-application Lomé / Kara).
+  const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
+  const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
 
   // Retours enregistrés par prestation (pour l'état « retour OK / en attente »).
   const retoursParPresta = useMemo(() => {
@@ -138,7 +144,7 @@ export default function Prestations() {
     if (!form.clientNom?.trim() && !form.clientId) return toast.error('Client requis')
     if (!form.lignes.length) return toast.error('Ajoutez au moins une ligne')
     const client = clients.find((c) => c.id === form.clientId)
-    const num = genNumero('PREST', prestations.length)
+    const num = genNumero(`PREST-${site.toUpperCase()}`, prestations.length)
     const lignes = form.lignes.map((l) => {
       const qte = parseInt(l.qte) || 0
       const tarif = parseFloat(l.tarif) || 0
@@ -157,14 +163,14 @@ export default function Prestations() {
     const totalFraisSave = frais.reduce((s, x) => s + x.montant, 0)
     const total = totalMateriel + totalFraisSave
     await addItem('logistique_prestations', {
-      num, date: todayStr(),
+      num, date: todayStr(), site,
       clientId: form.clientId, clientNom: client?.nom || form.clientNom,
       dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
       lignes, frais, total, statut: 'brouillon',
       agentId: user.uid, agentNom: user.nom
     })
-    await audit('logistique', 'PRESTATION', `${num} — ${formatMoney(total)}`)
-    toast.success('Prestation créée ✓ — en attente d\'approbation avant facturation')
+    await audit('logistique', 'PRESTATION', `${siteLabel(site)} — ${num} — ${formatMoney(total)}`)
+    toast.success('Prestation enregistrée ✓ — en attente d\'approbation, facturable dès à présent')
     setOpen(false)
   }
 
@@ -179,7 +185,7 @@ export default function Prestations() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>
+      {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
       <Card className="p-0">
         <Table
           columns={[
@@ -228,14 +234,14 @@ export default function Prestations() {
             <p className="text-xs font-bold uppercase text-gray-500">Matériel loué</p>
             {form.lignes.map((l, i) => (
               <div key={i} className="rounded-lg border p-2">
-                <div className="grid grid-cols-12 gap-2">
-                  <Select className="col-span-5" value={l.materielId} onChange={(e) => setLigne(i, { materielId: e.target.value })}>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-12">
+                  <Select className="col-span-2 md:col-span-5" value={l.materielId} onChange={(e) => setLigne(i, { materielId: e.target.value })}>
                     {materiel.map((m) => <option key={m.id} value={m.id}>{m.nom} ({m.cat})</option>)}
                     <option value="__autre__">➕ Autre (à préciser)…</option>
                   </Select>
-                  <Input className="col-span-2" type="number" min="1" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} placeholder="Qté" />
-                  <Input className="col-span-2" type="number" min="0" value={l.tarif} onChange={(e) => setLigne(i, { tarif: e.target.value })} placeholder="Tarif/u" />
-                  <div className="col-span-3 flex items-center justify-end font-bold text-secondary">
+                  <Input className="md:col-span-2" type="number" min="1" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} placeholder="Qté" />
+                  <Input className="md:col-span-2" type="number" min="0" value={l.tarif} onChange={(e) => setLigne(i, { tarif: e.target.value })} placeholder="Tarif/u" />
+                  <div className="col-span-2 flex items-center justify-end font-bold text-secondary md:col-span-3">
                     {formatMoney((parseInt(l.qte) || 0) * (parseFloat(l.tarif) || 0))}
                   </div>
                 </div>
@@ -251,10 +257,10 @@ export default function Prestations() {
             <div className="mt-2">
               <p className="text-xs font-bold uppercase text-gray-500">Frais supplémentaires</p>
               {(form.frais || []).map((x, i) => (
-                <div key={i} className="mt-1 grid grid-cols-12 gap-2">
-                  <Input className="col-span-7" value={x.label} onChange={(e) => setFrais(i, { label: e.target.value })} placeholder="Intitulé (ex : Transport, Lieu, Montage…)" />
-                  <Input className="col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setFrais(i, { montant: e.target.value })} placeholder="Montant" />
-                  <button type="button" onClick={() => removeFrais(i)} className="col-span-1 flex items-center justify-center text-red-500 hover:text-red-700"><Trash2 size={15} /></button>
+                <div key={i} className="mt-1 grid grid-cols-2 gap-2 md:grid-cols-12">
+                  <Input className="col-span-2 md:col-span-7" value={x.label} onChange={(e) => setFrais(i, { label: e.target.value })} placeholder="Intitulé (ex : Transport, Lieu, Montage…)" />
+                  <Input className="md:col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setFrais(i, { montant: e.target.value })} placeholder="Montant" />
+                  <button type="button" onClick={() => removeFrais(i)} className="flex items-center justify-center text-red-500 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
                 </div>
               ))}
               <Button variant="outline" size="sm" className="mt-1" onClick={addFrais}><Plus size={14} /> Frais</Button>
@@ -292,7 +298,8 @@ export default function Prestations() {
             <p><strong>Client :</strong> {detail.clientNom}</p>
             <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
             {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
-            <table className="mt-2 w-full text-sm">
+            <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Matériel</th><th className="p-2">Qté</th><th className="p-2">Tarif</th><th className="p-2 text-right">Montant</th></tr></thead>
               <tbody>
                 {(detail.lignes || []).map((l, i) => (
@@ -303,6 +310,7 @@ export default function Prestations() {
                 ))}
               </tbody>
             </table>
+            </div>
             <p className="text-right font-extrabold">Total : {formatMoney(detail.total)}</p>
 
             <div className="mt-2 rounded-lg bg-gray-50 p-3">

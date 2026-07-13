@@ -18,13 +18,21 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
+import { APPROVER_ROLES, isReadOnlyRole } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatDateShort } from '../../utils/formatters'
+import { useSite, matchSite } from './site/useSite'
 
 export default function Retours() {
-  const { user } = useAuth()
-  const { data: retours } = useCollection('logistique_retours')
-  const { data: prestations } = useCollection('logistique_prestations')
+  const { user, role } = useAuth()
+  const lectureSeule = isReadOnlyRole(role)
+  const site = useSite()
+  const { data: allRetours } = useCollection('logistique_retours')
+  const { data: allPrestations } = useCollection('logistique_prestations')
+
+  // Cloisonnement par site (sous-application Lomé / Kara).
+  const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
+  const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
 
   const [prestationId, setPrestationId] = useState('')
   const [etats, setEtats] = useState({}) // { materielId: { etat, qte, motif } }
@@ -72,9 +80,9 @@ export default function Retours() {
       for (const { l, st } of aTraiter) {
         // OK → tout le restant revient ; Cassé/Perdu → quantité saisie (bornée au restant).
         const qte = st.etat === 'OK' ? l.restant : Math.min(l.restant, Math.max(1, parseInt(st.qte) || 0))
-        const num = genNumero('RET', retours.length + n)
+        const num = genNumero(`RET-${site.toUpperCase()}`, retours.length + n)
         await addItem('logistique_retours', {
-          num, date: todayStr(),
+          num, date: todayStr(), site,
           prestationId: prestation.id, prestationNum: prestation.num, clientNom: prestation.clientNom,
           materielId: l.materielId, materielNom: l.materielNom,
           type: st.etat, qte, motif: (st.motif || '').trim(),
@@ -87,7 +95,7 @@ export default function Retours() {
             title: `Retour matériel — ${st.etat}`,
             body: `${qte} × ${l.materielNom} (${st.etat})${st.motif ? ` — ${st.motif}` : ''} · prestation ${prestation.num}`,
             module: 'logistique',
-            forRoles: ['admin', 'controleur'],
+            forRoles: APPROVER_ROLES,
             link: '/logistique/retours'
           })
         }
@@ -111,6 +119,7 @@ export default function Retours() {
         Les retours apparaissent ensuite en <strong>lecture seule</strong> dans la saisie magasin.
       </div>
 
+      {!lectureSeule && (
       <Card title="Nouveau retour (par prestation)">
         <FormGroup label="Prestation liée" required>
           <Select value={prestationId} onChange={(e) => choisirPrestation(e.target.value)}>
@@ -144,10 +153,10 @@ export default function Retours() {
                     </Select>
                   </div>
                   {(st.etat === 'Cassé' || st.etat === 'Perdu') && (
-                    <div className="mt-2 grid grid-cols-12 gap-2">
-                      <Input className="col-span-3" type="number" min="1" max={l.restant} value={st.qte ?? l.restant}
+                    <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-12">
+                      <Input className="md:col-span-3" type="number" min="1" max={l.restant} value={st.qte ?? l.restant}
                         onChange={(e) => setEtat(l.materielId, { qte: e.target.value })} placeholder="Qté" />
-                      <Input className="col-span-9" value={st.motif || ''} onChange={(e) => setEtat(l.materielId, { motif: e.target.value })}
+                      <Input className="col-span-2 md:col-span-9" value={st.motif || ''} onChange={(e) => setEtat(l.materielId, { motif: e.target.value })}
                         placeholder="Motif (détail de la casse / perte)" />
                     </div>
                   )}
@@ -158,8 +167,9 @@ export default function Retours() {
           </div>
         )}
       </Card>
+      )}
 
-      <Card title="Historique des retours" className="p-0">
+      <Card title="Historique des retours" className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>

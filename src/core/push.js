@@ -1,9 +1,21 @@
 // Abonnement Web Push + envoi de notifications push (app fermée).
 // Clé VAPID PUBLIQUE (non secrète) — la clé privée correspondante vit côté
-// serveur (fonction Netlify send-push).
+// serveur (fonction Netlify send-push, variable VAPID_PRIVATE).
 import { getAll, setItem } from './db'
+import { auth } from './firebase'
 
-const VAPID_PUBLIC = 'BKlCjgPKFCXhaFwx5RtYA9puJPaT9N6NN2Yt_KYr2bjriCObVcNVH6dw5yFrHinbvgSRHWVvK7jiv-Tk4lb3oDc'
+// Doit correspondre exactement à VAPID_PUBLIC côté serveur (Netlify). Surchargée
+// via VITE_VAPID_PUBLIC si vous générez votre propre paire de clés.
+const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC || 'BKlCjgPKFCXhaFwx5RtYA9puJPaT9N6NN2Yt_KYr2bjriCObVcNVH6dw5yFrHinbvgSRHWVvK7jiv-Tk4lb3oDc'
+
+// Jeton Firebase Auth de l'utilisateur courant, envoyé au serveur pour prouver
+// que l'appel vient bien d'un utilisateur connecté de l'app (cf. send-push.js).
+async function authHeader() {
+  try {
+    const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch { return {} }
+}
 
 export const pushSupported = () =>
   typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
@@ -67,7 +79,7 @@ export async function pushToUsers(uids, payload) {
     if (!subscriptions.length) return
     await fetch('/.netlify/functions/send-push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ subscriptions, payload })
     })
   } catch (e) { /* best effort */ }

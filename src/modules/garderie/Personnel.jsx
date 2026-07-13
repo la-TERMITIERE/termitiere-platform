@@ -14,6 +14,7 @@ import { setItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { POSTES_PERSONNEL } from './data'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -125,14 +126,19 @@ export default function Personnel() {
     const target = toDelete
     setToDelete(null)
     try {
-      // Statut 'supprime' en Firebase → caché même après rechargement
+      // Étape 1 (critique) : statut 'supprime' en base — seule garantie fiable après
+      // rechargement, puisque le masquage local (deletedIds) est éphémère.
       await setItem('garderie_personnel', target.id, { ...target, statut: 'supprime', id: target.id })
-      await removeItem('garderie_personnel', target.id)
       audit('garderie', 'PERSONNEL_DELETE', `${target.prenom} ${target.nom}`)
       toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
+      // Étape 2 (best-effort) : suppression complète — un échec ici n'est pas grave,
+      // le statut 'supprime' suffit déjà à le garder caché.
+      await removeItem('garderie_personnel', target.id).catch(() => {})
     } catch (err) {
-      audit('garderie', 'PERSONNEL_DELETE', `${target.prenom} ${target.nom}`)
-      toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
+      // Échec réel (ex. droits Firebase) : on démasque et on prévient l'utilisateur
+      // au lieu de prétendre que la suppression a marché.
+      setDeletedIds((prev) => { const next = new Set(prev); next.delete(target.id); return next })
+      toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} — réessayez.`)
     } finally {
       setDeleting(false)
     }
@@ -150,7 +156,7 @@ export default function Personnel() {
       const payload = { id: pid, personnelId: p.id, date: dateFiltre, heureArrivee: heure, heureDepart: '', statut: 'present' }
       await setItem('garderie_presences', pid, payload)
       audit('garderie', 'PERSONNEL_POINTAGE_ARRIVEE', `${p.prenom} ${p.nom}`, { heure, date: dateFiltre })
-      notify({ type: 'info', title: `🟢 Arrivée — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🟢 Arrivée — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Arrivée de ${p.prenom} à ${heure} ✓`)
     } else {
       if (!existing?.heureArrivee) return toast.error('Enregistrez d\'abord l\'arrivée')
@@ -159,7 +165,7 @@ export default function Personnel() {
       const payload = { ...existing, id: pid, heureDepart: heure }
       await setItem('garderie_presences', pid, payload)
       audit('garderie', 'PERSONNEL_POINTAGE_DEPART', `${p.prenom} ${p.nom}`, { heure, date: dateFiltre })
-      notify({ type: 'info', title: `🔴 Départ — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🔴 Départ — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Départ de ${p.prenom} à ${heure} ✓`)
     }
   }
@@ -181,7 +187,7 @@ export default function Personnel() {
       majCache(p.id, newData)
       await setItem('garderie_presences', pid, newData)
       audit('garderie', 'PERSONNEL_POINTAGE_ARRIVEE', `${p.prenom} ${p.nom}`, { heure: heureManuelle, date: dateFiltre, manuel: true })
-      notify({ type: 'info', title: `🟢 Arrivée — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🟢 Arrivée — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Arrivée ${pt ? 'corrigée' : 'enregistrée'} à ${heureManuelle} ✓`)
     } else {
       if (!pt?.heureArrivee) return toast.error('Enregistrez d\'abord l\'arrivée')
@@ -189,7 +195,7 @@ export default function Personnel() {
       majCache(p.id, newData)
       await setItem('garderie_presences', pid, newData)
       audit('garderie', 'PERSONNEL_POINTAGE_DEPART', `${p.prenom} ${p.nom}`, { heure: heureManuelle, date: dateFiltre, manuel: true })
-      notify({ type: 'info', title: `🔴 Départ — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🔴 Départ — ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Départ ${pt?.heureDepart ? 'corrigé' : 'enregistré'} à ${heureManuelle} ✓`)
     }
     setPointageModal(null)
@@ -542,7 +548,7 @@ export default function Personnel() {
                 {personnel.length === 0 && (
                   <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucun membre du personnel.</td></tr>
                 )}
-                {[...personnel].filter((p) => !deletedIds.has(p.id)).sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1).map((p) => (
+                {[...personnel].filter((p) => !deletedIds.has(p.id) && p.statut !== 'supprime').sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1).map((p) => (
                   <tr key={p.id} onClick={() => setDetail(p)} className="cursor-pointer hover:bg-orange-50 transition-colors">
                     <td className="px-3 py-2 font-semibold">
                       <div className="flex items-center gap-2">
@@ -670,17 +676,18 @@ export default function Personnel() {
 
       {/* Modal fiche personnel */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="md"
+        panelClassName="bg-white/90 backdrop-blur-xl backdrop-saturate-150"
         title={modal?.isNew ? 'Ajouter un membre' : 'Modifier la fiche'}
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Ajouter' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-3">
             {/* Photo de profil */}
-            <div className="flex items-center gap-4">
-              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+            <div className="flex items-center gap-4 rounded-2xl border border-orange-100/70 bg-orange-50/60 p-3.5 shadow-sm backdrop-blur-sm">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-100 shadow">
                 {modal.data.photo ? (
                   <img src={modal.data.photo} alt="Photo de profil" className="h-full w-full object-cover" />
                 ) : (
-                  <Camera size={24} className="text-gray-300" />
+                  <Camera size={24} className="text-orange-300" />
                 )}
                 {modal.data.photo && (
                   <button
@@ -729,16 +736,18 @@ export default function Personnel() {
 
       {/* Modal détail */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
         title={detail ? `${detail.prenom} ${detail.nom}` : ''}>
         {detail && (
           <div className="space-y-4 text-sm">
-            {/* En-tête : photo (modifiable) centrée en haut + identité */}
-            <div className="flex flex-col items-center text-center">
-              <div className="relative h-28 w-28 shrink-0">
+            {/* En-tête glassmorphism : photo (modifiable) + identité bien visible */}
+            <div className="relative flex flex-col items-center overflow-hidden rounded-2xl p-5 text-center text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(234,88,12,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.92) 0%, rgba(154,52,18,0.88) 100%)' }}>
+              <div className="relative h-32 w-32 shrink-0">
                 {detail.photo ? (
-                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-28 w-28 rounded-full border border-gray-200 object-cover" />
+                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-32 w-32 rounded-full border-4 border-white/80 object-cover shadow-lg" />
                 ) : (
-                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-orange-100 text-3xl font-bold text-orange-600">
+                  <div className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-white/80 bg-white/20 text-4xl font-bold text-white shadow-lg backdrop-blur-sm">
                     {(detail.prenom?.[0] || '?').toUpperCase()}
                   </div>
                 )}
@@ -748,23 +757,21 @@ export default function Personnel() {
                   onClick={() => detailPhotoInputRef.current?.click()}
                   disabled={detailPhotoUploading}
                   title="Changer la photo"
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+                  className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-orange-600 text-white shadow hover:bg-orange-700 disabled:opacity-60"
                 >
-                  {detailPhotoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  {detailPhotoUploading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
                 </button>
               </div>
-              <h3 className="mt-2 text-lg font-extrabold text-gray-900">{detail.prenom} {detail.nom}</h3>
-              <p className="text-sm text-gray-500">{POSTES_PERSONNEL.find((x) => x.id === detail.poste)?.label || detail.poste}</p>
-              <div className="mt-1">
-                <Badge tone={detail.statut === 'actif' ? 'success' : 'neutral'}>
-                  {detail.statut === 'actif' ? 'Actif' : 'Inactif'}
-                </Badge>
-              </div>
+              <h3 className="mt-3 text-xl font-extrabold leading-snug">{detail.prenom} {detail.nom}</h3>
+              <p className="mt-0.5 text-sm text-white/80">{POSTES_PERSONNEL.find((x) => x.id === detail.poste)?.label || detail.poste}</p>
+              <span className="mt-2 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                {detail.statut === 'actif' ? 'Actif' : 'Inactif'}
+              </span>
             </div>
 
             {/* Statistiques */}
             {detailStats && (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <div className="rounded-2xl border border-white/50 bg-white/40 p-3 text-center shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150">
                   <UserCheck size={16} className="mx-auto text-green-600" />
                   <p className="mt-1 text-lg font-extrabold text-gray-900">{detailStats.joursPresents}</p>

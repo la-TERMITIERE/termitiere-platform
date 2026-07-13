@@ -15,10 +15,21 @@ export const sommeMouvements = (lignes) =>
 export const sommeType = (lignes, type) =>
   (lignes || []).filter((l) => l.type === type).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
 
+// Sorties automatiques d'un matériel à une date : somme des autorisations de sortie
+// CERTIFIÉES prévues ce jour. Une autorisation couvre soit plusieurs lignes
+// (workflow prestation → une autorisation pour tout le matériel loué), soit — pour
+// les enregistrements hérités — un unique { materielId, qte }.
 export function autoSorties(demandes, materielId, dateSortie) {
   return (demandes || [])
-    .filter((d) => estCertifie(d.statut) && d.materielId === materielId && d.dateSortie === dateSortie)
-    .reduce((s, d) => s + (parseInt(d.qte) || 0), 0)
+    .filter((d) => estCertifie(d.statut) && d.dateSortie === dateSortie)
+    .reduce((s, d) => {
+      if (Array.isArray(d.lignes) && d.lignes.length) {
+        return s + d.lignes
+          .filter((l) => l.materielId === materielId)
+          .reduce((a, l) => a + (parseInt(l.qte) || 0), 0)
+      }
+      return d.materielId === materielId ? s + (parseInt(d.qte) || 0) : s
+    }, 0)
 }
 
 // EF Final = init + achats − sorties (locations) + retours OK

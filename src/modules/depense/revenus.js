@@ -17,11 +17,20 @@ export function revenuAgro(factures, annee, mois) {
     .reduce((s, f) => s + (Number(f.totalTTC) || 0), 0)
 }
 
-// Maxi Logistique / Briqueterie : toute facture de la collection est déjà émise/définitive.
+// Briqueterie : toute facture de la collection est déjà émise/définitive.
 export function revenuFactures(factures, annee, mois) {
   const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
   return (factures || [])
     .filter((f) => (f.date || '').startsWith(prefixe))
+    .reduce((s, f) => s + (Number(f.totalTTC) || 0), 0)
+}
+
+// Maxi Logistique (Lomé + Kara) : seules les factures APPROUVÉES (autorisation de
+// sortie certifiée) constituent un chiffre d'affaires réalisé. Les brouillons ne comptent pas.
+export function revenuLogistique(factures, annee, mois) {
+  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+  return (factures || [])
+    .filter((f) => f.statut === 'approuvee' && (f.date || '').startsWith(prefixe))
     .reduce((s, f) => s + (Number(f.totalTTC) || 0), 0)
 }
 
@@ -32,7 +41,7 @@ export function revenuSecteur(collections, secteurId, annee, mois) {
   const { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel } = collections
   if (secteurId === 'garderie') return revenuGarderie(paiementsGarderie, annee, mois)
   if (secteurId === 'agro') return revenuAgro(facturesAgro, annee, mois)
-  if (secteurId === 'logistique') return revenuFactures(facturesLogistique, annee, mois)
+  if (secteurId === 'logistique') return revenuLogistique(facturesLogistique, annee, mois)
   if (secteurId === 'evenementiel') return revenuFactures(facturesEvenementiel, annee, mois)
   return 0
 }

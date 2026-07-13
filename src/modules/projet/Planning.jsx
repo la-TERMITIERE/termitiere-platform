@@ -10,6 +10,8 @@ import {
   format, differenceInDays, startOfDay, addDays
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useAuthStore } from '../../core/auth'
+import { projetsVisibles, scopeParProjets } from './logic'
 
 const TABS = [
   { id: 'gantt',     label: 'Diagramme de Gantt', icon: BarChart3 },
@@ -25,8 +27,12 @@ const BARRE_COULEUR = {
 }
 
 export default function Planning() {
-  const { data: projets } = useCollection('projets')
-  const { data: taches }  = useCollection('projet_taches')
+  const { data: projetsTous } = useCollection('projets')
+  const { data: tachesTous }  = useCollection('projet_taches')
+  const { user, role } = useAuthStore()
+  // Cloisonnement : un chef de projet ne voit que le planning de ses projets.
+  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const taches  = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
   const [tab, setTab] = useState('gantt')
 
   return (
@@ -81,7 +87,7 @@ function GanttView({ projets, taches }) {
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+    <div className="overflow-hidden rounded-3xl border border-white/50 bg-white/70 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] backdrop-blur-xl backdrop-saturate-150">
       <div className="overflow-x-auto">
         <div style={{ minWidth: COL + Math.max(600, totalDays * 4) }}>
 
@@ -275,7 +281,7 @@ function EcheancesView({ projets, taches }) {
             {g.items.map((e) => {
               const passe = e.date < today.getTime()
               return (
-                <div key={e.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${passe && e.statut !== 'terminee' ? 'border-red-100 bg-red-50' : 'border-gray-100 bg-white'}`}>
+                <div key={e.id} className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm backdrop-blur-sm ${passe && e.statut !== 'terminee' ? 'border-red-200/60 bg-red-50/60' : 'border-white/50 bg-white/50'}`}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: TYPE_COLOR[e.type], flexShrink: 0 }} />
                   <div className="min-w-0 flex-1">
                     <p className={`font-semibold truncate ${e.statut === 'terminee' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{e.label}</p>

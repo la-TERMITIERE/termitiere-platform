@@ -14,6 +14,7 @@ import { setItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { GROUPES_AGE, STATUTS_ENFANT } from './data'
 import { calcAge, groupeRecommande, tarifSuggere, aImpayes } from './logic'
@@ -22,7 +23,8 @@ import { useGarderieStore } from './store/garderieStore'
 const emptyJournalier = () => ({
   nom: '', prenom: '', ageApprox: '',
   parentNom: '', parentContact: '',
-  date: todayStr(), nombreJours: '1', notes: ''
+  date: todayStr(), nombreJours: '1', notes: '',
+  apporteRepas: false
 })
 
 const empty = () => ({
@@ -31,13 +33,13 @@ const empty = () => ({
   typeAbonnement: 'mensuel',
   allergies: '', infoMedicale: '',
   parentId: '', parentNom: '', parentContact: '',
-  parentContact2: '', adresse: '',
+  parentContact2: '', parentProfession: '', adresse: '',
   dateInscription: todayStr(), notes: ''
 })
 
 export default function Enfants() {
   const { user, role } = useAuth()
-  const lectureSeule = role === 'tata' || role === 'superviseur'
+  const lectureSeule = role === 'tata' || role === 'superviseur' || role === 'partenaire'
   const { data: enfants }     = useCollection('garderie_enfants')
   const { data: parents }     = useCollection('garderie_parents')
   const { data: journaliers } = useCollection('garderie_journaliers')
@@ -69,23 +71,28 @@ export default function Enfants() {
     markEnfantDeleted(target.id)
     setToDelete(null)
     try {
-      // Étape 1 : statut 'supprime' dans Firebase → caché partout même après rechargement
+      // Étape 1 (critique) : statut 'supprime' en base — seule garantie fiable après
+      // rechargement, puisque le masquage local (deletedEnfantIds) est éphémère.
       await setItem('garderie_enfants', target.id, { ...target, statut: 'supprime', id: target.id })
-      // Étape 2 : suppression complète
-      await removeItem('garderie_enfants', target.id)
       audit('garderie', 'ENFANT_DELETE', `${target.prenom} ${target.nom}`)
       toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
+      // Étape 2 (best-effort) : suppression complète — un échec ici n'est pas grave,
+      // le statut 'supprime' suffit déjà à le garder caché ; "Nettoyer" rattrapera le reste.
+      await removeItem('garderie_enfants', target.id).catch(() => {})
     } catch (err) {
-      // Même si removeItem échoue, statut='supprime' garantit que l'enfant reste caché
-      audit('garderie', 'ENFANT_DELETE', `${target.prenom} ${target.nom}`)
-      toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
+      // Échec réel (ex. droits Firebase) : on démasque et on prévient l'utilisateur
+      // au lieu de prétendre que la suppression a marché.
+      unmarkEnfantDeleted(target.id)
+      toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} — réessayez.`)
     } finally {
       setDeleting(false)
     }
   }
 
   const liste = useMemo(() => {
-    let rows = enfants.filter((e) => !deletedEnfantIds.has(e.id))
+    // `deletedEnfantIds` est un masquage local temporaire (perdu au rechargement) —
+    // on exclut AUSSI sur le statut persisté en base, seule source fiable après reload.
+    let rows = enfants.filter((e) => !deletedEnfantIds.has(e.id) && e.statut !== 'supprime')
     if (filtreStatut) rows = rows.filter((e) => e.statut === filtreStatut)
     if (filtreGroupe) rows = rows.filter((e) => e.groupe === filtreGroupe)
     if (filtreAnnee)  rows = rows.filter((e) => (e.dateInscription || '').startsWith(filtreAnnee))
@@ -115,6 +122,7 @@ export default function Enfants() {
     if (!d.groupe) return toast.error('Groupe requis')
     if (!d.parentNom?.trim()) return toast.error('Nom du parent / tuteur requis')
     if (!d.parentContact?.trim()) return toast.error('Contact principal du parent requis')
+    if (!d.adresse?.trim()) return toast.error('Adresse requise')
 
     setSaving(true)
     try {
@@ -122,7 +130,7 @@ export default function Enfants() {
         const id = genId()
         await setItem('garderie_enfants', id, { ...d, id })
         audit('garderie', 'ENFANT_CREATE', `${d.prenom} ${d.nom}`, { groupe: d.groupe })
-        notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: ['super_admin','pau','ge','gerant'], excludeUid: user.uid, link: '/garderie/enfants' })
+        notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/enfants' })
         toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓`)
       } else {
         await setItem('garderie_enfants', modal.id, { ...d, id: modal.id })
@@ -315,7 +323,12 @@ export default function Enfants() {
                 {journaliersFiltre.map((j) => (
                   <tr key={j.id} className="hover:bg-orange-50 transition-colors">
                     <td className="px-3 py-2 text-xs text-gray-500">{formatDateShort(j.date)}</td>
-                    <td className="px-3 py-2 font-semibold">{j.prenom} {j.nom}</td>
+                    <td className="px-3 py-2 font-semibold">
+                      {j.prenom} {j.nom}
+                      {j.apporteRepas && (
+                        <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">🍱 repas apporté</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-xs text-gray-500">{j.ageApprox ? `~${j.ageApprox}` : '—'}</td>
                     <td className="px-3 py-2">
                       <p>{j.parentNom || '—'}</p>
@@ -539,6 +552,13 @@ export default function Enfants() {
               </div>
             </div>
 
+            <label className="flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800 cursor-pointer">
+              <input type="checkbox" checked={!!joModal.data.apporteRepas}
+                onChange={(e) => setJo('apporteRepas', e.target.checked)}
+                className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-400" />
+              🍱 Apporte son propre repas (pas de frais de cuisine)
+            </label>
+
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
               💡 Le paiement se fait dans le volet <strong>Paiements → Journaliers</strong>
             </div>
@@ -569,17 +589,18 @@ export default function Enfants() {
 
       {/* Modal création / édition */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="lg"
+        panelClassName="bg-white/90 backdrop-blur-xl backdrop-saturate-150"
         title={modal?.isNew ? 'Inscrire un enfant' : 'Modifier la fiche enfant'}
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Inscrire' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-4">
             {/* Photo de profil */}
-            <div className="flex items-center gap-4">
-              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+            <div className="flex items-center gap-4 rounded-2xl border border-orange-100/70 bg-orange-50/60 p-3.5 shadow-sm backdrop-blur-sm">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-100 shadow">
                 {modal.data.photo ? (
                   <img src={modal.data.photo} alt="Photo de profil" className="h-full w-full object-cover" />
                 ) : (
-                  <Camera size={24} className="text-gray-300" />
+                  <Camera size={24} className="text-orange-300" />
                 )}
                 {modal.data.photo && (
                   <button
@@ -663,8 +684,8 @@ export default function Enfants() {
               <FormGroup label="Date d'inscription">
                 <Input type="date" value={modal.data.dateInscription} onChange={(e) => set('dateInscription', e.target.value)} />
               </FormGroup>
-              <FormGroup label="Adresse">
-                <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} />
+              <FormGroup label="Adresse *">
+                <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Quartier, ville…" />
               </FormGroup>
             </div>
 
@@ -679,6 +700,9 @@ export default function Enfants() {
                 </FormGroup>
                 <FormGroup label="Contact secondaire">
                   <Input value={modal.data.parentContact2} onChange={(e) => set('parentContact2', e.target.value)} />
+                </FormGroup>
+                <FormGroup label="Profession du parent / tuteur">
+                  <Input value={modal.data.parentProfession} onChange={(e) => set('parentProfession', e.target.value)} placeholder="ex: Commerçant, Enseignant…" />
                 </FormGroup>
               </div>
             </div>
@@ -728,16 +752,18 @@ export default function Enfants() {
 
       {/* Modal détail */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
         title={detail ? `${detail.prenom} ${detail.nom}` : ''}>
         {detail && (
           <div className="space-y-4 text-sm">
-            {/* En-tête : photo (modifiable) centrée en haut + identité */}
-            <div className="flex flex-col items-center text-center">
-              <div className="relative h-28 w-28 shrink-0">
+            {/* En-tête glassmorphism : photo (modifiable) + identité bien visible */}
+            <div className="relative flex flex-col items-center overflow-hidden rounded-2xl p-5 text-center text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(234,88,12,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.92) 0%, rgba(154,52,18,0.88) 100%)' }}>
+              <div className="relative h-32 w-32 shrink-0">
                 {detail.photo ? (
-                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-28 w-28 rounded-full border border-gray-200 object-cover" />
+                  <img src={detail.photo} alt={`${detail.prenom} ${detail.nom}`} className="h-32 w-32 rounded-full border-4 border-white/80 object-cover shadow-lg" />
                 ) : (
-                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-orange-100 text-3xl font-bold text-orange-600">
+                  <div className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-white/80 bg-white/20 text-4xl font-bold text-white shadow-lg backdrop-blur-sm">
                     {(detail.prenom?.[0] || '?').toUpperCase()}
                   </div>
                 )}
@@ -747,16 +773,18 @@ export default function Enfants() {
                   onClick={() => detailPhotoInputRef.current?.click()}
                   disabled={detailPhotoUploading}
                   title="Changer la photo"
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+                  className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-orange-600 text-white shadow hover:bg-orange-700 disabled:opacity-60"
                 >
-                  {detailPhotoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  {detailPhotoUploading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
                 </button>
               </div>
-              <h3 className="mt-2 text-lg font-extrabold text-gray-900">{detail.prenom} {detail.nom}</h3>
-              <p className="text-sm text-gray-500">
+              <h3 className="mt-3 text-xl font-extrabold leading-snug">{detail.prenom} {detail.nom}</h3>
+              <p className="mt-0.5 text-sm text-white/80">
                 {calcAge(detail.dateNaissance) || detail.ageSaisi || '—'} · {GROUPES_AGE.find((g) => g.id === detail.groupe)?.label || '—'}
               </p>
-              <div className="mt-1"><Badge tone={STATUTS_ENFANT[detail.statut]?.tone}>{STATUTS_ENFANT[detail.statut]?.label}</Badge></div>
+              <span className="mt-2 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                {STATUTS_ENFANT[detail.statut]?.label}
+              </span>
             </div>
 
             {/* Statistiques */}
@@ -801,6 +829,7 @@ export default function Enfants() {
                   <div><span className="font-semibold text-gray-500">Nom :</span> {detail.parentNom || '—'}</div>
                   <div><span className="font-semibold text-gray-500">Contact :</span> {detail.parentContact || '—'}</div>
                   {detail.parentContact2 && <div><span className="font-semibold text-gray-500">Contact 2 :</span> {detail.parentContact2}</div>}
+                  <div><span className="font-semibold text-gray-500">Profession :</span> {detail.parentProfession || '—'}</div>
                 </div>
               </Card>
             </div>

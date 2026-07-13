@@ -134,9 +134,28 @@ export default function Demandes() {
                   </div>
                   <Badge tone={sd.tone}>{sd.label}</Badge>
                 </div>
-                <div className="rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
-                  {lignes.map((l, i) => <span key={i} className="mr-2 inline-block">• {l.qte} × {l.article}</span>)}
-                  {!lignes.length && <span className="text-gray-400">Aucune ligne</span>}
+                <div className="overflow-x-auto rounded-lg bg-gray-50 p-2">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Ce qui va sortir</p>
+                  {lignes.length ? (
+                    <table className="w-full text-xs">
+                      <thead className="text-[10px] uppercase text-gray-400">
+                        <tr><th className="pb-1 text-left">Article</th><th className="pb-1 text-center">Qté</th><th className="pb-1 text-right">PU</th><th className="pb-1 text-right">Total</th></tr>
+                      </thead>
+                      <tbody>
+                        {lignes.map((l, i) => {
+                          const pu = l.prixUnit ?? l.prix ?? (l.qte ? Math.round((l.total || 0) / l.qte) : 0)
+                          return (
+                            <tr key={i} className="border-t border-gray-100">
+                              <td className="py-1 font-medium text-gray-700">{l.article}</td>
+                              <td className="py-1 text-center font-semibold">{l.qte}</td>
+                              <td className="py-1 text-right text-gray-500">{formatMoney(pu)}</td>
+                              <td className="py-1 text-right font-semibold text-gray-700">{formatMoney(l.total || 0)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  ) : <span className="text-xs text-gray-400">Aucune ligne</span>}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-primary-dark">{formatMoney(totalTTC)}</span>

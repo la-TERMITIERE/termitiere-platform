@@ -72,6 +72,7 @@ export default function Params() {
         nom: 'Garderie La Termitière',
         tarifMensuel: 15000,
         tarifInscription: 5000,
+        fraisCuisine: 0,
         heureOuverture: '07:00',
         heureFermeture: '18:00',
         capaciteMax: 40,
@@ -92,7 +93,7 @@ export default function Params() {
     try {
       const collections = [
         'garderie_enfants', 'garderie_presences', 'garderie_paiements',
-        'garderie_incidents', 'garderie_menus', 'garderie_repas',
+        'garderie_incidents', 'garderie_soins', 'garderie_vaccinations', 'garderie_taches', 'garderie_menus', 'garderie_repas',
         'garderie_journaliers', 'garderie_nutrition', 'garderie_personnel'
       ]
       for (const col of collections) {
@@ -120,6 +121,8 @@ export default function Params() {
       'Parent / Tuteur': e.parentNom || '—',
       'Contact principal': e.parentContact || '—',
       'Contact secondaire': e.parentContact2 || '—',
+      Profession: e.parentProfession || '—',
+      Adresse: e.adresse || '—',
       Allergies: e.allergies || '—',
       'Info médicale': e.infoMedicale || '—',
       "Date d'inscription": formatDateShort(e.dateInscription),
@@ -141,6 +144,8 @@ export default function Params() {
           { key: 'Parent / Tuteur', label: 'Parent / Tuteur', width: 22 },
           { key: 'Contact principal', label: 'Contact 1', width: 16 },
           { key: 'Contact secondaire', label: 'Contact 2', width: 16 },
+          { key: 'Profession', label: 'Profession', width: 18 },
+          { key: 'Adresse', label: 'Adresse', width: 22 },
           { key: 'Allergies', label: 'Allergies', width: 20 },
           { key: 'Info médicale', label: 'Info médicale', width: 24 },
           { key: "Date d'inscription", label: "Date d'inscription", width: 16 },
@@ -208,6 +213,9 @@ export default function Params() {
           </FormGroup>
           <FormGroup label="Frais d'inscription (FCFA)">
             <Input type="number" value={form.tarifInscription} onChange={(e) => set('tarifInscription', Number(e.target.value))} disabled={!canEdit} />
+          </FormGroup>
+          <FormGroup label="Frais de cuisine (FCFA) — payés à part par les parents">
+            <Input type="number" min="0" value={form.fraisCuisine ?? 0} onChange={(e) => set('fraisCuisine', Number(e.target.value))} disabled={!canEdit} />
           </FormGroup>
           <FormGroup label="Alerte absences répétées (jours consécutifs)">
             <Input type="number" min={1} max={30} value={form.seuilAbsences ?? 3} onChange={(e) => set('seuilAbsences', Number(e.target.value))} disabled={!canEdit} />
@@ -311,7 +319,7 @@ export default function Params() {
           <Card title="⚠️ Tout réinitialiser" className="border border-red-200">
             <p className="mb-3 text-sm text-gray-500">
               Efface <strong>toutes les données</strong> de la garderie : enfants, présences, paiements,
-              incidents, menus, repas, nutrition et personnel.
+              incidents, soins, vaccinations, tâches, menus, repas, nutrition et personnel.
               <strong className="text-red-600"> Cette action est irréversible.</strong>
             </p>
             {!confirmReset ? (

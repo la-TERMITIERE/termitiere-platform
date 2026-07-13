@@ -221,13 +221,15 @@ export default function Cantine() {
   const stats = useMemo(() => {
     let menuNormal = 0
     let special = 0
+    let apporte = 0
     tousEnfants.forEach((e) => {
       const ref = e._typeEnfant === 'journalier' ? `j_${e.id}` : e.id
       const r = repasParEnfant[ref]
       if (r?.typeRepas === 'menu')    menuNormal++
       if (r?.typeRepas === 'special') special++
+      if (r?.typeRepas === 'apporte') apporte++
     })
-    return { total: tousEnfants.length, menuNormal, special }
+    return { total: tousEnfants.length, menuNormal, special, apporte }
   }, [repasParEnfant, tousEnfants])
 
   async function handleSaveMenu() {
@@ -270,18 +272,18 @@ export default function Cantine() {
       setSaisiSpecial((prev) => ({ ...prev, [ref]: existant?.descriptionSpecial || '' }))
       return
     }
-    const repasActuel = repasMenuActuel(menuDuJour)
+    const repasActuel = typeRepas === 'menu' ? repasMenuActuel(menuDuJour) : null
     await setItem('garderie_repas', id, {
       id, date: dateFiltre, enfantRef: ref,
       enfantNom: `${enfant.prenom} ${enfant.nom}`,
       typeEnfant: enfant._typeEnfant || 'inscrit',
-      typeRepas: 'menu',
-      repasLabel: repasActuel?.label || '',
+      typeRepas,
+      repasLabel: typeRepas === 'apporte' ? '🍱 Repas apporté' : (repasActuel?.label || ''),
       repasDesc: repasActuel?.desc || '',
       descriptionSpecial: '',
       appetit: existant?.appetit || ''
     })
-    audit('garderie', 'REPAS_SAVE', `${enfant.prenom} ${enfant.nom}`, { date: dateFiltre, typeRepas: 'menu' })
+    audit('garderie', 'REPAS_SAVE', `${enfant.prenom} ${enfant.nom}`, { date: dateFiltre, typeRepas })
   }
 
   async function tousAuMenu() {
@@ -292,7 +294,7 @@ export default function Cantine() {
       await Promise.all(tousEnfants.map((enfant) => {
         const ref = refEnfant(enfant)
         const existant = repasParEnfant[ref]
-        if (existant?.typeRepas === 'special') return Promise.resolve()
+        if (existant?.typeRepas === 'special' || existant?.typeRepas === 'apporte') return Promise.resolve()
         const id = `repas_${ref}_${dateFiltre}`
         return setItem('garderie_repas', id, {
           id, date: dateFiltre, enfantRef: ref,
@@ -444,11 +446,12 @@ export default function Cantine() {
           )}
 
           {enfantsActifs.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { label: 'Enfants à table',  val: stats.total,      color: 'text-orange-600' },
                 { label: 'Menu du jour',     val: stats.menuNormal, color: 'text-green-600'  },
                 { label: 'Repas spécial',    val: stats.special,    color: 'text-blue-600'   },
+                { label: 'Repas apporté',    val: stats.apporte,    color: 'text-amber-600'  },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl border border-gray-100 bg-white p-3 text-center shadow-sm">
                   <p className={`text-2xl font-extrabold ${s.color}`}>{s.val}</p>
@@ -495,11 +498,12 @@ export default function Cantine() {
                   <th className="px-3 py-2 text-left">Enfant</th>
                   <th className="px-3 py-2 text-center">🍛 Menu du jour</th>
                   <th className="px-3 py-2 text-center">⭐ Repas spécial</th>
+                  <th className="px-3 py-2 text-center">🍱 Apporté par le parent</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {tousEnfants.length === 0 && (
-                  <tr><td colSpan={3} className="py-8 text-center text-sm text-gray-400">
+                  <tr><td colSpan={4} className="py-8 text-center text-sm text-gray-400">
                     Aucun enfant présent ce jour. Marquez les arrivées dans le module <strong>Présences</strong>.
                   </td></tr>
                 )}
@@ -508,6 +512,7 @@ export default function Cantine() {
                   const r = repasParEnfant[ref]
                   const isMenu    = r?.typeRepas === 'menu'
                   const isSpecial = r?.typeRepas === 'special'
+                  const isApporte = r?.typeRepas === 'apporte'
                   const saisieActive = ref in saisiSpecial
                   return (
                     <tr key={ref} className="transition-colors hover:bg-orange-50">
@@ -515,6 +520,9 @@ export default function Cantine() {
                         <p className="font-semibold">{e.prenom} {e.nom}</p>
                         {e._typeEnfant === 'journalier' && (
                           <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 rounded px-1">Journalier</span>
+                        )}
+                        {e.apporteRepas && (
+                          <span className="ml-1 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded px-1">🍱 apporte son repas</span>
                         )}
                         {e.allergies && <p className="text-xs text-orange-500">⚠ {e.allergies}</p>}
                       </td>
@@ -584,6 +592,18 @@ export default function Cantine() {
                             </div>
                           )}
                         </div>
+                      </td>
+
+                      {/* Bouton Repas apporté par le parent */}
+                      <td className="px-3 py-3 text-center">
+                        <button onClick={() => garderieOuverte && cocherRepas(e, 'apporte')}
+                          disabled={!garderieOuverte}
+                          title={!garderieOuverte ? 'Garderie fermée — saisie impossible' : "L'enfant a apporté son propre repas"}
+                          className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                            isApporte ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'
+                          } ${!garderieOuverte ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                          {isApporte && <CheckCircle2 size={15} />} Apporté
+                        </button>
                       </td>
                     </tr>
                   )

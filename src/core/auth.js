@@ -10,12 +10,13 @@
 import { create } from 'zustand'
 import {
   signInWithEmailAndPassword,
+  signInWithCustomToken,
   createUserWithEmailAndPassword,
   signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
-import { getAll, setItem, addItem } from './db'
-import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole } from './roles'
+import { getAll, getOne, setItem, addItem } from './db'
+import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 
 // Cible auto-hébergée : authentification via Supabase Auth (identités réelles + RLS).
@@ -31,29 +32,63 @@ async function findByLogin(login) {
   return rows.find((u) => u.login === login) || null
 }
 
-// Comptes par défaut (amorçage au premier lancement / mode démo)
+// Comptes par défaut (amorçage au premier lancement / mode démo).
+// ⚠️ Ces mots de passe ne servent qu'à amorcer une base VIDE (premier
+// déploiement) ou le mode démo local — ils doivent être changés immédiatement
+// depuis Utilisateurs / Mon compte une fois le premier accès obtenu.
 export const DEFAULT_USERS = [
-  { login: 'superadmin', pass: 'super123', nom: 'Super-administrateur', role: 'super_admin', modules: ALL_MODULES, secteur: 'Conception', actif: true },
-  { login: 'pau', pass: 'pau123', nom: 'PAU', role: 'pau', modules: ALL_MODULES, secteur: 'Direction', actif: true },
-  { login: 'ge', pass: 'ge123', nom: 'Gérante exécutive', role: 'ge', modules: ALL_MODULES, secteur: 'Direction exécutive', actif: true },
-  { login: 'superviseur', pass: 'super2026', nom: 'Superviseur', role: 'superviseur', modules: ALL_MODULES, secteur: 'Supervision', actif: true },
-  { login: 'admin', pass: 'admin123', nom: 'Administrateur', role: 'admin', modules: ALL_MODULES, secteur: 'Direction', actif: true },
-  { login: 'gerant', pass: 'gerant123', nom: 'Gérant', role: 'gerant', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Gérance', actif: true },
-  { login: 'controleur', pass: 'ctrl123', nom: 'Contrôleur', role: 'controleur', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Contrôle', actif: true },
-  { login: 'agent', pass: 'agent123', nom: 'Agent Edah Josué', role: 'agent', modules: ['agro'], secteur: 'Élevage', actif: true },
-  { login: 'agent_log', pass: 'log123', nom: 'Agent Logistique', role: 'agent', modules: ['logistique'], secteur: 'Transport', actif: true },
-  { login: 'agent_briq', pass: 'briq123', nom: 'Agent Briqueterie', role: 'agent', modules: ['evenementiel'], secteur: 'Briqueterie', actif: true },
-  { login: 'agent_foncier', pass: 'fonc123', nom: 'Agent Foncier', role: 'agent', modules: ['foncier'], secteur: 'Foncier', actif: true }
+  { login: 'superadmin', pass: 'Sup3r-Adm1n-2026!', nom: 'Super-administrateur', role: 'super_admin', modules: ALL_MODULES, secteur: 'Conception', actif: true },
+  { login: 'pau', pass: 'Pau-Direction-2026!', nom: 'PAU', role: 'pau', modules: ALL_MODULES, secteur: 'Direction', actif: true },
+  { login: 'ge', pass: 'Ge-Executif-2026!', nom: 'Gérante exécutive', role: 'ge', modules: ALL_MODULES, secteur: 'Direction exécutive', actif: true },
+  { login: 'superviseur', pass: 'Superviseur-2026!', nom: 'Superviseur', role: 'superviseur', modules: ALL_MODULES, secteur: 'Supervision', actif: true },
+  { login: 'admin', pass: 'Admin-Termitiere-2026!', nom: 'Administrateur', role: 'admin', modules: ALL_MODULES, secteur: 'Direction', actif: true },
+  { login: 'gerant', pass: 'Gerant-2026!', nom: 'Gérant', role: 'gerant', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Gérance', actif: true },
+  { login: 'controleur', pass: 'Controleur-2026!', nom: 'Contrôleur', role: 'controleur', modules: ['agro', 'logistique', 'evenementiel', 'foncier'], secteur: 'Contrôle', actif: true },
+  { login: 'agent', pass: 'Agent-Elevage-2026!', nom: 'Agent Edah Josué', role: 'agent', modules: ['agro'], secteur: 'Élevage', actif: true },
+  { login: 'agent_log', pass: 'Agent-Log-2026!', nom: 'Agent Logistique', role: 'agent', modules: ['logistique'], secteur: 'Transport', actif: true },
+  { login: 'agent_briq', pass: 'Agent-Briq-2026!', nom: 'Agent Briqueterie', role: 'agent', modules: ['evenementiel'], secteur: 'Briqueterie', actif: true },
+  { login: 'agent_foncier', pass: 'Agent-Foncier-2026!', nom: 'Agent Foncier', role: 'agent', modules: ['foncier'], secteur: 'Foncier', actif: true }
 ]
 
 const DEMO_SESSION_KEY = 'termitiere_demo_session'
 const DEMO_USERS_KEY = 'termitiere_demo_users'
 
-// Hachage SHA-256 (avec sel) du mot de passe — évite tout stockage en clair.
-export async function hashPassword(pass) {
+const PBKDF2_ITER = 100000
+
+function hexToBytes(hex) {
+  const arr = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.substr(i * 2, 2), 16)
+  return arr
+}
+function bytesToHex(bytes) {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Sel aléatoire (hex) à générer une fois par utilisateur, stocké à côté du hash.
+export function newSalt() {
+  return bytesToHex(crypto.getRandomValues(new Uint8Array(16)))
+}
+
+// Hachage salé PBKDF2-SHA256 (100 000 itérations) — remplace l'ancien SHA-256 à
+// sel unique global (trop rapide à casser hors-ligne). Le hash + le sel sont
+// stockés dans la collection SÉPARÉE `users_secret` (jamais dans `users`, qui
+// reste lisible par tout utilisateur connecté pour l'annuaire de l'app).
+export async function hashPassword(pass, salt) {
+  const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: hexToBytes(salt), iterations: PBKDF2_ITER, hash: 'SHA-256' },
+    keyMaterial, 256
+  )
+  return bytesToHex(new Uint8Array(bits))
+}
+
+// Ancien schéma (sel unique global) — conservé UNIQUEMENT pour vérifier les
+// comptes pas encore migrés vers le hachage salé (repli côté MonCompte.jsx ;
+// la migration principale se fait côté serveur, voir netlify/functions/login.js).
+export async function legacyHashPassword(pass) {
   const data = new TextEncoder().encode(`termitiere::${pass}`)
   const buf = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
+  return bytesToHex(new Uint8Array(buf))
 }
 
 function loadDemoUsers() {
@@ -74,18 +109,19 @@ async function ensureSeed() {
     const existing = await getAll('users')
     if (existing.length > 0) return existing
     await Promise.all(
-      DEFAULT_USERS.map(async (u) =>
-        setItem('users', u.login, {
+      DEFAULT_USERS.map(async (u) => {
+        const salt = newSalt()
+        await setItem('users', u.login, {
           uid: u.login,
           login: u.login,
           nom: u.nom,
           role: u.role,
           modules: u.modules,
           secteur: u.secteur,
-          actif: true,
-          passHash: await hashPassword(u.pass)
+          actif: true
         })
-      )
+        await setItem('users_secret', u.login, { salt, passHash: await hashPassword(u.pass, salt) })
+      })
     )
     return getAll('users')
   })()
@@ -104,6 +140,11 @@ function sessionFromProfile(p) {
     // Droits de saisie par catégorie d'animaux (Maxi-Agro). null = aucune restriction
     // (comptes hérités) ; tableau (même vide) = restriction explicite.
     agroCategories: Array.isArray(p.agroCategories) ? p.agroCategories : null,
+    // Sites Maxi Logistique autorisés (Lomé / Kara). null = aucune restriction
+    // (comptes hérités = les deux) ; tableau (même vide) = restriction explicite.
+    logistiqueSites: Array.isArray(p.logistiqueSites) ? p.logistiqueSites : null,
+    // Droit de gérer l'onglet « Partenaires » (contacts externes) sur les plateformes.
+    gerePartenaires: p.gerePartenaires === true,
     secteur: p.secteur || '',
     actif: p.actif !== false
   }
@@ -197,15 +238,46 @@ export const useAuthStore = create((set, get) => ({
       return true
     }
 
-    // ── Mode cloud (Realtime Database) + vraie auth Firebase ──
-    // Stratégie « Firebase Auth d'abord » :
-    //  1) on tente une session Firebase Auth (cas normal une fois l'utilisateur migré ;
-    //     INDISPENSABLE quand les règles RTDB sont verrouillées sur `auth != null`) ;
-    //  2) repli sur l'auth applicative (hash SHA-256) tant que tout n'est pas migré /
-    //     que les règles sont encore ouvertes ; on en profite pour CRÉER le compte
-    //     Firebase Auth pour les prochaines connexions (migration transparente).
-    // Rétrocompatible : si le provider e-mail n'est pas (encore) activé, l'étape 1
-    // échoue proprement et on retombe sur le comportement applicatif d'aujourd'hui.
+    // ── Mode cloud (Realtime Database) ──
+    // Stratégie « connexion serveur d'abord » :
+    //  1) on demande à la fonction serveur netlify/functions/login.js de vérifier
+    //     l'identifiant + le mot de passe (le hash ne quitte JAMAIS le navigateur)
+    //     et de délivrer un jeton Firebase Auth personnalisé ;
+    //  2) tant que cette fonction n'est pas configurée (FIREBASE_SERVICE_ACCOUNT
+    //     absent), on retombe sur l'ancien circuit applicatif ci-dessous — utile
+    //     le temps de la mise en place, mais qui ne fonctionne QUE si les règles
+    //     RTDB autorisent encore la lecture non authentifiée de `users`.
+    try {
+      const loginRes = await fetch('/.netlify/functions/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login: id, pass })
+      }).then((r) => r.json()).catch(() => null)
+
+      if (loginRes?.ok && loginRes.token) {
+        await signInWithCustomToken(auth, loginRes.token)
+        const profile = await findByLogin(id)
+        if (!profile) {
+          set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' })
+          return false
+        }
+        const u = sessionFromProfile(profile)
+        localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
+        set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+        setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})
+        addItem('audit_global', {
+          userId: u.uid, userNom: u.nom, module: 'portail',
+          action: 'CONNEXION', details: '', timestamp: Date.now()
+        }).catch(() => {})
+        return true
+      }
+      if (loginRes && loginRes.error !== 'not_configured') {
+        set({ isLoading: false, error: loginRes.error || 'Identifiant ou mot de passe incorrect' })
+        return false
+      }
+      // loginRes absent (réseau) ou 'not_configured' → repli sur l'ancien circuit.
+    } catch (e) { /* repli sur l'ancien circuit applicatif ci-dessous */ }
+
     try {
       const email = loginToEmail(id)
 
@@ -236,10 +308,21 @@ export const useAuthStore = create((set, get) => ({
         return false
       }
 
-      // 3) Si pas (encore) authentifié Firebase : on vérifie le hash applicatif…
+      // 3) Si pas (encore) authentifié Firebase : on vérifie le mot de passe en
+      //    repli — nouveau schéma salé (users_secret) en priorité, ancien schéma
+      //    hérité (profile.passHash) sinon. La voie normale passe désormais par
+      //    netlify/functions/login.js ci-dessus ; ce repli reste nécessaire tant
+      //    que cette fonction n'est pas configurée (FIREBASE_SERVICE_ACCOUNT).
       if (!authed) {
-        const hash = await hashPassword(pass)
-        if (profile.passHash !== hash) {
+        const secret = await getOne('users_secret', profile.uid || profile.id || id).catch(() => null)
+        let ok = false
+        if (secret?.salt && secret?.passHash) {
+          ok = (await hashPassword(pass, secret.salt)) === secret.passHash
+        } else {
+          const legacy = secret?.passHash || profile.passHash
+          ok = Boolean(legacy) && (await legacyHashPassword(pass)) === legacy
+        }
+        if (!ok) {
           set({ isLoading: false, error: 'Identifiant ou mot de passe incorrect' })
           return false
         }
@@ -300,6 +383,9 @@ export const useAuthStore = create((set, get) => ({
   canManage: () => isApproverRole(get().role),
   // 2e niveau : certification définitive (déclenche l'effet métier).
   canCertify: () => isCertifierRole(get().role),
+  // Lecture seule stricte (superviseur interne / partenaire externe sectorisé) :
+  // consulte tout ce que ses modules lui donnent, ne crée / modifie / supprime RIEN.
+  isReadOnly: () => isReadOnlyRole(get().role),
 
   clearError: () => set({ error: null })
 }))

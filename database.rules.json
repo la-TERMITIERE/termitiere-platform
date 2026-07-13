@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "tp": {
+      "users": {
+        ".indexOn": ["login"],
+        "$uid": {
+          ".read": "auth != null",
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')"
+        }
+      },
+      "users_secret": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "audit_global": {
+        ".read": "auth != null && (root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')",
+        "$entryId": {
+          ".write": "auth != null && !data.exists() && newData.exists()"
+        }
+      },
+      "$other": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "$legacy": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

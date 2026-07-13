@@ -10,7 +10,7 @@ import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isApproverRole, isCertifierRole } from '../../core/roles'
+import { isApproverRole, isCertifierRole, FULL_ACCESS_ROLES } from '../../core/roles'
 import { updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
@@ -109,7 +109,7 @@ export default function Autorisations() {
       type: statut.key === 'depasse' ? 'danger' : 'warning',
       title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${secteur?.label || d.secteurId}` : `🟠 Budget en alerte — ${secteur?.label || d.secteurId}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
-      module: 'depense', forRoles: ['super_admin', 'pau', 'ge'], excludeUid: user?.uid, link: '/depense'
+      module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
   }
 

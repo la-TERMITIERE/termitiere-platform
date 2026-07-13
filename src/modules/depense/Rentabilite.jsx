@@ -114,7 +114,7 @@ export default function Rentabilite() {
       </div>
 
       <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Compare le revenu <strong>réellement encaissé/facturé</strong> de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Foncier, Comptabilité, Gestion de projet et Direction n'ont pas de revenu propre suivi dans l'application — ils n'apparaissent pas ici.
+        Compare le revenu <strong>réellement encaissé/facturé</strong> de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Foncier, Comptabilité, E-G.Pro et Direction n'ont pas de revenu propre suivi dans l'application — ils n'apparaissent pas ici.
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

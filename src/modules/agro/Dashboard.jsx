@@ -37,7 +37,7 @@ export default function Dashboard() {
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
 
-  const [preset, setPreset] = useState('journalier')
+  const [preset, setPreset] = useState('30')
   const [from, setFrom] = useState(addDays(todayStr(), -30))
   const [to, setTo] = useState(todayStr())
   const [scope, setScope] = useState(TOUTES)
@@ -153,14 +153,26 @@ export default function Dashboard() {
     }
   }, [morbiditeSerie, morbiditePrevision])
 
-  // Répartition (effectif par catégorie) — toujours global.
+  // Répartition (effectif). « Toutes » → par CATÉGORIE ; une catégorie sélectionnée
+  // → par ESPÈCE de cette catégorie (comme le détail par espèce plus bas).
   const repartition = useMemo(() => {
-    const rows = cats.map((c) => ({
-      cat: c, color: catColor(c),
-      total: especes.filter((e) => e.cat === c).reduce((s, e) => s + (dernier?.animaux?.[e.id]?.fin || 0), 0)
+    if (scope === TOUTES) {
+      const rows = cats.map((c) => ({
+        label: c, color: catColor(c),
+        total: especes.filter((e) => e.cat === c).reduce((s, e) => s + (dernier?.animaux?.[e.id]?.fin || 0), 0)
+      }))
+      return { parEspece: false, rows, data: { labels: rows.map((r) => r.label), datasets: [{ data: rows.map((r) => r.total), backgroundColor: rows.map((r) => r.color) }] } }
+    }
+    // Palette dérivée de la couleur de la catégorie (dégradé d'opacités) pour les espèces.
+    const base = catColor(scope)
+    const shade = (i, n) => base + Math.round(255 * (0.45 + 0.55 * (n > 1 ? (n - 1 - i) / (n - 1) : 1))).toString(16).padStart(2, '0')
+    const n = especesScope.length
+    const rows = especesScope.map((e, i) => ({
+      label: e.nom, color: shade(i, n),
+      total: dernier?.animaux?.[e.id]?.fin || 0
     }))
-    return { rows, data: { labels: rows.map((r) => r.cat), datasets: [{ data: rows.map((r) => r.total), backgroundColor: rows.map((r) => r.color) }] } }
-  }, [cats, especes, dernier])
+    return { parEspece: true, rows, data: { labels: rows.map((r) => r.label), datasets: [{ data: rows.map((r) => r.total), backgroundColor: rows.map((r) => r.color) }] } }
+  }, [scope, cats, especes, especesScope, dernier])
 
   // Détail par espèce du périmètre (table + barres).
   const especeRows = useMemo(() => especesScope.map((e) => {
@@ -276,10 +288,10 @@ export default function Dashboard() {
               : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
           </div>
         </button>
-        <Card title="Répartition par catégorie">
+        <Card title={repartition.parEspece ? `Répartition par espèce — ${scopeLabel}` : 'Répartition par catégorie'}>
           <div className="h-72">
             {repartition.rows.some((r) => r.total > 0)
-              ? <Doughnut data={repartition.data} options={{ maintainAspectRatio: false }} />
+              ? <Doughnut data={repartition.data} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} />
               : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif.</p>}
           </div>
         </Card>

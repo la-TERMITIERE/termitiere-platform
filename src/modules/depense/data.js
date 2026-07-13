@@ -5,6 +5,7 @@
 export const SECTEURS = [
   { id: 'agro',         label: 'MAXI-AGRO',          color: '#2EAA3F' },
   { id: 'logistique',   label: 'MAXI LOGISTIQUE',    color: '#BC3C31' },
+  { id: 'bat',          label: 'MAXI BAT',           color: '#0d9488' },
   { id: 'evenementiel', label: 'BRIQUETERIE',        color: '#7c3aed' },
   { id: 'garderie',     label: 'GARDERIE',           color: '#E8390E' },
   { id: 'divers',       label: 'DIVERS / HORS SECTEUR', color: '#64748b' }
@@ -21,6 +22,15 @@ export const CATEGORIES_DEPENSE = [
   { id: 'impots',        label: 'Impôts & taxes' },
   { id: 'autre',         label: 'Autre' }
 ]
+
+// Nature comptable du flux — indépendante de la catégorie. Sert à établir le solde
+// de trésorerie par type de flux (exploitation / investissement / perte).
+export const NATURES_FLUX = {
+  exploitation:   { label: 'Exploitation',   tone: 'info',    desc: 'Fonctionnement courant : salaires, achats, loyer, transport…' },
+  investissement: { label: 'Investissement', tone: 'success', desc: 'Achat d\'actif durable : terrain, bâtiment, véhicule, gros équipement…' },
+  perte:          { label: 'Perte',          tone: 'danger',  desc: 'Argent perdu sans contrepartie : casse, mortalité, créance irrécouvrable…' }
+}
+export const natureFluxDefaut = 'exploitation'
 
 // Circuit d'autorisation de décaissement (2 niveaux) :
 //   en_attente → approuvee → decaissee (argent réellement sorti, compté dans le budget)

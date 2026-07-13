@@ -216,7 +216,18 @@ export async function genererRecuPaiement(paiement, enfant) {
   doc.text('Montant dû', 10, y)
   doc.setTextColor(...NOIR)
   doc.text(fmtMontant(paiement.montantDu), W - 10, y, { align: 'right' })
-  y += 8
+  y += 6
+
+  // Détail frais de cuisine (payés à part par les parents), si présents
+  if (Number(paiement.montantCuisine) > 0) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(7)
+    doc.setTextColor(...GRIS)
+    doc.text('dont frais de cuisine', 14, y)
+    doc.text(fmtMontant(paiement.montantCuisine), W - 10, y, { align: 'right' })
+    y += 6
+  }
+  y += 2
 
   // Montant payé — mis en valeur
   doc.setFillColor(232, 57, 14, 0.1)

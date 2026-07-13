@@ -1,6 +1,6 @@
 // Liste des dépenses — saisie, filtres, justificatif.
-import { useMemo, useState } from 'react'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -16,20 +16,80 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
-import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
+import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
 import { notifierBeneficiaire } from './notifications'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
+  natureFlux: natureFluxDefaut,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: ''
 })
+
+// ── Champ bénéficiaire (membre de l'entreprise) : saisie libre + suggestions ──
+function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
+  const [open, setOpen]     = useState(false)
+  const [filtre, setFiltre] = useState('')
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const suggestions = useMemo(() => {
+    const q = filtre.toLowerCase()
+    return users.filter((u) => u.actif !== false && (u.nom || u.login || '').toLowerCase().includes(q)).slice(0, 10)
+  }, [users, filtre])
+
+  const choisir = (u) => { onSelectUser(u); setFiltre(''); setOpen(false) }
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex gap-1">
+        <input
+          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder="Nom du bénéficiaire…"
+          value={open ? filtre : value}
+          onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+        />
+        <button type="button" onClick={() => setOpen((o) => !o)}
+          className="rounded-lg border border-gray-200 px-2 text-gray-400 hover:text-primary"><ChevronDown size={14} /></button>
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+          {!suggestions.length
+            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur — votre saisie sera utilisée.</p>
+            : <ul className="max-h-48 overflow-y-auto py-1">
+                {suggestions.map((u) => (
+                  <li key={u.uid}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-primary/10"
+                    onMouseDown={(e) => { e.preventDefault(); choisir(u) }}>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary-dark">
+                      {(u.nom || '?').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">{u.nom}</p>
+                      {u.poste && <p className="text-[10px] text-gray-400">{u.poste}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+          }
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Depenses() {
   const { user, role } = useAuth()
   const isAdmin = isFullAccessRole(role)
+  const lectureSeule = isReadOnlyRole(role)
   const { data: depenses } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
@@ -37,6 +97,7 @@ export default function Depenses() {
   const [recherche, setRecherche] = useState('')
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('')
+  const [filtreNature, setFiltreNature] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
   const [toDelete, setToDelete] = useState(null)
@@ -48,13 +109,14 @@ export default function Depenses() {
     let rows = [...depenses]
     if (filtreSecteur)   rows = rows.filter((d) => d.secteurId === filtreSecteur)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
+    if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
     if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
       rows = rows.filter((d) => (d.description || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreCategorie, filtreMois, recherche])
+  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreMois, recherche])
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
@@ -134,7 +196,7 @@ export default function Depenses() {
       type: statut.key === 'depasse' ? 'danger' : 'warning',
       title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${secteur?.label || d.secteurId}` : `🟠 Budget en alerte — ${secteur?.label || d.secteurId}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
-      module: 'depense', forRoles: ['super_admin', 'pau', 'ge'], excludeUid: user?.uid, link: '/depense'
+      module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
   }
 
@@ -188,9 +250,16 @@ export default function Depenses() {
             {categoriesPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
           </Select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Nature du flux</label>
+          <Select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)}>
+            <option value="">Toutes</option>
+            {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </Select>
+        </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
-          <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>
+          {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
         </div>
       </div>
 
@@ -215,6 +284,7 @@ export default function Depenses() {
             {liste.map((d) => {
               const secteur = SECTEURS.find((s) => s.id === d.secteurId)
               const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
+              const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
               const modifiable = isAdmin || d.statut === 'en_attente' || !d.statut
               return (
                 <tr key={d.id} className="hover:bg-gray-50 transition-colors">
@@ -222,7 +292,10 @@ export default function Depenses() {
                   <td className="px-3 py-2">
                     <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-xs text-gray-600">{d.categorie || '—'}</td>
+                  <td className="px-3 py-2 text-xs text-gray-600">
+                    {d.categorie || '—'}
+                    <span className="mt-0.5 block"><Badge tone={nature.tone}>{nature.label}</Badge></span>
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{d.description || '—'}</td>
                   <td className="px-3 py-2 text-right font-semibold">{Number(d.montant).toLocaleString('fr-FR')} FCFA</td>
                   <td className="px-3 py-2">
@@ -289,6 +362,17 @@ export default function Depenses() {
                 <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
               </FormGroup>
             </div>
+            <FormGroup label="Nature du flux" hint="Sert au calcul du solde de trésorerie (voir l'onglet Flux de trésorerie).">
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(NATURES_FLUX).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => set('natureFlux', k)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    title={v.desc}>
+                    {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
+                  </button>
+                ))}
+              </div>
+            </FormGroup>
             <FormGroup label="Description">
               <textarea
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -311,27 +395,39 @@ export default function Depenses() {
               </div>
 
               {modal.data.beneficiaireType === 'externe' ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="Nom de la personne" />
-                  <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="Profession / fonction" />
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Nom de la personne</label>
+                    <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Profession / fonction</label>
+                    <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Maçon" />
+                  </div>
                 </div>
               ) : (
-                <Select value={modal.data.beneficiaireUid} onChange={(e) => {
-                  const u = users.find((x) => x.uid === e.target.value)
-                  set('beneficiaireUid', e.target.value)
-                  set('beneficiaireNom', u?.nom || '')
-                  set('beneficiaireFonction', u?.poste || '')
-                }}>
-                  <option value="">— Aucun —</option>
-                  {users.filter((u) => u.actif !== false).sort((a, b) => (a.nom || '') < (b.nom || '') ? -1 : 1).map((u) => (
-                    <option key={u.uid} value={u.uid}>{u.nom}{u.poste ? ` — ${u.poste}` : ''}</option>
-                  ))}
-                </Select>
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Nom du bénéficiaire</label>
+                    <ChampBeneficiaire
+                      value={modal.data.beneficiaireNom}
+                      onChange={(v) => { set('beneficiaireNom', v); set('beneficiaireUid', '') }}
+                      onSelectUser={(u) => { set('beneficiaireUid', u.uid); set('beneficiaireNom', u.nom || ''); set('beneficiaireFonction', u.poste || '') }}
+                      users={users}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Fonction (optionnel)</label>
+                    <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Comptable" />
+                  </div>
+                </div>
               )}
               <p className="mt-1 text-xs text-gray-400">
                 {modal.data.beneficiaireType === 'externe'
                   ? 'Bénéficiaire externe : pas de notification automatique (aucun compte sur la plateforme).'
-                  : 'Membre de l\'entreprise : recevra une notification dans l\'application pour confirmer la réception.'}
+                  : modal.data.beneficiaireUid
+                    ? 'Membre de l\'entreprise : recevra une notification dans l\'application pour confirmer la réception.'
+                    : 'Nom saisi librement, sans compte associé : pas de notification automatique.'}
               </p>
             </FormGroup>
             {modal.isNew && (

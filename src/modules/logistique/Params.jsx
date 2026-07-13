@@ -13,6 +13,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, todayStr } from '../../utils/formatters'
+import { useSite, matchSite, siteLabel } from './site/useSite'
 
 // Collections logistique sauvegardées/restaurées par l'export/import JSON.
 const JSON_COLS = ['logistique_inventaires', 'logistique_factures', 'logistique_prestations', 'logistique_demandes', 'logistique_retours', 'logistique_clients']
@@ -28,16 +29,26 @@ const RESET_COLLECTIONS = [
   { id: 'logistique_inventaires', label: 'Saisies magasin' },
   { id: 'logistique_factures', label: 'Factures' },
   { id: 'logistique_prestations', label: 'Prestations' },
-  { id: 'logistique_demandes', label: 'Autorisations sortie' }
+  { id: 'logistique_demandes', label: 'Autorisations sortie' },
+  { id: 'logistique_retours', label: 'Retours matériel' }
 ]
 
 export default function Params() {
   const { role } = useAuth()
-  const { data: inventaires } = useCollection('logistique_inventaires')
-  const { data: factures } = useCollection('logistique_factures')
-  const { data: prestations } = useCollection('logistique_prestations')
-  const { data: demandes } = useCollection('logistique_demandes')
+  const site = useSite()
+  const { data: allInventaires } = useCollection('logistique_inventaires')
+  const { data: allFactures } = useCollection('logistique_factures')
+  const { data: allPrestations } = useCollection('logistique_prestations')
+  const { data: allDemandes } = useCollection('logistique_demandes')
+  const { data: allRetours } = useCollection('logistique_retours')
   const saveMateriel = useLogistiqueStore((s) => s.saveMateriel)
+
+  // Export / réinitialisation cloisonnés au site courant (Lomé / Kara).
+  const inventaires = allInventaires.filter((i) => matchSite(i, site))
+  const factures = allFactures.filter((f) => matchSite(f, site))
+  const prestations = allPrestations.filter((p) => matchSite(p, site))
+  const demandes = allDemandes.filter((d) => matchSite(d, site))
+  const retours = allRetours.filter((r) => matchSite(r, site))
 
   const [exportChoix, setExportChoix] = useState(new Set(['inventaires', 'factures', 'prestations', 'demandes']))
   const [exportOpen, setExportOpen] = useState(false)
@@ -49,13 +60,17 @@ export default function Params() {
   // Sauvegarde JSON complète (toutes les collections logistique + référentiel matériel).
   async function exportJSON() {
     try {
-      const dump = { exportedAt: new Date().toISOString() }
-      for (const c of JSON_COLS) dump[c] = await getAll(c)
+      const dump = { exportedAt: new Date().toISOString(), site }
+      // Clients partagés entre sites ; les autres collections sont filtrées sur le site courant.
+      for (const c of JSON_COLS) {
+        const rows = await getAll(c)
+        dump[c] = c === 'logistique_clients' ? rows : rows.filter((r) => matchSite(r, site))
+      }
       dump.materiel = useLogistiqueStore.getState().materiel
       const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `termitiere-logistique-backup-${todayStr()}.json`
+      a.download = `termitiere-logistique-${site}-backup-${todayStr()}.json`
       a.click()
       toast.success('Sauvegarde JSON générée ✓')
     } catch (e) { toast.error('Erreur export : ' + e.message) }
@@ -164,18 +179,19 @@ export default function Params() {
   }
 
   async function resetDonnees() {
-    if (role !== 'admin') return toast.error('Action réservée à l\'administrateur')
+    if (!isFullAccessRole(role)) return toast.error('Action réservée au super administrateur / direction')
     setResetting(true)
     try {
       for (const col of RESET_COLLECTIONS) {
         const data = col.id === 'logistique_inventaires' ? inventaires
           : col.id === 'logistique_factures' ? factures
           : col.id === 'logistique_prestations' ? prestations
+          : col.id === 'logistique_retours' ? retours
           : demandes
         for (const item of data) await removeItem(col.id, item.id)
       }
-      await audit('logistique', 'RESET', 'Réinitialisation complète des données logistique')
-      toast.success('Données logistique réinitialisées ✓')
+      await audit('logistique', 'RESET', `Réinitialisation des données logistique — ${siteLabel(site)}`)
+      toast.success(`Données logistique (${siteLabel(site)}) réinitialisées ✓`)
       setResetOpen(false)
     } catch (e) {
       toast.error(e.message)
@@ -221,14 +237,15 @@ export default function Params() {
       </Card>
 
       {isAdmin && (
-        <Card title="Réinitialisation des données" className="border-red-200">
+        <Card title={`Réinitialisation des données — ${siteLabel(site)}`} className="border-red-200">
           <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>
-              <p className="font-semibold text-red-900">Zone dangereuse</p>
+              <p className="font-semibold text-red-900">Zone dangereuse — réservée au super administrateur / direction</p>
               <p className="mt-1 text-sm text-red-700">
-                Cette action supprime définitivement toutes les saisies, factures, prestations et autorisations de sortie.
-                Les paramètres et le référentiel matériel sont conservés.
+                Cette action supprime définitivement les saisies magasin, factures, prestations, autorisations de sortie
+                et retours du site <strong>{siteLabel(site)}</strong> uniquement. L'autre site, les paramètres et le
+                référentiel matériel sont conservés.
               </p>
               <Button variant="danger" size="sm" className="mt-3" onClick={() => setResetOpen(true)}>
                 <Trash2 size={15} /> Réinitialiser les données

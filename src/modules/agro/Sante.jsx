@@ -17,6 +17,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isReadOnlyRole } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -81,6 +82,7 @@ export default function Sante() {
 
 // ─────────── Onglet INTERVENTIONS ───────────
 function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
+  const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
   const [filtreType, setFiltreType] = useState('')
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
@@ -211,7 +213,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
         <div className="ml-auto flex gap-2">
           <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Rapport Excel</Button>
           <Button variant="outline" onClick={exportPDF}><FileDown size={16} /> Rapport PDF</Button>
-          <Button onClick={openCreate}><Plus size={16} /> Nouvelle intervention</Button>
+          {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Nouvelle intervention</Button>}
         </div>
       </div>
 
@@ -291,6 +293,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
 
 // ─────────── Onglet STOCK VACCINS ───────────
 function StockVaccins({ stock, user }) {
+  const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
 
@@ -348,7 +351,7 @@ function StockVaccins({ stock, user }) {
             <AlertTriangle size={15} /> {alertes.length} produit(s) à réapprovisionner ou périmé(s)
           </span>
         )}
-        <Button className="ml-auto" onClick={() => openCreate()}><Plus size={16} /> Ajouter un produit</Button>
+        {!lectureSeule && <Button className="ml-auto" onClick={() => openCreate()}><Plus size={16} /> Ajouter un produit</Button>}
       </div>
 
       <Card className="p-0">
@@ -396,6 +399,7 @@ function StockVaccins({ stock, user }) {
 
 // ─────────── Onglet RENDEZ-VOUS ───────────
 function RendezVous({ fiches, user }) {
+  const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
   const rdvs = useMemo(
     () => fiches.filter((f) => f.prochainRdv).sort((a, b) => (a.prochainRdv < b.prochainRdv ? -1 : 1)),
     [fiches]
@@ -419,7 +423,7 @@ function RendezVous({ fiches, user }) {
         <p className="mt-1 text-xs text-gray-400">Programmé par {r.creeParNom || '—'}</p>
         {retard && <Badge tone="danger" className="mt-1">En retard</Badge>}
       </div>
-      <Button size="sm" variant="outline" onClick={() => marquerFait(r)}><CheckCircle2 size={15} /> Fait</Button>
+      {!lectureSeule && <Button size="sm" variant="outline" onClick={() => marquerFait(r)}><CheckCircle2 size={15} /> Fait</Button>}
     </Card>
   )
 

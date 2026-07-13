@@ -2,12 +2,12 @@ import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { TrendingUp, Wallet, CheckSquare, Clock, FileDown, Loader2, Table2 } from 'lucide-react'
-import InfoBulle from '../../shared/ui/InfoBulle'
 
 const Titre = ({ label, formule, description }) => (
   <div>
-    <span className="flex items-center gap-1">{label} <InfoBulle texte={formule} /></span>
-    {description && <p className="mt-0.5 text-[11px] font-normal text-gray-400">{description}</p>}
+    <span className="font-bold">{label}</span>
+    {description && <p className="mt-0.5 text-[11px] font-normal text-gray-500">{description}</p>}
+    {formule && <p className="mt-0.5 text-[10px] font-normal italic text-gray-400">📐 {formule}</p>}
   </div>
 )
 import Card from '../../shared/ui/Card'
@@ -15,10 +15,11 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, formatNumber } from '../../utils/formatters'
-import { avancementProjet, tachesEnRetard } from './logic'
+import { avancementProjet, tachesEnRetard, projetsVisibles, scopeParProjets } from './logic'
 import { STATUTS_PROJET, PRIORITES } from './data'
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useAuthStore } from '../../core/auth'
 
 const TEAL   = '#0d9488'
 const TEAL2  = '#0f766e'
@@ -66,7 +67,7 @@ async function exporterExcel(projets, taches, depenses) {
       'Priorité':      PRIORITES[p.priorite]?.label || p.priorite || '',
       'Responsable':   p.responsable || '',
       'Date début':    p.dateDebut ? formatDateShort(p.dateDebut) : '',
-      'Date fin':      p.dateFin   ? formatDateShort(p.dateFin)   : '',
+      'Date fin':      p.dureeIndeterminee ? 'Durée indéterminée' : (p.dateFin ? formatDateShort(p.dateFin) : ''),
       'Budget (FCFA)': Number(p.budget)   || 0,
       'Dépenses (FCFA)': Number(p.depenses) || 0,
       'Écart (FCFA)':  (Number(p.budget) || 0) - (Number(p.depenses) || 0),
@@ -110,10 +111,10 @@ async function exporterExcel(projets, taches, depenses) {
   XLSX.writeFile(wb, `rapport_projet_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-async function telechargerPDF(projets, taches, depenses, commentaires, checklists) {
+async function telechargerPDF(projets, taches, depenses, commentaires) {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const { formatMoney: fmtM, formatDateShort: fmtD } = await import('../../utils/formatters')
+  const { formatMoney: fmtM, formatNumber: fmtN, formatDateShort: fmtD } = await import('../../utils/formatters')
   const { avancementProjet: avPct, tachesEnRetard: tRetard, projetEnRetard: pRetard } = await import('./logic')
   const { STATUTS_PROJET: SP, PRIORITES: PR, STATUTS_TACHE: ST } = await import('./data')
 
@@ -124,7 +125,7 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
   doc.setFillColor(...TEAL_C)
   doc.rect(0, 0, W, 28, 'F')
   doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold')
-  doc.text('RAPPORT GLOBAL — GESTION DE PROJET', M, 12)
+  doc.text('RAPPORT GLOBAL — E-G.Pro', M, 12)
   doc.setFontSize(9); doc.setFont('helvetica','normal')
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, M, 20)
   y = 36
@@ -134,7 +135,6 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
     const tp = taches.filter((t) => t.projetId === projet.id)
     const dp = depenses.filter((d) => d.projetId === projet.id)
     const cp = commentaires.filter((c) => c.projetId === projet.id)
-    const ch = checklists.filter((c) => c.projetId === projet.id)
     const av = avPct(tp)
     const budget = Number(projet.budget) || 0
     const totalDep = dp.reduce((s,d) => s+(Number(d.montant)||0), 0)
@@ -146,7 +146,8 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
     y += 18
 
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...GRAY_C)
-    doc.text(`Statut : ${SP[projet.statut]?.label||projet.statut||'—'}  |  Responsable : ${projet.responsable||'—'}  |  Fin : ${fmtD(projet.dateFin)}${pRetard(projet)?' ⚠ EN RETARD':''}`, M, y)
+    const finTexte = projet.dureeIndeterminee ? 'Durée indéterminée' : fmtD(projet.dateFin)
+    doc.text(`Statut : ${SP[projet.statut]?.label||projet.statut||'—'}  |  Responsable : ${projet.responsable||'—'}  |  Fin : ${finTexte}${pRetard(projet)?' ⚠ EN RETARD':''}`, M, y)
     y += 5
 
     // Barre
@@ -173,8 +174,8 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
       autoTable(doc, {
         startY: y,
         head: [['Date','Catégorie','Description','Montant (FCFA)']],
-        body: [...dp.map((d) => [fmtD(d.date), d.categorie||'—', d.description||'—', Number(d.montant||0).toLocaleString('fr-FR')]),
-               ['','','TOTAL', totalDep.toLocaleString('fr-FR')]],
+        body: [...dp.map((d) => [fmtD(d.date), d.categorie||'—', d.description||'—', fmtN(d.montant||0)]),
+               ['','','TOTAL', fmtN(totalDep)]],
         styles:{ fontSize:7, cellPadding:1.5 },
         headStyles:{ fillColor:TEAL_C, textColor:255, fontSize:7 },
         margin:{ left:M, right:M }
@@ -197,18 +198,25 @@ async function telechargerPDF(projets, taches, depenses, commentaires, checklist
 }
 
 export default function Rapports() {
-  const { data: projets }      = useCollection('projets')
-  const { data: taches }       = useCollection('projet_taches')
-  const { data: depenses }     = useCollection('projet_depenses')
-  const { data: commentaires } = useCollection('projet_commentaires')
-  const { data: checklists }   = useCollection('projet_checklists')
+  const { data: projetsTous }      = useCollection('projets')
+  const { data: tachesTous }       = useCollection('projet_taches')
+  const { data: depensesTous }     = useCollection('projet_depenses')
+  const { data: commentairesTous } = useCollection('projet_commentaires')
+  const { user, role } = useAuthStore()
+
+  // Cloisonnement : un chef de projet ne voit les rapports que de ses projets.
+  const projets      = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  const taches       = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
+  const depenses     = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
+  const commentaires = useMemo(() => scopeParProjets(commentairesTous, projets), [commentairesTous, projets])
+
   const [periode, setPeriode]      = useState('6')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [xlsLoading, setXlsLoading] = useState(false)
 
   const handlePDF = async () => {
     setPdfLoading(true)
-    try { await telechargerPDF(projets, taches, depenses, commentaires, checklists) }
+    try { await telechargerPDF(projets, taches, depenses, commentaires) }
     catch(e) { console.error(e); alert('Erreur lors de la génération du PDF.') }
     finally { setPdfLoading(false) }
   }
@@ -240,9 +248,9 @@ export default function Rapports() {
       labels: ps.map((p) => p.nom.length > 22 ? p.nom.slice(0, 22) + '…' : p.nom),
       datasets: [{
         label: 'Avancement (%)',
-        data: ps.map((p) => avancementProjet(taches.filter((t) => t.projetId === p.id))),
+        data: ps.map((p) => avancementProjet(taches.filter((t) => t.projetId === p.id), p)),
         backgroundColor: ps.map((p) => {
-          const pct = avancementProjet(taches.filter((t) => t.projetId === p.id))
+          const pct = avancementProjet(taches.filter((t) => t.projetId === p.id), p)
           return pct >= 100 ? GREEN : pct >= 50 ? TEAL : AMBER
         }),
         borderRadius: 6,
@@ -392,30 +400,35 @@ export default function Rapports() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleExcel} disabled={xlsLoading}
-            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
-            {xlsLoading ? <Loader2 size={13} className="animate-spin" /> : <Table2 size={13} />}
-            {xlsLoading ? 'Export…' : 'Export Excel'}
-          </button>
-          <button onClick={handlePDF} disabled={pdfLoading}
-            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors">
-            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-            {pdfLoading ? 'Génération…' : 'Télécharger PDF'}
-          </button>
+        <div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleExcel} disabled={xlsLoading}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
+              {xlsLoading ? <Loader2 size={13} className="animate-spin" /> : <Table2 size={13} />}
+              {xlsLoading ? 'Export…' : 'Export Excel'}
+            </button>
+            <button onClick={handlePDF} disabled={pdfLoading}
+              className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors">
+              {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+              {pdfLoading ? 'Génération…' : 'Télécharger PDF'}
+            </button>
+          </div>
+          <p className="mt-1 text-right text-[10px] italic text-gray-400">
+            Excel : 3 feuilles (Projets, Tâches, Dépenses) · PDF : un rapport par projet (avancement, tâches, dépenses, budget)
+          </p>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title={<span className="flex items-center gap-1">Projets actifs <InfoBulle texte="Projets dont le statut est 'En cours'." /></span>}
-          value={kpis.actifs} icon={TrendingUp} accent={TEAL} />
-        <StatCard title={<span className="flex items-center gap-1">Projets terminés <InfoBulle texte="Projets dont le statut est 'Terminé'." /></span>}
-          value={kpis.termines} icon={CheckSquare} accent={GREEN} />
-        <StatCard title={<span className="flex items-center gap-1">Avancement global <InfoBulle texte="Tâches terminées ÷ total tâches × 100, sur l'ensemble du module." /></span>}
-          value={`${kpis.tauxGlobal}%`} icon={TrendingUp} accent={TEAL2} />
-        <StatCard title={<span className="flex items-center gap-1">Tâches en retard <InfoBulle texte="Tâches non terminées dont l'échéance est dépassée." /></span>}
-          value={kpis.enRetard} icon={Clock} accent={RED} />
+        <StatCard title="Projets actifs" value={kpis.actifs} icon={TrendingUp} accent={TEAL}
+          sub="Projets au statut 'En cours'" />
+        <StatCard title="Projets terminés" value={kpis.termines} icon={CheckSquare} accent={GREEN}
+          sub="Projets au statut 'Terminé'" />
+        <StatCard title="Avancement global" value={`${kpis.tauxGlobal}%`} icon={TrendingUp} accent={TEAL2}
+          sub="Tâches terminées ÷ total tâches × 100" />
+        <StatCard title="Tâches en retard" value={kpis.enRetard} icon={Clock} accent={RED}
+          sub="Non terminées, échéance dépassée" />
       </div>
 
       {/* Budget total */}
@@ -426,6 +439,7 @@ export default function Rapports() {
             <div>
               <p className="text-xs text-gray-500">Budget total engagé (tous projets)</p>
               <p className="text-xl font-extrabold text-teal-700">{formatMoney(kpis.budgetTotal)}</p>
+              <p className="mt-0.5 text-[10px] italic text-gray-400">📐 Somme du budget prévu de tous les projets, tous statuts confondus.</p>
             </div>
           </div>
         </Card>

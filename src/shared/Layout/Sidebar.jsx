@@ -5,25 +5,46 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, X } from 'lucide-reac
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel } from '../../core/roles'
+import { roleLabel, canManagePartenaires } from '../../core/roles'
 import { estActif } from '../workflow'
+import { ACTIONS_PAR_VOLET } from '../../modules/projet/vues'
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
   const { user, role, hasModule, isAdmin, logout } = useAuth()
 
   // Module actif déduit du premier segment de l'URL
-  const seg = location.pathname.split('/')[1]
+  const parts = location.pathname.split('/')
+  const seg = parts[1]
   const activeModule = getModule(seg)
+  // Maxi Logistique : sous-application (site) déduite du 2e segment.
+  const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
+  const logSite = activeModule?.id === 'logistique' && LOG_SITES[parts[2]] ? parts[2] : null
 
   // Badge demandes AGRO : factures en attente d'approbation ou d'ajustement d'écart.
   const { data: facturesAgro } = useCollection('agro_factures')
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
+
+  // Badges "nouveauté" E-G.Pro : ce que d'autres ont ajouté depuis ma dernière visite du volet.
+  const { data: auditProjet }  = useCollection('audit_global')
+  const { data: derniereVues } = useCollection('projet_dernieres_vues')
+  const projetBadges = {}
+  if (activeModule?.id === 'projet') {
+    const monUid = user?.uid
+    Object.entries(ACTIONS_PAR_VOLET).forEach(([cle, actions]) => {
+      const vu = derniereVues.find((v) => v.userId === monUid && v.section === cle)?.vu || 0
+      projetBadges[cle] = auditProjet.filter((a) =>
+        a.module === 'projet' && actions.includes(a.action) && a.userId !== monUid && a.timestamp > vu
+      ).length
+    })
+  }
+
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
-    logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut)).length,
-    briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length
+    logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut) && (!logSite || (d.site || 'lome') === logSite)).length,
+    briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length,
+    ...projetBadges
   }
 
   const accentColor = activeModule?.color || '#BC3C31'
@@ -36,9 +57,25 @@ export default function Sidebar({ open, onClose }) {
       : 'text-white/80 hover:bg-white/10 hover:text-white hover:shadow-[0_12px_24px_-12px_rgba(0,0,0,0.35)]'
     }`
 
-  // Filtre les liens de navigation selon le rôle (propriété `roles` optionnelle)
-  const moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : [])
-    .filter((item) => !item.roles || item.roles.includes(role))
+  // Filtre les liens de navigation selon le rôle (`roles`) et les permissions
+  // par utilisateur (`perm`, ex. « partenaires » = accès donné par la direction).
+  const canSeeNav = (item) =>
+    (!item.roles || item.roles.includes(role)) &&
+    (!item.perm || (item.perm === 'partenaires' && canManagePartenaires(role, user)))
+  let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
+
+  // Maxi Logistique : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
+  // On préfixe alors chaque destination par /logistique/<site>/…
+  if (activeModule?.id === 'logistique') {
+    moduleNav = logSite
+      ? moduleNav.map((item) => ({
+          ...item,
+          to: item.to === '/logistique' ? `/logistique/${logSite}` : item.to.replace('/logistique/', `/logistique/${logSite}/`)
+        }))
+      : []
+  }
+
+  const moduleTitle = activeModule ? (logSite ? `${activeModule.nom} · ${LOG_SITES[logSite]}` : activeModule.nom) : "Toujours dans l'action"
 
   return (
     <>
@@ -88,7 +125,7 @@ export default function Sidebar({ open, onClose }) {
                 LA TERMITIÈRE
               </p>
               <p style={{ margin: 0, marginTop: 2, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,0.65)' }}>
-                {activeModule ? activeModule.nom : "Toujours dans l'action"}
+                {moduleTitle}
               </p>
             </div>
 
@@ -141,9 +178,9 @@ export default function Sidebar({ open, onClose }) {
           {activeModule && moduleNav.length > 0 && (
             <>
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
-                {activeModule.nom}
+                {moduleTitle}
               </p>
-              {moduleNav.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
+              {moduleNav.map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
                   <item.icon size={18} /> {item.label}
                   {item.badgeKey && badges[item.badgeKey] > 0 && (

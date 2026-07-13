@@ -88,7 +88,7 @@ export default function Historique() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat title="Entrées (période)" value={totaux.entrees} color="#16a34a" icon={ArrowDownCircle} />
         <Stat title="Sorties (période)" value={totaux.sorties} color="#d97706" icon={ArrowUpCircle} />
         <Stat title="Décès (période)" value={totaux.deces} color="#dc2626" icon={Skull} />

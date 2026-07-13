@@ -18,7 +18,7 @@ export const ACTEURS_ROLES = [
   { id: 'beneficiaire', label: 'Bénéficiaire' },
   { id: 'heritier', label: 'Héritier' },
   { id: 'notaire', label: 'Notaire' },
-  { id: 'geometre', label: 'Géomètre expert' },
+  { id: 'geometre', label: 'Géomètre / expert' },
   { id: 'conservateur', label: 'Conservateur foncier' },
   { id: 'mandataire', label: 'Mandataire / Représentant' }
 ]
@@ -40,13 +40,22 @@ export const PARCELLE_CHAMPS = [
   { id: 'numTitre', label: 'N° de Titre Foncier (original)' },
   { id: 'numLeve', label: 'N° de levé topographique' },
   { id: 'attestationCoutumiere', label: 'Attestation de détention de droit coutumier' },
-  { id: 'planParcellaire', label: 'Plan parcellaire visé' },
+  { id: 'planParcellaire', label: 'Plan visé' },
   { id: 'prefecture', label: 'Préfecture' },
   { id: 'commune', label: 'Commune' },
   { id: 'quartier', label: 'Quartier / Canton' },
-  { id: 'lot', label: 'Lot / Section' },
+  { id: 'lot', label: 'Référence — Lot' },
+  { id: 'hectares', label: 'Référence — Hectare(s)' },
   { id: 'superficie', label: 'Superficie (m²)' }
 ]
+
+// Plan visé : effectué ou non (facultatif).
+export const PLAN_VISE_OPTIONS = [
+  { id: '', label: '— Non renseigné —' },
+  { id: 'effectue', label: 'Effectué' },
+  { id: 'non_effectue', label: 'Non effectué' }
+]
+export const planViseLabel = (id) => PLAN_VISE_OPTIONS.find((o) => o.id === id)?.label || '—'
 
 // Documents fonciers attachables à une parcelle (pièces jointes PDF/images).
 export const PIECES_PARCELLE = [
