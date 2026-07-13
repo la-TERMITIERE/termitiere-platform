@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, Save } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import { isReadOnlyRole } from '../../core/roles'
 import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -15,6 +17,7 @@ const now = new Date()
 export default function Budgets() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: depenses } = useCollection('depense_depenses')
+  const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -70,7 +73,7 @@ export default function Budgets() {
         </button>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-gray-500">Total alloué : <strong className="text-gray-900">{totalAlloue.toLocaleString('fr-FR')} FCFA</strong></span>
-          <Button onClick={enregistrer} loading={saving}><Save size={16} /> Enregistrer</Button>
+          {!lectureSeule && <Button onClick={enregistrer} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
       </div>
 

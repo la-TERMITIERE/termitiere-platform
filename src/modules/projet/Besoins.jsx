@@ -43,7 +43,7 @@ export default function Besoins() {
   const { data: besoinsTous } = useCollection('projet_besoins')
   const { user, role } = useAuth()
   // Le superviseur crée/modifie/traite les besoins, mais ne les supprime pas.
-  const peutSupprimer = role !== 'superviseur'
+  const peutSupprimer = !['superviseur', 'partenaire'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetBesoins') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que les besoins de ses projets.

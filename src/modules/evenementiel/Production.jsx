@@ -11,6 +11,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isReadOnlyRole } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -20,7 +21,8 @@ import { DUREE_PRODUCTION_OPTIONS } from './data'
 import { calcConsommationProduction, getInventaire } from './logic'
 
 export default function Production() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const lectureSeule = isReadOnlyRole(role)
   const { data: productions } = useCollection('evenementiel_productions')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const briques = useBriqueterieStore((s) => s.briques.filter((b) => b.id !== 'caillasses'))
@@ -103,9 +105,11 @@ export default function Production() {
         Cycle de production <strong>24 h ou 48 h max</strong>. Les briques produites sont placées en <strong>appatam</strong>,
         puis déplacées vers l'extérieur pour séchage (5 à 6 jours).
       </div>
-      <div className="flex justify-end">
-        <Button onClick={openCreate}><Plus size={16} /> Nouvelle production</Button>
-      </div>
+      {!lectureSeule && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}><Plus size={16} /> Nouvelle production</Button>
+        </div>
+      )}
       <Card className="p-0">
         <Table
           columns={[

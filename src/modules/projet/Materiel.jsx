@@ -70,7 +70,7 @@ export default function Materiel() {
   const { data: materielsTous } = useCollection('projet_materiels')
   const { user, role } = useAuth()
   // Le superviseur crée/modifie/suit le matériel, mais ne supprime rien.
-  const peutSupprimer = role !== 'superviseur'
+  const peutSupprimer = !['superviseur', 'partenaire'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetMateriel') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que le matériel de ses projets.

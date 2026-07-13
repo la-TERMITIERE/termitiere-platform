@@ -17,6 +17,7 @@ import { addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
+import { isReadOnlyRole } from '../../core/roles'
 import { dernierStockBriques } from './logic'
 
 const STATUTS = {
@@ -28,7 +29,8 @@ const STATUTS = {
 }
 
 export default function Ventes() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const lectureSeule = isReadOnlyRole(role)
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
@@ -91,7 +93,7 @@ export default function Ventes() {
       </div>
       <div className="flex justify-end gap-2">
         <Link to="/evenementiel/demandes"><Button variant="outline"><Send size={16} /> Autorisations</Button></Link>
-        <Button onClick={openCreate}><Plus size={16} /> Nouvelle vente</Button>
+        {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Nouvelle vente</Button>}
       </div>
       <Card className="p-0">
         <Table

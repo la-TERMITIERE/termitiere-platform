@@ -13,23 +13,40 @@ import Retours from './Retours'
 import Referentiel from './Referentiel'
 import Clients from './Clients'
 import Fournisseurs from './Fournisseurs'
+import Pilotage from './Pilotage'
 import Journal from './Journal'
 import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
+import AutoCarryForwardLogistique from './AutoCarryForwardLogistique'
+import { Lock } from 'lucide-react'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
+import { canViewPilotage } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
+
+function AccesRefuse() {
+  return (
+    <div className="mx-auto mt-10 max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+      <Lock className="mx-auto mb-3 text-amber-600" size={32} />
+      <p className="font-bold text-amber-900">Accès réservé à la hiérarchie</p>
+      <p className="mt-1 text-sm text-amber-700">Le pilotage et les analyses ne sont pas accessibles avec votre profil.</p>
+    </div>
+  )
+}
 
 export default function LogistiqueModule() {
   const init = useLogistiqueStore((s) => s.init)
   useEffect(() => { init() }, [init])
 
   return (
+    <>
+    <AutoCarryForwardLogistique />
     <Routes>
       <Route index element={<SiteChooser />} />
       <Route path=":site/*" element={<SiteApp />} />
       <Route path="*" element={<Navigate to="/logistique" replace />} />
     </Routes>
+    </>
   )
 }
 
@@ -47,6 +64,7 @@ function SiteApp() {
         <Route index element={<Dashboard />} />
         <Route path="saisie" element={<SaisieMagasin />} />
         <Route path="prestations" element={<Prestations />} />
+        <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
         <Route path="factures" element={<Factures />} />
         <Route path="demandes" element={<Demandes />} />
         <Route path="retours" element={<Retours />} />

@@ -32,7 +32,7 @@ export default function Galerie() {
   const { data: projetsTous } = useCollection('projets')
   const { user, role } = useAuthStore()
   // Le superviseur ajoute des photos, mais ne les supprime pas.
-  const peutSupprimer = role !== 'superviseur'
+  const peutSupprimer = !['superviseur', 'partenaire'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetGalerie') }, [user?.uid])
   // Cloisonnement : un chef de projet ne voit que la galerie de ses projets.
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])

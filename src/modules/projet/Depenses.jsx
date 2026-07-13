@@ -83,7 +83,7 @@ export default function Depenses() {
   // Le chef de projet ne fait que consulter les dépenses — c'est la secrétaire qui les renseigne.
   const peutModifier = role !== 'chef_projet'
   // La secrétaire, l'agent et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
-  const peutSupprimer = !['chef_projet', 'secretaire', 'agent', 'superviseur'].includes(role)
+  const peutSupprimer = !['chef_projet', 'secretaire', 'agent', 'superviseur', 'partenaire'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.

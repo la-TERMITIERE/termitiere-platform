@@ -12,6 +12,8 @@ import { CAT_ANIMAUX, catColor } from './data'
 import { agregerAchatsVentes, mouvementsCategorie } from './logic'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 
+const TOUTES = '__TOUTES__'
+
 export default function DecisionBI({
   inventaires, factures, demandes, sante, stockVaccins,
   invPeriode, start, end
@@ -20,6 +22,7 @@ export default function DecisionBI({
   const aliments = useAgroStore((s) => s.aliments)
   const [kpiDetail, setKpiDetail] = useState(null)
   const [catPeriode, setCatPeriode] = useState(null) // catégorie détaillée sur la période
+  const [scope, setScope] = useState(TOUTES) // filtre catégorie des KPI du haut
 
   const tri = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1)), [inventaires])
   const dernier = tri[0]
@@ -30,33 +33,65 @@ export default function DecisionBI({
     return [...CAT_ANIMAUX, ...custom].filter((c) => especes.some((e) => e.cat === c))
   }, [especes])
 
+  // Périmètre KPI : « Toutes » ou une catégorie. Les cartes du haut, les flux et les
+  // détails (achats/ventes/naissances/décès/CA) se recalculent sur ce périmètre.
+  const especesScope = useMemo(
+    () => (scope === TOUTES ? especes : especes.filter((e) => e.cat === scope)),
+    [especes, scope]
+  )
+  const scopeIds = useMemo(() => new Set(especesScope.map((e) => e.id)), [especesScope])
+  const inScope = (id) => scope === TOUTES || scopeIds.has(id)
+  const scopeLabel = scope === TOUTES ? 'Toutes les catégories' : scope
+  // Catégorie ACTUELLE d'un article (par id) pour rattacher le CA des factures à la
+  // bonne catégorie, robuste aux anciens libellés stockés sur la ligne.
+  const catById = useMemo(() => {
+    const m = {}
+    especes.forEach((e) => { m[e.id] = e.cat })
+    aliments.forEach((a) => { m[a.id] = a.cat })
+    return m
+  }, [especes, aliments])
+  const ligneCat = (l) => catById[l.articleId] || l.articleCat
+
   const effectifTotal = useMemo(() =>
-    Object.values(dernier?.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0),
-  [dernier])
+    Object.entries(dernier?.animaux || {}).reduce((s, [id, a]) => s + (inScope(id) ? (a.fin || 0) : 0), 0),
+  [dernier, scope, scopeIds])
 
   const effectifVeille = useMemo(() =>
-    Object.values(veille?.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0),
-  [veille])
+    Object.entries(veille?.animaux || {}).reduce((s, [id, a]) => s + (inScope(id) ? (a.fin || 0) : 0), 0),
+  [veille, scope, scopeIds])
 
   const totauxAnim = useMemo(() => {
     let naiss = 0, ent = 0, sor = 0, dec = 0
-    invPeriode.forEach((i) => Object.values(i.animaux || {}).forEach((a) => {
+    invPeriode.forEach((i) => Object.entries(i.animaux || {}).forEach(([id, a]) => {
+      if (!inScope(id)) return
       naiss += a.naiss || 0; ent += a.ent || 0; sor += a.sor || 0; dec += a.dec || 0
     }))
     return { naiss, ent, sor, dec }
-  }, [invPeriode])
+  }, [invPeriode, scope, scopeIds])
 
-  const { achats, ventes, totalAchats, totalVentes } = useMemo(
+  const { achats: achatsAll, ventes: ventesAll } = useMemo(
     () => agregerAchatsVentes(invPeriode, especes, aliments),
     [invPeriode, especes, aliments]
   )
+  const achats = useMemo(() => (scope === TOUTES ? achatsAll : achatsAll.filter((a) => a.cat === scope)), [achatsAll, scope])
+  const ventes = useMemo(() => (scope === TOUTES ? ventesAll : ventesAll.filter((v) => v.cat === scope)), [ventesAll, scope])
+  const totalAchats = achats.reduce((s, l) => s + l.qte, 0)
+  const totalVentes = ventes.reduce((s, l) => s + l.qte, 0)
 
   const facturesPeriode = useMemo(
     () => factures.filter((f) => f.date >= start && f.date <= end),
     [factures, start, end]
   )
-  const caTotal = facturesPeriode.reduce((s, f) => s + (f.totalTTC || 0), 0)
-  const nbFactures = facturesPeriode.length
+  // Montant d'une facture rapporté au périmètre (total, ou somme des lignes de la catégorie).
+  const montantScope = (f) => scope === TOUTES
+    ? (f.totalTTC || 0)
+    : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((s, l) => s + (l.total || 0), 0)
+  const caTotal = facturesPeriode.reduce((s, f) => s + montantScope(f), 0)
+  const facturesScope = useMemo(
+    () => (scope === TOUTES ? facturesPeriode : facturesPeriode.filter((f) => montantScope(f) > 0)),
+    [facturesPeriode, scope, catById]
+  )
+  const nbFactures = facturesScope.length
 
   const demandesAttente = demandes.filter((d) => d.statut === 'en_attente').length
   const demandesPeriode = demandes.filter((d) => d.date >= start && d.date <= end)
@@ -72,7 +107,7 @@ export default function DecisionBI({
     return { cat, total, color: catColor(cat), ent: mJour.entrees, sor: mJour.sorties, diffEnt: veille ? mJour.entrees - mVeille.entrees : 0, diffSor: veille ? mJour.sorties - mVeille.sorties : 0 }
   }), [cats, especes, dernier, veille])
 
-  const baseEffectif = Object.values(dernier?.animaux || {}).reduce((s, a) => s + (a.init || 0), 0) || 1
+  const baseEffectif = Object.entries(dernier?.animaux || {}).reduce((s, [id, a]) => s + (inScope(id) ? (a.init || 0) : 0), 0) || 1
   const tauxMortalite = ((totauxAnim.dec / baseEffectif) * 100).toFixed(1)
   const tauxCroissance = (((totauxAnim.naiss - totauxAnim.dec) / baseEffectif) * 100).toFixed(1)
 
@@ -80,7 +115,7 @@ export default function DecisionBI({
   const decesDetail = useMemo(() => {
     const result = []
     invPeriode.forEach((inv) => {
-      especes.forEach((e) => {
+      especesScope.forEach((e) => {
         const a = inv.animaux?.[e.id]
         if (!a) return
         const sorties = a.sorties || []
@@ -96,13 +131,13 @@ export default function DecisionBI({
       })
     })
     return result.sort((a, b) => b.date.localeCompare(a.date))
-  }, [invPeriode, especes])
+  }, [invPeriode, especesScope])
 
   // Naissances détaillées sur la période
   const naissancesDetail = useMemo(() => {
     const result = []
     invPeriode.forEach((inv) => {
-      especes.forEach((e) => {
+      especesScope.forEach((e) => {
         const a = inv.animaux?.[e.id]
         if (!a) return
         const entrees = a.entrees || []
@@ -118,7 +153,7 @@ export default function DecisionBI({
       })
     })
     return result.sort((a, b) => b.date.localeCompare(a.date))
-  }, [invPeriode, especes])
+  }, [invPeriode, especesScope])
 
   // Effectifs et mouvements par catégorie POUR LA PÉRIODE (pas seulement aujourd'hui)
   const parCatPeriode = useMemo(() => cats.map((cat) => {
@@ -197,7 +232,7 @@ export default function DecisionBI({
     const map = {}
     facturesPeriode.forEach((f) => {
       const d = f.date || ''
-      if (d) map[d] = (map[d] || 0) + (f.totalTTC || 0)
+      if (d) map[d] = (map[d] || 0) + montantScope(f)
     })
     const keys = Object.keys(map).sort()
     let cumul = 0
@@ -246,11 +281,13 @@ export default function DecisionBI({
   const topClients = useMemo(() => {
     const map = {}
     facturesPeriode.forEach((f) => {
+      const m = montantScope(f)
+      if (m <= 0) return
       const nom = f.client?.nom || 'Inconnu'
-      map[nom] = (map[nom] || 0) + (f.totalTTC || 0)
+      map[nom] = (map[nom] || 0) + m
     })
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  }, [facturesPeriode])
+  }, [facturesPeriode, scope, catById])
 
   // Apporteurs d'affaires : CA généré par chaque membre ayant amené un client
   // (pour les primer). On ignore les factures sans apporteur (clients directs).
@@ -259,12 +296,14 @@ export default function DecisionBI({
     facturesPeriode.forEach((f) => {
       const nom = (f.apporteur || '').trim()
       if (!nom) return
+      const m = montantScope(f)
+      if (m <= 0) return
       if (!map[nom]) map[nom] = { ca: 0, nb: 0 }
-      map[nom].ca += f.totalTTC || 0
+      map[nom].ca += m
       map[nom].nb += 1
     })
     return Object.entries(map).map(([nom, v]) => ({ nom, ...v })).sort((a, b) => b.ca - a.ca)
-  }, [facturesPeriode])
+  }, [facturesPeriode, scope, catById])
 
   const kpis = [
     { id: 'effectif', title: 'Effectif total', value: formatNumber(effectifTotal), sub: veille ? `${effectifTotal - effectifVeille >= 0 ? '+' : ''}${effectifTotal - effectifVeille} vs veille` : '', icon: Layers, color: '#BC3C31' },
@@ -295,6 +334,16 @@ export default function DecisionBI({
           </div>
         </div>
       )}
+
+      {/* Filtre par catégorie (comme le Dashboard) — pilote les cartes du haut */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-bold uppercase tracking-wide text-gray-400">Catégorie :</span>
+        <ScopeTab active={scope === TOUTES} color="#374151" onClick={() => setScope(TOUTES)}>Toutes</ScopeTab>
+        {cats.map((c) => (
+          <ScopeTab key={c} active={scope === c} color={catColor(c)} onClick={() => setScope(c)}>{c}</ScopeTab>
+        ))}
+      </div>
+      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel}</p>
 
       {/* Grille KPI principale */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
@@ -493,7 +542,7 @@ export default function DecisionBI({
       <KpiDetailModal
         id={kpiDetail}
         onClose={() => setKpiDetail(null)}
-        data={{ achats, ventes, totauxAnim, parCat, parCatPeriode, alimentsStock, topClients, facturesPeriode, demandesPeriode, demandesEnAttenteList, interventions, effectifTotal, caTotal, decesDetail, naissancesDetail, invPeriode, baseEffectif, tauxMortalite, tauxCroissance, start, end }}
+        data={{ achats, ventes, totauxAnim, parCat, parCatPeriode, alimentsStock, topClients, facturesPeriode: facturesScope.map((f) => ({ ...f, _montantScope: montantScope(f) })), demandesPeriode, demandesEnAttenteList, interventions, effectifTotal, caTotal, decesDetail, naissancesDetail, invPeriode, baseEffectif, tauxMortalite, tauxCroissance, scopeLabel, start, end }}
       />
 
       <CategoriePeriodeModal
@@ -813,7 +862,7 @@ function KpiDetailModal({ id, onClose, data }) {
           <tr key={f.id || f.num} className="border-t">
             <td className="p-2">{formatDateShort(f.date)}</td>
             <td className="p-2">{f.client?.nom || '—'}</td>
-            <td className="p-2 text-right font-bold">{formatMoney(f.totalTTC)}</td>
+            <td className="p-2 text-right font-bold">{formatMoney(f._montantScope ?? f.totalTTC)}</td>
           </tr>
         ))}</tbody>
       </table>
@@ -861,6 +910,16 @@ function KpiDetailModal({ id, onClose, data }) {
     <Modal open onClose={onClose} size="lg" title={titles[id] || 'Détail'}>
       <div className="max-h-[60vh] overflow-auto">{content}</div>
     </Modal>
+  )
+}
+
+function ScopeTab({ active, color, onClick, children }) {
+  return (
+    <button onClick={onClick} type="button"
+      className="rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors"
+      style={active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' }}>
+      {children}
+    </button>
   )
 }
 

@@ -1,5 +1,5 @@
 // Saisie magasin — EF Initial · Achats · Sorties (autorisées) · Retours · EF Final.
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Save, Send, CheckCircle2, Plus, Trash2, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -10,6 +10,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isFullAccessRole } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 import { setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -31,6 +32,7 @@ export default function SaisieMagasin() {
   const { data: allRetoursCol } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
   const saveMateriel = useLogistiqueStore((s) => s.saveMateriel)
+  const referentielReady = useLogistiqueStore((s) => s.ready)
 
   // Cloisonnement par site : chaque magasin (Lomé / Kara) a son propre stock.
   const inventaires = useMemo(() => allInventaires.filter((i) => matchSite(i, site)), [allInventaires, site])
@@ -51,7 +53,16 @@ export default function SaisieMagasin() {
   const [seedInit, setSeedInit] = useState({}) // stock initial des articles fraîchement créés : { date: { id } }
 
   const peutSaisir = role === 'agent'
-  const peutEditerInit = false // toujours reporté automatiquement
+  // L'ADMINISTRATEUR (accès total) peut renseigner les STOCKS INITIAUX de départ
+  // (mise en route de l'app / recalage sur le stock physique) et enregistrer.
+  const peutEditerInit = isFullAccessRole(role)
+  const peutEnregistrer = peutSaisir || peutEditerInit
+  // Brouillon anti-perte (auto-enregistrement) : passe à true dès qu'on modifie.
+  const dirtyRef = useRef(false)
+  const draftRef = useRef({})
+  const lastSaveRef = useRef(0)
+  const [draftSavedAt, setDraftSavedAt] = useState(null)
+  const markDirty = () => { dirtyRef.current = true }
 
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { materiels: {} }
@@ -92,11 +103,13 @@ export default function SaisieMagasin() {
   }, [materiel])
 
   const setInit = (id, val) => {
+    markDirty()
     setStock((s) => ({ ...s, [id]: { ...s[id], init: Math.max(0, parseInt(val) || 0) } }))
   }
 
   const setLignes = (id, dir, lignes) => {
     if (!user) return
+    markDirty()
     const field = dir === 'entree' ? 'entrees' : dir === 'sortie' ? 'sorties' : 'retours'
     setStock((s) => {
       const prev = s[id]?.[field] || []
@@ -105,8 +118,60 @@ export default function SaisieMagasin() {
     })
   }
 
+  // Mémorise l'état courant pour l'auto-enregistrement (lu dans le timeout).
+  draftRef.current = { materiel, stock, autoSorOf, user, inventaires, date, site, referentielReady, peutEnregistrer }
+  // Repart « propre » au changement de jour.
+  useEffect(() => { dirtyRef.current = false }, [date])
+
+  // AUTO-ENREGISTREMENT DU BROUILLON (anti-perte). Au plus une fois par heure tant
+  // qu'il y a des modifications, MAIS forcé en fin de journée (≥ 23:58) pour capturer
+  // la saisie AVANT le changement de jour. Marqué brouillon (autoDraft), sans notifier.
+  useEffect(() => {
+    if (!peutEnregistrer) return
+    const UNE_HEURE = 60 * 60 * 1000
+    const tick = async () => {
+      if (!dirtyRef.current) return
+      const now = new Date()
+      const finDeJournee = now.getHours() === 23 && now.getMinutes() >= 58
+      if (!finDeJournee && Date.now() - (lastSaveRef.current || 0) < UNE_HEURE) return
+      const d = draftRef.current
+      if (!d.user || !d.referentielReady) return
+      const aDuContenu = d.materiel.some((m) => {
+        const x = d.stock[m.id]
+        return x && (x.entrees?.length || x.sorties?.length || x.retours?.length)
+      })
+      if (!aDuContenu) return
+      try {
+        const materiels = {}
+        d.materiel.forEach((m) => {
+          const x = d.stock[m.id] || { init: 0, entrees: [], sorties: [], retours: [] }
+          const autoSor = d.autoSorOf(m.id)
+          const agg = agregerMateriel(x, autoSor)
+          materiels[m.id] = {
+            ...agg,
+            entrees: annoterLignesAgent(x.entrees || [], d.user.uid, d.user.nom),
+            sorties: annoterLignesAgent(x.sorties || [], d.user.uid, d.user.nom),
+            retours: annoterLignesAgent(x.retours || [], d.user.uid, d.user.nom),
+            autoSor
+          }
+        })
+        const dejaEnregistre = !!getInventaire(d.inventaires, d.date)?.savedAt
+        await setItem('logistique_inventaires', `${d.site}__${d.date}`, {
+          date: d.date, site: d.site, agentId: d.user.uid, agentNom: d.user.nom,
+          autoSavedAt: ts(), autoDraft: !dejaEnregistre, materiels
+        })
+        dirtyRef.current = false
+        lastSaveRef.current = Date.now()
+        setDraftSavedAt(Date.now())
+      } catch (e) { /* brouillon best-effort */ }
+    }
+    const id = setInterval(tick, 30000)
+    return () => clearInterval(id)
+  }, [peutEnregistrer]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function save() {
     if (!user) return toast.error('Session expirée')
+    if (!referentielReady) return toast.error('Référentiel en cours de chargement — patientez puis réessayez')
     setSaving(true)
     try {
       const materiels = {}
@@ -125,7 +190,8 @@ export default function SaisieMagasin() {
       await setItem('logistique_inventaires', `${site}__${date}`, {
         date, site, agentId: user.uid, agentNom: user.nom, savedAt: ts(), materiels
       })
-      await audit('logistique', 'SAISIE_MAGASIN', `${site === 'lome' ? 'Lomé' : 'Kara'} — saisie magasin du ${date}`)
+      dirtyRef.current = false
+      await audit('logistique', 'SAISIE_MAGASIN', `${site === 'lome' ? 'Lomé' : 'Kara'} — saisie magasin du ${date}${peutEditerInit && !peutSaisir ? ' (stocks initiaux — admin)' : ''}`)
       toast.success('Saisie enregistrée ✓')
     } catch (e) {
       toast.error(e.message)
@@ -136,9 +202,22 @@ export default function SaisieMagasin() {
 
   return (
     <div className="space-y-4">
-      {!peutSaisir && (
+      {!peutEnregistrer && (
         <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
           👁️ Mode consultation — seuls les agents peuvent effectuer des saisies magasin
+        </div>
+      )}
+      {peutEditerInit && !peutSaisir && (
+        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          🛠️ Mode administrateur — vous pouvez renseigner les <strong>stocks initiaux de départ</strong> (colonne « Stock Initial ») pour caler l'appli sur le stock physique, puis <strong>Enregistrer</strong>.
+        </div>
+      )}
+      {!peutSaisir && peutEditerInit && (
+        <p className="text-xs text-gray-400">Les mouvements (achats / sorties / retours) restent gérés par les agents et les workflows ; en tant qu'administrateur vous ajustez les données de départ.</p>
+      )}
+      {draftSavedAt && !dejaSaisi && (
+        <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} — vos données sont en sécurité même sans clic sur « Enregistrer ».
         </div>
       )}
       <div className="flex flex-wrap items-end gap-3">
@@ -151,9 +230,9 @@ export default function SaisieMagasin() {
           <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
         </div>
         <div className="ml-auto flex gap-2">
-          {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un matériel</Button>}
+          {peutEnregistrer && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un matériel</Button>}
           <Link to={`/logistique/${site}/demandes`}><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
-          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
+          {peutEnregistrer && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
       </div>
 

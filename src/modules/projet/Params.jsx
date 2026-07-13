@@ -28,7 +28,7 @@ async function viderCollection(name) {
 
 function SectionSeuils() {
   const { role } = useAuthStore()
-  const peutModifier = !['chef_projet', 'superviseur'].includes(role)
+  const peutModifier = !['chef_projet', 'superviseur', 'partenaire'].includes(role)
   const { data: configs } = useCollection('projet_params')
   const [form, setForm]   = useState(SEUILS_DEFAUT)
   const [saving, setSaving] = useState(false)

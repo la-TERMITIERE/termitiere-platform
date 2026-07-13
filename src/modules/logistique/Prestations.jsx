@@ -16,7 +16,7 @@ import { addItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { isApproverRole } from '../../core/roles'
+import { isApproverRole, isReadOnlyRole } from '../../core/roles'
 import { catColor } from './data'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
@@ -185,7 +185,7 @@ export default function Prestations() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>
+      {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
       <Card className="p-0">
         <Table
           columns={[

@@ -24,8 +24,9 @@ function GarderieGuard({ roles, children }) {
 }
 
 // Les rôles à accès total (super_admin, pau, ge, directeur, admin) voient toujours tout.
-const ROLES_GESTION   = [...FULL_ACCESS_ROLES, 'gerant', 'gerante_garderie', 'superviseur']
-const ROLES_DIRECTION = [...FULL_ACCESS_ROLES, 'gerant', 'superviseur']
+// Le partenaire (externe, lecture seule) consulte comme le superviseur — s'il a le module.
+const ROLES_GESTION   = [...FULL_ACCESS_ROLES, 'gerant', 'gerante_garderie', 'superviseur', 'partenaire']
+const ROLES_DIRECTION = [...FULL_ACCESS_ROLES, 'gerant', 'superviseur', 'partenaire']
 const ROLES_ADMIN     = [...FULL_ACCESS_ROLES]
 
 export default function GarderieModule() {

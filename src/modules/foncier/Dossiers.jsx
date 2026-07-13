@@ -12,6 +12,7 @@ import Select from '../../shared/forms/Select'
 import PiecesJointes from '../../shared/ui/PiecesJointes'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isReadOnlyRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -61,7 +62,8 @@ function proprietairePrincipal(acteurs = []) {
 }
 
 export default function Dossiers() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const lectureSeule = isReadOnlyRole(role)
   const { data: dossiers } = useCollection('foncier_dossiers')
   const { data: toutesPieces } = useCollection('foncier_pieces')
   const customTypes = useFoncierStore((s) => s.customTypes)
@@ -215,10 +217,12 @@ export default function Dossiers() {
             <button onClick={() => { setDateDebut(''); setDateFin('') }} className="text-xs text-gray-400 underline hover:text-gray-600">effacer</button>
           )}
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" onClick={() => setTypeModal(true)}><Plus size={16} /> Ajouter un type</Button>
-          <Button onClick={openCreate}><Plus size={16} /> Nouveau dossier</Button>
-        </div>
+        {!lectureSeule && (
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" onClick={() => setTypeModal(true)}><Plus size={16} /> Ajouter un type</Button>
+            <Button onClick={openCreate}><Plus size={16} /> Nouveau dossier</Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -358,7 +362,7 @@ export default function Dossiers() {
               <Badge tone={STATUTS_DOSSIER[detail.statut]?.tone}>{STATUTS_DOSSIER[detail.statut]?.label || detail.statut}</Badge>
               <span className="text-sm font-bold text-emerald-700">{progressionDossier(detail.etapes)}% complété</span>
               <span className="text-xs text-gray-500">· {labelType(detail.type)}</span>
-              <button onClick={() => openEdit(detail)} className="ml-auto text-xs text-secondary underline">Modifier infos</button>
+              {!lectureSeule && <button onClick={() => openEdit(detail)} className="ml-auto text-xs text-secondary underline">Modifier infos</button>}
             </div>
 
             {/* Informations du dossier */}

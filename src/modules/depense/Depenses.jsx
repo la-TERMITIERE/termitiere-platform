@@ -19,7 +19,7 @@ import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
 import { notifierBeneficiaire } from './notifications'
-import { isFullAccessRole, FULL_ACCESS_ROLES } from '../../core/roles'
+import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
@@ -89,6 +89,7 @@ function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
 export default function Depenses() {
   const { user, role } = useAuth()
   const isAdmin = isFullAccessRole(role)
+  const lectureSeule = isReadOnlyRole(role)
   const { data: depenses } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
@@ -258,7 +259,7 @@ export default function Depenses() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
-          <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>
+          {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
         </div>
       </div>
 

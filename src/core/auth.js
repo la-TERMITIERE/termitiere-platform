@@ -16,7 +16,7 @@ import {
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, getOne, setItem, addItem } from './db'
-import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole } from './roles'
+import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 
 // Cible auto-hébergée : authentification via Supabase Auth (identités réelles + RLS).
@@ -383,6 +383,9 @@ export const useAuthStore = create((set, get) => ({
   canManage: () => isApproverRole(get().role),
   // 2e niveau : certification définitive (déclenche l'effet métier).
   canCertify: () => isCertifierRole(get().role),
+  // Lecture seule stricte (superviseur interne / partenaire externe sectorisé) :
+  // consulte tout ce que ses modules lui donnent, ne crée / modifie / supprime RIEN.
+  isReadOnly: () => isReadOnlyRole(get().role),
 
   clearError: () => set({ error: null })
 }))

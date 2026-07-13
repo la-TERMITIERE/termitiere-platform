@@ -184,6 +184,12 @@ export default function Utilisateurs() {
             </div>
 
             <FormGroup label="Accès aux modules">
+              {modal.data.role === 'partenaire' && (
+                <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  🤝 <strong>Partenaire</strong> : lecture seule stricte. Il consultera uniquement les modules cochés
+                  ci-dessous (tableaux de bord, pilotage, historiques) sans pouvoir rien créer, modifier ou approuver.
+                </p>
+              )}
               {isViewAllRole(modal.data.role) ? (
                 <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary-dark">
                   Ce rôle ({roleLabel(modal.data.role)}) voit tous les modules{modal.data.role === 'superviseur' ? ' (en lecture seule)' : ''}.

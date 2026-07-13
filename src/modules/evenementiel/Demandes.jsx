@@ -15,10 +15,11 @@ import { addItem, updateItem, setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
-import { todayStr, nowHM, genNumero, formatMoney } from '../../utils/formatters'
+import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { dernierStockBriques, retirerVenteDuStock } from './logic'
-import { APPROVER_ROLES, CERTIFIER_ROLES } from '../../core/roles'
+import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande } from '../../shared/workflow'
+import DemandeDetail from '../../shared/demandes/DemandeDetail'
 
 const STATUTS = STATUTS_DEMANDE
 
@@ -165,7 +166,7 @@ export default function Demandes() {
             {f === 'tous' ? 'Toutes' : STATUTS[f]?.short || f}
           </button>
         ))}
-        {role !== 'superviseur' && (
+        {!isReadOnlyRole(role) && (
           <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
             <Plus size={16} /> Demander une autorisation
           </Button>
@@ -270,24 +271,40 @@ export default function Demandes() {
             </Button>
           ))}
         </>}>
-        {decision && (
-          <>
-            <p className="mb-1 text-sm">Vente <strong>{decision.demande.venteNum}</strong> — {decision.demande.clientNom}</p>
-            {decision.demande.lignes?.length ? (
-              <div className="mb-3 rounded-lg bg-gray-50 p-2 text-sm">
-                {decision.demande.lignes.map((l, i) => (
-                  <div key={i} className="flex justify-between border-t border-gray-100 py-1 first:border-t-0">
-                    <span>{l.briqueNom}</span><strong>{l.qte}</strong>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mb-1 text-sm">{decision.demande.qte} × <strong>{decision.demande.briqueNom}</strong></p>
-            )}
-            <p className="mb-3"><Badge tone={STATUTS[normaliserStatut(decision.demande.statut)]?.tone}>{STATUTS[normaliserStatut(decision.demande.statut)]?.label}</Badge></p>
-            <FormGroup label="Commentaire"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
-          </>
-        )}
+        {decision && (() => {
+          const d = decision.demande
+          const sn = normaliserStatut(d.statut)
+          const lignes = d.lignes || []
+          const items = lignes.length
+            ? lignes.map((l) => ({
+                nom: l.briqueNom, qte: parseInt(l.qte) || 0,
+                stock: dernierStockBriques(inventaires, l.briqueId, l.briqueId === 'caillasses' ? 'caillasses' : 'pret'),
+                montant: l.montant
+              }))
+            : [{ nom: d.briqueNom, qte: parseInt(d.qte) || 0 }]
+          const montant = lignes.length ? lignes.reduce((s, l) => s + (l.montant || 0), 0) : undefined
+          return (
+            <>
+              <p className="mb-2 text-sm font-semibold text-gray-800">Vente {d.venteNum}</p>
+              <DemandeDetail
+                demandeur={d.demandeurNom}
+                dateHeure={d.date ? `${formatDateShort(d.date)}${d.heure ? ' ' + d.heure : ''}` : null}
+                client={d.clientNom}
+                motif={d.message}
+                sortieLabel="Chargement prévu"
+                sortieValue={d.dateSortie ? formatDateShort(d.dateSortie) : null}
+                items={items}
+                montant={montant}
+                statutNode={<Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>}
+                trail={[
+                  { label: 'Approuvé (N1)', value: d.approuveN1Par ? `${d.approuveN1Par}${d.approuveN1Le ? ' · ' + d.approuveN1Le : ''}` : '' },
+                  { label: 'Certifié', value: d.certifiePar ? `${d.certifiePar}${d.certifieLe ? ' · ' + d.certifieLe : ''}` : '' }
+                ]}
+              />
+              <FormGroup label="Commentaire" className="mt-3"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
+            </>
+          )
+        })()}
       </Modal>
     </div>
   )

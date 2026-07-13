@@ -92,7 +92,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
   const peutSoumettreValider  = !['secretaire', 'agent'].includes(role)
   const peutSaisirMontant     = true
   // Le superviseur crée/modifie/suit les tâches, mais ne les supprime pas.
-  const peutSupprimer         = !['secretaire', 'agent', 'superviseur'].includes(role)
+  const peutSupprimer         = !['secretaire', 'agent', 'superviseur', 'partenaire'].includes(role)
 
   const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
   const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])

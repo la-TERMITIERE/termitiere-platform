@@ -18,13 +18,14 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
-import { APPROVER_ROLES } from '../../core/roles'
+import { APPROVER_ROLES, isReadOnlyRole } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatDateShort } from '../../utils/formatters'
 import { useSite, matchSite } from './site/useSite'
 
 export default function Retours() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const lectureSeule = isReadOnlyRole(role)
   const site = useSite()
   const { data: allRetours } = useCollection('logistique_retours')
   const { data: allPrestations } = useCollection('logistique_prestations')
@@ -118,6 +119,7 @@ export default function Retours() {
         Les retours apparaissent ensuite en <strong>lecture seule</strong> dans la saisie magasin.
       </div>
 
+      {!lectureSeule && (
       <Card title="Nouveau retour (par prestation)">
         <FormGroup label="Prestation liée" required>
           <Select value={prestationId} onChange={(e) => choisirPrestation(e.target.value)}>
@@ -165,6 +167,7 @@ export default function Retours() {
           </div>
         )}
       </Card>
+      )}
 
       <Card title="Historique des retours" className="overflow-x-auto p-0">
         <table className="w-full text-sm">

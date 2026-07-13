@@ -33,7 +33,9 @@ const firebaseConfig = {
 
 // Synchronisation cloud active dès qu'une base Realtime Database est joignable.
 // (Toujours vrai avec la config par défaut ci-dessus → données partagées + temps réel.)
-export const isFirebaseConfigured = Boolean(firebaseConfig.databaseURL)
+export const isFirebaseConfigured = import.meta.env.VITE_FORCE_DEMO === 'true'
+  ? false
+  : Boolean(firebaseConfig.databaseURL)
 
 let app = null
 let auth = null

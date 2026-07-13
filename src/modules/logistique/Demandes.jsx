@@ -20,8 +20,9 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { dernierStock } from './logic'
-import { APPROVER_ROLES, CERTIFIER_ROLES } from '../../core/roles'
+import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande } from '../../shared/workflow'
+import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const STATUTS = STATUTS_DEMANDE
@@ -177,14 +178,14 @@ export default function Demandes() {
             {f === 'tous' ? 'Toutes' : STATUTS[f]?.short || f}
           </button>
         ))}
-        {role !== 'superviseur' && (
+        {!isReadOnlyRole(role) && (
           <Button className="ml-auto" onClick={openCreate} disabled={!facturesDispo.length}>
             <Plus size={16} /> Autorisation de sortie
           </Button>
         )}
       </div>
 
-      {role !== 'superviseur' && !facturesDispo.length && (
+      {!isReadOnlyRole(role) && !facturesDispo.length && (
         <div className="rounded-lg bg-sky-50 px-4 py-2 text-xs text-sky-700">
           Aucune facture en attente d'autorisation. Émettez d'abord une facture (onglet Facturation).
         </div>
@@ -281,19 +282,38 @@ export default function Demandes() {
               {a.label}
             </Button>
           ))}</>}>
-        {decision && (
-          <>
-            <p className="mb-1 text-sm">Prestation <strong>{decision.demande.prestationNum}</strong> — Facture {decision.demande.factureNum}</p>
-            <p className="mb-2 text-sm text-gray-600">{decision.demande.clientNom}</p>
-            <div className="mb-3 rounded-lg bg-gray-50 p-2 text-sm">
-              {(decision.demande.lignes || []).map((l, i) => (
-                <div key={i} className="flex justify-between"><span>{l.materielNom}</span><span className="font-semibold">×{l.qte}</span></div>
-              ))}
-            </div>
-            <p className="mb-3"><Badge tone={STATUTS[normaliserStatut(decision.demande.statut)]?.tone}>{STATUTS[normaliserStatut(decision.demande.statut)]?.label}</Badge></p>
-            <FormGroup label="Commentaire"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
-          </>
-        )}
+        {decision && (() => {
+          const d = decision.demande
+          const sn = normaliserStatut(d.statut)
+          const fac = factures.find((f) => f.id === d.factureId)
+          const items = (d.lignes || []).map((l) => ({
+            nom: l.materielNom, cat: l.materielCat,
+            qte: parseInt(l.qte) || 0, stock: dernierStock(inventaires, l.materielId)
+          }))
+          return (
+            <>
+              <p className="mb-2 text-sm font-semibold text-gray-800">
+                Prestation {d.prestationNum} · Facture {d.factureNum}
+              </p>
+              <DemandeDetail
+                demandeur={d.demandeurNom}
+                dateHeure={d.date ? `${formatDateShort(d.date)}${d.heure ? ' ' + d.heure : ''}` : null}
+                client={d.clientNom}
+                motif={d.message}
+                sortieLabel="Sortie prévue"
+                sortieValue={d.dateSortie ? formatDateShort(d.dateSortie) : null}
+                items={items}
+                montant={fac?.totalTTC}
+                statutNode={<Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>}
+                trail={[
+                  { label: 'Approuvé (N1)', value: d.approuveN1Par ? `${d.approuveN1Par}${d.approuveN1Le ? ' · ' + d.approuveN1Le : ''}` : '' },
+                  { label: 'Certifié', value: d.certifiePar ? `${d.certifiePar}${d.certifieLe ? ' · ' + d.certifieLe : ''}` : '' }
+                ]}
+              />
+              <FormGroup label="Commentaire" className="mt-3"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
+            </>
+          )
+        })()}
       </Modal>
     </div>
   )

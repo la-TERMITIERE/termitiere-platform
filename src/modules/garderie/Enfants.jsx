@@ -39,7 +39,7 @@ const empty = () => ({
 
 export default function Enfants() {
   const { user, role } = useAuth()
-  const lectureSeule = role === 'tata' || role === 'superviseur'
+  const lectureSeule = role === 'tata' || role === 'superviseur' || role === 'partenaire'
   const { data: enfants }     = useCollection('garderie_enfants')
   const { data: parents }     = useCollection('garderie_parents')
   const { data: journaliers } = useCollection('garderie_journaliers')

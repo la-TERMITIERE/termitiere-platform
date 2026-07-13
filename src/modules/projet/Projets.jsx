@@ -209,7 +209,7 @@ export default function Projets() {
   const lectureSeule      = ['secretaire', 'agent'].includes(role)
   const sansActionsDecision = ['secretaire', 'agent'].includes(role)
   // Le chef de projet et le superviseur créent/modifient/suivent les projets, mais ne les suppriment pas.
-  const peutSupprimer = !['secretaire', 'agent', 'chef_projet', 'superviseur'].includes(role)
+  const peutSupprimer = !['secretaire', 'agent', 'chef_projet', 'superviseur', 'partenaire'].includes(role)
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
 
   // Total dépensé par projet — recalculé en temps réel à chaque dépense saisie.

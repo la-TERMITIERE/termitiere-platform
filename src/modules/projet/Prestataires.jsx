@@ -17,7 +17,7 @@ export default function Prestataires() {
   const { data: masquesTous }  = useCollection('projet_prestataires_masques')
   const { user, role } = useAuthStore()
   // Le superviseur consulte tout, mais n'agit sur rien (lecture seule globale).
-  const lectureSeule = role === 'superviseur'
+  const lectureSeule = ['superviseur', 'partenaire'].includes(role)
 
   // Cloisonnement : un chef de projet ne voit que les prestataires de ses projets.
   const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])

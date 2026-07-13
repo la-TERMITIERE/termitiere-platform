@@ -23,6 +23,7 @@ export const ROLES = [
   { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie — présences, cantine, incidents' },
   { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif — E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
   { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro — accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },
+  { value: 'partenaire',       label: 'Partenaire',        desc: 'Externe — lecture seule sur SES modules uniquement (sectorisé) ; voit le pilotage, ne modifie rien' },
 ]
 
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
@@ -36,12 +37,20 @@ export const CERTIFIER_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin'
 
 // Rôles autorisés à voir les données FINANCIÈRES (chiffre d'affaires, montants)
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
-export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur']
+// Le PARTENAIRE (externe, lecture seule) voit aussi le pilotage — mais uniquement
+// sur les modules qui lui sont attribués (sectorisation par `modules`).
+export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire']
+
+// Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
+//   - superviseur : interne, voit TOUS les modules ;
+//   - partenaire  : externe, voit UNIQUEMENT ses modules attribués (sectorisé).
+export const READONLY_ROLES = ['superviseur', 'partenaire']
+export const isReadOnlyRole = (r) => READONLY_ROLES.includes(r)
 
 // E-G.Pro : volet Paramètres — tout le monde SAUF la secrétaire/l'agent (administratif)
 // et le chef de projet (terrain).
 export const PROJET_VOLETS_RESTREINTS_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => !['secretaire', 'agent', 'chef_projet'].includes(v))
+  .filter((v) => !['secretaire', 'agent', 'chef_projet', 'partenaire'].includes(v))
   .concat(['admin', 'controleur'])
 
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
@@ -87,7 +96,7 @@ export const isTata            = (r) => r === 'tata'
 export const isRoleGarderie    = (r) => ['gerante_garderie', 'tata'].includes(r)
 
 // Droits garderie détaillés
-export const garderieCanEdit   = (r) => !['tata', 'superviseur'].includes(r) || FULL_ACCESS_ROLES.includes(r)
+export const garderieCanEdit   = (r) => !['tata', 'superviseur', 'partenaire'].includes(r) || FULL_ACCESS_ROLES.includes(r)
 export const garderieCanManage = (r) => [...FULL_ACCESS_ROLES, 'gerante_garderie'].includes(r)
 
 const LEGACY_LABEL = { admin: 'Administrateur', controleur: 'Contrôleur' }
@@ -99,6 +108,7 @@ export const roleLabel = (r) =>
 export const roleTone = (r) => {
   if (FULL_ACCESS_ROLES.includes(r)) return 'primary'
   if (r === 'superviseur') return 'info'
+  if (r === 'partenaire') return 'warning'
   if (r === 'gerant' || r === 'controleur') return 'info'
   if (r === 'gerante_garderie') return 'warning'
   if (r === 'tata') return 'success'

@@ -28,7 +28,7 @@ export default function Documents() {
   const { data: tachesTous }  = useCollection('projet_taches')
   const { user, role } = useAuthStore()
   // Le superviseur ajoute/consulte des documents, mais ne les supprime pas.
-  const peutSupprimer = role !== 'superviseur'
+  const peutSupprimer = !['superviseur', 'partenaire'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDocuments') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches.

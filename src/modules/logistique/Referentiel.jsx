@@ -10,12 +10,16 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useLogistiqueStore } from './store/referentielStore'
+import { useAuth } from '../../hooks/useAuth'
+import { isReadOnlyRole } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { genId, formatMoney } from '../../utils/formatters'
 import { CAT_MATERIEL } from './data'
 
 export default function Referentiel() {
   const { materiel, saveMateriel, removeMateriel } = useLogistiqueStore()
+  const role = useAuth((s) => s.role)
+  const lectureSeule = isReadOnlyRole(role)
   const [modal, setModal] = useState(null)
 
   function openNew() {
@@ -40,7 +44,7 @@ export default function Referentiel() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">Gérez le catalogue matériel : coût d'achat, tarif de location et unité. La liste complète pourra être importée ultérieurement.</p>
-      <div className="flex justify-end"><Button onClick={openNew}><Plus size={16} /> Ajouter du matériel</Button></div>
+      {!lectureSeule && <div className="flex justify-end"><Button onClick={openNew}><Plus size={16} /> Ajouter du matériel</Button></div>}
       <Card className="p-0">
         <Table
           columns={[
@@ -49,7 +53,7 @@ export default function Referentiel() {
             { key: 'unite', label: 'Unité' },
             { key: 'coutAchat', label: 'Coût achat', align: 'right', render: (r) => formatMoney(r.coutAchat) },
             { key: 'tarifLocation', label: 'Tarif location', align: 'right', render: (r) => formatMoney(r.tarifLocation) },
-            { key: 'actions', label: '', align: 'right', render: (r) => (
+            { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ ...r, isNew: false })} className="rounded p-1.5 hover:bg-gray-100">✏️</button>
                 <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeMateriel(r.id) }} className="text-red-500"><Trash2 size={16} /></button>

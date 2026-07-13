@@ -8,6 +8,8 @@ import Table from '../../shared/ui/Table'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import { isReadOnlyRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, addDays, todayStr } from '../../utils/formatters'
@@ -16,6 +18,8 @@ const empty = () => ({ nom: '', contact: '', adresse: '', specialite: '', delaiM
 
 export default function Fournisseurs() {
   const { data: fournisseurs } = useCollection('logistique_fournisseurs')
+  const role = useAuth((s) => s.role)
+  const lectureSeule = isReadOnlyRole(role)
   const [modal, setModal] = useState(null)
 
   async function save() {
@@ -30,7 +34,7 @@ export default function Fournisseurs() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end"><Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Ajouter un fournisseur</Button></div>
+      {!lectureSeule && <div className="flex justify-end"><Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Ajouter un fournisseur</Button></div>}
       <Card className="p-0">
         <Table
           columns={[
@@ -40,7 +44,7 @@ export default function Fournisseurs() {
             { key: 'delaiMoyen', label: 'Délai (j)', align: 'center' },
             { key: 'note', label: 'Qualité', align: 'center', render: (r) => <span className="inline-flex items-center gap-0.5 text-amber-500">{r.note}<Star size={13} fill="currentColor" /></span> },
             { key: 'derniereCommande', label: 'Dernière cmd', render: (r) => formatDateShort(r.derniereCommande) },
-            { key: 'actions', label: '', align: 'right', render: (r) => (
+            { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
                 <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
