@@ -88,10 +88,13 @@ export default function Pilotage() {
 
   // Matières (global) : consommées & coût d'achat sur la période, marge brute indicative.
   const mat = useMemo(() => {
-    const conso = {}; let cout = 0
+    const conso = {}; const ent = {}; let cout = 0
     productionsP.forEach((p) => Object.entries(p.consommation || {}).forEach(([id, q]) => { conso[id] = (conso[id] || 0) + (parseFloat(q) || 0) }))
-    inventaires.filter((i) => inPeriode(i.date)).forEach((i) => Object.values(i.matieres || {}).forEach((m) => { cout += m.coutEntrees || 0 }))
-    return { conso, cout }
+    inventaires.filter((i) => inPeriode(i.date)).forEach((i) => Object.entries(i.matieres || {}).forEach(([id, m]) => {
+      cout += m.coutEntrees || 0
+      ent[id] = (ent[id] || 0) + (m.ent != null ? m.ent : (m.entrees || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0))
+    }))
+    return { conso, ent, cout }
   }, [productionsP, inventaires, start, end])
   const margeBrute = caTotal - mat.cout
   const tauxMarge = caTotal ? (margeBrute / caTotal) * 100 : 0
@@ -227,18 +230,27 @@ export default function Pilotage() {
         </div>
       </Card>
 
-      {/* Matières consommées */}
-      <Card title="Matières premières consommées — période">
+      {/* Matières premières : arrivages, consommation, stock */}
+      <Card title="Matières premières — arrivages, consommation, stock">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Matière</th><th className="px-2 py-2 text-right">Consommée</th></tr></thead>
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr><th className="px-3 py-2 text-left">Matière</th><th className="px-3 py-2 text-center text-green-700">Arrivages</th><th className="px-3 py-2 text-center text-orange-700">Consommée</th><th className="px-3 py-2 text-center">Stock actuel</th></tr>
+            </thead>
             <tbody className="divide-y divide-gray-100">
-              {matieres.map((m) => (
-                <tr key={m.id}>
-                  <td className="px-3 py-1.5 font-semibold">{m.nom}</td>
-                  <td className="px-2 py-1.5 text-right">{formatNumber(Math.round((mat.conso[m.id] || 0) * 10) / 10)} <span className="text-[10px] text-gray-400">{m.unite}</span></td>
-                </tr>
-              ))}
+              {matieres.map((m) => {
+                const ent = mat.ent[m.id] || 0
+                const conso = mat.conso[m.id] || 0
+                const stock = dernier?.matieres?.[m.id]?.fin || 0
+                return (
+                  <tr key={m.id}>
+                    <td className="px-3 py-1.5 font-semibold">{m.nom} <span className="text-[10px] font-normal text-gray-400">({m.unite})</span></td>
+                    <td className="px-3 py-1.5 text-center font-bold text-green-700">{ent ? '+' + formatNumber(Math.round(ent * 10) / 10) : '—'}</td>
+                    <td className="px-3 py-1.5 text-center font-bold text-orange-700">{conso ? '−' + formatNumber(Math.round(conso * 10) / 10) : '—'}</td>
+                    <td className="px-3 py-1.5 text-center text-base font-extrabold text-violet-700">{formatNumber(Math.round(stock * 10) / 10)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -15,7 +15,8 @@ import { useLogistiqueStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { estActif } from '../../shared/workflow'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-import { CAT_MATERIEL, catColor } from './data'
+import { CAT_MATERIEL, catColor, labelColor } from './data'
+import { analyserPrestations, nbJoursInclus } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const TOUTES = '__TOUTES__'
@@ -38,6 +39,7 @@ export default function Pilotage() {
   const { start, end, node: periodNode } = usePeriodSelect('30')
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
+  const [detail, setDetail] = useState(null) // drill-down analyse (élément / événement / client)
 
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
@@ -57,6 +59,92 @@ export default function Pilotage() {
   const facturesP = useMemo(() => factures.filter((f) => f.statut === 'approuvee' && inPeriode(f.date)), [factures, start, end])
   const prestationsP = useMemo(() => prestations.filter((p) => inPeriode(p.date)), [prestations, start, end])
   const retoursP = useMemo(() => retours.filter((r) => inPeriode(r.date)), [retours, start, end])
+
+  // Analyse détaillée des prestations de la période (par élément, catégorie,
+  // événement, client). Indépendante du filtre catégorie ci-dessus.
+  const analyse = useMemo(() => analyserPrestations(prestationsP), [prestationsP])
+  const keyOf = (l) => l.materielId || `autre:${l.materielNom || 'Autre'}`
+
+  // Prestations concernant un élément donné → détail cliquable.
+  const detailElement = (el) => {
+    const rows = prestationsP
+      .filter((p) => (p.lignes || []).some((l) => keyOf(l) === el.key))
+      .sort((a, b) => ((a.dateDebut || '') < (b.dateDebut || '') ? 1 : -1))
+    setDetail({
+      titre: `Élément : ${el.nom}`,
+      render: (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2 p-3">
+            <MiniStat label="Sollicité" value={`${el.count} fois`} color="#0284c7" />
+            <MiniStat label="Quantité cumulée" value={formatNumber(el.qte)} color="#7c3aed" />
+            <MiniStat label="Chiffre d'affaires" value={formatMoney(el.ca)} color="#16a34a" />
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2">Événement</th><th className="px-2 py-2 text-center">Qté</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">Montant</th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((p) => { const l = (p.lignes || []).find((x) => keyOf(x) === el.key); return (
+                <tr key={p.id}>
+                  <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(p.dateDebut || p.date)}</td>
+                  <td className="px-3 py-1.5">{p.clientNom || '—'}</td>
+                  <td className="px-3 py-1.5 text-gray-500">{p.evenement || '—'}</td>
+                  <td className="px-2 py-1.5 text-center">{l?.qte ?? '—'}</td>
+                  <td className="px-2 py-1.5 text-center">{l?.nbJours || 1}</td>
+                  <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(l?.montant || 0)}</td>
+                </tr>
+              )})}
+            </tbody>
+          </table>
+        </div>
+      )
+    })
+  }
+
+  const detailCategorie = (c) => setDetail({
+    titre: `Catégorie : ${c.cat}`,
+    render: (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr><th className="px-3 py-2 text-left">Élément</th><th className="px-2 py-2 text-center">Sollicitations</th><th className="px-2 py-2 text-center">Qté</th><th className="px-3 py-2 text-right">CA</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {c.elements.map((el, i) => (
+            <tr key={el.key} className="cursor-pointer hover:bg-sky-50" onClick={() => detailElement(el)}>
+              <td className="px-3 py-1.5 font-semibold">{i === 0 && <span className="mr-1">🏆</span>}{el.nom}</td>
+              <td className="px-2 py-1.5 text-center font-bold text-sky-700">{el.count}</td>
+              <td className="px-2 py-1.5 text-center">{formatNumber(el.qte)}</td>
+              <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(el.ca)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  })
+
+  const detailPrestations = (titre, rows) => setDetail({
+    titre,
+    render: (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client / Événement</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">Montant</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((p) => (
+            <tr key={p.id}>
+              <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(p.dateDebut || p.date)}</td>
+              <td className="px-3 py-1.5 font-mono text-xs">{p.num}</td>
+              <td className="px-3 py-1.5">{p.clientNom || '—'}<span className="text-gray-400"> · {p.evenement || '—'}</span></td>
+              <td className="px-2 py-1.5 text-center">{nbJoursInclus(p.dateDebut, p.dateFin)}</td>
+              <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(p.total || 0)}</td>
+            </tr>
+          ))}
+          {!rows.length && <tr><td colSpan={5} className="py-4 text-center text-gray-400">Aucune prestation.</td></tr>}
+        </tbody>
+      </table>
+    )
+  })
+  const maxElCount = Math.max(1, ...analyse.parElement.map((e) => e.count))
 
   // Montant d'une facture rapporté au périmètre (total, ou lignes de la catégorie).
   const montantScope = (f) => scope === TOUTES
@@ -248,8 +336,136 @@ export default function Pilotage() {
         </Card>
       </div>
 
+      {/* ══ Analyse détaillée des prestations (sollicitations & montants facturables) ══ */}
+      <div className="flex items-center gap-2 pt-2">
+        <TrendingUp size={18} className="text-[#BC3C31]" />
+        <h3 className="text-base font-extrabold text-gray-800">Analyse détaillée des prestations</h3>
+        <span className="text-xs text-gray-400">{analyse.parElement.length ? `${prestationsP.length} prestation(s) · ${formatDateShort(start)} → ${formatDateShort(end)}` : ''}</span>
+      </div>
+
+      {!analyse.parElement.length ? (
+        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune prestation sur la période — élargissez la plage.</p></Card>
+      ) : (
+        <>
+          {/* Tendances colorées par catégorie — le plus sollicité */}
+          <Card title="Tendances par catégorie — le plus sollicité">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {analyse.parCategorie.map((c) => {
+                const color = catColor(c.cat)
+                const maxCat = Math.max(1, ...c.elements.map((e) => e.count))
+                return (
+                  <button key={c.cat} onClick={() => detailCategorie(c)}
+                    className="group rounded-xl border border-gray-100 p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-2 font-bold" style={{ color }}>
+                        <span className="h-3 w-3 rounded-full" style={{ background: color }} /> {c.cat}
+                      </span>
+                      <span className="text-sm font-bold text-gray-700">{formatMoney(c.ca)}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {c.elements.slice(0, 4).map((el, i) => (
+                        <div key={el.key} className="flex items-center gap-2">
+                          <span className="w-32 shrink-0 truncate text-xs font-medium text-gray-600">{i === 0 && '🏆 '}{el.nom}</span>
+                          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                            <div className="h-full rounded-full" style={{ width: `${(el.count / maxCat) * 100}%`, background: color }} />
+                          </div>
+                          <span className="w-10 shrink-0 text-right text-xs font-bold text-gray-500">{el.count}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </Card>
+
+          {/* Classement des éléments */}
+          <Card title="Analyse par élément — sollicitations, quantités, CA">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr><th className="px-3 py-2 text-left">Élément</th><th className="px-3 py-2 text-left">Catégorie</th><th className="px-3 py-2">Sollicité</th><th className="px-2 py-2 text-center">Qté</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">CA</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {analyse.parElement.map((el) => (
+                    <tr key={el.key} className="cursor-pointer hover:bg-sky-50" onClick={() => detailElement(el)}>
+                      <td className="px-3 py-1.5 font-semibold">{el.nom}</td>
+                      <td className="px-3 py-1.5"><span className="text-xs font-semibold" style={{ color: catColor(el.cat) }}>{el.cat}</span></td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-sky-500" style={{ width: `${(el.count / maxElCount) * 100}%` }} /></div>
+                          <span className="text-xs font-bold text-sky-700">{el.count}×</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">{formatNumber(el.qte)}</td>
+                      <td className="px-2 py-1.5 text-center">{formatNumber(el.jours)}</td>
+                      <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(el.ca)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Événements les plus sollicités */}
+            <Card title="Événements les plus sollicités">
+              <div className="space-y-2">
+                {analyse.parEvenement.map((ev) => {
+                  const maxEv = Math.max(1, ...analyse.parEvenement.map((x) => x.count))
+                  const color = labelColor(ev.label)
+                  return (
+                    <button key={ev.label} onClick={() => detailPrestations(`Événement : ${ev.label}`, prestationsP.filter((p) => ((p.evenement || '').trim() || 'Non précisé') === ev.label))}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-50">
+                      <span className="w-36 shrink-0 truncate text-sm font-medium">{ev.label}</span>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full" style={{ width: `${(ev.count / maxEv) * 100}%`, background: color }} /></div>
+                      <span className="w-8 shrink-0 text-right text-xs font-bold text-gray-600">{ev.count}×</span>
+                      <span className="w-24 shrink-0 text-right text-xs font-semibold text-green-700">{formatMoney(ev.ca)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Card>
+
+            {/* Classement complet des clients */}
+            <Card title="Classement des clients (prestations · jours · CA)">
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr><th className="px-3 py-2 text-left">Client</th><th className="px-2 py-2 text-center">Presta.</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">CA</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {analyse.parClient.map((c, i) => (
+                      <tr key={c.nom} className="cursor-pointer hover:bg-sky-50" onClick={() => detailPrestations(`Client : ${c.nom}`, prestationsP.filter((p) => ((p.clientNom || '').trim() || 'Client inconnu') === c.nom))}>
+                        <td className="px-3 py-1.5 font-semibold">{i < 3 && ['🥇', '🥈', '🥉'][i]} {c.nom}</td>
+                        <td className="px-2 py-1.5 text-center font-bold text-sky-700">{c.count}</td>
+                        <td className="px-2 py-1.5 text-center">{formatNumber(c.jours)}</td>
+                        <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(c.ca)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
+
       <PilotageModal id={modal} onClose={() => setModal(null)} scopeLabel={scopeLabel}
         data={{ facturesP, prestationsP, retoursScope, parCat, montantScope }} />
+
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
+        <div className="overflow-x-auto rounded-lg border border-gray-100">{detail?.render}</div>
+      </Modal>
+    </div>
+  )
+}
+
+function MiniStat({ label, value, color }) {
+  return (
+    <div className="rounded-lg bg-gray-50 p-2 text-center">
+      <p className="text-[10px] font-bold uppercase text-gray-400">{label}</p>
+      <p className="text-base font-extrabold" style={{ color }}>{value}</p>
     </div>
   )
 }
