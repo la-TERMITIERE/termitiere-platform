@@ -42,15 +42,9 @@ const TONE_BAR = {
   info: 'bg-sky-400', warning: 'bg-amber-400', neutral: 'bg-gray-300', success: 'bg-green-400', danger: 'bg-red-400'
 }
 
-// Volet à ouvrir au clic sur une alerte — celui où l'action de correction se fait.
-const VOLET_ALERTE = {
-  projet_retard:   '/projet/projets',
-  budget_depasse:  '/projet/depenses',
-  tache_depassee:  '/projet/taches',
-  tache_retard:    '/projet/taches',
-  avancement_zero: '/projet/taches',
-  termine:         '/projet/projets'
-}
+// Volet à ouvrir au clic sur une alerte — on ouvre directement la fiche du projet
+// ou de la tâche concernée (pas juste la liste générale), là où se fait la correction.
+const VOLET_PAR_CIBLE = { projet: '/projet/projets', tache: '/projet/taches' }
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -163,7 +157,15 @@ export default function Dashboard() {
                 const Icone = cfg.icon
                 const responsable = projets.find((p) => p.id === a.projetId)?.responsable
                 return (
-                  <div key={a.id} onClick={() => navigate(VOLET_ALERTE[a.type] || '/projet')}
+                  <div key={a.id} onClick={() => {
+                      // Budget dépassé / Tâche en dépassement → droit au formulaire de révision,
+                      // pas juste la fiche, pour agir tout de suite sans clic supplémentaire.
+                      const ouvrirRevision = a.type === 'budget_depasse' || a.type === 'tache_depassee'
+                      const state = a.cibleType === 'tache'
+                        ? { openTacheId: a.cibleId, openRevision: ouvrirRevision }
+                        : { openProjetId: a.cibleId, openRevision: ouvrirRevision }
+                      navigate(VOLET_PAR_CIBLE[a.cibleType] || '/projet', { state })
+                    }}
                     title="Aller corriger"
                     className={`flex cursor-pointer items-start gap-3 rounded-2xl border border-white/60 px-3 py-2.5 shadow-sm ring-1 backdrop-blur-sm transition-all hover:shadow-md hover:brightness-95 ${cfg.bg} ${cfg.ring}`}>
                     <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm ${cfg.color}`}>

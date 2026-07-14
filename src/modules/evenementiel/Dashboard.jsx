@@ -75,15 +75,22 @@ export default function Dashboard() {
 
   // Tableaux de détail réutilisables.
   const tableStock = (champ) => (
-    <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-right">Quantité</th></tr></thead>
-      <tbody className="divide-y divide-gray-100">
-        {parType.filter((p) => p[champ] > 0).map((p) => (
-          <tr key={p.id}><td className="px-3 py-1.5 font-semibold">{p.nom}</td><td className="px-3 py-1.5 text-right font-bold text-violet-700">{formatNumber(p[champ])}</td></tr>
-        ))}
-        {!parType.some((p) => p[champ] > 0) && <tr><td colSpan={2} className="py-4 text-center text-gray-400">Aucun stock.</td></tr>}
-      </tbody>
-    </table>
+    <div className="overflow-hidden rounded-2xl border border-gray-100">
+      <table className="w-full text-sm">
+        <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+          <tr><th className="px-4 py-3 text-left">Type</th><th className="px-4 py-3 text-right">Quantité</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {parType.filter((p) => p[champ] > 0).map((p, i) => (
+            <tr key={p.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+              <td className="px-4 py-2.5 font-semibold text-gray-800">{p.nom}</td>
+              <td className="px-4 py-2.5 text-right text-base font-extrabold text-violet-700">{formatNumber(p[champ])}</td>
+            </tr>
+          ))}
+          {!parType.some((p) => p[champ] > 0) && <tr><td colSpan={2} className="bg-white py-8 text-center text-sm text-gray-400">Aucun stock.</td></tr>}
+        </tbody>
+      </table>
+    </div>
   )
 
   return (
@@ -108,15 +115,22 @@ export default function Dashboard() {
         <StatCard title="Production mois" value={formatNumber(prodMois)} icon={Factory} accent="#7c3aed"
           variation={prodMois - prodMoisPrec} variationLabel={`mois préc. : ${formatNumber(prodMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Production du mois', render: (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-right">Briques</th></tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {[...prodDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((p) => (
-                  <tr key={p.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(p.date)}</td><td className="px-3 py-1.5 text-right font-bold text-violet-700">{formatNumber(p.totalBriques || 0)}</td></tr>
-                ))}
-                {!prodDuMois.length && <tr><td colSpan={2} className="py-4 text-center text-gray-400">Aucune production ce mois.</td></tr>}
-              </tbody>
-            </table>
+            <div className="overflow-hidden rounded-2xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                  <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-right">Briques</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {[...prodDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((p, i) => (
+                    <tr key={p.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{formatDateShort(p.date)}</td>
+                      <td className="px-4 py-2.5 text-right text-base font-extrabold text-violet-700">{formatNumber(p.totalBriques || 0)}</td>
+                    </tr>
+                  ))}
+                  {!prodDuMois.length && <tr><td colSpan={2} className="bg-white py-8 text-center text-sm text-gray-400">Aucune production ce mois.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           ) })} />
         <StatCard title="Prêtes à vendre" value={formatNumber(stockPret)} icon={Package} accent="#16a34a"
           sub="par type — cliquer" onClick={() => setDetail({ titre: 'Briques prêtes à vendre', render: tableStock('pret') })} />
@@ -125,28 +139,45 @@ export default function Dashboard() {
         <StatCard title="CA du mois" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
           variation={caMois - caMoisPrec} variationLabel={`mois préc. : ${formatMoney(caMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Factures du mois', render: (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f) => (
-                  <tr key={f.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(f.date)}</td><td className="px-3 py-1.5">{f.client?.nom || '—'}</td><td className="px-3 py-1.5 text-right font-bold text-sky-700">{formatMoney(f.totalTTC || 0)}</td></tr>
-                ))}
-                {!facturesDuMois.length && <tr><td colSpan={3} className="py-4 text-center text-gray-400">Aucune facture ce mois.</td></tr>}
-              </tbody>
-            </table>
+            <div className="overflow-hidden rounded-2xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                  <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-right">Total TTC</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f, i) => (
+                    <tr key={f.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{formatDateShort(f.date)}</td>
+                      <td className="px-4 py-2.5 font-semibold text-gray-800">{f.client?.nom || '—'}</td>
+                      <td className="px-4 py-2.5 text-right text-base font-extrabold text-sky-700">{formatMoney(f.totalTTC || 0)}</td>
+                    </tr>
+                  ))}
+                  {!facturesDuMois.length && <tr><td colSpan={3} className="bg-white py-8 text-center text-sm text-gray-400">Aucune facture ce mois.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           ) })} />
         <StatCard title="Autorisations" value={demandesActives.length} sub={`${caillasses} caillasses · cliquer`} icon={Send}
           accent={demandesActives.length ? '#d97706' : '#64748b'}
           onClick={() => setDetail({ titre: 'Autorisations à traiter', render: (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">N°</th><th className="px-3 py-2">Brique</th><th className="px-3 py-2 text-center">Qté</th><th className="px-3 py-2">Statut</th></tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {demandesActives.map((d) => { const sn = normaliserStatut(d.statut); return (
-                  <tr key={d.id}><td className="px-3 py-1.5 font-mono text-xs">{d.num}</td><td className="px-3 py-1.5 font-semibold">{d.briqueNom}</td><td className="px-3 py-1.5 text-center">{d.qte}</td><td className="px-3 py-1.5"><Badge tone={STATUTS_DEMANDE[sn]?.tone}>{STATUTS_DEMANDE[sn]?.label}</Badge></td></tr>
-                )})}
-                {!demandesActives.length && <tr><td colSpan={4} className="py-4 text-center text-gray-400">Aucune autorisation en attente.</td></tr>}
-              </tbody>
-            </table>
+            <div className="overflow-hidden rounded-2xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                  <tr><th className="px-4 py-3 text-left">N°</th><th className="px-4 py-3 text-left">Brique</th><th className="px-4 py-3 text-center">Qté</th><th className="px-4 py-3 text-left">Statut</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {demandesActives.map((d, i) => { const sn = normaliserStatut(d.statut); return (
+                    <tr key={d.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{d.num}</td>
+                      <td className="px-4 py-2.5 font-semibold text-gray-800">{d.briqueNom}</td>
+                      <td className="px-4 py-2.5 text-center font-bold text-gray-800">{d.qte}</td>
+                      <td className="px-4 py-2.5"><Badge tone={STATUTS_DEMANDE[sn]?.tone}>{STATUTS_DEMANDE[sn]?.label}</Badge></td>
+                    </tr>
+                  )})}
+                  {!demandesActives.length && <tr><td colSpan={4} className="bg-white py-8 text-center text-sm text-gray-400">Aucune autorisation en attente.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           ) })} />
       </div>
 
@@ -170,8 +201,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
-        <div className="overflow-x-auto rounded-lg border border-gray-100">{detail?.render}</div>
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}
+        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="overflow-x-auto">{detail?.render}</div>
       </Modal>
     </div>
   )

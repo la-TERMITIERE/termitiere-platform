@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, ChevronDown, X, Play, CheckCircle2, FileDown, Loader2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -232,6 +233,22 @@ export default function Projets() {
   const [detail, setDetail]         = useState(null)
   const [commTexte, setCommTexte]   = useState('')
   const [commSending, setCommSending] = useState(false)
+
+  // Ouvre directement la fiche du projet concerné quand on arrive depuis une
+  // alerte du Dashboard (clic « Aller corriger ») — évite de devoir le rechercher.
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const id = location.state?.openProjetId
+    if (!id) return
+    const p = projets.find((x) => x.id === id)
+    if (p) {
+      // Alerte « Budget dépassé » → droit au formulaire de révision du budget.
+      if (location.state?.openRevision) ouvrirRevision(p)
+      else setDetail(p)
+    }
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, projets])
 
   // Révision du budget — garde une trace (ancien/nouveau/motif) au lieu d'écraser
   // silencieusement la valeur, utile en cas de litige ou de contrôle budgétaire.

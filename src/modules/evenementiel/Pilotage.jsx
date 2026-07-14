@@ -300,8 +300,9 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
     )
   }
   return (
-    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}>
-      <div className="max-h-[60vh] overflow-auto">{content}</div>
+    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}
+      panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+      <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>
   )
 }

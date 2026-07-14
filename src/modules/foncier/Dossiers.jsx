@@ -355,7 +355,8 @@ export default function Dossiers() {
       {/* ─────────── Modal détail ─────────── */}
       <Modal open={!!detail} onClose={() => setDetailId(null)} size="xl"
         title={detail ? `Dossier ${detail.num} — ${detail.commune || ''}` : ''}
-        footer={<Button onClick={() => setDetailId(null)}>Fermer</Button>}>
+        footer={<Button onClick={() => setDetailId(null)}>Fermer</Button>}
+        panelClassName="bg-gradient-to-br from-emerald-200/85 via-emerald-100/75 to-teal-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
@@ -368,7 +369,7 @@ export default function Dossiers() {
             {/* Informations du dossier */}
             <section>
               <p className="mb-2 text-xs font-bold uppercase text-gray-500">Informations du dossier</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-gray-100 p-3 text-sm sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-gray-100 bg-white p-3 text-sm sm:grid-cols-3">
                 <InfoField label="Type" value={labelType(detail.type)} />
                 <InfoField label="Mode d'acquisition" value={MODES_ACQUISITION.find((m) => m.id === detail.modeAcquisition)?.label} />
                 <InfoField label="Date d'ouverture" value={detail.dateOuverture} />
@@ -393,8 +394,8 @@ export default function Dossiers() {
               <p className="mb-2 text-xs font-bold uppercase text-gray-500">Acteurs</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {(detail.acteurs || []).map((a) => (
-                  <div key={a.id} className="rounded-lg border border-gray-100 p-2 text-sm">
-                    <p className="font-semibold">{a.nom || '—'} <span className="text-xs font-normal text-gray-500">· {ACTEURS_ROLES.find((r) => r.id === a.role)?.label || a.role}</span></p>
+                  <div key={a.id} className="rounded-lg border border-gray-100 bg-white p-2 text-sm">
+                    <p className="font-semibold text-gray-900">{a.nom || '—'} <span className="text-xs font-normal text-gray-500">· {ACTEURS_ROLES.find((r) => r.id === a.role)?.label || a.role}</span></p>
                     <p className="text-xs text-gray-500">{[a.contact, a.nif && `NIF ${a.nif}`].filter(Boolean).join(' · ') || '—'}</p>
                   </div>
                 ))}
@@ -412,10 +413,10 @@ export default function Dossiers() {
               <p className="mb-2 text-xs font-bold uppercase text-gray-500">Étapes administratives</p>
               <div className="space-y-2">
                 {(detail.etapes || []).slice().sort((a, b) => a.ordre - b.ordre).map((e, idx) => (
-                  <div key={e.id} className={`rounded-lg border p-3 ${e.statut === 'termine' ? 'border-green-200 bg-green-50/50' : e.statut === 'en_cours' ? 'border-amber-200 bg-amber-50/50' : e.statut === 'bloque' ? 'border-red-200 bg-red-50/50' : 'border-gray-200'}`}>
+                  <div key={e.id} className={`rounded-lg border bg-white p-3 ${e.statut === 'termine' ? 'border-green-200' : e.statut === 'en_cours' ? 'border-amber-200' : e.statut === 'bloque' ? 'border-red-200' : 'border-gray-200'}`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">{idx + 1}</span>
-                      <span className="flex-1 text-sm font-semibold">{e.label}</span>
+                      <span className="flex-1 text-sm font-semibold text-gray-900">{e.label}</span>
                       {e.personnel && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">{e.personnel}</span>}
                       <Badge tone={STATUTS_ETAPE[e.statut]?.tone}>{STATUTS_ETAPE[e.statut]?.label}</Badge>
                     </div>

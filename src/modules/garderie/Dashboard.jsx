@@ -547,6 +547,7 @@ export default function Dashboard() {
         onClose={() => setModal(null)}
         title="Enfants du jour"
         size="lg"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >
         <div className="space-y-3">
           {/* Inscrits */}
@@ -634,6 +635,7 @@ export default function Dashboard() {
         onClose={() => setModal(null)}
         title={`Présences du jour — ${formatDateShort(today)}`}
         size="lg"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >
         {presentsAujourdhui.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Aucun enfant actif enregistré.</p>
@@ -671,6 +673,7 @@ export default function Dashboard() {
         onClose={() => setModal(null)}
         title={`💰 Enfants non à jour — ${enfantsNonPayes.length} concerné(s)`}
         size="md"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >
         {enfantsNonPayes.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Tous les enfants sont à jour ce mois. ✓</p>
@@ -735,6 +738,7 @@ export default function Dashboard() {
         onClose={() => setModal(null)}
         title="Incidents ouverts (non résolus)"
         size="lg"
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >
         {incidents.filter((i) => !i.resolu).length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Aucun incident ouvert.</p>

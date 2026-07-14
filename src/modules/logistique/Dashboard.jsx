@@ -199,8 +199,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
-        <div className="overflow-x-auto rounded-lg border border-gray-100">{detail?.render}</div>
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}
+        panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-100 bg-white">{detail?.render}</div>
       </Modal>
     </div>
   )

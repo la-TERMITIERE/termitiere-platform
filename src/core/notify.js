@@ -1,7 +1,13 @@
 // Création de notifications applicatives (collection `notifications`, synchronisée
 // en temps réel comme le reste). Une notification cible des RÔLES et/ou des
 // UTILISATEURS précis ; chaque destinataire la voit dans sa cloche de notifications.
-import { addItem } from './db'
+//
+// En plus de la cloche, chaque notification déclenche aussi un vrai Web Push
+// (best-effort, ne bloque jamais la notif in-app) — pour que l'utilisateur soit
+// alerté même appli fermée, sur tous les appareils où il a cliqué « Activer les
+// alertes ». Voir src/core/push.js.
+import { addItem, getAll } from './db'
+import { pushToUsers } from './push'
 
 // notify({ type, title, body, module, forRoles, forUsers, excludeUid, link })
 //  - forRoles : rôles destinataires, ex. ['admin','controleur']
@@ -20,5 +26,19 @@ export async function notify({
     })
   } catch (e) {
     console.warn('[notify] échec :', e)
+  }
+
+  // Résout forRoles en identifiants concrets pour le push (le ciblage par rôle
+  // n'existe que côté cloche in-app ; le push a besoin d'abonnements précis).
+  try {
+    let cibles = [...forUsers]
+    if (forRoles.length) {
+      const users = await getAll('users')
+      cibles.push(...users.filter((u) => forRoles.includes(u.role)).map((u) => u.uid))
+    }
+    cibles = [...new Set(cibles)].filter((c) => c && c !== excludeUid)
+    if (cibles.length) await pushToUsers(cibles, { title, body, url: link })
+  } catch (e) {
+    // Best-effort : le push ne doit jamais faire échouer la notification.
   }
 }

@@ -283,7 +283,8 @@ export default function Prestations() {
         )}
       </Modal>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={`Prestation ${detail?.num || ''}`}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={`Prestation ${detail?.num || ''}`}
+        panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (() => {
           const s = statutOp(detail)
           const rets = retoursParPresta[detail.id] || []
@@ -295,10 +296,12 @@ export default function Prestations() {
               <Badge tone={s.tone}>{s.label}</Badge>
               <Badge tone={STATUTS[detail.statut]?.tone}>{STATUTS[detail.statut]?.label || detail.statut}</Badge>
             </div>
-            <p><strong>Client :</strong> {detail.clientNom}</p>
-            <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
-            {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
-            <div className="mt-2 overflow-x-auto">
+            <div className="rounded-lg bg-white p-3">
+              <p><strong>Client :</strong> {detail.clientNom}</p>
+              <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
+              {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
+            </div>
+            <div className="mt-2 overflow-x-auto rounded-lg bg-white">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Matériel</th><th className="p-2">Qté</th><th className="p-2">Tarif</th><th className="p-2 text-right">Montant</th></tr></thead>
               <tbody>
