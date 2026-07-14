@@ -10,7 +10,7 @@ import StatCard from '../../shared/ui/StatCard'
 import { useCollection } from '../../hooks/useFirestore'
 import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuthStore } from '../../core/auth'
-import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { STATUTS_PROJET } from './data'
@@ -80,9 +80,9 @@ export default function Depenses() {
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: notes }        = useCollection('projet_depenses_notes')
   const { user, role } = useAuthStore()
-  // Le chef de projet ne fait que consulter les dépenses — c'est la secrétaire qui les renseigne.
-  const peutModifier = role !== 'chef_projet'
-  // La secrétaire, l'agent et le superviseur créent/modifient les dépenses, mais ne les suppriment pas.
+  // Tout le monde (y compris le chef de projet) peut créer/modifier les dépenses.
+  const peutModifier = true
+  // La secrétaire, l'agent, le superviseur et le chef de projet ne suppriment pas.
   const peutSupprimer = !['chef_projet', 'secretaire', 'agent', 'superviseur', 'partenaire'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
@@ -188,6 +188,28 @@ export default function Depenses() {
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
   const openCreate = () => { setForm({ ...VIDE, projetId: filtreProjet }); setEditing(null); setModal(true) }
+
+  // Solder une tâche en un clic : pré-remplit tout (projet, tâche, prestataire) avec
+  // le montant du reste exact — l'utilisateur n'a plus qu'à vérifier et enregistrer,
+  // au lieu de devoir retrouver et retaper le montant restant à la main.
+  const openSolder = (g) => {
+    if (!g.tache || g.reste <= 0) return
+    setForm({
+      ...VIDE,
+      projetId: g.tache.projetId,
+      tacheId: g.tache.id,
+      date: todayStr(),
+      montant: String(g.reste),
+      categorie: 'sous_traitance',
+      description: `Solde — ${g.tache.titre}`,
+      fournisseur: g.tache.prestataireNom || '',
+      prestataireMetier: g.tache.prestataireMetier || '',
+      prestataireTelephone: g.tache.prestataireTelephone || '',
+      typePaiement: 'total'
+    })
+    setEditing(null)
+    setModal(true)
+  }
   const openEdit   = (d) => {
     setForm({
       projetId:    d.projetId    || '',
@@ -411,6 +433,13 @@ export default function Depenses() {
                               : g.totalVerse > 0
                                 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm">Tranche versée</span>
                                 : <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500 shadow-sm">Non payé</span>
+                          )}
+                          {peutModifier && g.prevu > 0 && g.reste > 0 && (
+                            <button onClick={(e) => { e.stopPropagation(); openSolder(g) }}
+                              title={`Verser le reste (${formatMoney(g.reste)}) en un clic`}
+                              className="rounded-full border border-teal-300 bg-white px-2.5 py-1 text-[11px] font-bold text-teal-700 shadow-sm transition-all hover:bg-teal-50 hover:shadow-[0_0_10px_1px_rgba(13,148,136,0.45)]">
+                              💳 Solder
+                            </button>
                           )}
                         </div>
                       </div>

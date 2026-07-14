@@ -75,6 +75,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         type: 'projet_retard',
         projetId: p.id,
         projetNom: p.nom,
+        cibleType: 'projet', cibleId: p.id,
         message: `Ce projet aurait dû se terminer le ${formatDateShort(p.dateFin)} (${joursRetard} jour${joursRetard > 1 ? 's' : ''} de retard).`,
         date: p.dateFin,
         priorite: p.priorite
@@ -91,6 +92,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         type: 'budget_depasse',
         projetId: p.id,
         projetNom: p.nom,
+        cibleType: 'projet', cibleId: p.id,
         message: `${pct}% du budget utilisé (${totalDepenses.toLocaleString('fr-FR')} / ${budget.toLocaleString('fr-FR')} FCFA).`,
         date: now,
         priorite: p.priorite
@@ -107,6 +109,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
           type: 'tache_depassee',
           projetId: p.id,
           projetNom: p.nom,
+          cibleType: 'tache', cibleId: t.id,
           message: `Tâche "${t.titre}" dépassée de ${(verse - prevu).toLocaleString('fr-FR')} FCFA (arrêté : ${prevu.toLocaleString('fr-FR')}, versé : ${verse.toLocaleString('fr-FR')}).`,
           date: now,
           priorite: t.priorite
@@ -123,6 +126,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
           type: 'avancement_zero',
           projetId: p.id,
           projetNom: p.nom,
+          cibleType: 'projet', cibleId: p.id,
           message: `Ce projet a ${tachesProjet.length} tâche(s) mais aucune n'est terminée depuis plus d'une semaine.`,
           date: p.createdAt,
           priorite: p.priorite
@@ -138,6 +142,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         type: 'tache_retard',
         projetId: p.id,
         projetNom: p.nom,
+        cibleType: 'tache', cibleId: t.id,
         message: `Tâche "${t.titre}" — échéance dépassée de ${joursRetard} jour${joursRetard > 1 ? 's' : ''} (assignée à : ${t.assignee || 'non assignée'}).`,
         date: t.echeance,
         priorite: t.priorite
@@ -151,6 +156,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         type: 'termine',
         projetId: p.id,
         projetNom: p.nom,
+        cibleType: 'projet', cibleId: p.id,
         message: `Projet marqué comme terminé le ${formatDateShort(p.updatedAt)}. Félicitations !`,
         date: p.updatedAt,
         priorite: p.priorite

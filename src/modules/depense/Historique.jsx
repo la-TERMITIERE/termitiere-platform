@@ -190,7 +190,16 @@ export default function Historique() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-500">{formatDateShort(d.date)}</td>
                     <td className="px-3 py-2"><Badge tone="neutral">{secteur?.label || d.secteurId}</Badge></td>
-                    <td className="px-3 py-2 text-gray-600">{d.description || d.categorie || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {d.description || d.categorie || '—'}
+                      {/* Traçabilité visible directement : qui a effectué la dépense → qui la reçoit */}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-400">
+                        <span>✍️ Par <span className="font-semibold text-gray-500">{d.enregistrePar || '—'}</span></span>
+                        {d.beneficiaireNom && (
+                          <span>→ 👤 <span className="font-semibold text-gray-500">{d.beneficiaireNom}</span>{d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold">{Number(d.montant).toLocaleString('fr-FR')} FCFA</td>
                     <td className="px-3 py-2">
                       <Badge tone={d.imprevue ? 'warning' : 'primary'}>{d.imprevue ? 'Imprévue' : 'Prévue'}</Badge>

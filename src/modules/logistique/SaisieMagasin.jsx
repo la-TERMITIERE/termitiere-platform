@@ -304,14 +304,15 @@ export default function SaisieMagasin() {
       />
 
       {/* Retours — LECTURE SEULE (saisis via la page « Retour matériel ») */}
-      <Modal open={!!retourDetail} onClose={() => setRetourDetail(null)} title={`Retours — ${retourDetail?.nom || ''}`}>
+      <Modal open={!!retourDetail} onClose={() => setRetourDetail(null)} title={`Retours — ${retourDetail?.nom || ''}`}
+        panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           🔒 Les retours s'enregistrent depuis la page <strong>Retour matériel</strong> (pour la traçabilité). Ils sont en lecture seule ici.
         </p>
         {(!retourDetail?.lignes?.length) ? (
           <p className="py-4 text-center text-sm text-gray-400">Aucun retour ce jour pour ce matériel.</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full rounded-lg bg-white text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="p-2 text-left">État</th><th className="p-2 text-center">Qté</th><th className="p-2 text-left">Prestation</th><th className="p-2 text-left">Motif</th></tr></thead>
             <tbody>
               {retourDetail.lignes.map((l, i) => (

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, ChevronDown, Play, Eye, CheckCircle2, CalendarClock, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -114,6 +115,22 @@ function OngletTaches({ taches, projets, users, depenses }) {
   const [filtrePhase, setFiltrePhase]   = useState('')
   const [mesTaches, setMesTaches]       = useState(false)
   const [detail, setDetail]             = useState(null)
+
+  // Ouvre directement la fiche de la tâche concernée quand on arrive depuis une
+  // alerte du Dashboard (clic « Aller corriger ») — évite de devoir la rechercher.
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const id = location.state?.openTacheId
+    if (!id) return
+    const t = taches.find((x) => x.id === id)
+    if (t) {
+      // Alerte « Tâche en dépassement » → droit au formulaire de révision du montant.
+      if (location.state?.openRevision) ouvrirRevision(t)
+      else setDetail(t)
+    }
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, taches])
 
   const nomConnecte = user?.nom || user?.login || ''
 
