@@ -47,7 +47,9 @@ export default function Factures() {
     const factureId = await addItem('logistique_factures', {
       num, date: todayStr(), site,
       prestationId: p.id, prestationNum: p.num,
-      clientNom: p.clientNom, lignes: p.lignes, totalHT: p.total, totalTTC: p.total,
+      clientNom: p.clientNom, evenement: p.evenement || '',
+      dateDebut: p.dateDebut || '', dateFin: p.dateFin || '',
+      lignes: p.lignes, frais: p.frais || [], totalHT: p.total, totalTTC: p.total,
       statut: 'brouillon', agentNom: user.nom
     })
     await updateItem('logistique_prestations', p.id, { statut: 'facturee', factureId, factureNum: num })

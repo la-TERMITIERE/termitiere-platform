@@ -18,6 +18,7 @@ import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { isApproverRole, isReadOnlyRole } from '../../core/roles'
 import { catColor } from './data'
+import { nbJoursInclus } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const STATUTS = {
@@ -36,6 +37,7 @@ export default function Prestations() {
   const { data: clients } = useCollection('logistique_clients')
   const { data: allRetours } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
+  const evenements = useLogistiqueStore((s) => s.evenements)
 
   // Cloisonnement par site (sous-application Lomé / Kara).
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
@@ -73,10 +75,12 @@ export default function Prestations() {
     setForm({
       clientId: clients[0]?.id || '',
       clientNom: clients[0]?.nom || '',
+      evenement: evenements[0] || '',
+      evenementAutre: '',
       dateDebut: todayStr(),
       dateFin: todayStr(),
       lieu: '',
-      lignes: [{ materielId: materiel[0]?.id || '', qte: 1, tarif: materiel[0]?.tarifLocation || 0 }],
+      lignes: [{ materielId: materiel[0]?.id || '', qte: 1, nbJours: 1, tarif: materiel[0]?.tarifLocation || 0 }],
       frais: [], // frais supplémentaires libres : { label, montant } (transport, lieu…)
       statut: 'brouillon'
     })
@@ -85,7 +89,19 @@ export default function Prestations() {
 
   function addLigne() {
     const m = materiel[0]
-    setForm((f) => ({ ...f, lignes: [...f.lignes, { materielId: m?.id || '', qte: 1, tarif: m?.tarifLocation || 0 }] }))
+    setForm((f) => ({ ...f, lignes: [...f.lignes, { materielId: m?.id || '', qte: 1, nbJours: nbJoursInclus(f.dateDebut, f.dateFin), tarif: m?.tarifLocation || 0 }] }))
+  }
+
+  // Change une date de période et réaligne le nombre de jours des lignes encore
+  // calées sur l'ancienne durée (les valeurs saisies à la main sont préservées).
+  function setPeriode(patch) {
+    setForm((f) => {
+      const ancien = nbJoursInclus(f.dateDebut, f.dateFin)
+      const next = { ...f, ...patch }
+      const nouveau = nbJoursInclus(next.dateDebut, next.dateFin)
+      next.lignes = f.lignes.map((l) => ((parseInt(l.nbJours) || 1) === ancien ? { ...l, nbJours: nouveau } : l))
+      return next
+    })
   }
 
   function setLigne(i, patch) {
@@ -120,9 +136,12 @@ export default function Prestations() {
     [form]
   )
 
+  // Montant d'une ligne du formulaire : Qté × Jours × Tarif/jour.
+  const ligneMontant = (l) => (parseInt(l.qte) || 0) * (parseInt(l.nbJours) || 1) * (parseFloat(l.tarif) || 0)
+
   const totalForm = useMemo(() => {
     if (!form) return 0
-    const mat = form.lignes.reduce((s, l) => s + (parseInt(l.qte) || 0) * (parseFloat(l.tarif) || 0), 0)
+    const mat = form.lignes.reduce((s, l) => s + ligneMontant(l), 0)
     return mat + (form.frais || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0)
   }, [form])
 
@@ -130,7 +149,7 @@ export default function Prestations() {
     if (!form) return []
     const map = {}
     form.lignes.forEach((l) => {
-      const montant = (parseInt(l.qte) || 0) * (parseFloat(l.tarif) || 0)
+      const montant = ligneMontant(l)
       const cat = l.materielId === '__autre__' ? 'AUTRES' : materiel.find((x) => x.id === l.materielId)?.cat
       if (!cat) return
       map[cat] = (map[cat] || 0) + montant
@@ -144,16 +163,18 @@ export default function Prestations() {
     if (!form.clientNom?.trim() && !form.clientId) return toast.error('Client requis')
     if (!form.lignes.length) return toast.error('Ajoutez au moins une ligne')
     const client = clients.find((c) => c.id === form.clientId)
+    const evenement = (form.evenement === '__autre__' ? form.evenementAutre : form.evenement || '').trim()
     const num = genNumero(`PREST-${site.toUpperCase()}`, prestations.length)
     const lignes = form.lignes.map((l) => {
       const qte = parseInt(l.qte) || 0
+      const jours = parseInt(l.nbJours) || 1
       const tarif = parseFloat(l.tarif) || 0
       if (l.materielId === '__autre__') {
         // Matériel hors référentiel : nom libre, pas de lien matériel/stock.
-        return { materielId: '', materielNom: (l.nomAutre || 'Autre').trim(), cat: 'AUTRES', unite: '', autre: true, qte, tarifUnitaire: tarif, montant: qte * tarif }
+        return { materielId: '', materielNom: (l.nomAutre || 'Autre').trim(), cat: 'AUTRES', unite: '', autre: true, qte, nbJours: jours, tarifUnitaire: tarif, montant: qte * jours * tarif }
       }
       const m = materiel.find((x) => x.id === l.materielId)
-      return { materielId: m?.id, materielNom: m?.nom, cat: m?.cat, unite: m?.unite, qte, tarifUnitaire: tarif, montant: qte * tarif }
+      return { materielId: m?.id, materielNom: m?.nom, cat: m?.cat, unite: m?.unite, qte, nbJours: jours, tarifUnitaire: tarif, montant: qte * jours * tarif }
     })
     // Frais supplémentaires (transport, lieu…) : on garde ceux qui ont un montant.
     const frais = (form.frais || [])
@@ -165,6 +186,7 @@ export default function Prestations() {
     await addItem('logistique_prestations', {
       num, date: todayStr(), site,
       clientId: form.clientId, clientNom: client?.nom || form.clientNom,
+      evenement,
       dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
       lignes, frais, total, statut: 'brouillon',
       agentId: user.uid, agentNom: user.nom
@@ -226,12 +248,31 @@ export default function Prestations() {
                   {!clients.length && <option value="">— Créez un client d'abord —</option>}
                 </Select>
               </FormGroup>
+              <FormGroup label="Événement">
+                <Select value={form.evenement} onChange={(e) => setForm((f) => ({ ...f, evenement: e.target.value }))}>
+                  {evenements.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
+                  <option value="__autre__">➕ Autre (à préciser)…</option>
+                </Select>
+              </FormGroup>
+              {form.evenement === '__autre__' && (
+                <FormGroup label="Préciser l'événement" className="col-span-2">
+                  <Input value={form.evenementAutre} onChange={(e) => setForm((f) => ({ ...f, evenementAutre: e.target.value }))} placeholder="ex : Lancement produit, Gala…" />
+                </FormGroup>
+              )}
               <FormGroup label="Lieu"><Input value={form.lieu} onChange={(e) => setForm((f) => ({ ...f, lieu: e.target.value }))} /></FormGroup>
-              <FormGroup label="Date début"><Input type="date" value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} /></FormGroup>
-              <FormGroup label="Date fin"><Input type="date" value={form.dateFin} onChange={(e) => setForm((f) => ({ ...f, dateFin: e.target.value }))} /></FormGroup>
+              <FormGroup label="Date début"><Input type="date" value={form.dateDebut} onChange={(e) => setPeriode({ dateDebut: e.target.value })} /></FormGroup>
+              <FormGroup label="Date fin"><Input type="date" value={form.dateFin} onChange={(e) => setPeriode({ dateFin: e.target.value })} /></FormGroup>
+              <div className="col-span-2 -mt-1 text-xs text-gray-500">Durée de la période : <strong>{nbJoursInclus(form.dateDebut, form.dateFin)} jour(s)</strong> — appliquée par défaut à chaque ligne (modifiable).</div>
             </div>
 
             <p className="text-xs font-bold uppercase text-gray-500">Matériel loué</p>
+            <div className="hidden grid-cols-12 gap-2 px-1 text-[10px] font-bold uppercase text-gray-400 md:grid">
+              <span className="col-span-5">Matériel</span>
+              <span className="col-span-2 text-center">Qté</span>
+              <span className="col-span-1 text-center">Jours</span>
+              <span className="col-span-2 text-center">Tarif/j</span>
+              <span className="col-span-2 text-right">Montant</span>
+            </div>
             {form.lignes.map((l, i) => (
               <div key={i} className="rounded-lg border p-2">
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-12">
@@ -240,9 +281,10 @@ export default function Prestations() {
                     <option value="__autre__">➕ Autre (à préciser)…</option>
                   </Select>
                   <Input className="md:col-span-2" type="number" min="1" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} placeholder="Qté" />
-                  <Input className="md:col-span-2" type="number" min="0" value={l.tarif} onChange={(e) => setLigne(i, { tarif: e.target.value })} placeholder="Tarif/u" />
-                  <div className="col-span-2 flex items-center justify-end font-bold text-secondary md:col-span-3">
-                    {formatMoney((parseInt(l.qte) || 0) * (parseFloat(l.tarif) || 0))}
+                  <Input className="md:col-span-1" type="number" min="1" value={l.nbJours ?? 1} onChange={(e) => setLigne(i, { nbJours: e.target.value })} placeholder="Jours" />
+                  <Input className="md:col-span-2" type="number" min="0" value={l.tarif} onChange={(e) => setLigne(i, { tarif: e.target.value })} placeholder="Tarif/j" />
+                  <div className="col-span-2 flex items-center justify-end font-bold text-secondary md:col-span-2">
+                    {formatMoney(ligneMontant(l))}
                   </div>
                 </div>
                 {l.materielId === '__autre__' && (
@@ -298,18 +340,19 @@ export default function Prestations() {
             </div>
             <div className="rounded-lg bg-white p-3">
               <p><strong>Client :</strong> {detail.clientNom}</p>
+              {detail.evenement && <p><strong>Événement :</strong> {detail.evenement}</p>}
               <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
               {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
             </div>
             <div className="mt-2 overflow-x-auto rounded-lg bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Matériel</th><th className="p-2">Qté</th><th className="p-2">Tarif</th><th className="p-2 text-right">Montant</th></tr></thead>
+              <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Matériel</th><th className="p-2">Qté</th><th className="p-2">Jours</th><th className="p-2">Tarif/j</th><th className="p-2 text-right">Montant</th></tr></thead>
               <tbody>
                 {(detail.lignes || []).map((l, i) => (
-                  <tr key={i} className="border-t"><td className="p-2">{l.materielNom}{l.autre ? <span className="ml-1 text-[10px] text-gray-400">(autre)</span> : null}</td><td className="p-2 text-center">{l.qte}</td><td className="p-2 text-center">{formatMoney(l.tarifUnitaire)}</td><td className="p-2 text-right font-bold">{formatMoney(l.montant)}</td></tr>
+                  <tr key={i} className="border-t"><td className="p-2">{l.materielNom}{l.autre ? <span className="ml-1 text-[10px] text-gray-400">(autre)</span> : null}</td><td className="p-2 text-center">{l.qte}</td><td className="p-2 text-center">{l.nbJours || 1}</td><td className="p-2 text-center">{formatMoney(l.tarifUnitaire)}</td><td className="p-2 text-right font-bold">{formatMoney(l.montant)}</td></tr>
                 ))}
                 {(detail.frais || []).map((x, i) => (
-                  <tr key={`f${i}`} className="border-t bg-amber-50/40"><td className="p-2 text-amber-700">{x.label} <span className="text-[10px]">(frais)</span></td><td className="p-2 text-center">—</td><td className="p-2 text-center">—</td><td className="p-2 text-right font-bold">{formatMoney(x.montant)}</td></tr>
+                  <tr key={`f${i}`} className="border-t bg-amber-50/40"><td className="p-2 text-amber-700">{x.label} <span className="text-[10px]">(frais)</span></td><td className="p-2 text-center">—</td><td className="p-2 text-center">—</td><td className="p-2 text-center">—</td><td className="p-2 text-right font-bold">{formatMoney(x.montant)}</td></tr>
                 ))}
               </tbody>
             </table>

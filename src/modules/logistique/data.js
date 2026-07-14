@@ -43,3 +43,26 @@ export function catColor(cat) {
   for (let i = 0; i < (cat || '').length; i++) h = (h * 31 + cat.charCodeAt(i)) >>> 0
   return EXTRA[h % EXTRA.length]
 }
+
+// Types d'événements courants (modifiables dans le Référentiel).
+export const EVENEMENTS = [
+  'Mariage',
+  'Funérailles',
+  'Baptême',
+  'Anniversaire',
+  'Conférence / Séminaire',
+  'Concert / Spectacle',
+  'Cérémonie religieuse',
+  'Réunion / Assemblée',
+  'Autre'
+]
+
+// Palette réutilisée pour colorer les éléments/événements dans les analyses.
+const PALETTE = ['#0284c7', '#7c3aed', '#ea580c', '#16a34a', '#db2777', '#ca8a04', '#0891b2', '#4f46e5', '#0d9488', '#be123c', '#9333ea', '#f59e0b']
+
+export function labelColor(label) {
+  let h = 0
+  const s = String(label || '')
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return PALETTE[h % PALETTE.length]
+}

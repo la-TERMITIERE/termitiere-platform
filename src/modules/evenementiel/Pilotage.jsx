@@ -3,10 +3,10 @@
 // chiffre d'affaires, production, ventes (volume), écoulement, stock, rebut
 // (caillasses), matières & marge brute indicative. Détail par type de brique.
 import { useMemo, useState } from 'react'
-import { Line, Doughnut, Bar } from 'react-chartjs-2'
+import { Doughnut, Bar } from 'react-chartjs-2'
 import {
-  BadgeDollarSign, Factory, Package, TrendingUp, Layers, Coins,
-  Percent, Recycle, ShoppingCart, Send, ClipboardList, Boxes
+  BadgeDollarSign, TrendingUp, TrendingDown, Layers,
+  Percent, Recycle, Boxes
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -14,7 +14,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useBriqueterieStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { estActif } from '../../shared/workflow'
-import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
 
 const TOUTES = '__TOUTES__'
 const PALETTE = ['#7c3aed', '#6366f1', '#0284c7', '#0d9488', '#16a34a', '#ca8a04', '#db2777', '#ea580c', '#0891b2', '#4f46e5']
@@ -27,12 +27,19 @@ export default function Pilotage() {
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: demandes } = useCollection('evenementiel_demandes')
 
-  const { start, end, node: periodNode } = usePeriodSelect('30')
+  const { start, end, preset, node: periodNode } = usePeriodSelect('30')
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
 
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
+
+  // Période précédente de MÊME durée — socle des indicateurs de tendance.
+  const comparable = preset !== 'all'
+  const dayCount = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+  const prevEnd = addDays(start, -1)
+  const prevStart = addDays(prevEnd, -(dayCount - 1))
+  const inPrev = (d) => comparable && (d || '') >= prevStart && (d || '') <= prevEnd
 
   const types = useMemo(() => briques.filter((b) => b.id !== 'caillasses'), [briques])
   const idSet = useMemo(() => new Set(types.map((b) => b.id)), [types])
@@ -88,15 +95,38 @@ export default function Pilotage() {
 
   // Matières (global) : consommées & coût d'achat sur la période, marge brute indicative.
   const mat = useMemo(() => {
-    const conso = {}; let cout = 0
+    const conso = {}; const ent = {}; let cout = 0
     productionsP.forEach((p) => Object.entries(p.consommation || {}).forEach(([id, q]) => { conso[id] = (conso[id] || 0) + (parseFloat(q) || 0) }))
-    inventaires.filter((i) => inPeriode(i.date)).forEach((i) => Object.values(i.matieres || {}).forEach((m) => { cout += m.coutEntrees || 0 }))
-    return { conso, cout }
+    inventaires.filter((i) => inPeriode(i.date)).forEach((i) => Object.entries(i.matieres || {}).forEach(([id, m]) => {
+      cout += m.coutEntrees || 0
+      ent[id] = (ent[id] || 0) + (m.ent != null ? m.ent : (m.entrees || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0))
+    }))
+    return { conso, ent, cout }
   }, [productionsP, inventaires, start, end])
   const margeBrute = caTotal - mat.cout
   const tauxMarge = caTotal ? (margeBrute / caTotal) * 100 : 0
 
   const autorisations = demandes.filter((d) => estActif(d.statut)).length
+
+  // ── Période précédente (mêmes règles de périmètre) → deltas décisionnels ──
+  const caOf = (facts) => scope === TOUTES
+    ? facts.reduce((s, f) => s + (f.totalTTC || 0), 0)
+    : facts.reduce((s, f) => s + (f.lignes || []).filter((l) => ligneBrique(l) === scope).reduce((a, l) => a + (l.total || (parseInt(l.qte) || 0) * (parseFloat(l.prixUnit) || 0)), 0), 0)
+  const volOf = (facts) => facts.reduce((s, f) => s + (f.lignes || []).reduce((a, l) => { const id = ligneBrique(l); return (scope === TOUTES ? !!id : id === scope) ? a + (parseInt(l.qte) || 0) : a }, 0), 0)
+  const prodOf = (prods) => prods.reduce((s, p) => s + (scope === TOUTES ? (p.totalBriques || 0) : (p.lignes || []).filter((l) => l.briqueId === scope).reduce((a, l) => a + (parseInt(l.qte) || 0), 0)), 0)
+
+  const facturesPrev = useMemo(() => comparable ? factures.filter((f) => inPrev(f.date)) : [], [factures, prevStart, prevEnd, comparable])
+  const productionsPrev = useMemo(() => comparable ? productions.filter((p) => inPrev(p.date)) : [], [productions, prevStart, prevEnd, comparable])
+  const caPrev = caOf(facturesPrev)
+  const ventesPrev = volOf(facturesPrev)
+  const prodPrev = prodOf(productionsPrev)
+  const prixPrev = ventesPrev ? caPrev / ventesPrev : 0
+  const ecoulPrev = prodPrev ? (ventesPrev / prodPrev) * 100 : 0
+  const caillassesPrev = productionsPrev.reduce((s, p) => s + (parseInt(p.caillasses) || 0), 0)
+  const rebutPrev = (prodPrev + caillassesPrev) > 0 ? (caillassesPrev / (prodPrev + caillassesPrev)) * 100 : 0
+  const matCoutPrev = inventaires.filter((i) => inPrev(i.date)).reduce((s, i) => s + Object.values(i.matieres || {}).reduce((a, m) => a + (m.coutEntrees || 0), 0), 0)
+  const tauxMargePrev = caPrev ? ((caPrev - matCoutPrev) / caPrev) * 100 : 0
+  const pct = (cur, prev) => (comparable && prev > 0) ? ((cur - prev) / prev) * 100 : null
 
   // Graphiques.
   const caParTypeChart = {
@@ -110,31 +140,41 @@ export default function Pilotage() {
       { label: 'Ventes', data: rowsScope.map((t) => t.ventes), backgroundColor: '#16a34a' }
     ]
   }
-  const evoCA = useMemo(() => {
-    const map = {}
-    facturesP.forEach((f) => {
-      const montant = scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => ligneBrique(l) === scope).reduce((s, l) => s + (l.total || (parseInt(l.qte) || 0) * (parseFloat(l.prixUnit) || 0)), 0)
-      if (f.date && montant) map[f.date] = (map[f.date] || 0) + montant
-    })
-    const keys = Object.keys(map).sort()
-    let cumul = 0
-    return {
-      labels: keys.map((k) => k.slice(5)),
-      datasets: [{ label: 'CA cumulé', data: keys.map((k) => (cumul += map[k])), borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.12)', fill: true, tension: 0.3, pointRadius: 2 }]
+  // Hero BI : CA par sous-période, période actuelle VS précédente (momentum).
+  const caTrend = useMemo(() => {
+    let s0 = start, e0 = end
+    if (!comparable || start < '2000-01-01') {
+      const ds = factures.map((f) => f.date).filter(Boolean).sort()
+      s0 = ds[0] || end; e0 = ds[ds.length - 1] || end
     }
-  }, [facturesP, scope])
+    const s = new Date(s0), e = new Date(e0)
+    const span = Math.max(1, Math.round((e - s) / 86400000) + 1)
+    const gran = span <= 14 ? 'day' : span <= 92 ? 'week' : 'month'
+    const iso = (d) => d.toISOString().slice(0, 10)
+    const dm = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+    const buckets = []
+    if (gran === 'day') {
+      for (let i = 0; i < span; i++) { const d = new Date(s); d.setDate(d.getDate() + i); buckets.push({ from: iso(d), to: iso(d), label: dm(d) }) }
+    } else if (gran === 'week') {
+      let cur = new Date(s)
+      while (cur <= e) { const from = new Date(cur); const to = new Date(cur); to.setDate(to.getDate() + 6); buckets.push({ from: iso(from), to: iso(to > e ? e : to), label: dm(from) }); cur.setDate(cur.getDate() + 7) }
+    } else {
+      let cur = new Date(s.getFullYear(), s.getMonth(), 1)
+      while (cur <= e) { const from = new Date(cur.getFullYear(), cur.getMonth(), 1); const to = new Date(cur.getFullYear(), cur.getMonth() + 1, 0); buckets.push({ from: iso(from < s ? s : from), to: iso(to > e ? e : to), label: cur.toLocaleDateString('fr-FR', { month: 'short' }) }); cur.setMonth(cur.getMonth() + 1) }
+    }
+    const caIn = (from, to) => caOf(factures.filter((f) => (f.date || '') >= from && (f.date || '') <= to))
+    const cur = buckets.map((b) => caIn(b.from, b.to))
+    const prev = (comparable && start >= '2000-01-01') ? buckets.map((b) => caIn(addDays(b.from, -dayCount), addDays(b.to, -dayCount))) : null
+    return { labels: buckets.map((b) => b.label), cur, prev }
+  }, [factures, start, end, scope, comparable, dayCount])
+  const caDelta = pct(caTotal, caPrev)
 
   const kpis = [
-    { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), sub: `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#7c3aed' },
-    { id: 'prod', title: 'Production', value: formatNumber(prodTotal), sub: 'briques produites', icon: Factory, color: '#6366f1' },
-    { id: 'ventes', title: 'Ventes (volume)', value: formatNumber(ventesVol), sub: 'briques facturées', icon: ShoppingCart, color: '#16a34a' },
-    { id: 'ecoul', title: 'Taux d\'écoulement', value: `${tauxEcoulement.toFixed(0)} %`, sub: 'ventes / production', icon: Percent, color: '#0d9488' },
-    { id: 'panier', title: 'Panier moyen', value: formatMoney(panierMoyen), sub: 'par facture', icon: Coins, color: '#0284c7' },
-    { id: 'prix', title: 'Prix moyen / brique', value: formatMoney(prixMoyen), sub: 'CA / volume vendu', icon: TrendingUp, color: '#0891b2' },
-    { id: 'pret', title: 'Stock prêt à vendre', value: formatNumber(stockPret), sub: `${formatNumber(stockSechage)} en séchage`, icon: Package, color: '#16a34a' },
-    { id: 'marge', title: 'Marge brute (est.)', value: formatMoney(margeBrute), sub: `${tauxMarge.toFixed(0)} % · matières ${formatMoney(mat.cout)}`, icon: Layers, color: margeBrute >= 0 ? '#15803d' : '#dc2626' },
-    { id: 'rebut', title: 'Rebut (caillasses)', value: `${tauxRebut.toFixed(1)} %`, sub: `${formatNumber(caillassesProd)} prod. · ${formatNumber(caillassesStock)} en stock`, icon: Recycle, color: '#64748b' },
-    { id: 'autos', title: 'Autorisations', value: autorisations, sub: 'sorties à traiter', icon: Send, color: autorisations ? '#d97706' : '#64748b' }
+    { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#7c3aed' },
+    { id: 'marge', title: 'Marge brute (est.)', value: `${tauxMarge.toFixed(0)} %`, deltaPP: comparable ? (tauxMarge - tauxMargePrev) : null, up: true, sub: `${formatMoney(margeBrute)} · matières ${formatMoney(mat.cout)}`, icon: Layers, color: margeBrute >= 0 ? '#15803d' : '#dc2626' },
+    { id: 'ecoul', title: 'Taux d\'écoulement', value: `${tauxEcoulement.toFixed(0)} %`, deltaPP: comparable ? (tauxEcoulement - ecoulPrev) : null, up: true, sub: 'ventes ÷ production', icon: Percent, color: '#0d9488' },
+    { id: 'prix', title: 'Prix moyen / brique', value: formatMoney(prixMoyen), delta: pct(prixMoyen, prixPrev), up: true, sub: 'CA ÷ volume vendu', icon: TrendingUp, color: '#0891b2' },
+    { id: 'rebut', title: 'Taux de rebut', value: `${tauxRebut.toFixed(1)} %`, deltaPP: comparable ? (tauxRebut - rebutPrev) : null, up: false, sub: `${formatNumber(caillassesProd)} caillasses produites`, icon: Recycle, color: tauxRebut > 5 ? '#dc2626' : '#16a34a' }
   ]
 
   return (
@@ -161,22 +201,61 @@ export default function Pilotage() {
       </div>
       <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
-      {/* KPI */}
+      {/* KPI décisionnels avec variation vs période précédente */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {kpis.map((k) => (
+        {kpis.map((k) => {
+          const raw = k.delta != null ? k.delta : (k.deltaPP != null ? k.deltaPP : null)
+          const positive = (raw ?? 0) >= 0
+          const good = k.up ? positive : !positive
+          const chip = k.delta != null ? `${positive ? '+' : ''}${k.delta.toFixed(1)} %` : (k.deltaPP != null ? `${positive ? '+' : ''}${k.deltaPP.toFixed(1)} pt` : null)
+          return (
           <button key={k.id} type="button" onClick={() => setModal(k.id)}
             className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
+              {chip && (
+                <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                  {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{chip}
+                </span>
+              )}
             </div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
             <p className="text-xl font-extrabold text-gray-900">{k.value}</p>
             {k.sub && <p className="mt-0.5 text-[10px] text-gray-400">{k.sub}</p>}
           </button>
-        ))}
+        )})}
       </div>
+      {comparable && <p className="-mt-3 text-[11px] text-gray-400">▲▼ variation vs période précédente équivalente ({formatDateShort(prevStart)} → {formatDateShort(prevEnd)})</p>}
 
-      {/* Graphiques */}
+      {/* Hero BI : CA par sous-période, actuel vs précédent */}
+      <Card title="Chiffre d'affaires par sous-période — actuel vs précédent">
+        <div className="h-64">
+          {caTrend.cur.some((v) => v > 0) || (caTrend.prev || []).some((v) => v > 0) ? (
+            <Bar data={{
+              labels: caTrend.labels,
+              datasets: [
+                { label: 'Période actuelle', data: caTrend.cur, backgroundColor: '#7c3aed', borderRadius: 4, maxBarThickness: 34 },
+                ...(caTrend.prev ? [{ label: 'Période précédente', data: caTrend.prev, backgroundColor: '#ddd0f5', borderRadius: 4, maxBarThickness: 34 }] : [])
+              ]
+            }} options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: !!caTrend.prev, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatMoney(c.parsed.y)}` } }
+              },
+              scales: { y: { ticks: { callback: (v) => formatNumber(v) } } }
+            }} />
+          ) : <p className="py-16 text-center text-sm text-gray-400">Aucune facture sur la période</p>}
+        </div>
+        {caDelta != null && (
+          <p className={`mt-2 text-sm font-semibold ${caDelta >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+            {caDelta >= 0 ? '▲' : '▼'} CA {caDelta >= 0 ? 'en hausse' : 'en baisse'} de {Math.abs(caDelta).toFixed(1)} % vs période précédente
+            <span className="font-normal text-gray-400"> ({formatMoney(caPrev)} → {formatMoney(caTotal)})</span>
+          </p>
+        )}
+      </Card>
+
+      {/* Répartition du CA + Production vs Ventes */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="CA par type de brique">
           <div className="h-64">
@@ -189,12 +268,6 @@ export default function Pilotage() {
           </div>
         </Card>
       </div>
-
-      <Card title="Évolution du chiffre d'affaires">
-        <div className="h-56">
-          {evoCA.labels.length ? <Line data={evoCA} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} /> : <p className="py-16 text-center text-sm text-gray-400">Aucune facture sur la période</p>}
-        </div>
-      </Card>
 
       {/* Détail par type */}
       <Card title="Détail par type de brique — période">
@@ -227,18 +300,27 @@ export default function Pilotage() {
         </div>
       </Card>
 
-      {/* Matières consommées */}
-      <Card title="Matières premières consommées — période">
+      {/* Matières premières : arrivages, consommation, stock */}
+      <Card title="Matières premières — arrivages, consommation, stock">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Matière</th><th className="px-2 py-2 text-right">Consommée</th></tr></thead>
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr><th className="px-3 py-2 text-left">Matière</th><th className="px-3 py-2 text-center text-green-700">Arrivages</th><th className="px-3 py-2 text-center text-orange-700">Consommée</th><th className="px-3 py-2 text-center">Stock actuel</th></tr>
+            </thead>
             <tbody className="divide-y divide-gray-100">
-              {matieres.map((m) => (
-                <tr key={m.id}>
-                  <td className="px-3 py-1.5 font-semibold">{m.nom}</td>
-                  <td className="px-2 py-1.5 text-right">{formatNumber(Math.round((mat.conso[m.id] || 0) * 10) / 10)} <span className="text-[10px] text-gray-400">{m.unite}</span></td>
-                </tr>
-              ))}
+              {matieres.map((m) => {
+                const ent = mat.ent[m.id] || 0
+                const conso = mat.conso[m.id] || 0
+                const stock = dernier?.matieres?.[m.id]?.fin || 0
+                return (
+                  <tr key={m.id}>
+                    <td className="px-3 py-1.5 font-semibold">{m.nom} <span className="text-[10px] font-normal text-gray-400">({m.unite})</span></td>
+                    <td className="px-3 py-1.5 text-center font-bold text-green-700">{ent ? '+' + formatNumber(Math.round(ent * 10) / 10) : '—'}</td>
+                    <td className="px-3 py-1.5 text-center font-bold text-orange-700">{conso ? '−' + formatNumber(Math.round(conso * 10) / 10) : '—'}</td>
+                    <td className="px-3 py-1.5 text-center text-base font-extrabold text-violet-700">{formatNumber(Math.round(stock * 10) / 10)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
