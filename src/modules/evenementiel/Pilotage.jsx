@@ -96,13 +96,13 @@ export default function Pilotage() {
   // Matières (global) : consommées & coût d'achat sur la période, marge brute indicative.
   const mat = useMemo(() => {
     const conso = {}; const ent = {}; let cout = 0
-    productionsP.forEach((p) => Object.entries(p.consommation || {}).forEach(([id, q]) => { conso[id] = (conso[id] || 0) + (parseFloat(q) || 0) }))
     inventaires.filter((i) => inPeriode(i.date)).forEach((i) => Object.entries(i.matieres || {}).forEach(([id, m]) => {
       cout += m.coutEntrees || 0
       ent[id] = (ent[id] || 0) + (m.ent != null ? m.ent : (m.entrees || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0))
+      conso[id] = (conso[id] || 0) + (m.conso != null ? m.conso : (m.consommations || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0))
     }))
     return { conso, ent, cout }
-  }, [productionsP, inventaires, start, end])
+  }, [inventaires, start, end])
   const margeBrute = caTotal - mat.cout
   const tauxMarge = caTotal ? (margeBrute / caTotal) * 100 : 0
 

@@ -9,16 +9,10 @@ import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useBriqueterieStore } from './store/referentielStore'
-import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
+import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
+import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
 import { stockBriqueTotal } from './logic'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
-
-// Renvoie le mois calendaire précédent au format 'YYYY-MM'.
-function moisPrecedent(ym) {
-  const [y, m] = ym.split('-').map(Number)
-  const d = new Date(y, m - 2, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
 
 export default function Dashboard() {
   const briques = useBriqueterieStore((s) => s.briques)
@@ -28,9 +22,16 @@ export default function Dashboard() {
   const { data: demandes } = useCollection('evenementiel_demandes')
 
   const [detail, setDetail] = useState(null) // { titre, render }
+  const { start, end, preset, node: periodNode } = usePeriodSelect('30')
 
-  const mois = todayStr().slice(0, 7)
-  const moisPrec = moisPrecedent(mois)
+  // Période sélectionnée + période précédente équivalente (pour les écarts).
+  const inPeriode = (d) => (d || '') >= start && (d || '') <= end
+  const comparable = preset !== 'all'
+  const dayCount = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+  const prevEnd = addDays(start, -1)
+  const prevStart = addDays(prevEnd, -(dayCount - 1))
+  const inPrev = (d) => comparable && (d || '') >= prevStart && (d || '') <= prevEnd
+
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
 
   const stockPret = useMemo(() => {
@@ -44,13 +45,13 @@ export default function Dashboard() {
   }, [dernier, briques])
 
   const caillasses = dernier?.briques?.caillasses?.caillasses || 0
-  const prodDuMois = productions.filter((p) => (p.date || '').startsWith(mois))
+  const prodDuMois = productions.filter((p) => inPeriode(p.date))
   const prodMois = prodDuMois.reduce((s, p) => s + (p.totalBriques || 0), 0)
-  const prodMoisPrec = productions.filter((p) => (p.date || '').startsWith(moisPrec)).reduce((s, p) => s + (p.totalBriques || 0), 0)
+  const prodMoisPrec = productions.filter((p) => inPrev(p.date)).reduce((s, p) => s + (p.totalBriques || 0), 0)
   // CA = factures émises (issues des ventes approuvées).
-  const facturesDuMois = factures.filter((f) => (f.date || '').startsWith(mois))
+  const facturesDuMois = factures.filter((f) => inPeriode(f.date))
   const caMois = facturesDuMois.reduce((s, f) => s + (f.totalTTC || 0), 0)
-  const caMoisPrec = factures.filter((f) => (f.date || '').startsWith(moisPrec)).reduce((s, f) => s + (f.totalTTC || 0), 0)
+  const caMoisPrec = factures.filter((f) => inPrev(f.date)).reduce((s, f) => s + (f.totalTTC || 0), 0)
   const demandesActives = demandes.filter((d) => estActif(d.statut))
 
   const parType = useMemo(() => {
@@ -95,7 +96,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
           <div style={{
@@ -109,12 +110,15 @@ export default function Dashboard() {
           <h2 className="text-lg font-extrabold">Briqueterie La Termitière</h2>
           <p className="text-sm text-white/80">Matières premières · Production · Séchage · Ventes · Autorisations (validation à deux niveaux)</p>
         </div>
+        <div className="ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:font-semibold [&_.input-base]:text-white [&_label]:font-bold [&_label]:text-white">
+          {periodNode}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard title="Production mois" value={formatNumber(prodMois)} icon={Factory} accent="#7c3aed"
-          variation={prodMois - prodMoisPrec} variationLabel={`mois préc. : ${formatNumber(prodMoisPrec)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Production du mois', render: (
+        <StatCard title="Production période" value={formatNumber(prodMois)} icon={Factory} accent="#7c3aed"
+          variation={comparable ? prodMois - prodMoisPrec : undefined} variationLabel={`période préc. : ${formatNumber(prodMoisPrec)} · cliquer`}
+          onClick={() => setDetail({ titre: 'Production de la période', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
@@ -127,7 +131,7 @@ export default function Dashboard() {
                       <td className="px-4 py-2.5 text-right text-base font-extrabold text-violet-700">{formatNumber(p.totalBriques || 0)}</td>
                     </tr>
                   ))}
-                  {!prodDuMois.length && <tr><td colSpan={2} className="bg-white py-8 text-center text-sm text-gray-400">Aucune production ce mois.</td></tr>}
+                  {!prodDuMois.length && <tr><td colSpan={2} className="bg-white py-8 text-center text-sm text-gray-400">Aucune production sur la période.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -136,9 +140,9 @@ export default function Dashboard() {
           sub="par type — cliquer" onClick={() => setDetail({ titre: 'Briques prêtes à vendre', render: tableStock('pret') })} />
         <StatCard title="En séchage" value={formatNumber(stockSechage)} icon={BrickWall} accent="#ca8a04"
           sub="5–6 jours · cliquer" onClick={() => setDetail({ titre: 'Briques en séchage', render: tableStock('sechage') })} />
-        <StatCard title="CA du mois" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
-          variation={caMois - caMoisPrec} variationLabel={`mois préc. : ${formatMoney(caMoisPrec)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Factures du mois', render: (
+        <StatCard title="CA période" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
+          variation={comparable ? caMois - caMoisPrec : undefined} variationLabel={`période préc. : ${formatMoney(caMoisPrec)} · cliquer`}
+          onClick={() => setDetail({ titre: 'Factures de la période', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
@@ -152,7 +156,7 @@ export default function Dashboard() {
                       <td className="px-4 py-2.5 text-right text-base font-extrabold text-sky-700">{formatMoney(f.totalTTC || 0)}</td>
                     </tr>
                   ))}
-                  {!facturesDuMois.length && <tr><td colSpan={3} className="bg-white py-8 text-center text-sm text-gray-400">Aucune facture ce mois.</td></tr>}
+                  {!facturesDuMois.length && <tr><td colSpan={3} className="bg-white py-8 text-center text-sm text-gray-400">Aucune facture sur la période.</td></tr>}
                 </tbody>
               </table>
             </div>

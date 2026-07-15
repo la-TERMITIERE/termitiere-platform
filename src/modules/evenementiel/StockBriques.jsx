@@ -1,7 +1,7 @@
 // Stock briques — appatam → séchage → prêtes · caillasses.
 // + Stock des matières premières (ciment, gravier, sable) : arrivages & consommation.
 import { useEffect, useState } from 'react'
-import { Save, AlertTriangle, Plus, PackagePlus } from 'lucide-react'
+import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -47,6 +47,7 @@ export default function StockBriques() {
   const [transferModal, setTransferModal] = useState(null)
   const [addModal, setAddModal] = useState(false)
   const [arrivage, setArrivage] = useState(null)   // { matiereId, qte, cout, label }
+  const [consoModal, setConsoModal] = useState(null) // { matiereId, qte, label } — consommation saisie à la main
   const [matDetail, setMatDetail] = useState(null) // matière sélectionnée pour l'historique
 
   const peutSaisir = role === 'agent'
@@ -93,7 +94,7 @@ export default function StockBriques() {
     setStock((s) => ({ ...s, [briqueId]: { ...s[briqueId], [etat]: Math.max(0, parseInt(val) || 0) } }))
   }
 
-  // Solde matière = stock initial + arrivages − consommations (production).
+  // Solde matière = stock initial + arrivages − consommations (saisies à la main).
   const matFin = (id) => {
     const c = matStock[id] || {}
     return Math.max(0, (parseFloat(c.init) || 0) + sumQte(c.entrees) - sumQte(c.consommations))
@@ -117,6 +118,26 @@ export default function StockBriques() {
     })
     toast.success('Arrivage ajouté — n\'oubliez pas d\'enregistrer')
     setArrivage(null)
+  }
+
+  // Enregistre une consommation SAISIE À LA MAIN (l'utilisateur indique combien
+  // a été consommé — pas de déduction automatique via les recettes).
+  function ajouterConsommation() {
+    const { matiereId, qte, label } = consoModal
+    const q = parseFloat(qte) || 0
+    if (!q) return toast.error('Quantité requise')
+    const dispo = matFin(matiereId)
+    if (q > dispo) return toast.error(`Consommation (${q}) supérieure au stock disponible (${Math.round(dispo * 10) / 10})`)
+    setMatStock((s) => {
+      const cur = s[matiereId] || { init: 0, entrees: [], consommations: [] }
+      const consommations = [...(cur.consommations || []), {
+        qte: q, label: (label || 'Consommation').trim(),
+        date, agentId: user.uid, agentNom: user.nom, manuel: true
+      }]
+      return { ...s, [matiereId]: { ...cur, consommations } }
+    })
+    toast.success('Consommation enregistrée — n\'oubliez pas d\'enregistrer')
+    setConsoModal(null)
   }
 
   // Création d'un nouveau type de brique depuis le stock.
@@ -261,15 +282,20 @@ export default function StockBriques() {
 
       {/* ── Stock des matières premières (ciment, gravier, sable) ── */}
       <Card className="overflow-hidden p-0">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
           <div>
             <h3 className="font-bold text-gray-800">Stock matières premières</h3>
-            <p className="text-xs text-gray-500">Arrivages saisis à la livraison · consommation déduite automatiquement à la production</p>
+            <p className="text-xs text-gray-500">Arrivages à la livraison · consommation saisie à la main</p>
           </div>
           {peutSaisir && (
-            <Button size="sm" variant="outline" onClick={() => setArrivage({ matiereId: matieres[0]?.id || '', qte: '', cout: '', label: '' })}>
-              <PackagePlus size={15} /> Arrivage
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setConsoModal({ matiereId: matieres[0]?.id || '', qte: '', label: '' })}>
+                <PackageMinus size={15} /> Consommation
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setArrivage({ matiereId: matieres[0]?.id || '', qte: '', cout: '', label: '' })}>
+                <PackagePlus size={15} /> Arrivage
+              </Button>
+            </div>
           )}
         </div>
         <div className="overflow-x-auto">
@@ -355,6 +381,22 @@ export default function StockBriques() {
               <FormGroup label="Coût unitaire (FCFA)" hint="optionnel"><Input type="number" min="0" value={arrivage.cout} onChange={(e) => setArrivage((a) => ({ ...a, cout: e.target.value }))} /></FormGroup>
             </div>
             <FormGroup label="Fournisseur / référence" hint="optionnel"><Input value={arrivage.label} onChange={(e) => setArrivage((a) => ({ ...a, label: e.target.value }))} placeholder="ex : Livraison CIMTOGO" /></FormGroup>
+          </div>
+        )}
+      </Modal>
+
+      {/* Consommation de matière première (saisie manuelle) */}
+      <Modal open={!!consoModal} onClose={() => setConsoModal(null)} title="Consommation de matière première"
+        footer={<><Button variant="ghost" onClick={() => setConsoModal(null)}>Annuler</Button><Button onClick={ajouterConsommation}><PackageMinus size={16} /> Enregistrer</Button></>}>
+        {consoModal && (
+          <div className="space-y-3">
+            <FormGroup label="Matière">
+              <Select value={consoModal.matiereId} onChange={(e) => setConsoModal((a) => ({ ...a, matiereId: e.target.value }))}>
+                {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom} ({m.unite}) — dispo : {Math.round(matFin(m.id) * 10) / 10}</option>)}
+              </Select>
+            </FormGroup>
+            <FormGroup label="Quantité consommée"><Input type="number" min="0" step="0.1" value={consoModal.qte} onChange={(e) => setConsoModal((a) => ({ ...a, qte: e.target.value }))} autoFocus /></FormGroup>
+            <FormGroup label="Motif / référence" hint="optionnel"><Input value={consoModal.label} onChange={(e) => setConsoModal((a) => ({ ...a, label: e.target.value }))} placeholder="ex : Production du jour, chantier…" /></FormGroup>
           </div>
         )}
       </Modal>

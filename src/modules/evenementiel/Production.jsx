@@ -18,7 +18,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatNumber } from '../../utils/formatters'
 import { DUREE_PRODUCTION_OPTIONS } from './data'
-import { calcConsommationProduction, getInventaire } from './logic'
+import { getInventaire } from './logic'
 
 export default function Production() {
   const { user, role } = useAuth()
@@ -26,7 +26,6 @@ export default function Production() {
   const { data: productions } = useCollection('evenementiel_productions')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const briques = useBriqueterieStore((s) => s.briques.filter((b) => b.id !== 'caillasses'))
-  const recettes = useBriqueterieStore((s) => s.recettes)
 
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
@@ -52,16 +51,16 @@ export default function Production() {
       briqueId: b.id, briqueNom: b.nom, qte: parseInt(form.quantites[b.id]) || 0
     })).filter((l) => l.qte > 0)
 
-    const conso = calcConsommationProduction(form.quantites, recettes)
-
     await addItem('evenementiel_productions', {
       num, date: form.date, duree: form.duree, machine: form.machine,
       lignes, totalBriques, caillasses: parseInt(form.caillasses) || 0,
-      consommation: conso, notes: form.notes,
+      notes: form.notes,
       agentId: user.uid, agentNom: user.nom
     })
 
-    // Mise à jour inventaire du jour : stock appatam + consommation matières
+    // Mise à jour inventaire du jour : stock appatam (les briques produites).
+    // La consommation des matières premières est saisie MANUELLEMENT dans l'onglet
+    // Stock briques (pas de déduction automatique par recette) → on préserve `matieres`.
     const inv = getInventaire(inventaires, form.date) || { date: form.date, matieres: {}, briques: {} }
     const briquesStock = { ...(inv.briques || {}) }
     lignes.forEach((l) => {
@@ -73,29 +72,14 @@ export default function Production() {
       briquesStock.caillasses = { ...cur, caillasses: (cur.caillasses || 0) + parseInt(form.caillasses) }
     }
 
-    const matieresData = { ...(inv.matieres || {}) }
-    Object.entries(conso).forEach(([matId, qte]) => {
-      if (!qte) return
-      const cur = matieresData[matId] || { init: 0, entrees: [], consommations: [], fin: 0 }
-      const consos = [...(cur.consommations || []), {
-        qte: Math.round(qte * 10) / 10,
-        label: `Production ${num}`,
-        agentId: user.uid,
-        agentNom: user.nom
-      }]
-      const totConso = consos.reduce((s, l) => s + (parseFloat(l.qte) || 0), 0)
-      const totEnt = (cur.entrees || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0)
-      matieresData[matId] = { ...cur, consommations: consos, conso: totConso, fin: Math.max(0, (cur.init || 0) + totEnt - totConso) }
-    })
-
     await setItem('evenementiel_inventaires', form.date, {
       ...inv, date: form.date, savedAt: ts(),
-      matieres: matieresData, briques: briquesStock,
+      matieres: inv.matieres || {}, briques: briquesStock,
       agentId: user.uid, agentNom: user.nom
     })
 
     await audit('evenementiel', 'PRODUCTION', `${num} — ${formatNumber(totalBriques)} briques`)
-    toast.success(`Production ${num} enregistrée ✓ — briques en appatam, matières consommées`)
+    toast.success(`Production ${num} enregistrée ✓ — briques placées en appatam`)
     setOpen(false)
   }
 
