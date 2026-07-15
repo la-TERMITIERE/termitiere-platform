@@ -228,6 +228,7 @@ export default function Projets() {
   const [searchOpen, setSearchOpen] = useState(false)
   const searchRef = useRef(null)
   const [filtreStatut, setFiltreStatut] = useState('')
+  const [filtreResponsable, setFiltreResponsable] = useState('')
   const [tri, setTri]               = useState('date_desc')
   const [mesProjets, setMesProjets] = useState(false)
   const [detail, setDetail]         = useState(null)
@@ -293,10 +294,16 @@ export default function Projets() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Chefs de projet distincts — pour le filtre "Chef de projet".
+  const chefsDeProjet = useMemo(() =>
+    [...new Set(projets.map((p) => p.responsable).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  [projets])
+
   const liste = useMemo(() => {
     let result = projets
       .filter((p) => (!search || p.nom?.toLowerCase().includes(search.toLowerCase()) || p.num?.includes(search)))
       .filter((p) => !filtreStatut || p.statut === filtreStatut)
+      .filter((p) => !filtreResponsable || p.responsable === filtreResponsable)
       .filter((p) => !mesProjets || !nomConnecte || p.responsable === nomConnecte)
 
     switch (tri) {
@@ -317,7 +324,7 @@ export default function Projets() {
       case 'budget_desc': result = [...result].sort((a, b) => (Number(b.budget) || 0) - (Number(a.budget) || 0)); break
     }
     return result
-  }, [projets, taches, search, filtreStatut, tri, mesProjets, nomConnecte])
+  }, [projets, taches, search, filtreStatut, filtreResponsable, tri, mesProjets, nomConnecte])
 
   const openCreate = () => { setForm(VIDE); setEditing(null); setModal(true) }
   const openEdit   = (p) => {
@@ -482,6 +489,13 @@ export default function Projets() {
           {Object.entries(STATUTS_PROJET).map(([k, v]) => (
             <option key={k} value={k}>{v.label}</option>
           ))}
+        </select>
+        <select
+          className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+          value={filtreResponsable} onChange={(e) => setFiltreResponsable(e.target.value)}
+        >
+          <option value="">Tous les chefs de projet</option>
+          {chefsDeProjet.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
         <select
           className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
