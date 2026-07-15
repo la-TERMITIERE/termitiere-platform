@@ -189,6 +189,21 @@ export default function Depenses() {
 
   const openCreate = () => { setForm({ ...VIDE, projetId: filtreProjet }); setEditing(null); setModal(true) }
 
+  // Solde de la tâche sélectionnée dans le formulaire — affiché pour que l'utilisateur
+  // voie le montant arrêté, ce qui a déjà été versé (y compris par d'autres versements),
+  // et puisse librement saisir un nouveau versement, partiel ou total : "Solder" ne force
+  // plus à tout verser d'un coup.
+  const tacheSolde = useMemo(() => {
+    if (!form.tacheId) return null
+    const tache = taches.find((t) => t.id === form.tacheId)
+    const prevu = Number(tache?.montantPrevu) || 0
+    if (!tache || prevu <= 0) return null
+    const dejaVerse = depenses
+      .filter((d) => d.tacheId === form.tacheId && d.id !== editing?.id)
+      .reduce((s, d) => s + (Number(d.montant) || 0), 0)
+    return { prevu, dejaVerse, reste: prevu - dejaVerse }
+  }, [form.tacheId, depenses, taches, editing])
+
   // Solder une tâche en un clic : pré-remplit tout (projet, tâche, prestataire) avec
   // le montant du reste exact — l'utilisateur n'a plus qu'à vérifier et enregistrer,
   // au lieu de devoir retrouver et retaper le montant restant à la main.
@@ -651,6 +666,22 @@ export default function Depenses() {
               </div>
             )
           })()}
+          {tacheSolde && (
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                <span>Montant arrêté : <b className="text-gray-800">{formatMoney(tacheSolde.prevu)}</b></span>
+                <span>Déjà versé : <b className="text-gray-800">{formatMoney(tacheSolde.dejaVerse)}</b></span>
+                <span>Reste : <b className={tacheSolde.reste > 0 ? 'text-amber-700' : 'text-green-700'}>{formatMoney(Math.max(tacheSolde.reste, 0))}</b></span>
+              </div>
+              {tacheSolde.reste > 0 && (
+                <button type="button"
+                  onClick={() => setForm((f) => ({ ...f, montant: String(tacheSolde.reste), typePaiement: 'total' }))}
+                  className="mt-2 text-[11px] font-semibold text-teal-700 hover:underline">
+                  Verser le reste en un clic ({formatMoney(tacheSolde.reste)})
+                </button>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Date</label>
@@ -660,7 +691,20 @@ export default function Depenses() {
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Montant (FCFA) *</label>
               <input type="number" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.montant} onChange={(e) => setForm((f) => ({ ...f, montant: e.target.value }))} />
+                value={form.montant} onChange={(e) => {
+                  const val = e.target.value
+                  setForm((f) => ({
+                    ...f, montant: val,
+                    // Si une tâche budgétée est liée, le type de paiement suit automatiquement
+                    // le montant saisi : tranche tant qu'il reste un solde après ce versement, sinon somme totale.
+                    typePaiement: tacheSolde ? (Number(val) >= tacheSolde.reste ? 'total' : 'avance') : f.typePaiement
+                  }))
+                }} />
+              {tacheSolde && form.montant !== '' && Number(form.montant) < tacheSolde.reste && (
+                <p className="mt-1 text-[11px] text-amber-600">
+                  Versement partiel — il restera {formatMoney(tacheSolde.reste - Number(form.montant))} après cet enregistrement.
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Catégorie</label>
