@@ -13,9 +13,18 @@ import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
+import { depensesProjetVersSecteurs } from './logic'
 
 export default function Historique() {
-  const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesReelles } = useCollection('depense_depenses')
+  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet.
+  const { data: depensesProjet } = useCollection('projet_depenses')
+  const { data: projetsTous }    = useCollection('projets')
+  const { data: tachesTous }     = useCollection('projet_taches')
+  const depenses = useMemo(
+    () => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous)],
+    [depensesReelles, depensesProjet, projetsTous, tachesTous]
+  )
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
@@ -182,9 +191,10 @@ export default function Historique() {
               const secteur = SECTEURS.find((s) => s.id === d.secteurId)
               const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
               const isOpen = openRow === d.id
+              const depuisProjet = d.source === 'projet'
               return (
                 <Fragment key={d.id}>
-                  <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setOpenRow(isOpen ? null : d.id)}>
+                  <tr className={`cursor-pointer hover:bg-gray-50 ${depuisProjet ? 'bg-teal-50/30' : ''}`} onClick={() => setOpenRow(isOpen ? null : d.id)}>
                     <td className="px-2 py-2 text-center text-gray-400">
                       {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </td>
@@ -192,6 +202,7 @@ export default function Historique() {
                     <td className="px-3 py-2"><Badge tone="neutral">{secteur?.label || d.secteurId}</Badge></td>
                     <td className="px-3 py-2 text-gray-600">
                       {d.description || d.categorie || '—'}
+                      {depuisProjet && <span className="ml-1"><Badge tone="info">🔗 Depuis E-G.Pro</Badge></span>}
                       {/* Traçabilité visible directement : qui a effectué la dépense → qui la reçoit */}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-400">
                         <span>✍️ Par <span className="font-semibold text-gray-500">{d.enregistrePar || '—'}</span></span>

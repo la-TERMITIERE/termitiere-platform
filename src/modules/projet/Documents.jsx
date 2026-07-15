@@ -52,6 +52,21 @@ export default function Documents() {
     (projet?.pieces || []).filter((p) => !filtreRub || p.rubrique === filtreRub),
   [projet, filtreRub])
 
+  // Vue globale (aucun projet sélectionné) : tous les documents déjà ajoutés,
+  // groupés par projet — pour les avoir sous les yeux dès l'ouverture du volet.
+  const projetsAvecDocs = useMemo(() =>
+    projets
+      .map((p) => ({
+        ...p,
+        piecesProjet: (p.pieces || []).filter((pc) => !filtreRub || pc.rubrique === filtreRub),
+        tachesAvecDocs: taches
+          .filter((t) => t.projetId === p.id)
+          .map((t) => ({ ...t, pieces: (t.pieces || []).filter((pc) => !filtreRub || pc.rubrique === filtreRub) }))
+          .filter((t) => t.pieces.length > 0)
+      }))
+      .filter((p) => p.piecesProjet.length > 0 || p.tachesAvecDocs.length > 0),
+  [projets, taches, filtreRub])
+
   const handleAdd = async (piece) => {
     if (!projet) return
     const pieces = [...(projet.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
@@ -93,30 +108,47 @@ export default function Documents() {
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </div>
-          {projet && (
-            <>
-              <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{STATUTS_PROJET[projet.statut]?.label}</Badge>
-              <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:ring-2 focus-within:ring-teal-400">
-                <Filter size={14} className="shrink-0 text-gray-400" />
-                <select className="bg-transparent text-sm focus:outline-none"
-                  value={filtreRub} onChange={(e) => setFiltreRub(e.target.value)}>
-                  <option value="">Toutes les rubriques</option>
-                  {RUBRIQUES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-                </select>
-                <ChevronDown size={12} className="pointer-events-none text-gray-400" />
-              </div>
-            </>
-          )}
+          {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{STATUTS_PROJET[projet.statut]?.label}</Badge>}
+          <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:ring-2 focus-within:ring-teal-400">
+            <Filter size={14} className="shrink-0 text-gray-400" />
+            <select className="bg-transparent text-sm focus:outline-none"
+              value={filtreRub} onChange={(e) => setFiltreRub(e.target.value)}>
+              <option value="">Toutes les rubriques</option>
+              {RUBRIQUES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+            <ChevronDown size={12} className="pointer-events-none text-gray-400" />
+          </div>
         </div>
       </Card>
 
       {!projet ? (
-        <Card>
-          <div className="flex flex-col items-center gap-2 py-12 text-gray-400">
-            <FolderOpen size={36} className="opacity-30" />
-            <p className="text-sm">Sélectionnez un projet pour voir ou ajouter ses documents.</p>
+        projetsAvecDocs.length === 0 ? (
+          <Card>
+            <div className="flex flex-col items-center gap-2 py-12 text-gray-400">
+              <FolderOpen size={36} className="opacity-30" />
+              <p className="text-sm">Aucun document ajouté pour l'instant. Sélectionnez un projet pour en ajouter.</p>
+            </div>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {projetsAvecDocs.map((p) => (
+              <Card key={p.id}>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <FolderKanban size={15} className="shrink-0 text-teal-500" />
+                  <button onClick={() => setProjetId(p.id)} className="text-sm font-bold text-gray-800 hover:text-teal-600 hover:underline">{p.nom}</button>
+                  <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label}</Badge>
+                </div>
+                {p.piecesProjet.length > 0 && <PiecesJointes pieces={p.piecesProjet} readOnly label="Documents du projet" />}
+                {p.tachesAvecDocs.map((t) => (
+                  <div key={t.id} className="mt-2 rounded-xl bg-gray-50 px-3 py-2.5">
+                    <p className="mb-1.5 text-xs font-semibold text-gray-600">📋 {t.titre}</p>
+                    <PiecesJointes pieces={t.pieces} readOnly />
+                  </div>
+                ))}
+              </Card>
+            ))}
           </div>
-        </Card>
+        )
       ) : (
         <>
           <Card>

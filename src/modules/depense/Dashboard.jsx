@@ -11,7 +11,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -20,7 +20,11 @@ const REAL_MOIS = now.getMonth() + 1
 
 export default function Dashboard() {
   const { data: budgets }  = useCollection('depense_budgets')
-  const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesReelles } = useCollection('depense_depenses')
+  const { data: depensesProjet }  = useCollection('projet_depenses')
+  const { data: projetsTous }     = useCollection('projets')
+  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet — pas de double saisie.
+  const depenses = useMemo(() => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous)], [depensesReelles, depensesProjet, projetsTous])
   const { user } = useAuth()
   const navigate = useNavigate()
 
