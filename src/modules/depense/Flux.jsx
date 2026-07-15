@@ -11,18 +11,23 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, NATURES_FLUX } from './data'
-import { soldesFluxMois, croissance, derniersMois, moisPrecedent } from './logic'
+import { soldesFluxMois, croissance, derniersMois, moisPrecedent, depensesProjetVersSecteurs } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
 
 export default function Flux() {
-  const { data: depenses }             = useCollection('depense_depenses')
+  const { data: depensesReelles }      = useCollection('depense_depenses')
+  const { data: depensesProjet }       = useCollection('projet_depenses')
+  const { data: projetsTous }          = useCollection('projets')
   const { data: paiementsGarderie }    = useCollection('garderie_paiements')
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
+
+  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet — pas de double saisie.
+  const depenses = useMemo(() => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous)], [depensesReelles, depensesProjet, projetsTous])
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 

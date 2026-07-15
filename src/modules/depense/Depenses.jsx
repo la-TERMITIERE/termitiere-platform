@@ -17,7 +17,7 @@ import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs } from './logic'
 import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 
@@ -90,9 +90,20 @@ export default function Depenses() {
   const { user, role } = useAuth()
   const isAdmin = isFullAccessRole(role)
   const lectureSeule = isReadOnlyRole(role)
-  const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
+
+  // Dépenses de E-G.Pro (secteur MAXI BAT) incluses en lecture seule dans la liste,
+  // avec tous les détails (projet, tâche, prestataire) — pas de double saisie ici,
+  // elles restent gérées uniquement depuis E-G.Pro.
+  const { data: depensesProjet } = useCollection('projet_depenses')
+  const { data: projetsTous }    = useCollection('projets')
+  const { data: tachesTous }     = useCollection('projet_taches')
+  const depenses = useMemo(
+    () => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous)],
+    [depensesReelles, depensesProjet, projetsTous, tachesTous]
+  )
 
   const [recherche, setRecherche] = useState('')
   const [filtreSecteur, setFiltreSecteur] = useState('')
@@ -310,9 +321,10 @@ export default function Depenses() {
               const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
               const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
               const source = SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]
-              const modifiable = isAdmin || d.statut === 'en_attente' || !d.statut
+              const depuisProjet = d.source === 'projet'
+              const modifiable = !depuisProjet && (isAdmin || d.statut === 'en_attente' || !d.statut)
               return (
-                <tr key={d.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={d.id} className={`hover:bg-gray-50 transition-colors ${depuisProjet ? 'bg-teal-50/30' : ''}`}>
                   <td className="px-3 py-2 text-xs text-gray-500">{formatDateShort(d.date)}</td>
                   <td className="px-3 py-2">
                     <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
@@ -321,7 +333,12 @@ export default function Depenses() {
                     {d.categorie || '—'}
                     <span className="mt-0.5 block"><Badge tone={nature.tone}>{nature.label}</Badge></span>
                   </td>
-                  <td className="px-3 py-2 text-gray-600">{d.description || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">
+                    {d.description || '—'}
+                    {depuisProjet && (
+                      <span className="mt-0.5 block"><Badge tone="info">🔗 Depuis E-G.Pro</Badge></span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right font-semibold">
                     {Number(d.montant).toLocaleString('fr-FR')} FCFA
                     {(d.sourceFinancement || sourceFinancementDefaut) === 'pau' && (
@@ -346,6 +363,9 @@ export default function Depenses() {
                       <button onClick={() => ouvrirPiece(d.piece)} title="Voir le justificatif" className="rounded p-1 text-primary hover:bg-primary/10">
                         <Eye size={14} />
                       </button>
+                    )}
+                    {!d.piece && depuisProjet && d.noteOrigine && (
+                      <span className="block max-w-[180px] whitespace-normal text-left text-[11px] italic text-gray-500">{d.noteOrigine}</span>
                     )}
                   </td>
                   <td className="px-3 py-2">

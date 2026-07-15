@@ -6,14 +6,18 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
 import { SECTEURS, MOIS_LABELS } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesProjetVersSecteurs } from './logic'
 
 const now = new Date()
 const PALETTE = ['#4F46E5', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
 
 export default function Analyses() {
   const { data: budgets }  = useCollection('depense_budgets')
-  const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesReelles } = useCollection('depense_depenses')
+  const { data: depensesProjet }  = useCollection('projet_depenses')
+  const { data: projetsTous }     = useCollection('projets')
+  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet — pas de double saisie.
+  const depenses = useMemo(() => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous)], [depensesReelles, depensesProjet, projetsTous])
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
