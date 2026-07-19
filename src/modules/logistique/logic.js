@@ -81,3 +81,73 @@ export function annoterLignesAgent(lignes, userId, userNom) {
 export const ENTREE_TYPES = ['Achat']
 export const SORTIE_TYPES_SAISIE = ['Ajustement']
 export const RETOUR_TYPES = ['OK', 'Cassé', 'Perdu']
+
+// Nombre de jours de location, bornes incluses (début = fin ⇒ 1 jour).
+export function nbJoursInclus(dateDebut, dateFin) {
+  if (!dateDebut) return 1
+  const d1 = new Date(dateDebut)
+  const d2 = new Date(dateFin || dateDebut)
+  if (isNaN(d1) || isNaN(d2)) return 1
+  const diff = Math.floor((d2 - d1) / 86400000)
+  return Math.max(1, diff + 1)
+}
+
+// Montant d'une ligne de prestation : quantité × jours × tarif unitaire/jour.
+export function montantLigne(l) {
+  const qte = parseInt(l?.qte) || 0
+  const jours = parseInt(l?.nbJours) || 1
+  const tarif = parseFloat(l?.tarifUnitaire ?? l?.tarif) || 0
+  return qte * jours * tarif
+}
+
+// ── Analyse détaillée des prestations ───────────────────────────────────────
+// Agrège une liste de prestations (déjà filtrée par site/période) pour le
+// Pilotage : par élément (matériel), par catégorie, par événement, par client.
+// Le CA d'une prestation = somme des montants de lignes + frais éventuels.
+export function analyserPrestations(prestations) {
+  const elements = {}
+  const categories = {}
+  const evenements = {}
+  const clients = {}
+
+  ;(prestations || [])
+    .filter((p) => p.statut !== 'annulee')
+    .forEach((p) => {
+      const joursPresta = nbJoursInclus(p.dateDebut, p.dateFin)
+      let caPresta = 0
+      ;(p.lignes || []).forEach((l) => {
+        const montant = l.montant != null ? l.montant : montantLigne(l)
+        caPresta += montant
+        const key = l.materielId || `autre:${l.materielNom || 'Autre'}`
+        const cat = l.cat || 'AUTRES'
+        const qte = parseInt(l.qte) || 0
+        const jours = parseInt(l.nbJours) || joursPresta
+        const e = elements[key] || (elements[key] = { key, nom: l.materielNom || 'Autre', cat, count: 0, qte: 0, jours: 0, ca: 0 })
+        e.count += 1; e.qte += qte; e.jours += jours; e.ca += montant
+        const c = categories[cat] || (categories[cat] = { cat, ca: 0, qte: 0, count: 0, elements: {} })
+        c.ca += montant; c.qte += qte; c.count += 1
+        c.elements[key] = e
+      })
+      ;(p.frais || []).forEach((f) => { caPresta += parseFloat(f.montant) || 0 })
+
+      const ev = (p.evenement || '').trim() || 'Non précisé'
+      const evStat = evenements[ev] || (evenements[ev] = { label: ev, ca: 0, qte: 0, count: 0 })
+      evStat.count += 1; evStat.ca += caPresta
+      evStat.qte += (p.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
+
+      const cli = (p.clientNom || '').trim() || 'Client inconnu'
+      const cStat = clients[cli] || (clients[cli] = { nom: cli, ca: 0, count: 0, jours: 0, dernier: '' })
+      cStat.count += 1; cStat.ca += caPresta; cStat.jours += joursPresta
+      if ((p.dateDebut || p.date || '') > cStat.dernier) cStat.dernier = p.dateDebut || p.date || ''
+    })
+
+  const parElement = Object.values(elements).sort((a, b) => b.count - a.count)
+  const parCategorie = Object.values(categories).map((c) => {
+    const els = Object.values(c.elements).sort((a, b) => b.count - a.count)
+    return { ...c, elements: els, top: els[0] || null }
+  }).sort((a, b) => b.ca - a.ca)
+  const parEvenement = Object.values(evenements).sort((a, b) => b.count - a.count)
+  const parClient = Object.values(clients).sort((a, b) => b.ca - a.ca)
+
+  return { parElement, parCategorie, parEvenement, parClient }
+}

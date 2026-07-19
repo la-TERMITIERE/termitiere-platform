@@ -586,12 +586,13 @@ function CategoriePeriodeModal({ cat, onClose, especes, invPeriode, dernier, sta
   }, [cat, especes, invPeriode, dernier])
 
   return (
-    <Modal open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} — détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
+    <Modal open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} — détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}
+      panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
       {data && (
         data.lignes.length === 0 ? (
           <p className="py-6 text-center text-gray-400">Aucune espèce dans cette catégorie.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg bg-white">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
@@ -907,8 +908,9 @@ function KpiDetailModal({ id, onClose, data }) {
   }
 
   return (
-    <Modal open onClose={onClose} size="lg" title={titles[id] || 'Détail'}>
-      <div className="max-h-[60vh] overflow-auto">{content}</div>
+    <Modal open onClose={onClose} size="lg" title={titles[id] || 'Détail'}
+      panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+      <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>
   )
 }

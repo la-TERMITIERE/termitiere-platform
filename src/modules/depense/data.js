@@ -32,6 +32,15 @@ export const NATURES_FLUX = {
 }
 export const natureFluxDefaut = 'exploitation'
 
+// Source de financement de la dépense — traçabilité pure (n'affecte pas les calculs
+// de budget/trésorerie). Distingue l'argent de l'entreprise de l'apport personnel
+// du promoteur (PAU), utile pour suivre ce que le PAU a investi de sa poche.
+export const SOURCES_FINANCEMENT = {
+  entreprise: { label: 'Fonds de l\'entreprise', tone: 'info',    desc: 'Payé avec la trésorerie / les revenus de l\'entreprise.' },
+  pau:        { label: 'Apport du PAU',          tone: 'purple',  desc: 'Payé par le promoteur (PAU) avec son argent personnel.' }
+}
+export const sourceFinancementDefaut = 'entreprise'
+
 // Circuit d'autorisation de décaissement (2 niveaux) :
 //   en_attente → approuvee → decaissee (argent réellement sorti, compté dans le budget)
 //   ou refusee à n'importe quelle étape.

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, ChevronDown, Play, Eye, CheckCircle2, CalendarClock, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -112,8 +113,25 @@ function OngletTaches({ taches, projets, users, depenses }) {
   const [filtreProjet, setFiltreProjet] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtrePhase, setFiltrePhase]   = useState('')
+  const [filtreResponsable, setFiltreResponsable] = useState('')
   const [mesTaches, setMesTaches]       = useState(false)
   const [detail, setDetail]             = useState(null)
+
+  // Ouvre directement la fiche de la tâche concernée quand on arrive depuis une
+  // alerte du Dashboard (clic « Aller corriger ») — évite de devoir la rechercher.
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const id = location.state?.openTacheId
+    if (!id) return
+    const t = taches.find((x) => x.id === id)
+    if (t) {
+      // Alerte « Tâche en dépassement » → droit au formulaire de révision du montant.
+      if (location.state?.openRevision) ouvrirRevision(t)
+      else setDetail(t)
+    }
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, taches])
 
   const nomConnecte = user?.nom || user?.login || ''
 
@@ -121,13 +139,19 @@ function OngletTaches({ taches, projets, users, depenses }) {
     [...new Set(taches.map((t) => t.phase).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
   [taches])
 
+  // Chefs de projet distincts — pour filtrer les tâches par responsable du projet parent.
+  const chefsDeProjet = useMemo(() =>
+    [...new Set(projets.map((p) => p.responsable).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  [projets])
+
   const liste = useMemo(() => taches
     .filter((t) => !filtreProjet || t.projetId === filtreProjet)
     .filter((t) => !filtreStatut || t.statut === filtreStatut)
     .filter((t) => !filtrePhase || t.phase === filtrePhase)
+    .filter((t) => !filtreResponsable || projets.find((p) => p.id === t.projetId)?.responsable === filtreResponsable)
     .filter((t) => !mesTaches || !nomConnecte || t.assignee === nomConnecte)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-  [taches, filtreProjet, filtreStatut, filtrePhase, mesTaches, nomConnecte])
+  [taches, projets, filtreProjet, filtreStatut, filtrePhase, filtreResponsable, mesTaches, nomConnecte])
 
   const openCreate = () => { setForm({ ...VIDE_TACHE, versementDate: todayStr() }); setEditing(null); setModal(true) }
   const openEdit   = (t) => {
@@ -277,6 +301,13 @@ function OngletTaches({ taches, projets, users, depenses }) {
             value={filtrePhase} onChange={(e) => setFiltrePhase(e.target.value)}>
             <option value="">Toutes les phases</option>
             {phasesDisponibles.map((ph) => <option key={ph} value={ph}>{ph}</option>)}
+          </select>
+        )}
+        {chefsDeProjet.length > 0 && (
+          <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+            value={filtreResponsable} onChange={(e) => setFiltreResponsable(e.target.value)}>
+            <option value="">Tous les chefs de projet</option>
+            {chefsDeProjet.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         )}
         {nomConnecte && (

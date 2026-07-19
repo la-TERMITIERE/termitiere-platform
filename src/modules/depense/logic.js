@@ -1,5 +1,55 @@
 // Calculs budget / dépenses par secteur et par mois.
 import { SECTEURS, natureFluxDefaut } from './data'
+import { METIERS_PRESTATAIRE } from '../projet/prestataire'
+
+// Correspondance type de projet (E-G.Pro) → secteur (E-DÉPENSES) : permet de ranger
+// automatiquement chaque dépense de chantier dans le secteur qu'elle concerne réellement,
+// plutôt que de tout regrouper sous "MAXI BAT".
+const SECTEUR_PAR_TYPE_PROJET = {
+  construction: 'bat',
+  amenagement:  'bat',
+  agricole:     'agro',
+  elevage:      'agro',
+  evenementiel: 'evenementiel',
+  informatique: 'divers',
+  commercial:   'divers',
+  autre:        'divers'
+}
+
+// ── Passerelle en lecture seule avec E-G.Pro (module Projet) ────────────────
+// Les dépenses de projet (`projet_depenses`) sont saisies et gérées exclusivement
+// dans E-G.Pro (tâches, tranches…) — ici on les convertit juste au format attendu
+// par E-DÉPENSES, rattachées au secteur que concerne réellement le projet d'origine
+// (via `SECTEUR_PAR_TYPE_PROJET`), avec tous les détails utiles (projet, tâche,
+// prestataire) pour éviter la double saisie tout en restant pleinement traçable.
+// Toute dépense présente dans projet_depenses a déjà été validée/enregistrée côté
+// E-G.Pro : elle est donc considérée comme réellement décaissée. `projets`/`taches`
+// sont optionnels — sans `projets`, le secteur retombe sur "divers".
+export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], taches = []) {
+  return depensesProjet.map((d) => {
+    const projet = projets.find((p) => p.id === d.projetId)
+    const tache  = taches.find((t) => t.id === d.tacheId)
+    const metier = METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier || ''
+    return {
+      id: `projet_${d.id}`,
+      secteurId: SECTEUR_PAR_TYPE_PROJET[projet?.type] || 'divers',
+      categorie: d.categorie || 'autre',
+      montant: Number(d.montant) || 0,
+      date: d.date ? new Date(d.date).toISOString().slice(0, 10) : '',
+      description: [projet?.nom, tache?.titre, d.description].filter(Boolean).join(' — ') || d.description || '',
+      noteOrigine: d.description || '',
+      natureFlux: natureFluxDefaut,
+      statut: 'decaissee',
+      source: 'projet',
+      projetId: d.projetId, projetNom: projet?.nom || '',
+      tacheId: d.tacheId, tacheTitre: tache?.titre || '',
+      enregistrePar: d.ajoutePar || '—',
+      createdAt: d.createdAt || d.date || Date.now(),
+      beneficiaireNom: d.fournisseur || '',
+      beneficiaireFonction: metier
+    }
+  })
+}
 
 // Budget alloué à un secteur pour un mois donné (0 si non défini).
 export function budgetSecteur(budgets, secteurId, annee, mois) {

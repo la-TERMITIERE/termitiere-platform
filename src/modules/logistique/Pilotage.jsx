@@ -3,10 +3,10 @@
 // chiffre d'affaires, prestations, panier moyen, matériel loué (rotation), taux de
 // casse / perte, valeur du parc, stock. Détail par catégorie de matériel.
 import { useMemo, useState } from 'react'
-import { Line, Doughnut, Bar } from 'react-chartjs-2'
+import { Doughnut, Bar } from 'react-chartjs-2'
 import {
-  BadgeDollarSign, ClipboardList, Coins, RotateCcw, AlertTriangle,
-  Boxes, Warehouse, Percent, TrendingUp, Send, Truck
+  BadgeDollarSign, ClipboardList, Coins, AlertTriangle,
+  Boxes, TrendingUp, TrendingDown
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -14,8 +14,9 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useLogistiqueStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { estActif } from '../../shared/workflow'
-import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-import { CAT_MATERIEL, catColor } from './data'
+import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
+import { CAT_MATERIEL, catColor, labelColor } from './data'
+import { analyserPrestations, nbJoursInclus } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const TOUTES = '__TOUTES__'
@@ -35,11 +36,19 @@ export default function Pilotage() {
   const demandes = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
   const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
 
-  const { start, end, node: periodNode } = usePeriodSelect('30')
+  const { start, end, preset, node: periodNode } = usePeriodSelect('30')
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
+  const [detail, setDetail] = useState(null) // drill-down analyse (élément / événement / client)
 
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
+
+  // Période précédente de MÊME durée — socle des indicateurs de tendance décisionnels.
+  const comparable = preset !== 'all'
+  const dayCount = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+  const prevEnd = addDays(start, -1)
+  const prevStart = addDays(prevEnd, -(dayCount - 1))
+  const inPrev = (d) => comparable && (d || '') >= prevStart && (d || '') <= prevEnd
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
 
   // Catégorie d'un matériel (par id) — pour rattacher CA / sorties / retours.
@@ -57,6 +66,92 @@ export default function Pilotage() {
   const facturesP = useMemo(() => factures.filter((f) => f.statut === 'approuvee' && inPeriode(f.date)), [factures, start, end])
   const prestationsP = useMemo(() => prestations.filter((p) => inPeriode(p.date)), [prestations, start, end])
   const retoursP = useMemo(() => retours.filter((r) => inPeriode(r.date)), [retours, start, end])
+
+  // Analyse détaillée des prestations de la période (par élément, catégorie,
+  // événement, client). Indépendante du filtre catégorie ci-dessus.
+  const analyse = useMemo(() => analyserPrestations(prestationsP), [prestationsP])
+  const keyOf = (l) => l.materielId || `autre:${l.materielNom || 'Autre'}`
+
+  // Prestations concernant un élément donné → détail cliquable.
+  const detailElement = (el) => {
+    const rows = prestationsP
+      .filter((p) => (p.lignes || []).some((l) => keyOf(l) === el.key))
+      .sort((a, b) => ((a.dateDebut || '') < (b.dateDebut || '') ? 1 : -1))
+    setDetail({
+      titre: `Élément : ${el.nom}`,
+      render: (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2 p-3">
+            <MiniStat label="Sollicité" value={`${el.count} fois`} color="#0284c7" />
+            <MiniStat label="Quantité cumulée" value={formatNumber(el.qte)} color="#7c3aed" />
+            <MiniStat label="Chiffre d'affaires" value={formatMoney(el.ca)} color="#16a34a" />
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2">Événement</th><th className="px-2 py-2 text-center">Qté</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">Montant</th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((p) => { const l = (p.lignes || []).find((x) => keyOf(x) === el.key); return (
+                <tr key={p.id}>
+                  <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(p.dateDebut || p.date)}</td>
+                  <td className="px-3 py-1.5">{p.clientNom || '—'}</td>
+                  <td className="px-3 py-1.5 text-gray-500">{p.evenement || '—'}</td>
+                  <td className="px-2 py-1.5 text-center">{l?.qte ?? '—'}</td>
+                  <td className="px-2 py-1.5 text-center">{l?.nbJours || 1}</td>
+                  <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(l?.montant || 0)}</td>
+                </tr>
+              )})}
+            </tbody>
+          </table>
+        </div>
+      )
+    })
+  }
+
+  const detailCategorie = (c) => setDetail({
+    titre: `Catégorie : ${c.cat}`,
+    render: (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr><th className="px-3 py-2 text-left">Élément</th><th className="px-2 py-2 text-center">Sollicitations</th><th className="px-2 py-2 text-center">Qté</th><th className="px-3 py-2 text-right">CA</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {c.elements.map((el, i) => (
+            <tr key={el.key} className="cursor-pointer hover:bg-sky-50" onClick={() => detailElement(el)}>
+              <td className="px-3 py-1.5 font-semibold">{i === 0 && <span className="mr-1">🏆</span>}{el.nom}</td>
+              <td className="px-2 py-1.5 text-center font-bold text-sky-700">{el.count}</td>
+              <td className="px-2 py-1.5 text-center">{formatNumber(el.qte)}</td>
+              <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(el.ca)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  })
+
+  const detailPrestations = (titre, rows) => setDetail({
+    titre,
+    render: (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client / Événement</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">Montant</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((p) => (
+            <tr key={p.id}>
+              <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(p.dateDebut || p.date)}</td>
+              <td className="px-3 py-1.5 font-mono text-xs">{p.num}</td>
+              <td className="px-3 py-1.5">{p.clientNom || '—'}<span className="text-gray-400"> · {p.evenement || '—'}</span></td>
+              <td className="px-2 py-1.5 text-center">{nbJoursInclus(p.dateDebut, p.dateFin)}</td>
+              <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(p.total || 0)}</td>
+            </tr>
+          ))}
+          {!rows.length && <tr><td colSpan={5} className="py-4 text-center text-gray-400">Aucune prestation.</td></tr>}
+        </tbody>
+      </table>
+    )
+  })
+  const maxElCount = Math.max(1, ...analyse.parElement.map((e) => e.count))
 
   // Montant d'une facture rapporté au périmètre (total, ou lignes de la catégorie).
   const montantScope = (f) => scope === TOUTES
@@ -105,43 +200,68 @@ export default function Pilotage() {
   const rotation = valeurParc > 0 ? (caTotal / valeurParc) * 100 : 0
   const autorisations = demandes.filter((d) => estActif(d.statut)).length
 
-  // Graphiques.
+  // ── Période précédente (mêmes règles de périmètre) → deltas décisionnels ──
+  const facturesPrev = useMemo(() => comparable ? factures.filter((f) => f.statut === 'approuvee' && inPrev(f.date)) : [], [factures, prevStart, prevEnd, comparable])
+  const caPrev = facturesPrev.reduce((s, f) => s + montantScope(f), 0)
+  const prestPrev = useMemo(() => prestations.filter((p) => inPrev(p.date)), [prestations, prevStart, prevEnd])
+  const nbPrestPrev = scope === TOUTES ? prestPrev.length : prestPrev.filter((p) => (p.lignes || []).some((l) => inScope(catOf[l.materielId] || l.cat))).length
+  const panierPrev = nbPrestPrev ? caPrev / nbPrestPrev : 0
+  const retoursPrevScope = retours.filter((r) => inPrev(r.date)).filter((r) => inScope(catOf[r.materielId] || 'AUTRES'))
+  const rc = (arr, t) => arr.filter((r) => r.type === t).reduce((s, r) => s + (parseInt(r.qte) || 0), 0)
+  const totRetPrev = rc(retoursPrevScope, 'OK') + rc(retoursPrevScope, 'Cassé') + rc(retoursPrevScope, 'Perdu')
+  const tauxCassePrev = totRetPrev ? ((rc(retoursPrevScope, 'Cassé') + rc(retoursPrevScope, 'Perdu')) / totRetPrev) * 100 : 0
+  // Variation relative (%) — null si pas de base de comparaison.
+  const pct = (cur, prev) => (comparable && prev > 0) ? ((cur - prev) / prev) * 100 : null
+
+  // Graphiques — répartition du CA (mix décisionnel).
   const caParCatChart = {
     labels: parCat.filter((p) => p.ca > 0).map((p) => p.cat),
     datasets: [{ data: parCat.filter((p) => p.ca > 0).map((p) => p.ca), backgroundColor: parCat.filter((p) => p.ca > 0).map((p) => p.color) }]
   }
-  const stockValeurChart = {
-    labels: rowsScope.map((p) => p.cat),
-    datasets: [{ label: 'Valeur du parc', data: rowsScope.map((p) => p.valeur), backgroundColor: rowsScope.map((p) => p.color) }]
+  const evParCa = analyse.parEvenement.filter((e) => e.ca > 0)
+  const caParEvChart = {
+    labels: evParCa.map((e) => e.label),
+    datasets: [{ data: evParCa.map((e) => e.ca), backgroundColor: evParCa.map((e) => labelColor(e.label)) }]
   }
-  const evoCA = useMemo(() => {
-    const map = {}
-    facturesP.forEach((f) => { const m = montantScope(f); if (f.date && m) map[f.date] = (map[f.date] || 0) + m })
-    const keys = Object.keys(map).sort()
-    let cumul = 0
-    return {
-      labels: keys.map((k) => k.slice(5)),
-      datasets: [{ label: 'CA cumulé', data: keys.map((k) => (cumul += map[k])), borderColor: '#BC3C31', backgroundColor: 'rgba(188,60,49,0.12)', fill: true, tension: 0.3, pointRadius: 2 }]
-    }
-  }, [facturesP, scope])
 
-  const topClients = useMemo(() => {
-    const map = {}
-    facturesP.forEach((f) => { const m = montantScope(f); if (m <= 0) return; const nom = f.clientNom || 'Inconnu'; map[nom] = (map[nom] || 0) + m })
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  }, [facturesP, scope])
+  // Hero chart : CA par sous-période, période actuelle VS précédente (momentum).
+  const caTrend = useMemo(() => {
+    const approved = factures.filter((f) => f.statut === 'approuvee')
+    let s0 = start, e0 = end
+    if (!comparable || start < '2000-01-01') {
+      const ds = approved.map((f) => f.date).filter(Boolean).sort()
+      s0 = ds[0] || end; e0 = ds[ds.length - 1] || end
+    }
+    const s = new Date(s0), e = new Date(e0)
+    const span = Math.max(1, Math.round((e - s) / 86400000) + 1)
+    const gran = span <= 14 ? 'day' : span <= 92 ? 'week' : 'month'
+    const iso = (d) => d.toISOString().slice(0, 10)
+    const dm = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+    const buckets = []
+    if (gran === 'day') {
+      for (let i = 0; i < span; i++) { const d = new Date(s); d.setDate(d.getDate() + i); buckets.push({ from: iso(d), to: iso(d), label: dm(d) }) }
+    } else if (gran === 'week') {
+      let cur = new Date(s)
+      while (cur <= e) { const from = new Date(cur); const to = new Date(cur); to.setDate(to.getDate() + 6); buckets.push({ from: iso(from), to: iso(to > e ? e : to), label: dm(from) }); cur.setDate(cur.getDate() + 7) }
+    } else {
+      let cur = new Date(s.getFullYear(), s.getMonth(), 1)
+      while (cur <= e) { const from = new Date(cur.getFullYear(), cur.getMonth(), 1); const to = new Date(cur.getFullYear(), cur.getMonth() + 1, 0); buckets.push({ from: iso(from < s ? s : from), to: iso(to > e ? e : to), label: cur.toLocaleDateString('fr-FR', { month: 'short' }) }); cur.setMonth(cur.getMonth() + 1) }
+    }
+    const caIn = (from, to) => approved.filter((f) => (f.date || '') >= from && (f.date || '') <= to).reduce((a, f) => a + montantScope(f), 0)
+    const cur = buckets.map((b) => caIn(b.from, b.to))
+    const prev = (comparable && start >= '2000-01-01') ? buckets.map((b) => caIn(addDays(b.from, -dayCount), addDays(b.to, -dayCount))) : null
+    return { labels: buckets.map((b) => b.label), cur, prev }
+  }, [factures, start, end, scope, comparable, dayCount])
+
+  // Croissance du CA vs période précédente (message décisionnel sous le graphe).
+  const caDelta = pct(caTotal, caPrev)
 
   const kpis = [
-    { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), sub: `${facturesP.length} facture(s) approuvée(s)`, icon: BadgeDollarSign, color: '#BC3C31' },
-    { id: 'presta', title: 'Prestations', value: nbPrestations, sub: 'sur la période', icon: ClipboardList, color: '#0284c7' },
-    { id: 'panier', title: 'Panier moyen', value: formatMoney(panierMoyen), sub: 'par prestation', icon: Coins, color: '#7c3aed' },
-    { id: 'loue', title: 'Matériel loué', value: formatNumber(loueTotal), sub: 'pièces sorties', icon: Truck, color: '#0d9488' },
-    { id: 'rotation', title: 'Rotation du parc', value: `${rotation.toFixed(0)} %`, sub: 'CA / valeur parc', icon: TrendingUp, color: '#16a34a' },
-    { id: 'parc', title: 'Valeur du parc', value: formatMoney(valeurParc), sub: `${formatNumber(stockTotal)} pièces en stock`, icon: Warehouse, color: '#0891b2' },
-    { id: 'casse', title: 'Taux de casse / perte', value: `${tauxCasse.toFixed(1)} %`, sub: `${formatNumber(retourCasse + retourPerdu)} sur ${formatNumber(totalRetours)} retours`, icon: AlertTriangle, color: tauxCasse > 5 ? '#dc2626' : '#64748b' },
-    { id: 'retok', title: 'Retours OK', value: formatNumber(retourOk), sub: 'matériel réintégré', icon: RotateCcw, color: '#16a34a' },
-    { id: 'stock', title: 'Stock disponible', value: formatNumber(stockTotal), sub: scopeLabel, icon: Boxes, color: '#64748b' },
-    { id: 'autos', title: 'Autorisations', value: autorisations, sub: 'sorties à traiter', icon: Send, color: autorisations ? '#d97706' : '#64748b' }
+    { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${facturesP.length} facture(s)`, icon: BadgeDollarSign, color: '#BC3C31' },
+    { id: 'presta', title: 'Prestations', value: formatNumber(nbPrestations), delta: pct(nbPrestations, nbPrestPrev), up: true, sub: comparable ? `préc. ${formatNumber(nbPrestPrev)}` : 'sur la période', icon: ClipboardList, color: '#0284c7' },
+    { id: 'panier', title: 'Panier moyen', value: formatMoney(panierMoyen), delta: pct(panierMoyen, panierPrev), up: true, sub: 'CA ÷ prestations', icon: Coins, color: '#7c3aed' },
+    { id: 'casse', title: 'Taux de casse / perte', value: `${tauxCasse.toFixed(1)} %`, deltaPP: comparable ? (tauxCasse - tauxCassePrev) : null, up: false, sub: `${formatNumber(retourCasse + retourPerdu)}/${formatNumber(totalRetours)} retours`, icon: AlertTriangle, color: tauxCasse > 5 ? '#dc2626' : '#16a34a' },
+    { id: 'rotation', title: 'Rotation du parc', value: `${rotation.toFixed(0)} %`, sub: `CA ÷ parc (${formatMoney(valeurParc)})`, icon: TrendingUp, color: '#0d9488' }
   ]
 
   return (
@@ -167,89 +287,202 @@ export default function Pilotage() {
       <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {kpis.map((k) => (
+        {kpis.map((k) => {
+          const raw = k.delta != null ? k.delta : (k.deltaPP != null ? k.deltaPP : null)
+          const positive = (raw ?? 0) >= 0
+          const good = k.up ? positive : !positive
+          const chip = k.delta != null ? `${positive ? '+' : ''}${k.delta.toFixed(1)} %` : (k.deltaPP != null ? `${positive ? '+' : ''}${k.deltaPP.toFixed(1)} pt` : null)
+          return (
           <button key={k.id} type="button" onClick={() => setModal(k.id)}
             className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
+              {chip && (
+                <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                  {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{chip}
+                </span>
+              )}
             </div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
             <p className="text-xl font-extrabold text-gray-900">{k.value}</p>
             {k.sub && <p className="mt-0.5 text-[10px] text-gray-400">{k.sub}</p>}
           </button>
-        ))}
+        )})}
       </div>
+      {comparable && <p className="-mt-3 text-[11px] text-gray-400">▲▼ variation vs période précédente équivalente ({formatDateShort(prevStart)} → {formatDateShort(prevEnd)})</p>}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="CA par catégorie">
-          <div className="h-64">
+      {/* Hero BI : CA par sous-période, actuel vs précédent (momentum & saisonnalité) */}
+      <Card title="Chiffre d'affaires par sous-période — actuel vs précédent">
+        <div className="h-64">
+          {caTrend.cur.some((v) => v > 0) || (caTrend.prev || []).some((v) => v > 0) ? (
+            <Bar data={{
+              labels: caTrend.labels,
+              datasets: [
+                { label: 'Période actuelle', data: caTrend.cur, backgroundColor: '#BC3C31', borderRadius: 4, maxBarThickness: 34 },
+                ...(caTrend.prev ? [{ label: 'Période précédente', data: caTrend.prev, backgroundColor: '#e7cbc8', borderRadius: 4, maxBarThickness: 34 }] : [])
+              ]
+            }} options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: !!caTrend.prev, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatMoney(c.parsed.y)}` } }
+              },
+              scales: { y: { ticks: { callback: (v) => formatNumber(v) } } }
+            }} />
+          ) : <p className="py-16 text-center text-sm text-gray-400">Aucune facture approuvée sur la période</p>}
+        </div>
+        {caDelta != null && (
+          <p className={`mt-2 text-sm font-semibold ${caDelta >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+            {caDelta >= 0 ? '▲' : '▼'} CA {caDelta >= 0 ? 'en hausse' : 'en baisse'} de {Math.abs(caDelta).toFixed(1)} % vs période précédente
+            <span className="font-normal text-gray-400"> ({formatMoney(caPrev)} → {formatMoney(caTotal)})</span>
+          </p>
+        )}
+      </Card>
+
+      {/* Répartition du CA — deux axes de décision : catégorie & type d'événement */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Répartition du CA par catégorie">
+          <div className="h-60">
             {parCat.some((p) => p.ca > 0) ? <Doughnut data={caParCatChart} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} /> : <p className="py-16 text-center text-sm text-gray-400">Aucune facture approuvée sur la période</p>}
           </div>
         </Card>
-        <Card title="Valeur du parc par catégorie" className="lg:col-span-2">
-          <div className="h-64">
-            {rowsScope.some((p) => p.valeur > 0) ? <Bar data={stockValeurChart} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} /> : <p className="py-16 text-center text-sm text-gray-400">Aucun stock valorisé</p>}
+        <Card title="CA facturable par type d'événement">
+          <div className="h-60">
+            {evParCa.length ? <Doughnut data={caParEvChart} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} /> : <p className="py-16 text-center text-sm text-gray-400">Aucune prestation sur la période</p>}
           </div>
         </Card>
       </div>
 
-      <Card title="Évolution du chiffre d'affaires">
-        <div className="h-56">
-          {evoCA.labels.length ? <Line data={evoCA} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} /> : <p className="py-16 text-center text-sm text-gray-400">Aucune facture approuvée sur la période</p>}
-        </div>
-      </Card>
+      {/* ══ Analyse détaillée des prestations (sollicitations & montants facturables) ══ */}
+      <div className="flex items-center gap-2 pt-2">
+        <TrendingUp size={18} className="text-[#BC3C31]" />
+        <h3 className="text-base font-extrabold text-gray-800">Analyse détaillée des prestations</h3>
+        <span className="text-xs text-gray-400">{analyse.parElement.length ? `${prestationsP.length} prestation(s) · ${formatDateShort(start)} → ${formatDateShort(end)}` : ''}</span>
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Détail par catégorie de matériel — période">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-3 py-2 text-left">Catégorie</th>
-                  <th className="px-2 py-2 text-center">Loué</th>
-                  <th className="px-2 py-2 text-center">Stock</th>
-                  <th className="px-2 py-2 text-right">Valeur parc</th>
-                  <th className="px-2 py-2 text-right">CA</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {parCat.map((p) => (
-                  <tr key={p.cat} className="cursor-pointer hover:bg-gray-50" onClick={() => setScope(p.cat)}>
-                    <td className="px-3 py-1.5 font-semibold" style={{ color: p.color }}>{p.cat}</td>
-                    <td className="px-2 py-1.5 text-center text-teal-700">{formatNumber(p.loue)}</td>
-                    <td className="px-2 py-1.5 text-center font-bold">{formatNumber(p.stock)}</td>
-                    <td className="px-2 py-1.5 text-right text-gray-600">{formatMoney(p.valeur)}</td>
-                    <td className="px-2 py-1.5 text-right font-bold text-red-700">{formatMoney(p.ca)}</td>
-                  </tr>
-                ))}
-                {!parCat.length && <tr><td colSpan={5} className="py-6 text-center text-gray-400">Aucune catégorie.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        <Card title="Top 5 clients (CA période)">
-          {topClients.length ? (
-            <div className="space-y-2">
-              {topClients.map(([nom, ca], i) => (
-                <div key={nom} className="flex items-center gap-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">{i + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{nom}</p>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                      <div className="h-full rounded-full bg-red-500" style={{ width: `${(ca / topClients[0][1]) * 100}%` }} />
+      {!analyse.parElement.length ? (
+        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune prestation sur la période — élargissez la plage.</p></Card>
+      ) : (
+        <>
+          {/* Tendances colorées par catégorie — le plus sollicité */}
+          <Card title="Tendances par catégorie — le plus sollicité">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {analyse.parCategorie.map((c) => {
+                const color = catColor(c.cat)
+                const maxCat = Math.max(1, ...c.elements.map((e) => e.count))
+                return (
+                  <button key={c.cat} onClick={() => detailCategorie(c)}
+                    className="group rounded-xl border border-gray-100 p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-2 font-bold" style={{ color }}>
+                        <span className="h-3 w-3 rounded-full" style={{ background: color }} /> {c.cat}
+                      </span>
+                      <span className="text-sm font-bold text-gray-700">{formatMoney(c.ca)}</span>
                     </div>
-                  </div>
-                  <span className="shrink-0 text-sm font-bold text-red-700">{formatMoney(ca)}</span>
-                </div>
-              ))}
+                    <div className="space-y-1.5">
+                      {c.elements.slice(0, 4).map((el, i) => (
+                        <div key={el.key} className="flex items-center gap-2">
+                          <span className="w-32 shrink-0 truncate text-xs font-medium text-gray-600">{i === 0 && '🏆 '}{el.nom}</span>
+                          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                            <div className="h-full rounded-full" style={{ width: `${(el.count / maxCat) * 100}%`, background: color }} />
+                          </div>
+                          <span className="w-10 shrink-0 text-right text-xs font-bold text-gray-500">{el.count}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
-          ) : <p className="py-8 text-center text-sm text-gray-400">Aucune facture approuvée</p>}
-        </Card>
-      </div>
+          </Card>
+
+          {/* Classement des éléments */}
+          <Card title="Analyse par élément — sollicitations, quantités, CA">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr><th className="px-3 py-2 text-left">Élément</th><th className="px-3 py-2 text-left">Catégorie</th><th className="px-3 py-2">Sollicité</th><th className="px-2 py-2 text-center">Qté</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">CA</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {analyse.parElement.map((el) => (
+                    <tr key={el.key} className="cursor-pointer hover:bg-sky-50" onClick={() => detailElement(el)}>
+                      <td className="px-3 py-1.5 font-semibold">{el.nom}</td>
+                      <td className="px-3 py-1.5"><span className="text-xs font-semibold" style={{ color: catColor(el.cat) }}>{el.cat}</span></td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-sky-500" style={{ width: `${(el.count / maxElCount) * 100}%` }} /></div>
+                          <span className="text-xs font-bold text-sky-700">{el.count}×</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">{formatNumber(el.qte)}</td>
+                      <td className="px-2 py-1.5 text-center">{formatNumber(el.jours)}</td>
+                      <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(el.ca)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Événements les plus sollicités */}
+            <Card title="Événements les plus sollicités">
+              <div className="space-y-2">
+                {analyse.parEvenement.map((ev) => {
+                  const maxEv = Math.max(1, ...analyse.parEvenement.map((x) => x.count))
+                  const color = labelColor(ev.label)
+                  return (
+                    <button key={ev.label} onClick={() => detailPrestations(`Événement : ${ev.label}`, prestationsP.filter((p) => ((p.evenement || '').trim() || 'Non précisé') === ev.label))}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-50">
+                      <span className="w-36 shrink-0 truncate text-sm font-medium">{ev.label}</span>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full" style={{ width: `${(ev.count / maxEv) * 100}%`, background: color }} /></div>
+                      <span className="w-8 shrink-0 text-right text-xs font-bold text-gray-600">{ev.count}×</span>
+                      <span className="w-24 shrink-0 text-right text-xs font-semibold text-green-700">{formatMoney(ev.ca)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Card>
+
+            {/* Classement complet des clients */}
+            <Card title="Classement des clients (prestations · jours · CA)">
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr><th className="px-3 py-2 text-left">Client</th><th className="px-2 py-2 text-center">Presta.</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">CA</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {analyse.parClient.map((c, i) => (
+                      <tr key={c.nom} className="cursor-pointer hover:bg-sky-50" onClick={() => detailPrestations(`Client : ${c.nom}`, prestationsP.filter((p) => ((p.clientNom || '').trim() || 'Client inconnu') === c.nom))}>
+                        <td className="px-3 py-1.5 font-semibold">{i < 3 && ['🥇', '🥈', '🥉'][i]} {c.nom}</td>
+                        <td className="px-2 py-1.5 text-center font-bold text-sky-700">{c.count}</td>
+                        <td className="px-2 py-1.5 text-center">{formatNumber(c.jours)}</td>
+                        <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(c.ca)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
 
       <PilotageModal id={modal} onClose={() => setModal(null)} scopeLabel={scopeLabel}
         data={{ facturesP, prestationsP, retoursScope, parCat, montantScope }} />
+
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
+        <div className="overflow-x-auto rounded-lg border border-gray-100">{detail?.render}</div>
+      </Modal>
+    </div>
+  )
+}
+
+function MiniStat({ label, value, color }) {
+  return (
+    <div className="rounded-lg bg-gray-50 p-2 text-center">
+      <p className="text-[10px] font-bold uppercase text-gray-400">{label}</p>
+      <p className="text-base font-extrabold" style={{ color }}>{value}</p>
     </div>
   )
 }
@@ -312,8 +545,9 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
     )
   }
   return (
-    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}>
-      <div className="max-h-[60vh] overflow-auto">{content}</div>
+    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}
+      panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
+      <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>
   )
 }

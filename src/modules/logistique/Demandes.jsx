@@ -310,6 +310,47 @@ export default function Demandes() {
                   { label: 'Certifié', value: d.certifiePar ? `${d.certifiePar}${d.certifieLe ? ' · ' + d.certifieLe : ''}` : '' }
                 ]}
               />
+
+              {/* Détail complet de la facturation (même en brouillon) — visible avant approbation. */}
+              <div className="mt-3 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between border-b bg-gray-50 px-3 py-2">
+                  <span className="text-xs font-bold uppercase text-gray-500">Détail de la facturation</span>
+                  {fac && <span className="text-xs text-gray-500">Facture {fac.num}{fac.evenement ? ` · ${fac.evenement}` : ''}</span>}
+                </div>
+                {fac ? (
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-gray-400">
+                      <tr><th className="px-3 py-1.5 text-left">Prestation</th><th className="px-2 py-1.5 text-center">Qté</th><th className="px-2 py-1.5 text-center">Jours</th><th className="px-2 py-1.5 text-right">Prix unit.</th><th className="px-3 py-1.5 text-right">Montant</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(fac.lignes || []).map((l, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-1.5 font-semibold">{l.materielNom || 'Élément'}</td>
+                          <td className="px-2 py-1.5 text-center">{l.qte ?? '—'}</td>
+                          <td className="px-2 py-1.5 text-center">{l.nbJours || 1}</td>
+                          <td className="px-2 py-1.5 text-right">{formatMoney(l.tarifUnitaire || 0)}</td>
+                          <td className="px-3 py-1.5 text-right font-bold">{formatMoney(l.montant || 0)}</td>
+                        </tr>
+                      ))}
+                      {(fac.frais || []).map((x, i) => (
+                        <tr key={`f${i}`} className="bg-amber-50/40">
+                          <td className="px-3 py-1.5 text-amber-700">{x.label} <span className="text-[10px]">(frais)</span></td>
+                          <td className="px-2 py-1.5 text-center">—</td><td className="px-2 py-1.5 text-center">—</td><td className="px-2 py-1.5 text-center">—</td>
+                          <td className="px-3 py-1.5 text-right font-bold">{formatMoney(x.montant || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t bg-gray-50"><td colSpan={4} className="px-3 py-2 text-right font-bold">Total</td><td className="px-3 py-2 text-right font-extrabold text-secondary">{formatMoney(fac.totalTTC ?? fac.totalHT ?? 0)}</td></tr>
+                    </tfoot>
+                  </table>
+                  </div>
+                ) : (
+                  <p className="px-3 py-3 text-sm text-gray-400">Facture introuvable — impossible d'afficher le détail.</p>
+                )}
+              </div>
+
               <FormGroup label="Commentaire" className="mt-3"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
             </>
           )

@@ -85,7 +85,7 @@ export const MODULES = [
   },
   {
     id: 'depense',
-    nom: 'DÉPENSES',
+    nom: 'E-DÉPENSES',
     description: 'Budget mensuel et suivi des dépenses par secteur',
     icon: Receipt,
     emoji: '💰',

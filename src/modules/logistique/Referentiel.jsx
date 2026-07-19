@@ -17,10 +17,23 @@ import { genId, formatMoney } from '../../utils/formatters'
 import { CAT_MATERIEL } from './data'
 
 export default function Referentiel() {
-  const { materiel, saveMateriel, removeMateriel } = useLogistiqueStore()
+  const { materiel, saveMateriel, removeMateriel, evenements, saveEvenements } = useLogistiqueStore()
   const role = useAuth((s) => s.role)
   const lectureSeule = isReadOnlyRole(role)
   const [modal, setModal] = useState(null)
+  const [newEv, setNewEv] = useState('')
+
+  function addEvenement() {
+    const v = newEv.trim()
+    if (!v) return
+    if (evenements.some((e) => e.toLowerCase() === v.toLowerCase())) { setNewEv(''); return toast.error('Déjà dans la liste') }
+    saveEvenements([...evenements, v])
+    setNewEv('')
+    toast.success('Événement ajouté ✓')
+  }
+  function removeEvenement(ev) {
+    saveEvenements(evenements.filter((e) => e !== ev))
+  }
 
   function openNew() {
     setModal({ isNew: true, id: '', nom: '', cat: CAT_MATERIEL[0], unite: 'unités', coutAchat: 0, tarifLocation: 0 })
@@ -63,6 +76,25 @@ export default function Referentiel() {
           rows={materiel}
           empty="Aucun matériel."
         />
+      </Card>
+
+      <Card title="Types d'événements">
+        <p className="mb-3 text-sm text-gray-500">Liste proposée lors de la saisie d'une prestation (mariage, funérailles…). Sert aux statistiques « quel événement sollicite le plus » dans le Pilotage.</p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {evenements.map((ev) => (
+            <span key={ev} className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+              {ev}
+              {!lectureSeule && <button onClick={() => removeEvenement(ev)} className="text-gray-400 hover:text-red-500" title="Retirer"><Trash2 size={13} /></button>}
+            </span>
+          ))}
+          {!evenements.length && <span className="text-sm text-gray-400">Aucun type d'événement.</span>}
+        </div>
+        {!lectureSeule && (
+          <div className="flex gap-2">
+            <Input value={newEv} onChange={(e) => setNewEv(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addEvenement()} placeholder="Nouveau type d'événement…" className="max-w-xs" />
+            <Button variant="outline" onClick={addEvenement}><Plus size={16} /> Ajouter</Button>
+          </div>
+        )}
       </Card>
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.isNew ? 'Nouveau matériel' : 'Modifier'}

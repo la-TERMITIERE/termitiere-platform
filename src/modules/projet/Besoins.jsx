@@ -22,9 +22,22 @@ const CATEGORIES_BESOIN = [
   { id: 'main_oeuvre',   label: 'Main d\'œuvre'  },
   { id: 'materiaux',     label: 'Matériaux'       },
   { id: 'equipement',    label: 'Équipement'      },
+  { id: 'financier',     label: 'Financier'       },
   { id: 'transport',     label: 'Transport'       },
   { id: 'autre',         label: 'Autre'           }
 ]
+
+// Le champ du bas s'adapte selon la catégorie : un besoin financier ou de main d'œuvre
+// (qui se traduit toujours par une somme à payer) demande un montant, pas une quantité ;
+// les autres catégories gardent une quantité, avec un libellé/exemple adapté à ce qu'on
+// y saisit réellement.
+const CATEGORIES_MONTANT = ['financier', 'main_oeuvre']
+const QUANTITE_META = {
+  materiaux:   { label: 'Quantité', placeholder: 'ex : 50 sacs' },
+  equipement:  { label: 'Quantité', placeholder: 'ex : 2 bétonnières' },
+  transport:   { label: 'Quantité', placeholder: 'ex : 3 voyages' },
+  autre:       { label: 'Quantité', placeholder: 'ex : 1' }
+}
 
 const STATUTS_BESOIN = {
   a_traiter: { label: 'À traiter', tone: 'warning' },
@@ -34,12 +47,13 @@ const STATUTS_BESOIN = {
 }
 
 const VIDE = {
-  projetId: '', titre: '', categorie: 'materiaux', quantite: '',
-  priorite: 'normale', dateSouhaitee: '', note: ''
+  projetId: '', tacheId: '', titre: '', categorie: 'materiaux', quantite: '',
+  montant: '', motif: '', priorite: 'normale', dateSouhaitee: '', note: ''
 }
 
 export default function Besoins() {
   const { data: projetsTous } = useCollection('projets')
+  const { data: tachesTous }  = useCollection('projet_taches')
   const { data: besoinsTous } = useCollection('projet_besoins')
   const { user, role } = useAuth()
   // Le superviseur crée/modifie/traite les besoins, mais ne les supprime pas.
@@ -73,45 +87,45 @@ export default function Besoins() {
   const openCreate = () => { setForm({ ...VIDE, projetId: filtreProjet }); setEditing(null); setModal(true) }
   const openEdit   = (b) => {
     setForm({
-      projetId: b.projetId || '', titre: b.titre || '', categorie: b.categorie || 'materiaux',
-      quantite: b.quantite || '', priorite: b.priorite || 'normale',
+      projetId: b.projetId || '', tacheId: b.tacheId || '', titre: b.titre || '', categorie: b.categorie || 'materiaux',
+      quantite: b.quantite || '', montant: b.montant || '', motif: b.motif || '', priorite: b.priorite || 'normale',
       dateSouhaitee: b.dateSouhaitee ? new Date(b.dateSouhaitee).toISOString().slice(0, 10) : '',
       note: b.note || ''
     })
     setEditing(b); setModal(true)
   }
 
-  // Le besoin est adressé au responsable du projet — notification directe à la création.
-  // Si le créateur EST le responsable (cas le plus fréquent pour un chef de projet),
-  // il n'y a personne à notifier côté projet : on remonte plutôt à la direction.
+  // Tâches du projet sélectionné dans le formulaire — pour rattacher le besoin à une tâche précise.
+  const tachesDuProjet = useMemo(() => tachesTous.filter((t) => t.projetId === form.projetId), [tachesTous, form.projetId])
+
+  // Tout nouveau besoin remonte systématiquement à l'administration (les rôles ayant
+  // pleinement accès à E-G.Pro), en plus du responsable du projet s'il y en a un et
+  // qu'il n'est pas lui-même le créateur du besoin.
   async function notifierResponsable(projetId, titre) {
     const projet = projets.find((p) => p.id === projetId)
     if (!projet) return
-    if (projet.responsableUid && projet.responsableUid !== user?.uid) {
-      await notify({
-        type: 'info',
-        title: `📦 Nouveau besoin — ${projet.nom}`,
-        body: titre,
-        module: 'projet', forUsers: [projet.responsableUid], link: '/projet/besoins'
-      }).catch(() => {})
-    } else {
-      await notify({
-        type: 'info',
-        title: `📦 Nouveau besoin — ${projet.nom}`,
-        body: titre,
-        module: 'projet', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/projet/besoins'
-      }).catch(() => {})
-    }
+    const forUsers = (projet.responsableUid && projet.responsableUid !== user?.uid) ? [projet.responsableUid] : []
+    await notify({
+      type: 'info',
+      title: `📦 Nouveau besoin — ${projet.nom}`,
+      body: titre,
+      module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, excludeUid: user?.uid, link: '/projet/besoins'
+    }).catch(() => {})
   }
 
+  const estMontant = CATEGORIES_MONTANT.includes(form.categorie)
+  const formValide = form.titre.trim() !== '' && !!form.projetId &&
+    (estMontant ? form.montant !== '' && form.motif.trim() !== '' : form.quantite.trim() !== '')
+
   const handleSave = async () => {
-    if (!form.titre.trim() || !form.projetId || !form.quantite.trim()) return
+    if (!formValide) return
     setSaving(true)
     try {
       const now = Date.now()
       const payload = {
         ...form,
         titre: form.titre.trim(),
+        montant: form.montant !== '' ? Number(form.montant) : '',
         dateSouhaitee: form.dateSouhaitee ? new Date(form.dateSouhaitee).getTime() : null,
         updatedAt: now
       }
@@ -194,6 +208,7 @@ export default function Besoins() {
         <div className="grid gap-3 md:grid-cols-2">
           {liste.map((b) => {
             const projet = projets.find((p) => p.id === b.projetId)
+            const tache  = b.tacheId ? tachesTous.find((t) => t.id === b.tacheId) : null
             const st = STATUTS_BESOIN[b.statut] || STATUTS_BESOIN.a_traiter
             return (
               <Card key={b.id} className="space-y-2">
@@ -202,6 +217,7 @@ export default function Besoins() {
                     <p className="font-bold text-gray-800 truncate">{b.titre}</p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                       {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
+                      {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
                       <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700">{catLabel(b.categorie)}</span>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${PRIORITES[b.priorite]?.tone === 'danger' ? 'bg-red-50 text-red-700' : PRIORITES[b.priorite]?.tone === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'}`}>
                         {PRIORITES[b.priorite]?.label || b.priorite}
@@ -210,7 +226,14 @@ export default function Besoins() {
                   </div>
                   <Badge tone={st.tone}>{st.label}</Badge>
                 </div>
-                {b.quantite && <p className="text-sm text-gray-600">Quantité : <b>{b.quantite}</b></p>}
+                {CATEGORIES_MONTANT.includes(b.categorie) ? (
+                  <>
+                    {b.montant !== '' && b.montant != null && <p className="text-sm text-gray-600">Montant : <b>{Number(b.montant).toLocaleString('fr-FR')} FCFA</b></p>}
+                    {b.motif && <p className="text-sm text-gray-600">Motif : <b>{b.motif}</b></p>}
+                  </>
+                ) : (
+                  b.quantite && <p className="text-sm text-gray-600">{QUANTITE_META[b.categorie]?.label || 'Quantité'} : <b>{b.quantite}</b></p>
+                )}
                 {b.dateSouhaitee && <p className="text-xs text-gray-500">Souhaité pour le {formatDateShort(b.dateSouhaitee)}</p>}
                 {b.note && <p className="text-sm text-gray-600 italic">« {b.note} »</p>}
                 <p className="text-[11px] text-gray-400">
@@ -249,11 +272,20 @@ export default function Besoins() {
         <div className="space-y-3">
           <FormGroup label="Projet" required>
             <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-              value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
+              value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value, tacheId: '' }))}>
               <option value="">— Sélectionner —</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </FormGroup>
+          {form.projetId && (
+            <FormGroup label="Tâche" hint="Optionnel — rattacher ce besoin à une tâche précise du projet">
+              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                value={form.tacheId} onChange={(e) => setForm((f) => ({ ...f, tacheId: e.target.value }))}>
+                <option value="">— Aucune tâche précise —</option>
+                {tachesDuProjet.map((t) => <option key={t.id} value={t.id}>{t.titre}</option>)}
+              </select>
+            </FormGroup>
+          )}
           <FormGroup label="Besoin" required hint="Ce qui manque ou doit être fourni">
             <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               placeholder="ex : Ciment, ouvriers supplémentaires, bétonnière…"
@@ -272,11 +304,26 @@ export default function Besoins() {
                 {Object.entries(PRIORITES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </FormGroup>
-            <FormGroup label="Quantité" required>
-              <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                placeholder="ex : 50 sacs"
-                value={form.quantite} onChange={(e) => setForm((f) => ({ ...f, quantite: e.target.value }))} />
-            </FormGroup>
+            {estMontant ? (
+              <>
+                <FormGroup label="Montant (FCFA)" required>
+                  <input type="number" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder={form.categorie === 'main_oeuvre' ? 'ex : 75000' : 'ex : 150000'}
+                    value={form.montant} onChange={(e) => setForm((f) => ({ ...f, montant: e.target.value }))} />
+                </FormGroup>
+                <FormGroup label="Motif" required hint="Raison de la demande de fonds">
+                  <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder={form.categorie === 'main_oeuvre' ? 'ex : Paiement des ouvriers' : 'ex : Avance sur salaires'}
+                    value={form.motif} onChange={(e) => setForm((f) => ({ ...f, motif: e.target.value }))} />
+                </FormGroup>
+              </>
+            ) : (
+              <FormGroup label={QUANTITE_META[form.categorie]?.label || 'Quantité'} required>
+                <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder={QUANTITE_META[form.categorie]?.placeholder || 'ex : 1'}
+                  value={form.quantite} onChange={(e) => setForm((f) => ({ ...f, quantite: e.target.value }))} />
+              </FormGroup>
+            )}
             <FormGroup label="Souhaité pour le" hint="Optionnel">
               <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
                 value={form.dateSouhaitee} onChange={(e) => setForm((f) => ({ ...f, dateSouhaitee: e.target.value }))} />
@@ -289,7 +336,7 @@ export default function Besoins() {
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.titre.trim() || !form.projetId || !form.quantite.trim()}>
+            <Button onClick={handleSave} disabled={saving || !formValide}>
               {saving ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
           </div>

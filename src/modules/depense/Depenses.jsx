@@ -16,15 +16,15 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
-import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
+import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut } from './data'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs } from './logic'
 import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
-  natureFlux: natureFluxDefaut,
+  natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: ''
 })
 
@@ -90,14 +90,26 @@ export default function Depenses() {
   const { user, role } = useAuth()
   const isAdmin = isFullAccessRole(role)
   const lectureSeule = isReadOnlyRole(role)
-  const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
+
+  // Dépenses de E-G.Pro (secteur MAXI BAT) incluses en lecture seule dans la liste,
+  // avec tous les détails (projet, tâche, prestataire) — pas de double saisie ici,
+  // elles restent gérées uniquement depuis E-G.Pro.
+  const { data: depensesProjet } = useCollection('projet_depenses')
+  const { data: projetsTous }    = useCollection('projets')
+  const { data: tachesTous }     = useCollection('projet_taches')
+  const depenses = useMemo(
+    () => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous)],
+    [depensesReelles, depensesProjet, projetsTous, tachesTous]
+  )
 
   const [recherche, setRecherche] = useState('')
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('')
   const [filtreNature, setFiltreNature] = useState('')
+  const [filtreSource, setFiltreSource] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
   const [toDelete, setToDelete] = useState(null)
@@ -110,13 +122,21 @@ export default function Depenses() {
     if (filtreSecteur)   rows = rows.filter((d) => d.secteurId === filtreSecteur)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
+    if (filtreSource)    rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === filtreSource)
     if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
       rows = rows.filter((d) => (d.description || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreMois, recherche])
+  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreSource, filtreMois, recherche])
+
+  // Total financé par le PAU (apport personnel) sur la liste affichée — traçabilité.
+  const totalApportPau = useMemo(
+    () => liste.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === 'pau')
+      .reduce((s, d) => s + (Number(d.montant) || 0), 0),
+    [liste]
+  )
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
@@ -167,7 +187,7 @@ export default function Depenses() {
         const statutInitial = d.imprevue ? 'en_attente' : 'decaissee'
         const depenseFinale = { ...d, id, statut: statutInitial, enregistrePar: user?.nom || '—', createdAt: Date.now() }
         await setItem('depense_depenses', id, depenseFinale)
-        await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, { secteurId: d.secteurId, categorie: d.categorie, montant: d.montant, imprevue: !!d.imprevue })
+        await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, categorie: d.categorie, montant: d.montant, imprevue: !!d.imprevue, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
         toast.success(d.imprevue ? 'Demande de décaissement soumise — en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
         if (statutInitial === 'decaissee') await notifierBeneficiaire(depenseFinale, secteur?.label || d.secteurId)
       } else {
@@ -257,11 +277,26 @@ export default function Depenses() {
             {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </Select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Source de financement</label>
+          <Select value={filtreSource} onChange={(e) => setFiltreSource(e.target.value)}>
+            <option value="">Toutes</option>
+            {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </Select>
+        </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
           {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
         </div>
       </div>
+
+      {totalApportPau > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm text-violet-800">
+          <span className="font-semibold">💜 Apport du PAU (sélection en cours) :</span>
+          <span className="font-bold">{totalApportPau.toLocaleString('fr-FR')} FCFA</span>
+          <span className="text-xs text-violet-500">— financé personnellement par le promoteur</span>
+        </div>
+      )}
 
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
@@ -285,9 +320,11 @@ export default function Depenses() {
               const secteur = SECTEURS.find((s) => s.id === d.secteurId)
               const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
               const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
-              const modifiable = isAdmin || d.statut === 'en_attente' || !d.statut
+              const source = SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]
+              const depuisProjet = d.source === 'projet'
+              const modifiable = !depuisProjet && (isAdmin || d.statut === 'en_attente' || !d.statut)
               return (
-                <tr key={d.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={d.id} className={`hover:bg-gray-50 transition-colors ${depuisProjet ? 'bg-teal-50/30' : ''}`}>
                   <td className="px-3 py-2 text-xs text-gray-500">{formatDateShort(d.date)}</td>
                   <td className="px-3 py-2">
                     <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
@@ -296,13 +333,25 @@ export default function Depenses() {
                     {d.categorie || '—'}
                     <span className="mt-0.5 block"><Badge tone={nature.tone}>{nature.label}</Badge></span>
                   </td>
-                  <td className="px-3 py-2 text-gray-600">{d.description || '—'}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{Number(d.montant).toLocaleString('fr-FR')} FCFA</td>
+                  <td className="px-3 py-2 text-gray-600">
+                    {d.description || '—'}
+                    {depuisProjet && (
+                      <span className="mt-0.5 block"><Badge tone="info">🔗 Depuis E-G.Pro</Badge></span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold">
+                    {Number(d.montant).toLocaleString('fr-FR')} FCFA
+                    {(d.sourceFinancement || sourceFinancementDefaut) === 'pau' && (
+                      <span className="mt-0.5 block"><Badge tone={source.tone}>💜 {source.label}</Badge></span>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <Badge tone={statut.tone}>{statut.label}</Badge>
+                    {/* Traçabilité : qui a effectué la dépense → qui la reçoit */}
+                    <p className="mt-1 text-[10px] text-gray-400">✍️ Par <span className="font-semibold text-gray-500">{d.enregistrePar || '—'}</span></p>
                     {d.beneficiaireNom && (
-                      <p className="mt-1 text-[10px] text-gray-400">
-                        {d.beneficiaireNom}{d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}{' '}
+                      <p className="mt-0.5 text-[10px] text-gray-400">
+                        → 👤 <span className="font-semibold text-gray-500">{d.beneficiaireNom}</span>{d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}{' '}
                         {d.beneficiaireUid
                           ? (d.recuConfirme ? '· ✅ reçu confirmé' : d.statut === 'decaissee' ? '· en attente de confirmation' : '')
                           : '· externe'}
@@ -314,6 +363,9 @@ export default function Depenses() {
                       <button onClick={() => ouvrirPiece(d.piece)} title="Voir le justificatif" className="rounded p-1 text-primary hover:bg-primary/10">
                         <Eye size={14} />
                       </button>
+                    )}
+                    {!d.piece && depuisProjet && d.noteOrigine && (
+                      <span className="block max-w-[180px] whitespace-normal text-left text-[11px] italic text-gray-500">{d.noteOrigine}</span>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -369,6 +421,17 @@ export default function Depenses() {
                     className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
                     title={v.desc}>
                     {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
+                  </button>
+                ))}
+              </div>
+            </FormGroup>
+            <FormGroup label="Source de financement" hint="Qui a payé : la trésorerie de l'entreprise ou l'apport personnel du PAU. (Traçabilité — n'affecte pas les calculs.)">
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => set('sourceFinancement', k)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    title={v.desc}>
+                    {(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? '✓ ' : ''}{v.label}
                   </button>
                 ))}
               </div>

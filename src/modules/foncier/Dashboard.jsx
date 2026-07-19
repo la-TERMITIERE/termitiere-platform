@@ -127,7 +127,8 @@ export default function Dashboard() {
       </div>
 
       {/* Détail : liste de dossiers filtrée (cliquable jusqu'au dossier) */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}
+        panelClassName="bg-gradient-to-br from-emerald-200/85 via-emerald-100/75 to-teal-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (detail.liste.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Aucun dossier.</p>
         ) : (
@@ -136,9 +137,9 @@ export default function Dashboard() {
               const pct = progressionDossier(d.etapes)
               return (
                 <button key={d.id} onClick={() => { setDossierSel(d); setDetail(null) }}
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-left text-sm transition-colors hover:bg-emerald-50">
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2 text-left text-sm shadow-sm transition-colors hover:bg-emerald-50">
                   <div>
-                    <p className="font-semibold">{d.commune} — Lot {d.lot || '—'} <span className="font-mono text-xs text-gray-400">{d.num}</span></p>
+                    <p className="font-semibold text-gray-900">{d.commune} — Lot {d.lot || '—'} <span className="font-mono text-xs text-gray-400">{d.num}</span></p>
                     <p className="text-xs text-gray-500">{d.proprietaire}</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -154,7 +155,8 @@ export default function Dashboard() {
 
       {/* Détail d'un dossier : ses étapes */}
       <Modal open={!!dossierSel} onClose={() => setDossierSel(null)} size="lg"
-        title={dossierSel ? `${dossierSel.commune} — Lot ${dossierSel.lot || '—'}` : ''}>
+        title={dossierSel ? `${dossierSel.commune} — Lot ${dossierSel.lot || '—'}` : ''}
+        panelClassName="bg-gradient-to-br from-emerald-200/85 via-emerald-100/75 to-teal-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {dossierSel && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -162,7 +164,7 @@ export default function Dashboard() {
               <Badge tone={STATUTS_DOSSIER[dossierSel.statut]?.tone}>{STATUTS_DOSSIER[dossierSel.statut]?.label || dossierSel.statut}</Badge>
               <span className="text-gray-500">{dossierSel.proprietaire}</span>
             </div>
-            <div className="rounded-lg border border-gray-100">
+            <div className="rounded-lg border border-gray-100 bg-white">
               {(dossierSel.etapes || []).slice().sort((a, b) => a.ordre - b.ordre).map((e) => (
                 <div key={e.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-2 text-sm last:border-0">
                   <span>{e.ordre}. {e.label}</span>
