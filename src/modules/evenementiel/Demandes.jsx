@@ -24,8 +24,9 @@ import CorrectifModal from '../../shared/demandes/CorrectifModal'
 import CorrectifCompare from '../../shared/demandes/CorrectifCompare'
 import {
   CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts,
-  sommeQte, reporterQtes, payloadDemandeCorrectif, payloadDecisionCorrectif
+  sommeQte, appliquerCorrectif, changementsArticle, payloadDemandeCorrectif, payloadDecisionCorrectif
 } from '../../shared/demandes/correctif'
+import { useBriqueterieStore } from './store/referentielStore'
 
 const STATUTS = STATUTS_DEMANDE
 // Clés identifiant une brique dans les lignes d'une demande / d'une vente.
@@ -37,6 +38,7 @@ export default function Demandes() {
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
+  const briques = useBriqueterieStore((s) => s.briques)
   const isManager = canManage()
   const isCertifier = canCertify()
   const lectureSeule = isReadOnlyRole(role)
@@ -195,9 +197,9 @@ export default function Demandes() {
     const d = relance
     if (!motif.trim()) return toast.error('Motif du correctif obligatoire')
     const deltas = deltasLignes(d.lignes || [], lignes, CLES)
-    if (!aDesEcarts(deltas)) return toast.error('Aucune quantité modifiée')
+    if (!aDesEcarts(deltas)) return toast.error('Aucun article ni quantité modifié')
     for (const dd of deltas) {
-      if (dd.delta > stockDe(dd.id)) return toast.error(`Stock insuffisant pour ${dd.nom} (+${dd.delta} demandé, ${stockDe(dd.id)} disponible)`)
+      if (dd.delta > stockDe(dd.id)) return toast.error(`Stock insuffisant pour ${dd.nom} (${dd.delta} à sortir en plus, ${stockDe(dd.id)} disponible)`)
     }
     await run(async () => {
       await updateItem('evenementiel_demandes', d.id, {
@@ -231,20 +233,30 @@ export default function Demandes() {
             ...maj.inv, date: maj.date, briques: maj.briques, savedAt: ts(), agentId: user.uid, agentNom: user.nom
           })
         }
+        // La vente suit : brique remplacée, quantité et montant recalculés.
+        const report = { avant: c.lignesAvant || d.lignes || [], apres: c.lignes || [], key: 'briqueId' }
         const vente = ventes.find((v) => v.id === d.venteId)
         if (vente) {
-          const lignes = reporterQtes(vente.lignes, c.lignes, 'briqueId')
-            .map((l) => ({ ...l, montant: (parseInt(l.qte) || 0) * (parseFloat(l.prixUnitaire) || 0) }))
+          const lignes = appliquerCorrectif(vente.lignes, {
+            ...report,
+            mapper: (x) => {
+              const qte = parseInt(x.qte) || 0
+              const pu = parseFloat(x.prixUnitaire) || 0
+              return { briqueId: x.briqueId, briqueNom: x.briqueNom, qte, prixUnitaire: pu, montant: qte * pu }
+            }
+          })
           await updateItem('evenementiel_ventes', vente.id, { lignes, total: lignes.reduce((s, l) => s + (l.montant || 0), 0) })
         }
         // Facture déjà émise sur cette vente : ses lignes suivent aussi (CA juste).
         const fac = factures.find((f) => f.venteId === d.venteId)
         if (fac) {
-          const qteParBrique = new Map(deltas.map((x) => [x.id, x.apres]))
-          const lignes = (fac.lignes || []).map((l) => {
-            if (!qteParBrique.has(l.articleId)) return l
-            const qte = qteParBrique.get(l.articleId)
-            return { ...l, qte, total: qte * (parseFloat(l.prixUnit) || 0) }
+          const lignes = appliquerCorrectif(fac.lignes, {
+            ...report, keyCible: 'articleId',
+            mapper: (x, l) => {
+              const qte = parseInt(x.qte) || 0
+              const pu = parseFloat(x.prixUnitaire) || parseFloat(l.prixUnit) || 0
+              return { articleId: x.briqueId, article: x.briqueNom, qte, prixUnit: pu, total: qte * pu }
+            }
           })
           const totalHT = lignes.reduce((s, l) => s + (l.total || 0), 0)
           const apresRemise = totalHT * (1 - (fac.remise || 0) / 100)
@@ -253,8 +265,14 @@ export default function Demandes() {
           })
         }
       }
+      const nouv = c.lignes || []
       await updateItem('evenementiel_demandes', d.id, {
-        ...(accepte ? { lignes: c.lignes, qte: sommeQte(c.lignes) } : {}),
+        ...(accepte ? {
+          lignes: nouv, qte: sommeQte(nouv),
+          briqueId: nouv[0]?.briqueId || d.briqueId,
+          // Le résumé affiché en liste suit la brique effectivement sortie.
+          briqueNom: nouv.length === 1 ? nouv[0].briqueNom : `${nouv.length} types de briques`
+        } : {}),
         correctif: payloadDecisionCorrectif(c, { accepte, user, horodate, commentaire })
       })
       await notify({
@@ -438,6 +456,7 @@ export default function Demandes() {
                   <CorrectifCompare
                     correctif={d.correctif}
                     deltas={deltasLignes(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
+                    changements={changementsArticle(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
                     stockOf={(x) => stockDe(x.id)}
                   />
                 </div>
@@ -468,7 +487,9 @@ export default function Demandes() {
         <CorrectifModal
           key={relance.id} onClose={() => setRelance(null)} busy={busy}
           titre={`Relancer l'autorisation ${relance.num}`}
-          lignes={relance.lignes || []} nomField="briqueNom"
+          lignes={relance.lignes || []} champs={CLES}
+          articles={briques}
+          onPickArticle={(b) => ({ prixUnitaire: b.tarifVente || 0 })}
           stockOf={(l) => stockDe(l.briqueId)}
           onSubmit={envoyerCorrectif}
         />

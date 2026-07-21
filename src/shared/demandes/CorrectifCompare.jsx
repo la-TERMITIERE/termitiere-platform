@@ -4,7 +4,7 @@
 // (quantités corrigées).
 import { formatNumber } from '../../utils/formatters'
 
-export default function CorrectifCompare({ correctif, deltas = [], stockOf }) {
+export default function CorrectifCompare({ correctif, deltas = [], changements = [], stockOf }) {
   if (!correctif) return null
 
   return (
@@ -17,6 +17,17 @@ export default function CorrectifCompare({ correctif, deltas = [], stockOf }) {
 
       {correctif.motif && (
         <p className="px-3 py-2 text-xs italic text-amber-900">« {correctif.motif} »</p>
+      )}
+
+      {changements.length > 0 && (
+        <div className="border-y border-amber-200 bg-amber-100/50 px-3 py-2 text-xs text-amber-900">
+          <p className="mb-0.5 font-bold uppercase tracking-wide">Article(s) remplacé(s)</p>
+          {changements.map((c, i) => (
+            <p key={i}>
+              <span className="line-through">{c.deNom}</span> → <strong>{c.versNom}</strong> · {formatNumber(c.qte)} pièce(s)
+            </p>
+          ))}
+        </div>
       )}
 
       <div className="overflow-x-auto">

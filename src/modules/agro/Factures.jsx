@@ -59,6 +59,11 @@ export default function Factures() {
   const { generateFacturePDF } = usePDF('agro')
 
   const tousArticles = [...especes, ...aliments]
+  // Articles proposés au correctif, avec ce dont le stock a besoin (type, catégorie).
+  const articlesCorrectif = useMemo(() => [
+    ...especes.map((e) => ({ ...e, type: 'animal' })),
+    ...aliments.map((a) => ({ ...a, type: 'aliment' }))
+  ], [especes, aliments])
   const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('tous')
   const [modal, setModal] = useState(null)        // { facture, editId }
@@ -375,8 +380,10 @@ export default function Factures() {
         <CorrectifModal
           key={relance.id} onClose={() => setRelance(null)} busy={busy}
           titre={`Relancer la facture ${relance.numero}`}
-          lignes={lignesEffectives(relance).filter((l) => l.articleId)}
-          nomField="article"
+          lignes={lignesEffectives(relance).map((l, i) => ({ ...l, _idx: i })).filter((l) => l.articleId)}
+          champs={CLES}
+          articles={articlesCorrectif}
+          onPickArticle={(a) => ({ articleType: a.type, articleCat: a.cat || '', prixUnit: a.prix || 0 })}
           onSubmit={envoyerCorrectif}
         />
       )}

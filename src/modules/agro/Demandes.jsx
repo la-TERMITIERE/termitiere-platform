@@ -19,8 +19,9 @@ import EcartModal from './EcartModal'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
 import CorrectifCompare from '../../shared/demandes/CorrectifCompare'
 import {
-  CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts
+  CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts, changementsArticle
 } from '../../shared/demandes/correctif'
+import { useAgroStore } from './store/agroStore'
 import {
   factureTotaux, lignesEffectives,
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
@@ -39,6 +40,13 @@ export default function Demandes() {
   const isAgent = role === 'agent'
   const peutApprouver = canManage()
   const { data: factures } = useCollection('agro_factures')
+  const especes = useAgroStore((s) => s.especes)
+  const aliments = useAgroStore((s) => s.aliments)
+  // Articles proposés au correctif, avec ce dont le stock a besoin (type, catégorie).
+  const articles = useMemo(() => [
+    ...especes.map((e) => ({ ...e, type: 'animal' })),
+    ...aliments.map((a) => ({ ...a, type: 'aliment' }))
+  ], [especes, aliments])
 
   const [filtre, setFiltre] = useState('sortie_demandee')
   const [createOpen, setCreateOpen] = useState(false)
@@ -97,7 +105,7 @@ export default function Demandes() {
   async function envoyerCorrectif({ lignes, motif }) {
     const f = relance
     if (!motif.trim()) return toast.error('Motif du correctif obligatoire')
-    if (!aDesEcarts(deltasLignes(lignesEffectives(f), lignes, CLES))) return toast.error('Aucune quantité modifiée')
+    if (!aDesEcarts(deltasLignes(lignesEffectives(f), lignes, CLES))) return toast.error('Aucun article ni quantité modifié')
     await run(() => wfDemanderCorrectif(f, user, lignes, motif), '🔄 Correctif envoyé à la hiérarchie')
     setRelance(null)
   }
@@ -277,8 +285,10 @@ export default function Demandes() {
         <CorrectifModal
           key={relance.id} onClose={() => setRelance(null)} busy={busy}
           titre={`Relancer la facture ${relance.numero}`}
-          lignes={lignesEffectives(relance).filter((l) => l.articleId)}
-          nomField="article"
+          lignes={lignesEffectives(relance).map((l, i) => ({ ...l, _idx: i })).filter((l) => l.articleId)}
+          champs={CLES}
+          articles={articles}
+          onPickArticle={(a) => ({ articleType: a.type, articleCat: a.cat || '', prixUnit: a.prix || 0 })}
           onSubmit={envoyerCorrectif}
         />
       )}
@@ -298,6 +308,7 @@ export default function Demandes() {
             <CorrectifCompare
               correctif={correctif.correctif}
               deltas={deltasLignes(correctif.correctif.lignesAvant || [], correctif.correctif.lignes || [], CLES)}
+              changements={changementsArticle(correctif.correctif.lignesAvant || [], correctif.correctif.lignes || [], CLES)}
             />
             <p className="mt-3 text-xs text-gray-500">
               En appliquant, les quantités déjà sorties reviennent au stock et les quantités corrigées en ressortent ;

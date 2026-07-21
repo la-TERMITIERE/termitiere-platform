@@ -27,8 +27,9 @@ import CorrectifModal from '../../shared/demandes/CorrectifModal'
 import CorrectifCompare from '../../shared/demandes/CorrectifCompare'
 import {
   CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts,
-  reporterQtes, payloadDemandeCorrectif, payloadDecisionCorrectif
+  appliquerCorrectif, changementsArticle, payloadDemandeCorrectif, payloadDecisionCorrectif
 } from '../../shared/demandes/correctif'
+import { useLogistiqueStore } from './store/referentielStore'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const STATUTS = STATUTS_DEMANDE
@@ -47,6 +48,7 @@ export default function Demandes() {
   const { data: allFactures } = useCollection('logistique_factures')
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: allInventaires } = useCollection('logistique_inventaires')
+  const materiel = useLogistiqueStore((s) => s.materiel)
   const isManager = canManage()
   const isCertifier = canCertify()
 
@@ -204,10 +206,10 @@ export default function Demandes() {
     const d = relance
     if (!motif.trim()) return toast.error('Motif du correctif obligatoire')
     const deltas = deltasLignes(d.lignes || [], lignes, CLES)
-    if (!aDesEcarts(deltas)) return toast.error('Aucune quantité modifiée')
+    if (!aDesEcarts(deltas)) return toast.error('Aucun matériel ni quantité modifié')
     for (const dd of deltas) {
       const stock = dernierStock(inventaires, dd.id)
-      if (dd.delta > stock) return toast.error(`Stock insuffisant pour ${dd.nom} (+${dd.delta} demandé, ${stock} disponible)`)
+      if (dd.delta > stock) return toast.error(`Stock insuffisant pour ${dd.nom} (${dd.delta} à sortir en plus, ${stock} disponible)`)
     }
     await run(async () => {
       await updateItem('logistique_demandes', d.id, {
@@ -232,11 +234,21 @@ export default function Demandes() {
     const d = decision.demande
     const c = d.correctif
     const horodate = todayStr() + ' ' + nowHM()
-    const majLignes = (src) => {
-      const lignes = reporterQtes(src, c.lignes, 'materielId')
-        .map((l) => ({ ...l, montant: (parseInt(l.qte) || 0) * (parseInt(l.nbJours) || 1) * (parseFloat(l.tarifUnitaire) || 0) }))
-      return lignes
-    }
+    // Matériel remplacé et/ou quantité corrigée, reportés sur la facture et la
+    // prestation ; le nombre de jours de location de la ligne est conservé.
+    const majLignes = (src) => appliquerCorrectif(src, {
+      avant: c.lignesAvant || d.lignes || [], apres: c.lignes || [], key: 'materielId',
+      mapper: (x, l) => {
+        const qte = parseInt(x.qte) || 0
+        const jours = parseInt(l.nbJours) || 1
+        const tarif = parseFloat(x.tarifUnitaire ?? l.tarifUnitaire) || 0
+        return {
+          materielId: x.materielId, materielNom: x.materielNom,
+          cat: x.materielCat || l.cat, unite: x.unite || l.unite,
+          qte, tarifUnitaire: tarif, montant: qte * jours * tarif
+        }
+      }
+    })
     const totalAvecFrais = (lignes, frais) =>
       lignes.reduce((s, l) => s + (l.montant || 0), 0) + (frais || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0)
 
@@ -436,6 +448,7 @@ export default function Demandes() {
                   <CorrectifCompare
                     correctif={d.correctif}
                     deltas={deltasLignes(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
+                    changements={changementsArticle(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
                     stockOf={(x) => dernierStock(inventaires, x.id)}
                   />
                 </div>
@@ -507,7 +520,9 @@ export default function Demandes() {
         <CorrectifModal
           key={relance.id} onClose={() => setRelance(null)} busy={busy}
           titre={`Relancer l'autorisation ${relance.num}`}
-          lignes={relance.lignes || []} nomField="materielNom"
+          lignes={relance.lignes || []} champs={CLES}
+          articles={materiel}
+          onPickArticle={(m) => ({ materielCat: m.cat, unite: m.unite, tarifUnitaire: m.tarifLocation || 0 })}
           stockOf={(l) => dernierStock(inventaires, l.materielId)}
           onSubmit={envoyerCorrectif}
         />
