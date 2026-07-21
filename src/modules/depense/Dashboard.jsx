@@ -1,6 +1,6 @@
 // Dashboard Dépenses — budget alloué vs dépensé, par secteur, pour le mois en cours.
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -10,8 +10,8 @@ import { useNavigate } from 'react-router-dom'
 import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs } from './logic'
+import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -23,8 +23,13 @@ export default function Dashboard() {
   const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: depensesProjet }  = useCollection('projet_depenses')
   const { data: projetsTous }     = useCollection('projets')
-  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet — pas de double saisie.
-  const depenses = useMemo(() => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous)], [depensesReelles, depensesProjet, projetsTous])
+  const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
+  // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
+  const depenses = useMemo(() => [
+    ...depensesReelles,
+    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...coutsMatieresBriqueterie(inventairesBriq)
+  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -59,6 +64,19 @@ export default function Dashboard() {
 
   const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois), [budgets, depenses, annee, mois])
   const enAttenteCount = useMemo(() => depensesEnCircuit(depenses).length, [depenses])
+
+  // Traçabilité du financement : combien vient réellement de la poche du PAU (apport
+  // personnel) vs de la trésorerie de l'entreprise — pour que le PAU voie son impact
+  // financier réel dans l'entreprise. Lecture seule, n'affecte aucun calcul de budget.
+  const financement = useMemo(() => {
+    const estPau = (d) => (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
+    const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+    const cumulPau = totalDepenses(depenses.filter(estPau))
+    const cumulEntreprise = totalDepenses(depenses.filter((d) => !estPau(d)))
+    const moisPau = totalDepenses(depenses.filter((d) => estPau(d) && (d.date || '').startsWith(prefixe)))
+    const total = cumulPau + cumulEntreprise
+    return { cumulPau, cumulEntreprise, moisPau, pct: total > 0 ? Math.round((cumulPau / total) * 100) : 0 }
+  }, [depenses, annee, mois])
 
   // Reconduction des dépenses récurrentes du mois précédent → uniquement visible sur le mois réel en cours.
   const estMoisCourant = annee === REAL_ANNEE && mois === REAL_MOIS
@@ -95,12 +113,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(79,70,229,0.35),0_8px_20px_-8px_rgba(79,70,229,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.85) 0%, rgba(55,48,163,0.8) 100%)' }}>
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(180,83,9,0.35),0_8px_20px_-8px_rgba(180,83,9,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.85) 0%, rgba(120,53,15,0.8) 100%)' }}>
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#4F46E5', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
+            background: '#B45309', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
           }}>
             <Wallet size={26} color="white" />
           </div>
@@ -124,11 +142,11 @@ export default function Dashboard() {
       {/* ── Demandes de décaissement à traiter ── */}
       {enAttenteCount > 0 && (
         <button onClick={() => navigate('/depense/autorisations')}
-          className="w-full rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-left text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-indigo-50/80">
-          <p className="flex items-center gap-2 font-bold text-indigo-800">
+          className="w-full rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-left text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-amber-50/80">
+          <p className="flex items-center gap-2 font-bold text-amber-800">
             <Stamp size={16} /> {enAttenteCount} demande(s) de décaissement à traiter
           </p>
-          <p className="mt-0.5 text-xs text-indigo-600">Cliquez pour ouvrir l'autorisation de décaissement</p>
+          <p className="mt-0.5 text-xs text-amber-600">Cliquez pour ouvrir l'autorisation de décaissement</p>
         </button>
       )}
 
@@ -153,18 +171,18 @@ export default function Dashboard() {
       {/* ── Dépenses récurrentes à reconduire ── */}
       {depensesAReconduire.length > 0 && (
         <button onClick={reconduireDepenses} disabled={reconduisant}
-          className="w-full rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-left text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-indigo-50/80 disabled:opacity-60">
-          <p className="flex items-center gap-2 font-bold text-indigo-800">
+          className="w-full rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-left text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-amber-50/80 disabled:opacity-60">
+          <p className="flex items-center gap-2 font-bold text-amber-800">
             <Repeat size={16} /> {depensesAReconduire.length} dépense(s) récurrente(s) à reconduire ce mois-ci
           </p>
-          <p className="mt-0.5 text-xs text-indigo-600">
+          <p className="mt-0.5 text-xs text-amber-600">
             {reconduisant ? 'Reconduction en cours…' : 'Cliquez pour les ajouter automatiquement au mois en cours'}
           </p>
         </button>
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#4F46E5"
+        <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#B45309"
           onClick={() => navigate('/depense/budgets')} />
         <StatCard title="Total dépensé" value={`${totalDepense.toLocaleString('fr-FR')} FCFA`} icon={TrendingDown} accent="#dc2626"
           onClick={() => navigate('/depense/liste')} />
@@ -175,6 +193,38 @@ export default function Dashboard() {
           valueColor={secteursDepasses > 0 ? '#dc2626' : undefined}
           sub={secteursDepasses > 0 ? 'à surveiller' : 'tout va bien'} />
       </div>
+
+      {/* Traçabilité du financement : impact réel du PAU dans l'entreprise, distinct
+          des fonds propres de l'entreprise. Cumul depuis le début, tous secteurs confondus. */}
+      {financement.cumulPau > 0 && (
+        <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-3 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+          <div className="flex flex-wrap items-center gap-2">
+            <HeartHandshake size={18} className="text-violet-600" />
+            <p className="font-bold text-violet-900">Apport du PAU dans l'entreprise</p>
+            <span className="ml-auto rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-violet-700 shadow-sm">{financement.pct}% du total financé</span>
+          </div>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Apport cumulé (depuis le début)</p>
+              <p className="text-lg font-black text-violet-800">{financement.cumulPau.toLocaleString('fr-FR')} FCFA</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Apport ce mois-ci</p>
+              <p className="text-lg font-black text-violet-800">{financement.moisPau.toLocaleString('fr-FR')} FCFA</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Fonds propres de l'entreprise (cumulé)</p>
+              <p className="text-lg font-black text-gray-700">{financement.cumulEntreprise.toLocaleString('fr-FR')} FCFA</p>
+            </div>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70">
+            <div className="h-2 rounded-full bg-violet-500" style={{ width: `${financement.pct}%` }} />
+          </div>
+          <p className="mt-1.5 text-[11px] text-violet-500">
+            Traçabilité pure — n'affecte pas les calculs de budget. Basé sur la « Source de financement » indiquée à chaque dépense.
+          </p>
+        </div>
+      )}
 
       <Card title="Répartition par secteur">
         <div className="space-y-3">

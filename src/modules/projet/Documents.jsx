@@ -28,7 +28,8 @@ export default function Documents() {
   const { data: tachesTous }  = useCollection('projet_taches')
   const { user, role } = useAuthStore()
   // Le superviseur ajoute/consulte des documents, mais ne les supprime pas.
-  const peutSupprimer = !['superviseur', 'partenaire'].includes(role)
+  // Accès complet pour la secrétaire/l'agent, sauf la suppression (réservée).
+  const peutSupprimer = !['superviseur', 'partenaire', 'secretaire', 'agent'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDocuments') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches.
@@ -36,6 +37,7 @@ export default function Documents() {
   const taches  = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
 
   const [projetId, setProjetId]   = useState('')
+  const [tacheIdAjout, setTacheIdAjout] = useState('')
   const [filtreRub, setFiltreRub] = useState('')
 
   const totalDocs = useMemo(() =>
@@ -44,13 +46,23 @@ export default function Documents() {
   [projets, taches])
 
   const projet = useMemo(() => projets.find((p) => p.id === projetId) || null, [projets, projetId])
-  const tachesDuProjet = useMemo(() =>
-    projet ? taches.filter((t) => t.projetId === projet.id && (t.pieces?.length || 0) > 0) : [],
+  // Toutes les tâches du projet (pas seulement celles qui ont déjà des documents) —
+  // pour pouvoir choisir sur laquelle rattacher un nouveau document, comme pour les besoins.
+  const tachesDuProjetToutes = useMemo(() =>
+    projet ? taches.filter((t) => t.projetId === projet.id) : [],
   [taches, projet])
+  const tacheAjout = useMemo(() =>
+    tachesDuProjetToutes.find((t) => t.id === tacheIdAjout) || null,
+  [tachesDuProjetToutes, tacheIdAjout])
+  // Tâches qui ont déjà des documents, affichées en dessous — sauf celle actuellement
+  // sélectionnée dans le sélecteur d'ajout (déjà montrée dans le bloc principal).
+  const tachesDuProjet = useMemo(() =>
+    tachesDuProjetToutes.filter((t) => t.id !== tacheIdAjout && (t.pieces?.length || 0) > 0),
+  [tachesDuProjetToutes, tacheIdAjout])
 
   const piecesFiltrees = useMemo(() =>
-    (projet?.pieces || []).filter((p) => !filtreRub || p.rubrique === filtreRub),
-  [projet, filtreRub])
+    ((tacheAjout ? tacheAjout.pieces : projet?.pieces) || []).filter((p) => !filtreRub || p.rubrique === filtreRub),
+  [projet, tacheAjout, filtreRub])
 
   // Vue globale (aucun projet sélectionné) : tous les documents déjà ajoutés,
   // groupés par projet — pour les avoir sous les yeux dès l'ouverture du volet.
@@ -69,16 +81,37 @@ export default function Documents() {
 
   const handleAdd = async (piece) => {
     if (!projet) return
-    const pieces = [...(projet.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
-    await updateItem('projets', projet.id, { pieces, updatedAt: Date.now() })
-    await audit('projet', 'document_ajoute', `${piece.nom} → ${projet.nom}`)
+    if (tacheAjout) {
+      const pieces = [...(tacheAjout.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
+      await updateItem('projet_taches', tacheAjout.id, { pieces, updatedAt: Date.now() })
+      await audit('projet', 'document_ajoute', `${piece.nom} → ${projet.nom} / ${tacheAjout.titre}`)
+    } else {
+      const pieces = [...(projet.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
+      await updateItem('projets', projet.id, { pieces, updatedAt: Date.now() })
+      await audit('projet', 'document_ajoute', `${piece.nom} → ${projet.nom}`)
+    }
+  }
+
+  // Suppression générique (utilisée aussi bien depuis la vue détail que depuis la
+  // vue globale et le bloc "documents des autres tâches", où aucun projet/tâche
+  // n'est "actif" dans le formulaire).
+  const supprimerPieceProjet = async (p, piece) => {
+    if (!peutSupprimer) return
+    if (!window.confirm(`Supprimer "${piece.nom}" ?`)) return
+    const pieces = (p.pieces || []).filter((pc) => pc.id !== piece.id)
+    await updateItem('projets', p.id, { pieces, updatedAt: Date.now() })
+  }
+  const supprimerPieceTache = async (t, piece) => {
+    if (!peutSupprimer) return
+    if (!window.confirm(`Supprimer "${piece.nom}" ?`)) return
+    const pieces = (t.pieces || []).filter((pc) => pc.id !== piece.id)
+    await updateItem('projet_taches', t.id, { pieces, updatedAt: Date.now() })
   }
 
   const handleRemove = async (piece) => {
-    if (!peutSupprimer || !projet) return
-    if (!window.confirm(`Supprimer "${piece.nom}" ?`)) return
-    const pieces = (projet.pieces || []).filter((p) => p.id !== piece.id)
-    await updateItem('projets', projet.id, { pieces, updatedAt: Date.now() })
+    if (!projet) return
+    if (tacheAjout) await supprimerPieceTache(tacheAjout, piece)
+    else await supprimerPieceProjet(projet, piece)
   }
 
   return (
@@ -103,12 +136,21 @@ export default function Documents() {
           <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:ring-2 focus-within:ring-teal-400">
             <FolderKanban size={16} className="shrink-0 text-teal-500" />
             <select className="w-full bg-transparent text-sm focus:outline-none"
-              value={projetId} onChange={(e) => setProjetId(e.target.value)}>
+              value={projetId} onChange={(e) => { setProjetId(e.target.value); setTacheIdAjout('') }}>
               <option value="">— Choisir un projet —</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </div>
           {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{STATUTS_PROJET[projet.statut]?.label}</Badge>}
+          {projet && tachesDuProjetToutes.length > 0 && (
+            <div className="flex min-w-[200px] items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:ring-2 focus-within:ring-teal-400">
+              <select className="w-full bg-transparent text-sm focus:outline-none"
+                value={tacheIdAjout} onChange={(e) => setTacheIdAjout(e.target.value)}>
+                <option value="">— Documents généraux du projet —</option>
+                {tachesDuProjetToutes.map((t) => <option key={t.id} value={t.id}>📋 {t.titre}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:ring-2 focus-within:ring-teal-400">
             <Filter size={14} className="shrink-0 text-gray-400" />
             <select className="bg-transparent text-sm focus:outline-none"
@@ -138,11 +180,15 @@ export default function Documents() {
                   <button onClick={() => setProjetId(p.id)} className="text-sm font-bold text-gray-800 hover:text-teal-600 hover:underline">{p.nom}</button>
                   <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label}</Badge>
                 </div>
-                {p.piecesProjet.length > 0 && <PiecesJointes pieces={p.piecesProjet} readOnly label="Documents du projet" />}
+                {p.piecesProjet.length > 0 && (
+                  <PiecesJointes pieces={p.piecesProjet} noAdd noDelete={!peutSupprimer}
+                    onRemove={(piece) => supprimerPieceProjet(p, piece)} label="Documents du projet" />
+                )}
                 {p.tachesAvecDocs.map((t) => (
                   <div key={t.id} className="mt-2 rounded-xl bg-gray-50 px-3 py-2.5">
                     <p className="mb-1.5 text-xs font-semibold text-gray-600">📋 {t.titre}</p>
-                    <PiecesJointes pieces={t.pieces} readOnly />
+                    <PiecesJointes pieces={t.pieces} noAdd noDelete={!peutSupprimer}
+                      onRemove={(piece) => supprimerPieceTache(t, piece)} />
                   </div>
                 ))}
               </Card>
@@ -158,18 +204,19 @@ export default function Documents() {
               onRemove={handleRemove}
               noDelete={!peutSupprimer}
               rubriques={RUBRIQUES}
-              label={`Documents — ${projet.nom}`}
+              label={tacheAjout ? `Documents — ${projet.nom} / ${tacheAjout.titre}` : `Documents — ${projet.nom}`}
               withLegende
             />
           </Card>
 
           {tachesDuProjet.length > 0 && (
-            <Card title="Documents attachés aux tâches de ce projet">
+            <Card title="Documents attachés aux autres tâches de ce projet">
               <div className="space-y-3">
                 {tachesDuProjet.map((t) => (
                   <div key={t.id} className="rounded-xl bg-gray-50 px-3 py-2.5">
                     <p className="mb-1.5 text-xs font-semibold text-gray-600">📋 {t.titre}</p>
-                    <PiecesJointes pieces={t.pieces || []} readOnly />
+                    <PiecesJointes pieces={t.pieces || []} noAdd noDelete={!peutSupprimer}
+                      onRemove={(piece) => supprimerPieceTache(t, piece)} />
                   </div>
                 ))}
               </div>

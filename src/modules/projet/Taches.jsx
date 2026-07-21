@@ -85,14 +85,18 @@ const VIDE_TACHE = {
   versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr()
 }
 
+// Couleur d'accent (barre latérale de la carte) selon le statut de la tâche.
+const STATUT_TACHE_ACCENT = { a_faire: '#94a3b8', en_cours: '#f59e0b', en_revision: '#8b5cf6', bloquee: '#dc2626', terminee: '#16a34a', annulee: '#cbd5e1' }
+
 // ─── Onglet Tâches ────────────────────────────────────────────────────────────
 
 function OngletTaches({ taches, projets, users, depenses }) {
   const { user, role }        = useAuthStore()
-  // La secrétaire et l'agent (mêmes droits) peuvent démarrer une tâche, mais ne soumettent ni ne valident (décision terrain).
-  const peutSoumettreValider  = !['secretaire', 'agent'].includes(role)
+  // La secrétaire et l'agent ont un accès complet aux tâches (créer, modifier, démarrer,
+  // soumettre, valider) — seule la SUPPRESSION leur reste interdite.
+  const peutSoumettreValider  = !['superviseur', 'partenaire'].includes(role)
   const peutSaisirMontant     = true
-  // Le superviseur crée/modifie/suit les tâches, mais ne les supprime pas.
+  // Suppression réservée : ni la secrétaire, ni l'agent, ni le superviseur/partenaire.
   const peutSupprimer         = !['secretaire', 'agent', 'superviseur', 'partenaire'].includes(role)
 
   const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
@@ -337,56 +341,63 @@ function OngletTaches({ taches, projets, users, depenses }) {
             const reste = prevu - verse
             const pctPaye = prevu > 0 ? Math.min(100, Math.round((verse / prevu) * 100)) : 0
             const aSuivi = prevu > 0 || verse > 0
+            const statutAccent = STATUT_TACHE_ACCENT[t.statut] || '#94a3b8'
             return (
-              <Card key={t.id} className="card-hover flex h-full flex-col" onClick={() => setDetail(t)}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={STATUTS_TACHE[t.statut]?.tone}>{STATUTS_TACHE[t.statut]?.label}</Badge>
-                    <Badge tone={PRIORITES[t.priorite]?.tone}>{PRIORITES[t.priorite]?.label}</Badge>
-                    {enRetard && <Badge tone="danger">En retard</Badge>}
+              <Card key={t.id} onClick={() => setDetail(t)}
+                className="group flex h-full cursor-pointer flex-col border-l-4 !p-0 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_10px_28px_-10px_rgba(13,148,136,0.25)] hover:ring-teal-200"
+                style={{ borderLeftColor: statutAccent }}>
+                <div className="flex flex-1 flex-col p-4">
+                  {/* En-tête : badges + actions */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={STATUTS_TACHE[t.statut]?.tone}>{STATUTS_TACHE[t.statut]?.label}</Badge>
+                      <Badge tone={PRIORITES[t.priorite]?.tone}>{PRIORITES[t.priorite]?.label}</Badge>
+                      {enRetard && <Badge tone="danger">⏰ En retard</Badge>}
+                    </div>
+                    <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => openEdit(t)} className="rounded-lg border border-teal-200 bg-teal-50 p-1 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={15} /></button>
+                      {peutSupprimer && (
+                        <button onClick={() => handleDelete(t)} className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={15} /></button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => openEdit(t)} className="rounded-lg border border-teal-200 bg-teal-50 p-1 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={15} /></button>
-                    {peutSupprimer && (
-                      <button onClick={() => handleDelete(t)} className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={15} /></button>
-                    )}
-                  </div>
-                </div>
 
-                <div className="min-w-0 flex-1">
-                  <p className="mt-1 font-semibold text-gray-800">{t.titre}</p>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {projet && <p className="text-xs text-teal-600">{projet.nom}</p>}
+                  {/* Titre + projet / phase */}
+                  <p className="mt-2 font-bold leading-snug text-gray-800">{t.titre}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {projet && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">📋 {projet.nom}</span>}
                     {t.phase && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{t.phase}</span>}
                   </div>
-                  <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
-                    {t.assignee && <span>Assigné à : {t.assignee}</span>}
-                    {t.dateDebut && <span>Début : {formatDateShort(t.dateDebut)}</span>}
-                    {t.echeance && <span className={enRetard ? 'text-red-500 font-semibold' : ''}>Échéance : {formatDateShort(t.echeance)}</span>}
-                    {t.prestataireNom && (
-                      <span>
-                        Prestataire : {t.prestataireNom}
-                        {t.prestataireMetier && ` (${METIERS_PRESTATAIRE.find((m) => m.id === t.prestataireMetier)?.label || t.prestataireMetier})`}
-                        {t.prestataireTelephone && ` · ${t.prestataireTelephone}`}
-                      </span>
-                    )}
+
+                  {/* Méta : assigné, dates, prestataire */}
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                    {t.assignee && <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">👤 {t.assignee}</span>}
+                    {t.dateDebut && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">📅 {formatDateShort(t.dateDebut)}</span>}
+                    {t.echeance && <span className={`rounded-full px-2 py-0.5 ${enRetard ? 'bg-red-50 font-semibold text-red-600' : 'bg-gray-100 text-gray-500'}`}>🏁 {formatDateShort(t.echeance)}</span>}
                   </div>
-                  {t.note && <p className="mt-1 text-xs text-gray-500">{t.note}</p>}
+                  {t.prestataireNom && (
+                    <p className="mt-1.5 text-[11px] text-gray-400">
+                      🔧 <span className="font-medium text-gray-600">{t.prestataireNom}</span>
+                      {t.prestataireMetier && ` · ${METIERS_PRESTATAIRE.find((m) => m.id === t.prestataireMetier)?.label || t.prestataireMetier}`}
+                      {t.prestataireTelephone && ` · ☎ ${t.prestataireTelephone}`}
+                    </p>
+                  )}
+                  {t.note && <p className="mt-1.5 line-clamp-2 text-xs italic text-gray-500">« {t.note} »</p>}
 
                   {/* Suivi financier prestataire */}
                   {aSuivi && (
-                    <div className="mt-2 rounded-2xl border border-teal-100/60 bg-teal-50/60 px-3 py-2.5 backdrop-blur-sm">
+                    <div className="mt-2.5 rounded-xl border border-teal-100/70 bg-teal-50/50 px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                        <span className="text-gray-600">Arrêté : <span className="font-semibold text-gray-800">{formatMoney(prevu)}</span></span>
-                        <span className="text-gray-600">Versé : <span className="font-semibold text-teal-700">{formatMoney(verse)}</span></span>
-                        <span className="text-gray-600">Reste : <span className={`font-semibold ${reste > 0 ? 'text-amber-600' : 'text-green-600'}`}>{formatMoney(reste > 0 ? reste : 0)}</span></span>
+                        <span className="text-gray-600">Arrêté <span className="font-semibold text-gray-800">{formatMoney(prevu)}</span></span>
+                        <span className="text-gray-600">Versé <span className="font-semibold text-teal-700">{formatMoney(verse)}</span></span>
+                        <span className="text-gray-600">Reste <span className={`font-semibold ${reste > 0 ? 'text-amber-600' : 'text-green-600'}`}>{formatMoney(reste > 0 ? reste : 0)}</span></span>
                       </div>
                       {prevu > 0 && (
                         <>
-                          <div className="mt-1.5 h-1.5 rounded-full bg-gray-100">
-                            <div className={`h-1.5 rounded-full transition-all ${reste <= 0 ? 'bg-green-500' : 'bg-teal-500'}`} style={{ width: `${pctPaye}%` }} />
+                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100">
+                            <div className={`h-2 rounded-full transition-all ${reste <= 0 ? 'bg-green-500' : 'bg-gradient-to-r from-teal-400 to-teal-600'}`} style={{ width: `${pctPaye}%` }} />
                           </div>
-                          <div className="mt-1">
+                          <div className="mt-1.5">
                             {reste <= 0
                               ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">✓ Soldé</span>
                               : verse > 0
@@ -414,21 +425,22 @@ function OngletTaches({ taches, projets, users, depenses }) {
                       <button onClick={() => setReportId(null)} className="text-xs text-gray-400 hover:text-gray-600">Annuler</button>
                     </div>
                   )}
-                </div>
 
-                <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                  {PROGRESSION[t.statut] && (peutSoumettreValider || t.statut === 'a_faire') && (
-                    <button onClick={() => avancer(t)}
-                      className={`flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold text-white transition-colors ${COLOR_BTN[t.statut]}`}>
-                      {ICONE_BTN[t.statut]}{LABEL_BTN[t.statut]}
-                    </button>
-                  )}
-                  {!['terminee','annulee'].includes(t.statut) && (
-                    <button onClick={() => ouvrirReport(t)}
-                      className="flex items-center gap-1 rounded-full border border-amber-300 px-3 py-1 text-[11px] font-bold text-amber-600 hover:bg-amber-50 transition-colors">
-                      <CalendarClock size={11} />Reporter
-                    </button>
-                  )}
+                  {/* Actions bas — épinglées en bas de la carte */}
+                  <div className="mt-auto flex flex-wrap gap-2 pt-3" onClick={(e) => e.stopPropagation()}>
+                    {PROGRESSION[t.statut] && (peutSoumettreValider || t.statut === 'a_faire') && (
+                      <button onClick={() => avancer(t)}
+                        className={`flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold text-white transition-colors ${COLOR_BTN[t.statut]}`}>
+                        {ICONE_BTN[t.statut]}{LABEL_BTN[t.statut]}
+                      </button>
+                    )}
+                    {!['terminee','annulee'].includes(t.statut) && (
+                      <button onClick={() => ouvrirReport(t)}
+                        className="flex items-center gap-1 rounded-full border border-amber-300 px-3 py-1 text-[11px] font-bold text-amber-600 hover:bg-amber-50 transition-colors">
+                        <CalendarClock size={11} />Reporter
+                      </button>
+                    )}
+                  </div>
                 </div>
               </Card>
             )

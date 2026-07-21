@@ -14,6 +14,14 @@ import Button from '../shared/ui/Button'
 import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
 
+// Certains logos ont beaucoup de marge transparente autour du symbole utile — on les
+// agrandit et on les recadre au centre (via un overflow-hidden sur le badge parent) au
+// lieu de les faire tenir en entier, pour qu'ils restent lisibles dans un petit badge.
+const LOGOS_ZOOM = {
+  garderie: 'h-24 w-24 object-contain',
+  agro:     'h-20 w-20 object-contain'
+}
+
 export default function PortalHome() {
   const navigate = useNavigate()
   const { user, hasModule, isAdmin } = useAuth()
@@ -119,10 +127,13 @@ export default function PortalHome() {
               <div className="flex items-start gap-4">
                 <div
                   className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl overflow-hidden"
-                  style={{ background: m.logo ? 'transparent' : m.color + '1a', color: m.color }}
+                  style={{ background: m.color + '1a', color: m.color }}
                 >
+                  {/* Ces logos ont beaucoup de marge transparente autour du symbole utile
+                      (texte ou icône) — les agrandir et les recadrer au centre (au lieu de
+                      les faire tenir en entier) garde ce symbole bien plus lisible. */}
                   {m.logo
-                    ? <img src={m.logo} alt={m.nom} className="h-14 w-14 object-contain" />
+                    ? <img src={m.logo} alt={m.nom} className={LOGOS_ZOOM[m.id] || 'h-9 w-9 object-contain'} />
                     : <m.icon size={28} />
                   }
                 </div>

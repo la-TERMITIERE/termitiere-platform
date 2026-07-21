@@ -16,6 +16,7 @@ import Fournisseurs from './Fournisseurs'
 import Pilotage from './Pilotage'
 import Journal from './Journal'
 import Params from './Params'
+import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import AutoCarryForwardLogistique from './AutoCarryForwardLogistique'
 import { Lock } from 'lucide-react'
@@ -65,6 +66,7 @@ function SiteApp() {
         <Route path="saisie" element={<SaisieMagasin />} />
         <Route path="prestations" element={<Prestations />} />
         <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
+        <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="logistique" /> : <AccesRefuse />} />
         <Route path="factures" element={<Factures />} />
         <Route path="demandes" element={<Demandes />} />
         <Route path="retours" element={<Retours />} />

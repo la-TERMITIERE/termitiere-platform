@@ -11,7 +11,7 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, NATURES_FLUX } from './data'
-import { soldesFluxMois, croissance, derniersMois, moisPrecedent, depensesProjetVersSecteurs } from './logic'
+import { soldesFluxMois, croissance, derniersMois, moisPrecedent, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
@@ -21,13 +21,18 @@ export default function Flux() {
   const { data: depensesReelles }      = useCollection('depense_depenses')
   const { data: depensesProjet }       = useCollection('projet_depenses')
   const { data: projetsTous }          = useCollection('projets')
+  const { data: inventairesBriq }      = useCollection('evenementiel_inventaires')
   const { data: paiementsGarderie }    = useCollection('garderie_paiements')
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
 
-  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet — pas de double saisie.
-  const depenses = useMemo(() => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous)], [depensesReelles, depensesProjet, projetsTous])
+  // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
+  const depenses = useMemo(() => [
+    ...depensesReelles,
+    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...coutsMatieresBriqueterie(inventairesBriq)
+  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
@@ -63,7 +68,7 @@ export default function Flux() {
       { label: 'Exploitation',   data: tendance.map((t) => t.soldeExploitation),   borderColor: '#0d9488', backgroundColor: '#0d948833', tension: 0.3 },
       { label: 'Investissement', data: tendance.map((t) => t.soldeInvestissement), borderColor: '#059669', backgroundColor: '#05966933', tension: 0.3 },
       { label: 'Pertes',         data: tendance.map((t) => t.soldePerte),          borderColor: '#dc2626', backgroundColor: '#dc262633', tension: 0.3 },
-      { label: 'Solde global',   data: tendance.map((t) => t.soldeGlobal),         borderColor: '#4F46E5', backgroundColor: '#4F46E533', tension: 0.3, borderDash: [6, 4], borderWidth: 2 }
+      { label: 'Solde global',   data: tendance.map((t) => t.soldeGlobal),         borderColor: '#B45309', backgroundColor: '#B4530933', tension: 0.3, borderDash: [6, 4], borderWidth: 2 }
     ]
   }
 
@@ -105,7 +110,7 @@ export default function Flux() {
         <Button variant="outline" className="ml-auto" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
       </div>
 
-      <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         Chaque dépense décaissée est classée par <strong>nature de flux</strong> (Exploitation, Investissement ou Perte — voir l'onglet Dépenses). Le solde d'exploitation compare cette dépense au revenu réel du mois ; investissement et pertes sont des sorties pures, sans revenu suivi en face.
       </div>
 
@@ -123,7 +128,7 @@ export default function Flux() {
         <StatCard
           title={<span className="flex items-center gap-1">Solde global <InfoBulle texte="Exploitation + Investissement + Pertes." /></span>}
           value={`${fmt(solde.soldeGlobal)} FCFA`} icon={solde.soldeGlobal >= 0 ? TrendingUp : TrendingDown}
-          accent={solde.soldeGlobal >= 0 ? '#4F46E5' : '#dc2626'} />
+          accent={solde.soldeGlobal >= 0 ? '#B45309' : '#dc2626'} />
       </div>
 
       <Card>

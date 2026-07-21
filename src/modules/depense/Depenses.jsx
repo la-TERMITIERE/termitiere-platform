@@ -1,6 +1,6 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -10,14 +10,14 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { setItem, removeItem } from '../../core/db'
+import { setItem, removeItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 
@@ -100,9 +100,14 @@ export default function Depenses() {
   const { data: depensesProjet } = useCollection('projet_depenses')
   const { data: projetsTous }    = useCollection('projets')
   const { data: tachesTous }     = useCollection('projet_taches')
+  const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
   const depenses = useMemo(
-    () => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous)],
-    [depensesReelles, depensesProjet, projetsTous, tachesTous]
+    () => [
+      ...depensesReelles,
+      ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
+      ...coutsMatieresBriqueterie(inventairesBriq)
+    ],
+    [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq]
   )
 
   const [recherche, setRecherche] = useState('')
@@ -112,10 +117,16 @@ export default function Depenses() {
   const [filtreSource, setFiltreSource] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
+  const [detailId, setDetailId] = useState(null)
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [uploading, setUploading] = useState(false)
+
+  // La fenêtre de détail est indexée par id (pas par snapshot) : ainsi, si un chef de
+  // projet modifie la dépense dans E-G.Pro pendant qu'elle est ouverte ici, le détail
+  // se met à jour tout seul (la liste `depenses` est en temps réel).
+  const detail = detailId ? depenses.find((d) => d.id === detailId) || null : null
 
   const liste = useMemo(() => {
     let rows = [...depenses]
@@ -183,7 +194,7 @@ export default function Depenses() {
       const secteur = SECTEURS.find((s) => s.id === d.secteurId)
       if (modal.isNew) {
         const id = genId()
-        // Prévue (déjà budgétée) → comptée immédiatement. Imprévue (hors budget) → passe par l'autorisation de décaissement.
+        // Prévue (déjà budgétée) → comptée immédiatement. Imprévue (hors budget) → autorisation de décaissement.
         const statutInitial = d.imprevue ? 'en_attente' : 'decaissee'
         const depenseFinale = { ...d, id, statut: statutInitial, enregistrePar: user?.nom || '—', createdAt: Date.now() }
         await setItem('depense_depenses', id, depenseFinale)
@@ -226,9 +237,22 @@ export default function Depenses() {
     const target = toDelete
     setToDelete(null)
     try {
-      await removeItem('depense_depenses', target.id)
       const secteur = SECTEURS.find((s) => s.id === target.secteurId)
-      await audit('depense', 'DEPENSE_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA`)
+      if (target.source === 'projet') {
+        // Dépense récupérée d'E-G.Pro : l'enregistrement réel vit dans `projet_depenses`.
+        // La supprimer ici la retire aussi d'E-G.Pro — on recalcule alors le total du projet
+        // pour garder les deux modules cohérents (même logique que la suppression côté E-G.Pro).
+        const realId = String(target.id).replace(/^projet_/, '')
+        await removeItem('projet_depenses', realId)
+        const totalProjet = depensesProjet
+          .filter((dep) => dep.id !== realId && dep.projetId === target.projetId)
+          .reduce((s, dep) => s + (Number(dep.montant) || 0), 0)
+        await updateItem('projets', target.projetId, { depenses: totalProjet, updatedAt: Date.now() })
+        await audit('depense', 'DEPENSE_PROJET_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA (dépense E-G.Pro : ${target.projetNom || target.projetId})`)
+      } else {
+        await removeItem('depense_depenses', target.id)
+        await audit('depense', 'DEPENSE_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA`)
+      }
       toast.success('Dépense supprimée ✓')
     } finally {
       setDeleting(false)
@@ -237,7 +261,7 @@ export default function Depenses() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Une dépense <strong>imprévue</strong> (hors budget) passe par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget du secteur.
       </div>
 
@@ -298,233 +322,283 @@ export default function Depenses() {
         </div>
       )}
 
-      <Card className="overflow-x-auto p-0">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-3 py-2 text-left">Date</th>
-              <th className="px-3 py-2 text-left">Secteur</th>
-              <th className="px-3 py-2 text-left">Catégorie</th>
-              <th className="px-3 py-2 text-left">Description</th>
-              <th className="px-3 py-2 text-right">Montant</th>
-              <th className="px-3 py-2 text-left">Statut</th>
-              <th className="px-3 py-2 text-center">Justif.</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {liste.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-sm text-gray-400">Aucune dépense trouvée.</td></tr>
-            )}
-            {liste.map((d) => {
-              const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-              const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
-              const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
-              const source = SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]
-              const depuisProjet = d.source === 'projet'
-              const modifiable = !depuisProjet && (isAdmin || d.statut === 'en_attente' || !d.statut)
-              return (
-                <tr key={d.id} className={`hover:bg-gray-50 transition-colors ${depuisProjet ? 'bg-teal-50/30' : ''}`}>
-                  <td className="px-3 py-2 text-xs text-gray-500">{formatDateShort(d.date)}</td>
-                  <td className="px-3 py-2">
-                    <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
-                  </td>
-                  <td className="px-3 py-2 text-xs text-gray-600">
-                    {d.categorie || '—'}
-                    <span className="mt-0.5 block"><Badge tone={nature.tone}>{nature.label}</Badge></span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600">
-                    {d.description || '—'}
-                    {depuisProjet && (
-                      <span className="mt-0.5 block"><Badge tone="info">🔗 Depuis E-G.Pro</Badge></span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold">
-                    {Number(d.montant).toLocaleString('fr-FR')} FCFA
-                    {(d.sourceFinancement || sourceFinancementDefaut) === 'pau' && (
-                      <span className="mt-0.5 block"><Badge tone={source.tone}>💜 {source.label}</Badge></span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge tone={statut.tone}>{statut.label}</Badge>
-                    {/* Traçabilité : qui a effectué la dépense → qui la reçoit */}
-                    <p className="mt-1 text-[10px] text-gray-400">✍️ Par <span className="font-semibold text-gray-500">{d.enregistrePar || '—'}</span></p>
-                    {d.beneficiaireNom && (
-                      <p className="mt-0.5 text-[10px] text-gray-400">
-                        → 👤 <span className="font-semibold text-gray-500">{d.beneficiaireNom}</span>{d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}{' '}
-                        {d.beneficiaireUid
-                          ? (d.recuConfirme ? '· ✅ reçu confirmé' : d.statut === 'decaissee' ? '· en attente de confirmation' : '')
-                          : '· externe'}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {d.piece && (
-                      <button onClick={() => ouvrirPiece(d.piece)} title="Voir le justificatif" className="rounded p-1 text-primary hover:bg-primary/10">
-                        <Eye size={14} />
-                      </button>
-                    )}
-                    {!d.piece && depuisProjet && d.noteOrigine && (
-                      <span className="block max-w-[180px] whitespace-normal text-left text-[11px] italic text-gray-500">{d.noteOrigine}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {modifiable && (
-                      <div className="flex gap-1">
-                        <button onClick={() => openEdit(d)} title="Modifier" className="rounded p-1 text-primary hover:bg-primary/10"><FilePen size={14} /></button>
-                        <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded p-1 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+      {liste.length === 0 ? (
+        <Card>
+          <div className="flex flex-col items-center gap-2 py-12 text-gray-400">
+            <Receipt size={34} className="opacity-30" />
+            <p className="text-sm">Aucune dépense trouvée.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[880px] border-separate border-spacing-y-2.5 text-sm">
+            <thead>
+              <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <th className="px-4 pb-1 text-left font-bold">Date & secteur</th>
+                <th className="px-4 pb-1 text-left font-bold">Dépense</th>
+                <th className="px-4 pb-1 text-left font-bold">Bénéficiaire</th>
+                <th className="px-4 pb-1 text-right font-bold">Montant</th>
+                <th className="px-4 pb-1 text-center font-bold">Statut</th>
+                <th className="px-4 pb-1"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {liste.map((d) => {
+                const secteur = SECTEURS.find((s) => s.id === d.secteurId)
+                const secteurColor = secteur?.color || '#64748b'
+                const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
+                const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
+                const source = SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]
+                const depuisProjet = d.source === 'projet'
+                const importe = !!d.source // dépense reprise d'un autre module (E-G.Pro, Briqueterie) : non modifiable ici
+                const estPau = (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
+                const modifiable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
+                const cell = 'bg-white py-3 align-middle transition-colors group-hover:bg-amber-50/40'
+                return (
+                  <tr key={d.id} onClick={() => setDetailId(d.id)}
+                    className="group cursor-pointer shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_6px_18px_-6px_rgba(180,83,9,0.18)] hover:ring-amber-200">
+                    {/* Date & secteur — accent coloré du secteur à gauche */}
+                    <td className={`${cell} rounded-l-2xl border-l-[3px] px-4`} style={{ borderColor: secteurColor }}>
+                      <p className="whitespace-nowrap text-xs font-semibold text-gray-700">{formatDateShort(d.date)}</p>
+                      <span className="mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: secteurColor + '1a', color: secteurColor }}>
+                        {secteur?.label || d.secteurId}
+                      </span>
+                    </td>
+
+                    {/* Dépense : description + catégorie/nature */}
+                    <td className={`${cell} px-4`}>
+                      {depuisProjet ? (
+                        <>
+                          <p className="line-clamp-2 max-w-[320px] font-semibold text-gray-800">{d.projetNom || d.description || '—'}</p>
+                          {d.tacheTitre && <p className="mt-0.5 line-clamp-1 max-w-[320px] text-xs text-gray-500">🔧 {d.tacheTitre}</p>}
+                        </>
+                      ) : (
+                        <p className="line-clamp-2 max-w-[320px] font-medium text-gray-700">{d.description || '—'}</p>
+                      )}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{d.categorie || '—'}</span>
+                        <Badge tone={nature.tone}>{nature.label}</Badge>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </Card>
+                    </td>
+
+                    {/* Bénéficiaire : qui a payé → qui a reçu */}
+                    <td className={`${cell} px-4`}>
+                      <div className="space-y-1 text-[11px]">
+                        <p className="text-gray-400">✍️ <span className="font-semibold text-gray-600">{d.enregistrePar || '—'}</span></p>
+                        {d.beneficiaireNom ? (
+                          <p className="text-gray-400">
+                            → 👤 <span className="font-semibold text-gray-700">{d.beneficiaireNom}</span>
+                            {d.beneficiaireFonction ? <span className="text-gray-400"> · {d.beneficiaireFonction}</span> : ''}
+                            <span className="ml-1 text-[10px] text-gray-400">
+                              {d.beneficiaireUid
+                                ? (d.recuConfirme ? '✅ reçu confirmé' : d.statut === 'decaissee' ? '⏳ à confirmer' : '')
+                                : '· externe'}
+                            </span>
+                          </p>
+                        ) : <p className="text-gray-300">—</p>}
+                      </div>
+                    </td>
+
+                    {/* Montant */}
+                    <td className={`${cell} whitespace-nowrap px-4 text-right`}>
+                      <span className="text-base font-extrabold text-gray-900">{Number(d.montant).toLocaleString('fr-FR')}</span>
+                      <span className="ml-0.5 text-[10px] font-semibold text-gray-400">FCFA</span>
+                      {estPau && <span className="mt-1 block"><Badge tone={source.tone}>💜 {source.label}</Badge></span>}
+                    </td>
+
+                    {/* Statut + justificatif */}
+                    <td className={`${cell} px-4 text-center`}>
+                      <Badge tone={statut.tone}>{statut.label}</Badge>
+                      {d.piece && (
+                        <button onClick={(e) => { e.stopPropagation(); ouvrirPiece(d.piece) }} title="Voir le justificatif"
+                          className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
+                          <Paperclip size={11} /> justif.
+                        </button>
+                      )}
+                      {!d.piece && depuisProjet && d.noteOrigine && (
+                        <p className="mx-auto mt-1 line-clamp-2 max-w-[150px] text-[10px] italic text-gray-400">{d.noteOrigine}</p>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className={`${cell} rounded-r-2xl px-3`} onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button onClick={() => setDetailId(d.id)} title="Voir les détails" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Eye size={15} /></button>
+                        {modifiable && (
+                          <>
+                            <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><FilePen size={15} /></button>
+                            <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+                          </>
+                        )}
+                        {/* Les dépenses récupérées d'E-G.Pro ne sont pas modifiables ici, mais un
+                            admin peut les supprimer (la suppression se répercute sur E-G.Pro). */}
+                        {depuisProjet && isAdmin && (
+                          <button onClick={() => setToDelete(d)} title="Supprimer (retire aussi d'E-G.Pro)" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Modal création / édition */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="md"
+        panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
         title={modal?.isNew ? 'Ajouter une dépense' : 'Modifier la dépense'}
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Enregistrer' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <FormGroup label="Secteur *">
-                <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
-                  <option value="">— Choisir —</option>
-                  {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Catégorie *">
-                <Input
-                  list="categorie-suggestions"
-                  value={modal.data.categorie}
-                  onChange={(e) => set('categorie', e.target.value)}
-                  placeholder="Saisir ou choisir une catégorie…"
+            {/* Détails de la dépense */}
+            <div className="rounded-xl border border-amber-100 bg-white p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Secteur *">
+                  <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
+                    <option value="">— Choisir —</option>
+                    {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Catégorie *">
+                  <Input
+                    list="categorie-suggestions"
+                    value={modal.data.categorie}
+                    onChange={(e) => set('categorie', e.target.value)}
+                    placeholder="Saisir ou choisir une catégorie…"
+                  />
+                  <datalist id="categorie-suggestions">
+                    {categorieSuggestions.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </FormGroup>
+                <FormGroup label="Montant (FCFA) *">
+                  <Input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)} placeholder="ex: 50000" />
+                </FormGroup>
+                <FormGroup label="Date *">
+                  <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
+                </FormGroup>
+              </div>
+              <FormGroup label="Description" className="mt-1">
+                <textarea
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  rows={2} value={modal.data.description} onChange={(e) => set('description', e.target.value)}
+                  placeholder="ex: Achat de fournitures de bureau"
                 />
-                <datalist id="categorie-suggestions">
-                  {categorieSuggestions.map((c) => <option key={c} value={c} />)}
-                </datalist>
-              </FormGroup>
-              <FormGroup label="Montant (FCFA) *">
-                <Input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)} placeholder="ex: 50000" />
-              </FormGroup>
-              <FormGroup label="Date *">
-                <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
               </FormGroup>
             </div>
-            <FormGroup label="Nature du flux" hint="Sert au calcul du solde de trésorerie (voir l'onglet Flux de trésorerie).">
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(NATURES_FLUX).map(([k, v]) => (
-                  <button key={k} type="button" onClick={() => set('natureFlux', k)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                    title={v.desc}>
-                    {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
-                  </button>
-                ))}
-              </div>
-            </FormGroup>
-            <FormGroup label="Source de financement" hint="Qui a payé : la trésorerie de l'entreprise ou l'apport personnel du PAU. (Traçabilité — n'affecte pas les calculs.)">
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => (
-                  <button key={k} type="button" onClick={() => set('sourceFinancement', k)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                    title={v.desc}>
-                    {(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? '✓ ' : ''}{v.label}
-                  </button>
-                ))}
-              </div>
-            </FormGroup>
-            <FormGroup label="Description">
-              <textarea
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                rows={2} value={modal.data.description} onChange={(e) => set('description', e.target.value)}
-                placeholder="ex: Achat de fournitures de bureau"
-              />
-            </FormGroup>
-            <FormGroup label="Bénéficiaire (optionnel)" hint="La personne qui reçoit l'argent.">
+
+            {/* Classification comptable */}
+            <div className="rounded-xl border border-amber-100 bg-white p-3 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">📊 Classification</p>
+              <FormGroup label="Nature du flux" hint="Sert au calcul du solde de trésorerie (voir l'onglet Flux de trésorerie).">
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(NATURES_FLUX).map(([k, v]) => (
+                    <button key={k} type="button" onClick={() => set('natureFlux', k)}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+                      title={v.desc}>
+                      {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
+                    </button>
+                  ))}
+                </div>
+              </FormGroup>
+              <FormGroup label="Source de financement" hint="Qui a payé : la trésorerie de l'entreprise ou l'apport personnel du PAU. (Traçabilité — n'affecte pas les calculs.)">
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => (
+                    <button key={k} type="button" onClick={() => set('sourceFinancement', k)}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+                      title={v.desc}>
+                      {(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? '✓ ' : ''}{v.label}
+                    </button>
+                  ))}
+                </div>
+              </FormGroup>
+              {modal.isNew && (
+                <FormGroup label="Type de dépense">
+                  <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input type="radio" name="type-depense" checked={!modal.data.imprevue} onChange={() => set('imprevue', false)} className="mt-0.5" />
+                      <span><strong>Prévue</strong> — déjà budgétée, comptée immédiatement (pas d'autorisation nécessaire)</span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input type="radio" name="type-depense" checked={!!modal.data.imprevue} onChange={() => set('imprevue', true)} className="mt-0.5" />
+                      <span><strong>Imprévue</strong> — hors budget, passe par l'autorisation de décaissement</span>
+                    </label>
+                  </div>
+                </FormGroup>
+              )}
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={!!modal.data.recurrente} onChange={(e) => set('recurrente', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400/30" />
+                🔁 Dépense récurrente (à reconduire chaque mois)
+              </label>
+            </div>
+
+            {/* Bénéficiaire */}
+            <div className="rounded-xl border border-amber-100 bg-white p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="font-medium normal-case text-amber-500">(optionnel — qui reçoit l'argent)</span></p>
               <div className="mb-2 flex gap-2">
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', '') }}
-                  className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType !== 'externe' ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500'}`}>
+                  className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType !== 'externe' ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500'}`}>
                   Membre de l'entreprise
                 </button>
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'externe'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', '') }}
-                  className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType === 'externe' ? 'border-primary bg-primary/10 text-primary-dark' : 'border-gray-200 text-gray-500'}`}>
+                  className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType === 'externe' ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500'}`}>
                   Externe (fournisseur, prestataire…)
                 </button>
               </div>
 
               {modal.data.beneficiaireType === 'externe' ? (
-                <div className="space-y-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Nom de la personne</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormGroup label="Nom de la personne">
                     <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Profession / fonction</label>
+                  </FormGroup>
+                  <FormGroup label="Profession / fonction">
                     <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Maçon" />
-                  </div>
+                  </FormGroup>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Nom du bénéficiaire</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormGroup label="Nom du bénéficiaire">
                     <ChampBeneficiaire
                       value={modal.data.beneficiaireNom}
                       onChange={(v) => { set('beneficiaireNom', v); set('beneficiaireUid', '') }}
                       onSelectUser={(u) => { set('beneficiaireUid', u.uid); set('beneficiaireNom', u.nom || ''); set('beneficiaireFonction', u.poste || '') }}
                       users={users}
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Fonction (optionnel)</label>
+                  </FormGroup>
+                  <FormGroup label="Fonction (optionnel)">
                     <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Comptable" />
-                  </div>
+                  </FormGroup>
                 </div>
               )}
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1.5 text-xs text-gray-400">
                 {modal.data.beneficiaireType === 'externe'
                   ? 'Bénéficiaire externe : pas de notification automatique (aucun compte sur la plateforme).'
                   : modal.data.beneficiaireUid
                     ? 'Membre de l\'entreprise : recevra une notification dans l\'application pour confirmer la réception.'
                     : 'Nom saisi librement, sans compte associé : pas de notification automatique.'}
               </p>
-            </FormGroup>
-            {modal.isNew && (
-              <FormGroup label="Type de dépense">
-                <div className="space-y-2 rounded-lg border border-gray-200 p-3">
-                  <label className="flex cursor-pointer items-start gap-2 text-sm">
-                    <input type="radio" name="type-depense" checked={!modal.data.imprevue} onChange={() => set('imprevue', false)} className="mt-0.5" />
-                    <span><strong>Prévue</strong> — déjà budgétée, comptée immédiatement (pas d'autorisation nécessaire)</span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-2 text-sm">
-                    <input type="radio" name="type-depense" checked={!!modal.data.imprevue} onChange={() => set('imprevue', true)} className="mt-0.5" />
-                    <span><strong>Imprévue</strong> — hors budget, passe par l'autorisation de décaissement</span>
-                  </label>
-                </div>
-              </FormGroup>
-            )}
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={!!modal.data.recurrente} onChange={(e) => set('recurrente', e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/30" />
-              🔁 Dépense récurrente (à reconduire chaque mois)
-            </label>
-            <FormGroup label="Justificatif (photo ou PDF)">
+            </div>
+
+            {/* Justificatif */}
+            <div className="rounded-xl border border-amber-100 bg-white p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📎 Justificatif <span className="font-medium normal-case text-amber-500">(photo ou PDF, optionnel)</span></p>
               {modal.data.piece ? (
-                <div className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
                   <span className="flex items-center gap-2 text-gray-700"><Paperclip size={14} /> {modal.data.piece.nom} <span className="text-xs text-gray-400">({formatTaille(modal.data.piece.taille)})</span></span>
                   <button onClick={() => set('piece', null)} className="text-xs text-red-500 hover:underline">Retirer</button>
                 </div>
               ) : (
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 hover:bg-gray-50">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-3 text-sm text-gray-500 hover:bg-amber-50">
                   <Paperclip size={16} /> {uploading ? 'Chargement…' : 'Ajouter un justificatif'}
                   <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handlePieceChange} disabled={uploading} />
                 </label>
               )}
-            </FormGroup>
+            </div>
           </div>
         )}
       </Modal>
@@ -533,11 +607,123 @@ export default function Depenses() {
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer cette dépense ?"
         footer={<><Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button><Button variant="danger" onClick={handleDelete} loading={deleting}>Supprimer</Button></>}>
         {toDelete && (
-          <p className="text-sm text-gray-600">
-            Vous allez supprimer la dépense de <span className="font-bold text-gray-900">{Number(toDelete.montant).toLocaleString('fr-FR')} FCFA</span> du {formatDateShort(toDelete.date)}.
-            Cette action est <span className="font-semibold text-red-600">irréversible</span>.
-          </p>
+          <div className="space-y-2 text-sm text-gray-600">
+            <p>
+              Vous allez supprimer la dépense de <span className="font-bold text-gray-900">{Number(toDelete.montant).toLocaleString('fr-FR')} FCFA</span> du {formatDateShort(toDelete.date)}.
+              Cette action est <span className="font-semibold text-red-600">irréversible</span>.
+            </p>
+            {toDelete.source === 'projet' && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                ⚠️ Cette dépense vient d'<strong>E-G.Pro</strong>{toDelete.projetNom ? ` (${toDelete.projetNom})` : ''}. La supprimer la retirera <strong>aussi d'E-G.Pro</strong> et réduira le total dépensé du projet.
+              </p>
+            )}
+          </div>
         )}
+      </Modal>
+
+      {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'E-G.Pro */}
+      <Modal open={!!detail} onClose={() => setDetailId(null)} size="md" title="Détail de la dépense"
+        panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
+        footer={
+          <div className="flex w-full items-center justify-between gap-2">
+            {detail && (detail.source === 'projet' ? isAdmin : (isAdmin || detail.statut === 'en_attente' || !detail.statut)) ? (
+              <Button variant="danger" onClick={() => { const d = detail; setDetailId(null); setToDelete(d) }}>
+                <Trash2 size={14} /> Supprimer
+              </Button>
+            ) : <span />}
+            <Button variant="outline" onClick={() => setDetailId(null)}>Fermer</Button>
+          </div>
+        }>
+        {detail && (() => {
+          const depuisProjet = detail.source === 'projet'
+          const secteur = SECTEURS.find((s) => s.id === detail.secteurId)
+          const statut = STATUTS_DECAISSEMENT[detail.statut] || STATUTS_DECAISSEMENT.decaissee
+          const nature = NATURES_FLUX[detail.natureFlux || natureFluxDefaut]
+          const src = SOURCES_FINANCEMENT[detail.sourceFinancement || sourceFinancementDefaut]
+          const chips = [
+            { label: 'Date', value: formatDateShort(detail.date) },
+            { label: 'Secteur', value: secteur?.label || detail.secteurId },
+            { label: 'Catégorie', value: detail.categorie || '—' },
+            { label: 'Nature de flux', value: nature.label },
+            ...(!depuisProjet ? [{ label: 'Financement', value: src.label }] : [])
+          ]
+          return (
+            <div className="space-y-3 text-sm">
+              {/* En-tête : montant + statut */}
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-3xl font-black leading-none text-gray-900">
+                      {Number(detail.montant).toLocaleString('fr-FR')}
+                      <span className="ml-1 text-sm font-bold text-gray-400">FCFA</span>
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge tone={nature.tone}>{nature.label}</Badge>
+                      {(detail.sourceFinancement || sourceFinancementDefaut) === 'pau' && <Badge tone={src.tone}>💜 {src.label}</Badge>}
+                    </div>
+                  </div>
+                  <Badge tone={statut.tone}>{statut.label}</Badge>
+                </div>
+              </div>
+
+              {/* Informations clés en tuiles */}
+              <div className="grid grid-cols-2 gap-2">
+                {chips.map((c) => (
+                  <div key={c.label} className="rounded-xl bg-white p-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{c.label}</p>
+                    <p className="mt-0.5 font-bold text-gray-800">{c.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Projet / tâche (dépenses récupérées d'E-G.Pro) */}
+              {depuisProjet && (detail.projetNom || detail.tacheTitre) && (
+                <div className="rounded-2xl border-l-4 border-teal-400 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 Projet concerné</p>
+                  <p className="mt-1 font-bold text-gray-800">{detail.projetNom || '—'}</p>
+                  {detail.tacheTitre && <p className="mt-1 flex items-center gap-1 text-gray-600">🔧 <span className="font-medium">{detail.tacheTitre}</span></p>}
+                  {detail.noteOrigine && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs italic text-gray-600">« {detail.noteOrigine} »</p>}
+                </div>
+              )}
+
+              {/* Description (dépenses saisies directement dans E-DÉPENSES) */}
+              {!depuisProjet && (
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
+                  <p className="mt-1 font-medium text-gray-700">{detail.description || '—'}</p>
+                </div>
+              )}
+
+              {/* Traçabilité : qui a payé → qui a reçu */}
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Traçabilité</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                    ✍️ {detail.enregistrePar || '—'}
+                  </span>
+                  {detail.beneficiaireNom && (
+                    <>
+                      <span className="text-gray-300">→</span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800">
+                        👤 {detail.beneficiaireNom}{detail.beneficiaireFonction ? ` · ${detail.beneficiaireFonction}` : ''}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                  {detail.beneficiaireTelephone && <span>☎ {detail.beneficiaireTelephone}</span>}
+                  {detail.typePaiement && <span>💳 {detail.typePaiement === 'avance' ? 'Tranche / avance' : 'Somme totale'}</span>}
+                </div>
+              </div>
+
+              {detail.piece && (
+                <button onClick={() => ouvrirPiece(detail.piece)} className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-primary shadow-sm hover:bg-primary/5">
+                  <Eye size={14} /> Voir le justificatif
+                </button>
+              )}
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )

@@ -13,17 +13,22 @@ import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
-import { depensesProjetVersSecteurs } from './logic'
+import { depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 
 export default function Historique() {
   const { data: depensesReelles } = useCollection('depense_depenses')
-  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet.
+  // Dépenses reprises en lecture seule : E-G.Pro (par secteur du projet) + coût matières Briqueterie.
   const { data: depensesProjet } = useCollection('projet_depenses')
   const { data: projetsTous }    = useCollection('projets')
   const { data: tachesTous }     = useCollection('projet_taches')
+  const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
   const depenses = useMemo(
-    () => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous)],
-    [depensesReelles, depensesProjet, projetsTous, tachesTous]
+    () => [
+      ...depensesReelles,
+      ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
+      ...coutsMatieresBriqueterie(inventairesBriq)
+    ],
+    [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq]
   )
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
@@ -110,7 +115,7 @@ export default function Historique() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         Récapitule <strong>toutes</strong> les dépenses de la période : prévues comptées directement et imprévues passées par l'<strong>autorisation de décaissement</strong> (envoyées, approuvées, certifiées ou refusées). Cliquez sur une ligne pour voir sa frise chronologique complète.
       </div>
 
@@ -202,7 +207,6 @@ export default function Historique() {
                     <td className="px-3 py-2"><Badge tone="neutral">{secteur?.label || d.secteurId}</Badge></td>
                     <td className="px-3 py-2 text-gray-600">
                       {d.description || d.categorie || '—'}
-                      {depuisProjet && <span className="ml-1"><Badge tone="info">🔗 Depuis E-G.Pro</Badge></span>}
                       {/* Traçabilité visible directement : qui a effectué la dépense → qui la reçoit */}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-400">
                         <span>✍️ Par <span className="font-semibold text-gray-500">{d.enregistrePar || '—'}</span></span>

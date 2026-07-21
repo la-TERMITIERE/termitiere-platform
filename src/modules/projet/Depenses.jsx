@@ -1,5 +1,5 @@
 // Suivi des dépenses détaillé par projet.
-import { useState, useMemo, useEffect, Fragment } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import Card from '../../shared/ui/Card'
@@ -401,117 +401,104 @@ export default function Depenses() {
         </Card>
       )}
 
-      {/* Liste dépenses */}
+      {/* Liste dépenses — regroupées par tâche, en lignes-cartes */}
       {!liste.length ? (
         <Card><p className="py-10 text-center text-sm text-gray-400">Aucune dépense enregistrée.</p></Card>
       ) : (
-        <div className="overflow-x-auto rounded-3xl border border-white/50 bg-white/70 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] backdrop-blur-xl backdrop-saturate-150">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/60 text-left text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Projet</th>
-                <th className="px-4 py-3">Catégorie</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Prestataire</th>
-                <th className="px-4 py-3 text-right">Montant</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {groupesParTache.map((g) => (
-                <Fragment key={g.key}>
-                  {/* En-tête de groupe : tâche + suivi budget */}
-                  <tr className="border-y border-teal-100/80 bg-gradient-to-r from-teal-50/90 to-teal-50/40">
-                    <td colSpan={7} className="px-4 py-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-sm font-bold text-teal-800">
-                          {g.tache ? <>📋 {g.tache.titre}</> : <span className="text-gray-500">📁 Dépenses générales (sans tâche)</span>}
-                        </span>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {g.prevu > 0 && (
-                            <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
-                              Arrêté <b className="text-gray-800">{formatMoney(g.prevu)}</b>
-                            </span>
-                          )}
-                          <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
-                            Versé <b className="text-teal-700">{formatMoney(g.totalVerse)}</b>
-                          </span>
-                          {g.prevu > 0 && (
-                            <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
-                              Reste <b className={g.reste > 0 ? 'text-amber-600' : 'text-green-600'}>{formatMoney(g.reste > 0 ? g.reste : 0)}</b>
-                            </span>
-                          )}
-                          {g.prevu > 0 && (
-                            g.reste <= 0
-                              ? <span className="rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-bold text-green-700 shadow-sm">✓ Soldé</span>
-                              : g.totalVerse > 0
-                                ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm">Tranche versée</span>
-                                : <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500 shadow-sm">Non payé</span>
-                          )}
-                          {peutModifier && g.prevu > 0 && g.reste > 0 && (
-                            <button onClick={(e) => { e.stopPropagation(); openSolder(g) }}
-                              title={`Verser le reste (${formatMoney(g.reste)}) en un clic`}
-                              className="rounded-full border border-teal-300 bg-white px-2.5 py-1 text-[11px] font-bold text-teal-700 shadow-sm transition-all hover:bg-teal-50 hover:shadow-[0_0_10px_1px_rgba(13,148,136,0.45)]">
-                              💳 Solder
-                            </button>
-                          )}
-                        </div>
+        <div className="space-y-5">
+          {groupesParTache.map((g) => (
+            <div key={g.key} className="space-y-2">
+              {/* En-tête de groupe : tâche + suivi budget */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-50 to-teal-50/30 px-4 py-2.5">
+                <span className="flex items-center gap-1.5 text-sm font-bold text-teal-800">
+                  {g.tache ? <>📋 {g.tache.titre}</> : <span className="text-gray-500">📁 Dépenses générales (sans tâche)</span>}
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {g.prevu > 0 && (
+                    <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                      Arrêté <b className="text-gray-800">{formatMoney(g.prevu)}</b>
+                    </span>
+                  )}
+                  <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                    Versé <b className="text-teal-700">{formatMoney(g.totalVerse)}</b>
+                  </span>
+                  {g.prevu > 0 && (
+                    <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                      Reste <b className={g.reste > 0 ? 'text-amber-600' : 'text-green-600'}>{formatMoney(g.reste > 0 ? g.reste : 0)}</b>
+                    </span>
+                  )}
+                  {g.prevu > 0 && (
+                    g.reste <= 0
+                      ? <span className="rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-bold text-green-700 shadow-sm">✓ Soldé</span>
+                      : g.totalVerse > 0
+                        ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm">Tranche versée</span>
+                        : <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500 shadow-sm">Non payé</span>
+                  )}
+                  {peutModifier && g.prevu > 0 && g.reste > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); openSolder(g) }}
+                      title={`Verser le reste (${formatMoney(g.reste)}) en un clic`}
+                      className="rounded-full border border-teal-300 bg-white px-2.5 py-1 text-[11px] font-bold text-teal-700 shadow-sm transition-all hover:bg-teal-50 hover:shadow-[0_0_10px_1px_rgba(13,148,136,0.45)]">
+                      💳 Solder
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Lignes-cartes */}
+              {g.deps.map((d) => {
+                const projet = projets.find((p) => p.id === d.projetId)
+                return (
+                  <div key={d.id} onClick={() => setDetail(d)}
+                    className="group flex cursor-pointer items-start gap-4 rounded-2xl border-l-[3px] border-teal-400 bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_6px_18px_-6px_rgba(13,148,136,0.2)] hover:ring-teal-200">
+                    {/* Corps : date, projet, description, prestataire */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="whitespace-nowrap text-xs font-semibold text-gray-500">{formatDateShort(d.date)}</span>
+                        {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
+                        <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">{catLabel(d.categorie)}</span>
                       </div>
-                    </td>
-                  </tr>
-                  {g.deps.map((d) => {
-                    const projet = projets.find((p) => p.id === d.projetId)
-                    return (
-                  <tr key={d.id} onClick={() => setDetail(d)} className="group cursor-pointer border-b border-gray-50 transition-colors odd:bg-white/40 even:bg-transparent hover:bg-teal-50/50">
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDateShort(d.date)}</td>
-                    <td className="px-4 py-3">
-                      {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700">{catLabel(d.categorie)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-600 max-w-xs truncate">{d.description}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {d.fournisseur && <p className="font-semibold text-gray-700">{d.fournisseur}</p>}
-                      {d.prestataireMetier && (
-                        <p className="text-gray-400">{METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier}</p>
+                      {d.description && <p className="mt-1 line-clamp-2 font-medium text-gray-700">{d.description}</p>}
+                      {(d.fournisseur || d.prestataireMetier || d.prestataireTelephone) && (
+                        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
+                          {d.fournisseur && <span>👤 <span className="font-semibold text-gray-600">{d.fournisseur}</span></span>}
+                          {d.prestataireMetier && <span>· {METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier}</span>}
+                          {d.prestataireTelephone && <span>· ☎ {d.prestataireTelephone}</span>}
+                        </p>
                       )}
-                      {d.prestataireTelephone && <p className="text-gray-400">{d.prestataireTelephone}</p>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <p className="font-mono text-[15px] font-bold text-gray-800">{formatMoney(d.montant)}</p>
-                      <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${d.typePaiement === 'avance' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                    </div>
+
+                    {/* Montant + type de paiement */}
+                    <div className="shrink-0 whitespace-nowrap text-right">
+                      <p className="text-base font-extrabold text-gray-900">{formatMoney(d.montant)}</p>
+                      <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${d.typePaiement === 'avance' ? 'border border-amber-200 bg-amber-50 text-amber-700' : 'border border-green-200 bg-green-50 text-green-700'}`}>
                         {TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale'}
                       </span>
-                    </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
-                        <button onClick={() => setNoteDepId(noteDepId === d.id ? null : d.id)}
-                          title="Commentaires"
-                          className={`relative rounded-lg p-1.5 shadow-sm transition-all hover:scale-105 ${noteDepId === d.id ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-teal-500 hover:text-white'}`}>
-                          <MessageSquare size={13} />
-                          {notesDeDepense(d.id).length > 0 && (
-                            <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[8px] font-bold text-white">
-                              {notesDeDepense(d.id).length}
-                            </span>
-                          )}
-                        </button>
-                        {peutModifier && (
-                          <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 shadow-sm transition-all hover:scale-105 hover:border-teal-300 hover:bg-teal-100"><Pencil size={13} /></button>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => setNoteDepId(noteDepId === d.id ? null : d.id)}
+                        title="Commentaires"
+                        className={`relative rounded-lg p-1.5 shadow-sm transition-all hover:scale-105 ${noteDepId === d.id ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-teal-500 hover:text-white'}`}>
+                        <MessageSquare size={13} />
+                        {notesDeDepense(d.id).length > 0 && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[8px] font-bold text-white">
+                            {notesDeDepense(d.id).length}
+                          </span>
                         )}
-                        {peutSupprimer && (
-                          <button onClick={() => handleDelete(d)} title="Supprimer" className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 shadow-sm transition-all hover:scale-105 hover:border-red-300 hover:bg-red-100"><Trash2 size={13} /></button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                      </button>
+                      {peutModifier && (
+                        <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 shadow-sm transition-all hover:scale-105 hover:border-teal-300 hover:bg-teal-100"><Pencil size={13} /></button>
+                      )}
+                      {peutSupprimer && (
+                        <button onClick={() => handleDelete(d)} title="Supprimer" className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 shadow-sm transition-all hover:scale-105 hover:border-red-300 hover:bg-red-100"><Trash2 size={13} /></button>
+                      )}
+                    </div>
+                  </div>
                 )
               })}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+            </div>
+          ))}
         </div>
       )}
 

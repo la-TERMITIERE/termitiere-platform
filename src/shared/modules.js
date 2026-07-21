@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Stamp, Waves, PackagePlus, Handshake, Wrench
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, LineChart, Scale
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_PILOTAGE_ROLES, PROJET_JOURNAL_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES } from '../core/roles'
 
@@ -87,9 +87,9 @@ export const MODULES = [
     id: 'depense',
     nom: 'E-DÉPENSES',
     description: 'Budget mensuel et suivi des dépenses par secteur',
-    icon: Receipt,
+    icon: Landmark,
     emoji: '💰',
-    color: '#4F46E5',
+    color: '#B45309',
     path: '/depense',
     statut: 'actif'
   }
@@ -102,6 +102,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
+    { label: 'Recettes & Dépenses', to: '/agro/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
@@ -114,6 +115,7 @@ export const MODULE_NAV = {
     { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
     { label: 'Pilotage & Analyses', to: '/logistique/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
+    { label: 'Recettes & Dépenses', to: '/logistique/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Facturation', to: '/logistique/factures', icon: FileText },
     { label: 'Autorisations sortie', to: '/logistique/demandes', icon: Send, badgeKey: 'logistiqueDemandes' },
     { label: 'Retours matériel', to: '/logistique/retours', icon: RotateCcw },
@@ -131,6 +133,7 @@ export const MODULE_NAV = {
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
     { label: 'Facturation', to: '/evenementiel/factures', icon: FileText },
     { label: 'Pilotage & Analyses', to: '/evenementiel/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
+    { label: 'Recettes & Dépenses', to: '/evenementiel/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
     { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
@@ -174,6 +177,7 @@ export const MODULE_NAV = {
     { label: 'Santé & Infirmerie', to: '/garderie/incidents', icon: Stethoscope },
     { label: 'Tâches',             to: '/garderie/taches',    icon: ListChecks },
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur','partenaire'] },
+    { label: 'Recettes & Dépenses', to: '/garderie/finances', icon: Scale,          roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire'] },
     { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires' },
     { label: 'Journal et Historique', to: '/garderie/journal', icon: BookOpen,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur','partenaire'] },
     { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: [...FULL_ACCESS_ROLES] }
@@ -182,10 +186,12 @@ export const MODULE_NAV = {
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
     { label: 'Budgets',                      to: '/depense/budgets',      icon: Receipt,         roles: FINANCE_VIEW_ROLES },
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet },
+    { label: 'Recettes & Dépenses',          to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: FINANCE_VIEW_ROLES },
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
+    { label: 'Prévisionnel de trésorerie',   to: '/depense/previsionnel', icon: LineChart,       roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
     { label: 'Journal et Historique',        to: '/depense/journal',      icon: BookOpen,        roles: FINANCE_VIEW_ROLES },
     { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: FINANCE_VIEW_ROLES }

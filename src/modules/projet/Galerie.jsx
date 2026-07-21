@@ -32,7 +32,8 @@ export default function Galerie() {
   const { data: projetsTous } = useCollection('projets')
   const { user, role } = useAuthStore()
   // Le superviseur ajoute des photos, mais ne les supprime pas.
-  const peutSupprimer = !['superviseur', 'partenaire'].includes(role)
+  // Accès complet pour la secrétaire/l'agent, sauf la suppression (réservée).
+  const peutSupprimer = !['superviseur', 'partenaire', 'secretaire', 'agent'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetGalerie') }, [user?.uid])
   // Cloisonnement : un chef de projet ne voit que la galerie de ses projets.
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
@@ -453,20 +454,19 @@ function GrilleImages({ images, projetId, onOpen, onDelete }) {
             className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
           />
 
+          {/* Bouton supprimer — toujours visible (pas seulement au survol, pour rester
+              utilisable au doigt sur mobile/tablette, où il n'y a pas de hover). */}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(img.id) }}
+              className="absolute right-1.5 top-1.5 z-10 rounded-full bg-red-500/90 p-1.5 text-white shadow-sm hover:bg-red-600"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+
           {/* Overlay au hover */}
           <div className="absolute inset-0 flex flex-col justify-between bg-black/0 p-2 transition-colors group-hover:bg-black/40">
-            {/* Bouton supprimer */}
-            {onDelete && (
-              <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(img.id) }}
-                  className="rounded-full bg-red-500/80 p-1.5 text-white hover:bg-red-600"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            )}
-
             {/* Légende + zoom */}
             <div className="opacity-0 transition-opacity group-hover:opacity-100">
               {img.legende && (

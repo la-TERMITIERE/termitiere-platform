@@ -125,7 +125,7 @@ export default function Autorisations() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         <strong>Réservé aux dépenses imprévues (hors budget).</strong> Les dépenses prévues/budgétées sont comptées directement dans <strong>Dépenses</strong>. Ici : un responsable <strong>approuve</strong> la demande (1er niveau), puis un décideur la <strong>certifie</strong> pour décaisser réellement l'argent (2e niveau, définitif). Seules les dépenses <strong>décaissées</strong> comptent dans le budget du secteur.
       </div>
 

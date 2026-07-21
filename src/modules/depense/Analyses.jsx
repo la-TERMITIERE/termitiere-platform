@@ -6,18 +6,23 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
 import { SECTEURS, MOIS_LABELS } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesProjetVersSecteurs } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 
 const now = new Date()
-const PALETTE = ['#4F46E5', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
+const PALETTE = ['#B45309', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
 
 export default function Analyses() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: depensesProjet }  = useCollection('projet_depenses')
   const { data: projetsTous }     = useCollection('projets')
-  // Dépenses de E-G.Pro incluses en lecture seule, réparties selon le secteur réel du projet — pas de double saisie.
-  const depenses = useMemo(() => [...depensesReelles, ...depensesProjetVersSecteurs(depensesProjet, projetsTous)], [depensesReelles, depensesProjet, projetsTous])
+  const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
+  // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
+  const depenses = useMemo(() => [
+    ...depensesReelles,
+    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...coutsMatieresBriqueterie(inventairesBriq)
+  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -51,7 +56,7 @@ export default function Analyses() {
   const barData = {
     labels: parSecteur.map((s) => s.label),
     datasets: [
-      { label: 'Budget alloué', data: parSecteur.map((s) => s.alloue), backgroundColor: '#4F46E533', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 6 },
+      { label: 'Budget alloué', data: parSecteur.map((s) => s.alloue), backgroundColor: '#B4530933', borderColor: '#B45309', borderWidth: 1, borderRadius: 6 },
       { label: 'Dépensé', data: parSecteur.map((s) => s.depense), backgroundColor: '#dc262699', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6 }
     ]
   }
@@ -71,7 +76,7 @@ export default function Analyses() {
   const lineData = {
     labels: tendance.map((t) => t.label),
     datasets: [
-      { label: 'Budget alloué', data: tendance.map((t) => t.alloue), borderColor: '#4F46E5', backgroundColor: '#4F46E533', tension: 0.3 },
+      { label: 'Budget alloué', data: tendance.map((t) => t.alloue), borderColor: '#B45309', backgroundColor: '#B4530933', tension: 0.3 },
       { label: 'Dépensé', data: tendance.map((t) => t.depense), borderColor: '#dc2626', backgroundColor: '#dc262633', tension: 0.3 }
     ]
   }

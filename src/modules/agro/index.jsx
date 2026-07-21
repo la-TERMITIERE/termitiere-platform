@@ -13,6 +13,7 @@ import Demandes from './Demandes'
 import Journal from './Journal'
 import Params from './Params'
 import AutoCarryForward from './AutoCarryForward'
+import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useAgroStore } from './store/agroStore'
 import { useAuth } from '../../hooks/useAuth'
@@ -42,6 +43,7 @@ export default function AgroModule() {
       <Route index element={<Dashboard />} />
       <Route path="saisie" element={<Saisie />} />
       <Route path="factures" element={<Factures />} />
+      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="agro" /> : <AccesRefuse />} />
       <Route path="analyses" element={canViewPilotage(role) ? <Analyses /> : <AccesRefuse />} />
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />

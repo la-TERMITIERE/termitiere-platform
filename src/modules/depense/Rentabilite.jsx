@@ -11,18 +11,29 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, MOIS_LABELS } from './data'
-import { depensesSecteurMois, totalDepenses, derniersMois } from './logic'
+import { depensesSecteurMois, totalDepenses, derniersMois, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
 
 export default function Rentabilite() {
-  const { data: depenses }            = useCollection('depense_depenses')
+  const { data: depensesReelles }     = useCollection('depense_depenses')
+  const { data: depensesProjet }      = useCollection('projet_depenses')
+  const { data: projetsTous }         = useCollection('projets')
+  const { data: inventairesBriq }     = useCollection('evenementiel_inventaires')
   const { data: paiementsGarderie }   = useCollection('garderie_paiements')
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
+
+  // Comme Dashboard/Analyses/Flux : on inclut les dépenses de chantier E-G.Pro et le coût
+  // des matières Briqueterie pour que la marge par secteur reflète toutes les dépenses réelles.
+  const depenses = useMemo(() => [
+    ...depensesReelles,
+    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...coutsMatieresBriqueterie(inventairesBriq)
+  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
@@ -71,7 +82,7 @@ export default function Rentabilite() {
     datasets: [
       { label: 'Revenu',  data: tendance.map((t) => t.revenu),  borderColor: '#059669', backgroundColor: '#05966933', tension: 0.3 },
       { label: 'Dépense', data: tendance.map((t) => t.depense), borderColor: '#dc2626', backgroundColor: '#dc262633', tension: 0.3 },
-      { label: 'Marge',   data: tendance.map((t) => t.marge),   borderColor: '#4F46E5', backgroundColor: '#4F46E533', tension: 0.3, borderDash: [6, 4] }
+      { label: 'Marge',   data: tendance.map((t) => t.marge),   borderColor: '#B45309', backgroundColor: '#B4530933', tension: 0.3, borderDash: [6, 4] }
     ]
   }
 
@@ -113,7 +124,7 @@ export default function Rentabilite() {
         <Button variant="outline" className="ml-auto" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
       </div>
 
-      <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         Compare le revenu <strong>réellement encaissé/facturé</strong> de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Foncier, Comptabilité, E-G.Pro et Direction n'ont pas de revenu propre suivi dans l'application — ils n'apparaissent pas ici.
       </div>
 

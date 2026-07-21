@@ -18,6 +18,8 @@ export default function Prestataires() {
   const { user, role } = useAuthStore()
   // Le superviseur consulte tout, mais n'agit sur rien (lecture seule globale).
   const lectureSeule = ['superviseur', 'partenaire'].includes(role)
+  // Accès complet pour la secrétaire/l'agent, sauf le retrait de l'annuaire (suppression réservée).
+  const peutSupprimer = !['superviseur', 'partenaire', 'secretaire', 'agent'].includes(role)
 
   // Cloisonnement : un chef de projet ne voit que les prestataires de ses projets.
   const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
@@ -44,7 +46,7 @@ export default function Prestataires() {
   const metierLabel = (id) => METIERS_PRESTATAIRE.find((m) => m.id === id)?.label || id
 
   const supprimer = async (p) => {
-    if (lectureSeule) return
+    if (!peutSupprimer) return
     if (!window.confirm(`Retirer "${p.nom}" de l'annuaire ?\n\nL'historique des tâches et dépenses déjà enregistrées n'est PAS supprimé — seule la fiche de l'annuaire disparaît. Le prestataire réapparaîtra automatiquement si son nom est de nouveau saisi.`)) return
     await setItem('projet_prestataires_masques', safeKey(p.nom.toLowerCase()), { nom: p.nom, masqueLe: Date.now() })
     if (selection?.nom === p.nom) setSelection(null)
@@ -95,7 +97,7 @@ export default function Prestataires() {
                     <p className="text-sm font-bold text-teal-700">{formatMoney(p.totalVerse)}</p>
                     <p className="text-[10px] text-gray-400">total versé</p>
                   </div>
-                  {!lectureSeule && (
+                  {peutSupprimer && (
                     <button
                       onClick={(e) => { e.stopPropagation(); supprimer(p) }}
                       title="Retirer de l'annuaire"

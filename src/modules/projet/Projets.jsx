@@ -198,6 +198,11 @@ function ChampResponsable({ value, onChange, users }) {
 
 const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
 
+// Couleur d'accent (barre latérale de la carte) selon le statut du projet.
+const STATUT_ACCENT = { planification: '#3b82f6', en_cours: '#f59e0b', en_pause: '#94a3b8', termine: '#16a34a', annule: '#dc2626' }
+// Emoji illustrant le type de projet.
+const TYPE_EMOJI = { construction: '🏗️', amenagement: '🌳', informatique: '💻', agricole: '🌱', elevage: '🐄', commercial: '📈', evenementiel: '🎪', autre: '📦' }
+
 export default function Projets() {
   const { data: projetsTous }  = useCollection('projets')
   const { data: taches }       = useCollection('projet_taches')
@@ -206,9 +211,11 @@ export default function Projets() {
   const { data: users }        = useCollection('users')
   const [generatingPdf, setGeneratingPdf] = useState(null)
   const { user, role }    = useAuthStore()
-  // La secrétaire et l'agent (mêmes droits) sont en lecture seule sur les projets.
-  const lectureSeule      = ['secretaire', 'agent'].includes(role)
-  const sansActionsDecision = ['secretaire', 'agent'].includes(role)
+  // Seuls le superviseur et le partenaire sont en lecture seule stricte. La secrétaire
+  // et l'agent ont un accès complet aux projets (créer, modifier, Démarrer/Terminer) —
+  // seule la SUPPRESSION leur reste interdite.
+  const lectureSeule      = ['superviseur', 'partenaire'].includes(role)
+  const sansActionsDecision = ['superviseur', 'partenaire'].includes(role)
   // Le chef de projet et le superviseur créent/modifient/suivent les projets, mais ne les suppriment pas.
   const peutSupprimer = !['secretaire', 'agent', 'chef_projet', 'superviseur', 'partenaire'].includes(role)
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
@@ -550,38 +557,53 @@ export default function Projets() {
             const coutParUnite = (p.type === 'agricole' && superficie > 0 && depense > 0) ? depense / superficie : null
             // Avancement basé sur les tâches ; sans tâche, on retombe sur le taux de consommation du budget.
             const pct = avancementProjet(tachesDuProjet, { ...p, depenses: depense })
+            const statutAccent = STATUT_ACCENT[p.statut] || '#94a3b8'
+            const tachesTerminees = tachesDuProjet.filter((t) => t.statut === 'terminee').length
             return (
-              <Card key={p.id} className="card-hover" onClick={() => setDetail(p)}>
-                <div className="flex items-start justify-between gap-2">
+              <Card key={p.id} onClick={() => setDetail(p)}
+                className="group cursor-pointer border-l-4 !p-0 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_10px_28px_-10px_rgba(13,148,136,0.25)] hover:ring-teal-200"
+                style={{ borderLeftColor: statutAccent }}>
+                <div className="flex items-start justify-between gap-3 p-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-gray-400">{p.num}</span>
-                      <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label}</Badge>
-                      <Badge tone={PRIORITES[p.priorite]?.tone}>{PRIORITES[p.priorite]?.label}</Badge>
+                    {/* En-tête : icône type + nom + badges */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl shadow-sm" style={{ background: statutAccent + '18' }}>
+                        {TYPE_EMOJI[p.type] || '📦'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <h3 className="truncate text-[15px] font-bold text-gray-800">{p.nom}</h3>
+                          <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label}</Badge>
+                          <Badge tone={PRIORITES[p.priorite]?.tone}>{PRIORITES[p.priorite]?.label}</Badge>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
+                          <span className="font-mono">{p.num}</span>
+                          <span>· {TYPES_PROJET.find((t) => t.id === p.type)?.label || p.type}</span>
+                        </div>
+                        {p.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{p.description}</p>}
+                      </div>
                     </div>
-                    <p className="mt-1 font-semibold text-gray-800">{p.nom}</p>
-                    {p.description && <p className="text-xs text-gray-500">{p.description}</p>}
-                    <div className="mt-1 flex flex-wrap gap-4 text-xs text-gray-500">
-                      {p.responsable && <span>Resp. : {p.responsable}</span>}
-                      {p.dateDebut   && <span>Début : {formatDateShort(p.dateDebut)}</span>}
-                      {p.dureeIndeterminee
-                        ? <span className="italic text-gray-400">Durée indéterminée</span>
-                        : p.dateFin && <span>Fin : {formatDateShort(p.dateFin)}</span>}
+
+                    {/* Méta : responsable, dates, superficie */}
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      {p.responsable && <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">👤 {p.responsable}</span>}
+                      {p.dateDebut && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">📅 {formatDateShort(p.dateDebut)}{!p.dureeIndeterminee && p.dateFin ? ` → ${formatDateShort(p.dateFin)}` : ''}</span>}
+                      {p.dureeIndeterminee && <span className="rounded-full bg-gray-100 px-2 py-0.5 italic text-gray-400">Durée indéterminée</span>}
                       {p.type === 'agricole' && superficie > 0 && (
-                        <span className="font-medium text-green-700">🌱 {superficie} {uniteSuperficie(p.superficieUnite)}</span>
+                        <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">🌱 {superficie} {uniteSuperficie(p.superficieUnite)}</span>
                       )}
                     </div>
 
                     {/* Suivi budgétaire — le reste diminue à chaque dépense */}
                     {budget > 0 && (
-                      <div className="mt-2 rounded-2xl bg-white/50 px-3 py-2.5 shadow-sm">
+                      <div className="mt-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
-                          <span className="text-gray-500">Budget : <b className="text-gray-700">{formatMoney(budget)}</b></span>
-                          <span className="text-gray-500">Dépensé : <b className="text-amber-600">{formatMoney(depense)}</b></span>
-                          <span className="text-gray-500">Reste : <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
+                          <span className="text-gray-500">Budget <b className="text-gray-700">{formatMoney(budget)}</b></span>
+                          <span className="text-gray-500">Dépensé <b className="text-amber-600">{formatMoney(depense)}</b></span>
+                          <span className="text-gray-500">Reste <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
                         </div>
-                        <div className="mt-1.5 h-1.5 rounded-full bg-gray-200/70">
-                          <div className={`h-1.5 rounded-full transition-all ${pctBudget >= 100 ? 'bg-red-500' : 'bg-amber-500'}`}
+                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200/70">
+                          <div className={`h-2 rounded-full transition-all ${pctBudget >= 100 ? 'bg-red-500' : pctBudget >= 80 ? 'bg-amber-500' : 'bg-teal-500'}`}
                             style={{ width: `${Math.min(100, pctBudget)}%` }} />
                         </div>
                         {reste < 0 && (
@@ -596,11 +618,11 @@ export default function Projets() {
                     {/* Avancement des tâches */}
                     {tachesDuProjet.length > 0 && (
                       <div className="mt-2 flex items-center gap-2">
-                        <div className="h-1.5 flex-1 rounded-full bg-gray-100">
-                          <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                          <div className="h-2 rounded-full bg-gradient-to-r from-teal-400 to-teal-600 transition-all" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-[10px] font-bold text-gray-500">
-                          {pct}% — {tachesDuProjet.filter(t=>t.statut==='terminee').length}/{tachesDuProjet.length} tâches
+                        <span className="whitespace-nowrap text-[10px] font-bold text-gray-500">
+                          {pct}% · {tachesTerminees}/{tachesDuProjet.length} tâches
                         </span>
                       </div>
                     )}

@@ -11,6 +11,7 @@ import Taches from './Taches'
 import Cantine from './Cantine'
 import Journal from './Journal'
 import Params from './Params'
+import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useGarderieStore } from './store/garderieStore'
 import { useAuth } from '../../hooks/useAuth'
@@ -54,6 +55,9 @@ export default function GarderieModule() {
       } />
       <Route path="analyses" element={
         <GarderieGuard roles={ROLES_DIRECTION}><Analyses /></GarderieGuard>
+      } />
+      <Route path="finances" element={
+        <GarderieGuard roles={ROLES_GESTION}><RecettesDepenses secteurId="garderie" /></GarderieGuard>
       } />
       <Route path="partenaires" element={<Partenaires module="garderie" />} />
       <Route path="journal" element={
