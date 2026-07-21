@@ -1,0 +1,15 @@
+# Ordre de collage dans Supabase Studio → SQL Editor
+#
+# 1) Coller migration/supabase/schema.sql en premier (crée les tables) → Run.
+# 2) Coller CHAQUE fichier ci-dessous, DANS CET ORDRE, un par un → Run à chaque fois.
+#    (Chaque fichier est un UPSERT : sans risque de le rejouer si vous hésitez sur ce qui a déjà été fait.)
+# 3) Terminer par verify.sql (npm run gen-verify) pour contrôler que tout est bien passé.
+
+# Cochez au fur et à mesure :
+[ ] 01_8-tables.sql                      900 ligne(s)  — tp_agro_demandes, tp_agro_factures, tp_agro_inventaires, tp_agro_partenaires, tp_agro_referentiel, tp_agro_sante, tp_agro_vaccins, tp_audit_global
+[ ] 02_4-tables.sql                      900 ligne(s)  — tp_audit_global, tp_depense_depenses, tp_evenementiel_clients, tp_evenementiel_demandes
+[ ] 03_34-tables.sql                     900 ligne(s)  — tp_evenementiel_demandes, tp_evenementiel_evenements, tp_evenementiel_factures, tp_evenementiel_inventaires, tp_evenementiel_partenaires, tp_evenementiel_productions, tp_evenementiel_referentiel, tp_evenementiel_transferts, tp_evenementiel_ventes, tp_foncier_dossiers, tp_foncier_partenaires, tp_foncier_pieces, tp_garderie_checklist_items, tp_garderie_enfants, tp_garderie_incidents, tp_garderie_journaliers, tp_garderie_menus, tp_garderie_nutrition, tp_garderie_paiements, tp_garderie_params, tp_garderie_personnel, tp_garderie_presences, tp_garderie_repas, tp_garderie_routine_items, tp_garderie_taches, tp_logistique_clients, tp_logistique_demandes, tp_logistique_factures, tp_logistique_inventaires, tp_logistique_partenaires, tp_logistique_prestations, tp_logistique_referentiel, tp_logistique_retours, tp_notifications
+[ ] 04_10-tables.sql                     503 ligne(s)  — tp_notifications, tp_projet_alertes_dashboard_fermees, tp_projet_alertes_fermees, tp_projet_alertes_notif, tp_projet_depenses, tp_projet_depenses_notes, tp_projet_dernieres_vues, tp_projet_params, tp_projet_taches, tp_projets
+[ ] 05_5-tables.sql                       52 ligne(s)  — tp_projets, tp_push_subs, tp_users, tp_users_secret, legacy_maxiagro
+
+# Total : 3255 enregistrement(s) dans 5 fichier(s).

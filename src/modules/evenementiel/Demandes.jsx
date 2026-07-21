@@ -1,7 +1,7 @@
 // Autorisations de sortie des briques — workflow à deux niveaux :
 // un gérant approuve, puis la Direction / GE certifie (libère le chargement).
 import { useMemo, useState } from 'react'
-import { Plus, Shield } from 'lucide-react'
+import { Plus, Shield, Trash2, RotateCcw } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -11,38 +11,56 @@ import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem, updateItem, setItem, ts } from '../../core/db'
+import { addItem, updateItem, removeItem, setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { dernierStockBriques, retirerVenteDuStock } from './logic'
+import { dernierStockBriques, retirerVenteDuStock, appliquerDeltasStockBriques } from './logic'
 import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
-import { STATUTS_DEMANDE, normaliserStatut, actionsDemande } from '../../shared/workflow'
+import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
+import CorrectifModal from '../../shared/demandes/CorrectifModal'
+import CorrectifCompare from '../../shared/demandes/CorrectifCompare'
+import {
+  CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts,
+  sommeQte, reporterQtes, payloadDemandeCorrectif, payloadDecisionCorrectif
+} from '../../shared/demandes/correctif'
 
 const STATUTS = STATUTS_DEMANDE
+// Clés identifiant une brique dans les lignes d'une demande / d'une vente.
+const CLES = { key: 'briqueId', nom: 'briqueNom' }
 
 export default function Demandes() {
   const { user, role, canManage, canCertify } = useAuth()
   const { data: demandes } = useCollection('evenementiel_demandes')
   const { data: ventes } = useCollection('evenementiel_ventes')
+  const { data: factures } = useCollection('evenementiel_factures')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const isManager = canManage()
   const isCertifier = canCertify()
+  const lectureSeule = isReadOnlyRole(role)
 
   const [filtre, setFiltre] = useState('en_attente')
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null)
   const [commentaire, setCommentaire] = useState('')
+  const [relance, setRelance] = useState(null)   // demande certifiée à relancer
+  const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ venteId: '', dateSortie: todayStr(), message: '' })
 
   const ventesBrouillon = ventes.filter((v) => ['brouillon', 'en_attente'].includes(v.statut))
   // Vente sélectionnée : ses informations (client, briques, quantités) remplissent la demande.
   const selectedVente = ventes.find((v) => v.id === form.venteId) || null
+  const estAuteur = (d) => d.demandeur === user.login
+  const nbCorrectifs = useMemo(() => demandes.filter(correctifEnCours).length, [demandes])
   const filtrees = useMemo(() =>
-    [...demandes].filter((d) => filtre === 'tous' || normaliserStatut(d.statut) === filtre).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [...demandes]
+      .filter((d) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(d) : normaliserStatut(d.statut) === filtre))
+      .sort((a, b) => (a.date < b.date ? 1 : -1)),
   [demandes, filtre])
+
+  const stockDe = (briqueId) => dernierStockBriques(inventaires, briqueId, briqueId === 'caillasses' ? 'caillasses' : 'pret')
 
   function openCreate() {
     const v = ventesBrouillon[0]
@@ -153,6 +171,104 @@ export default function Demandes() {
     setCommentaire('')
   }
 
+  const run = async (fn, okMsg) => {
+    setBusy(true)
+    try { await fn(); if (okMsg) toast.success(okMsg) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+    finally { setBusy(false) }
+  }
+
+  // ─── Suppression (tant que la demande n'est pas certifiée) ───
+  // Le stock n'ayant pas encore bougé, il suffit de rendre la vente au brouillon.
+  async function supprimer(d) {
+    if (!confirm(`Supprimer l'autorisation ${d.num} ?\nLa vente ${d.venteNum || ''} redevient un brouillon modifiable.`)) return
+    await run(async () => {
+      await removeItem('evenementiel_demandes', d.id)
+      if (d.venteId) await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })
+      await audit('evenementiel', 'DEMANDE_SUPPRESSION', d.num)
+    }, 'Autorisation supprimée — la vente repasse en brouillon')
+    setDecision(null)
+  }
+
+  // ─── Relance : correctif sur une autorisation CERTIFIÉE ───
+  async function envoyerCorrectif({ lignes, motif }) {
+    const d = relance
+    if (!motif.trim()) return toast.error('Motif du correctif obligatoire')
+    const deltas = deltasLignes(d.lignes || [], lignes, CLES)
+    if (!aDesEcarts(deltas)) return toast.error('Aucune quantité modifiée')
+    for (const dd of deltas) {
+      if (dd.delta > stockDe(dd.id)) return toast.error(`Stock insuffisant pour ${dd.nom} (+${dd.delta} demandé, ${stockDe(dd.id)} disponible)`)
+    }
+    await run(async () => {
+      await updateItem('evenementiel_demandes', d.id, {
+        correctif: payloadDemandeCorrectif({ lignes, lignesAvant: d.lignes || [], motif, user, horodate: todayStr() + ' ' + nowHM() })
+      })
+      await notify({
+        type: 'demande', title: 'Demande de correctif 🔄',
+        body: `Autorisation ${d.num} — ${d.clientNom || ''} : quantités à corriger${motif.trim() ? ' — ' + motif.trim() : ''}`,
+        module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+      })
+      await audit('evenementiel', 'CORRECTIF_DEMANDE', d.num)
+    }, '🔄 Correctif envoyé à la hiérarchie')
+    setRelance(null)
+  }
+
+  // ─── La hiérarchie tranche le correctif ───
+  // Accepté : les anciennes quantités RENTRENT au stock, les nouvelles en RESSORTENT
+  // (un seul mouvement net par brique), et la vente — ainsi que sa facture éventuelle —
+  // s'aligne sur les quantités corrigées.
+  async function trancherCorrectif(accepte) {
+    const d = decision.demande
+    const c = d.correctif
+    const horodate = todayStr() + ' ' + nowHM()
+    const deltas = deltasLignes(c.lignesAvant || d.lignes || [], c.lignes || [], CLES)
+
+    await run(async () => {
+      if (accepte) {
+        const maj = appliquerDeltasStockBriques(inventaires, deltas)
+        if (maj) {
+          await setItem('evenementiel_inventaires', maj.date, {
+            ...maj.inv, date: maj.date, briques: maj.briques, savedAt: ts(), agentId: user.uid, agentNom: user.nom
+          })
+        }
+        const vente = ventes.find((v) => v.id === d.venteId)
+        if (vente) {
+          const lignes = reporterQtes(vente.lignes, c.lignes, 'briqueId')
+            .map((l) => ({ ...l, montant: (parseInt(l.qte) || 0) * (parseFloat(l.prixUnitaire) || 0) }))
+          await updateItem('evenementiel_ventes', vente.id, { lignes, total: lignes.reduce((s, l) => s + (l.montant || 0), 0) })
+        }
+        // Facture déjà émise sur cette vente : ses lignes suivent aussi (CA juste).
+        const fac = factures.find((f) => f.venteId === d.venteId)
+        if (fac) {
+          const qteParBrique = new Map(deltas.map((x) => [x.id, x.apres]))
+          const lignes = (fac.lignes || []).map((l) => {
+            if (!qteParBrique.has(l.articleId)) return l
+            const qte = qteParBrique.get(l.articleId)
+            return { ...l, qte, total: qte * (parseFloat(l.prixUnit) || 0) }
+          })
+          const totalHT = lignes.reduce((s, l) => s + (l.total || 0), 0)
+          const apresRemise = totalHT * (1 - (fac.remise || 0) / 100)
+          await updateItem('evenementiel_factures', fac.id, {
+            lignes, totalHT, totalTTC: Math.round(apresRemise * (1 + (fac.tva || 0) / 100))
+          })
+        }
+      }
+      await updateItem('evenementiel_demandes', d.id, {
+        ...(accepte ? { lignes: c.lignes, qte: sommeQte(c.lignes) } : {}),
+        correctif: payloadDecisionCorrectif(c, { accepte, user, horodate, commentaire })
+      })
+      await notify({
+        type: accepte ? 'success' : 'refus',
+        title: accepte ? 'Correctif appliqué ✅' : 'Correctif refusé ⛔',
+        body: `Autorisation ${d.num} — ${accepte ? `quantités corrigées (${sommeQte(c.lignes)} brique(s)) et stock réajusté` : 'les quantités certifiées restent inchangées'}`,
+        module: 'evenementiel', forUsers: [c.par || d.demandeur], excludeUid: user.uid, link: '/evenementiel/demandes'
+      })
+      await audit('evenementiel', accepte ? 'CORRECTIF_APPLIQUE' : 'CORRECTIF_REFUSE', d.num)
+    }, accepte ? '✅ Correctif appliqué — stock réajusté' : 'Correctif refusé')
+    setDecision(null)
+    setCommentaire('')
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -161,12 +277,12 @@ export default function Demandes() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {['en_attente', 'approuve_n1', 'certifie', 'refuse', 'tous'].map((f) => (
+        {['en_attente', 'approuve_n1', 'correctif', 'certifie', 'refuse', 'tous'].map((f) => (
           <button key={f} onClick={() => setFiltre(f)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filtre === f ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'}`}>
-            {f === 'tous' ? 'Toutes' : STATUTS[f]?.short || f}
+            {f === 'tous' ? 'Toutes' : f === 'correctif' ? `${CORRECTIF_STATUTS.demande.short}${nbCorrectifs ? ` (${nbCorrectifs})` : ''}` : STATUTS[f]?.short || f}
           </button>
         ))}
-        {!isReadOnlyRole(role) && (
+        {!lectureSeule && (
           <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
             <Plus size={16} /> Demander une autorisation
           </Button>
@@ -184,15 +300,18 @@ export default function Demandes() {
               <th className="px-3 py-2">Chargement</th>
               <th className="px-3 py-2">Validation</th>
               <th className="px-3 py-2">Statut</th>
-              {isManager && <th className="px-3 py-2" />}
+              <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtrees.map((d) => {
               const sn = normaliserStatut(d.statut)
               const acts = actionsDemande(d.statut, { canManage: isManager, canCertify: isCertifier })
+              const enCorrectif = correctifEnCours(d)
+              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
+              const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
               return (
-              <tr key={d.id}>
+              <tr key={d.id} className={enCorrectif ? 'bg-amber-50/50' : ''}>
                 <td className="px-3 py-2 font-mono text-xs">{d.num}</td>
                 <td className="px-3 py-2"><span className="font-semibold">{d.venteNum}</span><br /><span className="text-xs text-gray-500">{d.clientNom}</span></td>
                 <td className="px-3 py-2 font-semibold">{d.briqueNom}</td>
@@ -202,16 +321,35 @@ export default function Demandes() {
                   {d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : '—'}
                   {d.certifiePar && <span className="block">Certifié : {d.certifiePar}</span>}
                 </td>
-                <td className="px-3 py-2"><Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge></td>
-                {isManager && (
-                  <td className="px-3 py-2 text-right">
-                    {acts.length > 0 && (
+                <td className="px-3 py-2">
+                  <Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>
+                  {d.correctif && (
+                    <Badge tone={CORRECTIF_STATUTS[d.correctif.statut]?.tone} className="mt-1">
+                      {CORRECTIF_STATUTS[d.correctif.statut]?.label}
+                    </Badge>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    {(acts.length > 0 || enCorrectif) && isManager && (
                       <button onClick={() => setDecision({ demande: d })} className="rounded bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/20">
-                        {sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
+                        {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
                       </button>
                     )}
-                  </td>
-                )}
+                    {relancable && (
+                      <button onClick={() => setRelance(d)} title="Demander un correctif"
+                        className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-200">
+                        <RotateCcw size={13} /> Relancer
+                      </button>
+                    )}
+                    {suppressible && (
+                      <button onClick={() => supprimer(d)} disabled={busy} title="Supprimer la demande"
+                        className="rounded p-1.5 text-red-500 hover:bg-red-50 disabled:opacity-50">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             )})}
           </tbody>
@@ -262,10 +400,19 @@ export default function Demandes() {
         </FormGroup>
       </Modal>
 
-      <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }} title="Traiter la demande"
+      <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }}
+        title={decision && correctifEnCours(decision.demande) ? 'Trancher le correctif' : 'Traiter la demande'}
         footer={<>
           <Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-          {decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
+          {decision && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: isManager }) && !lectureSeule && (
+            <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
+          )}
+          {decision && correctifEnCours(decision.demande) ? (
+            <>
+              <Button variant="danger" loading={busy} onClick={() => trancherCorrectif(false)}>Refuser le correctif</Button>
+              <Button variant="success" loading={busy} onClick={() => trancherCorrectif(true)}>Appliquer le correctif</Button>
+            </>
+          ) : decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
             <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
               {a.label}
             </Button>
@@ -286,6 +433,15 @@ export default function Demandes() {
           return (
             <>
               <p className="mb-2 text-sm font-semibold text-gray-800">Vente {d.venteNum}</p>
+              {correctifEnCours(d) && (
+                <div className="mb-3">
+                  <CorrectifCompare
+                    correctif={d.correctif}
+                    deltas={deltasLignes(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
+                    stockOf={(x) => stockDe(x.id)}
+                  />
+                </div>
+              )}
               <DemandeDetail
                 demandeur={d.demandeurNom}
                 dateHeure={d.date ? `${formatDateShort(d.date)}${d.heure ? ' ' + d.heure : ''}` : null}
@@ -306,6 +462,17 @@ export default function Demandes() {
           )
         })()}
       </Modal>
+
+      {/* Relance : correctif de quantités sur une autorisation déjà certifiée */}
+      {relance && (
+        <CorrectifModal
+          key={relance.id} onClose={() => setRelance(null)} busy={busy}
+          titre={`Relancer l'autorisation ${relance.num}`}
+          lignes={relance.lignes || []} nomField="briqueNom"
+          stockOf={(l) => stockDe(l.briqueId)}
+          onSubmit={envoyerCorrectif}
+        />
+      )}
     </div>
   )
 }

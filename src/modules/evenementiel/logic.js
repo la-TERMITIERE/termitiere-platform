@@ -99,3 +99,21 @@ export function retirerVenteDuStock(inventaires, vente) {
   })
   return { date: inv.date, inv, briques }
 }
+
+// Rejoue un correctif sur le stock : pour chaque brique, `delta` est l'écart
+// entre la quantité corrigée et la quantité déjà sortie. delta > 0 → on sort le
+// supplément ; delta < 0 → l'excédent RENTRE au stock. Même contrat de retour
+// que retirerVenteDuStock ({ date, inv, briques } ou null).
+export function appliquerDeltasStockBriques(inventaires, deltas) {
+  const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
+  const inv = tri[0]
+  if (!inv) return null
+  const briques = { ...(inv.briques || {}) }
+  ;(deltas || []).forEach((d) => {
+    if (!d.id || !d.delta) return
+    const etat = d.id === 'caillasses' ? 'caillasses' : 'pret'
+    const cur = briques[d.id] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+    briques[d.id] = { ...cur, [etat]: Math.max(0, (cur[etat] || 0) - d.delta) }
+  })
+  return { date: inv.date, inv, briques }
+}

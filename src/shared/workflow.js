@@ -27,6 +27,16 @@ export function normaliserStatut(s) {
 export const estCertifie = (s) => normaliserStatut(s) === 'certifie'
 export const estFinal = (s) => ['certifie', 'refuse'].includes(normaliserStatut(s))
 
+// Suppression d'une demande : tant qu'elle n'est PAS certifiée, son auteur (ou un
+// approbateur) peut la retirer — le brouillon lié redevient alors modifiable.
+// Une fois CERTIFIÉE, la suppression est fermée : le stock est sorti et la
+// facture compte dans le chiffre d'affaires. Seule une demande de correctif
+// permet alors de la reprendre (cf. shared/demandes/correctif).
+export function peutSupprimerDemande(statut, { isAuteur = false, canManage = false } = {}) {
+  if (estCertifie(statut)) return false
+  return isAuteur || canManage
+}
+
 // Statuts « à traiter » — pour les badges de menu et les compteurs.
 export const STATUTS_ACTIFS = ['en_attente', 'approuve_n1', 'partiel']
 export const estActif = (s) => STATUTS_ACTIFS.includes(s)

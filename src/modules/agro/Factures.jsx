@@ -6,7 +6,7 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle } from 'lucide-react'
+import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -24,11 +24,19 @@ import { usePDF } from '../../hooks/usePDF'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
 import EcartModal from './EcartModal'
+import CorrectifModal from '../../shared/demandes/CorrectifModal'
+import { CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts } from '../../shared/demandes/correctif'
 import {
   lignesEffectives, calcTotaux,
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
-  certifier as wfCertifier, signalerEcart as wfSignaler, appliquerAjustement as wfAjuster, rouvrir as wfRouvrir
+  certifier as wfCertifier, signalerEcart as wfSignaler, appliquerAjustement as wfAjuster, rouvrir as wfRouvrir,
+  demanderCorrectif as wfDemanderCorrectif
 } from './factureWorkflow'
+
+// Clés identifiant un article dans les lignes d'une facture, et statuts encore
+// supprimables — au-delà, le stock est engagé (écart ou correctif).
+const CLES = { key: 'articleId', nom: 'article' }
+const SUPPRIMABLES = ['brouillon', 'sortie_demandee', 'refusee']
 
 const emptyFacture = () => ({
   date: todayStr(),
@@ -55,6 +63,7 @@ export default function Factures() {
   const [filtre, setFiltre] = useState('tous')
   const [modal, setModal] = useState(null)        // { facture, editId }
   const [ecart, setEcart] = useState(null)        // facture en cours d'ajustement (hiérarchie)
+  const [relance, setRelance] = useState(null)    // facture certifiée à relancer (correctif)
   const [busy, setBusy] = useState(false)
 
   const liste = useMemo(
@@ -126,10 +135,11 @@ export default function Factures() {
     }
   }
 
+  // Supprimable tant que la sortie n'a pas été approuvée : le stock est intact.
   async function supprimer(f) {
-    if (!confirm(`Supprimer le brouillon ${f.numero} ?`)) return
+    if (!confirm(`Supprimer la facture ${f.numero} ?\nAucun stock n'a encore bougé — l'action est définitive.`)) return
     await removeItem('agro_factures', f.id)
-    await audit('agro', 'FACTURE_DELETE', f.numero)
+    await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`)
     toast.success('Facture supprimée')
   }
 
@@ -171,6 +181,14 @@ export default function Factures() {
   async function rouvrir(f) {
     run(() => wfRouvrir(f), 'Facture rouverte en brouillon')
   }
+  // Facture certifiée dont une quantité était fausse : l'agent la relance.
+  async function envoyerCorrectif({ lignes, motif }) {
+    const f = relance
+    if (!motif.trim()) return toast.error('Motif du correctif obligatoire')
+    if (!aDesEcarts(deltasLignes(lignesEffectives(f), lignes, CLES))) return toast.error('Aucune quantité modifiée')
+    await run(() => wfDemanderCorrectif(f, user, lignes, motif), '🔄 Correctif envoyé à la hiérarchie')
+    setRelance(null)
+  }
 
   // Boutons contextuels selon statut + rôle.
   function actions(f) {
@@ -181,7 +199,6 @@ export default function Factures() {
       if (isAgent) {
         a.push({ id: 'dem', label: 'Demander la sortie', icon: Send, tone: 'primary', on: () => demanderSortie(f) })
         a.push({ id: 'edit', label: 'Modifier', icon: Pencil, tone: 'ghost', on: () => openEdit(f) })
-        a.push({ id: 'del', label: 'Supprimer', icon: Trash2, tone: 'danger', on: () => supprimer(f) })
       }
     } else if (st === 'sortie_demandee') {
       if (peutApprouver) {
@@ -197,6 +214,13 @@ export default function Factures() {
       if (peutApprouver) a.push({ id: 'adj', label: 'Ajuster les quantités', icon: Pencil, tone: 'primary', on: () => setEcart(f) })
     } else if (st === 'refusee') {
       if (isAgent) a.push({ id: 're', label: 'Rouvrir', icon: Pencil, tone: 'ghost', on: () => rouvrir(f) })
+    }
+    // Suppression tant que le stock n'est pas engagé ; ensuite, relance en correctif.
+    if (SUPPRIMABLES.includes(st) && (isAgent || peutApprouver)) {
+      a.push({ id: 'del', label: 'Supprimer', icon: Trash2, tone: 'danger', on: () => supprimer(f) })
+    }
+    if (peutRelancer(f, { estCertifiee: st === 'certifiee', isAuteur: f.createdBy === user.nom, canManage: peutApprouver })) {
+      a.push({ id: 'rel', label: 'Relancer (correctif)', icon: RotateCcw, tone: 'warning', on: () => setRelance(f) })
     }
     return a
   }
@@ -252,6 +276,11 @@ export default function Factures() {
                     <td className="px-3 py-2 text-center">
                       <Badge tone={sd.tone}>{sd.label}</Badge>
                       {f.ecartAjuste && st !== 'certifiee' && <p className="mt-0.5 text-[10px] text-amber-600">quantités ajustées</p>}
+                      {f.correctif && (
+                        <p className="mt-0.5 text-[10px] font-semibold text-amber-600">
+                          {CORRECTIF_STATUTS[f.correctif.statut]?.label}
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap justify-end gap-1">
@@ -340,6 +369,17 @@ export default function Factures() {
 
       {/* Modal écart : ajustement des quantités réelles par la hiérarchie */}
       <EcartModal facture={ecart} onClose={() => setEcart(null)} onSubmit={appliquerAjustement} busy={busy} />
+
+      {/* Relance : correctif de quantités sur une facture déjà certifiée */}
+      {relance && (
+        <CorrectifModal
+          key={relance.id} onClose={() => setRelance(null)} busy={busy}
+          titre={`Relancer la facture ${relance.numero}`}
+          lignes={lignesEffectives(relance).filter((l) => l.articleId)}
+          nomField="article"
+          onSubmit={envoyerCorrectif}
+        />
+      )}
     </div>
   )
 }

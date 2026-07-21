@@ -2,12 +2,13 @@
 // entre la page Facturation et la page Demandes de sortie. Chaque fonction effectue
 // l'écriture en base + l'audit + les notifications (+ le stock le cas échéant).
 // L'UI (confirmations, toasts) reste dans les composants.
-import { updateItem } from '../../core/db'
+import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { APPROVER_ROLES } from '../../core/roles'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { creerDemandesFacture, ajusterFactureEcart } from './factureStock'
+import { reporterQtes, payloadDemandeCorrectif, payloadDecisionCorrectif } from '../../shared/demandes/correctif'
 
 const horo = () => `${todayStr()} ${new Date().toTimeString().slice(0, 5)}`
 
@@ -73,4 +74,57 @@ export async function appliquerAjustement(f, user, ajustements) {
 
 export async function rouvrir(f) {
   await updateItem('agro_factures', f.id, { statut: 'brouillon' })
+}
+
+// ⑤ Agent : la facture est CERTIFIÉE mais une quantité était fausse — il la
+// « relance » avec les quantités voulues. Rien ne bouge tant que la hiérarchie
+// n'a pas tranché : le statut reste `certifiee` (le stock ne doit pas se dénouer).
+export async function demanderCorrectif(f, user, lignes, motif) {
+  await updateItem('agro_factures', f.id, {
+    correctif: payloadDemandeCorrectif({ lignes, lignesAvant: lignesEffectives(f), motif, user, horodate: horo() })
+  })
+  await audit('agro', 'FACTURE_CORRECTIF_DEMANDE', `${f.numero}${motif ? ' — ' + motif : ''}`)
+  await notify({
+    type: 'demande', title: 'Demande de correctif 🔄',
+    body: `Facture ${f.numero} — ${f.client?.nom || ''} : quantités à corriger${motif ? ' — ' + motif : ''}`,
+    module: 'agro', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/agro/demandes'
+  })
+}
+
+// ⑥ Hiérarchie : tranche le correctif. Accepté, les demandes de sortie liées sont
+// recalées sur les nouvelles quantités : appliquerDemandeAuStock cale `autoSor`
+// sur ce nouveau total, donc les anciennes quantités RENTRENT au stock et les
+// nouvelles en RESSORTENT. Le CA suit les nouveaux totaux.
+export async function trancherCorrectif(f, user, accepte, commentaire = '') {
+  const c = f.correctif || {}
+  if (accepte) {
+    // Les quantités corrigées reprennent la tarification des lignes d'origine.
+    const lignes = reporterQtes(f.lignes, c.lignes, 'articleId')
+      .map((l) => ({ ...l, total: (parseInt(l.qte) || 0) * (parseFloat(l.prixUnit ?? l.prix) || 0) }))
+    const { totalHT, totalTTC } = calcTotaux(lignes, f.remise, f.tva)
+    await creerDemandesFacture({ ...f, lignes }, user)
+    await updateItem('agro_factures', f.id, {
+      lignes, lignesReelles: null, ecartAjuste: false, totalHT, totalTTC,
+      correctif: payloadDecisionCorrectif(c, { accepte, user, horodate: horo(), commentaire })
+    })
+  } else {
+    await updateItem('agro_factures', f.id, {
+      correctif: payloadDecisionCorrectif(c, { accepte, user, horodate: horo(), commentaire })
+    })
+  }
+  await audit('agro', accepte ? 'FACTURE_CORRECTIF_APPLIQUE' : 'FACTURE_CORRECTIF_REFUSE', f.numero)
+  await notify({
+    type: accepte ? 'approuve' : 'refus',
+    title: accepte ? 'Correctif appliqué ✅' : 'Correctif refusé ⛔',
+    body: `Facture ${f.numero} — ${accepte ? 'quantités corrigées, stock et CA réajustés' : 'les quantités certifiées restent inchangées'}`,
+    module: 'agro', forUsers: [c.par || f.createdBy], excludeUid: user.uid, link: '/agro/factures'
+  })
+}
+
+// Suppression d'une facture avant tout effet sur le stock (brouillon, sortie
+// demandée, refusée). Après approbation, le stock est engagé : on passe alors par
+// l'écart ou le correctif.
+export async function supprimerFacture(f) {
+  await removeItem('agro_factures', f.id)
+  await audit('agro', 'FACTURE_DELETE', `${f.numero} (${f.statut || 'brouillon'})`)
 }

@@ -12,7 +12,7 @@ import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useLogistiqueStore } from './store/referentielStore'
-import { addItem, updateItem } from '../../core/db'
+import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
@@ -205,6 +205,15 @@ export default function Prestations() {
     toast.success(`Prestation ${p.num} approuvée ✓ — elle peut maintenant être facturée`)
   }
 
+  // Suppression réservée au BROUILLON : dès qu'elle est facturée, la prestation
+  // se retire en supprimant d'abord la facture (onglet Facturation).
+  async function supprimer(p) {
+    if (!confirm(`Supprimer la prestation ${p.num} (${p.clientNom}) ?`)) return
+    await removeItem('logistique_prestations', p.id)
+    await audit('logistique', 'PRESTATION_DELETE', `${siteLabel(site)} — ${p.num}`)
+    toast.success('Prestation supprimée')
+  }
+
   return (
     <div className="space-y-4">
       {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
@@ -226,6 +235,9 @@ export default function Prestations() {
                   <button onClick={() => approuver(r)} className="rounded p-1.5 text-green-600 hover:bg-green-50" title="Approuver pour facturation"><CheckCircle2 size={16} /></button>
                 )}
                 <button onClick={() => setDetail(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" title="Voir les détails"><Eye size={16} /></button>
+                {!isReadOnlyRole(role) && r.statut === 'brouillon' && !r.approuvee && (
+                  <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50" title="Supprimer le brouillon"><Trash2 size={16} /></button>
+                )}
               </div>
             ) }
           ]}

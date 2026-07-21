@@ -1,6 +1,6 @@
 // Ventes briques — création de commandes, liées aux autorisations de sortie.
 import { useMemo, useState } from 'react'
-import { Plus, Send } from 'lucide-react'
+import { Plus, Send, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -13,7 +13,7 @@ import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
-import { addItem } from '../../core/db'
+import { addItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
@@ -84,6 +84,15 @@ export default function Ventes() {
     setOpen(false)
   }
 
+  // Une vente n'est supprimable qu'en BROUILLON : dès qu'une autorisation de
+  // sortie est engagée dessus, elle se retire depuis l'onglet Autorisations.
+  async function supprimer(v) {
+    if (!confirm(`Supprimer la vente ${v.num} (${v.clientNom}) ?`)) return
+    await removeItem('evenementiel_ventes', v.id)
+    await audit('evenementiel', 'VENTE_DELETE', v.num)
+    toast.success('Vente supprimée')
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -102,7 +111,12 @@ export default function Ventes() {
             { key: 'clientNom', label: 'Client' },
             { key: 'dateChargement', label: 'Chargement', render: (r) => formatDateShort(r.dateChargement) },
             { key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> },
-            { key: 'statut', label: 'Statut', render: (r) => <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge> }
+            { key: 'statut', label: 'Statut', render: (r) => <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge> },
+            { key: 'actions', label: '', align: 'right', render: (r) => (
+              !lectureSeule && r.statut === 'brouillon'
+                ? <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                : null
+            ) }
           ]}
           rows={liste}
           empty="Aucune vente."

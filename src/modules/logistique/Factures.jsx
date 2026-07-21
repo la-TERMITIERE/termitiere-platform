@@ -1,6 +1,6 @@
 // Facturation logistique — émission obligatoire avant demande d'autorisation de sortie.
 import { useMemo, useState } from 'react'
-import { FileText, Plus } from 'lucide-react'
+import { FileText, Plus, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -10,7 +10,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem, updateItem } from '../../core/db'
+import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
@@ -29,11 +29,17 @@ export default function Factures() {
   const peutFacturer = role === 'agent'
   const { data: allFactures } = useCollection('logistique_factures')
   const { data: allPrestations } = useCollection('logistique_prestations')
+  const { data: allDemandes } = useCollection('logistique_demandes')
   const [open, setOpen] = useState(false)
   const [prestId, setPrestId] = useState('')
 
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
+  // Factures déjà engagées dans une autorisation de sortie : plus supprimables ici.
+  const facturesEngagees = useMemo(
+    () => new Set(allDemandes.map((d) => d.factureId).filter(Boolean)),
+    [allDemandes]
+  )
 
   // L'agent garde la main : il facture une prestation dès qu'elle est en brouillon
   // (pas besoin d'approbation préalable). L'approbation viendra via l'autorisation de sortie.
@@ -56,6 +62,16 @@ export default function Factures() {
     await audit('logistique', 'FACTURE', `${siteLabel(site)} — ${num} — ${formatMoney(p.total)} (brouillon)`)
     toast.success(`Facture ${num} émise en brouillon ✓ — émettez l'autorisation de sortie liée`)
     setOpen(false)
+  }
+
+  // Une facture BROUILLON sans autorisation de sortie peut être retirée : la
+  // prestation qu'elle portait redevient facturable.
+  async function supprimer(f) {
+    if (!confirm(`Supprimer la facture ${f.num} (${f.clientNom}) ?\nLa prestation ${f.prestationNum || ''} redevient facturable.`)) return
+    await removeItem('logistique_factures', f.id)
+    if (f.prestationId) await updateItem('logistique_prestations', f.prestationId, { statut: 'brouillon', factureId: null, factureNum: null })
+    await audit('logistique', 'FACTURE_DELETE', `${siteLabel(site)} — ${f.num}`)
+    toast.success('Facture supprimée — la prestation redevient facturable')
   }
 
   return (
@@ -88,7 +104,12 @@ export default function Factures() {
             { key: 'clientNom', label: 'Client' },
             { key: 'prestationNum', label: 'Prestation' },
             { key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> },
-            { key: 'statut', label: 'Statut', render: (r) => { const s = F_STATUTS[r.statut] || F_STATUTS.brouillon; return <Badge tone={s.tone}>{s.label}</Badge> } }
+            { key: 'statut', label: 'Statut', render: (r) => { const s = F_STATUTS[r.statut] || F_STATUTS.brouillon; return <Badge tone={s.tone}>{s.label}</Badge> } },
+            { key: 'actions', label: '', align: 'right', render: (r) => (
+              peutFacturer && r.statut === 'brouillon' && !facturesEngagees.has(r.id)
+                ? <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                : null
+            ) }
           ]}
           rows={liste}
           empty="Aucune facture."

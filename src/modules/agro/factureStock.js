@@ -17,10 +17,12 @@ import { getAll, addItem, updateItem, setItem } from '../../core/db'
 import { appliquerDemandeAuStock } from './applyDemande'
 import { getInventaire, autoSorties, mutationsEntrantes, agregerAnimal } from './logic'
 
-// Lignes « stockables » d'une facture : article identifié + quantité > 0.
+// Lignes « stockables » d'une facture : article identifié. Les lignes à quantité
+// nulle restent de la partie — un correctif peut ramener une ligne à 0, et sa
+// demande liée doit alors être remise à 0 (le stock revient).
 function lignesStockables(facture) {
   return (facture.lignes || []).map((l, i) => ({ ...l, _idx: i }))
-    .filter((l) => l.articleId && (parseInt(l.qte) || 0) > 0)
+    .filter((l) => l.articleId)
 }
 
 // Crée (ou met à jour) les demandes de sortie liées à une facture approuvée,
@@ -41,7 +43,8 @@ export async function creerDemandesFacture(facture, user) {
     }
     const exists = demandes.find((d) => d.factureId === facture.id && d.ligneIdx === i)
     if (exists) await updateItem('agro_demandes', exists.id, payload)
-    else await addItem('agro_demandes', payload)
+    else if (payload.qte > 0) await addItem('agro_demandes', payload)
+    else continue // ligne vide jamais sortie : rien à décompter
     await appliquerDemandeAuStock({ ...payload, statut: 'certifie' })
   }
 }
