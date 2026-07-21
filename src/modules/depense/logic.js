@@ -16,6 +16,14 @@ const SECTEUR_PAR_TYPE_PROJET = {
   autre:        'divers'
 }
 
+// Nature de flux par type de projet : un chantier (construction/aménagement) est un
+// achat d'actif durable → Investissement, pas de la dépense de fonctionnement courant.
+// Les autres types de projet (agricole, élevage, événementiel…) restent Exploitation.
+const NATURE_PAR_TYPE_PROJET = {
+  construction: 'investissement',
+  amenagement:  'investissement'
+}
+
 // ── Passerelle en lecture seule avec E-G.Pro (module Projet) ────────────────
 // Les dépenses de projet (`projet_depenses`) sont saisies et gérées exclusivement
 // dans E-G.Pro (tâches, tranches…) — ici on les convertit juste au format attendu
@@ -38,7 +46,7 @@ export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], ta
       date: d.date ? new Date(d.date).toISOString().slice(0, 10) : '',
       description: [projet?.nom, tache?.titre, d.description].filter(Boolean).join(' — ') || d.description || '',
       noteOrigine: d.description || '',
-      natureFlux: natureFluxDefaut,
+      natureFlux: NATURE_PAR_TYPE_PROJET[projet?.type] || natureFluxDefaut,
       statut: 'decaissee',
       source: 'projet',
       projetId: d.projetId, projetNom: projet?.nom || '',
@@ -46,9 +54,38 @@ export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], ta
       enregistrePar: d.ajoutePar || '—',
       createdAt: d.createdAt || d.date || Date.now(),
       beneficiaireNom: d.fournisseur || '',
-      beneficiaireFonction: metier
+      beneficiaireFonction: metier,
+      beneficiaireTelephone: d.prestataireTelephone || '',
+      typePaiement: d.typePaiement || ''
     }
   })
+}
+
+// ── Passerelle en lecture seule avec la Briqueterie (module Événementiel) ────
+// Le coût d'achat des matières premières (sable, ciment…) est saisi dans la Briqueterie
+// (`evenementiel_inventaires`, champ `coutEntrees` par matière et par date). Ici on
+// convertit chaque saisie journalière dont le coût est > 0 en une dépense du secteur
+// BRIQUETERIE, pour éviter la double saisie tout en reflétant ces coûts réels.
+export function coutsMatieresBriqueterie(inventaires = []) {
+  return (inventaires || [])
+    .map((inv) => ({
+      inv,
+      cout: Object.values(inv.matieres || {}).reduce((s, m) => s + (Number(m.coutEntrees) || 0), 0)
+    }))
+    .filter((x) => x.cout > 0)
+    .map(({ inv, cout }) => ({
+      id: `briqmat_${inv.date}`,
+      secteurId: 'evenementiel',
+      categorie: 'matieres',
+      montant: cout,
+      date: inv.date ? String(inv.date).slice(0, 10) : '',
+      description: 'Achat de matières premières (Briqueterie)',
+      noteOrigine: 'Coût des matières entrées ce jour — saisi dans le Stock de la Briqueterie',
+      natureFlux: natureFluxDefaut,
+      statut: 'decaissee',
+      source: 'briqueterie',
+      enregistrePar: '—'
+    }))
 }
 
 // Budget alloué à un secteur pour un mois donné (0 si non défini).

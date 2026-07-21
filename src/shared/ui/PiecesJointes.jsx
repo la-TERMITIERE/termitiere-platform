@@ -6,7 +6,7 @@ import { Paperclip, Eye, Trash2, Loader2, FileText, Image as ImageIcon, ChevronD
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { toast } from '../../core/notifications'
 
-export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, noDelete = false, label = 'Pièces jointes', rubriques = null, withProprietaire = false, withLegende = false }) {
+export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, noAdd = false, noDelete = false, label = 'Pièces jointes', rubriques = null, withProprietaire = false, withLegende = false }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [rubrique, setRubrique] = useState('')
@@ -44,7 +44,7 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
         )}
       </div>
 
-      {!readOnly && (
+      {!readOnly && !noAdd && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/70 p-2.5">
           {rubriques?.length > 0 && (
             rubriqueLibre ? (

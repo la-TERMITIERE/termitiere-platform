@@ -12,6 +12,7 @@ import Pilotage from './Pilotage'
 import Params from './Params'
 import Clients from './Clients'
 import Journal from './Journal'
+import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useBriqueterieStore } from './store/referentielStore'
 import { useAuth } from '../../hooks/useAuth'
@@ -40,6 +41,7 @@ export default function EvenementielModule() {
       <Route path="ventes" element={<Ventes />} />
       <Route path="factures" element={<Factures />} />
       <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
+      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="evenementiel" /> : <AccesRefuse />} />
       <Route path="demandes" element={<Demandes />} />
       <Route path="params" element={<Params />} />
       <Route path="clients" element={<Clients />} />
