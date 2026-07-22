@@ -289,6 +289,7 @@ export default function Demandes() {
           champs={CLES}
           articles={articles}
           onPickArticle={(a) => ({ articleType: a.type, articleCat: a.cat || '', prixUnit: a.prix || 0 })}
+          prixField="prixUnit"
           onSubmit={envoyerCorrectif}
         />
       )}

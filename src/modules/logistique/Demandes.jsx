@@ -4,7 +4,7 @@
 //   • la facture passe « approuvée » → elle compte alors dans le chiffre d'affaires ;
 //   • le matériel loué est décompté du stock magasin (sorties auto, cf. logic.autoSorties).
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -70,6 +70,37 @@ export default function Demandes() {
   // Factures en brouillon dont l'autorisation de sortie reste à émettre.
   const facturesAvecDemande = useMemo(() => new Set(liste.map((d) => d.factureId).filter(Boolean)), [liste])
   const facturesDispo = factures.filter((f) => f.statut === 'brouillon' && !facturesAvecDemande.has(f.id))
+
+  // Lignes source (facture, sinon prestation) de l'autorisation relancée : c'est
+  // sur elles que porte le correctif. La demande ne retient que le matériel du
+  // référentiel — on garde donc `_idx`, la position réelle dans la facture, et on
+  // y joint le tarif pratiqué pour que le prix soit visible et modifiable.
+  const lignesRelance = useMemo(() => {
+    if (!relance) return []
+    const fac = factures.find((f) => f.id === relance.factureId)
+    const p = prestations.find((x) => x.id === relance.prestationId)
+    const source = (fac?.lignes?.length ? fac.lignes : p?.lignes) || []
+    return source
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.materielId)
+      .map(({ l, i }) => {
+        const dl = (relance.lignes || []).find((x) => x.materielId === l.materielId)
+        return {
+          materielId: l.materielId, materielNom: l.materielNom,
+          materielCat: l.cat, unite: l.unite,
+          qte: parseInt(dl?.qte ?? l.qte) || 0,
+          nbJours: parseInt(l.nbJours) || 1,
+          tarifUnitaire: parseFloat(l.tarifUnitaire) || 0,
+          _idx: i
+        }
+      })
+  }, [relance, factures, prestations])
+  const lignesSourceRelance = useMemo(() => {
+    if (!relance) return []
+    const fac = factures.find((f) => f.id === relance.factureId)
+    const p = prestations.find((x) => x.id === relance.prestationId)
+    return (fac?.lignes?.length ? fac.lignes : p?.lignes) || []
+  }, [relance, factures, prestations])
 
   const nbCorrectifs = useMemo(() => liste.filter(correctifEnCours).length, [liste])
   const filtrees = useMemo(() =>
@@ -204,8 +235,9 @@ export default function Demandes() {
   // ─── Relance : correctif sur une autorisation CERTIFIÉE ───
   async function envoyerCorrectif({ lignes, motif }) {
     const d = relance
+    const source = lignesSourceRelance
     if (!motif.trim()) return toast.error('Motif du correctif obligatoire')
-    const deltas = deltasLignes(d.lignes || [], lignes, CLES)
+    const deltas = deltasLignes(lignesRelance, lignes, CLES)
     if (!aDesEcarts(deltas)) return toast.error('Aucun matériel ni quantité modifié')
     for (const dd of deltas) {
       const stock = dernierStock(inventaires, dd.id)
@@ -213,7 +245,8 @@ export default function Demandes() {
     }
     await run(async () => {
       await updateItem('logistique_demandes', d.id, {
-        correctif: payloadDemandeCorrectif({ lignes, lignesAvant: d.lignes || [], motif, user, horodate: todayStr() + ' ' + nowHM() })
+        // `lignesAvant` suit l'indexation de la facture, cible du report.
+        correctif: payloadDemandeCorrectif({ lignes, lignesAvant: source, motif, user, horodate: todayStr() + ' ' + nowHM() })
       })
       await notify({
         type: 'demande', title: 'Demande de correctif 🔄',
@@ -348,6 +381,9 @@ export default function Demandes() {
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap items-center justify-end gap-1">
+                    {/* Consultation ouverte à tous : la même fiche, sans les actions. */}
+                    <button onClick={() => setDecision({ demande: d, lecture: true })} title="Voir le détail"
+                      className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
                     {(acts.length > 0 || enCorrectif) && isManager && (
                       <button onClick={() => setDecision({ demande: d })} className="rounded bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/20">
                         {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
@@ -415,21 +451,25 @@ export default function Demandes() {
       </Modal>
 
       <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }}
-        title={decision && correctifEnCours(decision.demande) ? 'Trancher le correctif' : "Traiter l'autorisation"}
-        footer={<><Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-          {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: isManager }) && (
-            <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
-          )}
-          {decision && correctifEnCours(decision.demande) ? (
-            <>
-              <Button variant="danger" loading={busy} onClick={() => trancherCorrectif(false)}>Refuser le correctif</Button>
-              <Button variant="success" loading={busy} onClick={() => trancherCorrectif(true)}>Appliquer le correctif</Button>
-            </>
-          ) : decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
-            <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
-              {a.label}
-            </Button>
-          ))}</>}>
+        title={decision?.lecture
+          ? `Autorisation ${decision.demande.num}`
+          : decision && correctifEnCours(decision.demande) ? 'Trancher le correctif' : "Traiter l'autorisation"}
+        footer={decision?.lecture
+          ? <Button variant="ghost" onClick={() => setDecision(null)}>Fermer</Button>
+          : <><Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
+            {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: isManager }) && (
+              <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
+            )}
+            {decision && correctifEnCours(decision.demande) ? (
+              <>
+                <Button variant="danger" loading={busy} onClick={() => trancherCorrectif(false)}>Refuser le correctif</Button>
+                <Button variant="success" loading={busy} onClick={() => trancherCorrectif(true)}>Appliquer le correctif</Button>
+              </>
+            ) : decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
+              <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
+                {a.label}
+              </Button>
+            ))}</>}>
         {decision && (() => {
           const d = decision.demande
           const sn = normaliserStatut(d.statut)
@@ -509,7 +549,24 @@ export default function Demandes() {
                 )}
               </div>
 
-              <FormGroup label="Commentaire" className="mt-3"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
+              {decision.lecture ? (
+                <>
+                  {d.commentaireDecision && (
+                    <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs italic text-gray-600">
+                      Commentaire de décision : « {d.commentaireDecision} »
+                    </p>
+                  )}
+                  {d.correctif && !correctifEnCours(d) && (
+                    <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} — demandé par {d.correctif.parNom}
+                      {d.correctif.traitePar ? `, tranché par ${d.correctif.traitePar}` : ''}
+                      {d.correctif.motif ? ` · « ${d.correctif.motif} »` : ''}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <FormGroup label="Commentaire" className="mt-3"><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} /></FormGroup>
+              )}
             </>
           )
         })()}
@@ -520,9 +577,10 @@ export default function Demandes() {
         <CorrectifModal
           key={relance.id} onClose={() => setRelance(null)} busy={busy}
           titre={`Relancer l'autorisation ${relance.num}`}
-          lignes={relance.lignes || []} champs={CLES}
+          lignes={lignesRelance} champs={CLES}
           articles={materiel}
           onPickArticle={(m) => ({ materielCat: m.cat, unite: m.unite, tarifUnitaire: m.tarifLocation || 0 })}
+          prixField="tarifUnitaire" prixLabel="Tarif / jour"
           stockOf={(l) => dernierStock(inventaires, l.materielId)}
           onSubmit={envoyerCorrectif}
         />

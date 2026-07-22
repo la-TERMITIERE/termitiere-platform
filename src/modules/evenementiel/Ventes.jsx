@@ -1,12 +1,13 @@
 // Ventes briques — création de commandes, liées aux autorisations de sortie.
 import { useMemo, useState } from 'react'
-import { Plus, Send, Trash2 } from 'lucide-react'
+import { Plus, Send, Trash2, Eye } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
+import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -16,7 +17,7 @@ import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
+import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { isReadOnlyRole } from '../../core/roles'
 import { dernierStockBriques } from './logic'
 
@@ -38,6 +39,7 @@ export default function Ventes() {
 
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
+  const [detail, setDetail] = useState(null)   // vente consultée
 
   const liste = useMemo(() => [...ventes].sort((a, b) => (a.date < b.date ? 1 : -1)), [ventes])
 
@@ -113,15 +115,48 @@ export default function Ventes() {
             { key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> },
             { key: 'statut', label: 'Statut', render: (r) => <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge> },
             { key: 'actions', label: '', align: 'right', render: (r) => (
-              !lectureSeule && r.statut === 'brouillon'
-                ? <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
-                : null
+              <div className="flex justify-end gap-1">
+                <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                {!lectureSeule && r.statut === 'brouillon' && (
+                  <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                )}
+              </div>
             ) }
           ]}
           rows={liste}
           empty="Aucune vente."
         />
       </Card>
+
+      {/* Consultation d'une vente — lecture seule */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        title={detail ? `Vente ${detail.num}` : ''}
+        footer={<Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>}>
+        {detail && (
+          <FicheDetail
+            entetes={[
+              { label: 'Client', value: detail.clientNom || '—' },
+              { label: 'Statut', value: STATUTS[detail.statut]?.label || detail.statut },
+              { label: 'Date de la vente', value: formatDateShort(detail.date) },
+              { label: 'Chargement prévu', value: formatDateShort(detail.dateChargement) },
+              { label: 'Enregistrée par', value: detail.agentNom },
+              { label: 'Notes', value: detail.notes }
+            ]}
+            colonnes={[
+              { label: 'Brique', render: (l) => l.briqueNom || '—' },
+              { label: 'Quantité', align: 'center', render: (l) => formatNumber(l.qte) },
+              { label: 'Prix unitaire', align: 'right', render: (l) => formatMoney(l.prixUnitaire || 0) },
+              { label: 'Montant', align: 'right', render: (l) => formatMoney(l.montant || 0) }
+            ]}
+            lignes={detail.lignes || []}
+            vide="Aucune brique sur cette vente."
+            pied={[
+              { label: 'Total briques', value: formatNumber((detail.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)) },
+              { label: 'Montant total', value: detail.total || 0, fort: true }
+            ]}
+          />
+        )}
+      </Modal>
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title="Nouvelle vente"
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>

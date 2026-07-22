@@ -355,6 +355,11 @@ export default function Prestations() {
               {detail.evenement && <p><strong>Événement :</strong> {detail.evenement}</p>}
               <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
               {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
+              {detail.factureNum && <p><strong>Facture :</strong> {detail.factureNum}</p>}
+              {detail.agentNom && <p><strong>Saisie par :</strong> {detail.agentNom}</p>}
+              <p><strong>Approbation :</strong> {detail.approuvee
+                ? `✅ ${detail.approuveePar || ''}${detail.approuveeLe ? ' · ' + detail.approuveeLe : ''}`
+                : '⏳ en attente'}</p>
             </div>
             <div className="mt-2 overflow-x-auto rounded-lg bg-white">
             <table className="w-full text-sm">

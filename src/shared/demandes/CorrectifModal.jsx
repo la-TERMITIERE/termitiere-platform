@@ -1,7 +1,9 @@
 // Formulaire « Relancer » — l'auteur d'une autorisation CERTIFIÉE corrige ce
-// qu'il voulait réellement sortir : la QUANTITÉ, mais aussi l'ARTICLE lui-même
-// (300 « 10 creux » saisis alors qu'il s'agissait de « 12 creux »). Rien n'est
-// appliqué ici : la correction part en validation auprès de la hiérarchie
+// qu'il voulait réellement sortir : la QUANTITÉ, l'ARTICLE lui-même (300
+// « 10 creux » saisis alors qu'il s'agissait de « 12 creux ») et le PRIX
+// UNITAIRE, qui doit rester saisissable — changer d'article propose le tarif du
+// référentiel, mais un tarif négocié doit pouvoir passer. Rien n'est appliqué
+// ici : la correction part en validation auprès de la hiérarchie
 // (cf. shared/demandes/correctif).
 import { useState } from 'react'
 import { RotateCcw, ArrowRight } from 'lucide-react'
@@ -10,7 +12,7 @@ import Button from '../ui/Button'
 import FormGroup from '../forms/FormGroup'
 import Input from '../forms/Input'
 import Select from '../forms/Select'
-import { formatNumber } from '../../utils/formatters'
+import { formatNumber, formatMoney } from '../../utils/formatters'
 import { lignesEditables, sommeQte } from './correctif'
 
 // Le parent ne monte ce composant que lorsqu'il y a une demande à relancer, et
@@ -21,6 +23,7 @@ export default function CorrectifModal({
   titre = 'Demander un correctif',
   lignes = [], champs = { key: 'id', nom: 'nom' },
   articles = [], onPickArticle,
+  prixField, prixLabel = 'Prix unitaire',
   stockOf
 }) {
   const { key, nom } = champs
@@ -38,6 +41,9 @@ export default function CorrectifModal({
 
   const totalAvant = sommeQte(lignes)
   const totalApres = sommeQte(rows)
+  const montantApres = prixField
+    ? rows.reduce((s, l) => s + (parseInt(l.qte) || 0) * (parseFloat(l[prixField]) || 0), 0)
+    : 0
   const modifiable = articles.length > 0
 
   return (
@@ -50,7 +56,8 @@ export default function CorrectifModal({
       </>}>
       <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
         Cette autorisation est <strong>certifiée</strong> : elle ne peut plus être supprimée. Corrigez
-        {modifiable ? <> l'<strong>article</strong> et/ou la <strong>quantité</strong></> : <> les <strong>quantités</strong></>} —
+        {modifiable ? <> l'<strong>article</strong>, la <strong>quantité</strong></> : <> la <strong>quantité</strong></>}
+        {prixField ? <> et le <strong>prix unitaire</strong></> : null} —
         après validation de la hiérarchie, ce qui était sorti <strong>revient au stock</strong> et ce qui est corrigé en est décompté.
       </p>
 
@@ -61,6 +68,7 @@ export default function CorrectifModal({
               <th className="px-2 py-1.5 text-left">Certifié</th>
               <th className="px-2 py-1.5 text-left">Article corrigé</th>
               <th className="px-2 py-1.5 text-center">Qté corrigée</th>
+              {prixField && <th className="px-2 py-1.5 text-center">{prixLabel}</th>}
               {stockOf && <th className="px-2 py-1.5 text-center">Stock actuel</th>}
               <th className="px-2 py-1.5 text-center">Écart</th>
             </tr>
@@ -80,7 +88,10 @@ export default function CorrectifModal({
                 <tr key={i} className={ko ? 'bg-red-50/50' : ''}>
                   <td className="px-2 py-1.5">
                     <span className={changeArticle ? 'text-gray-400 line-through' : 'font-semibold'}>{avant[nom] || '—'}</span>
-                    <span className="block text-[11px] text-gray-400">×{formatNumber(qteAvant)}</span>
+                    <span className="block text-[11px] text-gray-400">
+                      ×{formatNumber(qteAvant)}
+                      {prixField && avant[prixField] != null ? ` · ${formatMoney(parseFloat(avant[prixField]) || 0)}` : ''}
+                    </span>
                   </td>
                   <td className="px-2 py-1.5">
                     {modifiable ? (
@@ -98,6 +109,17 @@ export default function CorrectifModal({
                     <Input type="number" min="0" className="mx-auto w-24 text-center" value={l.qte}
                       onChange={(e) => patchRow(i, { qte: e.target.value })} />
                   </td>
+                  {/* Changer d'article propose son tarif du référentiel, mais le prix
+                      reste saisissable : une remise ou un tarif négocié doit passer. */}
+                  {prixField && (
+                    <td className="px-2 py-1.5 text-center">
+                      <Input type="number" min="0" className="mx-auto w-28 text-center" value={l[prixField] ?? ''}
+                        onChange={(e) => patchRow(i, { [prixField]: e.target.value })} />
+                      <span className="mt-0.5 block text-[11px] font-semibold text-gray-500">
+                        {formatMoney(qteApres * (parseFloat(l[prixField]) || 0))}
+                      </span>
+                    </td>
+                  )}
                   {stockOf && <td className={`px-2 py-1.5 text-center ${ko ? 'font-bold text-red-600' : 'text-gray-500'}`}>{formatNumber(stock || 0)}{ko ? ' ⚠️' : ''}</td>}
                   <td className="px-2 py-1.5 text-center text-xs font-bold">
                     {changeArticle ? (
@@ -111,13 +133,14 @@ export default function CorrectifModal({
                 </tr>
               )
             })}
-            {!rows.length && <tr><td colSpan={5} className="py-3 text-center text-gray-400">Aucune ligne.</td></tr>}
+            {!rows.length && <tr><td colSpan={6} className="py-3 text-center text-gray-400">Aucune ligne.</td></tr>}
           </tbody>
           <tfoot>
             <tr className="border-t bg-gray-50 text-xs font-bold">
               <td className="px-2 py-1.5">Total {formatNumber(totalAvant)}</td>
               <td className="px-2 py-1.5" />
               <td className="px-2 py-1.5 text-center">{formatNumber(totalApres)}</td>
+              {prixField && <td className="px-2 py-1.5 text-center text-gray-700">{formatMoney(montantApres)}</td>}
               {stockOf && <td />}
               <td className={`px-2 py-1.5 text-center ${totalApres - totalAvant > 0 ? 'text-red-600' : totalApres - totalAvant < 0 ? 'text-green-600' : 'text-gray-400'}`}>
                 {totalApres - totalAvant > 0 ? '+' : ''}{formatNumber(totalApres - totalAvant)}
