@@ -2,7 +2,7 @@
 // Cartes cliquables (détail) + écarts vs mois précédent mis en avant.
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut } from 'react-chartjs-2'
-import { BrickWall, Factory, Package, Send, AlertTriangle } from 'lucide-react'
+import { ShoppingCart, Factory, Package, Send, AlertTriangle } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -19,6 +19,7 @@ export default function Dashboard() {
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: productions } = useCollection('evenementiel_productions')
   const { data: factures } = useCollection('evenementiel_factures')
+  const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: demandes } = useCollection('evenementiel_demandes')
 
   const [detail, setDetail] = useState(null) // { titre, render }
@@ -52,6 +53,13 @@ export default function Dashboard() {
   const facturesDuMois = factures.filter((f) => inPeriode(f.date))
   const caMois = facturesDuMois.reduce((s, f) => s + (f.totalTTC || 0), 0)
   const caMoisPrec = factures.filter((f) => inPrev(f.date)).reduce((s, f) => s + (f.totalTTC || 0), 0)
+  // Ventes de la période — commandes enregistrées, quel que soit leur avancement.
+  const ventesDuMois = useMemo(
+    () => ventes.filter((v) => inPeriode(v.date)).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [ventes, start, end]
+  )
+  const ventesMontant = ventesDuMois.reduce((s, v) => s + (v.total || 0), 0)
+  const nbVentesPrec = ventes.filter((v) => inPrev(v.date)).length
   const demandesActives = demandes.filter((d) => estActif(d.statut))
 
   const parType = useMemo(() => {
@@ -138,8 +146,45 @@ export default function Dashboard() {
           ) })} />
         <StatCard title="Prêtes à vendre" value={formatNumber(stockPret)} icon={Package} accent="#16a34a"
           sub="par type — cliquer" onClick={() => setDetail({ titre: 'Briques prêtes à vendre', render: tableStock('pret') })} />
-        <StatCard title="En séchage" value={formatNumber(stockSechage)} icon={BrickWall} accent="#ca8a04"
-          sub="5–6 jours · cliquer" onClick={() => setDetail({ titre: 'Briques en séchage', render: tableStock('sechage') })} />
+        <StatCard title="Ventes période" value={formatNumber(ventesDuMois.length)} icon={ShoppingCart} accent="#ca8a04"
+          variation={comparable ? ventesDuMois.length - nbVentesPrec : undefined}
+          variationLabel={`${formatMoney(ventesMontant)} · cliquer`}
+          sub={`${formatMoney(ventesMontant)} · cliquer`}
+          onClick={() => setDetail({ titre: 'Ventes de la période', render: (
+            <div className="overflow-hidden rounded-2xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">N°</th>
+                    <th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-center">Briques</th>
+                    <th className="px-4 py-3 text-right">Montant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {ventesDuMois.map((v, i) => (
+                    <tr key={v.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{formatDateShort(v.date)}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{v.num}</td>
+                      <td className="px-4 py-2.5 font-semibold text-gray-800">{v.clientNom || '—'}</td>
+                      <td className="px-4 py-2.5 text-center font-bold text-gray-700">
+                        {formatNumber((v.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-base font-extrabold text-amber-700">{formatMoney(v.total || 0)}</td>
+                    </tr>
+                  ))}
+                  {!ventesDuMois.length && <tr><td colSpan={5} className="bg-white py-8 text-center text-sm text-gray-400">Aucune vente sur la période.</td></tr>}
+                </tbody>
+                {ventesDuMois.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-gray-200 bg-violet-50/60">
+                      <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total</td>
+                      <td className="px-4 py-3 text-right text-base font-extrabold text-amber-700">{formatMoney(ventesMontant)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          ) })} />
         <StatCard title="CA période" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
           variation={comparable ? caMois - caMoisPrec : undefined} variationLabel={`période préc. : ${formatMoney(caMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Factures de la période', render: (

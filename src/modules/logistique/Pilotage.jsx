@@ -1,7 +1,7 @@
 // Pilotage & Analyse — MAXI LOGISTIQUE (par SITE, vue direction / investisseurs).
 // Indicateurs clés filtrables par PÉRIODE et par CATÉGORIE de matériel :
-// chiffre d'affaires, prestations, panier moyen, matériel loué (rotation), taux de
-// casse / perte, valeur du parc, stock. Détail par catégorie de matériel.
+// chiffre d'affaires, prestations, panier moyen et taux de casse / perte.
+// Détail par catégorie de matériel.
 import { useMemo, useState } from 'react'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
@@ -196,8 +196,6 @@ export default function Pilotage() {
 
   const rowsScope = scope === TOUTES ? parCat : parCat.filter((p) => p.cat === scope)
   const stockTotal = rowsScope.reduce((s, p) => s + p.stock, 0)
-  const valeurParc = rowsScope.reduce((s, p) => s + p.valeur, 0)
-  const rotation = valeurParc > 0 ? (caTotal / valeurParc) * 100 : 0
   const autorisations = demandes.filter((d) => estActif(d.statut)).length
 
   // ── Période précédente (mêmes règles de périmètre) → deltas décisionnels ──
@@ -260,8 +258,7 @@ export default function Pilotage() {
     { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${facturesP.length} facture(s)`, icon: BadgeDollarSign, color: '#BC3C31' },
     { id: 'presta', title: 'Prestations', value: formatNumber(nbPrestations), delta: pct(nbPrestations, nbPrestPrev), up: true, sub: comparable ? `préc. ${formatNumber(nbPrestPrev)}` : 'sur la période', icon: ClipboardList, color: '#0284c7' },
     { id: 'panier', title: 'Panier moyen', value: formatMoney(panierMoyen), delta: pct(panierMoyen, panierPrev), up: true, sub: 'CA ÷ prestations', icon: Coins, color: '#7c3aed' },
-    { id: 'casse', title: 'Taux de casse / perte', value: `${tauxCasse.toFixed(1)} %`, deltaPP: comparable ? (tauxCasse - tauxCassePrev) : null, up: false, sub: `${formatNumber(retourCasse + retourPerdu)}/${formatNumber(totalRetours)} retours`, icon: AlertTriangle, color: tauxCasse > 5 ? '#dc2626' : '#16a34a' },
-    { id: 'rotation', title: 'Rotation du parc', value: `${rotation.toFixed(0)} %`, sub: `CA ÷ parc (${formatMoney(valeurParc)})`, icon: TrendingUp, color: '#0d9488' }
+    { id: 'casse', title: 'Taux de casse / perte', value: `${tauxCasse.toFixed(1)} %`, deltaPP: comparable ? (tauxCasse - tauxCassePrev) : null, up: false, sub: `${formatNumber(retourCasse + retourPerdu)}/${formatNumber(totalRetours)} retours`, icon: AlertTriangle, color: tauxCasse > 5 ? '#dc2626' : '#16a34a' }
   ]
 
   return (
@@ -286,7 +283,7 @@ export default function Pilotage() {
       </div>
       <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpis.map((k) => {
           const raw = k.delta != null ? k.delta : (k.deltaPP != null ? k.deltaPP : null)
           const positive = (raw ?? 0) >= 0
@@ -295,17 +292,18 @@ export default function Pilotage() {
           return (
           <button key={k.id} type="button" onClick={() => setModal(k.id)}
             className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
+            <div className="mb-2 flex items-center justify-between gap-1">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
               {chip && (
-                <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                   {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{chip}
                 </span>
               )}
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
-            <p className="text-xl font-extrabold text-gray-900">{k.value}</p>
-            {k.sub && <p className="mt-0.5 text-[10px] text-gray-400">{k.sub}</p>}
+            {/* truncate + title : un montant long est coupé proprement, lisible au survol. */}
+            <p className="truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
+            <p className="truncate text-lg font-extrabold leading-tight text-gray-900 sm:text-xl" title={String(k.value)}>{k.value}</p>
+            {k.sub && <p className="mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
           </button>
         )})}
       </div>
@@ -500,11 +498,11 @@ function ScopeTab({ active, color, onClick, children }) {
 function PilotageModal({ id, onClose, scopeLabel, data }) {
   if (!id) return null
   const titles = {
-    ca: 'Factures approuvées', panier: 'Prestations', rotation: 'Factures approuvées', parc: 'Parc par catégorie', stock: 'Parc par catégorie',
+    ca: 'Factures approuvées', panier: 'Prestations', parc: 'Parc par catégorie', stock: 'Parc par catégorie',
     presta: 'Prestations', loue: 'Prestations', casse: 'Retours (casse / perte)', retok: 'Retours OK', autos: 'Détail'
   }
   let content = null
-  if (['ca', 'rotation'].includes(id)) {
+  if (id === 'ca') {
     const rows = [...data.facturesP].sort((a, b) => (a.date < b.date ? 1 : -1))
     content = (
       <table className="w-full text-sm">
