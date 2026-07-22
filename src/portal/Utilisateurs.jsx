@@ -10,6 +10,7 @@ import Badge from '../shared/ui/Badge'
 import FormGroup from '../shared/forms/FormGroup'
 import Input from '../shared/forms/Input'
 import Select from '../shared/forms/Select'
+import ChampAutocomplete from '../shared/forms/ChampAutocomplete'
 import { useUsersStore } from '../core/users'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
@@ -162,18 +163,19 @@ export default function Utilisateurs() {
               </FormGroup>
               <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
               <FormGroup label="Secteur">
-                <Input list="secteurs-suggestions" autoComplete="off"
-                  value={modal.data.secteur} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, secteur: e.target.value } }))} />
-                <datalist id="secteurs-suggestions">
-                  {secteursSuggestions.map((s) => <option key={s} value={s} />)}
-                </datalist>
+                <ChampAutocomplete
+                  value={modal.data.secteur}
+                  onChange={(v) => setModal((m) => ({ ...m, data: { ...m.data, secteur: v } }))}
+                  suggestions={secteursSuggestions}
+                />
               </FormGroup>
               <FormGroup label="Poste (fonction dans l'entreprise)" className="col-span-2" hint="Ex. Comptable, Responsable RH, Gérant… — affiché notamment quand cette personne est choisie comme bénéficiaire d'un décaissement.">
-                <Input list="postes-suggestions" autoComplete="off"
-                  value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} placeholder="ex: Comptable" />
-                <datalist id="postes-suggestions">
-                  {postesSuggestions.map((p) => <option key={p} value={p} />)}
-                </datalist>
+                <ChampAutocomplete
+                  value={modal.data.poste}
+                  onChange={(v) => setModal((m) => ({ ...m, data: { ...m.data, poste: v } }))}
+                  suggestions={postesSuggestions}
+                  placeholder="ex: Comptable"
+                />
               </FormGroup>
               <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 — pour les alertes WhatsApp">
                 <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />

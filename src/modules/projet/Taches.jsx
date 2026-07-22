@@ -13,6 +13,7 @@ import { useAuthStore } from '../../core/auth'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
 import { projetsVisibles, scopeParProjets } from './logic'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 
 function ChampAssignee({ value, onChange, users }) {
   const [open, setOpen]     = useState(false)
@@ -452,13 +453,12 @@ function OngletTaches({ taches, projets, users, depenses }) {
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Titre *</label>
-            <input list="taches-suggestions" autoComplete="off"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            <ChampAutocomplete
+              value={form.titre}
+              onChange={(v) => setForm((f) => ({ ...f, titre: v }))}
+              suggestions={tachesSuggestions(projets.find((p) => p.id === form.projetId)?.type)}
               placeholder="Choisir une suggestion ou saisir…"
-              value={form.titre} onChange={(e) => setForm((f) => ({ ...f, titre: e.target.value }))} />
-            <datalist id="taches-suggestions">
-              {tachesSuggestions(projets.find((p) => p.id === form.projetId)?.type).map((s) => <option key={s} value={s} />)}
-            </datalist>
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -478,13 +478,12 @@ function OngletTaches({ taches, projets, users, depenses }) {
               return (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-600">{libelleEtape(typeProjet)}</label>
-                  <input list="phases-suggestions" autoComplete="off"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  <ChampAutocomplete
+                    value={form.phase}
+                    onChange={(v) => setForm((f) => ({ ...f, phase: v }))}
+                    suggestions={suggestions}
                     placeholder={suggestions[0] ? `ex : ${suggestions[0]}` : 'Regroupement libre'}
-                    value={form.phase} onChange={(e) => setForm((f) => ({ ...f, phase: e.target.value }))} />
-                  <datalist id="phases-suggestions">
-                    {suggestions.map((s) => <option key={s} value={s} />)}
-                  </datalist>
+                  />
                 </div>
               )
             })()}

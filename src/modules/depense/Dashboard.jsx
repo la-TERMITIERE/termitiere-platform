@@ -142,24 +142,36 @@ export default function Dashboard() {
       {/* ── Demandes de décaissement à traiter ── */}
       {enAttenteCount > 0 && (
         <button onClick={() => navigate('/depense/autorisations')}
-          className="w-full rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-left text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-amber-50/80">
-          <p className="flex items-center gap-2 font-bold text-amber-800">
-            <Stamp size={16} /> {enAttenteCount} demande(s) de décaissement à traiter
-          </p>
-          <p className="mt-0.5 text-xs text-amber-600">Cliquez pour ouvrir l'autorisation de décaissement</p>
+          className="group flex w-full items-center gap-3 rounded-2xl border-l-4 border-amber-500 bg-gradient-to-r from-amber-50/95 via-amber-50/70 to-amber-50/30 px-4 py-3.5 text-left shadow-[0_16px_36px_-16px_rgba(180,83,9,0.28)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_44px_-16px_rgba(180,83,9,0.38)]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 shadow-[0_4px_10px_-2px_rgba(180,83,9,0.5)]">
+            <Stamp size={18} className="text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-amber-900">{enAttenteCount} demande{enAttenteCount > 1 ? 's' : ''} de décaissement à traiter</p>
+            <p className="text-xs text-amber-600">Cliquez pour ouvrir l'autorisation de décaissement</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-bold text-white">{enAttenteCount}</span>
+          <ChevronRight size={18} className="shrink-0 text-amber-400 transition-transform group-hover:translate-x-0.5" />
         </button>
       )}
 
       {/* ── Alerte secteurs en attention / dépassement ── */}
       {alertes.length > 0 && (
-        <div className="rounded-2xl border-2 border-red-300/70 bg-red-50/60 px-4 py-3 text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-          <p className="flex items-center gap-2 font-bold text-red-800">
-            <AlertTriangle size={16} /> {alertes.length} secteur(s) à surveiller — {MOIS_LABELS[mois - 1]} {annee}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <div className="rounded-2xl border-l-4 border-red-500 bg-gradient-to-r from-red-50/95 via-red-50/70 to-red-50/30 px-4 py-3.5 shadow-[0_16px_36px_-16px_rgba(220,38,38,0.28)] backdrop-blur-xl backdrop-saturate-150">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500 shadow-[0_4px_10px_-2px_rgba(220,38,38,0.5)]">
+              <AlertTriangle size={18} className="text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-red-900">{alertes.length} secteur{alertes.length > 1 ? 's' : ''} à surveiller</p>
+              <p className="text-xs text-red-500">{MOIS_LABELS[mois - 1]} {annee}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white">{alertes.length}</span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
             {alertes.map((s) => (
-              <span key={s.id} className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                s.statut.key === 'depasse' ? 'border-red-300 bg-red-100 text-red-800' : 'border-amber-300 bg-amber-100 text-amber-800'
+              <span key={s.id} className={`rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm ${
+                s.statut.key === 'depasse' ? 'border-red-300 bg-white text-red-700' : 'border-amber-300 bg-white text-amber-700'
               }`}>
                 {s.statut.key === 'depasse' ? '🔴' : '🟠'} {s.label} — {s.pct}%
               </span>
@@ -171,13 +183,17 @@ export default function Dashboard() {
       {/* ── Dépenses récurrentes à reconduire ── */}
       {depensesAReconduire.length > 0 && (
         <button onClick={reconduireDepenses} disabled={reconduisant}
-          className="w-full rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-left text-sm shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-amber-50/80 disabled:opacity-60">
-          <p className="flex items-center gap-2 font-bold text-amber-800">
-            <Repeat size={16} /> {depensesAReconduire.length} dépense(s) récurrente(s) à reconduire ce mois-ci
-          </p>
-          <p className="mt-0.5 text-xs text-amber-600">
-            {reconduisant ? 'Reconduction en cours…' : 'Cliquez pour les ajouter automatiquement au mois en cours'}
-          </p>
+          className="group flex w-full items-center gap-3 rounded-2xl border-l-4 border-sky-500 bg-gradient-to-r from-sky-50/95 via-sky-50/70 to-sky-50/30 px-4 py-3.5 text-left shadow-[0_16px_36px_-16px_rgba(2,132,199,0.28)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_44px_-16px_rgba(2,132,199,0.38)] disabled:opacity-60 disabled:hover:translate-y-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 shadow-[0_4px_10px_-2px_rgba(2,132,199,0.5)]">
+            <Repeat size={18} className="text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-sky-900">{depensesAReconduire.length} dépense{depensesAReconduire.length > 1 ? 's' : ''} récurrente{depensesAReconduire.length > 1 ? 's' : ''} à reconduire ce mois-ci</p>
+            <p className="text-xs text-sky-600">
+              {reconduisant ? 'Reconduction en cours…' : 'Cliquez pour les ajouter automatiquement au mois en cours'}
+            </p>
+          </div>
+          {!reconduisant && <ChevronRight size={18} className="shrink-0 text-sky-400 transition-transform group-hover:translate-x-0.5" />}
         </button>
       )}
 
@@ -227,22 +243,28 @@ export default function Dashboard() {
       )}
 
       <Card title="Répartition par secteur">
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {parSecteur.map((s) => (
-            <div key={s.id} className="rounded-2xl border border-gray-200/60 bg-white/50 p-3 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150">
+            <div key={s.id} className="rounded-2xl border border-gray-200/60 bg-white/60 p-3.5 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150 transition-shadow hover:shadow-[0_14px_30px_-14px_rgba(26,26,26,0.18)]"
+              style={{ borderLeft: `4px solid ${s.color}` }}>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                <span className="font-semibold text-gray-800">{s.label}</span>
+                <span className="font-bold text-gray-800">{s.label}</span>
                 <Badge tone={s.statut.tone}>{s.statut.label}</Badge>
-                <div className="ml-auto text-sm text-gray-500">
-                  <strong className="text-gray-800">{s.depense.toLocaleString('fr-FR')}</strong> / {s.alloue.toLocaleString('fr-FR')} FCFA
+                <div className="ml-auto text-right text-sm text-gray-500">
+                  <strong className="text-gray-800">{s.depense.toLocaleString('fr-FR')}</strong>
+                  <span className="text-gray-400"> / {s.alloue.toLocaleString('fr-FR')} FCFA</span>
                 </div>
               </div>
-              <div className="mt-2 h-2 rounded-full bg-gray-100">
-                <div
-                  className={`h-2 rounded-full ${s.statut.key === 'depasse' ? 'bg-red-500' : s.statut.key === 'attention' ? 'bg-amber-500' : 'bg-green-500'}`}
-                  style={{ width: `${Math.min(s.pct, 100)}%` }}
-                />
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className={`h-2.5 rounded-full transition-all ${s.statut.key === 'depasse' ? 'bg-red-500' : s.statut.key === 'attention' ? 'bg-amber-500' : 'bg-green-500'}`}
+                    style={{ width: `${Math.min(s.pct, 100)}%` }}
+                  />
+                </div>
+                <span className={`w-10 shrink-0 text-right text-xs font-bold ${s.statut.key === 'depasse' ? 'text-red-600' : s.statut.key === 'attention' ? 'text-amber-600' : 'text-green-600'}`}>
+                  {s.pct}%
+                </span>
               </div>
             </div>
           ))}

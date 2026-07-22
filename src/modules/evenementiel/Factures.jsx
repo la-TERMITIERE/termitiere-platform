@@ -10,6 +10,7 @@ import Table from '../../shared/ui/Table'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
@@ -255,26 +256,13 @@ export default function Factures() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
                   <FormGroup label="Client" required hint="Choisissez un client existant ou tapez un nouveau nom">
-                    <Input
-                      list="clients-briq-list"
+                    <ChampAutocomplete
                       value={modal.facture.client.nom}
-                      onChange={(e) => {
-                        const nom = e.target.value
-                        const connu = clientsConnus.find((c) => c.nom.toLowerCase() === nom.trim().toLowerCase())
-                        setModal((m) => ({
-                          ...m,
-                          facture: {
-                            ...m.facture,
-                            client: connu
-                              ? { ...m.facture.client, nom, tel: connu.tel, email: connu.email, adresse: connu.adresse }
-                              : { ...m.facture.client, nom }
-                          }
-                        }))
-                      }}
+                      suggestions={clientsConnus}
+                      getLabel={(c) => c.nom}
+                      onChange={(nom) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom } } }))}
+                      onSelect={(connu) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom: connu.nom, tel: connu.tel, email: connu.email, adresse: connu.adresse } } }))}
                     />
-                    <datalist id="clients-briq-list">
-                      {clientsConnus.map((c) => <option key={c.nom} value={c.nom} />)}
-                    </datalist>
                   </FormGroup>
                   <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
                   <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>

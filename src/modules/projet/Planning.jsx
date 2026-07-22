@@ -62,17 +62,31 @@ export default function Planning() {
 
 function GanttView({ projets, taches }) {
   const today = startOfDay(new Date())
-  const COL   = 220 // largeur colonne noms (px)
+  const COL   = 260 // largeur colonne noms (px)
+
+  const [filtreStatut, setFiltreStatut] = useState('')
+  const [filtreResponsable, setFiltreResponsable] = useState('')
+  const [filtreProjet, setFiltreProjet] = useState('')
+
+  const chefsDeProjet = useMemo(() =>
+    [...new Set(projets.map((p) => p.responsable).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  [projets])
+
+  const projetsFiltres = useMemo(() => projets
+    .filter((p) => !filtreStatut || p.statut === filtreStatut)
+    .filter((p) => !filtreResponsable || p.responsable === filtreResponsable)
+    .filter((p) => !filtreProjet || p.id === filtreProjet),
+  [projets, filtreStatut, filtreResponsable, filtreProjet])
 
   const { debut, fin, mois } = useMemo(() => {
-    const avecDates = projets.filter((p) => p.dateDebut || p.dateFin)
+    const avecDates = projetsFiltres.filter((p) => p.dateDebut || p.dateFin)
     if (!avecDates.length) return { debut: today, fin: addDays(today, 90), mois: [] }
     const ds    = avecDates.map((p) => p.dateDebut || p.dateFin)
     const fs    = avecDates.map((p) => p.dateFin   || p.dateDebut)
     const start = startOfDay(addDays(new Date(Math.min(...ds)), -15))
     const end   = endOfMonth(addDays(new Date(Math.max(...fs)), 15))
     return { debut: start, fin: end, mois: eachMonthOfInterval({ start, end }) }
-  }, [projets])
+  }, [projetsFiltres])
 
   const totalDays = differenceInDays(fin, debut) + 1
 
@@ -80,38 +94,64 @@ function GanttView({ projets, taches }) {
   const wPct  = (t1, t2) => Math.max(0.8, ((Math.min(totalDays - 1, differenceInDays(startOfDay(new Date(t2)), debut)) - Math.max(0, differenceInDays(startOfDay(new Date(t1)), debut)) + 1) / totalDays) * 100)
 
   const todayPct           = pct(today.getTime())
-  const projetsAvecDates   = projets.filter((p) => p.dateDebut || p.dateFin)
-
-  if (!projetsAvecDates.length) {
-    return <Card><p className="py-10 text-center text-sm text-gray-400">Aucun projet avec des dates — ajoutez des dates début/fin dans l'onglet Projets.</p></Card>
-  }
+  const projetsAvecDates   = projetsFiltres.filter((p) => p.dateDebut || p.dateFin)
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-white/50 bg-white/70 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] backdrop-blur-xl backdrop-saturate-150">
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: COL + Math.max(600, totalDays * 4) }}>
+    <div className="space-y-3">
+      {/* ── Filtres ────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+          value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
+          <option value="">Tous les projets</option>
+          {[...projets].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')).map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+        </select>
+        <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+          value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
+          <option value="">Tous les statuts</option>
+          {Object.entries(STATUTS_PROJET).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        {chefsDeProjet.length > 0 && (
+          <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+            value={filtreResponsable} onChange={(e) => setFiltreResponsable(e.target.value)}>
+            <option value="">Tous les chefs de projet</option>
+            {chefsDeProjet.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
+        {(filtreStatut || filtreResponsable || filtreProjet) && (
+          <button onClick={() => { setFiltreStatut(''); setFiltreResponsable(''); setFiltreProjet('') }}
+            className="text-xs font-semibold text-gray-400 hover:text-gray-600">Réinitialiser</button>
+        )}
+      </div>
 
-          {/* ── En-tête ────────────────────────────────────────────────────── */}
-          <div className="flex bg-gray-50 border-b-2 border-gray-200">
-            <div style={{ width: COL, minWidth: COL }} className="shrink-0 border-r-2 border-gray-200 px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide">
-              Projet / Tâche
-            </div>
-            <div className="relative flex-1">
-              {/* Colonnes mois */}
-              <div className="flex h-full">
-                {mois.map((m) => {
-                  const days = differenceInDays(endOfMonth(m), startOfDay(m)) + 1
-                  const w    = (days / totalDays) * 100
-                  return (
-                    <div key={m.toISOString()} style={{ width: `${w}%` }}
-                      className="border-r border-gray-200 py-3 text-center text-xs font-bold text-gray-600 last:border-r-0 bg-gray-50">
-                      {format(m, 'MMM yyyy', { locale: fr })}
-                    </div>
-                  )
-                })}
+      {!projetsAvecDates.length ? (
+        <Card><p className="py-10 text-center text-sm text-gray-400">Aucun projet avec des dates ne correspond à ces filtres.</p></Card>
+      ) : (
+      <div className="overflow-hidden rounded-3xl border border-white/50 bg-white/70 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] backdrop-blur-xl backdrop-saturate-150">
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: COL + Math.max(600, totalDays * 4) }}>
+
+            {/* ── Lignes défilables, en-tête figé en haut ──────────────────── */}
+            <div className="overflow-y-auto" style={{ maxHeight: '62vh' }}>
+              <div className="flex bg-gray-50 border-b-2 border-gray-200 sticky top-0 z-20">
+                <div style={{ width: COL, minWidth: COL }} className="shrink-0 border-r-2 border-gray-200 px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide bg-gray-50">
+                  Projet / Tâche
+                </div>
+                <div className="relative flex-1">
+                  {/* Colonnes mois */}
+                  <div className="flex h-full">
+                    {mois.map((m) => {
+                      const days = differenceInDays(endOfMonth(m), startOfDay(m)) + 1
+                      const w    = (days / totalDays) * 100
+                      return (
+                        <div key={m.toISOString()} style={{ width: `${w}%` }}
+                          className="border-r border-gray-200 py-3 text-center text-xs font-bold text-gray-600 last:border-r-0 bg-gray-50">
+                          {format(m, 'MMM yyyy', { locale: fr })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
           {/* ── Lignes projets ─────────────────────────────────────────────── */}
           {projetsAvecDates.map((p, pi) => {
@@ -127,9 +167,9 @@ function GanttView({ projets, taches }) {
                 <div className={`flex border-b border-gray-100 ${rowBg} hover:bg-teal-50/30 transition-colors`} style={{ minHeight: 48 }}>
                   {/* Nom */}
                   <div style={{ width: COL, minWidth: COL }} className="shrink-0 border-r-2 border-gray-200 flex items-center gap-2 px-4 py-2">
-                    <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: couleur }} />
+                    <div className="w-2.5 h-2.5 rounded-sm shrink-0 mt-0.5" style={{ background: couleur }} />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate" title={p.nom}>{p.nom}</p>
+                      <p className="text-sm font-semibold leading-snug text-gray-800" title={p.nom}>{p.nom}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">{STATUTS_PROJET[p.statut]?.label}</p>
                     </div>
                   </div>
@@ -198,28 +238,30 @@ function GanttView({ projets, taches }) {
               </div>
             )
           })}
-
-          {/* ── Légende ───────────────────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center gap-4 border-t border-gray-100 bg-gray-50 px-4 py-2">
-            <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span className="inline-block w-4 h-0.5 bg-red-400 rounded" />Aujourd'hui
-            </span>
-            {Object.entries(BARRE_COULEUR).map(([statut, couleur]) => (
-              <span key={statut} className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: couleur }} />
-                {STATUTS_PROJET[statut]?.label}
+            </div>
+            {/* ── Légende — hors zone de défilement, toujours visible en bas ──── */}
+            <div className="flex flex-wrap items-center gap-4 border-t border-gray-100 bg-gray-50 px-4 py-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <span className="inline-block w-4 h-0.5 bg-red-400 rounded" />Aujourd'hui
               </span>
-            ))}
-            <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-400" style={{ transform:'rotate(45deg)' }} />Tâche
-            </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" style={{ transform:'rotate(45deg)' }} />Tâche terminée
-            </span>
-          </div>
+              {Object.entries(BARRE_COULEUR).map(([statut, couleur]) => (
+                <span key={statut} className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: couleur }} />
+                  {STATUTS_PROJET[statut]?.label}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-400" style={{ transform:'rotate(45deg)' }} />Tâche
+              </span>
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" style={{ transform:'rotate(45deg)' }} />Tâche terminée
+              </span>
+            </div>
 
+          </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

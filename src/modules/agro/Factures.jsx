@@ -14,6 +14,7 @@ import Badge from '../../shared/ui/Badge'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
@@ -309,22 +310,25 @@ export default function Factures() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
               <FormGroup label="Client" required hint="Client existant ou nouveau nom">
-                <Input list="clients-list" value={modal.facture.client.nom}
-                  onChange={(e) => {
-                    const nom = e.target.value
-                    const connu = clientsConnus.find((c) => c.nom.toLowerCase() === nom.trim().toLowerCase())
-                    setModal((m) => ({ ...m, facture: { ...m.facture, client: connu ? { ...m.facture.client, nom, tel: connu.tel, email: connu.email, adresse: connu.adresse } : { ...m.facture.client, nom } } }))
-                  }} />
-                <datalist id="clients-list">{clientsConnus.map((c) => <option key={c.nom} value={c.nom} />)}</datalist>
+                <ChampAutocomplete
+                  value={modal.facture.client.nom}
+                  suggestions={clientsConnus}
+                  getLabel={(c) => c.nom}
+                  onChange={(nom) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom } } }))}
+                  onSelect={(connu) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom: connu.nom, tel: connu.tel, email: connu.email, adresse: connu.adresse } } }))}
+                />
               </FormGroup>
               <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
               <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
             </div>
             <div className="mt-2">
               <FormGroup label="Apporté / recommandé par (membre de l'entreprise)" hint="Laissez vide si le client est venu en direct.">
-                <Input list="apporteurs-list" placeholder="Nom du membre…" value={modal.facture.apporteur || ''}
-                  onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, apporteur: e.target.value } }))} />
-                <datalist id="apporteurs-list">{users.map((u) => <option key={u.id} value={u.nom || u.login} />)}</datalist>
+                <ChampAutocomplete
+                  value={modal.facture.apporteur || ''}
+                  suggestions={users.map((u) => u.nom || u.login)}
+                  placeholder="Nom du membre…"
+                  onChange={(v) => setModal((m) => ({ ...m, facture: { ...m.facture, apporteur: v } }))}
+                />
               </FormGroup>
             </div>
 
