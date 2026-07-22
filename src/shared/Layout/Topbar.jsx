@@ -77,6 +77,13 @@ export default function Topbar({ onMenuToggle, user }) {
           {hasModuleLogo ? (
             <img src={logo} alt={nom}
               style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', padding: 3, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', display: 'block' }} />
+          ) : mod?.icon ? (
+            <div style={{
+              width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: color, boxShadow: '0 1px 4px rgba(0,0,0,0.15)', flexShrink: 0
+            }}>
+              <mod.icon size={18} color="white" strokeWidth={2.25} />
+            </div>
           ) : (
             <div style={{
               width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',

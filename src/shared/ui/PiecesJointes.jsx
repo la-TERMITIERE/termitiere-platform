@@ -2,15 +2,15 @@
 // Découplé du stockage : le parent fournit `pieces` et les callbacks onAdd/onRemove.
 // Les fichiers images sont compressés ; tout est encodé en data URL (cf. utils/fichiers).
 import { useRef, useState } from 'react'
-import { Paperclip, Eye, Trash2, Loader2, FileText, Image as ImageIcon, ChevronDown } from 'lucide-react'
+import { Paperclip, Eye, Trash2, Loader2, FileText, Image as ImageIcon } from 'lucide-react'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { toast } from '../../core/notifications'
+import ChampAutocomplete from '../forms/ChampAutocomplete'
 
 export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly = false, noAdd = false, noDelete = false, label = 'Pièces jointes', rubriques = null, withProprietaire = false, withLegende = false }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [rubrique, setRubrique] = useState('')
-  const [rubriqueLibre, setRubriqueLibre] = useState(false)
   const [proprietaire, setProprietaire] = useState('')
   const [legende, setLegende] = useState('')
 
@@ -47,25 +47,17 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
       {!readOnly && !noAdd && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/70 p-2.5">
           {rubriques?.length > 0 && (
-            rubriqueLibre ? (
-              <input value={rubrique} onChange={(e) => setRubrique(e.target.value)}
-                autoFocus placeholder="Nom de la rubrique…"
-                className="rounded-lg border border-teal-300 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400" />
-            ) : (
-              <div className="relative">
-                <select value={rubrique}
-                  onChange={(e) => {
-                    if (e.target.value === '__libre__') { setRubriqueLibre(true); setRubrique('') }
-                    else setRubrique(e.target.value)
-                  }}
-                  className="appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400">
-                  <option value="">— Rubrique —</option>
-                  {rubriques.map((r) => <option key={r.id || r} value={r.id || r}>{r.label || r}</option>)}
-                  <option value="__libre__">✏️ Saisir une rubrique…</option>
-                </select>
-                <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-            )
+            <div className="w-40">
+              <ChampAutocomplete
+                value={rubrique}
+                onChange={setRubrique}
+                onSelect={(r) => setRubrique(r.id || r)}
+                suggestions={rubriques}
+                getLabel={(r) => r.label || r}
+                placeholder="— Rubrique —"
+                className="w-full rounded-lg border border-gray-200 bg-white py-1.5 px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400"
+              />
+            </div>
           )}
           {withProprietaire && (
             <input value={proprietaire} onChange={(e) => setProprietaire(e.target.value)}

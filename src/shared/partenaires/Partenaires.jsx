@@ -15,6 +15,7 @@ import Table from '../ui/Table'
 import Badge from '../ui/Badge'
 import FormGroup from '../forms/FormGroup'
 import Input from '../forms/Input'
+import ChampAutocomplete from '../forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem, removeItem } from '../../core/db'
@@ -66,8 +67,6 @@ export default function Partenaires({ module, suggestions }) {
     toast.success('Partenaire supprimé')
   }
 
-  const listId = `partenaire-types-${module}`
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -117,10 +116,12 @@ export default function Partenaires({ module, suggestions }) {
               <Input value={modal.data.nom} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, nom: e.target.value } }))} placeholder="ex : Dr Koffi / Clinique vétérinaire du Golfe" autoFocus />
             </FormGroup>
             <FormGroup label="Type / spécificité" hint="Ex. Vétérinaire, Technicien agricole, Fournisseur…">
-              <Input list={listId} value={modal.data.type} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, type: e.target.value } }))} placeholder="ex : Vétérinaire" />
-              {listeSuggestions.length > 0 && (
-                <datalist id={listId}>{listeSuggestions.map((s) => <option key={s} value={s} />)}</datalist>
-              )}
+              <ChampAutocomplete
+                value={modal.data.type}
+                onChange={(v) => setModal((m) => ({ ...m, data: { ...m.data, type: v } }))}
+                suggestions={listeSuggestions}
+                placeholder="ex : Vétérinaire"
+              />
             </FormGroup>
             <FormGroup label="Contact / téléphone">
               <Input value={modal.data.contact} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, contact: e.target.value } }))} placeholder="ex : 22890000000" />

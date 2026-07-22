@@ -7,6 +7,7 @@ import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import StatCard from '../../shared/ui/StatCard'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuthStore } from '../../core/auth'
@@ -37,40 +38,15 @@ const VIDE = {
   typePaiement: 'total'
 }
 
-// ── Champ catégorie : liste prédéfinie + saisie libre ──────────────────────
+// ── Champ catégorie : saisie libre + suggestions filtrées en direct ────────
 function ChampCategorie({ value, onChange }) {
-  const [libre, setLibre] = useState(!CATEGORIES.find((c) => c.id === value) && !!value)
-
-  const handleSelect = (e) => {
-    const val = e.target.value
-    if (val === '__libre__') { setLibre(true); onChange('') }
-    else { setLibre(false); onChange(val) }
-  }
-
   return (
-    <div className="space-y-1">
-      <div className="relative">
-        <select
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 appearance-none"
-          value={libre ? '__libre__' : (value || '')}
-          onChange={handleSelect}
-        >
-          <option value="">— Choisir —</option>
-          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          <option value="__libre__">✏️ Saisir une catégorie…</option>
-        </select>
-        <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-      </div>
-      {libre && (
-        <input
-          autoFocus
-          className="w-full rounded-lg border border-teal-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          placeholder="Nom de la catégorie…"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      )}
-    </div>
+    <ChampAutocomplete
+      value={value}
+      onChange={onChange}
+      suggestions={CATEGORIES.map((c) => c.label)}
+      placeholder="Choisir ou saisir une catégorie…"
+    />
   )
 }
 
@@ -712,12 +688,11 @@ export default function Depenses() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire</label>
-                <input list="prestataires-connus" autoComplete="off"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="ex: Kofi Adjovi"
+                <ChampAutocomplete
                   value={form.fournisseur}
-                  onChange={(e) => {
-                    const val = e.target.value
+                  suggestions={prestatairesConnus}
+                  placeholder="ex: Kofi Adjovi"
+                  onChange={(val) => {
                     const coord = coordPrestataires.get(val.trim().toLowerCase())
                     setForm((f) => ({
                       ...f, fournisseur: val,
@@ -725,9 +700,6 @@ export default function Depenses() {
                       prestataireMetier:    f.prestataireMetier    || coord?.metier    || f.prestataireMetier
                     }))
                   }} />
-                <datalist id="prestataires-connus">
-                  {prestatairesConnus.map((n) => <option key={n} value={n} />)}
-                </datalist>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Téléphone</label>

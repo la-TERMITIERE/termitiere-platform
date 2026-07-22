@@ -12,6 +12,7 @@ import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuth } from '../../hooks/useAuth'
@@ -507,12 +508,12 @@ export default function Materiel() {
               </select>
             </FormGroup>
             <FormGroup label="Unité" hint="ex : sac, m³, litre">
-              <input list="unites-suggestions" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              <ChampAutocomplete
+                value={form.unite}
+                onChange={(v) => setForm((f) => ({ ...f, unite: v }))}
+                suggestions={UNITES_SUGGESTIONS}
                 placeholder="unité"
-                value={form.unite} onChange={(e) => setForm((f) => ({ ...f, unite: e.target.value }))} />
-              <datalist id="unites-suggestions">
-                {UNITES_SUGGESTIONS.map((u) => <option key={u} value={u} />)}
-              </datalist>
+              />
             </FormGroup>
             {!editing && (
               <FormGroup label="Quantité initiale" required hint="Stock de départ — mettre 0 si aucun stock pour l'instant">

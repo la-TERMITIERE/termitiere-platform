@@ -8,6 +8,7 @@ import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { setItem, removeItem, updateItem } from '../../core/db'
@@ -463,15 +464,13 @@ export default function Depenses() {
                   </Select>
                 </FormGroup>
                 <FormGroup label="Catégorie *">
-                  <Input
-                    list="categorie-suggestions"
+                  <ChampAutocomplete
                     value={modal.data.categorie}
-                    onChange={(e) => set('categorie', e.target.value)}
+                    onChange={(v) => set('categorie', v)}
+                    suggestions={categorieSuggestions}
                     placeholder="Saisir ou choisir une catégorie…"
+                    accent="amber"
                   />
-                  <datalist id="categorie-suggestions">
-                    {categorieSuggestions.map((c) => <option key={c} value={c} />)}
-                  </datalist>
                 </FormGroup>
                 <FormGroup label="Montant (FCFA) *">
                   <Input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)} placeholder="ex: 50000" />
