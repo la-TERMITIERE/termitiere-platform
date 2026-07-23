@@ -1,6 +1,6 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -17,10 +17,11 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
-import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut } from './data'
+import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
+import { marquerVoletVu } from '../../shared/nouveautes'
 
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
@@ -110,6 +111,7 @@ export default function Depenses() {
     ],
     [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq]
   )
+  useEffect(() => { marquerVoletVu(user?.uid, 'depenseDepenses') }, [user?.uid])
 
   const [recherche, setRecherche] = useState('')
   const [filtreSecteur, setFiltreSecteur] = useState('')
@@ -118,6 +120,8 @@ export default function Depenses() {
   const [filtreSource, setFiltreSource] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
+  const [lot, setLot] = useState(null)            // ajout multiple : tableau de lignes, ou null si fermé
+  const [savingLot, setSavingLot] = useState(false)
   const [detailId, setDetailId] = useState(null)
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -165,6 +169,13 @@ export default function Depenses() {
 
   function openCreate() { setModal({ data: empty(), isNew: true }) }
   function openEdit(d)  { setModal({ data: { ...empty(), ...d }, isNew: false, id: d.id }) }
+
+  // ── Ajout multiple (lot) ──
+  const ligneVide = () => ({ secteurId: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false })
+  function openLot() { setLot([ligneVide(), ligneVide(), ligneVide()]) }
+  const setLigne = (i, k, v) => setLot((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
+  const ajouterLigne = () => setLot((rows) => [...rows, ligneVide()])
+  const retirerLigne = (i) => setLot((rows) => (rows.length > 1 ? rows.filter((_, idx) => idx !== i) : rows))
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
   async function handlePieceChange(e) {
@@ -182,6 +193,35 @@ export default function Depenses() {
     }
   }
 
+  // Crée une nouvelle dépense en appliquant le circuit d'autorisation :
+  //  • imprévue (hors budget) OU montant > SEUIL_APPROBATION_PAU → demande envoyée au PAU
+  //    (statut « en attente ») ;
+  //  • sinon → décaissée immédiatement.
+  // Utilisé aussi bien pour la saisie unitaire que pour l'ajout multiple (lot).
+  async function soumettreNouvelleDepense(d) {
+    const secteur = SECTEURS.find((s) => s.id === d.secteurId)
+    const id = genId()
+    const montant = Number(d.montant) || 0
+    const grosseDepense = montant > SEUIL_APPROBATION_PAU
+    const statutInitial = (d.imprevue || grosseDepense) ? 'en_attente' : 'decaissee'
+    const depenseFinale = { ...d, id, montant, statut: statutInitial, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
+    await setItem('depense_depenses', id, depenseFinale)
+    await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${montant.toLocaleString('fr-FR')} FCFA${grosseDepense ? ' (> seuil → demande PAU)' : ''}${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, categorie: d.categorie, montant, imprevue: !!d.imprevue, grosseDepense, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
+    if (statutInitial === 'en_attente') {
+      // Demande d'autorisation → alerte le PAU (et le super admin) dans sa cloche + push.
+      await notify({
+        type: 'warning',
+        title: `💰 Demande de décaissement — ${secteur?.label || d.secteurId}`,
+        body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · ${grosseDepense ? `dépasse ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA` : 'dépense imprévue'}. En attente de votre autorisation.`,
+        module: 'depense', forRoles: ['pau', 'super_admin'], excludeUid: user?.uid, link: '/depense/autorisations'
+      })
+    } else {
+      await notifierBeneficiaire(depenseFinale, secteur?.label || d.secteurId)
+    }
+    await alerterSiDepassement(depenseFinale, secteur)
+    return { statutInitial, grosseDepense }
+  }
+
   async function handleSave() {
     if (saving) return
     const d = modal.data
@@ -192,25 +232,45 @@ export default function Depenses() {
 
     setSaving(true)
     try {
-      const secteur = SECTEURS.find((s) => s.id === d.secteurId)
       if (modal.isNew) {
-        const id = genId()
-        // Prévue (déjà budgétée) → comptée immédiatement. Imprévue (hors budget) → autorisation de décaissement.
-        const statutInitial = d.imprevue ? 'en_attente' : 'decaissee'
-        const depenseFinale = { ...d, id, statut: statutInitial, enregistrePar: user?.nom || '—', createdAt: Date.now() }
-        await setItem('depense_depenses', id, depenseFinale)
-        await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, categorie: d.categorie, montant: d.montant, imprevue: !!d.imprevue, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
-        toast.success(d.imprevue ? 'Demande de décaissement soumise — en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
-        if (statutInitial === 'decaissee') await notifierBeneficiaire(depenseFinale, secteur?.label || d.secteurId)
+        const { statutInitial, grosseDepense } = await soumettreNouvelleDepense(d)
+        toast.success(
+          statutInitial === 'en_attente'
+            ? (grosseDepense
+                ? `Dépense supérieure à ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA — demande envoyée au PAU pour autorisation ✓`
+                : 'Demande de décaissement soumise — en attente d\'autorisation ✓')
+            : 'Dépense enregistrée ✓'
+        )
       } else {
+        const secteur = SECTEURS.find((s) => s.id === d.secteurId)
         await setItem('depense_depenses', modal.id, { ...d, id: modal.id })
         await audit('depense', 'DEPENSE_EDIT', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Dépense mise à jour ✓')
+        await alerterSiDepassement({ ...d, id: modal.id }, secteur)
       }
-      await alerterSiDepassement(d, secteur)
       setModal(null)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Ajout multiple (lot) : enregistre plusieurs dépenses d'un seul coup. Chaque ligne
+  // complète suit le même circuit (décaissée ou demande PAU selon le montant/imprévu).
+  async function enregistrerLot() {
+    if (savingLot) return
+    const valides = (lot || []).filter((r) => r.secteurId && r.categorie && Number(r.montant) > 0 && r.date)
+    if (valides.length === 0) return toast.error('Aucune ligne complète à enregistrer (secteur, catégorie, montant, date)')
+    setSavingLot(true)
+    try {
+      let nbDemandes = 0
+      for (const r of valides) {
+        const { statutInitial } = await soumettreNouvelleDepense(r)
+        if (statutInitial === 'en_attente') nbDemandes++
+      }
+      toast.success(`${valides.length} dépense(s) enregistrée(s)${nbDemandes ? ` · ${nbDemandes} demande(s) envoyée(s) au PAU` : ''} ✓`)
+      setLot(null)
+    } finally {
+      setSavingLot(false)
     }
   }
 
@@ -220,7 +280,7 @@ export default function Depenses() {
     if (!annee || !mois) return
     const alloue = budgetSecteur(budgets, d.secteurId, annee, mois)
     if (alloue <= 0) return
-    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== modal.id), d], d.secteurId, annee, mois))
+    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois))
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct)
     if (statut.key === 'ok') return
@@ -263,7 +323,7 @@ export default function Depenses() {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Une dépense <strong>imprévue</strong> (hors budget) passe par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget du secteur.
+        <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Une dépense <strong>imprévue</strong> (hors budget), ou toute dépense <strong>supérieure à {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong>, devient automatiquement une <strong>demande envoyée au PAU</strong> et passe par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget du secteur.
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -311,6 +371,7 @@ export default function Depenses() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
+          {!lectureSeule && <Button variant="outline" onClick={openLot}><Layers size={16} /> Ajout multiple</Button>}
           {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
         </div>
       </div>
@@ -598,6 +659,79 @@ export default function Depenses() {
                 </label>
               )}
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal ajout multiple (lot) */}
+      <Modal open={!!lot} onClose={() => setLot(null)} size="xl" title="Ajouter plusieurs dépenses d'un coup"
+        footer={lot && (() => {
+          const completes = lot.filter((r) => r.secteurId && r.categorie && Number(r.montant) > 0 && r.date)
+          const totalLot = completes.reduce((s, r) => s + Number(r.montant), 0)
+          return (
+            <>
+              <span className="mr-auto text-xs text-gray-500">
+                {completes.length} ligne(s) prête(s) · <strong className="text-gray-800">{totalLot.toLocaleString('fr-FR')} FCFA</strong>
+              </span>
+              <Button variant="outline" onClick={() => setLot(null)} disabled={savingLot}>Annuler</Button>
+              <Button onClick={enregistrerLot} loading={savingLot} disabled={completes.length === 0}>Enregistrer tout</Button>
+            </>
+          )
+        })()}>
+        {lot && (
+          <div className="space-y-3">
+            <p className="rounded-xl border border-amber-200/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
+              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Toute ligne <strong>supérieure à {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong> devient une <strong>demande envoyée au PAU</strong> pour autorisation.
+            </p>
+
+            <div className="hidden gap-2 px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 sm:grid sm:grid-cols-12">
+              <span className="sm:col-span-3">Secteur</span>
+              <span className="sm:col-span-2">Catégorie</span>
+              <span className="sm:col-span-2">Montant</span>
+              <span className="sm:col-span-2">Date</span>
+              <span className="sm:col-span-2">Description</span>
+              <span className="sm:col-span-1" />
+            </div>
+
+            <div className="space-y-2">
+              {lot.map((r, i) => {
+                const versPau = Number(r.montant) > SEUIL_APPROBATION_PAU
+                return (
+                  <div key={i} className="grid grid-cols-2 items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 sm:grid-cols-12">
+                    <div className="sm:col-span-3">
+                      <Select value={r.secteurId} onChange={(e) => setLigne(i, 'secteurId', e.target.value)}>
+                        <option value="">— Secteur —</option>
+                        {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Select value={r.categorie} onChange={(e) => setLigne(i, 'categorie', e.target.value)}>
+                        <option value="">— Catégorie —</option>
+                        {CATEGORIES_DEPENSE.map((c) => <option key={c.id} value={c.label}>{c.label}</option>)}
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Input type="number" min="0" value={r.montant} onChange={(e) => setLigne(i, 'montant', e.target.value)} placeholder="0" />
+                      {versPau && <span className="mt-0.5 block text-[10px] font-semibold text-violet-600">→ demande PAU</span>}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Input type="date" value={r.date} onChange={(e) => setLigne(i, 'date', e.target.value)} />
+                    </div>
+                    <div className="col-span-2 sm:col-span-2">
+                      <Input value={r.description} onChange={(e) => setLigne(i, 'description', e.target.value)} placeholder="(optionnel)" />
+                    </div>
+                    <div className="col-span-2 flex justify-end sm:col-span-1 sm:justify-center">
+                      <button type="button" onClick={() => retirerLigne(i)} disabled={lot.length <= 1}
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30" title="Retirer la ligne">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <Button variant="outline" onClick={ajouterLigne}><Plus size={16} /> Ajouter une ligne</Button>
           </div>
         )}
       </Modal>

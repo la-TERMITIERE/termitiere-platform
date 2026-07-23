@@ -15,6 +15,7 @@ import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../util
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { STATUTS_PROJET } from './data'
+import { STATUTS_DECAISSEMENT } from '../depense/data'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
 import { projetsVisibles, scopeParProjets } from './logic'
@@ -32,10 +33,17 @@ const CATEGORIES = [
   { id: 'autre',        label: 'Autre'            }
 ]
 
+// Source de financement d'une dépense de projet — transmise à E-DÉPENSES pour le suivi
+// de l'apport du PAU. Valeurs identiques à E-DÉPENSES ('entreprise' / 'pau').
+const SOURCES_FIN = [
+  { id: 'entreprise', label: "Fonds de l'entreprise" },
+  { id: 'pau',        label: 'Apport du PAU' }
+]
+
 const VIDE = {
   projetId: '', tacheId: '', date: '', montant: '', categorie: '', description: '',
   fournisseur: '', prestataireMetier: '', prestataireTelephone: '',
-  typePaiement: 'total'
+  typePaiement: 'total', sourceFinancement: 'entreprise'
 }
 
 // ── Champ catégorie : saisie libre + suggestions filtrées en direct ────────
@@ -55,6 +63,11 @@ export default function Depenses() {
   const { data: depensesTous } = useCollection('projet_depenses')
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: notes }        = useCollection('projet_depenses_notes')
+  // Dépenses créées côté E-DÉPENSES à la validation d'un besoin (source de vérité =
+  // E-DÉPENSES, circuit d'autorisation de décaissement) — reprises ici en LECTURE SEULE
+  // pour que le chef de projet les voie sans double saisie, sans jamais les dupliquer
+  // (elles ne passent pas par la passerelle projet_depenses → depense_depenses).
+  const { data: depenseDepensesTous } = useCollection('depense_depenses')
   const { user, role } = useAuthStore()
   // Tout le monde (y compris le chef de projet) peut créer/modifier les dépenses.
   const peutModifier = true
@@ -64,8 +77,19 @@ export default function Depenses() {
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.
   const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
-  const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
   const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
+  const depenses = useMemo(() => {
+    const projetIds = new Set(projets.map((p) => p.id))
+    const depuisBesoins = (depenseDepensesTous || [])
+      .filter((d) => d.source === 'besoin' && projetIds.has(d.projetId))
+      .map((d) => ({
+        id: `besoin_${d.id}`, depenseDepId: d.id, projetId: d.projetId, tacheId: d.tacheId || '',
+        montant: d.montant, date: d.date, categorie: 'sous_traitance', description: d.description || d.noteOrigine || '',
+        typePaiement: 'total', ajoutePar: d.enregistrePar || '—', createdAt: d.createdAt,
+        depuisBesoin: true, statutDecaissement: d.statut
+      }))
+    return [...scopeParProjets(depensesTous, projets), ...depuisBesoins]
+  }, [depensesTous, depenseDepensesTous, projets])
 
   const [filtreProjet, setFiltreProjet]     = useState('')
   const [filtreCategorie, setFiltreCateg]   = useState('')
@@ -212,7 +236,8 @@ export default function Depenses() {
       fournisseur: d.fournisseur || '',
       prestataireMetier:    d.prestataireMetier    || '',
       prestataireTelephone: d.prestataireTelephone || '',
-      typePaiement:         d.typePaiement         || 'total'
+      typePaiement:         d.typePaiement         || 'total',
+      sourceFinancement:    d.sourceFinancement    || 'entreprise'
     })
     setEditing(d); setModal(true)
   }
@@ -236,7 +261,7 @@ export default function Depenses() {
           .reduce((s, d) => s + (Number(d.montant) || 0), 0) + Number(form.montant)
         await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
       } else {
-        await addItem('projet_depenses', { ...payload, createdAt: now, ajoutePar: user?.nom || user?.login || null })
+        await addItem('projet_depenses', { ...payload, createdAt: now, ajoutePar: user?.nom || user?.login || null, ajouteParUid: user?.uid || null })
         // Mettre à jour le total dépenses du projet
         const projet = projets.find((p) => p.id === form.projetId)
         if (projet) {
@@ -432,6 +457,11 @@ export default function Depenses() {
                         <span className="whitespace-nowrap text-xs font-semibold text-gray-500">{formatDateShort(d.date)}</span>
                         {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
                         <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">{catLabel(d.categorie)}</span>
+                        {d.depuisBesoin && (
+                          <Badge tone={(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).tone}>
+                            🔗 Besoin validé — {(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).label}
+                          </Badge>
+                        )}
                       </div>
                       {d.description && <p className="mt-1 line-clamp-2 font-medium text-gray-700">{d.description}</p>}
                       {(d.fournisseur || d.prestataireMetier || d.prestataireTelephone) && (
@@ -463,10 +493,10 @@ export default function Depenses() {
                           </span>
                         )}
                       </button>
-                      {peutModifier && (
+                      {peutModifier && !d.depuisBesoin && (
                         <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 shadow-sm transition-all hover:scale-105 hover:border-teal-300 hover:bg-teal-100"><Pencil size={13} /></button>
                       )}
-                      {peutSupprimer && (
+                      {peutSupprimer && !d.depuisBesoin && (
                         <button onClick={() => handleDelete(d)} title="Supprimer" className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 shadow-sm transition-all hover:scale-105 hover:border-red-300 hover:bg-red-100"><Trash2 size={13} /></button>
                       )}
                     </div>
@@ -523,7 +553,7 @@ export default function Depenses() {
                 <Button variant="ghost" onClick={() => { setDetail(null); setNoteDepId(d.id) }}>
                   <MessageSquare size={14} className="mr-1" />Commentaires
                 </Button>
-                {peutModifier && (
+                {peutModifier && !d.depuisBesoin && (
                   <Button onClick={() => { setDetail(null); openEdit(d) }}>
                     <Pencil size={14} className="mr-1" />Modifier
                   </Button>
@@ -681,6 +711,24 @@ export default function Depenses() {
             <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
             <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
               value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Source de financement
+              <span className="ml-1 font-normal text-gray-400">— qui paie cette dépense ?</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {SOURCES_FIN.map((s) => (
+                <button key={s.id} type="button" onClick={() => setForm((f) => ({ ...f, sourceFinancement: s.id }))}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.sourceFinancement === s.id ? (s.id === 'pau' ? 'border-violet-400 bg-violet-50 text-violet-800' : 'border-teal-400 bg-teal-50 text-teal-800') : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}>
+                  {form.sourceFinancement === s.id ? '✓ ' : ''}{s.id === 'pau' ? '💜 ' : ''}{s.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-gray-400">
+              « Apport du PAU » remonte automatiquement dans E-DÉPENSES (suivi de l'apport du promoteur).
+            </p>
           </div>
 
           <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-3">

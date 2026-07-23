@@ -5,7 +5,7 @@ import { METIERS_PRESTATAIRE } from '../projet/prestataire'
 // Correspondance type de projet (E-G.Pro) → secteur (E-DÉPENSES) : permet de ranger
 // automatiquement chaque dépense de chantier dans le secteur qu'elle concerne réellement,
 // plutôt que de tout regrouper sous "MAXI BAT".
-const SECTEUR_PAR_TYPE_PROJET = {
+export const SECTEUR_PAR_TYPE_PROJET = {
   construction: 'bat',
   amenagement:  'bat',
   agricole:     'agro',
@@ -16,13 +16,13 @@ const SECTEUR_PAR_TYPE_PROJET = {
   autre:        'divers'
 }
 
-// Nature de flux par type de projet : un chantier (construction/aménagement) est un
-// achat d'actif durable → Investissement, pas de la dépense de fonctionnement courant.
-// Les autres types de projet (agricole, élevage, événementiel…) restent Exploitation.
-const NATURE_PAR_TYPE_PROJET = {
-  construction: 'investissement',
-  amenagement:  'investissement'
-}
+// Nature de flux des dépenses de projet : toute dépense engagée dans un projet/chantier
+// E-G.Pro est un engagement ponctuel (développement d'un actif ou d'une opération), pas
+// une charge de fonctionnement courant. On la classe donc systématiquement en
+// « Investissement » — ainsi elle n'écrase pas le solde d'EXPLOITATION, qui doit refléter
+// le seul fonctionnement récurrent (revenus réels vs charges courantes). Le montant reste
+// bien comptabilisé (solde d'investissement + solde global), il est juste au bon endroit.
+export const NATURE_DEPENSE_PROJET = 'investissement'
 
 // ── Passerelle en lecture seule avec E-G.Pro (module Projet) ────────────────
 // Les dépenses de projet (`projet_depenses`) sont saisies et gérées exclusivement
@@ -40,13 +40,18 @@ export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], ta
     const metier = METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier || ''
     return {
       id: `projet_${d.id}`,
-      secteurId: SECTEUR_PAR_TYPE_PROJET[projet?.type] || 'divers',
+      // Secteur explicite choisi sur le projet (E-G.Pro) en priorité ; à défaut, on retombe
+      // sur la correspondance type de projet → secteur, puis « divers ».
+      secteurId: projet?.secteurId || SECTEUR_PAR_TYPE_PROJET[projet?.type] || 'divers',
       categorie: d.categorie || 'autre',
       montant: Number(d.montant) || 0,
       date: d.date ? new Date(d.date).toISOString().slice(0, 10) : '',
       description: [projet?.nom, tache?.titre, d.description].filter(Boolean).join(' — ') || d.description || '',
       noteOrigine: d.description || '',
-      natureFlux: NATURE_PAR_TYPE_PROJET[projet?.type] || natureFluxDefaut,
+      natureFlux: NATURE_DEPENSE_PROJET,
+      // Source de financement saisie dans E-G.Pro (apport du PAU ou fonds entreprise) :
+      // transmise telle quelle pour que le suivi de l'apport du PAU (Dashboard / Analyses) la voie.
+      sourceFinancement: d.sourceFinancement || 'entreprise',
       statut: 'decaissee',
       source: 'projet',
       projetId: d.projetId, projetNom: projet?.nom || '',

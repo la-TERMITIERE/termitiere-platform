@@ -1,9 +1,11 @@
 // Dashboard Dépenses — budget alloué vs dépensé, par secteur, pour le mois en cours.
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake, HandCoins, History } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
+import Button from '../../shared/ui/Button'
+import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
@@ -24,6 +26,7 @@ export default function Dashboard() {
   const { data: depensesProjet }  = useCollection('projet_depenses')
   const { data: projetsTous }     = useCollection('projets')
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
+  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
   const depenses = useMemo(() => [
     ...depensesReelles,
@@ -36,6 +39,9 @@ export default function Dashboard() {
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
   const [reconduisant, setReconduisant] = useState(false)
+  const [remboursement, setRemboursement] = useState(null) // { montant, date, motif } quand le modal est ouvert
+  const [rembSaving, setRembSaving] = useState(false)
+  const [histoRembOuvert, setHistoRembOuvert] = useState(false)
 
   const changerMois = (delta) => {
     let m = mois + delta, a = annee
@@ -65,18 +71,44 @@ export default function Dashboard() {
   const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois), [budgets, depenses, annee, mois])
   const enAttenteCount = useMemo(() => depensesEnCircuit(depenses).length, [depenses])
 
-  // Traçabilité du financement : combien vient réellement de la poche du PAU (apport
-  // personnel) vs de la trésorerie de l'entreprise — pour que le PAU voie son impact
-  // financier réel dans l'entreprise. Lecture seule, n'affecte aucun calcul de budget.
+  // Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) MOINS ce qu'elle
+  // lui a déjà restitué (remboursements) = ce qu'elle lui doit encore. Lecture seule côté
+  // dépenses ; les remboursements, eux, sont une vraie écriture (collection dédiée).
   const financement = useMemo(() => {
     const estPau = (d) => (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
     const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
     const cumulPau = totalDepenses(depenses.filter(estPau))
     const cumulEntreprise = totalDepenses(depenses.filter((d) => !estPau(d)))
+    const cumulRembourse = totalDepenses(remboursementsPau)
+    const detteNette = cumulPau - cumulRembourse
     const moisPau = totalDepenses(depenses.filter((d) => estPau(d) && (d.date || '').startsWith(prefixe)))
+    const moisRembourse = totalDepenses(remboursementsPau.filter((r) => (r.date || '').startsWith(prefixe)))
     const total = cumulPau + cumulEntreprise
-    return { cumulPau, cumulEntreprise, moisPau, pct: total > 0 ? Math.round((cumulPau / total) * 100) : 0 }
-  }, [depenses, annee, mois])
+    return { cumulPau, cumulEntreprise, cumulRembourse, detteNette, moisPau, moisRembourse, pct: total > 0 ? Math.round((cumulPau / total) * 100) : 0 }
+  }, [depenses, remboursementsPau, annee, mois])
+
+  const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '' })
+
+  async function confirmerRemboursement() {
+    if (!remboursement) return
+    const montant = Number(remboursement.montant)
+    if (!remboursement.montant || montant <= 0) return toast.error('Montant requis')
+    if (montant > financement.detteNette) return toast.error(`Le montant dépasse la dette restante (${financement.detteNette.toLocaleString('fr-FR')} FCFA)`)
+    if (!remboursement.date) return toast.error('Date requise')
+    setRembSaving(true)
+    try {
+      const id = genId()
+      await setItem('depense_pau_remboursements', id, {
+        id, montant, date: remboursement.date, motif: remboursement.motif.trim(),
+        enregistrePar: user?.nom || user?.login || '—', createdAt: Date.now()
+      })
+      await audit('depense', 'PAU_REMBOURSEMENT', `${montant.toLocaleString('fr-FR')} FCFA remboursés au PAU${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`, { montant, date: remboursement.date })
+      toast.success('Remboursement enregistré ✓')
+      setRemboursement(null)
+    } finally {
+      setRembSaving(false)
+    }
+  }
 
   // Reconduction des dépenses récurrentes du mois précédent → uniquement visible sur le mois réel en cours.
   const estMoisCourant = annee === REAL_ANNEE && mois === REAL_MOIS
@@ -199,7 +231,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#B45309"
-          onClick={() => navigate('/depense/budgets')} />
+          onClick={() => navigate('/depense/recettes-depenses')} />
         <StatCard title="Total dépensé" value={`${totalDepense.toLocaleString('fr-FR')} FCFA`} icon={TrendingDown} accent="#dc2626"
           onClick={() => navigate('/depense/liste')} />
         <StatCard title="Reste global" value={`${(totalAlloue - totalDepense).toLocaleString('fr-FR')} FCFA`} icon={Wallet}
@@ -210,37 +242,107 @@ export default function Dashboard() {
           sub={secteursDepasses > 0 ? 'à surveiller' : 'tout va bien'} />
       </div>
 
-      {/* Traçabilité du financement : impact réel du PAU dans l'entreprise, distinct
-          des fonds propres de l'entreprise. Cumul depuis le début, tous secteurs confondus. */}
+      {/* Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) et lui doit
+          encore restituer. Le remboursement réduit la dette nette — traçabilité complète. */}
       {financement.cumulPau > 0 && (
         <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-3 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-wrap items-center gap-2">
             <HeartHandshake size={18} className="text-violet-600" />
-            <p className="font-bold text-violet-900">Apport du PAU dans l'entreprise</p>
-            <span className="ml-auto rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-violet-700 shadow-sm">{financement.pct}% du total financé</span>
+            <p className="font-bold text-violet-900">Dette envers le PAU</p>
+            <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-violet-700 shadow-sm">{financement.pct}% du financement total</span>
+            <div className="ml-auto flex items-center gap-2">
+              {financement.cumulRembourse > 0 && (
+                <button onClick={() => setHistoRembOuvert((o) => !o)}
+                  className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-600 shadow-sm hover:bg-violet-50">
+                  <History size={12} /> Historique
+                </button>
+              )}
+              {financement.detteNette > 0 && (
+                <button onClick={ouvrirRemboursement}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(124,58,237,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-violet-700 hover:shadow-[0_7px_18px_-4px_rgba(124,58,237,0.7)]">
+                  <HandCoins size={14} /> Rembourser
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Dette nette — l'info la plus importante, mise en avant */}
+          <div className="mt-2 rounded-xl bg-white/70 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Dette restante (à restituer)</p>
+            <p className={`text-2xl font-black ${financement.detteNette > 0 ? 'text-violet-800' : 'text-green-700'}`}>
+              {financement.detteNette.toLocaleString('fr-FR')} FCFA
+              {financement.detteNette === 0 && <span className="ml-2 text-sm font-bold text-green-600">✓ Soldée</span>}
+            </p>
+          </div>
+
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Apport cumulé (depuis le début)</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Apporté (cumulé)</p>
               <p className="text-lg font-black text-violet-800">{financement.cumulPau.toLocaleString('fr-FR')} FCFA</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Apport ce mois-ci</p>
-              <p className="text-lg font-black text-violet-800">{financement.moisPau.toLocaleString('fr-FR')} FCFA</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Déjà remboursé (cumulé)</p>
+              <p className="text-lg font-black text-green-700">{financement.cumulRembourse.toLocaleString('fr-FR')} FCFA</p>
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Fonds propres de l'entreprise (cumulé)</p>
               <p className="text-lg font-black text-gray-700">{financement.cumulEntreprise.toLocaleString('fr-FR')} FCFA</p>
             </div>
           </div>
+
+          {/* Barre de remboursement de la dette */}
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70">
-            <div className="h-2 rounded-full bg-violet-500" style={{ width: `${financement.pct}%` }} />
+            <div className="h-2 rounded-full bg-green-500" style={{ width: `${financement.cumulPau > 0 ? Math.min(100, Math.round((financement.cumulRembourse / financement.cumulPau) * 100)) : 0}%` }} />
           </div>
           <p className="mt-1.5 text-[11px] text-violet-500">
-            Traçabilité pure — n'affecte pas les calculs de budget. Basé sur la « Source de financement » indiquée à chaque dépense.
+            {financement.cumulPau > 0 ? Math.round((financement.cumulRembourse / financement.cumulPau) * 100) : 0}% de la dette déjà restituée. Basé sur la « Source de financement » de chaque dépense + les remboursements enregistrés.
           </p>
+
+          {histoRembOuvert && remboursementsPau.length > 0 && (
+            <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto rounded-xl bg-white/70 p-2">
+              {[...remboursementsPau].sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => (
+                <div key={r.id} className="flex items-center justify-between rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
+                  <div className="min-w-0">
+                    <span className="font-bold text-gray-800">{Number(r.montant).toLocaleString('fr-FR')} FCFA</span>
+                    {r.motif && <span className="ml-2 truncate text-gray-500">{r.motif}</span>}
+                  </div>
+                  <span className="shrink-0 text-[10px] text-gray-400">{formatDateShort(r.date)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Modal enregistrement d'un remboursement au PAU */}
+      <Modal open={!!remboursement} onClose={() => setRemboursement(null)} size="sm" title="Rembourser le PAU"
+        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200"
+        footer={<><Button variant="outline" onClick={() => setRemboursement(null)} disabled={rembSaving}>Annuler</Button><Button onClick={confirmerRemboursement} loading={rembSaving}>Enregistrer</Button></>}>
+        {remboursement && (
+          <div className="space-y-3">
+            <p className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700">
+              Dette restante : <strong>{financement.detteNette.toLocaleString('fr-FR')} FCFA</strong>
+            </p>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Montant remboursé (FCFA) <span className="text-red-500">*</span></label>
+              <input type="number" min="0" max={financement.detteNette}
+                value={remboursement.montant} onChange={(e) => setRemboursement((r) => ({ ...r, montant: e.target.value }))}
+                placeholder="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Date <span className="text-red-500">*</span></label>
+              <input type="date" value={remboursement.date} onChange={(e) => setRemboursement((r) => ({ ...r, date: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Motif / précision</label>
+              <input value={remboursement.motif} onChange={(e) => setRemboursement((r) => ({ ...r, motif: e.target.value }))}
+                placeholder="ex : Remboursement partiel sur trésorerie du mois"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Card title="Répartition par secteur">
         <div className="space-y-2.5">

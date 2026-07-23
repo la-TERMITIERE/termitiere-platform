@@ -1,24 +1,3 @@
-// Suivi "dernière vue" par utilisateur et par volet — sert à calculer les badges
-// "nouveauté" dans le menu (cf. Sidebar.jsx). S'appuie sur le journal d'audit déjà
-// existant : chaque ajout (tâche, dépense, document, photo, commentaire, projet)
-// y est déjà tracé via audit('projet', ...).
-import { setItem } from '../../core/db'
-
-// Actions d'audit associées à chaque volet — utilisées pour compter les nouveautés.
-export const ACTIONS_PAR_VOLET = {
-  projetProjets:      ['projet_cree'],
-  projetTaches:       ['tache_creee'],
-  projetDocuments:    ['document_ajoute'],
-  projetGalerie:      ['photos_ajoutees'],
-  projetDepenses:     ['depense_ajoutee'],
-  projetBesoins:      ['besoin_cree'],
-  projetMateriel:     ['materiel_ajoute']
-}
-
-// Marque le volet comme vu par l'utilisateur courant (fait disparaître son badge).
-export function marquerVoletVu(userId, section) {
-  if (!userId || !section) return
-  return setItem('projet_dernieres_vues', `${userId}__${section}`, {
-    userId, section, vu: Date.now()
-  })
-}
+// Ré-exporte le système partagé de badges "nouveauté" (src/shared/nouveautes.js) —
+// gardé ici pour ne pas casser les imports existants des écrans E-G.Pro.
+export { marquerVoletVu, VOLETS_SUIVIS } from '../../shared/nouveautes'

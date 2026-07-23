@@ -5,7 +5,10 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import OfflineBanner from './OfflineBanner'
 import AutoApproveDemandes from '../AutoApproveDemandes'
+import AutoApproveSortiesFacture from '../AutoApproveSortiesFacture'
+import AutoApproveWorkflow from '../AutoApproveWorkflow'
 import ProjetAlerteWatcher from '../ProjetAlerteWatcher'
+import ProjetAutoDemarrage from '../ProjetAutoDemarrage'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function AppShell() {
@@ -15,7 +18,11 @@ export default function AppShell() {
   return (
     <div className="flex h-screen overflow-hidden bg-[#faf6f5]">
       {hasModule('agro') && <AutoApproveDemandes />}
+      {hasModule('agro') && <AutoApproveSortiesFacture />}
+      {hasModule('logistique') && <AutoApproveWorkflow collection="logistique_demandes" module="logistique" />}
+      {hasModule('evenementiel') && <AutoApproveWorkflow collection="evenementiel_demandes" module="evenementiel" />}
       {hasModule('projet') && <ProjetAlerteWatcher />}
+      {hasModule('projet') && <ProjetAutoDemarrage />}
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onMenuToggle={() => setSidebarOpen((o) => !o)} />

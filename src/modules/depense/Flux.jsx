@@ -2,7 +2,7 @@
 // croisé avec les revenus réels des autres modules. Lecture seule, aucune écriture croisée.
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
-import { Line } from 'react-chartjs-2'
+import { Chart } from 'react-chartjs-2'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
@@ -62,14 +62,26 @@ export default function Flux() {
     return { label, ...s }
   }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel])
 
-  const lineData = {
+  // Barres = solde de chaque nature (exploitation / investissement / perte), ligne = solde global.
+  // Le zéro accentué sépare visuellement gain (au-dessus) et sortie (en-dessous).
+  const chartData = {
     labels: tendance.map((t) => t.label),
     datasets: [
-      { label: 'Exploitation',   data: tendance.map((t) => t.soldeExploitation),   borderColor: '#0d9488', backgroundColor: '#0d948833', tension: 0.3 },
-      { label: 'Investissement', data: tendance.map((t) => t.soldeInvestissement), borderColor: '#059669', backgroundColor: '#05966933', tension: 0.3 },
-      { label: 'Pertes',         data: tendance.map((t) => t.soldePerte),          borderColor: '#dc2626', backgroundColor: '#dc262633', tension: 0.3 },
-      { label: 'Solde global',   data: tendance.map((t) => t.soldeGlobal),         borderColor: '#B45309', backgroundColor: '#B4530933', tension: 0.3, borderDash: [6, 4], borderWidth: 2 }
+      { type: 'line', label: 'Solde global', data: tendance.map((t) => t.soldeGlobal), borderColor: '#334155', backgroundColor: 'rgba(51,65,85,0.05)', borderWidth: 3, borderDash: [6, 4], tension: 0.35, pointRadius: 3, pointBackgroundColor: '#334155', order: 0, fill: false },
+      { type: 'bar', label: 'Exploitation',   data: tendance.map((t) => t.soldeExploitation),   backgroundColor: 'rgba(13,148,136,0.6)', borderColor: '#0d9488', borderWidth: 1, borderRadius: 4, order: 1 },
+      { type: 'bar', label: 'Investissement', data: tendance.map((t) => t.soldeInvestissement), backgroundColor: 'rgba(217,119,6,0.55)', borderColor: '#d97706', borderWidth: 1, borderRadius: 4, order: 1 },
+      { type: 'bar', label: 'Pertes',         data: tendance.map((t) => t.soldePerte),          backgroundColor: 'rgba(220,38,38,0.55)', borderColor: '#dc2626', borderWidth: 1, borderRadius: 4, order: 1 }
     ]
+  }
+
+  const chartOptions = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
+    scales: {
+      y: { beginAtZero: false, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') }, grid: { color: (c) => (c.tick.value === 0 ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.05)') } },
+      x: { grid: { display: false } }
+    }
   }
 
   function exportXLSX() {
@@ -118,16 +130,20 @@ export default function Flux() {
         <StatCard
           title={<span className="flex items-center gap-1">Solde d'exploitation <InfoBulle texte="Revenus réels du mois − dépenses classées Exploitation." /></span>}
           value={`${fmt(solde.soldeExploitation)} FCFA`} icon={solde.soldeExploitation >= 0 ? TrendingUp : TrendingDown}
+          sub={`Revenus ${fmt(solde.revenuExploitation)} − Charges ${fmt(solde.depExploitation)}`}
           accent={solde.soldeExploitation >= 0 ? '#0d9488' : '#dc2626'} />
         <StatCard
           title={<span className="flex items-center gap-1">Solde d'investissement <InfoBulle texte="− dépenses classées Investissement (achat d'actif durable)." /></span>}
-          value={`${fmt(solde.soldeInvestissement)} FCFA`} icon={TrendingDown} accent="#059669" />
+          value={`${fmt(solde.soldeInvestissement)} FCFA`} icon={TrendingDown}
+          sub={`Décaissé : ${fmt(solde.depInvestissement)} FCFA`} accent="#d97706" />
         <StatCard
           title={<span className="flex items-center gap-1">Pertes <InfoBulle texte="− dépenses classées Perte (argent perdu sans contrepartie)." /></span>}
-          value={`${fmt(solde.soldePerte)} FCFA`} icon={TrendingDown} accent="#dc2626" />
+          value={`${fmt(solde.soldePerte)} FCFA`} icon={TrendingDown}
+          sub={`Décaissé : ${fmt(solde.depPerte)} FCFA`} accent="#dc2626" />
         <StatCard
           title={<span className="flex items-center gap-1">Solde global <InfoBulle texte="Exploitation + Investissement + Pertes." /></span>}
           value={`${fmt(solde.soldeGlobal)} FCFA`} icon={solde.soldeGlobal >= 0 ? TrendingUp : TrendingDown}
+          sub={`Revenus ${fmt(solde.revenuExploitation)} − Sorties ${fmt(solde.depExploitation + solde.depInvestissement + solde.depPerte)}`}
           accent={solde.soldeGlobal >= 0 ? '#B45309' : '#dc2626'} />
       </div>
 
@@ -148,9 +164,40 @@ export default function Flux() {
         </div>
       </Card>
 
+      <Card title={`Entrées vs sorties — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-green-700">💰 Entrées</p>
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <span className="text-gray-600">Revenus réels du mois</span>
+              <span className="font-mono font-semibold text-green-700">{fmt(solde.revenuExploitation)} FCFA</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-red-100 bg-red-50/40 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-red-700">📤 Sorties</p>
+            <div className="mt-2 space-y-1 text-sm">
+              <div className="flex items-center justify-between"><span className="text-gray-600">Fonctionnement (exploitation)</span><span className="font-mono">{fmt(solde.depExploitation)}</span></div>
+              <div className="flex items-center justify-between"><span className="text-gray-600">Investissements</span><span className="font-mono">{fmt(solde.depInvestissement)}</span></div>
+              <div className="flex items-center justify-between"><span className="text-gray-600">Pertes</span><span className="font-mono">{fmt(solde.depPerte)}</span></div>
+              <div className="flex items-center justify-between border-t border-red-100 pt-1 font-bold"><span className="text-gray-700">Total sorties</span><span className="font-mono text-red-700">{fmt(solde.depExploitation + solde.depInvestissement + solde.depPerte)} FCFA</span></div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
+          <span className="text-sm font-bold text-gray-700">Solde net du mois (entrées − sorties)</span>
+          <span className={`font-mono text-lg font-black ${solde.soldeGlobal >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(solde.soldeGlobal)} FCFA</span>
+        </div>
+      </Card>
+
       <Card title="Tendance sur 6 mois — solde par nature de flux">
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
+          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#0d9488' }} /> Exploitation (fonctionnement)</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d97706' }} /> Investissement</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Pertes</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block h-0 w-4 border-t-2 border-dashed" style={{ borderColor: '#334155' }} /> Solde global (ligne)</span>
+        </div>
         <div style={{ height: 300 }}>
-          <Line data={lineData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } }} />
+          <Chart type="bar" data={chartData} options={chartOptions} />
         </div>
       </Card>
     </div>
