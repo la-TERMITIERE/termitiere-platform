@@ -136,7 +136,7 @@ export default function Materiel() {
           : []
         await addItem('projet_materiels', {
           ...payload, statut: 'sur_site', quantite: qteInit, mouvements, createdAt: now,
-          responsable: user?.nom || user?.login || null
+          responsable: user?.nom || user?.login || null, ajouteParUid: user?.uid || null
         })
         await audit('projet', 'materiel_ajoute', payload.nom)
       }
@@ -480,60 +480,71 @@ export default function Materiel() {
       </Modal>
 
       {/* Modal création/édition */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier le matériel' : 'Ajouter du matériel'}>
-        <div className="space-y-3">
-          <FormGroup label="Projet" required>
-            <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-              value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
-              <option value="">— Sélectionner —</option>
-              {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
-            </select>
-          </FormGroup>
-          <FormGroup label="Matériel" required>
-            <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-              placeholder="ex : Ciment, bétonnière, marteau-piqueur…"
-              value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
-          </FormGroup>
-          <div className="grid grid-cols-2 gap-3">
-            <FormGroup label="Catégorie">
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                value={form.categorie} onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}>
-                {CATEGORIES_MATERIEL.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier le matériel' : 'Ajouter du matériel'}
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-200/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📋 Informations</p>
+            <FormGroup label="Projet" required>
+              <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
+                <option value="">— Sélectionner —</option>
+                {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </select>
             </FormGroup>
-            <FormGroup label="État">
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                value={form.etat} onChange={(e) => setForm((f) => ({ ...f, etat: e.target.value }))}>
-                {Object.entries(ETATS_MATERIEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </FormGroup>
-            <FormGroup label="Unité" hint="ex : sac, m³, litre">
-              <ChampAutocomplete
-                value={form.unite}
-                onChange={(v) => setForm((f) => ({ ...f, unite: v }))}
-                suggestions={UNITES_SUGGESTIONS}
-                placeholder="unité"
-              />
-            </FormGroup>
-            {!editing && (
-              <FormGroup label="Quantité initiale" required hint="Stock de départ — mettre 0 si aucun stock pour l'instant">
-                <input type="number" min="0" step="any" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="0"
-                  value={form.quantiteInitiale} onChange={(e) => setForm((f) => ({ ...f, quantiteInitiale: e.target.value }))} />
-              </FormGroup>
-            )}
-            <FormGroup label="Arrivé le" hint="Optionnel">
-              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.dateEntree} onChange={(e) => setForm((f) => ({ ...f, dateEntree: e.target.value }))} />
+            <FormGroup label="Matériel" required>
+              <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                placeholder="ex : Ciment, bétonnière, marteau-piqueur…"
+                value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
             </FormGroup>
           </div>
-          {editing && (
-            <p className="text-[11px] text-gray-400">Le stock se modifie via les boutons "Entrée" / "Sortie" sur la fiche, pas ici.</p>
-          )}
-          <FormGroup label="Note" hint="Optionnel">
-            <textarea rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none"
-              value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
-          </FormGroup>
+
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📦 Détails & stock</p>
+            <div className="grid grid-cols-2 gap-3">
+              <FormGroup label="Catégorie">
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.categorie} onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}>
+                  {CATEGORIES_MATERIEL.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </FormGroup>
+              <FormGroup label="État">
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.etat} onChange={(e) => setForm((f) => ({ ...f, etat: e.target.value }))}>
+                  {Object.entries(ETATS_MATERIEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </FormGroup>
+              <FormGroup label="Unité" hint="ex : sac, m³, litre">
+                <ChampAutocomplete
+                  value={form.unite}
+                  onChange={(v) => setForm((f) => ({ ...f, unite: v }))}
+                  suggestions={UNITES_SUGGESTIONS}
+                  placeholder="unité"
+                />
+              </FormGroup>
+              {!editing && (
+                <FormGroup label="Quantité initiale" required hint="Stock de départ — mettre 0 si aucun stock pour l'instant">
+                  <input type="number" min="0" step="any" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="0"
+                    value={form.quantiteInitiale} onChange={(e) => setForm((f) => ({ ...f, quantiteInitiale: e.target.value }))} />
+                </FormGroup>
+              )}
+              <FormGroup label="Arrivé le" hint="Optionnel">
+                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.dateEntree} onChange={(e) => setForm((f) => ({ ...f, dateEntree: e.target.value }))} />
+              </FormGroup>
+            </div>
+            {editing && (
+              <p className="text-[11px] text-gray-500">Le stock se modifie via les boutons "Entrée" / "Sortie" sur la fiche, pas ici.</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <FormGroup label="Note" hint="Optionnel">
+              <textarea rows={2} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none"
+                value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+            </FormGroup>
+          </div>
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>

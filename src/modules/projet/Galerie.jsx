@@ -92,7 +92,8 @@ export default function Galerie() {
             dataURL,
             legende: legende.trim() || '',
             date: Date.now(),
-            taille: Math.floor(dataURL.length * 3 / 4)
+            taille: Math.floor(dataURL.length * 3 / 4),
+            ajouteParUid: user?.uid || null
           })
         } catch (e) { toast.error(`${file.name} : ${e.message}`) }
       }
@@ -172,7 +173,8 @@ export default function Galerie() {
       dataURL,
       legende: legende.trim() || '',
       date:    Date.now(),
-      taille
+      taille,
+      ajouteParUid: user?.uid || null
     }
     const galerie = [...(projetActif.galerie || []), img]
     await updateItem('projets', projetActif.id, { galerie, updatedAt: Date.now() })

@@ -9,6 +9,7 @@ import PiecesJointes from '../../shared/ui/PiecesJointes'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem, updateItem, addItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, UNITES_SUPERFICIE, uniteSuperficie } from './data'
+import { SECTEURS as SECTEURS_DEPENSE } from '../depense/data'
 import { avancementProjet, genererNumProjet, projetsVisibles } from './logic'
 import { formatDateShort, formatMoney, formatDateTime } from '../../utils/formatters'
 import { audit } from '../../core/audit'
@@ -196,7 +197,7 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
+const VIDE = { nom: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
 
 // Couleur d'accent (barre latérale de la carte) selon le statut du projet.
 const STATUT_ACCENT = { planification: '#3b82f6', en_cours: '#f59e0b', en_pause: '#94a3b8', termine: '#16a34a', annule: '#dc2626' }
@@ -336,7 +337,7 @@ export default function Projets() {
   const openCreate = () => { setForm(VIDE); setEditing(null); setModal(true) }
   const openEdit   = (p) => {
     setForm({
-      nom: p.nom || '', type: p.type || 'autre', statut: p.statut || 'planification',
+      nom: p.nom || '', type: p.type || 'autre', secteurId: p.secteurId || '', statut: p.statut || 'planification',
       priorite: p.priorite || 'normale', responsable: p.responsable || '', responsableUid: p.responsableUid || '',
       collaborateurs: p.collaborateurs || [],
       dateDebut: p.dateDebut ? new Date(p.dateDebut).toISOString().slice(0,10) : '',
@@ -379,7 +380,7 @@ export default function Projets() {
           budget: form.budget !== '' ? Number(form.budget) : null,
           superficie: (form.type === 'agricole' && form.superficie !== '') ? Number(form.superficie) : null,
           createdAt: now, updatedAt: now,
-          createdBy: null
+          createdBy: user?.uid || null
         })
         await audit('projet', 'projet_cree', `${form.nom} (${num})`)
       }
@@ -637,8 +638,9 @@ export default function Projets() {
                     </div>
                     {!sansActionsDecision && p.statut === 'planification' && (
                       <button onClick={() => demarrer(p)}
+                        title="Démarrer maintenant, avant la date de début prévue (sinon le projet démarre automatiquement à cette date)"
                         className="mt-1 flex items-center gap-1 rounded-full bg-teal-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-teal-600 transition-colors">
-                        <Play size={11} />Démarrer
+                        <Play size={11} />Démarrer maintenant
                       </button>
                     )}
                     {!sansActionsDecision && p.statut === 'en_cours' && (
@@ -656,35 +658,54 @@ export default function Projets() {
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier le projet' : 'Nouveau projet'}>
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Nom du projet *</label>
-            <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-              value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier le projet' : 'Nouveau projet'}
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-200/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="space-y-4">
+          {/* ── Informations générales ── */}
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📋 Informations générales</p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Nom du projet *</label>
+              <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                placeholder="ex : Poulailler Kara — extension"
+                value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Type</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+                  {TYPES_PROJET.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Secteur concerné</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.secteurId} onChange={(e) => setForm((f) => ({ ...f, secteurId: e.target.value }))}>
+                  <option value="">— Auto (selon le type) —</option>
+                  {SECTEURS_DEPENSE.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Statut</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.statut} onChange={(e) => setForm((f) => ({ ...f, statut: e.target.value }))}>
+                  {Object.entries(STATUTS_PROJET).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Priorité</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.priorite} onChange={(e) => setForm((f) => ({ ...f, priorite: e.target.value }))}>
+                  {Object.entries(PRIORITES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Type</label>
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                {TYPES_PROJET.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Statut</label>
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.statut} onChange={(e) => setForm((f) => ({ ...f, statut: e.target.value }))}>
-                {Object.entries(STATUTS_PROJET).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Priorité</label>
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.priorite} onChange={(e) => setForm((f) => ({ ...f, priorite: e.target.value }))}>
-                {Object.entries(PRIORITES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
+
+          {/* ── Équipe ── */}
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">👤 Équipe</p>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Responsable</label>
               <ChampResponsable
@@ -696,7 +717,7 @@ export default function Projets() {
                 <p className="mt-1 text-[11px] text-amber-500">⚠ Nom libre — choisissez un compte dans la liste pour que ce projet soit visible par un chef de projet cloisonné.</p>
               )}
             </div>
-            <div className="col-span-2">
+            <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Collaborateurs</label>
               <ChampCollaborateurs
                 value={form.collaborateurs}
@@ -705,56 +726,68 @@ export default function Projets() {
               />
               <p className="mt-1 text-[11px] text-gray-400">Chaque collaborateur ajouté a le même accès complet au projet que le responsable.</p>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Date début</label>
-              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} />
-            </div>
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="block text-xs font-medium text-gray-600">Date fin prévue</label>
-                <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                  <input type="checkbox" checked={form.dureeIndeterminee}
-                    onChange={(e) => setForm((f) => ({ ...f, dureeIndeterminee: e.target.checked, dateFin: e.target.checked ? '' : f.dateFin }))} />
-                  Durée indéterminée
-                </label>
-              </div>
-              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-                disabled={form.dureeIndeterminee}
-                value={form.dateFin} onChange={(e) => setForm((f) => ({ ...f, dateFin: e.target.value }))} />
-            </div>
           </div>
-          {form.type === 'agricole' && (
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-green-100 bg-green-50 p-3">
+
+          {/* ── Planning ── */}
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📅 Planning</p>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Superficie cultivée</label>
-                <input type="number" step="any" min="0" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                  placeholder="ex : 2.5"
-                  value={form.superficie} onChange={(e) => setForm((f) => ({ ...f, superficie: e.target.value }))} />
+                <label className="mb-1 block text-xs font-medium text-gray-600">Date début</label>
+                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Unité</label>
-                <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                  value={form.superficieUnite} onChange={(e) => setForm((f) => ({ ...f, superficieUnite: e.target.value }))}>
-                  {Object.entries(UNITES_SUPERFICIE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-medium text-gray-600">Date fin prévue</label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                    <input type="checkbox" checked={form.dureeIndeterminee}
+                      onChange={(e) => setForm((f) => ({ ...f, dureeIndeterminee: e.target.checked, dateFin: e.target.checked ? '' : f.dateFin }))} />
+                    Durée indéterminée
+                  </label>
+                </div>
+                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 disabled:bg-gray-50 disabled:text-gray-400"
+                  disabled={form.dureeIndeterminee}
+                  value={form.dateFin} onChange={(e) => setForm((f) => ({ ...f, dateFin: e.target.value }))} />
               </div>
             </div>
-          )}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA)</label>
-            <input type="number" min="0"
-              placeholder="Laisser vide si le budget n'est pas encore établi"
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.budget !== '' && !budgetValide ? 'border-red-300' : 'border-gray-200'}`}
-              value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
-            {form.budget !== '' && !budgetValide
-              ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
-              : <p className="mt-1 text-[11px] text-gray-400">Optionnel — peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
+            {form.type === 'agricole' && (
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-green-200 bg-green-50 p-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Superficie cultivée</label>
+                  <input type="number" step="any" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    placeholder="ex : 2.5"
+                    value={form.superficie} onChange={(e) => setForm((f) => ({ ...f, superficie: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Unité</label>
+                  <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    value={form.superficieUnite} onChange={(e) => setForm((f) => ({ ...f, superficieUnite: e.target.value }))}>
+                    {Object.entries(UNITES_SUPERFICIE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
-            <textarea rows={3} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-              value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+
+          {/* ── Budget & description ── */}
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">💰 Budget & description</p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA)</label>
+              <input type="number" min="0"
+                placeholder="Laisser vide si le budget n'est pas encore établi"
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.budget !== '' && !budgetValide ? 'border-red-300' : 'border-gray-200'}`}
+                value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
+              {form.budget !== '' && !budgetValide
+                ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
+                : <p className="mt-1 text-[11px] text-gray-400">Optionnel — peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
+              <textarea rows={3} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>

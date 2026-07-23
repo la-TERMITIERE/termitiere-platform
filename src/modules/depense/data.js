@@ -41,6 +41,11 @@ export const SOURCES_FINANCEMENT = {
 }
 export const sourceFinancementDefaut = 'entreprise'
 
+// Seuil au-delà duquel une dépense devient automatiquement une demande d'autorisation
+// envoyée au PAU (au lieu d'être décaissée directement). Toute dépense > ce montant
+// passe par le circuit en_attente → approuvée → décaissée.
+export const SEUIL_APPROBATION_PAU = 20000
+
 // Circuit d'autorisation de décaissement (2 niveaux) :
 //   en_attente → approuvee → decaissee (argent réellement sorti, compté dans le budget)
 //   ou refusee à n'importe quelle étape.

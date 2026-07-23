@@ -1,11 +1,11 @@
-// Recettes & Dépenses — récapitulatif mensuel par secteur.
-//  • Les RECETTES sont récupérées automatiquement du système de facturation de chaque
-//    module (garderie, agro, logistique, briqueterie) — lecture seule, aucune saisie ici.
-//  • Les DÉPENSES du secteur peuvent être ajoutées directement depuis cet écran, en plus
-//    de celles reprises automatiquement d'E-G.Pro et de la Briqueterie.
+// Bilan par secteur — vue financière mensuelle complète, par secteur.
+// Fusion des anciens écrans « Budgets » et « Recettes & Dépenses » :
+//  • RECETTES récupérées automatiquement des factures de chaque module (lecture seule) ;
+//  • DÉPENSES du secteur (saisies dans E-DÉPENSES + reprises d'E-G.Pro et Briqueterie) ;
+//  • SOLDE (recette − dépense), BUDGET alloué (avec révision tracée) + reste & % consommé.
+// La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, TrendingUp, TrendingDown, Scale, Eye, Paperclip, Filter, History } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -13,26 +13,20 @@ import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { isReadOnlyRole } from '../../core/roles'
-import { setItem } from '../../core/db'
+import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { genId, todayStr, formatDateShort, formatDateTime } from '../../utils/formatters'
+import { genId, formatDateShort, formatDateTime } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
-import { SECTEURS, MOIS_LABELS, CATEGORIES_DEPENSE, NATURES_FLUX, natureFluxDefaut, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, STATUTS_DECAISSEMENT } from './data'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
 
-const empty = (secteurId = '') => ({
-  secteurId, categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut
-})
-
 // Thème visuel (panneau de détail + survol) selon le secteur affiché — pour que le
-// design s'accorde à la couleur du module quand cet écran est intégré ailleurs
-// (MAXI-AGRO en vert, Briqueterie en violet, etc.). Sans secteur précis (vue globale
-// dans E-DÉPENSES), on retombe sur l'ambre, la couleur du module.
+// design s'accorde à la couleur du module quand cet écran est intégré ailleurs.
 const THEME_PAR_SECTEUR = {
   agro:         { gradient: 'bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200', hover: 'hover:bg-green-50/40' },
   logistique:   { gradient: 'bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200', hover: 'hover:bg-red-50/40' },
@@ -42,9 +36,13 @@ const THEME_PAR_SECTEUR = {
   default:      { gradient: 'bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200', hover: 'hover:bg-amber-50/40' }
 }
 
-// `secteurId` optionnel : quand il est fourni (vue intégrée dans un module métier comme
-// MAXI-AGRO ou la Briqueterie), l'écran est restreint à ce seul secteur. Sans lui, il
-// affiche tous les secteurs (vue globale dans E-DÉPENSES).
+const badgePct = (statut) => statut.key === 'depasse' ? 'bg-red-100 text-red-700'
+  : statut.key === 'attention' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+const barColor = (statut) => statut.key === 'depasse' ? 'bg-red-500'
+  : statut.key === 'attention' ? 'bg-amber-500' : 'bg-teal-500'
+
+// `secteurId` optionnel : quand il est fourni (vue intégrée dans un module métier), l'écran
+// est restreint à ce seul secteur. Sans lui, il affiche tous les secteurs (E-DÉPENSES).
 export default function RecettesDepenses({ secteurId = null }) {
   const { data: budgets }             = useCollection('depense_budgets')
   const { data: depensesReelles }     = useCollection('depense_depenses')
@@ -67,25 +65,15 @@ export default function RecettesDepenses({ secteurId = null }) {
     ...coutsMatieresBriqueterie(inventairesBriq)
   ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
-  // Secteurs affichés : un seul (vue intégrée dans un module) ou tous (vue globale).
   const secteursAffiches = useMemo(() => secteurId ? SECTEURS.filter((s) => s.id === secteurId) : SECTEURS, [secteurId])
   const theme = THEME_PAR_SECTEUR[secteurId] || THEME_PAR_SECTEUR.default
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
-  const [modal, setModal] = useState(null) // { data } pour l'ajout de dépense
-  const [saving, setSaving] = useState(false)
-  // Liste détaillée dépliée : en vue mono-secteur, elle est ouverte par défaut.
-  const [openSecteur, setOpenSecteur] = useState(secteurId)
-  // Onglet actif : « Résumé » (par secteur, mois par mois) ou « Historique » (tout, filtrable).
-  const [tab, setTab] = useState('resume')
-  // Filtres de l'onglet « Historique des dépenses » (toutes périodes confondues).
-  const [filtreSecteurHist, setFiltreSecteurHist] = useState('')
-  const [filtreResponsable, setFiltreResponsable] = useState('')
-  const [detail, setDetail] = useState(null) // dépense sélectionnée dans l'historique
-  // Révision du budget alloué d'un secteur — même principe que dans l'onglet Budgets :
-  // on garde une trace (ancien/nouveau/motif) au lieu d'écraser silencieusement la valeur.
-  const [revision, setRevision]     = useState(null) // { id, secteurId, secteurLabel, montantActuel, revisions }
+  const [detail, setDetail] = useState(null) // dépense sélectionnée (détail lecture seule)
+  const [secteurDetail, setSecteurDetail] = useState(null) // secteur sélectionné (détail financier)
+  // Révision du budget alloué d'un secteur — garde une trace (ancien/nouveau/motif).
+  const [revision, setRevision]     = useState(null)
   const [revMontant, setRevMontant] = useState('')
   const [revMotif, setRevMotif]     = useState('')
   const [revSaving, setRevSaving]   = useState(false)
@@ -104,59 +92,18 @@ export default function RecettesDepenses({ secteurId = null }) {
     const recette = SECTEURS_AVEC_REVENU.includes(s.id) ? revenuSecteur(collections, s.id, annee, mois) : 0
     const lignes = depensesSecteurMois(depenses, s.id, annee, mois).sort((a, b) => (a.date < b.date ? 1 : -1))
     const depense = totalDepenses(lignes)
+    const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return {
       ...s, recette, depense, lignes, solde: recette - depense, aRevenu: SECTEURS_AVEC_REVENU.includes(s.id),
-      budgetId, alloue, revisionsBudget: budgetDoc?.revisions || []
+      budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || []
     }
   }), [secteursAffiches, budgets, depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
 
   const totalRecette = parSecteur.reduce((s, x) => s + x.recette, 0)
   const totalDepense = parSecteur.reduce((s, x) => s + x.depense, 0)
   const soldeGlobal  = totalRecette - totalDepense
-
-  // ── Historique des dépenses — TOUTES les dépenses, toutes périodes confondues, y
-  // compris celles saisies directement dans le module E-DÉPENSES (pas seulement le
-  // mois affiché en haut). Scopé au secteur du module si intégré (agro, garderie…).
-  const depensesDuScope = useMemo(
-    () => secteurId ? depenses.filter((d) => d.secteurId === secteurId) : depenses,
-    [depenses, secteurId]
-  )
-
-  // Liste des responsables distincts (qui a enregistré la dépense) — pour le filtre.
-  const responsablesDisponibles = useMemo(
-    () => [...new Set(depensesDuScope.map((d) => d.enregistrePar).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [depensesDuScope]
-  )
-
-  const historique = useMemo(() => {
-    let rows = depensesDuScope
-    if (!secteurId && filtreSecteurHist) rows = rows.filter((d) => d.secteurId === filtreSecteurHist)
-    if (filtreResponsable) rows = rows.filter((d) => d.enregistrePar === filtreResponsable)
-    return [...rows].sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depensesDuScope, secteurId, filtreSecteurHist, filtreResponsable])
-
-  const totalHistorique = historique.reduce((s, d) => s + (Number(d.montant) || 0), 0)
-
-  const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
-
-  async function enregistrer() {
-    const d = modal.data
-    if (!d.categorie) return toast.error('Catégorie requise')
-    if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
-    if (!d.date) return toast.error('Date requise')
-    setSaving(true)
-    try {
-      const id = genId()
-      const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-      await setItem('depense_depenses', id, {
-        ...d, id, montant: Number(d.montant), statut: 'decaissee',
-        enregistrePar: user?.nom || '—', createdAt: Date.now()
-      })
-      await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${fmt(d.montant)} FCFA (recettes & dépenses)`, { secteurId: d.secteurId, categorie: d.categorie, montant: Number(d.montant) })
-      toast.success('Dépense ajoutée ✓')
-      setModal(null)
-    } finally { setSaving(false) }
-  }
+  const totalAlloue  = parSecteur.reduce((s, x) => s + x.alloue, 0)
+  const totalReste   = totalAlloue - totalDepense
 
   const ouvrirRevision = (s) => {
     setRevision({ id: s.budgetId, secteurId: s.id, secteurLabel: s.label, montantActuel: s.alloue, revisions: s.revisionsBudget })
@@ -168,17 +115,40 @@ export default function RecettesDepenses({ secteurId = null }) {
     if (!revision) return
     const nouveau = Number(revMontant)
     if (revMontant === '' || nouveau < 0) return toast.error('Montant requis')
-    if (!revMotif.trim()) return toast.error('Motif requis')
+    // Première allocation (aucun budget encore) → pas de motif exigé. Révision d'un
+    // budget existant → motif obligatoire (traçabilité du changement).
+    const estAllocation = revision.montantActuel === 0
+    if (!estAllocation && !revMotif.trim()) return toast.error('Motif de révision requis')
+    const motif = revMotif.trim() || 'Allocation initiale'
     setRevSaving(true)
     try {
       const ancien = revision.montantActuel
-      const entry = { id: genId(), ancien, nouveau, motif: revMotif.trim(), date: Date.now(), auteur: user?.nom || user?.login || '—' }
+      const entry = { id: genId(), ancien, nouveau, motif, date: Date.now(), auteur: user?.nom || user?.login || '—' }
       const revisions = [...revision.revisions, entry]
       await setItem('depense_budgets', revision.id, {
         id: revision.id, secteurId: revision.secteurId, annee, mois, montant: nouveau, revisions, updatedAt: Date.now()
       })
-      await audit('depense', 'BUDGET_REVISE', `${revision.secteurLabel} — ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${revMotif.trim()})`, { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
-      toast.success('Budget révisé ✓')
+      await audit('depense', estAllocation ? 'BUDGET_ALLOUE' : 'BUDGET_REVISE',
+        estAllocation
+          ? `${revision.secteurLabel} — budget alloué ${fmt(nouveau)} FCFA`
+          : `${revision.secteurLabel} — ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${motif})`,
+        { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
+      toast.success(estAllocation ? 'Budget alloué ✓' : 'Budget révisé ✓')
+      setRevision(null)
+    } finally {
+      setRevSaving(false)
+    }
+  }
+
+  // Suppression du budget alloué d'un secteur pour le mois → retour à « Non défini ».
+  const supprimerBudget = async () => {
+    if (!revision) return
+    if (!window.confirm(`Supprimer le budget alloué de ${revision.secteurLabel} pour ${MOIS_LABELS[mois - 1]} ${annee} ?\nLe secteur repassera à « Non défini » (l'historique des révisions sera perdu).`)) return
+    setRevSaving(true)
+    try {
+      await removeItem('depense_budgets', revision.id)
+      await audit('depense', 'BUDGET_SUPPRIME', `${revision.secteurLabel} — budget supprimé (${MOIS_LABELS[mois - 1]} ${annee})`, { secteurId: revision.secteurId, annee, mois })
+      toast.success('Budget supprimé ✓')
       setRevision(null)
     } finally {
       setRevSaving(false)
@@ -187,20 +157,6 @@ export default function RecettesDepenses({ secteurId = null }) {
 
   return (
     <div className="space-y-5">
-      {/* Bascule Résumé / Historique — deux volets distincts du même écran */}
-      <div className="flex flex-wrap gap-1 rounded-xl border border-amber-100 bg-amber-50/60 p-1">
-        <button onClick={() => setTab('resume')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'resume' ? 'bg-white text-amber-800 shadow-sm' : 'text-amber-700/70 hover:text-amber-800'}`}>
-          📊 Résumé par secteur
-        </button>
-        <button onClick={() => setTab('historique')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'historique' ? 'bg-white text-amber-800 shadow-sm' : 'text-amber-700/70 hover:text-amber-800'}`}>
-          🕐 Historique des dépenses
-        </button>
-      </div>
-
-      {tab === 'resume' && (
-      <>
       {/* Navigation mois */}
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
@@ -209,31 +165,32 @@ export default function RecettesDepenses({ secteurId = null }) {
       </div>
 
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Les <strong>recettes</strong> sont récupérées automatiquement des factures de chaque module (garderie, agro, logistique, briqueterie). Les <strong>dépenses</strong> peuvent être ajoutées ici par secteur — en plus de celles reprises d'E-G.Pro et de la Briqueterie.
+        Bilan financier par secteur : les <strong>recettes</strong> (factures des modules) croisées aux <strong>dépenses</strong> donnent le <strong>solde</strong>, comparé au <strong>budget alloué</strong> (reste & % consommé). La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.
       </div>
 
       {/* KPI globaux */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Recettes totales" value={`${fmt(totalRecette)} FCFA`} icon={TrendingUp} accent="#059669" />
         <StatCard title="Dépenses totales" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent="#dc2626" />
         <StatCard title="Solde global" value={`${fmt(soldeGlobal)} FCFA`} sub={soldeGlobal >= 0 ? 'Excédent' : 'Déficit'}
           icon={Scale} accent={soldeGlobal >= 0 ? '#059669' : '#dc2626'} valueColor={soldeGlobal >= 0 ? '#059669' : '#dc2626'} />
+        <StatCard title="Budget alloué" value={`${fmt(totalAlloue)} FCFA`}
+          sub={totalReste < 0 ? '⚠ Budget dépassé' : `Reste ${fmt(totalReste)} FCFA`}
+          icon={Wallet} accent={totalReste < 0 ? '#dc2626' : '#B45309'} valueColor={totalReste < 0 ? '#dc2626' : undefined} />
       </div>
 
       {/* Par secteur */}
       <div className="space-y-2.5">
-        {parSecteur.map((s) => {
-          const ouvert = openSecteur === s.id
-          return (
-          <div key={s.id} className="overflow-hidden rounded-2xl border-l-4 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100" style={{ borderLeftColor: s.color }}>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-              {/* Cliquer sur cette zone déplie la liste détaillée des dépenses du secteur */}
-              <button onClick={() => setOpenSecteur(ouvert ? null : s.id)} className="flex min-w-[150px] items-center gap-2 text-left" disabled={s.lignes.length === 0}>
-                <ChevronDown size={15} className={`shrink-0 text-gray-400 transition-transform ${ouvert ? 'rotate-180' : ''} ${s.lignes.length === 0 ? 'opacity-0' : ''}`} />
+        {parSecteur.map((s) => (
+          <div key={s.id} className="overflow-hidden rounded-2xl border-l-4 bg-white/80 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_52px_-18px_rgba(26,26,26,0.30)]" style={{ borderLeftColor: s.color }}>
+            {/* Toute la ligne est cliquable → détail financier du secteur */}
+            <button onClick={() => setSecteurDetail(s)}
+              className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-gray-50/40">
+              <div className="flex min-w-[150px] items-center gap-2">
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: s.color }} />
                 <span className="font-bold text-gray-800">{s.label}</span>
                 {s.lignes.length > 0 && <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">{s.lignes.length}</span>}
-              </button>
+              </div>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                 <span className="text-gray-500">Recettes {s.aRevenu
@@ -247,202 +204,55 @@ export default function RecettesDepenses({ secteurId = null }) {
                 {s.aRevenu && (
                   <Badge tone={s.solde >= 0 ? 'success' : 'danger'}>{s.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>
                 )}
+                <ChevronRight size={16} className="text-gray-300" />
+              </div>
+            </button>
+
+            {/* Budget alloué + consommation (fusion de l'ancien écran Budgets) */}
+            <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase text-gray-400">Budget</span>
+                <span className="text-sm font-bold text-gray-700">
+                  {s.alloue > 0 ? `${fmt(s.alloue)} FCFA` : <span className="font-normal text-gray-300">Non défini</span>}
+                </span>
                 {!lectureSeule && (
-                  <Button size="sm" variant="outline" onClick={() => setModal({ data: empty(s.id) })}>
-                    <Plus size={14} /> Dépense
-                  </Button>
+                  s.alloue > 0 ? (
+                    <button onClick={() => ouvrirRevision(s)} title="Réviser ce budget (revoir ou ajouter une somme)"
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm transition-all duration-200 hover:bg-amber-50 hover:shadow-[0_0_10px_1px_rgba(180,83,9,0.45)]">
+                      🔄 Réviser
+                    </button>
+                  ) : (
+                    <button onClick={() => ouvrirRevision(s)} title="Allouer un budget à ce secteur"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(180,83,9,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-[0_7px_18px_-4px_rgba(180,83,9,0.7)]">
+                      <span className="text-sm leading-none">＋</span> Allouer un budget
+                    </button>
+                  )
+                )}
+                {s.revisionsBudget.length > 0 && (
+                  <button onClick={() => ouvrirRevision(s)} title="Voir l'historique des révisions"
+                    className="flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-gray-500 shadow-sm hover:bg-gray-100">
+                    <History size={11} /> {s.revisionsBudget.length}
+                  </button>
+                )}
+                {s.alloue > 0 && (
+                  <span className="ml-auto flex items-center gap-3 text-xs">
+                    <span className="text-gray-500">Reste <b className={s.reste < 0 ? 'text-red-600' : 'text-green-600'}>{fmt(s.reste)}</b></span>
+                    <span className={`rounded-full px-2 py-0.5 font-bold ${badgePct(s.statut)}`}>{s.pct}%</span>
+                  </span>
                 )}
               </div>
-            </div>
-
-            {/* Budget alloué pour le mois — peut être revu ou complété à tout moment ;
-                cliquer affiche le détail (formulaire + historique des révisions). */}
-            <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2">
-              <span className="text-[10px] font-semibold uppercase text-gray-400">Budget alloué</span>
-              <span className="text-sm font-bold text-gray-700">
-                {s.alloue > 0 ? `${fmt(s.alloue)} FCFA` : <span className="font-normal text-gray-300">Non défini</span>}
-              </span>
-              {!lectureSeule && (
-                <button onClick={() => ouvrirRevision(s)}
-                  title={s.alloue > 0 ? "Réviser ce budget (revoir ou ajouter une somme)" : "Allouer un budget à ce secteur"}
-                  className="rounded-lg border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700 shadow-sm transition-all duration-200 hover:bg-amber-50 hover:shadow-[0_0_10px_1px_rgba(180,83,9,0.45)]">
-                  {s.alloue > 0 ? '🔄 Réviser' : '+ Allouer'}
-                </button>
-              )}
-              {s.revisionsBudget.length > 0 && (
-                <button onClick={() => ouvrirRevision(s)} title="Voir l'historique des révisions"
-                  className="flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-gray-500 shadow-sm hover:bg-gray-100">
-                  <History size={11} /> {s.revisionsBudget.length}
-                </button>
+              {s.alloue > 0 && (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                  <div className={`h-1.5 rounded-full transition-all ${barColor(s.statut)}`} style={{ width: `${Math.min(100, s.pct)}%` }} />
+                </div>
               )}
             </div>
 
-            {/* Liste détaillée des dépenses du secteur (dépliable) — lignes-cartes
-                cliquables, comme l'onglet Historique : cliquer ouvre le détail. */}
-            {ouvert && s.lignes.length > 0 && (
-              <div className="space-y-1.5 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
-                {s.lignes.map((d) => (
-                  <div key={d.id} onClick={() => setDetail(d)}
-                    className={`group flex cursor-pointer items-center gap-3 rounded-xl bg-white px-3 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.03)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.1)] ${theme.hover}`}>
-                    <span className="whitespace-nowrap text-xs font-medium text-gray-500">{formatDateShort(d.date)}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-gray-700">{d.description || '—'}</p>
-                      <span className="mt-0.5 inline-block rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{d.categorie || '—'}</span>
-                    </div>
-                    <span className="whitespace-nowrap text-[11px]">
-                      {d.source === 'projet' ? <span className="font-semibold text-teal-600">E-G.Pro</span>
-                        : d.source === 'briqueterie' ? <span className="font-semibold text-violet-600">Briqueterie</span>
-                        : <span className="text-gray-400">Saisie</span>}
-                    </span>
-                    <span className="whitespace-nowrap text-sm font-extrabold text-gray-900">{fmt(d.montant)} <span className="text-[10px] font-semibold text-gray-400">FCFA</span></span>
-                    <Eye size={13} className="shrink-0 text-gray-300 transition-colors group-hover:text-gray-500" />
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-          )
-        })}
+        ))}
       </div>
-      </>
-      )}
 
-      {tab === 'historique' && (
-      /* Historique des dépenses — toutes les dépenses, toutes périodes confondues,
-         y compris celles saisies directement dans le module E-DÉPENSES. Cliquer sur
-         une ligne ouvre son détail, comme dans les autres volets de l'application. */
-      <div className="space-y-3">
-        {/* Barre de filtres */}
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3">
-          <Filter size={15} className="shrink-0 text-amber-600" />
-          {!secteurId && (
-            <select value={filtreSecteurHist} onChange={(e) => setFiltreSecteurHist(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-300">
-              <option value="">Tous les secteurs</option>
-              {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-          )}
-          <select value={filtreResponsable} onChange={(e) => setFiltreResponsable(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-300">
-            <option value="">Tous les responsables</option>
-            {responsablesDisponibles.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <div className="ml-auto flex items-center gap-3 text-xs">
-            <span className="rounded-full bg-white px-2.5 py-1 font-bold text-gray-500 shadow-sm">{historique.length} dépense{historique.length > 1 ? 's' : ''}</span>
-            <span className="rounded-full bg-white px-2.5 py-1 font-bold text-amber-700 shadow-sm">{fmt(totalHistorique)} FCFA</span>
-          </div>
-        </div>
-
-        {/* Liste — lignes-cartes cliquables (comme le reste du module) */}
-        {historique.length === 0 ? (
-          <Card>
-            <p className="py-10 text-center text-sm text-gray-400">Aucune dépense ne correspond à ces filtres.</p>
-          </Card>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-separate border-spacing-y-2 text-sm">
-              <tbody>
-                {historique.map((d) => {
-                  const sect = SECTEURS.find((s) => s.id === d.secteurId)
-                  const sectColor = sect?.color || '#64748b'
-                  return (
-                    <tr key={d.id} onClick={() => setDetail(d)}
-                      className={`group cursor-pointer shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_6px_16px_-6px_rgba(0,0,0,0.12)] ${theme.hover}`}>
-                      <td className="rounded-l-2xl border-l-[3px] bg-white px-4 py-2.5 align-middle" style={{ borderColor: sectColor }}>
-                        <p className="whitespace-nowrap text-xs font-semibold text-gray-500">{formatDateShort(d.date)}</p>
-                        {!secteurId && (
-                          <span className="mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: sectColor + '18', color: sectColor }}>
-                            {sect?.label || d.secteurId}
-                          </span>
-                        )}
-                      </td>
-                      <td className="bg-white px-4 py-2.5 align-middle">
-                        <p className="line-clamp-1 max-w-[280px] font-medium text-gray-700">{d.description || '—'}</p>
-                        <span className="mt-0.5 inline-block rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{d.categorie || '—'}</span>
-                      </td>
-                      <td className="bg-white px-4 py-2.5 align-middle text-xs text-gray-500">✍️ <span className="font-semibold text-gray-600">{d.enregistrePar || '—'}</span></td>
-                      <td className="whitespace-nowrap bg-white px-4 py-2.5 text-right align-middle">
-                        <span className="text-sm font-extrabold text-gray-900">{fmt(d.montant)}</span>
-                        <span className="ml-0.5 text-[10px] font-semibold text-gray-400">FCFA</span>
-                      </td>
-                      <td className="whitespace-nowrap rounded-r-2xl bg-white px-4 py-2.5 text-right align-middle text-[11px]">
-                        {d.source === 'projet' ? <span className="font-semibold text-teal-600">E-G.Pro</span>
-                          : d.source === 'briqueterie' ? <span className="font-semibold text-violet-600">Briqueterie</span>
-                          : <span className="text-gray-400">Saisie</span>}
-                        <Eye size={13} className="ml-2 inline text-gray-300 transition-colors group-hover:text-gray-500" />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* Modal ajout dépense */}
-      <Modal open={!!modal} onClose={() => setModal(null)} size="sm" title="Ajouter une dépense"
-        panelClassName={theme.gradient}
-        footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={enregistrer} loading={saving}>Enregistrer</Button></>}>
-        {modal && (
-          <div className="space-y-3">
-            {/* Secteur concerné */}
-            <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-sm">
-              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: SECTEURS.find((s) => s.id === modal.data.secteurId)?.color }} />
-              <span className="text-gray-500">Secteur :</span>
-              <span className="font-bold text-gray-800">{SECTEURS.find((s) => s.id === modal.data.secteurId)?.label}</span>
-            </div>
-
-            {/* Détails de la dépense */}
-            <div className="rounded-xl border border-amber-100 bg-white p-3 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Date</label>
-                  <input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Montant (FCFA) <span className="text-red-500">*</span></label>
-                  <input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)}
-                    placeholder="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Catégorie <span className="text-red-500">*</span></label>
-                <select value={modal.data.categorie} onChange={(e) => set('categorie', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300">
-                  <option value="">— Choisir —</option>
-                  {CATEGORIES_DEPENSE.map((c) => <option key={c.id} value={c.label}>{c.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Description</label>
-                <input value={modal.data.description} onChange={(e) => set('description', e.target.value)}
-                  placeholder="Ex : achat de fournitures" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-              </div>
-            </div>
-
-            {/* Classification */}
-            <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📊 Classification</p>
-              <label className="mb-1 block text-sm font-semibold text-gray-700">Nature de flux</label>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(NATURES_FLUX).map(([k, v]) => (
-                  <button key={k} type="button" onClick={() => set('natureFlux', k)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
-                    title={v.desc}>
-                    {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Détail d'une dépense de l'historique — même principe que dans les autres volets */}
+      {/* Détail d'une dépense — lecture seule */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="md" title="Détail de la dépense"
         panelClassName={theme.gradient}
         footer={<Button variant="outline" onClick={() => setDetail(null)}>Fermer</Button>}>
@@ -454,7 +264,6 @@ export default function RecettesDepenses({ secteurId = null }) {
           const depuisBriqueterie = detail.source === 'briqueterie'
           return (
             <div className="space-y-3 text-sm">
-              {/* En-tête : montant + statut */}
               <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -471,7 +280,6 @@ export default function RecettesDepenses({ secteurId = null }) {
                 </div>
               </div>
 
-              {/* Infos clés en tuiles */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-white p-3 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Date</p>
@@ -496,7 +304,6 @@ export default function RecettesDepenses({ secteurId = null }) {
                 </div>
               </div>
 
-              {/* Projet / tâche (dépenses récupérées d'E-G.Pro) */}
               {depuisProjet && (detail.projetNom || detail.tacheTitre) && (
                 <div className="rounded-2xl border-l-4 border-teal-400 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 Projet concerné</p>
@@ -506,7 +313,6 @@ export default function RecettesDepenses({ secteurId = null }) {
                 </div>
               )}
 
-              {/* Description (dépenses saisies directement) */}
               {!depuisProjet && (
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
@@ -514,7 +320,6 @@ export default function RecettesDepenses({ secteurId = null }) {
                 </div>
               )}
 
-              {/* Traçabilité */}
               <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Traçabilité</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -542,38 +347,130 @@ export default function RecettesDepenses({ secteurId = null }) {
         })()}
       </Modal>
 
-      {/* Révision du budget alloué d'un secteur */}
+      {/* Détail financier d'un secteur — récapitulatif complet du mois */}
+      <Modal open={!!secteurDetail} onClose={() => setSecteurDetail(null)} size="md"
+        title={secteurDetail ? `Détail financier — ${secteurDetail.label} · ${MOIS_LABELS[mois - 1]} ${annee}` : 'Détail'}
+        panelClassName={theme.gradient}
+        footer={<Button variant="outline" onClick={() => setSecteurDetail(null)}>Fermer</Button>}>
+        {secteurDetail && (
+          <div className="space-y-3 text-sm">
+            {/* Solde en tête */}
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="h-3 w-3 rounded-full" style={{ background: secteurDetail.color }} />
+                <span className="font-bold text-gray-800">{secteurDetail.label}</span>
+                {secteurDetail.aRevenu && <Badge tone={secteurDetail.solde >= 0 ? 'success' : 'danger'}>{secteurDetail.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>}
+              </div>
+              <p className={`mt-2 text-3xl font-black leading-none ${secteurDetail.solde >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                {secteurDetail.solde >= 0 ? '+' : ''}{fmt(secteurDetail.solde)}<span className="ml-1 text-sm font-bold text-gray-400">FCFA</span>
+              </p>
+              <p className="mt-0.5 text-[11px] text-gray-400">Solde du mois (recettes − dépenses)</p>
+            </div>
+
+            {/* Tuiles chiffrées */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Recettes</p>
+                <p className="mt-0.5 font-bold text-green-700">{secteurDetail.aRevenu ? `${fmt(secteurDetail.recette)} FCFA` : '— non suivi'}</p>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Dépenses</p>
+                <p className="mt-0.5 font-bold text-amber-600">{fmt(secteurDetail.depense)} FCFA</p>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Budget alloué</p>
+                <p className="mt-0.5 font-bold text-gray-800">{secteurDetail.alloue > 0 ? `${fmt(secteurDetail.alloue)} FCFA` : <span className="font-normal text-gray-300">Non défini</span>}</p>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Reste sur budget</p>
+                <p className={`mt-0.5 font-bold ${secteurDetail.reste < 0 ? 'text-red-600' : 'text-green-600'}`}>{secteurDetail.alloue > 0 ? `${fmt(secteurDetail.reste)} FCFA` : '—'}</p>
+              </div>
+            </div>
+
+            {/* Consommation du budget */}
+            {secteurDetail.alloue > 0 && (
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Consommation du budget</span>
+                  <span className={`rounded-full px-2 py-0.5 font-bold ${badgePct(secteurDetail.statut)}`}>{secteurDetail.pct}%</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className={`h-2 rounded-full ${barColor(secteurDetail.statut)}`} style={{ width: `${Math.min(100, secteurDetail.pct)}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Liste des dépenses du mois — clic → détail de la dépense */}
+            <div className="rounded-xl bg-white p-3 shadow-sm">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Dépenses du mois ({secteurDetail.lignes.length})</p>
+              {secteurDetail.lignes.length === 0 ? (
+                <p className="py-2 text-center text-xs text-gray-400">Aucune dépense enregistrée ce mois.</p>
+              ) : (
+                <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {secteurDetail.lignes.map((d) => (
+                    <div key={d.id} onClick={() => { setSecteurDetail(null); setDetail(d) }}
+                      className={`group flex cursor-pointer items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs transition-colors ${theme.hover}`}>
+                      <span className="whitespace-nowrap text-gray-500">{formatDateShort(d.date)}</span>
+                      <span className="min-w-0 flex-1 truncate text-gray-700">{d.description || '—'}</span>
+                      <span className="whitespace-nowrap font-bold text-gray-900">{fmt(d.montant)}</span>
+                      <Eye size={12} className="shrink-0 text-gray-300 transition-colors group-hover:text-gray-500" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Allocation (1ère fois) ou Révision (budget existant) du budget d'un secteur */}
       <Modal open={!!revision} onClose={() => setRevision(null)} size="sm"
-        title={revision ? `Réviser le budget — ${revision.secteurLabel}` : 'Réviser le budget'}
+        title={revision ? `${revision.montantActuel > 0 ? 'Réviser' : 'Allouer'} le budget — ${revision.secteurLabel}` : 'Budget'}
         panelClassName={theme.gradient}>
-        {revision && (
+        {revision && (() => {
+          const estAllocation = revision.montantActuel === 0
+          return (
           <div className="space-y-4">
             <div className="rounded-xl bg-white p-3 shadow-sm">
-              <div className="grid grid-cols-2 gap-3">
+              {estAllocation ? (
                 <div>
-                  <p className="text-[10px] font-semibold uppercase text-gray-400">Budget actuel</p>
-                  <p className="text-sm font-bold text-gray-700">{fmt(revision.montantActuel)} FCFA</p>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant à allouer (FCFA)</label>
+                  <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)} autoFocus
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                  <p className="mt-1 text-[11px] text-gray-400">Première allocation du mois — aucun motif requis.</p>
                 </div>
-                <div>
-                  <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Nouveau montant (FCFA)</label>
-                  <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Motif de la révision</label>
-                <input value={revMotif} onChange={(e) => setRevMotif(e.target.value)}
-                  placeholder="ex : Ajustement suite à hausse des prix, apport supplémentaire du PAU…"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-              </div>
-              <div className="mt-3 flex justify-end">
-                <Button size="sm" onClick={confirmerRevision} loading={revSaving}>Confirmer la révision</Button>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase text-gray-400">Budget actuel</p>
+                      <p className="text-sm font-bold text-gray-700">{fmt(revision.montantActuel)} FCFA</p>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Nouveau montant (FCFA)</label>
+                      <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Motif de la révision</label>
+                    <input value={revMotif} onChange={(e) => setRevMotif(e.target.value)}
+                      placeholder="ex : Ajustement suite à hausse des prix, apport supplémentaire du PAU…"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  </div>
+                </>
+              )}
+              <div className="mt-3 flex items-center justify-between gap-2">
+                {revision.montantActuel > 0 && !lectureSeule
+                  ? <Button size="sm" variant="danger" onClick={supprimerBudget} loading={revSaving}>🗑️ Supprimer le budget</Button>
+                  : <span />}
+                <Button size="sm" onClick={confirmerRevision} loading={revSaving}>{estAllocation ? 'Allouer' : 'Confirmer la révision'}</Button>
               </div>
             </div>
 
             {revision.revisions.length > 0 && (
               <div className="rounded-xl bg-white p-3 shadow-sm">
-                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-gray-400"><History size={12} /> Historique des révisions</p>
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-gray-400"><History size={12} /> Historique des allocations & révisions</p>
                 <div className="max-h-52 space-y-2 overflow-y-auto">
                   {[...revision.revisions].reverse().map((r) => (
                     <div key={r.id} className="rounded-lg bg-gray-50 px-3 py-2 text-xs">
@@ -586,7 +483,8 @@ export default function RecettesDepenses({ secteurId = null }) {
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
       </Modal>
     </div>
   )

@@ -81,12 +81,13 @@ export default function Documents() {
 
   const handleAdd = async (piece) => {
     if (!projet) return
+    const pieceDatee = { ...piece, id: `pj_${Date.now()}`, createdAt: Date.now(), ajouteParUid: user?.uid || null }
     if (tacheAjout) {
-      const pieces = [...(tacheAjout.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
+      const pieces = [...(tacheAjout.pieces || []), pieceDatee]
       await updateItem('projet_taches', tacheAjout.id, { pieces, updatedAt: Date.now() })
       await audit('projet', 'document_ajoute', `${piece.nom} → ${projet.nom} / ${tacheAjout.titre}`)
     } else {
-      const pieces = [...(projet.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
+      const pieces = [...(projet.pieces || []), pieceDatee]
       await updateItem('projets', projet.id, { pieces, updatedAt: Date.now() })
       await audit('projet', 'document_ajoute', `${piece.nom} → ${projet.nom}`)
     }

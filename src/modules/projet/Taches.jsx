@@ -80,10 +80,17 @@ function ChampAssignee({ value, onChange, users }) {
 import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 
+// Source de financement du versement — transmise à E-DÉPENSES pour le suivi de l'apport
+// du PAU. Valeurs identiques à E-DÉPENSES ('entreprise' / 'pau').
+const SOURCES_FIN = [
+  { id: 'entreprise', label: "Fonds de l'entreprise" },
+  { id: 'pau',        label: 'Apport du PAU' }
+]
+
 const VIDE_TACHE = {
   titre: '', projetId: '', phase: '', assignee: '', priorite: 'normale', statut: 'a_faire', dateDebut: '', echeance: '', montantPrevu: '', note: '',
   prestataireNom: '', prestataireMetier: '', prestataireTelephone: '',
-  versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr()
+  versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr(), versementSource: 'entreprise'
 }
 
 // Couleur d'accent (barre latérale de la carte) selon le statut de la tâche.
@@ -167,7 +174,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
       echeance: t.echeance ? new Date(t.echeance).toISOString().slice(0,10) : '',
       montantPrevu: t.montantPrevu ?? '', note: t.note||'',
       prestataireNom: t.prestataireNom||'', prestataireMetier: t.prestataireMetier||'', prestataireTelephone: t.prestataireTelephone||'',
-      versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr()
+      versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr(), versementSource: 'entreprise'
     })
     setEditing(t); setModal(true)
   }
@@ -181,7 +188,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
     setSaving(true)
     try {
       const now = Date.now()
-      const { versementActif, versementMontant, versementType, versementDate, ...tacheForm } = form
+      const { versementActif, versementMontant, versementType, versementDate, versementSource, ...tacheForm } = form
       const payload = {
         ...tacheForm,
         dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
@@ -194,7 +201,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
         await audit('projet', 'tache_modifiee', form.titre)
       } else {
         const id = `tache_${now}`
-        await setItem('projet_taches', id, { id, ...payload, createdAt: now, createdBy: null })
+        await setItem('projet_taches', id, { id, ...payload, createdAt: now, createdBy: user?.uid || null })
         await audit('projet', 'tache_creee', form.titre)
 
         // Versement initial optionnel — enregistre directement la dépense liée,
@@ -211,8 +218,9 @@ function OngletTaches({ taches, projets, users, depenses }) {
             prestataireMetier: form.prestataireMetier || '',
             prestataireTelephone: form.prestataireTelephone || '',
             typePaiement: versementType,
+            sourceFinancement: versementSource || 'entreprise',
             statut: 'en_attente',
-            ajoutePar: user?.nom || user?.login || null
+            ajoutePar: user?.nom || user?.login || null, ajouteParUid: user?.uid || null, createdAt: now
           })
           if (form.projetId) {
             const totalProjet = depenses
@@ -449,101 +457,111 @@ function OngletTaches({ taches, projets, users, depenses }) {
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier la tâche' : 'Nouvelle tâche'}>
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Titre *</label>
-            <ChampAutocomplete
-              value={form.titre}
-              onChange={(v) => setForm((f) => ({ ...f, titre: v }))}
-              suggestions={tachesSuggestions(projets.find((p) => p.id === form.projetId)?.type)}
-              placeholder="Choisir une suggestion ou saisir…"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier la tâche' : 'Nouvelle tâche'}
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-200/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="space-y-4">
+          {/* ── Informations ── */}
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📋 Informations</p>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Projet</label>
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
-                <option value="">— Sélectionner un projet —</option>
-                {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
-              </select>
-            </div>
-            {(() => {
-              const typeProjet = projets.find((p) => p.id === form.projetId)?.type
-              // Les étapes déjà utilisées sur CE projet passent en premier dans les suggestions —
-              // évite de retaper une variante/typo (ex: "demarage" vs "demarrage") pour la même étape.
-              const phasesDuProjet = [...new Set(taches.filter((t) => t.projetId === form.projetId).map((t) => t.phase).filter(Boolean))]
-              const suggestions = [...new Set([...phasesDuProjet, ...etapesDefaut(typeProjet)])]
-              return (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">{libelleEtape(typeProjet)}</label>
-                  <ChampAutocomplete
-                    value={form.phase}
-                    onChange={(v) => setForm((f) => ({ ...f, phase: v }))}
-                    suggestions={suggestions}
-                    placeholder={suggestions[0] ? `ex : ${suggestions[0]}` : 'Regroupement libre'}
-                  />
-                </div>
-              )
-            })()}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Statut</label>
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.statut} onChange={(e) => setForm((f) => ({ ...f, statut: e.target.value }))}>
-                {Object.entries(STATUTS_TACHE).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Priorité</label>
-              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.priorite} onChange={(e) => setForm((f) => ({ ...f, priorite: e.target.value }))}>
-                {Object.entries(PRIORITES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Assigné à</label>
-              <ChampAssignee
-                value={form.assignee}
-                onChange={(v) => setForm((f) => ({ ...f, assignee: v }))}
-                users={users}
+              <label className="mb-1 block text-xs font-medium text-gray-600">Titre *</label>
+              <ChampAutocomplete
+                value={form.titre}
+                onChange={(v) => setForm((f) => ({ ...f, titre: v }))}
+                suggestions={tachesSuggestions(projets.find((p) => p.id === form.projetId)?.type)}
+                placeholder="Choisir une suggestion ou saisir…"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Date de début</label>
-              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Échéance</label>
-              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
-                value={form.echeance} onChange={(e) => setForm((f) => ({ ...f, echeance: e.target.value }))} />
-            </div>
-            {peutSaisirMontant && (
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Montant arrêté (FCFA) *</label>
-                <input type="number" min="0"
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantPrevu !== '' && !montantValide ? 'border-red-300' : 'border-gray-200'}`}
-                  placeholder="Montant total convenu avec le prestataire"
-                  value={form.montantPrevu} onChange={(e) => setForm((f) => ({ ...f, montantPrevu: e.target.value }))} />
-                {form.montantPrevu !== '' && !montantValide && (
-                  <p className="mt-1 text-[11px] text-red-500">Le montant doit être supérieur à 0.</p>
-                )}
+                <label className="mb-1 block text-xs font-medium text-gray-600">Projet</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
+                  <option value="">— Sélectionner un projet —</option>
+                  {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                </select>
               </div>
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Note (détails) *</label>
-            <textarea rows={3}
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${!noteValide && form.note !== '' ? 'border-red-300' : 'border-gray-200'}`}
-              placeholder="Décris les détails de la tâche : nature exacte des travaux, conditions, matériaux, remarques…"
-              value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
-            <p className="mt-1 text-[11px] text-gray-400">Champ obligatoire — précise ici tout ce qui doit être retenu sur cette tâche.</p>
+              {(() => {
+                const typeProjet = projets.find((p) => p.id === form.projetId)?.type
+                // Les étapes déjà utilisées sur CE projet passent en premier dans les suggestions —
+                // évite de retaper une variante/typo (ex: "demarage" vs "demarrage") pour la même étape.
+                const phasesDuProjet = [...new Set(taches.filter((t) => t.projetId === form.projetId).map((t) => t.phase).filter(Boolean))]
+                const suggestions = [...new Set([...phasesDuProjet, ...etapesDefaut(typeProjet)])]
+                return (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">{libelleEtape(typeProjet)}</label>
+                    <ChampAutocomplete
+                      value={form.phase}
+                      onChange={(v) => setForm((f) => ({ ...f, phase: v }))}
+                      suggestions={suggestions}
+                      placeholder={suggestions[0] ? `ex : ${suggestions[0]}` : 'Regroupement libre'}
+                    />
+                  </div>
+                )
+              })()}
+            </div>
           </div>
 
-          <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-3">
+          {/* ── Détails & planning ── */}
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">⚙️ Détails &amp; planning</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Statut</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.statut} onChange={(e) => setForm((f) => ({ ...f, statut: e.target.value }))}>
+                  {Object.entries(STATUTS_TACHE).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Priorité</label>
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.priorite} onChange={(e) => setForm((f) => ({ ...f, priorite: e.target.value }))}>
+                  {Object.entries(PRIORITES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Assigné à</label>
+                <ChampAssignee
+                  value={form.assignee}
+                  onChange={(v) => setForm((f) => ({ ...f, assignee: v }))}
+                  users={users}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Date de début</label>
+                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.dateDebut} onChange={(e) => setForm((f) => ({ ...f, dateDebut: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Échéance</label>
+                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.echeance} onChange={(e) => setForm((f) => ({ ...f, echeance: e.target.value }))} />
+              </div>
+              {peutSaisirMontant && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Montant arrêté (FCFA) *</label>
+                  <input type="number" min="0"
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantPrevu !== '' && !montantValide ? 'border-red-300' : 'border-gray-200'}`}
+                    placeholder="Montant total convenu avec le prestataire"
+                    value={form.montantPrevu} onChange={(e) => setForm((f) => ({ ...f, montantPrevu: e.target.value }))} />
+                  {form.montantPrevu !== '' && !montantValide && (
+                    <p className="mt-1 text-[11px] text-red-500">Le montant doit être supérieur à 0.</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Note (détails) *</label>
+              <textarea rows={3}
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${!noteValide && form.note !== '' ? 'border-red-300' : 'border-gray-200'}`}
+                placeholder="Décris les détails de la tâche : nature exacte des travaux, conditions, matériaux, remarques…"
+                value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+              <p className="mt-1 text-[11px] text-gray-500">Champ obligatoire — précise ici tout ce qui doit être retenu sur cette tâche.</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
             <p className="text-xs font-bold uppercase text-teal-700">Coordonnées du prestataire</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -582,7 +600,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
           </div>
 
           {!editing && peutSaisirMontant && (
-            <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3 space-y-3">
+            <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                 <Wallet size={14} className="text-teal-600" /> Versement initial
                 <span className="text-xs font-normal text-gray-400">(optionnel)</span>
@@ -609,6 +627,20 @@ function OngletTaches({ taches, projets, users, depenses }) {
                   <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
                     value={form.versementDate} onChange={(e) => setForm((f) => ({ ...f, versementDate: e.target.value }))} />
                 </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Source de financement <span className="font-normal text-gray-400">— qui paie ce versement ?</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {SOURCES_FIN.map((s) => (
+                    <button key={s.id} type="button" onClick={() => setForm((f) => ({ ...f, versementSource: s.id }))}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.versementSource === s.id ? (s.id === 'pau' ? 'border-violet-400 bg-violet-50 text-violet-800' : 'border-teal-400 bg-teal-50 text-teal-800') : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}>
+                      {form.versementSource === s.id ? '✓ ' : ''}{s.id === 'pau' ? '💜 ' : ''}{s.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-gray-400">« Apport du PAU » remonte automatiquement dans E-DÉPENSES (suivi de l'apport du promoteur).</p>
               </div>
             </div>
           )}

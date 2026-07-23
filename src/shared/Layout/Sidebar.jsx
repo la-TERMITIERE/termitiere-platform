@@ -1,5 +1,6 @@
 // Navigation latérale : en-tête marque + nav portail + nav intra-module + footer utilisateur.
 // Mobile : panneau coulissant avec overlay. Desktop : fixe 260px.
+import { useMemo } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, LogOut, Users, UserCircle, X } from 'lucide-react'
 import { MODULES, MODULE_NAV, getModule } from '../modules'
@@ -7,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
 import { roleLabel, canManagePartenaires } from '../../core/roles'
 import { estActif } from '../workflow'
-import { ACTIONS_PAR_VOLET } from '../../modules/projet/vues'
+import { calculerBadges } from '../nouveautes'
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
@@ -26,25 +27,26 @@ export default function Sidebar({ open, onClose }) {
   const { data: demandesLog } = useCollection('logistique_demandes')
   const { data: demandesBriq } = useCollection('evenementiel_demandes')
 
-  // Badges "nouveauté" E-G.Pro : ce que d'autres ont ajouté depuis ma dernière visite du volet.
-  const { data: auditProjet }  = useCollection('audit_global')
-  const { data: derniereVues } = useCollection('projet_dernieres_vues')
-  const projetBadges = {}
-  if (activeModule?.id === 'projet') {
-    const monUid = user?.uid
-    Object.entries(ACTIONS_PAR_VOLET).forEach(([cle, actions]) => {
-      const vu = derniereVues.find((v) => v.userId === monUid && v.section === cle)?.vu || 0
-      projetBadges[cle] = auditProjet.filter((a) =>
-        a.module === 'projet' && actions.includes(a.action) && a.userId !== monUid && a.timestamp > vu
-      ).length
-    })
-  }
+  // Badges "nouveauté" (E-G.Pro + E-DÉPENSES) : ce que d'autres ont ajouté depuis ma
+  // dernière visite de chaque volet — basé sur l'état réel des collections, donc un
+  // badge disparaît automatiquement dès que l'élément correspondant est supprimé.
+  const { data: derniereVues }   = useCollection('vues_volets')
+  const { data: projetsDoc }     = useCollection('projets')
+  const { data: tachesDoc }      = useCollection('projet_taches')
+  const { data: projetDepenses } = useCollection('projet_depenses')
+  const { data: projetBesoins }  = useCollection('projet_besoins')
+  const { data: projetMateriel } = useCollection('projet_materiels')
+  const { data: depenseDepenses }= useCollection('depense_depenses')
+  const nouveautesBadges = useMemo(() => calculerBadges({
+    projets: projetsDoc, projet_taches: tachesDoc, projet_depenses: projetDepenses,
+    projet_besoins: projetBesoins, projet_materiels: projetMateriel, depense_depenses: depenseDepenses
+  }, derniereVues, user?.uid), [projetsDoc, tachesDoc, projetDepenses, projetBesoins, projetMateriel, depenseDepenses, derniereVues, user?.uid])
 
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
     logistiqueDemandes: demandesLog.filter((d) => estActif(d.statut) && (!logSite || (d.site || 'lome') === logSite)).length,
     briqueterieDemandes: demandesBriq.filter((d) => estActif(d.statut)).length,
-    ...projetBadges
+    ...nouveautesBadges
   }
 
   const accentColor = activeModule?.color || '#BC3C31'
