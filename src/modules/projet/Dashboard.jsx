@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing, X, Clock3, Wallet2, HandCoins, TimerOff, PartyPopper } from 'lucide-react'
+import { FolderKanban, Clock, CheckCircle2, AlertTriangle, BellRing, X, Clock3, Wallet2, HandCoins, TimerOff, PartyPopper, Banknote } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
@@ -32,6 +32,7 @@ const TYPE_ALERTE = {
   projet_retard:   { color: 'text-red-600',    ring: 'ring-red-200',    bg: 'bg-red-50/80',    icon: Clock3,     label: 'Projet en retard'      },
   budget_depasse:  { color: 'text-amber-600',  ring: 'ring-amber-200',  bg: 'bg-amber-50/80',  icon: Wallet2,    label: 'Budget dépassé'        },
   tache_depassee:  { color: 'text-amber-600',  ring: 'ring-amber-200',  bg: 'bg-amber-50/80',  icon: HandCoins,  label: 'Tâche en dépassement'  },
+  reste_a_payer:   { color: 'text-sky-600',    ring: 'ring-sky-200',    bg: 'bg-sky-50/80',    icon: Banknote,   label: 'Reste à payer'         },
   tache_retard:    { color: 'text-orange-600', ring: 'ring-orange-200', bg: 'bg-orange-50/80', icon: TimerOff,   label: 'Tâche en retard'       },
   avancement_zero: { color: 'text-indigo-600', ring: 'ring-indigo-200', bg: 'bg-indigo-50/80', icon: AlertTriangle, label: 'Aucun avancement'   },
   termine:         { color: 'text-green-600',  ring: 'ring-green-200',  bg: 'bg-green-50/80',  icon: PartyPopper, label: 'Terminé ✓'            }
@@ -61,6 +62,7 @@ export default function Dashboard() {
   const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
 
   const [detail, setDetail] = useState(null)
+  const [resteOuvert, setResteOuvert] = useState(false) // détail de l'alerte groupée « reste à payer »
   const seuils = configs.find((c) => c.id === 'seuils') ?? SEUILS_DEFAUT
 
   // Revérifie périodiquement si une alerte fermée doit réapparaître (délai de 2 min écoulé).
@@ -156,6 +158,43 @@ export default function Dashboard() {
                 const cfg = TYPE_ALERTE[a.type]
                 const Icone = cfg.icon
                 const responsable = projets.find((p) => p.id === a.projetId)?.responsable
+                // Alerte groupée « reste à payer » : pas de navigation directe, un clic déplie
+                // la liste des tâches concernées (une seule carte au lieu d'une par tâche).
+                if (a.type === 'reste_a_payer') {
+                  return (
+                    <div key={a.id} className={`rounded-2xl border border-white/60 shadow-sm ring-1 backdrop-blur-sm ${cfg.bg} ${cfg.ring}`}>
+                      <div onClick={() => setResteOuvert((o) => !o)} title="Voir le détail"
+                        className="flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-all hover:brightness-95">
+                        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm ${cfg.color}`}>
+                          <Icone size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</span>
+                          <p className="mt-0.5 text-xs leading-snug text-gray-500">{a.message}</p>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); fermerSurDashboard(a) }} title="Masquer 2 min"
+                          className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/80 hover:text-gray-700">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {resteOuvert && (
+                        <div className="space-y-1 border-t border-white/60 px-3 py-2">
+                          {a.details.map((d) => (
+                            <div key={d.tacheId} onClick={() => navigate('/projet/taches', { state: { openTacheId: d.tacheId } })}
+                              title="Aller corriger"
+                              className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-white/70">
+                              <span className="min-w-0 truncate text-gray-600">
+                                <span className="font-semibold text-gray-700">{d.tacheTitre}</span>
+                                <span className="text-gray-400"> — {d.projetNom}</span>
+                              </span>
+                              <span className="shrink-0 font-bold text-sky-700">{d.reste.toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
                 return (
                   <div key={a.id} onClick={() => {
                       // Budget dépassé / Tâche en dépassement → droit au formulaire de révision,

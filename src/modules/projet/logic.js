@@ -59,6 +59,7 @@ const SEUIL_MIN_DEPASSEMENT = 1000 // FCFA
 // ── Alertes — source unique utilisée par le Dashboard, l'onglet Alertes et le Pilotage ──
 export function genererAlertes(projets = [], taches = [], depenses = [], seuils = SEUILS_DEFAUT) {
   const alertes = []
+  const restesAPayer = [] // regroupées en une seule alerte à la fin, plutôt qu'une par tâche
   const now = Date.now()
   const SEMAINE = 7 * 24 * 3600 * 1000
   const seuilBudget     = (seuils?.budget     ?? SEUILS_DEFAUT.budget)     / 100
@@ -117,6 +118,20 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
       }
     })
 
+    // Tâches avec un reste à payer au prestataire (montant arrêté non encore soldé) —
+    // collectées ici, regroupées en une seule alerte après la boucle sur les projets.
+    tachesProjet.forEach((t) => {
+      const prevu = Number(t.montantPrevu) || 0
+      const verse = depenses.filter((d) => d.tacheId === t.id).reduce((s, d) => s + (Number(d.montant) || 0), 0)
+      const reste = prevu - verse
+      if (t.statut !== 'annulee' && prevu > 0 && reste >= SEUIL_MIN_DEPASSEMENT) {
+        restesAPayer.push({
+          projetId: p.id, projetNom: p.nom, tacheId: t.id, tacheTitre: t.titre,
+          prevu, verse, reste, priorite: t.priorite
+        })
+      }
+    })
+
     // Projet actif sans avancement depuis le seuil d'inactivité (réglable)
     if (!['termine', 'annule'].includes(p.statut) && p.createdAt && (now - p.createdAt) > seuilInactivite) {
       const avancement = avancementProjet(tachesProjet, p)
@@ -164,7 +179,22 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
     }
   })
 
+  // Reste à payer : une seule alerte groupant toutes les tâches concernées (tous projets
+  // confondus), au lieu d'une alerte par tâche — trop de doublons sinon dans le bandeau.
+  if (restesAPayer.length) {
+    const total = restesAPayer.reduce((s, r) => s + r.reste, 0)
+    alertes.push({
+      id: 'reste_a_payer_global',
+      type: 'reste_a_payer',
+      cibleType: 'liste',
+      message: `${restesAPayer.length} tâche${restesAPayer.length > 1 ? 's' : ''} avec un solde à régler — total ${total.toLocaleString('fr-FR')} FCFA.`,
+      details: restesAPayer.sort((a, b) => b.reste - a.reste),
+      date: now,
+      priorite: 'normale'
+    })
+  }
+
   // Trier : retards d'abord, puis budget, puis reste
-  const ordre = { projet_retard: 0, budget_depasse: 1, tache_depassee: 2, tache_retard: 3, avancement_zero: 4, termine: 5 }
+  const ordre = { projet_retard: 0, budget_depasse: 1, tache_depassee: 2, reste_a_payer: 3, tache_retard: 4, avancement_zero: 5, termine: 6 }
   return alertes.sort((a, b) => (ordre[a.type] ?? 9) - (ordre[b.type] ?? 9))
 }

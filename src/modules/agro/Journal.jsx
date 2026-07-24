@@ -14,7 +14,7 @@ import Select from '../../shared/forms/Select'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { formatDateTime, formatDateShort } from '../../utils/formatters'
+import { formatDateTime, formatDateShort, extraireMontantFCFA } from '../../utils/formatters'
 import Historique from './Historique'
 
 // Libellé + icône par type d'événement.
@@ -87,6 +87,7 @@ function OngletJournal({ evenements }) {
       Rôle: l.userRole || '—',
       Événement: evInfo(l.action).label,
       Détails: l.details || '—',
+      'Montant (FCFA)': extraireMontantFCFA(l.details),
       'Détails complets': metaToText(l.meta)
     }))
     exportRapportExcel({
@@ -101,6 +102,7 @@ function OngletJournal({ evenements }) {
           { key: 'Rôle', label: 'Rôle', width: 14 },
           { key: 'Événement', label: 'Événement', width: 26 },
           { key: 'Détails', label: 'Détails', width: 40 },
+          { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16, type: 'number' },
           { key: 'Détails complets', label: 'Métadonnées', width: 50 }
         ],
         rows

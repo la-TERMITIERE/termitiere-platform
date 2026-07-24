@@ -4,7 +4,8 @@
 //  • DÉPENSES du secteur (saisies dans E-DÉPENSES + reprises d'E-G.Pro et Briqueterie) ;
 //  • SOLDE (recette − dépense), BUDGET alloué (avec révision tracée) + reste & % consommé.
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -19,7 +20,7 @@ import { toast } from '../../core/notifications'
 import { genId, formatDateShort, formatDateTime } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { budgetSecteur, depensesSecteurMois, remboursementsSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
@@ -53,6 +54,7 @@ export default function RecettesDepenses({ secteurId = null }) {
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
+  const { data: remboursementsPau }   = useCollection('depense_pau_remboursements')
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
 
@@ -91,13 +93,33 @@ export default function RecettesDepenses({ secteurId = null }) {
     const alloue = budgetSecteur(budgets, s.id, annee, mois)
     const recette = SECTEURS_AVEC_REVENU.includes(s.id) ? revenuSecteur(collections, s.id, annee, mois) : 0
     const lignes = depensesSecteurMois(depenses, s.id, annee, mois).sort((a, b) => (a.date < b.date ? 1 : -1))
-    const depense = totalDepenses(lignes)
+    const rembourseCeMois = totalDepenses(remboursementsSecteurMois(remboursementsPau, s.id, annee, mois))
+    const depense = totalDepenses(lignes) - rembourseCeMois
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return {
-      ...s, recette, depense, lignes, solde: recette - depense, aRevenu: SECTEURS_AVEC_REVENU.includes(s.id),
+      ...s, recette, depense, lignes, rembourseCeMois, solde: recette - depense, aRevenu: SECTEURS_AVEC_REVENU.includes(s.id),
       budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || []
     }
-  }), [secteursAffiches, budgets, depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  }), [secteursAffiches, budgets, depenses, remboursementsPau, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+
+  // Ouverture directe du détail d'un secteur depuis l'alerte du Dashboard (clic sur une
+  // carte secteur « à surveiller ») — évite de devoir le rechercher dans la liste.
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (location.state?.annee && location.state?.mois) { setAnnee(location.state.annee); setMois(location.state.mois) }
+  }, [location.state])
+  useEffect(() => {
+    const id = location.state?.openSecteurId
+    if (!id) return
+    // Attend que le mois demandé soit bien appliqué (effet ci-dessus) avant d'ouvrir,
+    // pour que le détail affiché corresponde au bon mois plutôt qu'au mois par défaut.
+    const { annee: wantAnnee, mois: wantMois } = location.state
+    if ((wantAnnee && wantAnnee !== annee) || (wantMois && wantMois !== mois)) return
+    const s = parSecteur.find((x) => x.id === id)
+    if (s) setSecteurDetail(s)
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, parSecteur, annee, mois])
 
   const totalRecette = parSecteur.reduce((s, x) => s + x.recette, 0)
   const totalDepense = parSecteur.reduce((s, x) => s + x.depense, 0)
@@ -376,6 +398,9 @@ export default function RecettesDepenses({ secteurId = null }) {
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Dépenses</p>
                 <p className="mt-0.5 font-bold text-amber-600">{fmt(secteurDetail.depense)} FCFA</p>
+                {secteurDetail.rembourseCeMois > 0 && (
+                  <p className="mt-0.5 text-[10px] text-violet-600">💜 dont {fmt(secteurDetail.rembourseCeMois)} FCFA crédités (remboursement PAU)</p>
+                )}
               </div>
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Budget alloué</p>

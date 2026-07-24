@@ -1,10 +1,11 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, ChevronDown, Play, Eye, CheckCircle2, CalendarClock, Wallet } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, Play, Eye, CheckCircle2, CalendarClock, Wallet, Paperclip } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import PiecesJointes from '../../shared/ui/PiecesJointes'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, addItem, updateItem, removeItem } from '../../core/db'
 import { STATUTS_TACHE, PRIORITES, tachesSuggestions, etapesDefaut, libelleEtape } from './data'
@@ -85,6 +86,15 @@ import { audit } from '../../core/audit'
 const SOURCES_FIN = [
   { id: 'entreprise', label: "Fonds de l'entreprise" },
   { id: 'pau',        label: 'Apport du PAU' }
+]
+
+// Rubriques des pièces jointes d'une tâche — factures, devis… tout justificatif lié au versement.
+const RUBRIQUES_TACHE = [
+  { id: 'facture', label: 'Facture' },
+  { id: 'devis',   label: 'Devis' },
+  { id: 'recu',    label: 'Reçu / bon de livraison' },
+  { id: 'photo',   label: 'Photo' },
+  { id: 'autre',   label: 'Autre' }
 ]
 
 const VIDE_TACHE = {
@@ -179,6 +189,20 @@ function OngletTaches({ taches, projets, users, depenses }) {
     setEditing(t); setModal(true)
   }
 
+  // Pièces jointes (factures, devis…) — nécessitent un id existant, donc réservées à
+  // l'édition d'une tâche déjà créée (comme pour les besoins).
+  const ajouterPiece = async (t, piece) => {
+    const pieces = [...(t.pieces || []), { ...piece, id: `pj_${Date.now()}`, createdAt: Date.now(), ajouteParUid: user?.uid || null }]
+    await updateItem('projet_taches', t.id, { pieces, updatedAt: Date.now() })
+  }
+  const retirerPiece = async (t, piece) => {
+    const pieces = (t.pieces || []).filter((p) => p.id !== piece.id)
+    await updateItem('projet_taches', t.id, { pieces, updatedAt: Date.now() })
+  }
+  // Vue à jour de la tâche en cours d'édition/détail (les pièces ajoutées doivent
+  // apparaître immédiatement sans fermer la modale).
+  const editingLive = editing ? (taches.find((t) => t.id === editing.id) || editing) : null
+
   const montantValide = !peutSaisirMontant || (form.montantPrevu !== '' && Number(form.montantPrevu) > 0)
   const noteValide    = form.note.trim() !== ''
   const formValide    = form.titre.trim() !== '' && montantValide && noteValide
@@ -196,40 +220,42 @@ function OngletTaches({ taches, projets, users, depenses }) {
         montantPrevu: form.montantPrevu !== '' ? Number(form.montantPrevu) : null,
         updatedAt: now
       }
+      let tacheId = editing?.id
       if (editing) {
         await setItem('projet_taches', editing.id, { ...editing, ...payload })
         await audit('projet', 'tache_modifiee', form.titre)
       } else {
-        const id = `tache_${now}`
-        await setItem('projet_taches', id, { id, ...payload, createdAt: now, createdBy: user?.uid || null })
+        tacheId = `tache_${now}`
+        await setItem('projet_taches', tacheId, { id: tacheId, ...payload, createdAt: now, createdBy: user?.uid || null })
         await audit('projet', 'tache_creee', form.titre)
+      }
 
-        // Versement initial optionnel — enregistre directement la dépense liée,
-        // pour éviter de ressaisir la même chose dans le volet Dépenses.
-        const montantVerse = Number(versementMontant) || 0
-        if (montantVerse > 0) {
-          await addItem('projet_depenses', {
-            projetId: form.projetId, tacheId: id,
-            date: versementDate ? new Date(versementDate).getTime() : now,
-            montant: montantVerse,
-            categorie: 'sous_traitance',
-            description: `Versement — ${form.titre}`,
-            fournisseur: form.prestataireNom || '',
-            prestataireMetier: form.prestataireMetier || '',
-            prestataireTelephone: form.prestataireTelephone || '',
-            typePaiement: versementType,
-            sourceFinancement: versementSource || 'entreprise',
-            statut: 'en_attente',
-            ajoutePar: user?.nom || user?.login || null, ajouteParUid: user?.uid || null, createdAt: now
-          })
-          if (form.projetId) {
-            const totalProjet = depenses
-              .filter((d) => d.projetId === form.projetId)
-              .reduce((s, d) => s + (Number(d.montant) || 0), 0) + montantVerse
-            await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
-          }
-          await audit('projet', 'depense_ajoutee', `${montantVerse.toLocaleString('fr-FR')} FCFA — ${form.titre}`)
+      // Versement optionnel — enregistre directement la dépense liée, pour éviter
+      // de ressaisir la même chose dans le volet Dépenses. Disponible aussi bien
+      // à la création qu'à la modification d'une tâche existante.
+      const montantVerse = Number(versementMontant) || 0
+      if (montantVerse > 0) {
+        await addItem('projet_depenses', {
+          projetId: form.projetId, tacheId,
+          date: versementDate ? new Date(versementDate).getTime() : now,
+          montant: montantVerse,
+          categorie: 'sous_traitance',
+          description: `Versement — ${form.titre}`,
+          fournisseur: form.prestataireNom || '',
+          prestataireMetier: form.prestataireMetier || '',
+          prestataireTelephone: form.prestataireTelephone || '',
+          typePaiement: versementType,
+          sourceFinancement: versementSource || 'entreprise',
+          statut: 'en_attente',
+          ajoutePar: user?.nom || user?.login || null, ajouteParUid: user?.uid || null, createdAt: now
+        })
+        if (form.projetId) {
+          const totalProjet = depenses
+            .filter((d) => d.projetId === form.projetId)
+            .reduce((s, d) => s + (Number(d.montant) || 0), 0) + montantVerse
+          await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
         }
+        await audit('projet', 'depense_ajoutee', `${montantVerse.toLocaleString('fr-FR')} FCFA — ${form.titre}`)
       }
       setModal(false)
     } finally { setSaving(false) }
@@ -362,6 +388,11 @@ function OngletTaches({ taches, projets, users, depenses }) {
                       <Badge tone={STATUTS_TACHE[t.statut]?.tone}>{STATUTS_TACHE[t.statut]?.label}</Badge>
                       <Badge tone={PRIORITES[t.priorite]?.tone}>{PRIORITES[t.priorite]?.label}</Badge>
                       {enRetard && <Badge tone="danger">⏰ En retard</Badge>}
+                      {t.pieces?.length > 0 && (
+                        <span className="flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                          <Paperclip size={10} /> {t.pieces.length}
+                        </span>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => openEdit(t)} className="rounded-lg border border-teal-200 bg-teal-50 p-1 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={15} /></button>
@@ -599,14 +630,16 @@ function OngletTaches({ taches, projets, users, depenses }) {
             </div>
           </div>
 
-          {!editing && peutSaisirMontant && (
+          {peutSaisirMontant && (
             <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <Wallet size={14} className="text-teal-600" /> Versement initial
+                <Wallet size={14} className="text-teal-600" /> {editing ? 'Nouveau versement' : 'Versement initial'}
                 <span className="text-xs font-normal text-gray-400">(optionnel)</span>
               </div>
               <p className="text-[11px] text-gray-500 -mt-1">
-                Renseigne un montant pour enregistrer tout de suite un premier versement — il s'ajoutera automatiquement au volet Dépenses, lié à cette tâche. Laisse à 0 (ou vide) s'il n'y a pas encore de paiement.
+                {editing
+                  ? "Renseigne un montant pour enregistrer un nouveau versement pour cette tâche — il s'ajoutera automatiquement au volet Dépenses, en plus des versements déjà effectués. Laisse à 0 (ou vide) si tu ne veux rien ajouter."
+                  : "Renseigne un montant pour enregistrer tout de suite un premier versement — il s'ajoutera automatiquement au volet Dépenses, lié à cette tâche. Laisse à 0 (ou vide) s'il n'y a pas encore de paiement."}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -643,6 +676,23 @@ function OngletTaches({ taches, projets, users, depenses }) {
                 <p className="mt-1 text-[11px] text-gray-400">« Apport du PAU » remonte automatiquement dans E-DÉPENSES (suivi de l'apport du promoteur).</p>
               </div>
             </div>
+          )}
+
+          {editingLive && (
+            <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+              <PiecesJointes
+                pieces={editingLive.pieces || []}
+                onAdd={(piece) => ajouterPiece(editingLive, piece)}
+                onRemove={(piece) => retirerPiece(editingLive, piece)}
+                label="📎 Pièces jointes (factures, devis…)"
+                rubriques={RUBRIQUES_TACHE}
+              />
+            </div>
+          )}
+          {!editingLive && (
+            <p className="text-center text-[11px] text-gray-400">
+              Les pièces jointes (factures, devis…) pourront être ajoutées une fois la tâche enregistrée.
+            </p>
           )}
 
           <div className="flex justify-end gap-2 pt-1">
@@ -774,6 +824,10 @@ function OngletTaches({ taches, projets, users, depenses }) {
                     </div>
                   )}
                 </div>
+              )}
+
+              {detail.pieces?.length > 0 && (
+                <PiecesJointes pieces={detail.pieces} noAdd noDelete label="📎 Pièces jointes" />
               )}
 
               <div className="flex justify-end gap-2 pt-1">

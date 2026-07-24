@@ -114,6 +114,23 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois) {
   return depenses.filter((d) => d.secteurId === secteurId && (d.date || '').startsWith(prefixe) && estDecaissee(d))
 }
 
+// Remboursements au PAU rattachés à un secteur donné, sur un mois donné. Le PAU finance
+// une dépense d'un secteur précis (apport ponctuel) ; quand l'entreprise le rembourse, ce
+// montant crédite le budget du secteur concerné — la dépense financée par le PAU n'entame
+// plus durablement sa capacité budgétaire, puisqu'elle est restituée.
+export function remboursementsSecteurMois(remboursements, secteurId, annee, mois) {
+  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+  return remboursements.filter((r) => r.secteurId === secteurId && (r.date || '').startsWith(prefixe))
+}
+
+// Dépense nette d'un secteur sur un mois : dépenses décaissées moins les remboursements au
+// PAU rattachés à ce secteur ce même mois.
+export function depenseNetteSecteurMois(depenses, remboursements, secteurId, annee, mois) {
+  const brut = totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois))
+  const rembourse = totalDepenses(remboursementsSecteurMois(remboursements, secteurId, annee, mois))
+  return brut - rembourse
+}
+
 // Dépenses en attente d'approbation ou approuvées (à décaisser).
 export function depensesEnCircuit(depenses) {
   return depenses.filter((d) => d.statut === 'en_attente' || d.statut === 'approuvee')
@@ -132,11 +149,11 @@ export function statutBudget(pct) {
 }
 
 // Secteurs dont le budget est en alerte (≥80%) ou dépassé (≥100%) pour un mois donné.
-export function secteursEnAlerte(budgets, depenses, annee, mois) {
+export function secteursEnAlerte(budgets, depenses, annee, mois, remboursements = []) {
   return SECTEURS
     .map((s) => {
       const alloue = budgetSecteur(budgets, s.id, annee, mois)
-      const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
+      const depense = depenseNetteSecteurMois(depenses, remboursements, s.id, annee, mois)
       const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
       return { ...s, alloue, depense, pct, statut: statutBudget(pct) }
     })

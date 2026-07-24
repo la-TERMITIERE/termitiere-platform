@@ -13,6 +13,19 @@ export const formatMoney = (amount) =>
 export const formatNumber = (n) =>
   espacerMilliers(new Intl.NumberFormat('fr-FR').format(Number(n) || 0))
 
+// Extrait le montant FCFA (nombre) d'un texte libre — sert à isoler la somme des
+// colonnes « Détails » du journal d'audit (ex. "Kara — FAC-…-000031 — 10 000 FCFA
+// (brouillon)" → 10000), pour une colonne dédiée exploitable dans Excel (SOMME()),
+// sans jamais modifier ou retirer le texte d'origine. Renvoie '' si aucun montant
+// n'est trouvé (ex. "AUT-KARA-2026-000033 — autorisation auto (10 min)").
+export function extraireMontantFCFA(texte) {
+  if (!texte) return ''
+  const m = String(texte).match(/([\d][\d\s .,]*)\s*FCFA/)
+  if (!m) return ''
+  const nombre = Number(m[1].replace(/[\s .,]/g, ''))
+  return Number.isFinite(nombre) ? nombre : ''
+}
+
 // Date longue : "01 juin 2026". Accepte string 'YYYY-MM-DD' ou Date.
 export const formatDate = (dateStr) => {
   if (!dateStr) return ''

@@ -10,7 +10,7 @@ import Select from '../../shared/forms/Select'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { formatDateTime, formatDateShort } from '../../utils/formatters'
+import { formatDateTime, formatDateShort, extraireMontantFCFA } from '../../utils/formatters'
 import Historique from './Historique'
 
 const EVENTS = {
@@ -22,6 +22,7 @@ const EVENTS = {
   DECAISSEMENT_APPROUVE: { label: 'Décaissement approuvé',         emoji: '✅' },
   DECAISSEMENT_REFUSE:   { label: 'Décaissement refusé',           emoji: '❌' },
   DECAISSEMENT_CERTIFIE: { label: 'Décaissement certifié',         emoji: '🏁' },
+  PAU_REMBOURSEMENT:     { label: 'Remboursement au PAU',          emoji: '💜' },
   RESET:                 { label: 'Réinitialisation',              emoji: '♻️' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
@@ -60,7 +61,8 @@ function OngletJournal({ evenements }) {
       Utilisateur: l.userNom || '—',
       Rôle: l.userRole || '—',
       Événement: evInfo(l.action).label,
-      Détails: l.details || '—'
+      Détails: l.details || '—',
+      'Montant (FCFA)': extraireMontantFCFA(l.details)
     }))
     exportRapportExcel({
       filename: `journal-depenses-${start}_${end}.xlsx`,
@@ -73,7 +75,8 @@ function OngletJournal({ evenements }) {
           { key: 'Utilisateur', label: 'Utilisateur', width: 20 },
           { key: 'Rôle', label: 'Rôle', width: 14 },
           { key: 'Événement', label: 'Événement', width: 26 },
-          { key: 'Détails', label: 'Détails', width: 40 }
+          { key: 'Détails', label: 'Détails', width: 40 },
+          { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16, type: 'number' }
         ],
         rows
       }]

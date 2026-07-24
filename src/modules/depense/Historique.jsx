@@ -22,6 +22,7 @@ export default function Historique() {
   const { data: projetsTous }    = useCollection('projets')
   const { data: tachesTous }     = useCollection('projet_taches')
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
+  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const depenses = useMemo(
     () => [
       ...depensesReelles,
@@ -55,6 +56,15 @@ export default function Historique() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
   }, [depenses, start, end, filtreSecteur, filtreStatut, filtreType, recherche])
 
+  // Remboursements versés au PAU sur la période — mouvement inverse (restitution), pas
+  // une dépense : affiché à part pour ne pas fausser les totaux dépensés ci-dessus.
+  const remboursements = useMemo(() =>
+    remboursementsPau
+      .filter((r) => (r.date || '') >= start && (r.date || '') <= end)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)),
+  [remboursementsPau, start, end])
+  const totalRembourse = useMemo(() => remboursements.reduce((s, r) => s + (Number(r.montant) || 0), 0), [remboursements])
+
   const stats = useMemo(() => {
     const decaissees = lignes.filter((d) => (d.statut || 'decaissee') === 'decaissee')
     const enCircuit  = lignes.filter((d) => d.statut === 'en_attente' || d.statut === 'approuvee')
@@ -87,29 +97,47 @@ export default function Historique() {
         'Réception confirmée': !d.beneficiaireNom ? '—' : (!d.beneficiaireUid ? 'Externe (N/A)' : (d.recuConfirme ? 'Oui' : 'Non'))
       }
     })
+    const rowsRemb = remboursements.map((r) => ({
+      Date: formatDateShort(r.date),
+      'Montant (FCFA)': Number(r.montant) || 0,
+      Motif: r.motif || '—'
+    }))
     exportRapportExcel({
       filename: `historique-depenses-${start}_${end}.xlsx`,
-      sections: [{
-        id: 'historique', name: 'Historique',
-        title: 'Historique des dépenses',
-        subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} dépense(s)`,
-        columns: [
-          { key: 'Date', label: 'Date', width: 14 },
-          { key: 'Secteur', label: 'Secteur', width: 20 },
-          { key: 'Catégorie', label: 'Catégorie', width: 20 },
-          { key: 'Description', label: 'Description', width: 30 },
-          { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16 },
-          { key: 'Type', label: 'Type', width: 12 },
-          { key: 'Statut', label: 'Statut', width: 20 },
-          { key: 'Créée par', label: 'Créée par', width: 18 },
-          { key: 'Approuvée par', label: 'Approuvée par', width: 18 },
-          { key: 'Certifiée par', label: 'Certifiée par', width: 18 },
-          { key: 'Bénéficiaire', label: 'Bénéficiaire', width: 18 },
-          { key: 'Profession / poste', label: 'Profession / poste', width: 20 },
-          { key: 'Réception confirmée', label: 'Réception confirmée', width: 16 }
-        ],
-        rows
-      }]
+      sections: [
+        {
+          id: 'historique', name: 'Historique',
+          title: 'Historique des dépenses',
+          subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} dépense(s)`,
+          columns: [
+            { key: 'Date', label: 'Date', width: 14 },
+            { key: 'Secteur', label: 'Secteur', width: 20 },
+            { key: 'Catégorie', label: 'Catégorie', width: 20 },
+            { key: 'Description', label: 'Description', width: 30 },
+            { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16 },
+            { key: 'Type', label: 'Type', width: 12 },
+            { key: 'Statut', label: 'Statut', width: 20 },
+            { key: 'Créée par', label: 'Créée par', width: 18 },
+            { key: 'Approuvée par', label: 'Approuvée par', width: 18 },
+            { key: 'Certifiée par', label: 'Certifiée par', width: 18 },
+            { key: 'Bénéficiaire', label: 'Bénéficiaire', width: 18 },
+            { key: 'Profession / poste', label: 'Profession / poste', width: 20 },
+            { key: 'Réception confirmée', label: 'Réception confirmée', width: 16 }
+          ],
+          rows
+        },
+        {
+          id: 'remboursements', name: 'Remboursements PAU',
+          title: 'Remboursements au PAU',
+          subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${remboursements.length} remboursement(s)`,
+          columns: [
+            { key: 'Date', label: 'Date', width: 14 },
+            { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16 },
+            { key: 'Motif', label: 'Motif', width: 40 }
+          ],
+          rows: rowsRemb
+        }
+      ]
     })
   }
 
@@ -235,6 +263,30 @@ export default function Historique() {
           </tbody>
         </table>
       </Card>
+
+      {/* Remboursements au PAU — mouvement de restitution, distinct des dépenses ci-dessus */}
+      {remboursements.length > 0 && (
+        <Card title={
+          <span className="flex items-center gap-2">
+            💜 Remboursements au PAU
+            <span className="ml-auto text-[11px] font-normal text-gray-400">
+              {remboursements.length} remboursement{remboursements.length > 1 ? 's' : ''} · {totalRembourse.toLocaleString('fr-FR')} FCFA
+            </span>
+          </span>
+        }>
+          <div className="divide-y divide-gray-100">
+            {remboursements.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <span className="font-bold text-violet-700">{Number(r.montant).toLocaleString('fr-FR')} FCFA</span>
+                  {r.motif && <span className="ml-2 truncate text-gray-500">{r.motif}</span>}
+                </div>
+                <span className="shrink-0 text-xs text-gray-400">{formatDateShort(r.date)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

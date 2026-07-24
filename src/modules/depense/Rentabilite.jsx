@@ -2,7 +2,7 @@
 // avec la dépense décaissée du même secteur/mois. Lecture seule, aucune écriture croisée.
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
-import { Bar, Line } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
@@ -11,7 +11,7 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, MOIS_LABELS } from './data'
-import { depensesSecteurMois, totalDepenses, derniersMois, depensesNatureMois, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { depensesSecteurMois, totalDepenses, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
@@ -69,35 +69,6 @@ export default function Rentabilite() {
       { label: 'Revenu réalisé',     data: secteurs.map((s) => s.revenu),  backgroundColor: '#05966933', borderColor: '#059669', borderWidth: 1, borderRadius: 6 },
       { label: 'Dépense décaissée',  data: secteurs.map((s) => s.depense), backgroundColor: '#dc262699', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6 }
     ]
-  }
-
-  // Deux marges pour ne pas confondre rentabilité du fonctionnement et poids des investissements :
-  //  • Marge courante = revenu − dépenses de fonctionnement (nature « Exploitation ») → vraie rentabilité récurrente ;
-  //  • Marge totale   = revenu − TOUTES les dépenses (investissements de projet compris) → plonge quand un gros chantier tombe.
-  const tendance = useMemo(() => derniersMois(6, MOIS_LABELS).map(({ annee: a, mois: m, label }) => {
-    const revenu      = SECTEURS_AVEC_REVENU.reduce((s, id) => s + revenuSecteur(collections, id, a, m), 0)
-    const depTotale   = SECTEURS.reduce((s, sec) => s + totalDepenses(depensesSecteurMois(depenses, sec.id, a, m)), 0)
-    const depCourante = totalDepenses(depensesNatureMois(depenses, 'exploitation', a, m))
-    return { label, revenu, margeCourante: revenu - depCourante, margeTotale: revenu - depTotale }
-  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel])
-
-  const lineData = {
-    labels: tendance.map((t) => t.label),
-    datasets: [
-      { label: 'Revenu', data: tendance.map((t) => t.revenu), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.12)', tension: 0.3, fill: true, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#059669' },
-      { label: 'Marge courante (hors investissements)', data: tendance.map((t) => t.margeCourante), borderColor: '#B45309', backgroundColor: 'rgba(180,83,9,0.06)', tension: 0.3, borderWidth: 3, pointRadius: 3, pointBackgroundColor: '#B45309' },
-      { label: 'Marge totale (investissements compris)', data: tendance.map((t) => t.margeTotale), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.06)', tension: 0.3, borderWidth: 2, borderDash: [6, 4], pointRadius: 3, pointBackgroundColor: '#dc2626' }
-    ]
-  }
-
-  const lineOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
-    scales: {
-      y: { beginAtZero: false, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') }, grid: { color: (c) => (c.tick.value === 0 ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.05)') } },
-      x: { grid: { display: false } }
-    }
   }
 
   function exportXLSX() {
@@ -193,16 +164,9 @@ export default function Rentabilite() {
         </table>
       </Card>
 
-      <Card title="Tendance sur 6 mois — revenu & marges (courante vs totale)">
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#059669' }} /> Revenu réel</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#B45309' }} /> Marge courante = revenu − charges de fonctionnement (hors investissements)</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Marge totale = revenu − toutes les dépenses (investissements compris)</span>
-        </div>
-        <div style={{ height: 280 }}>
-          <Line data={lineData} options={lineOptions} />
-        </div>
-      </Card>
+      <p className="text-center text-xs text-gray-400">
+        Pour la tendance de la marge sur 6 mois, voir <strong>Flux de trésorerie</strong> — le solde d'exploitation et le solde global y équivalent exactement à la marge courante et à la marge totale ci-dessus.
+      </p>
     </div>
   )
 }
