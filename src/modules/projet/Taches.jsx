@@ -88,15 +88,6 @@ const SOURCES_FIN = [
   { id: 'pau',        label: 'Apport du PAU' }
 ]
 
-// Rubriques des pièces jointes d'une tâche — factures, devis… tout justificatif lié au versement.
-const RUBRIQUES_TACHE = [
-  { id: 'facture', label: 'Facture' },
-  { id: 'devis',   label: 'Devis' },
-  { id: 'recu',    label: 'Reçu / bon de livraison' },
-  { id: 'photo',   label: 'Photo' },
-  { id: 'autre',   label: 'Autre' }
-]
-
 const VIDE_TACHE = {
   titre: '', projetId: '', phase: '', assignee: '', priorite: 'normale', statut: 'a_faire', dateDebut: '', echeance: '', montantPrevu: '', note: '',
   prestataireNom: '', prestataireMetier: '', prestataireTelephone: '',
@@ -225,35 +216,36 @@ function OngletTaches({ taches, projets, users, depenses }) {
         await setItem('projet_taches', editing.id, { ...editing, ...payload })
         await audit('projet', 'tache_modifiee', form.titre)
       } else {
-        tacheId = `tache_${now}`
-        await setItem('projet_taches', tacheId, { id: tacheId, ...payload, createdAt: now, createdBy: user?.uid || null })
+        const id = `tache_${now}`
+        await setItem('projet_taches', id, { id, ...payload, createdAt: now, createdBy: user?.uid || null })
         await audit('projet', 'tache_creee', form.titre)
       }
 
-      // Versement optionnel — enregistre directement la dépense liée, pour éviter
-      // de ressaisir la même chose dans le volet Dépenses. Disponible aussi bien
-      // à la création qu'à la modification d'une tâche existante.
-      const montantVerse = Number(versementMontant) || 0
-      if (montantVerse > 0) {
-        await addItem('projet_depenses', {
-          projetId: form.projetId, tacheId,
-          date: versementDate ? new Date(versementDate).getTime() : now,
-          montant: montantVerse,
-          categorie: 'sous_traitance',
-          description: `Versement — ${form.titre}`,
-          fournisseur: form.prestataireNom || '',
-          prestataireMetier: form.prestataireMetier || '',
-          prestataireTelephone: form.prestataireTelephone || '',
-          typePaiement: versementType,
-          sourceFinancement: versementSource || 'entreprise',
-          statut: 'en_attente',
-          ajoutePar: user?.nom || user?.login || null, ajouteParUid: user?.uid || null, createdAt: now
-        })
-        if (form.projetId) {
-          const totalProjet = depenses
-            .filter((d) => d.projetId === form.projetId)
-            .reduce((s, d) => s + (Number(d.montant) || 0), 0) + montantVerse
-          await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
+        // Versement initial optionnel — enregistre directement la dépense liée,
+        // pour éviter de ressaisir la même chose dans le volet Dépenses.
+        const montantVerse = Number(versementMontant) || 0
+        if (montantVerse > 0) {
+          await addItem('projet_depenses', {
+            projetId: form.projetId, tacheId: id,
+            date: versementDate ? new Date(versementDate).getTime() : now,
+            montant: montantVerse,
+            categorie: 'sous_traitance',
+            description: `Versement — ${form.titre}`,
+            fournisseur: form.prestataireNom || '',
+            prestataireMetier: form.prestataireMetier || '',
+            prestataireTelephone: form.prestataireTelephone || '',
+            typePaiement: versementType,
+            sourceFinancement: versementSource || 'entreprise',
+            statut: 'en_attente',
+            ajoutePar: user?.nom || user?.login || null, ajouteParUid: user?.uid || null, createdAt: now
+          })
+          if (form.projetId) {
+            const totalProjet = depenses
+              .filter((d) => d.projetId === form.projetId)
+              .reduce((s, d) => s + (Number(d.montant) || 0), 0) + montantVerse
+            await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
+          }
+          await audit('projet', 'depense_ajoutee', `${montantVerse.toLocaleString('fr-FR')} FCFA — ${form.titre}`)
         }
         await audit('projet', 'depense_ajoutee', `${montantVerse.toLocaleString('fr-FR')} FCFA — ${form.titre}`)
       }
@@ -630,7 +622,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
             </div>
           </div>
 
-          {peutSaisirMontant && (
+          {!editing && peutSaisirMontant && (
             <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                 <Wallet size={14} className="text-teal-600" /> {editing ? 'Nouveau versement' : 'Versement initial'}

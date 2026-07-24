@@ -23,14 +23,6 @@ import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
 
-// Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
-const SOURCE_INFO = {
-  projet:       { label: 'E-G.Pro · Versement', tone: 'info' },
-  besoin:       { label: 'E-G.Pro · Besoin validé', tone: 'info' },
-  briqueterie:  { label: 'Briqueterie', tone: 'neutral' }
-}
-const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
-
 const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
