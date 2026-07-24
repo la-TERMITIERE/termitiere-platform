@@ -2,11 +2,12 @@
 // Calquée sur la facturation MAXI-AGRO — permet d'émettre des factures
 // directement depuis l'application (briques + lignes libres).
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Pencil } from 'lucide-react'
+import { Plus, FileDown, Trash2, Pencil, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
+import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -18,7 +19,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
-import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
+import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 
 const emptyFacture = () => ({
   date: todayStr(),
@@ -45,6 +46,7 @@ export default function Factures() {
 
   const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null) // { facture, editId }
+  const [detail, setDetail] = useState(null) // facture consultée
 
   const liste = useMemo(
     () =>
@@ -171,6 +173,7 @@ export default function Factures() {
       key: 'actions', label: '', align: 'right',
       render: (r) => (
         <div className="flex justify-end gap-1">
+          <button title="Voir le détail" onClick={() => setDetail(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
           <button title="PDF" onClick={() => generateFacturePDF(r)} className="rounded p-1.5 text-secondary hover:bg-sky-50"><FileDown size={16} /></button>
           {peutFacturer() && <button title="Modifier" onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
           {peutFacturer() && <button title="Supprimer" onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
@@ -189,6 +192,45 @@ export default function Factures() {
       <Card className="p-0">
         <Table columns={columns} rows={liste} empty="Aucune facture." />
       </Card>
+
+      {/* Consultation d'une facture — lecture seule */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        title={detail ? `Facture ${detail.numero}` : ''}
+        footer={<>
+          <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>
+          {detail && <Button variant="secondary" onClick={() => generateFacturePDF(detail)}><FileDown size={15} /> PDF</Button>}
+        </>}>
+        {detail && (() => {
+          const t = calcTotaux(detail)
+          const vente = ventes.find((v) => v.id === detail.venteId)
+          return (
+            <FicheDetail
+              entetes={[
+                { label: 'Client', value: detail.client?.nom || '—' },
+                { label: 'Date', value: formatDateShort(detail.date) },
+                { label: 'Téléphone', value: detail.client?.tel },
+                { label: 'Adresse', value: detail.client?.adresse },
+                { label: 'E-mail', value: detail.client?.email },
+                { label: 'Vente liée', value: vente ? `${vente.num} · ${vente.clientNom || ''}` : null }
+              ]}
+              colonnes={[
+                { label: 'Article', render: (l) => l.article || '—' },
+                { label: 'Quantité', align: 'center', render: (l) => formatNumber(l.qte) },
+                { label: 'Prix unitaire', align: 'right', render: (l) => formatMoney(l.prixUnit || 0) },
+                { label: 'Total', align: 'right', render: (l) => formatMoney(l.total || 0) }
+              ]}
+              lignes={detail.lignes || []}
+              vide="Aucune ligne sur cette facture."
+              pied={[
+                { label: 'Total HT', value: t.totalHT },
+                { label: 'Remise', value: detail.remise ? `${detail.remise} %` : null },
+                { label: 'TVA', value: detail.tva ? `${detail.tva} %` : null },
+                { label: 'Total TTC', value: t.totalTTC, fort: true }
+              ]}
+            />
+          )
+        })()}
+      </Modal>
 
       <Modal
         open={!!modal}

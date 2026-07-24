@@ -59,14 +59,41 @@ export const lignesEditables = (lignes = []) => (lignes || []).map((l) => ({ ...
 
 export const sommeQte = (lignes = []) => (lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
 
-// Reporte les quantités corrigées sur une liste « miroir » (vente, facture…) :
-// alignement par position quand l'article correspond, sinon par clé. Le montant
-// reste à recalculer par l'appelant, chaque module ayant sa propre tarification.
-export function reporterQtes(cibles = [], corrigees = [], key = 'id') {
+// Applique un correctif — ARTICLE et quantité — à une liste « miroir » : la
+// vente, la facture ou la prestation qui reflètent la demande. L'alignement se
+// fait par POSITION (l'article ayant pu changer, la clé ne suffit plus) : à
+// l'indice i, la ligne cible qui portait bien l'ancien article reçoit le nouvel
+// article et la nouvelle quantité.
+//   `key`      : champ identifiant sur les lignes de la demande
+//   `keyCible` : idem sur les lignes de la cible (nommage souvent différent)
+//   `mapper`   : (ligneCorrigee, ligneCible) → champs à écrire sur la cible,
+//                chaque module ayant sa propre tarification.
+// Une ligne corrigée vise la position `_idx` quand elle en porte une (cas où
+// l'écran n'a présenté qu'une partie des lignes), sinon son propre rang.
+const position = (ligne, rang) => (ligne?._idx ?? rang)
+
+export function appliquerCorrectif(cibles = [], { avant = [], apres = [], key = 'id', keyCible = key, mapper }) {
+  if (!mapper) return cibles || []
+  const parPosition = new Map()
+  ;(apres || []).forEach((c, i) => parPosition.set(position(c, i), c))
   return (cibles || []).map((l, i) => {
-    const c = corrigees?.[i]?.[key] === l[key] ? corrigees[i] : (corrigees || []).find((x) => x[key] === l[key])
-    return c ? { ...l, qte: parseInt(c.qte) || 0 } : l
+    const c = parPosition.get(i)
+    if (!c) return l
+    const a = avant[i]
+    const attendu = a ? a[key] : c[key]
+    if (l[keyCible] !== attendu) return l
+    const { _idx, ...champs } = mapper(c, l)
+    return { ...l, ...champs }
   })
+}
+
+// Lignes dont l'ARTICLE lui-même a été remplacé — pour l'afficher à la hiérarchie.
+export function changementsArticle(avant = [], apres = [], { key = 'id', nom = 'nom' } = {}) {
+  return (apres || []).reduce((acc, c, i) => {
+    const a = avant[position(c, i)]
+    if (a && c && a[key] !== c[key]) acc.push({ deNom: a[nom] || a[key], versNom: c[nom] || c[key], qte: parseInt(c.qte) || 0 })
+    return acc
+  }, [])
 }
 
 // Sous-objet à écrire sur la demande lors de la relance.

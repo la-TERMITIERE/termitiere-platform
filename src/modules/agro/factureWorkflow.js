@@ -8,7 +8,7 @@ import { notify } from '../../core/notify'
 import { APPROVER_ROLES } from '../../core/roles'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { creerDemandesFacture, ajusterFactureEcart } from './factureStock'
-import { reporterQtes, payloadDemandeCorrectif, payloadDecisionCorrectif } from '../../shared/demandes/correctif'
+import { appliquerCorrectif, payloadDemandeCorrectif, payloadDecisionCorrectif } from '../../shared/demandes/correctif'
 
 const horo = () => `${todayStr()} ${new Date().toTimeString().slice(0, 5)}`
 
@@ -98,9 +98,19 @@ export async function demanderCorrectif(f, user, lignes, motif) {
 export async function trancherCorrectif(f, user, accepte, commentaire = '') {
   const c = f.correctif || {}
   if (accepte) {
-    // Les quantités corrigées reprennent la tarification des lignes d'origine.
-    const lignes = reporterQtes(f.lignes, c.lignes, 'articleId')
-      .map((l) => ({ ...l, total: (parseInt(l.qte) || 0) * (parseFloat(l.prixUnit ?? l.prix) || 0) }))
+    // Article remplacé et/ou quantité corrigée ; le prix suit le nouvel article.
+    const lignes = appliquerCorrectif(f.lignes, {
+      avant: c.lignesAvant || [], apres: c.lignes || [], key: 'articleId',
+      mapper: (x, l) => {
+        const qte = parseInt(x.qte) || 0
+        const pu = parseFloat(x.prixUnit ?? l.prixUnit ?? l.prix) || 0
+        return {
+          articleId: x.articleId, article: x.article,
+          articleType: x.articleType || l.articleType, articleCat: x.articleCat || l.articleCat,
+          qte, prixUnit: pu, total: qte * pu
+        }
+      }
+    })
     const { totalHT, totalTTC } = calcTotaux(lignes, f.remise, f.tva)
     await creerDemandesFacture({ ...f, lignes }, user)
     await updateItem('agro_factures', f.id, {

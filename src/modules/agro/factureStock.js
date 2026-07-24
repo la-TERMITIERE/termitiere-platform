@@ -42,10 +42,14 @@ export async function creerDemandesFacture(facture, user) {
       date: facture.date
     }
     const exists = demandes.find((d) => d.factureId === facture.id && d.ligneIdx === i)
+    // Un correctif a pu REMPLACER l'article de la ligne : l'ancien doit relâcher
+    // sa réservation de stock, sinon sa sortie resterait comptée à tort.
+    const ancien = exists && exists.articleId !== payload.articleId ? { ...exists } : null
     if (exists) await updateItem('agro_demandes', exists.id, payload)
     else if (payload.qte > 0) await addItem('agro_demandes', payload)
     else continue // ligne vide jamais sortie : rien à décompter
     await appliquerDemandeAuStock({ ...payload, statut: 'certifie' })
+    if (ancien) await appliquerDemandeAuStock({ ...ancien, statut: 'certifie' })
   }
 }
 

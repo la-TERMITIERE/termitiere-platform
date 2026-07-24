@@ -1,11 +1,12 @@
 // Facturation logistique — émission obligatoire avant demande d'autorisation de sortie.
 import { useMemo, useState } from 'react'
-import { FileText, Plus, Trash2 } from 'lucide-react'
+import { FileText, Plus, Trash2, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
+import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
@@ -13,7 +14,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
+import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 // Une facture logistique naît en BROUILLON. Elle n'est APPROUVÉE (et ne compte
@@ -32,6 +33,7 @@ export default function Factures() {
   const { data: allDemandes } = useCollection('logistique_demandes')
   const [open, setOpen] = useState(false)
   const [prestId, setPrestId] = useState('')
+  const [detail, setDetail] = useState(null)   // facture consultée
 
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
@@ -106,15 +108,68 @@ export default function Factures() {
             { key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> },
             { key: 'statut', label: 'Statut', render: (r) => { const s = F_STATUTS[r.statut] || F_STATUTS.brouillon; return <Badge tone={s.tone}>{s.label}</Badge> } },
             { key: 'actions', label: '', align: 'right', render: (r) => (
-              peutFacturer && r.statut === 'brouillon' && !facturesEngagees.has(r.id)
-                ? <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
-                : null
+              <div className="flex justify-end gap-1">
+                <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                {peutFacturer && r.statut === 'brouillon' && !facturesEngagees.has(r.id) && (
+                  <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                )}
+              </div>
             ) }
           ]}
           rows={liste}
           empty="Aucune facture."
         />
       </Card>
+
+      {/* Consultation d'une facture — lecture seule */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        title={detail ? `Facture ${detail.num}` : ''}
+        footer={<Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>}>
+        {detail && (() => {
+          const totalLignes = (detail.lignes || []).reduce((s, l) => s + (l.montant || 0), 0)
+          const totalFrais = (detail.frais || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0)
+          return (
+            <FicheDetail
+              entetes={[
+                { label: 'Client', value: detail.clientNom || '—' },
+                { label: 'Statut', value: (F_STATUTS[detail.statut] || F_STATUTS.brouillon).label },
+                { label: 'Prestation', value: detail.prestationNum },
+                { label: 'Événement', value: detail.evenement },
+                { label: 'Date de facture', value: formatDateShort(detail.date) },
+                { label: 'Période', value: detail.dateDebut ? `${formatDateShort(detail.dateDebut)} → ${formatDateShort(detail.dateFin)}` : null },
+                { label: 'Site', value: siteLabel(detail.site || site) },
+                { label: 'Émise par', value: detail.agentNom },
+                { label: 'Approuvée par', value: detail.approuveePar ? `${detail.approuveePar}${detail.approuveeLe ? ' · ' + detail.approuveeLe : ''}` : null }
+              ]}
+              colonnes={[
+                { label: 'Prestation', render: (l) => l.materielNom || 'Élément' },
+                { label: 'Qté', align: 'center', render: (l) => formatNumber(l.qte || 0) },
+                { label: 'Jours', align: 'center', render: (l) => formatNumber(l.nbJours || 1) },
+                { label: 'Tarif / jour', align: 'right', render: (l) => formatMoney(l.tarifUnitaire || 0) },
+                { label: 'Montant', align: 'right', render: (l) => formatMoney(l.montant || 0) }
+              ]}
+              lignes={detail.lignes || []}
+              vide="Aucune ligne sur cette facture."
+              pied={[
+                { label: 'Sous-total matériel', value: totalLignes },
+                { label: 'Frais supplémentaires', value: totalFrais || null },
+                { label: 'Total', value: detail.totalTTC ?? detail.totalHT ?? 0, fort: true }
+              ]}
+            >
+              {(detail.frais || []).length > 0 && (
+                <div className="rounded-lg bg-amber-50/60 px-3 py-2">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">Frais supplémentaires</p>
+                  {(detail.frais || []).map((x, i) => (
+                    <div key={i} className="flex justify-between gap-3 text-xs text-amber-900">
+                      <span>{x.label}</span><span className="font-semibold">{formatMoney(x.montant || 0)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </FicheDetail>
+          )
+        })()}
+      </Modal>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Émettre une facture (brouillon)"
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={emettre}><FileText size={16} /> Émettre</Button></>}>

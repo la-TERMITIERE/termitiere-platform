@@ -1,12 +1,12 @@
 // Pilotage & Analyse — BRIQUETERIE (vue direction / investisseurs).
 // Indicateurs clés de performance filtrables par PÉRIODE et par TYPE de brique :
-// chiffre d'affaires, production, ventes (volume), écoulement, stock, rebut
-// (caillasses), matières & marge brute indicative. Détail par type de brique.
+// chiffre d'affaires, ventes de la période, écoulement, prix moyen et clients
+// servis. Détail par type de brique + matières premières.
 import { useMemo, useState } from 'react'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
-  BadgeDollarSign, TrendingUp, TrendingDown, Layers,
-  Percent, Recycle, Boxes
+  BadgeDollarSign, TrendingUp, TrendingDown, ShoppingCart,
+  Percent, Users, Boxes
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -25,6 +25,7 @@ export default function Pilotage() {
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: productions } = useCollection('evenementiel_productions')
   const { data: factures } = useCollection('evenementiel_factures')
+  const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: demandes } = useCollection('evenementiel_demandes')
 
   const { start, end, preset, node: periodNode } = usePeriodSelect('30')
@@ -88,12 +89,32 @@ export default function Pilotage() {
   const prixMoyen = ventesVol ? caTotal / ventesVol : 0
   const tauxEcoulement = prodTotal ? (ventesVol / prodTotal) * 100 : 0
 
-  // Rebut (caillasses) — global : produites sur la période + stock actuel.
-  const caillassesProd = productionsP.reduce((s, p) => s + (parseInt(p.caillasses) || 0), 0)
-  const caillassesStock = dernier?.briques?.caillasses?.caillasses || 0
-  const tauxRebut = (prodTotal + caillassesProd) > 0 ? (caillassesProd / (prodTotal + caillassesProd)) * 100 : 0
+  // Ventes de la période — commandes enregistrées, restreintes au type filtré.
+  const venteDansScope = (v) => scope === TOUTES || (v.lignes || []).some((l) => l.briqueId === scope)
+  const ventesP = useMemo(
+    () => ventes.filter((v) => inPeriode(v.date) && venteDansScope(v)).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [ventes, start, end, scope]
+  )
+  const ventesMontant = ventesP.reduce((s, v) => s + (v.total || 0), 0)
 
-  // Matières (global) : consommées & coût d'achat sur la période, marge brute indicative.
+  // Clients servis : clients distincts facturés sur la période, avec leur poids.
+  const clientsServis = useMemo(() => {
+    const map = {}
+    facturesP.forEach((f) => {
+      const nom = (f.client?.nom || '').trim() || '—'
+      const montant = scope === TOUTES
+        ? (f.totalTTC || 0)
+        : (f.lignes || []).filter((l) => ligneBrique(l) === scope)
+            .reduce((a, l) => a + (l.total || (parseInt(l.qte) || 0) * (parseFloat(l.prixUnit) || 0)), 0)
+      if (scope !== TOUTES && montant <= 0) return
+      const cur = map[nom] || { nom, montant: 0, nb: 0 }
+      cur.montant += montant; cur.nb += 1
+      map[nom] = cur
+    })
+    return Object.values(map).sort((a, b) => b.montant - a.montant)
+  }, [facturesP, scope])
+
+  // Matières (global) : consommées & coût d'achat sur la période.
   const mat = useMemo(() => {
     const conso = {}; const ent = {}; let cout = 0
     inventaires.filter((i) => inPeriode(i.date)).forEach((i) => Object.entries(i.matieres || {}).forEach(([id, m]) => {
@@ -103,8 +124,6 @@ export default function Pilotage() {
     }))
     return { conso, ent, cout }
   }, [inventaires, start, end])
-  const margeBrute = caTotal - mat.cout
-  const tauxMarge = caTotal ? (margeBrute / caTotal) * 100 : 0
 
   const autorisations = demandes.filter((d) => estActif(d.statut)).length
 
@@ -122,10 +141,10 @@ export default function Pilotage() {
   const prodPrev = prodOf(productionsPrev)
   const prixPrev = ventesPrev ? caPrev / ventesPrev : 0
   const ecoulPrev = prodPrev ? (ventesPrev / prodPrev) * 100 : 0
-  const caillassesPrev = productionsPrev.reduce((s, p) => s + (parseInt(p.caillasses) || 0), 0)
-  const rebutPrev = (prodPrev + caillassesPrev) > 0 ? (caillassesPrev / (prodPrev + caillassesPrev)) * 100 : 0
-  const matCoutPrev = inventaires.filter((i) => inPrev(i.date)).reduce((s, i) => s + Object.values(i.matieres || {}).reduce((a, m) => a + (m.coutEntrees || 0), 0), 0)
-  const tauxMargePrev = caPrev ? ((caPrev - matCoutPrev) / caPrev) * 100 : 0
+  const nbVentesPrev = comparable ? ventes.filter((v) => inPrev(v.date) && venteDansScope(v)).length : 0
+  const nbClientsPrev = comparable
+    ? new Set(facturesPrev.map((f) => (f.client?.nom || '').trim() || '—')).size
+    : 0
   const pct = (cur, prev) => (comparable && prev > 0) ? ((cur - prev) / prev) * 100 : null
 
   // Graphiques.
@@ -171,10 +190,10 @@ export default function Pilotage() {
 
   const kpis = [
     { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#7c3aed' },
-    { id: 'marge', title: 'Marge brute (est.)', value: `${tauxMarge.toFixed(0)} %`, deltaPP: comparable ? (tauxMarge - tauxMargePrev) : null, up: true, sub: `${formatMoney(margeBrute)} · matières ${formatMoney(mat.cout)}`, icon: Layers, color: margeBrute >= 0 ? '#15803d' : '#dc2626' },
+    { id: 'ventesTot', title: 'Ventes de la période', value: formatNumber(ventesP.length), delta: pct(ventesP.length, nbVentesPrev), up: true, sub: formatMoney(ventesMontant), icon: ShoppingCart, color: '#15803d' },
     { id: 'ecoul', title: 'Taux d\'écoulement', value: `${tauxEcoulement.toFixed(0)} %`, deltaPP: comparable ? (tauxEcoulement - ecoulPrev) : null, up: true, sub: 'ventes ÷ production', icon: Percent, color: '#0d9488' },
     { id: 'prix', title: 'Prix moyen / brique', value: formatMoney(prixMoyen), delta: pct(prixMoyen, prixPrev), up: true, sub: 'CA ÷ volume vendu', icon: TrendingUp, color: '#0891b2' },
-    { id: 'rebut', title: 'Taux de rebut', value: `${tauxRebut.toFixed(1)} %`, deltaPP: comparable ? (tauxRebut - rebutPrev) : null, up: false, sub: `${formatNumber(caillassesProd)} caillasses produites`, icon: Recycle, color: tauxRebut > 5 ? '#dc2626' : '#16a34a' }
+    { id: 'clients', title: 'Clients servis', value: formatNumber(clientsServis.length), delta: pct(clientsServis.length, nbClientsPrev), up: true, sub: `${formatNumber(nbFactures)} facture(s)`, icon: Users, color: '#0891b2' }
   ]
 
   return (
@@ -211,17 +230,18 @@ export default function Pilotage() {
           return (
           <button key={k.id} type="button" onClick={() => setModal(k.id)}
             className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
+            <div className="mb-2 flex items-center justify-between gap-1">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
               {chip && (
-                <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                   {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{chip}
                 </span>
               )}
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
-            <p className="text-xl font-extrabold text-gray-900">{k.value}</p>
-            {k.sub && <p className="mt-0.5 text-[10px] text-gray-400">{k.sub}</p>}
+            {/* truncate + title : un montant long est coupé proprement, lisible au survol. */}
+            <p className="truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
+            <p className="truncate text-lg font-extrabold leading-tight text-gray-900 sm:text-xl" title={String(k.value)}>{k.value}</p>
+            {k.sub && <p className="mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
           </button>
         )})}
       </div>
@@ -328,7 +348,7 @@ export default function Pilotage() {
       </Card>
 
       <PilotageModal id={modal} onClose={() => setModal(null)} scopeLabel={scopeLabel}
-        data={{ facturesP, productionsP, parType, ligneBrique, scope }} />
+        data={{ facturesP, productionsP, parType, ligneBrique, scope, ventesP, ventesMontant, clientsServis }} />
     </div>
   )
 }
@@ -346,12 +366,51 @@ function ScopeTab({ active, color, onClick, children }) {
 function PilotageModal({ id, onClose, scopeLabel, data }) {
   if (!id) return null
   const titles = {
-    ca: 'Factures de la période', panier: 'Factures de la période', prix: 'Factures de la période', marge: 'Factures de la période',
+    ca: 'Factures de la période', panier: 'Factures de la période', prix: 'Factures de la période',
     prod: 'Productions de la période', ecoul: 'Productions de la période',
-    ventes: 'Ventes par type', pret: 'Stock par type', rebut: 'Productions & rebut', autos: 'Autorisations', prodType: 'Détail'
+    ventesTot: 'Ventes de la période', clients: 'Clients servis',
+    ventes: 'Ventes par type', pret: 'Stock par type', autos: 'Autorisations', prodType: 'Détail'
   }
   let content = null
-  if (['ca', 'panier', 'prix', 'marge'].includes(id)) {
+  if (id === 'ventesTot') {
+    content = (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase">
+          <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">N°</th><th className="p-2 text-left">Client</th><th className="p-2 text-center">Briques</th><th className="p-2 text-right">Montant</th></tr>
+        </thead>
+        <tbody>{data.ventesP.map((v) => (
+          <tr key={v.id} className="border-t">
+            <td className="p-2">{formatDateShort(v.date)}</td>
+            <td className="p-2 font-mono text-xs text-gray-500">{v.num}</td>
+            <td className="p-2">{v.clientNom || '—'}</td>
+            <td className="p-2 text-center font-semibold">{formatNumber((v.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0))}</td>
+            <td className="p-2 text-right font-bold text-green-700">{formatMoney(v.total || 0)}</td>
+          </tr>
+        ))}{!data.ventesP.length && <tr><td colSpan={5} className="p-4 text-center text-gray-400">Aucune vente sur la période.</td></tr>}</tbody>
+        {data.ventesP.length > 0 && (
+          <tfoot><tr className="border-t bg-gray-50">
+            <td colSpan={4} className="p-2 text-right text-xs font-bold uppercase text-gray-500">Montant total</td>
+            <td className="p-2 text-right text-base font-extrabold text-green-700">{formatMoney(data.ventesMontant)}</td>
+          </tr></tfoot>
+        )}
+      </table>
+    )
+  } else if (id === 'clients') {
+    content = (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs uppercase">
+          <tr><th className="p-2 text-left">Client</th><th className="p-2 text-center">Factures</th><th className="p-2 text-right">Montant</th></tr>
+        </thead>
+        <tbody>{data.clientsServis.map((c) => (
+          <tr key={c.nom} className="border-t">
+            <td className="p-2 font-semibold">{c.nom}</td>
+            <td className="p-2 text-center">{formatNumber(c.nb)}</td>
+            <td className="p-2 text-right font-bold text-sky-700">{formatMoney(c.montant)}</td>
+          </tr>
+        ))}{!data.clientsServis.length && <tr><td colSpan={3} className="p-4 text-center text-gray-400">Aucun client facturé.</td></tr>}</tbody>
+      </table>
+    )
+  } else if (['ca', 'panier', 'prix'].includes(id)) {
     const rows = [...data.facturesP].sort((a, b) => (a.date < b.date ? 1 : -1))
     content = (
       <table className="w-full text-sm">
@@ -361,7 +420,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
         ))}{!rows.length && <tr><td colSpan={3} className="p-4 text-center text-gray-400">Aucune facture.</td></tr>}</tbody>
       </table>
     )
-  } else if (['prod', 'ecoul', 'rebut'].includes(id)) {
+  } else if (['prod', 'ecoul'].includes(id)) {
     const rows = [...data.productionsP].sort((a, b) => (a.date < b.date ? 1 : -1))
     content = (
       <table className="w-full text-sm">

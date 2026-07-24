@@ -6,11 +6,12 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
+import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -22,7 +23,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
-import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
+import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
 import EcartModal from './EcartModal'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
@@ -60,11 +61,17 @@ export default function Factures() {
   const { generateFacturePDF } = usePDF('agro')
 
   const tousArticles = [...especes, ...aliments]
+  // Articles proposés au correctif, avec ce dont le stock a besoin (type, catégorie).
+  const articlesCorrectif = useMemo(() => [
+    ...especes.map((e) => ({ ...e, type: 'animal' })),
+    ...aliments.map((a) => ({ ...a, type: 'aliment' }))
+  ], [especes, aliments])
   const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('tous')
   const [modal, setModal] = useState(null)        // { facture, editId }
   const [ecart, setEcart] = useState(null)        // facture en cours d'ajustement (hiérarchie)
   const [relance, setRelance] = useState(null)    // facture certifiée à relancer (correctif)
+  const [detail, setDetail] = useState(null)      // facture consultée (lecture seule)
   const [busy, setBusy] = useState(false)
 
   const liste = useMemo(
@@ -284,7 +291,10 @@ export default function Factures() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-wrap justify-end gap-1">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {/* Consultation ouverte à tous, quel que soit le statut. */}
+                        <button onClick={() => setDetail(f)} title="Voir le détail"
+                          className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
                         {actions(f).map((act) => (
                           <Button key={act.id} size="sm" variant={act.tone} disabled={busy} onClick={act.on}>
                             <act.icon size={14} /> {act.label}
@@ -372,6 +382,67 @@ export default function Factures() {
       </Modal>
 
       {/* Modal écart : ajustement des quantités réelles par la hiérarchie */}
+      {/* Consultation d'une facture — lecture seule */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+        title={detail ? `Facture ${detail.numero}` : ''}
+        footer={<>
+          <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>
+          {detail && factureStatut(detail) === 'certifiee' && (
+            <Button variant="secondary" onClick={() => generateFacturePDF(detail)}><FileDown size={15} /> PDF</Button>
+          )}
+        </>}>
+        {detail && (() => {
+          const st = factureStatut(detail)
+          const lignes = lignesEffectives(detail).filter((l) => l.articleId || (l.article || '').trim())
+          const t = calcTotaux(lignes, detail.remise, detail.tva)
+          return (
+            <FicheDetail
+              entetes={[
+                { label: 'Client', value: detail.client?.nom || '—' },
+                { label: 'Statut', value: (FACTURE_STATUTS[st] || { label: st }).label },
+                { label: 'Date', value: formatDateShort(detail.date) },
+                { label: 'Téléphone', value: detail.client?.tel },
+                { label: 'Apporteur', value: detail.apporteur },
+                { label: 'Créée par', value: detail.createdBy },
+                { label: 'Sortie demandée', value: detail.sortieDemandeePar ? `${detail.sortieDemandeePar}${detail.sortieDemandeeLe ? ' · ' + detail.sortieDemandeeLe : ''}` : null },
+                { label: 'Sortie approuvée', value: detail.sortieApprouveePar ? `${detail.sortieApprouveePar}${detail.sortieApprouveeLe ? ' · ' + detail.sortieApprouveeLe : ''}` : null },
+                { label: 'Certifiée', value: detail.certifieePar ? `${detail.certifieePar}${detail.certifieeLe ? ' · ' + detail.certifieeLe : ''}` : null },
+                { label: 'Motif de refus', value: detail.refusMotif }
+              ]}
+              colonnes={[
+                { label: 'Article', render: (l) => l.article || '—' },
+                { label: 'Catégorie', render: (l) => l.articleCat || '' },
+                { label: 'Quantité', align: 'center', render: (l) => formatNumber(l.qte) },
+                { label: 'Prix unitaire', align: 'right', render: (l) => formatMoney(l.prixUnit ?? l.prix ?? 0) },
+                { label: 'Total', align: 'right', render: (l) => formatMoney(l.total || 0) }
+              ]}
+              lignes={lignes}
+              vide="Aucune ligne sur cette facture."
+              pied={[
+                { label: 'Total HT', value: t.totalHT },
+                { label: 'Remise', value: detail.remise ? `${detail.remise} %` : null },
+                { label: 'TVA', value: detail.tva ? `${detail.tva} %` : null },
+                { label: 'Total TTC', value: t.totalTTC, fort: true }
+              ]}
+            >
+              {detail.ecartAjuste && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Quantités ajustées après écart{detail.ecartAjustePar ? ` par ${detail.ecartAjustePar}` : ''}
+                  {detail.ecartMotif ? ` · « ${detail.ecartMotif} »` : ''}
+                </p>
+              )}
+              {detail.correctif && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {CORRECTIF_STATUTS[detail.correctif.statut]?.label} — demandé par {detail.correctif.parNom}
+                  {detail.correctif.traitePar ? `, tranché par ${detail.correctif.traitePar}` : ''}
+                  {detail.correctif.motif ? ` · « ${detail.correctif.motif} »` : ''}
+                </p>
+              )}
+            </FicheDetail>
+          )
+        })()}
+      </Modal>
+
       <EcartModal facture={ecart} onClose={() => setEcart(null)} onSubmit={appliquerAjustement} busy={busy} />
 
       {/* Relance : correctif de quantités sur une facture déjà certifiée */}
@@ -379,8 +450,11 @@ export default function Factures() {
         <CorrectifModal
           key={relance.id} onClose={() => setRelance(null)} busy={busy}
           titre={`Relancer la facture ${relance.numero}`}
-          lignes={lignesEffectives(relance).filter((l) => l.articleId)}
-          nomField="article"
+          lignes={lignesEffectives(relance).map((l, i) => ({ ...l, _idx: i })).filter((l) => l.articleId)}
+          champs={CLES}
+          articles={articlesCorrectif}
+          onPickArticle={(a) => ({ articleType: a.type, articleCat: a.cat || '', prixUnit: a.prix || 0 })}
+          prixField="prixUnit"
           onSubmit={envoyerCorrectif}
         />
       )}
