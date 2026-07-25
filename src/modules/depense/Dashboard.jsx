@@ -87,7 +87,6 @@ export default function Dashboard() {
   }, [depenses, remboursementsPau, annee, mois])
 
   const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '', secteurId: '' })
-  const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '' })
 
   async function confirmerRemboursement() {
     if (!remboursement) return
@@ -95,15 +94,17 @@ export default function Dashboard() {
     if (!remboursement.montant || montant <= 0) return toast.error('Montant requis')
     if (montant > financement.detteNette) return toast.error(`Le montant dépasse la dette restante (${financement.detteNette.toLocaleString('fr-FR')} FCFA)`)
     if (!remboursement.date) return toast.error('Date requise')
+    if (!remboursement.secteurId) return toast.error('Secteur requis — le PAU avait financé une dépense d\'un secteur précis')
     setRembSaving(true)
     try {
       const id = genId()
+      const secteurLabel = SECTEURS.find((s) => s.id === remboursement.secteurId)?.label || remboursement.secteurId
       await setItem('depense_pau_remboursements', id, {
-        id, montant, date: remboursement.date, motif: remboursement.motif.trim(),
+        id, montant, date: remboursement.date, motif: remboursement.motif.trim(), secteurId: remboursement.secteurId,
         enregistrePar: user?.nom || user?.login || '—', createdAt: Date.now()
       })
-      await audit('depense', 'PAU_REMBOURSEMENT', `${montant.toLocaleString('fr-FR')} FCFA remboursés au PAU${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`, { montant, date: remboursement.date })
-      toast.success('Remboursement enregistré ✓')
+      await audit('depense', 'PAU_REMBOURSEMENT', `${montant.toLocaleString('fr-FR')} FCFA remboursés au PAU — ${secteurLabel}${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`, { montant, date: remboursement.date, secteurId: remboursement.secteurId })
+      toast.success('Remboursement enregistré ✓ — budget crédité pour ' + secteurLabel)
       setRemboursement(null)
     } finally {
       setRembSaving(false)
@@ -325,6 +326,7 @@ export default function Dashboard() {
                 <div key={r.id} className="flex items-center justify-between rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
                   <div className="min-w-0">
                     <span className="font-bold text-gray-800">{Number(r.montant).toLocaleString('fr-FR')} FCFA</span>
+                    {r.secteurId && <span className="ml-2 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">{SECTEURS.find((s) => s.id === r.secteurId)?.label || r.secteurId}</span>}
                     {r.motif && <span className="ml-2 truncate text-gray-500">{r.motif}</span>}
                   </div>
                   <span className="shrink-0 text-[10px] text-gray-400">{formatDateShort(r.date)}</span>
@@ -354,6 +356,15 @@ export default function Dashboard() {
               <label className="mb-1 block text-sm font-semibold text-gray-700">Date <span className="text-red-500">*</span></label>
               <input type="date" value={remboursement.date} onChange={(e) => setRemboursement((r) => ({ ...r, date: e.target.value }))}
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Secteur concerné <span className="text-red-500">*</span></label>
+              <select value={remboursement.secteurId} onChange={(e) => setRemboursement((r) => ({ ...r, secteurId: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300">
+                <option value="">— Choisir le secteur dont l'apport du PAU est remboursé —</option>
+                {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-400">Le montant remboursé crédite le budget consommé de ce secteur (il ne compte plus contre son budget alloué).</p>
             </div>
             <div>
               <label className="mb-1 block text-sm font-semibold text-gray-700">Motif / précision</label>

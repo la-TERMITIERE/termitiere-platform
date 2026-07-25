@@ -1,6 +1,7 @@
-// Logique métier — dossiers fonciers, progression des étapes.
+// Logique métier — dossiers fonciers, progression des étapes, frais détaillés.
 
-import { etapesPourType } from './data'
+import { etapesPourType, CATEGORIES_FRAIS, FRAIS_INSCRIPTION_LABEL } from './data'
+import { genId, todayStr } from '../../utils/formatters'
 
 // Types disponibles = types par défaut + types personnalisés (référentiel).
 export function typesDisponibles(defaults, customTypes = []) {
@@ -26,8 +27,101 @@ export function initEtapes(typeId) {
     responsable: '',
     personnel: e.personnel || '',   // intervenant type (Géomètre, OTR, Notaire…)
     cout: e.cout || '',             // référence de coût liée à l'étape
-    montant: ''                     // montant réel payé (saisi par l'agent)
+    montant: '',                    // hérité : montant unique (dossiers antérieurs)
+    frais: []                       // lignes de frais détaillées de l'étape
   }))
+}
+
+// ───────────────────────── FRAIS ─────────────────────────
+
+// Nouvelle ligne de frais vierge.
+export const newFrais = (patch = {}) => ({
+  id: genId(),
+  categorie: 'administratif',
+  libelle: '',
+  montant: '',
+  date: todayStr(),
+  note: '',
+  ...patch
+})
+
+// Somme d'une liste de lignes de frais.
+export function totalFrais(frais) {
+  return (frais || []).reduce((s, f) => s + (parseFloat(f.montant) || 0), 0)
+}
+
+// Total d'une étape : somme des lignes détaillées ; à défaut on retombe sur
+// l'ancien champ `montant` unique, pour ne rien perdre des dossiers créés avant
+// la saisie détaillée.
+export function totalEtape(etape) {
+  if (!etape) return 0
+  if (etape.frais?.length) return totalFrais(etape.frais)
+  return parseFloat(etape.montant) || 0
+}
+
+// Frais engagés à l'inscription (ouverture du dossier), hors étapes.
+export function totalInscription(dossier) {
+  return totalFrais(dossier?.fraisInscription)
+}
+
+// Total dépensé sur un dossier à l'instant T — inscription + toutes les étapes.
+// Ne dépend pas de l'achèvement du dossier : le cumul est disponible en cours de route.
+export function totalDossier(dossier) {
+  if (!dossier) return 0
+  return totalInscription(dossier) + (dossier.etapes || []).reduce((s, e) => s + totalEtape(e), 0)
+}
+
+// Toutes les lignes de frais d'un dossier, à plat, enrichies de leur provenance
+// (inscription ou étape). Les dossiers antérieurs, qui n'ont qu'un montant unique
+// par étape, sont représentés par une ligne de reprise afin de rester comptés.
+export function lignesFraisDossier(dossier) {
+  if (!dossier) return []
+  const lignes = []
+  const pousser = (f, source, sourceLabel, ordre) =>
+    lignes.push({ ...f, source, sourceLabel, ordre })
+
+  ;(dossier.fraisInscription || []).forEach((f) => pousser(f, 'inscription', FRAIS_INSCRIPTION_LABEL, 0))
+  ;[...(dossier.etapes || [])].sort((a, b) => a.ordre - b.ordre).forEach((e) => {
+    if (e.frais?.length) {
+      e.frais.forEach((f) => pousser(f, e.id, e.label, e.ordre))
+    } else if ((parseFloat(e.montant) || 0) > 0) {
+      pousser(
+        { id: `${e.id}__repris`, categorie: 'autre', libelle: 'Montant saisi (avant détail des frais)', montant: e.montant, date: e.dateFin || '', repris: true },
+        e.id, e.label, e.ordre
+      )
+    }
+  })
+  return lignes
+}
+
+// Répartition du total par catégorie de frais (décroissant), catégories vides exclues.
+export function totalParCategorie(dossier) {
+  const map = {}
+  lignesFraisDossier(dossier).forEach((l) => {
+    const cat = l.categorie || 'autre'
+    map[cat] = (map[cat] || 0) + (parseFloat(l.montant) || 0)
+  })
+  return CATEGORIES_FRAIS
+    .filter((c) => map[c.id])
+    .map((c) => ({ ...c, montant: map[c.id] }))
+    .sort((a, b) => b.montant - a.montant)
+}
+
+// Récapitulatif poste par poste : inscription puis étapes, avec sous-total et
+// nombre de lignes. Sert au tableau « détail de chaque étape et à quel coût ».
+export function recapFraisDossier(dossier) {
+  const lignes = lignesFraisDossier(dossier)
+  const groupes = []
+  lignes.forEach((l) => {
+    let g = groupes.find((x) => x.source === l.source)
+    if (!g) {
+      g = { source: l.source, label: l.sourceLabel, ordre: l.ordre, lignes: [], total: 0 }
+      groupes.push(g)
+    }
+    g.lignes.push(l)
+    g.total += parseFloat(l.montant) || 0
+  })
+  return groupes.sort((a, b) => a.ordre - b.ordre)
 }
 
 export function progressionDossier(etapes) {

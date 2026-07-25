@@ -1,7 +1,7 @@
 // Dossiers fonciers — acteurs, parcelle, suivi des étapes, pièces jointes (PDF/images),
 // cession/vente avec grille d'appréciation (verdict approbation/annulation base).
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Eye, Trash2, UserPlus, ChevronRight } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Plus, Eye, Trash2, UserPlus, ChevronRight, ChevronDown, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -16,13 +16,17 @@ import { isReadOnlyRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, genNumero, genId, formatMoney } from '../../utils/formatters'
+import { todayStr, genNumero, genId, formatMoney, formatDateShort } from '../../utils/formatters'
 import {
   TYPES_DOSSIER, MODES_ACQUISITION, STATUTS_DOSSIER, STATUTS_ETAPE,
   ACTEURS_ROLES, CESSION_CATEGORIES, APPRECIATION_CRITERES, VERDICTS_APPRECIATION,
-  PIECES_ACTEUR, PIECES_PARCELLE, COUTS_REFERENCE, PLAN_VISE_OPTIONS, planViseLabel
+  PIECES_ACTEUR, PIECES_PARCELLE, COUTS_REFERENCE, PLAN_VISE_OPTIONS, planViseLabel,
+  CATEGORIES_FRAIS, FRAIS_INSCRIPTION_LABEL, categorieFraisLabel
 } from './data'
-import { initEtapesPour, progressionDossier, etapeCourante, peutPasserSuivante, statutAutoDossier } from './logic'
+import {
+  initEtapesPour, progressionDossier, etapeCourante, peutPasserSuivante, statutAutoDossier,
+  newFrais, totalFrais, totalEtape, totalDossier, totalInscription, totalParCategorie, recapFraisDossier
+} from './logic'
 import { useFoncierStore } from './store/referentielStore'
 
 // Rubriques de classement des pièces jointes (pour les taguer à l'upload).
@@ -47,6 +51,7 @@ const emptyDossier = () => ({
   parcelle: emptyParcelle(),
   acteurs: [newActeur()],
   cession: { categorie: 'terrain_nu', docsFournis: {}, appreciation: { criteres: {}, verdict: 'en_attente', observations: '' } },
+  fraisInscription: [],
   montantAchat: '',
   notes: ''
 })
@@ -110,16 +115,19 @@ export default function Dossiers() {
     return rows.sort((a, b) => (a.dateOuverture < b.dateOuverture ? 1 : -1))
   }, [dossiers, filtreType, recherche, dateDebut, dateFin])
 
-  // Coût total dépensé sur les dossiers de la période/filtre courant.
-  const totalPeriode = useMemo(
-    () => liste.reduce((s, d) => s + (d.etapes || []).reduce((t, e) => t + (parseFloat(e.montant) || 0), 0), 0),
-    [liste]
-  )
+  // Coût total dépensé sur les dossiers de la période/filtre courant
+  // (frais d'inscription + frais de toutes les étapes).
+  const totalPeriode = useMemo(() => liste.reduce((s, d) => s + totalDossier(d), 0), [liste])
 
   function openCreate() { setModal({ data: emptyDossier(), isNew: true }) }
   function openEdit(d) {
     setModal({
-      data: { ...emptyDossier(), ...d, parcelle: { ...emptyParcelle(), ...(d.parcelle || {}) }, acteurs: d.acteurs?.length ? d.acteurs : [newActeur()] },
+      data: {
+        ...emptyDossier(), ...d,
+        parcelle: { ...emptyParcelle(), ...(d.parcelle || {}) },
+        acteurs: d.acteurs?.length ? d.acteurs : [newActeur()],
+        fraisInscription: d.fraisInscription || []
+      },
       isNew: false, id: d.id
     })
   }
@@ -176,6 +184,11 @@ export default function Dossiers() {
     const etapes = (d.etapes || []).map((e) => (e.id === etapeId ? { ...e, ...patch } : e))
     await patchDossier(dossierId, { etapes })
   }
+
+  // Frais d'une étape / de l'inscription — enregistrés au fil de la saisie,
+  // le cumul du dossier se recalcule immédiatement.
+  const setFraisEtape = (dossierId, etapeId, frais) => updateEtape(dossierId, etapeId, { frais })
+  const setFraisInscription = (dossierId, frais) => patchDossier(dossierId, { fraisInscription: frais })
 
   async function setVerdict(dossierId, appreciationPatch) {
     const d = dossiers.find((x) => x.id === dossierId)
@@ -239,6 +252,7 @@ export default function Dossiers() {
               <th className="px-3 py-2">Localisation</th>
               <th className="px-3 py-2">Propriétaire / Cédant</th>
               <th className="px-3 py-2">Progression</th>
+              <th className="px-3 py-2 text-right">Frais engagés</th>
               <th className="px-3 py-2">Statut</th>
               <th className="px-3 py-2" />
             </tr>
@@ -259,6 +273,11 @@ export default function Dossiers() {
                       <span className="text-[10px] font-bold">{pct}%</span>
                     </div>
                     {etape && <p className="text-[10px] text-gray-500">{etape.label}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {totalDossier(d) > 0
+                      ? <span className="text-xs font-semibold text-emerald-700">{formatMoney(totalDossier(d))}</span>
+                      : <span className="text-xs text-gray-300">—</span>}
                   </td>
                   <td className="px-3 py-2"><Badge tone={STATUTS_DOSSIER[d.statut]?.tone}>{STATUTS_DOSSIER[d.statut]?.label || d.statut}</Badge></td>
                   <td className="px-3 py-2 text-right">
@@ -347,6 +366,16 @@ export default function Dossiers() {
               <p className="mt-1 text-[11px] text-gray-400">Pièces exigées par acteur (à téléverser dans le détail) : CNI/passeport légalisé, acte de naissance &lt; 3 mois, NIF.</p>
             </section>
 
+            {/* Frais d'inscription (ouverture du dossier) */}
+            <section>
+              <p className="mb-2 text-xs font-bold uppercase text-gray-500">Frais d'inscription</p>
+              <FraisEditor
+                frais={modal.data.fraisInscription || []}
+                onChange={(frais) => setData({ fraisInscription: frais })}
+                hint="Frais engagés pour ouvrir le dossier (constitution, honoraires, déplacement…). Les frais de chaque étape se saisissent ensuite dans le détail du dossier."
+              />
+            </section>
+
             <FormGroup label="Notes"><Input value={modal.data.notes} onChange={(e) => setData({ notes: e.target.value })} /></FormGroup>
           </div>
         )}
@@ -408,6 +437,24 @@ export default function Dossiers() {
               <AppreciationPanel detail={detail} onVerdict={(patch) => setVerdict(detail.id, patch)} />
             )}
 
+            {/* Frais d'inscription */}
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase text-gray-500">Frais d'inscription</p>
+                {totalInscription(detail) > 0 && (
+                  <span className="text-xs font-bold text-emerald-700">{formatMoney(totalInscription(detail))}</span>
+                )}
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-white p-3">
+                <FraisEditor
+                  frais={detail.fraisInscription || []}
+                  onChange={(frais) => setFraisInscription(detail.id, frais)}
+                  lectureSeule={lectureSeule}
+                  hint="Frais engagés pour ouvrir le dossier."
+                />
+              </div>
+            </section>
+
             {/* Étapes */}
             <section>
               <p className="mb-2 text-xs font-bold uppercase text-gray-500">Étapes administratives</p>
@@ -418,10 +465,13 @@ export default function Dossiers() {
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">{idx + 1}</span>
                       <span className="flex-1 text-sm font-semibold text-gray-900">{e.label}</span>
                       {e.personnel && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">{e.personnel}</span>}
+                      {totalEtape(e) > 0 && (
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">{formatMoney(totalEtape(e))}</span>
+                      )}
                       <Badge tone={STATUTS_ETAPE[e.statut]?.tone}>{STATUTS_ETAPE[e.statut]?.label}</Badge>
                     </div>
                     {e.cout && <p className="mt-1 text-[11px] text-gray-500">Coût lié : {coutLabel(e.cout)}</p>}
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                       <Select className="text-xs" value={e.statut} onChange={(ev) => {
                         if (ev.target.value === 'termine' && !peutPasserSuivante(detail.etapes, e.id)) {
                           return toast.error('Validez l\'étape précédente d\'abord')
@@ -432,22 +482,25 @@ export default function Dossiers() {
                       </Select>
                       <Input type="date" className="text-xs" value={e.dateDebut || ''} onChange={(ev) => updateEtape(detail.id, e.id, { dateDebut: ev.target.value })} />
                       <Input type="date" className="text-xs" value={e.dateFin || ''} onChange={(ev) => updateEtape(detail.id, e.id, { dateFin: ev.target.value })} />
-                      <Input type="number" min="0" className="text-xs" placeholder="Montant payé" value={e.montant || ''} onChange={(ev) => updateEtape(detail.id, e.id, { montant: ev.target.value })} />
                     </div>
                     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <Input className="text-xs" placeholder="Responsable (nous)" value={e.responsable || ''} onChange={(ev) => updateEtape(detail.id, e.id, { responsable: ev.target.value })} />
                       <Input className="text-xs" placeholder="Notes étape…" value={e.notes || ''} onChange={(ev) => updateEtape(detail.id, e.id, { notes: ev.target.value })} />
                     </div>
+
+                    {/* Frais détaillés de l'étape */}
+                    <FraisEtape
+                      etape={e}
+                      onChange={(frais) => setFraisEtape(detail.id, e.id, frais)}
+                      lectureSeule={lectureSeule}
+                    />
                   </div>
                 ))}
               </div>
             </section>
 
-            {/* Coût total payé */}
-            {(() => {
-              const total = (detail.etapes || []).reduce((s, e) => s + (parseFloat(e.montant) || 0), 0)
-              return total > 0 ? <p className="text-right text-sm font-bold text-emerald-700">Total payé : {formatMoney(total)}</p> : null
-            })()}
+            {/* Récapitulatif des frais — cumul à l'instant T, même dossier non terminé */}
+            <RecapFrais dossier={detail} />
 
             {/* Pièces jointes */}
             <section>
@@ -476,6 +529,159 @@ function InfoField({ label, value }) {
       <p className="text-[10px] uppercase text-gray-400">{label}</p>
       <p className="font-medium text-gray-800">{value || '—'}</p>
     </div>
+  )
+}
+
+// ─────────── Éditeur de lignes de frais (inscription ou étape) ───────────
+// Une ligne = une dépense réelle : catégorie, libellé, montant, date. Le sous-total
+// se recalcule à la saisie, sans attendre l'achèvement du dossier.
+function FraisEditor({ frais = [], onChange, lectureSeule, hint }) {
+  const total = totalFrais(frais)
+  const setLigne = (i, patch) => onChange(frais.map((f, j) => (j === i ? { ...f, ...patch } : f)))
+  const removeLigne = (i) => onChange(frais.filter((_, j) => j !== i))
+
+  return (
+    <div className="space-y-2">
+      {frais.map((f, i) => (
+        <div key={f.id} className="grid grid-cols-2 gap-2 md:grid-cols-12">
+          <Select className="text-xs md:col-span-3" value={f.categorie || 'autre'} disabled={lectureSeule}
+            onChange={(e) => setLigne(i, { categorie: e.target.value })}>
+            {CATEGORIES_FRAIS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </Select>
+          <Input className="text-xs md:col-span-4" placeholder="Libellé (ex : timbres fiscaux)" value={f.libelle || ''} disabled={lectureSeule}
+            onChange={(e) => setLigne(i, { libelle: e.target.value })} />
+          <Input type="number" min="0" className="text-xs md:col-span-2" placeholder="Montant" value={f.montant || ''} disabled={lectureSeule}
+            onChange={(e) => setLigne(i, { montant: e.target.value })} />
+          <Input type="date" className="text-xs md:col-span-2" value={f.date || ''} disabled={lectureSeule}
+            onChange={(e) => setLigne(i, { date: e.target.value })} />
+          <div className="flex items-center justify-end md:col-span-1">
+            {!lectureSeule && (
+              <button onClick={() => removeLigne(i)} title="Supprimer cette ligne" className="rounded p-1.5 text-red-500 hover:bg-red-50">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {!frais.length && <p className="text-xs text-gray-400">Aucun frais saisi.</p>}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {!lectureSeule && (
+          <Button variant="outline" size="sm" onClick={() => onChange([...frais, newFrais()])}>
+            <Plus size={14} /> Ajouter un frais
+          </Button>
+        )}
+        {total > 0 && (
+          <span className="ml-auto text-xs text-gray-600">Sous-total : <strong className="text-emerald-700">{formatMoney(total)}</strong></span>
+        )}
+      </div>
+
+      {hint && <p className="text-[11px] text-gray-400">{hint}</p>}
+    </div>
+  )
+}
+
+// ─────────── Frais d'une étape (repliable) ───────────
+// Les dossiers antérieurs n'ont qu'un montant unique par étape : on le présente
+// comme une première ligne de reprise pour qu'il ne soit jamais perdu ni compté
+// deux fois dès que le détail est saisi.
+function FraisEtape({ etape, onChange, lectureSeule }) {
+  const [ouvert, setOuvert] = useState(false)
+  const montantRepris = parseFloat(etape.montant) || 0
+  const frais = etape.frais?.length
+    ? etape.frais
+    : montantRepris > 0
+      ? [newFrais({ id: `${etape.id}__repris`, categorie: 'autre', libelle: 'Montant saisi précédemment', montant: etape.montant, date: etape.dateFin || todayStr() })]
+      : []
+  const total = totalEtape(etape)
+
+  return (
+    <div className="mt-2 border-t border-gray-100 pt-2">
+      <button onClick={() => setOuvert((o) => !o)} className="flex w-full items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-emerald-700">
+        {ouvert ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <Wallet size={13} />
+        <span>Frais de l'étape</span>
+        <span className="ml-auto font-bold text-emerald-700">
+          {total > 0 ? formatMoney(total) : <span className="font-normal text-gray-400">à saisir</span>}
+        </span>
+        {frais.length > 0 && <span className="text-[10px] font-normal text-gray-400">({frais.length} ligne{frais.length > 1 ? 's' : ''})</span>}
+      </button>
+      {ouvert && (
+        <div className="mt-2">
+          <FraisEditor frais={frais} onChange={onChange} lectureSeule={lectureSeule}
+            hint="Détaillez ce qui a été payé pour terminer cette étape (honoraires, administratif, transport…)." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────── Récapitulatif des frais du dossier ───────────
+// Cumul disponible à tout moment : dossier terminé ou en cours.
+function RecapFrais({ dossier }) {
+  const total = totalDossier(dossier)
+  const parCategorie = totalParCategorie(dossier)
+  const groupes = recapFraisDossier(dossier)
+  const pct = progressionDossier(dossier.etapes)
+  if (!total) return null
+
+  return (
+    <section className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <p className="text-xs font-bold uppercase text-emerald-800">Récapitulatif des frais</p>
+        <span className="ml-auto text-lg font-extrabold text-emerald-700">{formatMoney(total)}</span>
+      </div>
+      <p className="text-[11px] text-gray-500">
+        Total engagé à ce stade — dossier avancé à {pct}%{pct < 100 ? ' (frais susceptibles d\'augmenter)' : ''}.
+      </p>
+
+      {/* Répartition par nature de dépense */}
+      <p className="mt-3 mb-1 text-xs font-semibold text-gray-700">Par catégorie</p>
+      <div className="space-y-1">
+        {parCategorie.map((c) => (
+          <div key={c.id} className="flex items-center gap-2">
+            <span className="w-40 shrink-0 truncate text-xs text-gray-600">{c.label}</span>
+            <div className="h-1.5 flex-1 rounded-full bg-white">
+              <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${total ? (c.montant / total) * 100 : 0}%` }} />
+            </div>
+            <span className="w-28 shrink-0 text-right text-xs font-semibold text-gray-800">{formatMoney(c.montant)}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Détail poste par poste */}
+      <p className="mt-3 mb-1 text-xs font-semibold text-gray-700">Détail par étape</p>
+      <div className="overflow-x-auto rounded-lg border border-emerald-100 bg-white">
+        <table className="w-full text-xs">
+          <tbody className="divide-y divide-gray-100">
+            {groupes.map((g) => (
+              <Fragment key={g.source}>
+                <tr className="bg-gray-50">
+                  <td className="px-2 py-1.5 font-semibold text-gray-800" colSpan={2}>
+                    {g.source === 'inscription' ? FRAIS_INSCRIPTION_LABEL : `${g.ordre}. ${g.label}`}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-bold text-emerald-700">{formatMoney(g.total)}</td>
+                </tr>
+                {g.lignes.map((l) => (
+                  <tr key={l.id}>
+                    <td className="px-2 py-1 pl-5 text-gray-600">{l.libelle || <span className="text-gray-400">(sans libellé)</span>}</td>
+                    <td className="px-2 py-1 text-gray-400">{categorieFraisLabel(l.categorie)}{l.date ? ` · ${formatDateShort(l.date)}` : ''}</td>
+                    <td className="px-2 py-1 text-right text-gray-700">{formatMoney(parseFloat(l.montant) || 0)}</td>
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-emerald-200 bg-emerald-50">
+              <td className="px-2 py-1.5 font-bold text-gray-800" colSpan={2}>TOTAL DÉPENSÉ</td>
+              <td className="px-2 py-1.5 text-right font-extrabold text-emerald-700">{formatMoney(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
   )
 }
 
