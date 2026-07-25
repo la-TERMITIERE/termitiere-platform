@@ -279,6 +279,10 @@ export default function Depenses() {
 
   const handleDelete = async (d) => {
     if (!peutSupprimer) return
+    // Garde-fou : une dépense reprise d'un besoin validé vit réellement dans
+    // `depense_depenses` (E-DÉPENSES) — jamais dans `projet_depenses` ici. Le bouton
+    // supprimer est déjà masqué pour ces lignes, mais on bloque aussi l'appel direct.
+    if (d.depuisBesoin) return
     if (!window.confirm('Supprimer cette dépense ?')) return
     await removeItem('projet_depenses', d.id)
     // Recalculer le total du projet

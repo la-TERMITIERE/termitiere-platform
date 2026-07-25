@@ -294,6 +294,9 @@ export default function Depenses() {
 
   async function handleDelete() {
     if (!toDelete || deleting) return
+    // Garde-fou : une ligne « pont Briqueterie » n'a pas de document réel dans
+    // depense_depenses — rien à supprimer ici, elle se pilote depuis le Stock Briqueterie.
+    if (toDelete.source === 'briqueterie') { setToDelete(null); return }
     setDeleting(true)
     const target = toDelete
     setToDelete(null)
@@ -412,6 +415,8 @@ export default function Depenses() {
                 const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
                 const source = SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]
                 const depuisProjet = d.source === 'projet'
+                const avecOrigine = d.source === 'projet' || d.source === 'besoin' // motif/tâche à afficher
+                const origine = infoSource(d)
                 const importe = !!d.source // dépense reprise d'un autre module (E-G.Pro, Briqueterie) : non modifiable ici
                 const estPau = (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
                 const modifiable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
@@ -427,9 +432,9 @@ export default function Depenses() {
                       </span>
                     </td>
 
-                    {/* Dépense : description + catégorie/nature */}
+                    {/* Dépense : description + catégorie/nature/origine */}
                     <td className={`${cell} px-4`}>
-                      {depuisProjet ? (
+                      {avecOrigine ? (
                         <>
                           <p className="line-clamp-2 max-w-[320px] font-semibold text-gray-800">{d.projetNom || d.description || '—'}</p>
                           {d.tacheTitre && <p className="mt-0.5 line-clamp-1 max-w-[320px] text-xs text-gray-500">🔧 {d.tacheTitre}</p>}
@@ -440,6 +445,7 @@ export default function Depenses() {
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{d.categorie || '—'}</span>
                         <Badge tone={nature.tone}>{nature.label}</Badge>
+                        <Badge tone={origine.tone}>{origine.label}</Badge>
                       </div>
                     </td>
 
@@ -477,7 +483,7 @@ export default function Depenses() {
                           <Paperclip size={11} /> justif.
                         </button>
                       )}
-                      {!d.piece && depuisProjet && d.noteOrigine && (
+                      {!d.piece && avecOrigine && d.noteOrigine && (
                         <p className="mx-auto mt-1 line-clamp-2 max-w-[150px] text-[10px] italic text-gray-400">{d.noteOrigine}</p>
                       )}
                     </td>
@@ -759,7 +765,7 @@ export default function Depenses() {
         panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
-            {detail && (detail.source === 'projet' ? isAdmin : (isAdmin || detail.statut === 'en_attente' || !detail.statut)) ? (
+            {detail && detail.source !== 'briqueterie' && (detail.source === 'projet' ? isAdmin : (isAdmin || detail.statut === 'en_attente' || !detail.statut)) ? (
               <Button variant="danger" onClick={() => { const d = detail; setDetailId(null); setToDelete(d) }}>
                 <Trash2 size={14} /> Supprimer
               </Button>
@@ -769,6 +775,8 @@ export default function Depenses() {
         }>
         {detail && (() => {
           const depuisProjet = detail.source === 'projet'
+          const avecOrigine = detail.source === 'projet' || detail.source === 'besoin'
+          const origine = infoSource(detail)
           const secteur = SECTEURS.find((s) => s.id === detail.secteurId)
           const statut = STATUTS_DECAISSEMENT[detail.statut] || STATUTS_DECAISSEMENT.decaissee
           const nature = NATURES_FLUX[detail.natureFlux || natureFluxDefaut]
@@ -778,6 +786,7 @@ export default function Depenses() {
             { label: 'Secteur', value: secteur?.label || detail.secteurId },
             { label: 'Catégorie', value: detail.categorie || '—' },
             { label: 'Nature de flux', value: nature.label },
+            { label: 'Origine', value: origine.label },
             ...(!depuisProjet ? [{ label: 'Financement', value: src.label }] : [])
           ]
           return (
@@ -809,10 +818,10 @@ export default function Depenses() {
                 ))}
               </div>
 
-              {/* Projet / tâche (dépenses récupérées d'E-G.Pro) */}
-              {depuisProjet && (detail.projetNom || detail.tacheTitre) && (
+              {/* Projet / tâche / motif (dépenses récupérées d'E-G.Pro, versement ou besoin validé) */}
+              {avecOrigine && (detail.projetNom || detail.tacheTitre) && (
                 <div className="rounded-2xl border-l-4 border-teal-400 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 Projet concerné</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 {origine.label}</p>
                   <p className="mt-1 font-bold text-gray-800">{detail.projetNom || '—'}</p>
                   {detail.tacheTitre && <p className="mt-1 flex items-center gap-1 text-gray-600">🔧 <span className="font-medium">{detail.tacheTitre}</span></p>}
                   {detail.noteOrigine && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs italic text-gray-600">« {detail.noteOrigine} »</p>}
@@ -820,7 +829,7 @@ export default function Depenses() {
               )}
 
               {/* Description (dépenses saisies directement dans E-DÉPENSES) */}
-              {!depuisProjet && (
+              {!avecOrigine && (
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
                   <p className="mt-1 font-medium text-gray-700">{detail.description || '—'}</p>

@@ -180,7 +180,7 @@ export default function Pilotage() {
   const alertes = useMemo(() => genererAlertes(projets, taches, depenses, seuils), [projets, taches, depenses, seuils])
   const alertesResume = useMemo(() => ({
     critiques:      alertes.filter((a) => ['projet_retard', 'budget_depasse'].includes(a.type)).length,
-    avertissements: alertes.filter((a) => ['tache_depassee', 'tache_retard', 'avancement_zero'].includes(a.type)).length
+    avertissements: alertes.filter((a) => ['tache_depassee', 'reste_a_payer', 'tache_retard', 'avancement_zero'].includes(a.type)).length
   }), [alertes])
 
   const chartOpts = {

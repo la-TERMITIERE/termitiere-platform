@@ -24,6 +24,7 @@ const TITRES = {
   projet_retard:   '⏰ Projet en retard',
   budget_depasse:  '💰 Budget dépassé',
   tache_depassee:  '💰 Tâche en dépassement',
+  reste_a_payer:   '🏦 Reste à payer',
   tache_retard:    '⚠️ Tâche en retard',
   avancement_zero: '⏳ Aucun avancement',
   termine:         '✅ Projet terminé'
@@ -40,6 +41,10 @@ export default function ProjetAlerteWatcher() {
     let annule = false
 
     async function traiterAlerte(alerte) {
+      // « Reste à payer » : uniquement visible dans le bandeau Alertes du Dashboard,
+      // pas de notification poussée (alerte groupée, trop fréquente pour relancer en boucle).
+      if (alerte.type === 'reste_a_payer') return
+
       const projet = projets.find((p) => p.id === alerte.projetId)
       const forUsers = projet?.responsableUid ? [projet.responsableUid] : []
       const titre = TITRES[alerte.type] || 'Alerte projet'

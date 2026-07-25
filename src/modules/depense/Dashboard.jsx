@@ -13,7 +13,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { budgetSecteur, depenseNetteSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -52,11 +52,10 @@ export default function Dashboard() {
 
   const parSecteur = useMemo(() => SECTEURS.map((s) => {
     const alloue = budgetSecteur(budgets, s.id, annee, mois)
-    const listeDep = depensesSecteurMois(depenses, s.id, annee, mois)
-    const depense = totalDepenses(listeDep)
+    const depense = depenseNetteSecteurMois(depenses, remboursementsPau, s.id, annee, mois)
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return { ...s, alloue, depense, reste: alloue - depense, pct, statut: statutBudget(pct) }
-  }), [budgets, depenses, annee, mois])
+  }), [budgets, depenses, remboursementsPau, annee, mois])
 
   const totalAlloue = parSecteur.reduce((s, x) => s + x.alloue, 0)
   const totalDepense = parSecteur.reduce((s, x) => s + x.depense, 0)
@@ -68,7 +67,7 @@ export default function Dashboard() {
       .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 8)
   }, [depenses, annee, mois])
 
-  const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois), [budgets, depenses, annee, mois])
+  const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois, remboursementsPau), [budgets, depenses, annee, mois, remboursementsPau])
   const enAttenteCount = useMemo(() => depensesEnCircuit(depenses).length, [depenses])
 
   // Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) MOINS ce qu'elle
@@ -87,6 +86,7 @@ export default function Dashboard() {
     return { cumulPau, cumulEntreprise, cumulRembourse, detteNette, moisPau, moisRembourse, pct: total > 0 ? Math.round((cumulPau / total) * 100) : 0 }
   }, [depenses, remboursementsPau, annee, mois])
 
+  const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '', secteurId: '' })
   const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '' })
 
   async function confirmerRemboursement() {
@@ -188,29 +188,50 @@ export default function Dashboard() {
       )}
 
       {/* ── Alerte secteurs en attention / dépassement ── */}
-      {alertes.length > 0 && (
-        <div className="rounded-2xl border-l-4 border-red-500 bg-gradient-to-r from-red-50/95 via-red-50/70 to-red-50/30 px-4 py-3.5 shadow-[0_16px_36px_-16px_rgba(220,38,38,0.28)] backdrop-blur-xl backdrop-saturate-150">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500 shadow-[0_4px_10px_-2px_rgba(220,38,38,0.5)]">
-              <AlertTriangle size={18} className="text-white" />
+      {alertes.length > 0 && (() => {
+        const nbDepasses = alertes.filter((s) => s.statut.key === 'depasse').length
+        const nbAttention = alertes.length - nbDepasses
+        const ouvrirSecteur = (s) => navigate('/depense/recettes-depenses', { state: { openSecteurId: s.id, annee, mois } })
+        return (
+          <div className="group w-full rounded-2xl border-l-4 border-red-500 bg-gradient-to-r from-red-50/95 via-red-50/70 to-red-50/30 px-4 py-3.5 shadow-[0_16px_36px_-16px_rgba(220,38,38,0.28)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_44px_-16px_rgba(220,38,38,0.38)]">
+            <button onClick={() => navigate('/depense/recettes-depenses')} title="Voir tous les secteurs"
+              className="flex w-full flex-wrap items-center gap-3 text-left">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500 shadow-[0_4px_10px_-2px_rgba(220,38,38,0.5)]">
+                <AlertTriangle size={18} className="text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-red-900">{alertes.length} secteur{alertes.length > 1 ? 's' : ''} à surveiller</p>
+                <p className="text-xs text-red-500">
+                  {MOIS_LABELS[mois - 1]} {annee}
+                  {nbDepasses > 0 && <span className="ml-1.5">· {nbDepasses} dépassé{nbDepasses > 1 ? 's' : ''}</span>}
+                  {nbAttention > 0 && <span className="ml-1.5">· {nbAttention} en attention</span>}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white">{alertes.length}</span>
+              <ChevronRight size={18} className="shrink-0 text-red-400 transition-transform group-hover:translate-x-0.5" />
+            </button>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {alertes.map((s) => {
+                const depasse = s.statut.key === 'depasse'
+                return (
+                  <button key={s.id} onClick={() => ouvrirSecteur(s)} title="Voir le détail de ce secteur"
+                    className={`rounded-xl border bg-white/80 px-3 py-2 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${depasse ? 'border-red-200 hover:border-red-300' : 'border-amber-200 hover:border-amber-300'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`truncate text-xs font-bold ${depasse ? 'text-red-700' : 'text-amber-700'}`}>
+                        {depasse ? '🔴' : '🟠'} {s.label}
+                      </span>
+                      <span className={`shrink-0 text-xs font-black ${depasse ? 'text-red-700' : 'text-amber-700'}`}>{s.pct}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                      <div className={`h-1.5 rounded-full ${depasse ? 'bg-red-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, s.pct)}%` }} />
+                    </div>
+                  </button>
+                )
+              })}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-bold text-red-900">{alertes.length} secteur{alertes.length > 1 ? 's' : ''} à surveiller</p>
-              <p className="text-xs text-red-500">{MOIS_LABELS[mois - 1]} {annee}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white">{alertes.length}</span>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {alertes.map((s) => (
-              <span key={s.id} className={`rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm ${
-                s.statut.key === 'depasse' ? 'border-red-300 bg-white text-red-700' : 'border-amber-300 bg-white text-amber-700'
-              }`}>
-                {s.statut.key === 'depasse' ? '🔴' : '🟠'} {s.label} — {s.pct}%
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Dépenses récurrentes à reconduire ── */}
       {depensesAReconduire.length > 0 && (

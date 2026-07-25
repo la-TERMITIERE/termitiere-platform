@@ -2,7 +2,7 @@
 // avec la dépense décaissée du même secteur/mois. Lecture seule, aucune écriture croisée.
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
-import { Bar, Line } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'

@@ -53,6 +53,7 @@ export default function RecettesDepenses({ secteurId = null }) {
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
+  const { data: remboursementsPau }   = useCollection('depense_pau_remboursements')
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
 
@@ -97,7 +98,26 @@ export default function RecettesDepenses({ secteurId = null }) {
       ...s, recette, depense, lignes, solde: recette - depense, aRevenu: SECTEURS_AVEC_REVENU.includes(s.id),
       budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || []
     }
-  }), [secteursAffiches, budgets, depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  }), [secteursAffiches, budgets, depenses, remboursementsPau, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+
+  // Ouverture directe du détail d'un secteur depuis l'alerte du Dashboard (clic sur une
+  // carte secteur « à surveiller ») — évite de devoir le rechercher dans la liste.
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (location.state?.annee && location.state?.mois) { setAnnee(location.state.annee); setMois(location.state.mois) }
+  }, [location.state])
+  useEffect(() => {
+    const id = location.state?.openSecteurId
+    if (!id) return
+    // Attend que le mois demandé soit bien appliqué (effet ci-dessus) avant d'ouvrir,
+    // pour que le détail affiché corresponde au bon mois plutôt qu'au mois par défaut.
+    const { annee: wantAnnee, mois: wantMois } = location.state
+    if ((wantAnnee && wantAnnee !== annee) || (wantMois && wantMois !== mois)) return
+    const s = parSecteur.find((x) => x.id === id)
+    if (s) setSecteurDetail(s)
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state, parSecteur, annee, mois])
 
   const totalRecette = parSecteur.reduce((s, x) => s + x.recette, 0)
   const totalDepense = parSecteur.reduce((s, x) => s + x.depense, 0)

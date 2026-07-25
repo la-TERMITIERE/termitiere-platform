@@ -10,7 +10,7 @@ import HistoriqueTimeline from '../../shared/ui/HistoriqueTimeline'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { formatDateTime, formatDateShort } from '../../utils/formatters'
+import { formatDateTime, formatDateShort, extraireMontantFCFA } from '../../utils/formatters'
 
 const EVENTS = {
   ENFANT_CREATE:              { label: 'Enfant inscrit',          emoji: '👶' },
@@ -84,7 +84,8 @@ function OngletJournal({ evenements, loading }) {
       Utilisateur: l.userNom || '—',
       Rôle: l.userRole || '—',
       Événement: evInfo(l.action).label,
-      Détails: l.details || '—'
+      Détails: l.details || '—',
+      'Montant (FCFA)': extraireMontantFCFA(l.details)
     }))
     exportRapportExcel({ theme: 'garderie',
       filename: `journal-garderie-${start}_${end}.xlsx`,
@@ -97,7 +98,8 @@ function OngletJournal({ evenements, loading }) {
           { key: 'Utilisateur', label: 'Utilisateur', width: 20 },
           { key: 'Rôle', label: 'Rôle', width: 14 },
           { key: 'Événement', label: 'Événement', width: 28 },
-          { key: 'Détails', label: 'Détails', width: 40 }
+          { key: 'Détails', label: 'Détails', width: 40 },
+          { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16, type: 'number' }
         ],
         rows
       }]
