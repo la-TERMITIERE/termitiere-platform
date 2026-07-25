@@ -1,16 +1,16 @@
 // Dashboard Foncier — dossiers, progression, alertes.
 // Toutes les cartes sont cliquables : carte → liste de dossiers → détail d'un dossier (étapes).
 import { useMemo, useState } from 'react'
-import { MapPin, FileText, Clock, CheckCircle2 } from 'lucide-react'
+import { MapPin, FileText, Clock, CheckCircle2, Wallet } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { TYPES_DOSSIER, STATUTS_DOSSIER, STATUTS_ETAPE, VERDICTS_APPRECIATION } from './data'
-import { progressionDossier, etapeCourante } from './logic'
+import { progressionDossier, etapeCourante, totalEtape, totalDossier, totalInscription } from './logic'
 import { useFoncierStore } from './store/referentielStore'
-import { formatDateShort } from '../../utils/formatters'
+import { formatDateShort, formatMoney } from '../../utils/formatters'
 
 export default function Dashboard() {
   const { data: dossiers } = useCollection('foncier_dossiers')
@@ -23,7 +23,8 @@ export default function Dashboard() {
     const enCours = dossiers.filter((d) => d.statut === 'en_cours')
     const titresObtenus = dossiers.filter((d) => ['titre_obtenu', 'cloture'].includes(d.statut))
     const morcellements = dossiers.filter((d) => d.type === 'morcellement' && d.statut !== 'cloture')
-    return { ouverts, enCours, titresObtenus, morcellements }
+    const totalFrais = dossiers.reduce((s, d) => s + totalDossier(d), 0)
+    return { ouverts, enCours, titresObtenus, morcellements, totalFrais }
   }, [dossiers])
 
   const recents = useMemo(() =>
@@ -58,7 +59,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard title="Dossiers total" value={dossiers.length} icon={FileText} accent="#059669"
           sub="cliquer pour la liste" onClick={() => openDetail('Tous les dossiers', dossiers)} />
         <StatCard title="En cours" value={stats.enCours.length} icon={Clock} accent="#d97706"
@@ -67,6 +68,8 @@ export default function Dashboard() {
           sub="cliquer pour la liste" onClick={() => openDetail('Titres obtenus', stats.titresObtenus)} />
         <StatCard title="Morcellements actifs" value={stats.morcellements.length} icon={MapPin} accent="#0284c7"
           sub="cliquer pour la liste" onClick={() => openDetail('Morcellements actifs', stats.morcellements)} />
+        <StatCard title="Frais engagés" value={formatMoney(stats.totalFrais)} icon={Wallet} accent="#7c3aed"
+          sub="inscription + étapes" onClick={() => openDetail('Frais par dossier', [...dossiers].sort((a, b) => totalDossier(b) - totalDossier(a)))} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -143,6 +146,7 @@ export default function Dashboard() {
                     <p className="text-xs text-gray-500">{d.proprietaire}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {totalDossier(d) > 0 && <span className="text-xs font-semibold text-emerald-700">{formatMoney(totalDossier(d))}</span>}
                     <span className="text-xs font-bold text-gray-500">{pct}%</span>
                     <Badge tone={STATUTS_DOSSIER[d.statut]?.tone}>{STATUTS_DOSSIER[d.statut]?.label || d.statut}</Badge>
                   </div>
@@ -165,14 +169,26 @@ export default function Dashboard() {
               <span className="text-gray-500">{dossierSel.proprietaire}</span>
             </div>
             <div className="rounded-lg border border-gray-100 bg-white">
+              {totalInscription(dossierSel) > 0 && (
+                <div className="flex items-center justify-between border-b border-gray-50 px-3 py-2 text-sm">
+                  <span className="text-gray-600">Inscription / ouverture du dossier</span>
+                  <span className="font-semibold text-emerald-700">{formatMoney(totalInscription(dossierSel))}</span>
+                </div>
+              )}
               {(dossierSel.etapes || []).slice().sort((a, b) => a.ordre - b.ordre).map((e) => (
-                <div key={e.id} className="flex items-center justify-between border-b border-gray-50 px-3 py-2 text-sm last:border-0">
-                  <span>{e.ordre}. {e.label}</span>
+                <div key={e.id} className="flex items-center gap-2 border-b border-gray-50 px-3 py-2 text-sm last:border-0">
+                  <span className="flex-1">{e.ordre}. {e.label}</span>
+                  {totalEtape(e) > 0 && <span className="text-xs font-semibold text-emerald-700">{formatMoney(totalEtape(e))}</span>}
                   <Badge tone={STATUTS_ETAPE[e.statut]?.tone}>{STATUTS_ETAPE[e.statut]?.label || e.statut}</Badge>
                 </div>
               ))}
               {!(dossierSel.etapes || []).length && <p className="px-3 py-4 text-center text-sm text-gray-400">Aucune étape.</p>}
             </div>
+            {totalDossier(dossierSel) > 0 && (
+              <p className="text-right text-sm">
+                Total dépensé à ce stade : <strong className="text-emerald-700">{formatMoney(totalDossier(dossierSel))}</strong>
+              </p>
+            )}
           </div>
         )}
       </Modal>

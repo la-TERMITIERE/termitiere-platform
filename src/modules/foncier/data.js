@@ -204,6 +204,27 @@ export const COUTS_REFERENCE = [
   { id: 'autorisation_lotir', label: 'Autorisation de lotir (Ministère)', montant: null }
 ]
 
+// ───────────────────────── FRAIS DÉTAILLÉS ─────────────────────────
+// L'inscription du dossier ET chacune de ses étapes portent une liste de lignes
+// de frais réellement engagés : { id, categorie, libelle, montant, date, note }.
+// La catégorie sert à totaliser par nature de dépense sur l'ensemble du dossier
+// (« combien de transport ? », « combien d'honoraires ? »).
+export const CATEGORIES_FRAIS = [
+  { id: 'honoraires', label: 'Honoraires entreprise' },
+  { id: 'administratif', label: 'Frais administratifs' },
+  { id: 'transport', label: 'Transport / déplacement' },
+  { id: 'notaire', label: 'Notaire' },
+  { id: 'geometre', label: 'Géomètre / bornage' },
+  { id: 'taxes', label: 'Taxes & impôts (OTR)' },
+  { id: 'prestataire', label: 'Main-d\'œuvre / prestataire' },
+  { id: 'autre', label: 'Autre' }
+]
+
+export const categorieFraisLabel = (id) => CATEGORIES_FRAIS.find((c) => c.id === id)?.label || 'Autre'
+
+// Libellé du bloc de frais rattaché à l'inscription (hors étapes du workflow).
+export const FRAIS_INSCRIPTION_LABEL = 'Inscription / ouverture du dossier'
+
 // ───────────────────────── WORKFLOWS (ÉTAPES) ─────────────────────────
 // Chaque étape : { id, label, ordre, pieces?, cout?, personnel? }
 

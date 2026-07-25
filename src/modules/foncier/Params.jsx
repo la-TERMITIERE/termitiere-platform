@@ -13,6 +13,7 @@ import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_DOSSIER, STATUTS_DOSSIER } from './data'
+import { totalDossier, totalInscription } from './logic'
 
 export default function Params() {
   const { role } = useAuth()
@@ -36,6 +37,8 @@ export default function Params() {
         'Mode acquisition': d.modeAcquisition || '—',
         'N° Titre Foncier': d.parcelle?.numTitre || d.reference || '—',
         Superficie: d.superficie ? `${d.superficie} m²` : '—',
+        'Frais inscription': totalInscription(d),
+        'Total frais engagés': totalDossier(d),
         Notes: d.notes || ''
       }))
       await exportRapportExcel({
@@ -54,6 +57,8 @@ export default function Params() {
             { key: 'Mode acquisition', label: 'Mode acquisition', width: 22 },
             { key: 'N° Titre Foncier', label: 'N° Titre Foncier', width: 20 },
             { key: 'Superficie', label: 'Superficie', width: 14 },
+            { key: 'Frais inscription', label: 'Frais inscription (FCFA)', width: 20 },
+            { key: 'Total frais engagés', label: 'Total frais engagés (FCFA)', width: 24 },
             { key: 'Notes', label: 'Notes', width: 40 }
           ],
           rows
