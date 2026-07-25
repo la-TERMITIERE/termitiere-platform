@@ -9,6 +9,11 @@
 import { addItem, getAll } from './db'
 import { pushToUsers } from './push'
 
+// Types « importants » : notification système persistante + vibration marquée
+// (demandes d'autorisation, refus, alertes). Doit rester aligné avec
+// TYPES_URGENTS de src/hooks/useNotifications.js.
+const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
+
 // notify({ type, title, body, module, forRoles, forUsers, excludeUid, link })
 //  - forRoles : rôles destinataires, ex. ['admin','controleur']
 //  - forUsers : logins/uids destinataires précis, ex. ['agent']
@@ -19,8 +24,9 @@ export async function notify({
   forRoles = [], forUsers = [], excludeUid = null, link = ''
 }) {
   if (!title) return
+  let id = null
   try {
-    await addItem('notifications', {
+    id = await addItem('notifications', {
       type, title, body, module, forRoles, forUsers,
       excludeUid: excludeUid || null, link, readBy: {}
     })
@@ -37,7 +43,15 @@ export async function notify({
       cibles.push(...users.filter((u) => forRoles.includes(u.role)).map((u) => u.uid))
     }
     cibles = [...new Set(cibles)].filter((c) => c && c !== excludeUid)
-    if (cibles.length) await pushToUsers(cibles, { title, body, url: link })
+    // `tag` = identifiant de la notification : la notification système affichée
+    // par le service worker et celle affichée par l'onglet ouvert se remplacent
+    // au lieu de se dédoubler.
+    if (cibles.length) {
+      await pushToUsers(cibles, {
+        title, body, url: link || '/', tag: id || undefined,
+        type, module, urgent: TYPES_URGENTS.includes(type)
+      })
+    }
   } catch (e) {
     // Best-effort : le push ne doit jamais faire échouer la notification.
   }
