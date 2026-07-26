@@ -32,24 +32,29 @@ quand l'appli est fermée.
 Le push « appli fermée » passe par la fonction `netlify/functions/send-push.js`,
 qui a besoin d'une paire de clés VAPID.
 
-Les variables `VAPID_PUBLIC` / `VAPID_PRIVATE` sont déclarées dans **Netlify →
-Site configuration → Environment variables**. La clé **publique** doit être
-**identique** à celle du client (`src/core/push.js`, surchargeable par
-`VITE_VAPID_PUBLIC`) — elle n'est pas secrète, les navigateurs doivent justement
-la connaître. Valeur attendue actuellement :
+Trois variables sont nécessaires dans **Netlify → Site configuration →
+Environment variables** :
 
-```
-BKlCjgPKFCXhaFwx5RtYA9puJPaT9N6NN2Yt_KYr2bjriCObVcNVH6dw5yFrHinbvgSRHWVvK7jiv-Tk4lb3oDc
-```
+| Variable | Rôle |
+|---|---|
+| `VAPID_PRIVATE` | Secret de signature, utilisé par la fonction `send-push`. |
+| `VAPID_PUBLIC` | Clé publique correspondante, côté serveur. |
+| `VITE_VAPID_PUBLIC` | **La même valeur que `VAPID_PUBLIC`**, lue par Vite au moment du build pour que le navigateur s'abonne avec la bonne clé. |
 
-⚠️ **Vérifier avant toute modification** : si la valeur dans Netlify diffère de
-celle ci-dessus, le push échoue silencieusement (le service de push renvoie 403
-et rien n'arrive sur les appareils). Il faut alors aligner les deux — soit
-corriger Netlify, soit reporter la valeur de Netlify dans `src/core/push.js`.
+⚠️ **Le point qui casse tout, sans aucun message d'erreur** : la clé publique
+utilisée par le navigateur pour s'abonner et celle utilisée par le serveur pour
+signer doivent être **identiques**. Sinon le service de push (Google, Apple,
+Mozilla…) rejette l'envoi avec un 403 : l'app ne voit rien, le destinataire ne
+reçoit rien. C'est exactement le piège dans lequel le projet est tombé — d'où la
+troisième variable, qui garantit que le client utilise la clé du serveur au lieu
+de la valeur par défaut inscrite dans `src/core/push.js`.
 
-Sans ces variables, la fonction répond `{ ok:false, skipped:'Push non configuré' }` :
-l'application continue à fonctionner normalement, seul le push appli-fermée est
-ignoré.
+Pour diagnostiquer : la console du navigateur affiche
+`[push] aucun envoi abouti (0/N)` quand tous les envois sont refusés.
+
+Sans `VAPID_PUBLIC`/`VAPID_PRIVATE`, la fonction répond
+`{ ok:false, skipped:'Push non configuré' }` : l'application continue à
+fonctionner normalement, seul le push appli-fermée est ignoré.
 
 Pour regénérer une paire (par exemple si la clé privée a fuité) :
 ```bash

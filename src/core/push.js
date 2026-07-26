@@ -98,10 +98,22 @@ export async function pushToUsers(uids, payload) {
       .filter((s) => s.sub && (wanted.includes(s.uid) || wanted.includes(s.login)))
       .map((s) => s.sub)
     if (!subscriptions.length) return
-    await fetch('/.netlify/functions/send-push', {
+    const res = await fetch('/.netlify/functions/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ subscriptions, payload })
     })
+    // Un push refusé par le service de notification est invisible : ni erreur
+    // côté app, ni notification côté destinataire. On le signale au moins dans
+    // la console, faute de quoi une clé VAPID désaccordée passe inaperçue.
+    const info = await res.json().catch(() => null)
+    if (info && info.total > 0 && info.sent === 0) {
+      console.warn(
+        `[push] aucun envoi abouti (0/${info.total}). Vérifiez que VAPID_PUBLIC ` +
+        '(Netlify) et la clé publique du client sont identiques — cf. docs/NOTIFICATIONS.md.'
+      )
+    } else if (info && info.skipped) {
+      console.warn('[push] ignoré :', info.skipped)
+    }
   } catch (e) { /* best effort */ }
 }
