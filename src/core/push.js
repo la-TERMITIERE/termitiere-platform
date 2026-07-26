@@ -6,7 +6,7 @@ import { auth } from './firebase'
 
 // Doit correspondre exactement à VAPID_PUBLIC côté serveur (Netlify). Surchargée
 // via VITE_VAPID_PUBLIC si vous générez votre propre paire de clés.
-const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC || 'BKlCjgPKFCXhaFwx5RtYA9puJPaT9N6NN2Yt_KYr2bjriCObVcNVH6dw5yFrHinbvgSRHWVvK7jiv-Tk4lb3oDc'
+const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC || 'BBSBKK3fGTljcGXHj5MEtt2s__-WtEyGVy1b6PTrJ7_zvpGT8Nda_5C7xxWKL3yYLfXBescTfjRwT1SrozUNgHw'
 
 // Jeton Firebase Auth de l'utilisateur courant, envoyé au serveur pour prouver
 // que l'appel vient bien d'un utilisateur connecté de l'app (cf. send-push.js).

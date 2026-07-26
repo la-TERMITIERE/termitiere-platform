@@ -45,9 +45,13 @@ Environment variables** :
 utilisée par le navigateur pour s'abonner et celle utilisée par le serveur pour
 signer doivent être **identiques**. Sinon le service de push (Google, Apple,
 Mozilla…) rejette l'envoi avec un 403 : l'app ne voit rien, le destinataire ne
-reçoit rien. C'est exactement le piège dans lequel le projet est tombé — d'où la
-troisième variable, qui garantit que le client utilise la clé du serveur au lieu
-de la valeur par défaut inscrite dans `src/core/push.js`.
+reçoit rien. C'est exactement le piège dans lequel le projet est tombé.
+
+La valeur par défaut inscrite dans `src/core/push.js` a été alignée sur la clé
+`VAPID_PUBLIC` du site (commence par `BBSBKK3f…`), donc le client s'abonne
+désormais avec la bonne clé même sans `VITE_VAPID_PUBLIC`. Si un jour vous
+changez la paire de clés du serveur, remettez la valeur à jour **des deux
+côtés** (Netlify + `src/core/push.js`), sans quoi le silence reviendra.
 
 Pour diagnostiquer : la console du navigateur affiche
 `[push] aucun envoi abouti (0/N)` quand tous les envois sont refusés.
