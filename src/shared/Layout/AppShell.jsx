@@ -4,6 +4,8 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import OfflineBanner from './OfflineBanner'
+import AlertesHeadsUp from './AlertesHeadsUp'
+import ActiverAlertes from './ActiverAlertes'
 import AutoApproveDemandes from '../AutoApproveDemandes'
 import AutoApproveSortiesFacture from '../AutoApproveSortiesFacture'
 import AutoApproveWorkflow from '../AutoApproveWorkflow'
@@ -17,6 +19,9 @@ export default function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#faf6f5]">
+      {/* Alertes façon WhatsApp (bandeau + son) et demande d'autorisation système */}
+      <AlertesHeadsUp />
+      <ActiverAlertes />
       {hasModule('agro') && <AutoApproveDemandes />}
       {hasModule('agro') && <AutoApproveSortiesFacture />}
       {hasModule('logistique') && <AutoApproveWorkflow collection="logistique_demandes" module="logistique" />}

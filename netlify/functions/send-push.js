@@ -76,7 +76,12 @@ export async function handler(event) {
     title: payload.title || 'LA TERMITIÈRE',
     body: payload.body || '',
     url: payload.url || '/',
-    tag: payload.tag
+    tag: payload.tag,
+    // Contexte utilisé par le service worker pour composer une notification
+    // riche (emoji du type, nom du module, urgence) — cf. public/push-handler.js.
+    type: payload.type || 'info',
+    module: payload.module || '',
+    urgent: !!payload.urgent
   })
 
   const results = await Promise.all(
