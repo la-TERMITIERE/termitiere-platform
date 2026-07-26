@@ -1,12 +1,12 @@
 // Abonnement Web Push + envoi de notifications push (app fermée).
 // Clé VAPID PUBLIQUE (non secrète) — la clé privée correspondante vit côté
 // serveur (fonction Netlify send-push, variable VAPID_PRIVATE).
-import { getAll, setItem } from './db'
+import { getAll, setItem, removeItem } from './db'
 import { auth } from './firebase'
 
 // Doit correspondre exactement à VAPID_PUBLIC côté serveur (Netlify). Surchargée
 // via VITE_VAPID_PUBLIC si vous générez votre propre paire de clés.
-const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC || 'BKlCjgPKFCXhaFwx5RtYA9puJPaT9N6NN2Yt_KYr2bjriCObVcNVH6dw5yFrHinbvgSRHWVvK7jiv-Tk4lb3oDc'
+const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC || 'BFX5dEZnhmoncyToVUDvNXosS5ptnkBdwemHJ-0V4MU2TClvJR19qMrw6ntyx-98pgPRu3mexgwVhIK6eyKP2To'
 
 // Jeton Firebase Auth de l'utilisateur courant, envoyé au serveur pour prouver
 // que l'appel vient bien d'un utilisateur connecté de l'app (cf. send-push.js).
@@ -37,6 +37,18 @@ function keyFor(endpoint) {
   return 'sub_' + h.toString(36)
 }
 
+// Un abonnement est lié à la clé VAPID utilisée au moment de sa création : si la
+// paire de clés du serveur change, l'ancien abonnement devient définitivement
+// inutilisable (le service de push renvoie 403). On le détecte pour se
+// réabonner, sinon l'appareil ne recevrait plus jamais rien en silence.
+function memeCle(sub, cleAttendue) {
+  const brute = sub?.options?.applicationServerKey
+  if (!brute) return false
+  const actuelle = new Uint8Array(brute)
+  if (actuelle.length !== cleAttendue.length) return false
+  return actuelle.every((o, i) => o === cleAttendue[i])
+}
+
 // Abonne l'appareil courant aux notifications push et enregistre l'abonnement
 // (associé à l'utilisateur) pour que le serveur puisse lui pousser des messages.
 export async function subscribeToPush(user) {
@@ -44,11 +56,20 @@ export async function subscribeToPush(user) {
   if (Notification.permission !== 'granted') return false
   try {
     const reg = await navigator.serviceWorker.ready
+    const cle = urlBase64ToUint8Array(VAPID_PUBLIC)
     let sub = await reg.pushManager.getSubscription()
+    if (sub && !memeCle(sub, cle)) {
+      // Abonnement hérité d'une ancienne clé VAPID : on le jette et on repart
+      // proprement (l'enregistrement périmé est retiré de la base).
+      const ancien = sub.toJSON()
+      try { await sub.unsubscribe() } catch { /* ignore */ }
+      removeItem('push_subs', keyFor(ancien.endpoint)).catch(() => {})
+      sub = null
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
+        applicationServerKey: cle
       })
     }
     const json = sub.toJSON()

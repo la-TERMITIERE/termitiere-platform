@@ -30,23 +30,39 @@ quand l'appli est fermée.
 
 ## Côté serveur (à faire une fois)
 Le push « appli fermée » passe par la fonction `netlify/functions/send-push.js`,
-qui a besoin d'une paire de clés VAPID dans **Netlify → Site settings →
-Environment variables** :
+qui a besoin d'une paire de clés VAPID.
+
+**La paire est déjà générée.** La clé **publique** est dans le code
+(`src/core/push.js`) — elle n'est pas secrète, elle doit justement être connue
+des navigateurs :
 
 ```
-VAPID_PUBLIC   = <clé publique>
-VAPID_PRIVATE  = <clé privée>
+BFX5dEZnhmoncyToVUDvNXosS5ptnkBdwemHJ-0V4MU2TClvJR19qMrw6ntyx-98pgPRu3mexgwVhIK6eyKP2To
 ```
 
-La clé **publique** doit être identique côté client (`VITE_VAPID_PUBLIC`, valeur
-par défaut dans `src/core/push.js`). Sans ces variables, la fonction répond
-`{ ok:false, skipped:'Push non configuré' }` : l'application continue à
-fonctionner normalement, seul le push appli-fermée est ignoré.
+La clé **privée** est dans le fichier `vapid-keys.local` à la racine du projet
+(ignoré par git : elle ne doit jamais être commitée). Il reste à déclarer les
+deux dans **Netlify → Site settings → Environment variables** :
 
-Pour générer une paire :
+```
+VAPID_PUBLIC   = <la clé publique ci-dessus>
+VAPID_PRIVATE  = <la clé privée du fichier vapid-keys.local>
+```
+
+Puis **Deploys → Trigger deploy** pour que la fonction les voie.
+
+Sans ces variables, la fonction répond `{ ok:false, skipped:'Push non configuré' }` :
+l'application continue à fonctionner normalement, seul le push appli-fermée est
+ignoré.
+
+Pour regénérer une paire (par exemple si la clé privée a fuité) :
 ```bash
 npx web-push generate-vapid-keys
 ```
+Il faut alors mettre à jour **les deux** côtés : `VAPID_PUBLIC`/`VAPID_PRIVATE`
+dans Netlify **et** la valeur par défaut dans `src/core/push.js`. Les appareils
+déjà abonnés avec l'ancienne clé se réabonnent tout seuls à leur prochaine
+connexion (`subscribeToPush` détecte l'abonnement périmé et le remplace).
 
 ## Réglages disponibles pour l'utilisateur
 - **Son des alertes** : bouton 🔊 / 🔇 dans le panneau de la cloche (mémorisé par
