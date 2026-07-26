@@ -1,6 +1,6 @@
 // Prestations / Location de matériel — quantité × tarif unitaire = montant par catégorie.
-import { useMemo, useState } from 'react'
-import { Plus, Eye, Trash2, CheckCircle2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Eye, Trash2, CheckCircle2, Coins, Save } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -38,6 +38,7 @@ export default function Prestations() {
   const { data: allRetours } = useCollection('logistique_retours')
   const materiel = useLogistiqueStore((s) => s.materiel)
   const evenements = useLogistiqueStore((s) => s.evenements)
+  const saveEvenements = useLogistiqueStore((s) => s.saveEvenements)
 
   // Cloisonnement par site (sous-application Lomé / Kara).
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
@@ -68,11 +69,30 @@ export default function Prestations() {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const [form, setForm] = useState(null)
+  // Édition « plus tard » des dépenses internes depuis la fiche de détail.
+  const [depLater, setDepLater] = useState([])
+  const [depSaving, setDepSaving] = useState(false)
+  useEffect(() => { setDepLater(detail?.depenses ? detail.depenses.map((x) => ({ ...x })) : []) }, [detail])
+
+  async function saveDepensesLater() {
+    if (!detail) return
+    const clean = depLater
+      .filter((x) => (parseFloat(x.montant) || 0) > 0)
+      .map((x) => ({ label: (x.label || 'Dépense').trim(), montant: parseFloat(x.montant) || 0 }))
+    setDepSaving(true)
+    try {
+      await updateItem('logistique_prestations', detail.id, { depenses: clean })
+      await audit('logistique', 'PRESTATION_DEPENSES', `${detail.num} — ${clean.length} dépense(s)`)
+      setDetail((d) => (d ? { ...d, depenses: clean } : d))
+      toast.success('Dépenses enregistrées ✓')
+    } catch (e) { toast.error(e.message) } finally { setDepSaving(false) }
+  }
 
   const liste = useMemo(() => [...prestations].sort((a, b) => (a.date < b.date ? 1 : -1)), [prestations])
 
   function openCreate() {
     setForm({
+      type: 'prestation', // 'prestation' (avec dépenses internes) ou 'location' (simple)
       clientId: clients[0]?.id || '',
       clientNom: clients[0]?.nom || '',
       evenement: evenements[0] || '',
@@ -81,11 +101,17 @@ export default function Prestations() {
       dateFin: todayStr(),
       lieu: '',
       lignes: [{ materielId: materiel[0]?.id || '', qte: 1, nbJours: 1, tarif: materiel[0]?.tarifLocation || 0 }],
-      frais: [], // frais supplémentaires libres : { label, montant } (transport, lieu…)
+      frais: [], // frais supplémentaires FACTURÉS au client : { label, montant } (transport, lieu…)
+      depenses: [], // dépenses INTERNES liées à la prestation (frais de mission…) — hors CA
       statut: 'brouillon'
     })
     setOpen(true)
   }
+
+  // ── Dépenses internes (frais de mission, carburant équipe…) — hors facturation ──
+  function addDepense() { setForm((f) => ({ ...f, depenses: [...(f.depenses || []), { label: '', montant: 0 }] })) }
+  function setDepense(i, patch) { setForm((f) => ({ ...f, depenses: f.depenses.map((x, k) => (k === i ? { ...x, ...patch } : x)) })) }
+  function removeDepense(i) { setForm((f) => ({ ...f, depenses: f.depenses.filter((_, k) => k !== i) })) }
 
   function addLigne() {
     const m = materiel[0]
@@ -135,6 +161,10 @@ export default function Prestations() {
     () => (form?.frais || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0),
     [form]
   )
+  const totalDepenses = useMemo(
+    () => (form?.depenses || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0),
+    [form]
+  )
 
   // Montant d'une ligne du formulaire : Qté × Jours × Tarif/jour.
   const ligneMontant = (l) => (parseInt(l.qte) || 0) * (parseInt(l.nbJours) || 1) * (parseFloat(l.tarif) || 0)
@@ -180,15 +210,25 @@ export default function Prestations() {
     const frais = (form.frais || [])
       .filter((x) => (parseFloat(x.montant) || 0) > 0)
       .map((x) => ({ label: (x.label || 'Frais').trim(), montant: parseFloat(x.montant) || 0 }))
+    // Dépenses INTERNES (frais de mission…) — seulement pour une prestation, hors CA.
+    const depenses = form.type === 'prestation'
+      ? (form.depenses || [])
+        .filter((x) => (parseFloat(x.montant) || 0) > 0)
+        .map((x) => ({ label: (x.label || 'Dépense').trim(), montant: parseFloat(x.montant) || 0 }))
+      : []
     const totalMateriel = lignes.reduce((s, l) => s + l.montant, 0)
     const totalFraisSave = frais.reduce((s, x) => s + x.montant, 0)
     const total = totalMateriel + totalFraisSave
+    // Nouvel événement saisi à la volée → mémorisé dans le référentiel pour réemploi.
+    if (evenement && !evenements.includes(evenement)) {
+      try { await saveEvenements([...evenements, evenement]) } catch { /* non bloquant */ }
+    }
     await addItem('logistique_prestations', {
-      num, date: todayStr(), site,
+      num, date: todayStr(), site, type: form.type || 'prestation',
       clientId: form.clientId, clientNom: client?.nom || form.clientNom,
       evenement,
       dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
-      lignes, frais, total, statut: 'brouillon',
+      lignes, frais, depenses, total, statut: 'brouillon',
       agentId: user.uid, agentNom: user.nom
     })
     await audit('logistique', 'PRESTATION', `${siteLabel(site)} — ${num} — ${formatMoney(total)}`)
@@ -219,9 +259,10 @@ export default function Prestations() {
       {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
       <Card className="p-0">
         <Table
+          stickyHeader
           columns={[
-            { key: 'num', label: 'N°' },
-            { key: 'clientNom', label: 'Client' },
+            { key: 'num', label: 'N°', sticky: true, width: '96px' },
+            { key: 'clientNom', label: 'Client', sticky: true, width: '130px' },
             { key: 'periode', label: 'Période', render: (r) => `${formatDateShort(r.dateDebut)} → ${formatDateShort(r.dateFin)}` },
             { key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> },
             { key: 'statut', label: 'Facturation', render: (r) => <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge> },
@@ -250,6 +291,18 @@ export default function Prestations() {
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
         {form && (
           <div className="space-y-4">
+            {/* Nature de l'opération : une prestation porte des dépenses internes. */}
+            <div className="flex gap-2">
+              {[['prestation', '🎪 Prestation'], ['location', '📦 Location simple']].map(([v, lbl]) => (
+                <button key={v} type="button" onClick={() => setForm((f) => ({ ...f, type: v }))}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-bold transition-colors ${form.type === v ? 'border-secondary bg-secondary/10 text-secondary' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            {form.type === 'prestation' && (
+              <p className="-mt-2 text-[11px] text-gray-400">Une prestation permet de renseigner les <strong>dépenses internes</strong> (frais de mission, transport de l'équipe…) — même plus tard. Elles n'entrent pas dans le montant facturé mais servent à calculer le bénéfice.</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Client">
                 <Select value={form.clientId} onChange={(e) => {
@@ -263,12 +316,13 @@ export default function Prestations() {
               <FormGroup label="Événement">
                 <Select value={form.evenement} onChange={(e) => setForm((f) => ({ ...f, evenement: e.target.value }))}>
                   {evenements.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
-                  <option value="__autre__">➕ Autre (à préciser)…</option>
+                  <option value="__autre__">➕ Plus… (nouvel événement)</option>
                 </Select>
               </FormGroup>
               {form.evenement === '__autre__' && (
-                <FormGroup label="Préciser l'événement" className="col-span-2">
-                  <Input value={form.evenementAutre} onChange={(e) => setForm((f) => ({ ...f, evenementAutre: e.target.value }))} placeholder="ex : Lancement produit, Gala…" />
+                <FormGroup label="Nouvel événement" className="col-span-2"
+                  hint="Il sera ajouté à la liste pour être réutilisé.">
+                  <Input value={form.evenementAutre} onChange={(e) => setForm((f) => ({ ...f, evenementAutre: e.target.value }))} placeholder="ex : Lancement produit, Gala, Investiture…" autoFocus />
                 </FormGroup>
               )}
               <FormGroup label="Lieu"><Input value={form.lieu} onChange={(e) => setForm((f) => ({ ...f, lieu: e.target.value }))} /></FormGroup>
@@ -320,6 +374,23 @@ export default function Prestations() {
               <Button variant="outline" size="sm" className="mt-1" onClick={addFrais}><Plus size={14} /> Frais</Button>
               {totalFrais > 0 && <p className="mt-1 text-right text-sm text-gray-600">Total frais : <strong>{formatMoney(totalFrais)}</strong></p>}
             </div>
+
+            {/* Dépenses INTERNES (hors facturation) — uniquement pour une prestation */}
+            {form.type === 'prestation' && (
+              <div className="mt-2 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 p-2">
+                <p className="text-xs font-bold uppercase text-orange-700">Dépenses internes de la prestation</p>
+                <p className="mb-1 text-[11px] text-gray-500">Coûts supportés par l'entreprise (frais de mission, carburant, main-d'œuvre…). Non facturés au client. Peuvent être complétés plus tard.</p>
+                {(form.depenses || []).map((x, i) => (
+                  <div key={i} className="mt-1 grid grid-cols-2 gap-2 md:grid-cols-12">
+                    <Input className="col-span-2 md:col-span-7" value={x.label} onChange={(e) => setDepense(i, { label: e.target.value })} placeholder="Intitulé (ex : Frais de mission, Carburant…)" />
+                    <Input className="md:col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setDepense(i, { montant: e.target.value })} placeholder="Montant" />
+                    <button type="button" onClick={() => removeDepense(i)} className="flex items-center justify-center text-red-500 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="mt-1" onClick={addDepense}><Plus size={14} /> Dépense</Button>
+                {totalDepenses > 0 && <p className="mt-1 text-right text-sm text-orange-700">Total dépenses : <strong>{formatMoney(totalDepenses)}</strong></p>}
+              </div>
+            )}
 
             {parCategorie.length > 0 && (
               <div className="rounded-lg bg-gray-50 p-3">
@@ -375,6 +446,37 @@ export default function Prestations() {
             </table>
             </div>
             <p className="text-right font-extrabold">Total : {formatMoney(detail.total)}</p>
+
+            {/* Dépenses internes — modifiables « plus tard » tant que non facturée */}
+            {(detail.type === 'prestation' || (detail.depenses || []).length > 0) && (
+              <div className="mt-2 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 p-3">
+                <p className="mb-1 flex items-center gap-1 text-xs font-bold uppercase text-orange-700"><Coins size={13} /> Dépenses internes (hors facturation)</p>
+                {!isReadOnlyRole(role) && detail.statut === 'brouillon' ? (
+                  <>
+                    {depLater.map((x, i) => (
+                      <div key={i} className="mt-1 grid grid-cols-2 gap-2 md:grid-cols-12">
+                        <Input className="col-span-2 md:col-span-7" value={x.label} onChange={(e) => setDepLater((a) => a.map((y, k) => (k === i ? { ...y, label: e.target.value } : y)))} placeholder="Intitulé (ex : Frais de mission…)" />
+                        <Input className="md:col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setDepLater((a) => a.map((y, k) => (k === i ? { ...y, montant: e.target.value } : y)))} placeholder="Montant" />
+                        <button type="button" onClick={() => setDepLater((a) => a.filter((_, k) => k !== i))} className="flex items-center justify-center text-red-500 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
+                      </div>
+                    ))}
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setDepLater((a) => [...a, { label: '', montant: 0 }])}><Plus size={14} /> Dépense</Button>
+                      <Button size="sm" onClick={saveDepensesLater} loading={depSaving}><Save size={14} /> Enregistrer les dépenses</Button>
+                    </div>
+                  </>
+                ) : (
+                  (detail.depenses || []).length
+                    ? (detail.depenses || []).map((x, i) => (
+                        <div key={i} className="flex justify-between text-xs text-orange-900"><span>{x.label}</span><span className="font-semibold">{formatMoney(x.montant)}</span></div>
+                      ))
+                    : <p className="text-xs text-gray-400">Aucune dépense renseignée.</p>
+                )}
+                {(detail.depenses || []).length > 0 && (
+                  <p className="mt-1 text-right text-xs font-bold text-orange-700">Total : {formatMoney((detail.depenses || []).reduce((s, x) => s + (x.montant || 0), 0))}</p>
+                )}
+              </div>
+            )}
 
             <div className="mt-2 rounded-lg bg-gray-50 p-3">
               <p className="mb-1 text-xs font-bold uppercase text-gray-500">Suivi des retours</p>

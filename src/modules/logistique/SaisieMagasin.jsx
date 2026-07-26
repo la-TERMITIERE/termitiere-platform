@@ -248,7 +248,7 @@ export default function SaisieMagasin() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
               <tr>
-                <th className="bg-gray-50 px-3 py-2 text-left">Matériel</th>
+                <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left">Matériel</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Stock Initial 🔒</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Achats</th>
                 <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
@@ -260,7 +260,7 @@ export default function SaisieMagasin() {
               {cats.map((cat) => (
                 <Fragment key={cat}>
                   <tr>
-                    <td colSpan={6} className="px-3 py-1.5 text-xs font-bold uppercase text-white" style={{ background: catColor(cat) }}>{cat}</td>
+                    <td colSpan={6} className="sticky left-0 px-3 py-1.5 text-xs font-bold uppercase text-white" style={{ background: catColor(cat) }}>{cat}</td>
                   </tr>
                   {materiel.filter((m) => m.cat === cat).map((m) => {
                     const d = stock[m.id] || { init: 0, entrees: [], sorties: [], retours: [] }
@@ -270,8 +270,8 @@ export default function SaisieMagasin() {
                     const totRet = sommeMouvements(d.retours)
                     const fin = Math.max(0, (d.init || 0) + totEnt - totSor + sommeType(d.retours, 'OK'))
                     return (
-                      <tr key={m.id}>
-                        <td className="px-3 py-1.5 font-semibold">{m.nom} <span className="text-[10px] text-gray-400">({m.unite})</span></td>
+                      <tr key={m.id} className="group">
+                        <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-semibold group-hover:bg-gray-50">{m.nom} <span className="text-[10px] text-gray-400">({m.unite})</span></td>
                         <td className="px-2 py-1.5 text-center">
                           <input type="number" min="0" value={d.init ?? 0} readOnly={!peutEditerInit}
                             onChange={(e) => setInit(m.id, e.target.value)}

@@ -36,10 +36,12 @@ export default function StatCard({
               {up ? <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" /> : <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />}
               {up ? '+' : ''}{variation}
             </span>
-            <span className="truncate text-xs font-semibold text-gray-400 sm:text-sm" title={String(value ?? '')}>{value}</span>
+            <span className="break-words text-xs font-semibold text-gray-400 sm:text-sm" title={String(value ?? '')}>{value}</span>
           </div>
         ) : (
-          <p className="truncate text-xl font-extrabold leading-tight sm:text-2xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
+          // Pas de troncature : un montant long passe à la ligne / rétrécit, mais
+          // reste TOUJOURS entièrement lisible (demande direction — plus de « 7 M… »).
+          <p className="break-words text-lg font-extrabold leading-tight sm:text-xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
         )}
         {(variationLabel || sub) && (
           <p className="mt-0.5 truncate text-[11px] text-gray-400" title={variationLabel || sub}>{variationLabel || sub}</p>

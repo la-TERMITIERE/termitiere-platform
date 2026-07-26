@@ -6,7 +6,7 @@
 // - Le CA n'est compté que sur les factures CERTIFIÉES.
 import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Boxes, HeartPulse, Stethoscope, Sprout, ShoppingCart, Wallet } from 'lucide-react'
+import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
@@ -92,9 +92,15 @@ export default function Dashboard() {
       if (a) { naiss += a.naiss || 0; dec += a.dec || 0 }
     }))
     const baseSafe = base || 1
+    // Cas de maladie sur la période = animaux encore malades + animaux décédés.
+    // Le taux de létalité mesure la part de ces cas qui ont abouti au décès
+    // (mortalité des animaux TOMBÉS MALADES), à distinguer du taux de mortalité
+    // (décès rapportés à tout l'effectif). Borné naturellement à 100 %.
+    const casMaladie = malades + dec
     return {
-      effectif, base, malades, naiss, dec,
+      effectif, base, malades, naiss, dec, casMaladie,
       mortalite: (dec / baseSafe) * 100,
+      letalite: casMaladie ? (dec / casMaladie) * 100 : 0,
       croissance: ((naiss - dec) / baseSafe) * 100,
       morbidite: effectif ? (malades / effectif) * 100 : 0
     }
@@ -256,9 +262,10 @@ export default function Dashboard() {
       {/* Indicateurs du périmètre */}
       <div>
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs — {scopeLabel}</p>
-        <div className={`grid grid-cols-2 gap-3 ${showFinance ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Indic title="Effectif en stock" value={formatNumber(ind.effectif)} icon={Boxes} color="#2563eb" sub={`${especesScope.length} espèce(s)`} />
           <Indic title="Taux de mortalité" value={`${ind.mortalite.toFixed(1)} %`} icon={HeartPulse} color="#dc2626" sub={`${ind.dec} décès`} onClick={() => setModalKey('mortalite')} />
+          <Indic title="Taux de létalité" value={`${ind.letalite.toFixed(1)} %`} icon={Skull} color="#991b1b" sub={`${ind.dec} décès / ${ind.casMaladie} cas`} onClick={() => setModalKey('letalite')} />
           <Indic title="Taux de morbidité" value={`${ind.morbidite.toFixed(1)} %`} icon={Stethoscope} color="#d97706" sub={`${ind.malades} malade(s)`} onClick={() => setModalKey('morbidite')} />
           <Indic title="Taux de croissance" value={`${ind.croissance.toFixed(1)} %`} icon={Sprout} color="#16a34a" sub={`${ind.naiss} naissance(s)`} onClick={() => setModalKey('croissance')} />
           <Indic title="Ventes (volume)" value={formatNumber(ventes.courant)} icon={ShoppingCart} color="#0d9488" sub={`${ventes.liste.length} vente(s)`} delta={ventes.courant - ventes.precedent} onClick={() => setModalKey('ventes')} />
@@ -338,6 +345,13 @@ export default function Dashboard() {
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Taux : <strong>{ind.mortalite.toFixed(1)} %</strong> — {ind.dec} décès / {formatNumber(ind.base)} têtes (effectif initial)</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Effectif initial) × 100</p>
+        <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
+      </Modal>
+
+      <Modal open={modalKey === 'letalite'} onClose={() => setModalKey(null)} size="lg" title={`Létalité — ${scopeLabel}`}
+        panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900">Taux : <strong>{ind.letalite.toFixed(1)} %</strong> — {ind.dec} décès / {ind.casMaladie} cas de maladie (malades + décès)</p>
+        <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Cas de maladie) × 100 — part des animaux tombés malades qui n'ont pas survécu (≠ mortalité, rapportée à tout l'effectif).</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
       </Modal>
 

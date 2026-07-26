@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   BadgeDollarSign, ClipboardList, Coins, AlertTriangle,
-  Boxes, TrendingUp, TrendingDown
+  Boxes, TrendingUp, TrendingDown, Wallet
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -40,6 +40,7 @@ export default function Pilotage() {
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
   const [detail, setDetail] = useState(null) // drill-down analyse (élément / événement / client)
+  const [elementSort, setElementSort] = useState('count') // 'count' (sollicitation) | 'ca'
 
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
 
@@ -152,17 +153,29 @@ export default function Pilotage() {
     )
   })
   const maxElCount = Math.max(1, ...analyse.parElement.map((e) => e.count))
+  // Classement des éléments — par sollicitation (défaut) OU par chiffre d'affaires.
+  const elementsTries = useMemo(() => {
+    const arr = [...analyse.parElement]
+    return elementSort === 'ca' ? arr.sort((a, b) => b.ca - a.ca) : arr.sort((a, b) => b.count - a.count)
+  }, [analyse, elementSort])
 
   // Montant d'une facture rapporté au périmètre (total, ou lignes de la catégorie).
   const montantScope = (f) => scope === TOUTES
     ? (f.totalTTC || 0)
     : (f.lignes || []).filter((l) => inScope(catOf[l.materielId] || l.cat)).reduce((s, l) => s + (l.montant || 0), 0)
 
+  // Une prestation entre dans le périmètre si elle a une ligne de la catégorie.
+  const prestationInScope = (p) => scope === TOUTES || (p.lignes || []).some((l) => inScope(catOf[l.materielId] || l.cat))
+  const sommeDepenses = (p) => (p.depenses || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0)
+
   const caTotal = facturesP.reduce((s, f) => s + montantScope(f), 0)
   const nbPrestations = scope === TOUTES
     ? prestationsP.length
-    : prestationsP.filter((p) => (p.lignes || []).some((l) => inScope(catOf[l.materielId] || l.cat))).length
-  const panierMoyen = nbPrestations ? caTotal / nbPrestations : 0
+    : prestationsP.filter(prestationInScope).length
+  // Dépenses internes liées aux prestations (frais de mission…) — voir onglet Prestations.
+  const depensesTotal = prestationsP.filter(prestationInScope).reduce((s, p) => s + sommeDepenses(p), 0)
+  // Solde = bénéfice brut des prestations/locations = CA − dépenses.
+  const solde = caTotal - depensesTotal
 
   // Matériel loué (volume de sorties) sur la période, par catégorie.
   const loueParCat = useMemo(() => {
@@ -202,12 +215,16 @@ export default function Pilotage() {
   const facturesPrev = useMemo(() => comparable ? factures.filter((f) => f.statut === 'approuvee' && inPrev(f.date)) : [], [factures, prevStart, prevEnd, comparable])
   const caPrev = facturesPrev.reduce((s, f) => s + montantScope(f), 0)
   const prestPrev = useMemo(() => prestations.filter((p) => inPrev(p.date)), [prestations, prevStart, prevEnd])
-  const nbPrestPrev = scope === TOUTES ? prestPrev.length : prestPrev.filter((p) => (p.lignes || []).some((l) => inScope(catOf[l.materielId] || l.cat))).length
-  const panierPrev = nbPrestPrev ? caPrev / nbPrestPrev : 0
+  const nbPrestPrev = scope === TOUTES ? prestPrev.length : prestPrev.filter(prestationInScope).length
+  const depensesPrev = prestPrev.filter(prestationInScope).reduce((s, p) => s + sommeDepenses(p), 0)
+  const soldePrev = caPrev - depensesPrev
   const retoursPrevScope = retours.filter((r) => inPrev(r.date)).filter((r) => inScope(catOf[r.materielId] || 'AUTRES'))
   const rc = (arr, t) => arr.filter((r) => r.type === t).reduce((s, r) => s + (parseInt(r.qte) || 0), 0)
   const totRetPrev = rc(retoursPrevScope, 'OK') + rc(retoursPrevScope, 'Cassé') + rc(retoursPrevScope, 'Perdu')
   const tauxCassePrev = totRetPrev ? ((rc(retoursPrevScope, 'Cassé') + rc(retoursPrevScope, 'Perdu')) / totRetPrev) * 100 : 0
+  // Casse/perte (pièces) période courante vs précédente — pour la tendance.
+  const cassePiecesCur = retourCasse + retourPerdu
+  const cassePiecesPrev = rc(retoursPrevScope, 'Cassé') + rc(retoursPrevScope, 'Perdu')
   // Variation relative (%) — null si pas de base de comparaison.
   const pct = (cur, prev) => (comparable && prev > 0) ? ((cur - prev) / prev) * 100 : null
 
@@ -246,10 +263,15 @@ export default function Pilotage() {
       while (cur <= e) { const from = new Date(cur.getFullYear(), cur.getMonth(), 1); const to = new Date(cur.getFullYear(), cur.getMonth() + 1, 0); buckets.push({ from: iso(from < s ? s : from), to: iso(to > e ? e : to), label: cur.toLocaleDateString('fr-FR', { month: 'short' }) }); cur.setMonth(cur.getMonth() + 1) }
     }
     const caIn = (from, to) => approved.filter((f) => (f.date || '') >= from && (f.date || '') <= to).reduce((a, f) => a + montantScope(f), 0)
+    // Casse / perte (pièces) sur les mêmes sous-périodes — pour la tendance des pertes.
+    const retScope = retours.filter((r) => (r.type === 'Cassé' || r.type === 'Perdu') && inScope(catOf[r.materielId] || 'AUTRES'))
+    const casseIn = (from, to) => retScope.filter((r) => (r.date || '') >= from && (r.date || '') <= to).reduce((a, r) => a + (parseInt(r.qte) || 0), 0)
     const cur = buckets.map((b) => caIn(b.from, b.to))
     const prev = (comparable && start >= '2000-01-01') ? buckets.map((b) => caIn(addDays(b.from, -dayCount), addDays(b.to, -dayCount))) : null
-    return { labels: buckets.map((b) => b.label), cur, prev }
-  }, [factures, start, end, scope, comparable, dayCount])
+    const casseCur = buckets.map((b) => casseIn(b.from, b.to))
+    const cassePrev = (comparable && start >= '2000-01-01') ? buckets.map((b) => casseIn(addDays(b.from, -dayCount), addDays(b.to, -dayCount))) : null
+    return { labels: buckets.map((b) => b.label), cur, prev, casseCur, cassePrev }
+  }, [factures, retours, catOf, start, end, scope, comparable, dayCount])
 
   // Croissance du CA vs période précédente (message décisionnel sous le graphe).
   const caDelta = pct(caTotal, caPrev)
@@ -257,8 +279,9 @@ export default function Pilotage() {
   const kpis = [
     { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${facturesP.length} facture(s)`, icon: BadgeDollarSign, color: '#BC3C31' },
     { id: 'presta', title: 'Prestations', value: formatNumber(nbPrestations), delta: pct(nbPrestations, nbPrestPrev), up: true, sub: comparable ? `préc. ${formatNumber(nbPrestPrev)}` : 'sur la période', icon: ClipboardList, color: '#0284c7' },
-    { id: 'panier', title: 'Panier moyen', value: formatMoney(panierMoyen), delta: pct(panierMoyen, panierPrev), up: true, sub: 'CA ÷ prestations', icon: Coins, color: '#7c3aed' },
-    { id: 'casse', title: 'Taux de casse / perte', value: `${tauxCasse.toFixed(1)} %`, deltaPP: comparable ? (tauxCasse - tauxCassePrev) : null, up: false, sub: `${formatNumber(retourCasse + retourPerdu)}/${formatNumber(totalRetours)} retours`, icon: AlertTriangle, color: tauxCasse > 5 ? '#dc2626' : '#16a34a' }
+    { id: 'depenses', title: 'Dépenses (prestations)', value: formatMoney(depensesTotal), delta: pct(depensesTotal, depensesPrev), up: false, sub: 'frais de mission, transport…', icon: Coins, color: '#ea580c' },
+    { id: 'solde', title: 'Solde (bénéfice)', value: formatMoney(solde), delta: pct(solde, soldePrev), up: true, sub: 'CA − dépenses', icon: Wallet, color: solde >= 0 ? '#16a34a' : '#dc2626' },
+    { id: 'casse', title: 'Taux de casse / perte', value: `${tauxCasse.toFixed(1)} %`, deltaPP: comparable ? (tauxCasse - tauxCassePrev) : null, up: false, sub: `${formatNumber(cassePiecesCur)}/${formatNumber(totalRetours)} retours`, icon: AlertTriangle, color: tauxCasse > 5 ? '#dc2626' : '#16a34a' }
   ]
 
   return (
@@ -283,7 +306,7 @@ export default function Pilotage() {
       </div>
       <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => {
           const raw = k.delta != null ? k.delta : (k.deltaPP != null ? k.deltaPP : null)
           const positive = (raw ?? 0) >= 0
@@ -300,9 +323,9 @@ export default function Pilotage() {
                 </span>
               )}
             </div>
-            {/* truncate + title : un montant long est coupé proprement, lisible au survol. */}
+            {/* Montant TOUJOURS entièrement visible (passe à la ligne au besoin). */}
             <p className="truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
-            <p className="truncate text-lg font-extrabold leading-tight text-gray-900 sm:text-xl" title={String(k.value)}>{k.value}</p>
+            <p className="break-words text-base font-extrabold leading-tight text-gray-900 sm:text-lg" title={String(k.value)}>{k.value}</p>
             {k.sub && <p className="mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
           </button>
         )})}
@@ -333,6 +356,34 @@ export default function Pilotage() {
           <p className={`mt-2 text-sm font-semibold ${caDelta >= 0 ? 'text-green-700' : 'text-red-600'}`}>
             {caDelta >= 0 ? '▲' : '▼'} CA {caDelta >= 0 ? 'en hausse' : 'en baisse'} de {Math.abs(caDelta).toFixed(1)} % vs période précédente
             <span className="font-normal text-gray-400"> ({formatMoney(caPrev)} → {formatMoney(caTotal)})</span>
+          </p>
+        )}
+      </Card>
+
+      {/* Tendance des casses / pertes — actuel vs précédent (pièces) */}
+      <Card title="Casse / perte par sous-période — actuel vs précédent">
+        <div className="h-56">
+          {caTrend.casseCur.some((v) => v > 0) || (caTrend.cassePrev || []).some((v) => v > 0) ? (
+            <Bar data={{
+              labels: caTrend.labels,
+              datasets: [
+                { label: 'Période actuelle', data: caTrend.casseCur, backgroundColor: '#dc2626', borderRadius: 4, maxBarThickness: 34 },
+                ...(caTrend.cassePrev ? [{ label: 'Période précédente', data: caTrend.cassePrev, backgroundColor: '#fca5a5', borderRadius: 4, maxBarThickness: 34 }] : [])
+              ]
+            }} options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: !!caTrend.cassePrev, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatNumber(c.parsed.y)} pièce(s)` } }
+              },
+              scales: { y: { ticks: { precision: 0 } } }
+            }} />
+          ) : <p className="py-14 text-center text-sm text-gray-400">Aucune casse ni perte sur la période</p>}
+        </div>
+        {comparable && (
+          <p className={`mt-2 text-sm font-semibold ${cassePiecesCur <= cassePiecesPrev ? 'text-green-700' : 'text-red-600'}`}>
+            {cassePiecesCur <= cassePiecesPrev ? '▼' : '▲'} {formatNumber(cassePiecesCur)} pièce(s) cassée(s)/perdue(s)
+            <span className="font-normal text-gray-400"> (préc. {formatNumber(cassePiecesPrev)})</span>
           </p>
         )}
       </Card>
@@ -394,15 +445,26 @@ export default function Pilotage() {
             </div>
           </Card>
 
-          {/* Classement des éléments */}
+          {/* Classement des éléments — triable par sollicitation ou par CA */}
           <Card title="Analyse par élément — sollicitations, quantités, CA">
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-400">Trier par :</span>
+              <button onClick={() => setElementSort('count')} type="button"
+                className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors ${elementSort === 'count' ? 'bg-sky-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                Plus sollicité
+              </button>
+              <button onClick={() => setElementSort('ca')} type="button"
+                className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors ${elementSort === 'ca' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                Chiffre d'affaires
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                   <tr><th className="px-3 py-2 text-left">Élément</th><th className="px-3 py-2 text-left">Catégorie</th><th className="px-3 py-2">Sollicité</th><th className="px-2 py-2 text-center">Qté</th><th className="px-2 py-2 text-center">Jours</th><th className="px-3 py-2 text-right">CA</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {analyse.parElement.map((el) => (
+                  {elementsTries.map((el) => (
                     <tr key={el.key} className="cursor-pointer hover:bg-sky-50" onClick={() => detailElement(el)}>
                       <td className="px-3 py-1.5 font-semibold">{el.nom}</td>
                       <td className="px-3 py-1.5"><span className="text-xs font-semibold" style={{ color: catColor(el.cat) }}>{el.cat}</span></td>
@@ -467,7 +529,10 @@ export default function Pilotage() {
       )}
 
       <PilotageModal id={modal} onClose={() => setModal(null)} scopeLabel={scopeLabel}
-        data={{ facturesP, prestationsP, retoursScope, parCat, montantScope }} />
+        data={{
+          facturesP, prestationsP: prestationsP.filter(prestationInScope), retoursScope, parCat, montantScope,
+          sommeDepenses, caTotal, depensesTotal, solde
+        }} />
 
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
         <div className="overflow-x-auto rounded-lg border border-gray-100">{detail?.render}</div>
@@ -498,8 +563,9 @@ function ScopeTab({ active, color, onClick, children }) {
 function PilotageModal({ id, onClose, scopeLabel, data }) {
   if (!id) return null
   const titles = {
-    ca: 'Factures approuvées', panier: 'Prestations', parc: 'Parc par catégorie', stock: 'Parc par catégorie',
-    presta: 'Prestations', loue: 'Prestations', casse: 'Retours (casse / perte)', retok: 'Retours OK', autos: 'Détail'
+    ca: 'Factures approuvées', parc: 'Parc par catégorie', stock: 'Parc par catégorie',
+    presta: 'Prestations', depenses: 'Dépenses des prestations', solde: 'Solde (CA − dépenses)',
+    casse: 'Casse / perte par prestation'
   }
   let content = null
   if (id === 'ca') {
@@ -512,7 +578,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
         ))}{!rows.length && <tr><td colSpan={4} className="p-4 text-center text-gray-400">Aucune facture approuvée.</td></tr>}</tbody>
       </table>
     )
-  } else if (['presta', 'loue', 'panier'].includes(id)) {
+  } else if (id === 'presta') {
     const rows = [...data.prestationsP].sort((a, b) => (a.date < b.date ? 1 : -1))
     content = (
       <table className="w-full text-sm">
@@ -522,14 +588,56 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
         ))}{!rows.length && <tr><td colSpan={4} className="p-4 text-center text-gray-400">Aucune prestation.</td></tr>}</tbody>
       </table>
     )
-  } else if (['casse', 'retok'].includes(id)) {
-    const rows = [...data.retoursScope].sort((a, b) => (a.date < b.date ? 1 : -1))
+  } else if (id === 'depenses' || id === 'solde') {
+    const rows = [...data.prestationsP]
+      .map((p) => ({ p, dep: data.sommeDepenses(p) }))
+      .filter((x) => id === 'solde' || x.dep > 0)
+      .sort((a, b) => b.dep - a.dep)
+    content = (
+      <>
+        {id === 'solde' && (
+          <div className="grid grid-cols-3 gap-2 p-3">
+            <MiniStat label="Chiffre d'affaires" value={formatMoney(data.caTotal)} color="#16a34a" />
+            <MiniStat label="Dépenses" value={formatMoney(data.depensesTotal)} color="#ea580c" />
+            <MiniStat label="Solde" value={formatMoney(data.solde)} color={data.solde >= 0 ? '#16a34a' : '#dc2626'} />
+          </div>
+        )}
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2">N°</th><th className="p-2">Client</th><th className="p-2 text-right">Facturé</th><th className="p-2 text-right">Dépenses</th></tr></thead>
+          <tbody>{rows.map(({ p, dep }) => (
+            <tr key={p.id} className="border-t"><td className="p-2 font-mono text-xs">{p.num}</td><td className="p-2">{p.clientNom}</td><td className="p-2 text-right">{formatMoney(p.total || 0)}</td><td className="p-2 text-right font-bold text-orange-700">{dep > 0 ? formatMoney(dep) : '—'}</td></tr>
+          ))}{!rows.length && <tr><td colSpan={4} className="p-4 text-center text-gray-400">Aucune dépense enregistrée.</td></tr>}</tbody>
+        </table>
+      </>
+    )
+  } else if (id === 'casse') {
+    // Regroupe les retours cassés / perdus PAR PRESTATION : nb cassé, nb perdu,
+    // pénalité totale et statut de remboursement (demande direction).
+    const map = {}
+    data.retoursScope.filter((r) => r.type !== 'OK').forEach((r) => {
+      const k = r.prestationId || r.prestationNum || r.id
+      const g = map[k] || (map[k] = { presta: r.prestationNum || '—', client: r.clientNom || '—', casse: 0, perdu: 0, penalite: 0, du: 0, items: [] })
+      if (r.type === 'Cassé') g.casse += parseInt(r.qte) || 0
+      if (r.type === 'Perdu') g.perdu += parseInt(r.qte) || 0
+      const pen = parseFloat(r.penalite) || 0
+      g.penalite += pen
+      if (pen > 0 && !r.penalitePayee) g.du += pen
+      g.items.push(r)
+    })
+    const rows = Object.values(map).sort((a, b) => b.penalite - a.penalite)
     content = (
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2">Date</th><th className="p-2">Matériel</th><th className="p-2 text-center">Qté</th><th className="p-2">État</th><th className="p-2">Motif</th></tr></thead>
-        <tbody>{rows.map((r) => (
-          <tr key={r.id} className="border-t"><td className="p-2">{formatDateShort(r.date)}</td><td className="p-2 font-semibold">{r.materielNom}</td><td className="p-2 text-center">{r.qte}</td><td className={`p-2 font-semibold ${r.type === 'OK' ? 'text-green-600' : 'text-red-600'}`}>{r.type}</td><td className="p-2 text-gray-500">{r.motif || '—'}</td></tr>
-        ))}{!rows.length && <tr><td colSpan={5} className="p-4 text-center text-gray-400">Aucun retour.</td></tr>}</tbody>
+        <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2">Prestation</th><th className="p-2">Client</th><th className="p-2 text-center">Cassé</th><th className="p-2 text-center">Perdu</th><th className="p-2 text-right">Pénalité</th><th className="p-2 text-center">Remboursement</th></tr></thead>
+        <tbody>{rows.map((g, i) => (
+          <tr key={i} className="border-t">
+            <td className="p-2 font-mono text-xs">{g.presta}</td>
+            <td className="p-2">{g.client}</td>
+            <td className="p-2 text-center font-bold text-red-600">{g.casse || '—'}</td>
+            <td className="p-2 text-center font-bold text-red-600">{g.perdu || '—'}</td>
+            <td className="p-2 text-right font-semibold">{g.penalite > 0 ? formatMoney(g.penalite) : '—'}</td>
+            <td className="p-2 text-center">{g.penalite > 0 ? (g.du > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">Reste {formatMoney(g.du)}</span> : <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">Réglée</span>) : '—'}</td>
+          </tr>
+        ))}{!rows.length && <tr><td colSpan={6} className="p-4 text-center text-gray-400">Aucune casse ni perte sur la période.</td></tr>}</tbody>
       </table>
     )
   } else {

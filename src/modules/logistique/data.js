@@ -3,7 +3,8 @@
 
 export const CAT_MATERIEL = [
   'TENTES & STRUCTURES',
-  'TABLES & CHAISES',
+  'TABLES',
+  'CHAISES',
   'SONORISATION',
   'ÉCLAIRAGE',
   'DÉCORATION',
@@ -11,12 +12,20 @@ export const CAT_MATERIEL = [
   'AUTRES'
 ]
 
+// Ancienne catégorie fusionnée « TABLES & CHAISES » → éclatée en TABLES / CHAISES.
+// Réaffecte un matériel hérité à la bonne catégorie d'après son nom.
+export const ANCIENNE_CAT_TABLES_CHAISES = 'TABLES & CHAISES'
+export function migrerCatTableChaise(cat, nom) {
+  if (cat !== ANCIENNE_CAT_TABLES_CHAISES) return cat
+  return /chaise|tabouret|banc/i.test(nom || '') ? 'CHAISES' : 'TABLES'
+}
+
 export const MATERIEL = [
   { id: 'tente_5x5', nom: 'Tente 5×5 m', cat: 'TENTES & STRUCTURES', unite: 'unités', coutAchat: 850000, tarifLocation: 75000 },
   { id: 'tente_10x10', nom: 'Tente 10×10 m', cat: 'TENTES & STRUCTURES', unite: 'unités', coutAchat: 1800000, tarifLocation: 150000 },
-  { id: 'chaise_pliante', nom: 'Chaise pliante', cat: 'TABLES & CHAISES', unite: 'unités', coutAchat: 8500, tarifLocation: 500 },
-  { id: 'table_ronde', nom: 'Table ronde (8 pers.)', cat: 'TABLES & CHAISES', unite: 'unités', coutAchat: 45000, tarifLocation: 5000 },
-  { id: 'table_rect', nom: 'Table rectangulaire', cat: 'TABLES & CHAISES', unite: 'unités', coutAchat: 35000, tarifLocation: 4000 },
+  { id: 'chaise_pliante', nom: 'Chaise pliante', cat: 'CHAISES', unite: 'unités', coutAchat: 8500, tarifLocation: 500 },
+  { id: 'table_ronde', nom: 'Table ronde (8 pers.)', cat: 'TABLES', unite: 'unités', coutAchat: 45000, tarifLocation: 5000 },
+  { id: 'table_rect', nom: 'Table rectangulaire', cat: 'TABLES', unite: 'unités', coutAchat: 35000, tarifLocation: 4000 },
   { id: 'enceinte', nom: 'Enceinte active', cat: 'SONORISATION', unite: 'unités', coutAchat: 320000, tarifLocation: 35000 },
   { id: 'console_mix', nom: 'Console de mixage', cat: 'SONORISATION', unite: 'unités', coutAchat: 450000, tarifLocation: 50000 },
   { id: 'projecteur', nom: 'Projecteur LED', cat: 'ÉCLAIRAGE', unite: 'unités', coutAchat: 120000, tarifLocation: 15000 },
@@ -27,6 +36,8 @@ export const MATERIEL = [
 
 export const CAT_COLORS = {
   'TENTES & STRUCTURES': '#0284c7',
+  'TABLES': '#7c3aed',
+  'CHAISES': '#9333ea',
   'TABLES & CHAISES': '#7c3aed',
   'SONORISATION': '#ea580c',
   'ÉCLAIRAGE': '#ca8a04',
@@ -53,8 +64,7 @@ export const EVENEMENTS = [
   'Conférence / Séminaire',
   'Concert / Spectacle',
   'Cérémonie religieuse',
-  'Réunion / Assemblée',
-  'Autre'
+  'Réunion / Assemblée'
 ]
 
 // Palette réutilisée pour colorer les éléments/événements dans les analyses.

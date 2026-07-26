@@ -100,13 +100,25 @@ export default function Factures() {
       )}
       <Card className="p-0">
         <Table
+          stickyHeader
           columns={[
-            { key: 'num', label: 'N° facture' },
+            { key: 'num', label: 'N° facture', sticky: true, width: '120px' },
             { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
             { key: 'clientNom', label: 'Client' },
             { key: 'prestationNum', label: 'Prestation' },
             { key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> },
-            { key: 'statut', label: 'Statut', render: (r) => { const s = F_STATUTS[r.statut] || F_STATUTS.brouillon; return <Badge tone={s.tone}>{s.label}</Badge> } },
+            { key: 'statut', label: 'Statut', render: (r) => {
+              const s = F_STATUTS[r.statut] || F_STATUTS.brouillon
+              const auto = /syst/i.test(r.approuveePar || '')
+              return (
+                <div>
+                  <Badge tone={s.tone}>{s.label}</Badge>
+                  {r.statut === 'approuvee' && r.approuveePar && (
+                    <p className="mt-0.5 text-[10px] text-gray-500">{auto ? '🤖' : '✅'} {r.approuveePar}{r.approuveeLe ? ` · ${formatDateShort(r.approuveeLe)}` : ''}</p>
+                  )}
+                </div>
+              )
+            } },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>

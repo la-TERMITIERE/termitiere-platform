@@ -319,7 +319,7 @@ export default function Saisie() {
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
             <tr>
-              <th className="bg-gray-50 px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
+              <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
               <th className="bg-gray-50 px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Entrées</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
@@ -340,8 +340,8 @@ export default function Saisie() {
                   const totSor = sommeMouvements(d.sorties) + autoSor
                   const fin = Math.max(0, (d.init || 0) + totEnt - totSor)
                   return (
-                    <tr key={a.id}>
-                      <td className="px-3 py-1.5 font-semibold">
+                    <tr key={a.id} className="group">
+                      <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-semibold group-hover:bg-gray-50">
                         {a.nom}
                         {kind === 'aliments' && a.unite && (
                           <span className="ml-1 text-[10px] font-normal text-gray-400">({a.unite})</span>
@@ -559,7 +559,7 @@ function FragmentCat({ cat, color, span, children }) {
   return (
     <>
       <tr>
-        <td colSpan={span} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white" style={{ background: color }}>
+        <td colSpan={span} className="sticky left-0 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white" style={{ background: color }}>
           {cat}
         </td>
       </tr>

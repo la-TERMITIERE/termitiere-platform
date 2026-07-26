@@ -258,11 +258,11 @@ export default function Factures() {
       </div>
 
       <Card className="p-0">
-        <div className="overflow-x-auto">
+        <div className="max-h-[calc(100vh-16rem)] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
               <tr>
-                <th className="px-3 py-2 text-left">N°</th>
+                <th className="sticky left-0 z-30 bg-gray-50 px-3 py-2 text-left">N°</th>
                 <th className="px-3 py-2 text-left">Date</th>
                 <th className="px-3 py-2 text-left">Client</th>
                 <th className="px-3 py-2 text-right">Total TTC</th>
@@ -276,8 +276,8 @@ export default function Factures() {
                 const sd = FACTURE_STATUTS[st] || { label: st, tone: 'neutral' }
                 const tot = calcTotaux(lignesEffectives(f), f.remise, f.tva)
                 return (
-                  <tr key={f.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 font-mono text-xs">{f.numero}</td>
+                  <tr key={f.id} className="group hover:bg-gray-50">
+                    <td className="sticky left-0 z-10 bg-white px-3 py-2 font-mono text-xs group-hover:bg-gray-50">{f.numero}</td>
                     <td className="px-3 py-2">{formatDateShort(f.date)}</td>
                     <td className="px-3 py-2">{f.client?.nom || '—'}</td>
                     <td className="px-3 py-2 text-right font-bold">{formatMoney(tot.totalTTC)}</td>

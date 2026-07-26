@@ -341,11 +341,12 @@ export default function Demandes() {
         </div>
       )}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="p-0">
+       <div className="max-h-[calc(100vh-16rem)] overflow-auto rounded-2xl">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
             <tr>
-              <th className="px-3 py-2 text-left">N°</th>
+              <th className="sticky left-0 z-30 bg-gray-50 px-3 py-2 text-left">N°</th>
               <th className="px-3 py-2">Facture</th>
               <th className="px-3 py-2">Prestation</th>
               <th className="px-3 py-2">Client</th>
@@ -364,8 +365,8 @@ export default function Demandes() {
               const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
               const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
               return (
-              <tr key={d.id} className={enCorrectif ? 'bg-amber-50/50' : ''}>
-                <td className="px-3 py-2 font-mono text-xs">{d.num}</td>
+              <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
+                <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white'} group-hover:bg-gray-50`}>{d.num}</td>
                 <td className="px-3 py-2">{d.factureNum}</td>
                 <td className="px-3 py-2 font-semibold">{d.prestationNum || '—'}</td>
                 <td className="px-3 py-2">{d.clientNom || '—'}</td>
@@ -408,6 +409,7 @@ export default function Demandes() {
           </tbody>
         </table>
         {!filtrees.length && <p className="py-10 text-center text-gray-400">Aucune demande.</p>}
+       </div>
       </Card>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Autorisation de sortie (prestation)"
