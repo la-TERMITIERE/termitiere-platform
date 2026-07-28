@@ -15,7 +15,7 @@ import {
   signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
-import { getAll, getOne, setItem, addItem } from './db'
+import { getAll, getOne, setItem, addItem, subscribeCollection } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 
@@ -150,6 +150,33 @@ function sessionFromProfile(p) {
   }
 }
 
+// Suivi en temps réel du profil DE L'UTILISATEUR CONNECTÉ (rôle, modules, actif).
+// Sans ça, un changement fait par un administrateur (retrait d'un module,
+// désactivation du compte…) ne prenait effet qu'à la prochaine connexion : la
+// session en mémoire/localStorage restait celle chargée au login, jamais
+// resynchronisée. `set`/`get` sont liés à la valeur passée par useAuthStore.create,
+// capturés via les closures ci-dessous au lieu d'être passés en paramètre.
+let _unsubOwnProfile = null
+function watchOwnProfile(uid, set, get) {
+  _unsubOwnProfile?.()
+  _unsubOwnProfile = subscribeCollection('users', (rows) => {
+    const cur = get().user
+    if (!cur || cur.uid !== uid) return // session changée/fermée entre-temps
+    const fresh = rows.find((r) => (r.uid || r.login) === uid)
+    if (!fresh) return
+    if (fresh.actif === false) {
+      // Compte désactivé par l'administrateur pendant que la session était ouverte.
+      localStorage.removeItem(DEMO_SESSION_KEY)
+      _unsubOwnProfile?.(); _unsubOwnProfile = null
+      set({ user: null, role: null, modules: [] })
+      return
+    }
+    const u = sessionFromProfile(fresh)
+    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
+    set({ user: u, role: u.role, modules: u.modules })
+  })
+}
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   role: null,
@@ -178,11 +205,12 @@ export const useAuthStore = create((set, get) => ({
       if (raw) {
         const u = JSON.parse(raw)
         set({ user: u, role: u.role, modules: u.modules || [], ready: true })
-        return () => {}
+        watchOwnProfile(u.uid, set, get)
+        return () => _unsubOwnProfile?.()
       }
     } catch (e) { /* ignore */ }
     set({ ready: true })
-    return () => {}
+    return () => _unsubOwnProfile?.()
   },
 
   // Connexion par identifiant + mot de passe.
@@ -216,6 +244,7 @@ export const useAuthStore = create((set, get) => ({
         const u = sessionFromProfile(profile)
         localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
         set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+        watchOwnProfile(u.uid, set, get)
         addItem('audit_global', {
           userId: u.uid, userNom: u.nom, module: 'portail', action: 'CONNEXION', details: '', timestamp: Date.now()
         }).catch(() => {})
@@ -235,6 +264,7 @@ export const useAuthStore = create((set, get) => ({
       const u = sessionFromProfile(found)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
       set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+      watchOwnProfile(u.uid, set, get)
       return true
     }
 
@@ -264,6 +294,7 @@ export const useAuthStore = create((set, get) => ({
         const u = sessionFromProfile(profile)
         localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
         set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+        watchOwnProfile(u.uid, set, get)
         setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})
         addItem('audit_global', {
           userId: u.uid, userNom: u.nom, module: 'portail',
@@ -336,6 +367,7 @@ export const useAuthStore = create((set, get) => ({
       const u = sessionFromProfile(profile)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
       set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+      watchOwnProfile(u.uid, set, get)
       // Trace de dernière connexion + entrée au journal d'activité (non bloquant).
       // On écrit avec la CLÉ technique du profil (jamais l'identifiant brut).
       setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})
@@ -355,6 +387,7 @@ export const useAuthStore = create((set, get) => ({
     // après déconnexion → accès possible aux données sous règles verrouillées / RLS).
     if (USE_SUPABASE_AUTH && supabase) { try { await supabase.auth.signOut() } catch (e) { /* ignore */ } }
     if (auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
+    _unsubOwnProfile?.(); _unsubOwnProfile = null
     localStorage.removeItem(DEMO_SESSION_KEY)
     set({ user: null, role: null, modules: [] })
   },

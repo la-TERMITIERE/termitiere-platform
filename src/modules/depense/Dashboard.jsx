@@ -13,7 +13,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depenseNetteSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -33,8 +33,12 @@ export default function Dashboard() {
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
   ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const navigate = useNavigate()
+  // L'agent n'a pas accès aux KPI financiers globaux (budget alloué, dette PAU, secteurs
+  // en dépassement) ni au détail des revenus/financement — seulement au total dépensé et
+  // au reste, dont il a besoin pour suivre sa propre saisie.
+  const restreintAgent = role === 'agent'
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -52,10 +56,10 @@ export default function Dashboard() {
 
   const parSecteur = useMemo(() => SECTEURS.map((s) => {
     const alloue = budgetSecteur(budgets, s.id, annee, mois)
-    const depense = depenseNetteSecteurMois(depenses, remboursementsPau, s.id, annee, mois)
+    const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return { ...s, alloue, depense, reste: alloue - depense, pct, statut: statutBudget(pct) }
-  }), [budgets, depenses, remboursementsPau, annee, mois])
+  }), [budgets, depenses, annee, mois])
 
   const totalAlloue = parSecteur.reduce((s, x) => s + x.alloue, 0)
   const totalDepense = parSecteur.reduce((s, x) => s + x.depense, 0)
@@ -67,7 +71,7 @@ export default function Dashboard() {
       .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 8)
   }, [depenses, annee, mois])
 
-  const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois, remboursementsPau), [budgets, depenses, annee, mois, remboursementsPau])
+  const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois), [budgets, depenses, annee, mois])
   const enAttenteCount = useMemo(() => depensesEnCircuit(depenses).length, [depenses])
 
   // Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) MOINS ce qu'elle
@@ -251,22 +255,26 @@ export default function Dashboard() {
         </button>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#B45309"
-          onClick={() => navigate('/depense/recettes-depenses')} />
+      <div className={`grid grid-cols-2 gap-3 ${restreintAgent ? '' : 'lg:grid-cols-4'}`}>
+        {!restreintAgent && (
+          <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#B45309"
+            onClick={() => navigate('/depense/recettes-depenses')} />
+        )}
         <StatCard title="Total dépensé" value={`${totalDepense.toLocaleString('fr-FR')} FCFA`} icon={TrendingDown} accent="#dc2626"
           onClick={() => navigate('/depense/liste')} />
         <StatCard title="Reste global" value={`${(totalAlloue - totalDepense).toLocaleString('fr-FR')} FCFA`} icon={Wallet}
           accent={(totalAlloue - totalDepense) < 0 ? '#dc2626' : '#16a34a'} />
-        <StatCard title="Secteurs en dépassement" value={secteursDepasses} icon={AlertTriangle}
-          accent={secteursDepasses > 0 ? '#dc2626' : '#16a34a'}
-          valueColor={secteursDepasses > 0 ? '#dc2626' : undefined}
-          sub={secteursDepasses > 0 ? 'à surveiller' : 'tout va bien'} />
+        {!restreintAgent && (
+          <StatCard title="Secteurs en dépassement" value={secteursDepasses} icon={AlertTriangle}
+            accent={secteursDepasses > 0 ? '#dc2626' : '#16a34a'}
+            valueColor={secteursDepasses > 0 ? '#dc2626' : undefined}
+            sub={secteursDepasses > 0 ? 'à surveiller' : 'tout va bien'} />
+        )}
       </div>
 
       {/* Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) et lui doit
           encore restituer. Le remboursement réduit la dette nette — traçabilité complète. */}
-      {financement.cumulPau > 0 && (
+      {!restreintAgent && financement.cumulPau > 0 && (
         <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-3 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-wrap items-center gap-2">
             <HeartHandshake size={18} className="text-violet-600" />
@@ -386,7 +394,9 @@ export default function Dashboard() {
                 <Badge tone={s.statut.tone}>{s.statut.label}</Badge>
                 <div className="ml-auto text-right text-sm text-gray-500">
                   <strong className="text-gray-800">{s.depense.toLocaleString('fr-FR')}</strong>
-                  <span className="text-gray-400"> / {s.alloue.toLocaleString('fr-FR')} FCFA</span>
+                  {restreintAgent
+                    ? <span className="text-gray-400"> · reste {s.reste.toLocaleString('fr-FR')} FCFA</span>
+                    : <span className="text-gray-400"> / {s.alloue.toLocaleString('fr-FR')} FCFA</span>}
                 </div>
               </div>
               <div className="mt-2 flex items-center gap-2">

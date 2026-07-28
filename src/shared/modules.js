@@ -102,7 +102,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
-    { label: 'Recettes & Budget', to: '/agro/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépense', to: '/agro/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
@@ -115,7 +115,7 @@ export const MODULE_NAV = {
     { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
     { label: 'Pilotage & Analyses', to: '/logistique/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
-    { label: 'Recettes & Budget', to: '/logistique/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépense', to: '/logistique/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Facturation', to: '/logistique/factures', icon: FileText },
     { label: 'Autorisations sortie', to: '/logistique/demandes', icon: Send, badgeKey: 'logistiqueDemandes' },
     { label: 'Retours matériel', to: '/logistique/retours', icon: RotateCcw },
@@ -133,7 +133,7 @@ export const MODULE_NAV = {
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
     { label: 'Facturation', to: '/evenementiel/factures', icon: FileText },
     { label: 'Pilotage & Analyses', to: '/evenementiel/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
-    { label: 'Recettes & Budget', to: '/evenementiel/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépense', to: '/evenementiel/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
     { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
@@ -162,7 +162,10 @@ export const MODULE_NAV = {
     { label: 'Besoins',      to: '/projet/besoins',      icon: PackagePlus, badgeKey: 'projetBesoins' },
     { label: 'Matériel & Matériaux', to: '/projet/materiel', icon: Wrench, badgeKey: 'projetMateriel' },
     { label: 'Prestataires', to: '/projet/prestataires', icon: UserCircle },
-    { label: 'Partenaires', to: '/projet/partenaires', icon: Handshake, perm: 'partenaires' },
+    // `roles: ['agent']` en plus de `perm` : l'agent E-G.Pro voit cet onglet (en lecture
+    // seule, cf. Partenaires.jsx → peutGerer) même sans la permission gerePartenaires,
+    // qui reste nécessaire pour ajouter/modifier/supprimer un partenaire.
+    { label: 'Partenaires', to: '/projet/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] },
     { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
     { label: 'Journal et Historique', to: '/projet/journal', icon: BookOpen, roles: PROJET_JOURNAL_ROLES },
     { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: PROJET_VOLETS_RESTREINTS_ROLES }
@@ -177,7 +180,7 @@ export const MODULE_NAV = {
     { label: 'Santé & Infirmerie', to: '/garderie/incidents', icon: Stethoscope },
     { label: 'Tâches',             to: '/garderie/taches',    icon: ListChecks },
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur','partenaire'] },
-    { label: 'Recettes & Budget', to: '/garderie/finances', icon: Scale,          roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire'] },
+    { label: 'Dépense', to: '/garderie/finances', icon: Scale,          roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire'] },
     { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires' },
     { label: 'Journal et Historique', to: '/garderie/journal', icon: BookOpen,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur','partenaire'] },
     { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: [...FULL_ACCESS_ROLES] }
@@ -185,7 +188,7 @@ export const MODULE_NAV = {
   depense: [
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet, badgeKey: 'depenseDepenses' },
-    { label: 'Recettes & Budget',            to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Revenus & Budget',            to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: FINANCE_VIEW_ROLES },
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },

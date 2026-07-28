@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Trash2 } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -17,10 +17,10 @@ import { isReadOnlyRole } from '../../core/roles'
 import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { genId, formatDateShort, formatDateTime } from '../../utils/formatters'
+import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, remboursementsSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
@@ -44,17 +44,20 @@ const barColor = (statut) => statut.key === 'depasse' ? 'bg-red-500'
 
 // `secteurId` optionnel : quand il est fourni (vue intégrée dans un module métier), l'écran
 // est restreint à ce seul secteur. Sans lui, il affiche tous les secteurs (E-DÉPENSES).
-export default function RecettesDepenses({ secteurId = null }) {
+// `masquerRevenu` : vue « Dépense » pure pour les modules intégrés — cache les revenus/solde
+// et rend le budget en lecture seule (l'allocation ne se fait que depuis E-DÉPENSES).
+export default function RecettesDepenses({ secteurId = null, masquerRevenu = false }) {
   const { data: budgets }             = useCollection('depense_budgets')
   const { data: depensesReelles }     = useCollection('depense_depenses')
   const { data: depensesProjet }      = useCollection('projet_depenses')
   const { data: projetsTous }         = useCollection('projets')
+  const { data: versementsClientTous }= useCollection('projet_versements_client')
+  const { data: revenusManuelsTous }  = useCollection('depense_revenus_manuels')
   const { data: inventairesBriq }     = useCollection('evenementiel_inventaires')
   const { data: paiementsGarderie }   = useCollection('garderie_paiements')
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
-  const { data: remboursementsPau }   = useCollection('depense_pau_remboursements')
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
 
@@ -66,6 +69,10 @@ export default function RecettesDepenses({ secteurId = null }) {
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
   ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+
+  // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu.
+  const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
+    [versementsClientTous, projetsTous])
 
   const secteursAffiches = useMemo(() => secteurId ? SECTEURS.filter((s) => s.id === secteurId) : SECTEURS, [secteurId])
   const theme = THEME_PAR_SECTEUR[secteurId] || THEME_PAR_SECTEUR.default
@@ -79,6 +86,10 @@ export default function RecettesDepenses({ secteurId = null }) {
   const [revMontant, setRevMontant] = useState('')
   const [revMotif, setRevMotif]     = useState('')
   const [revSaving, setRevSaving]   = useState(false)
+  // Ajout manuel d'un revenu — pour les secteurs sans facturation automatique
+  // (Hors secteur, MAXI BAT) : { secteurId, montant, date, description }.
+  const [ajoutRevenu, setAjoutRevenu] = useState(null)
+  const [revenuSaving, setRevenuSaving] = useState(false)
 
   const changerMois = (delta) => {
     let m = mois + delta, a = annee
@@ -91,16 +102,21 @@ export default function RecettesDepenses({ secteurId = null }) {
     const budgetId = `${s.id}_${annee}-${String(mois).padStart(2, '0')}`
     const budgetDoc = budgets.find((b) => b.id === budgetId)
     const alloue = budgetSecteur(budgets, s.id, annee, mois)
-    const recette = SECTEURS_AVEC_REVENU.includes(s.id) ? revenuSecteur(collections, s.id, annee, mois) : 0
+    const recette = revenuSecteur(collections, s.id, annee, mois, depenses, versementsClientRoutes, revenusManuelsTous)
+    const apportPau = revenuPauSecteurMois(depenses, s.id, annee, mois)
+    const versementsClient = revenuClientSecteurMois(versementsClientRoutes, s.id, annee, mois)
+    const revenuManuel = revenuManuelSecteurMois(revenusManuelsTous, s.id, annee, mois)
+    const revenusManuelsDuMois = revenusManuelsTous
+      .filter((r) => r.secteurId === s.id && (r.date || '').startsWith(`${annee}-${String(mois).padStart(2, '0')}`))
+      .sort((a, b) => (b.date || 0) - (a.date || 0))
     const lignes = depensesSecteurMois(depenses, s.id, annee, mois).sort((a, b) => (a.date < b.date ? 1 : -1))
-    const rembourseCeMois = totalDepenses(remboursementsSecteurMois(remboursementsPau, s.id, annee, mois))
-    const depense = totalDepenses(lignes) - rembourseCeMois
+    const depense = totalDepenses(lignes)
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return {
-      ...s, recette, depense, lignes, rembourseCeMois, solde: recette - depense, aRevenu: SECTEURS_AVEC_REVENU.includes(s.id),
+      ...s, recette, apportPau, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, solde: recette - depense,
       budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || []
     }
-  }), [secteursAffiches, budgets, depenses, remboursementsPau, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
 
   // Ouverture directe du détail d'un secteur depuis l'alerte du Dashboard (clic sur une
   // carte secteur « à surveiller ») — évite de devoir le rechercher dans la liste.
@@ -177,6 +193,40 @@ export default function RecettesDepenses({ secteurId = null }) {
     }
   }
 
+  // Ajout manuel d'un revenu — réservé aux secteurs sans facturation automatique
+  // (Hors secteur, MAXI BAT) ; le secteur se choisit dans le formulaire.
+  const secteursSansRevenuAuto = useMemo(() => SECTEURS.filter((s) => !SECTEURS_AVEC_REVENU.includes(s.id)), [])
+  const ouvrirAjoutRevenu = () => setAjoutRevenu({ secteurId: secteursSansRevenuAuto[0]?.id || '', montant: '', date: todayStr(), description: '' })
+
+  const confirmerAjoutRevenu = async () => {
+    if (!ajoutRevenu) return
+    const montant = Number(ajoutRevenu.montant)
+    if (!ajoutRevenu.secteurId) return toast.error('Secteur requis')
+    if (!ajoutRevenu.montant || montant <= 0) return toast.error('Montant requis')
+    if (!ajoutRevenu.date) return toast.error('Date requise')
+    const secteurLabel = SECTEURS.find((s) => s.id === ajoutRevenu.secteurId)?.label || ajoutRevenu.secteurId
+    setRevenuSaving(true)
+    try {
+      const id = genId()
+      await setItem('depense_revenus_manuels', id, {
+        id, secteurId: ajoutRevenu.secteurId, montant,
+        date: ajoutRevenu.date, description: ajoutRevenu.description.trim(),
+        enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
+      })
+      await audit('depense', 'REVENU_MANUEL_AJOUTE', `${secteurLabel} — ${fmt(montant)} FCFA${ajoutRevenu.description ? ' — ' + ajoutRevenu.description.trim() : ''}`, { secteurId: ajoutRevenu.secteurId, montant })
+      toast.success('Revenu ajouté ✓')
+      setAjoutRevenu(null)
+    } finally {
+      setRevenuSaving(false)
+    }
+  }
+
+  const supprimerRevenuManuel = async (r) => {
+    if (!window.confirm(`Supprimer ce revenu de ${fmt(r.montant)} FCFA ?`)) return
+    await removeItem('depense_revenus_manuels', r.id)
+    await audit('depense', 'REVENU_MANUEL_SUPPRIME', `${fmt(r.montant)} FCFA`, { secteurId: r.secteurId })
+  }
+
   return (
     <div className="space-y-5">
       {/* Navigation mois */}
@@ -184,21 +234,32 @@ export default function RecettesDepenses({ secteurId = null }) {
         <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
         <span className="text-lg font-extrabold text-gray-800">{MOIS_LABELS[mois - 1]} {annee}</span>
         <button onClick={() => changerMois(1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronRight size={16} /></button>
+        {!masquerRevenu && !lectureSeule && (
+          <Button onClick={ouvrirAjoutRevenu} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter un revenu</Button>
+        )}
       </div>
 
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Bilan financier par secteur : les <strong>recettes</strong> (factures des modules) croisées aux <strong>dépenses</strong> donnent le <strong>solde</strong>, comparé au <strong>budget alloué</strong> (reste & % consommé). La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.
+        {masquerRevenu
+          ? <>Suivi des <strong>dépenses</strong> de ce secteur face au <strong>budget alloué</strong> depuis E-DÉPENSES (reste & % consommé). L'allocation du budget se fait uniquement dans E-DÉPENSES ; la <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>
+          : <>Bilan financier par secteur : les <strong>revenus</strong> (factures des modules + apports du PAU comptés en revenu) croisés aux <strong>dépenses</strong> donnent le <strong>solde</strong>, comparé au <strong>budget alloué</strong> (reste & % consommé). La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>}
       </div>
 
       {/* KPI globaux */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Recettes totales" value={`${fmt(totalRecette)} FCFA`} icon={TrendingUp} accent="#059669" />
+      <div className={`grid gap-3 sm:grid-cols-2 ${masquerRevenu ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+        {!masquerRevenu && <StatCard title="Revenus totaux" value={`${fmt(totalRecette)} FCFA`} icon={TrendingUp} accent="#059669" />}
         <StatCard title="Dépenses totales" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent="#dc2626" />
-        <StatCard title="Solde global" value={`${fmt(soldeGlobal)} FCFA`} sub={soldeGlobal >= 0 ? 'Excédent' : 'Déficit'}
-          icon={Scale} accent={soldeGlobal >= 0 ? '#059669' : '#dc2626'} valueColor={soldeGlobal >= 0 ? '#059669' : '#dc2626'} />
+        {!masquerRevenu && (
+          <StatCard title="Solde global" value={`${fmt(soldeGlobal)} FCFA`} sub={soldeGlobal >= 0 ? 'Excédent' : 'Déficit'}
+            icon={Scale} accent={soldeGlobal >= 0 ? '#059669' : '#dc2626'} valueColor={soldeGlobal >= 0 ? '#059669' : '#dc2626'} />
+        )}
         <StatCard title="Budget alloué" value={`${fmt(totalAlloue)} FCFA`}
           sub={totalReste < 0 ? '⚠ Budget dépassé' : `Reste ${fmt(totalReste)} FCFA`}
           icon={Wallet} accent={totalReste < 0 ? '#dc2626' : '#B45309'} valueColor={totalReste < 0 ? '#dc2626' : undefined} />
+        {masquerRevenu && (
+          <StatCard title="Reste" value={`${fmt(totalReste)} FCFA`} sub={totalReste < 0 ? '⚠ Budget dépassé' : undefined}
+            icon={Scale} accent={totalReste < 0 ? '#dc2626' : '#0d9488'} valueColor={totalReste < 0 ? '#dc2626' : undefined} />
+        )}
       </div>
 
       {/* Par secteur */}
@@ -215,17 +276,13 @@ export default function RecettesDepenses({ secteurId = null }) {
               </div>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <span className="text-gray-500">Recettes {s.aRevenu
-                  ? <b className="text-green-700">{fmt(s.recette)}</b>
-                  : <span className="text-gray-300">— non suivi</span>}</span>
+                {!masquerRevenu && <span className="text-gray-500">Revenus <b className="text-green-700">{fmt(s.recette)}</b></span>}
                 <span className="text-gray-500">Dépenses <b className="text-amber-600">{fmt(s.depense)}</b></span>
-                <span className="text-gray-500">Solde <b className={s.solde >= 0 ? 'text-green-700' : 'text-red-600'}>{s.solde >= 0 ? '+' : ''}{fmt(s.solde)}</b></span>
+                {!masquerRevenu && <span className="text-gray-500">Solde <b className={s.solde >= 0 ? 'text-green-700' : 'text-red-600'}>{s.solde >= 0 ? '+' : ''}{fmt(s.solde)}</b></span>}
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                {s.aRevenu && (
-                  <Badge tone={s.solde >= 0 ? 'success' : 'danger'}>{s.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>
-                )}
+                {!masquerRevenu && <Badge tone={s.solde >= 0 ? 'success' : 'danger'}>{s.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>}
                 <ChevronRight size={16} className="text-gray-300" />
               </div>
             </button>
@@ -237,7 +294,7 @@ export default function RecettesDepenses({ secteurId = null }) {
                 <span className="text-sm font-bold text-gray-700">
                   {s.alloue > 0 ? `${fmt(s.alloue)} FCFA` : <span className="font-normal text-gray-300">Non défini</span>}
                 </span>
-                {!lectureSeule && (
+                {!lectureSeule && !masquerRevenu && (
                   s.alloue > 0 ? (
                     <button onClick={() => ouvrirRevision(s)} title="Réviser ce budget (revoir ou ajouter une somme)"
                       className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm transition-all duration-200 hover:bg-amber-50 hover:shadow-[0_0_10px_1px_rgba(180,83,9,0.45)]">
@@ -250,7 +307,7 @@ export default function RecettesDepenses({ secteurId = null }) {
                     </button>
                   )
                 )}
-                {s.revisionsBudget.length > 0 && (
+                {!masquerRevenu && s.revisionsBudget.length > 0 && (
                   <button onClick={() => ouvrirRevision(s)} title="Voir l'historique des révisions"
                     className="flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-gray-500 shadow-sm hover:bg-gray-100">
                     <History size={11} /> {s.revisionsBudget.length}
@@ -269,6 +326,13 @@ export default function RecettesDepenses({ secteurId = null }) {
                 </div>
               )}
             </div>
+
+            {/* Revenu manuel — indication seule ; l'ajout se fait via le bouton en haut de l'écran */}
+            {!masquerRevenu && !SECTEURS_AVEC_REVENU.includes(s.id) && s.revenuManuel > 0 && (
+              <div className="border-t border-gray-100 bg-violet-50/40 px-4 py-2">
+                <span className="text-[11px] text-violet-600">✍️ dont {fmt(s.revenuManuel)} FCFA saisis manuellement ce mois</span>
+              </div>
+            )}
 
           </div>
         ))}
@@ -376,31 +440,50 @@ export default function RecettesDepenses({ secteurId = null }) {
         footer={<Button variant="outline" onClick={() => setSecteurDetail(null)}>Fermer</Button>}>
         {secteurDetail && (
           <div className="space-y-3 text-sm">
-            {/* Solde en tête */}
+            {/* Solde (ou dépensé, en vue « Dépense » seule) en tête */}
             <div className="rounded-2xl bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="h-3 w-3 rounded-full" style={{ background: secteurDetail.color }} />
                 <span className="font-bold text-gray-800">{secteurDetail.label}</span>
-                {secteurDetail.aRevenu && <Badge tone={secteurDetail.solde >= 0 ? 'success' : 'danger'}>{secteurDetail.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>}
+                {!masquerRevenu && <Badge tone={secteurDetail.solde >= 0 ? 'success' : 'danger'}>{secteurDetail.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>}
               </div>
-              <p className={`mt-2 text-3xl font-black leading-none ${secteurDetail.solde >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                {secteurDetail.solde >= 0 ? '+' : ''}{fmt(secteurDetail.solde)}<span className="ml-1 text-sm font-bold text-gray-400">FCFA</span>
-              </p>
-              <p className="mt-0.5 text-[11px] text-gray-400">Solde du mois (recettes − dépenses)</p>
+              {masquerRevenu ? (
+                <>
+                  <p className="mt-2 text-3xl font-black leading-none text-amber-600">
+                    {fmt(secteurDetail.depense)}<span className="ml-1 text-sm font-bold text-gray-400">FCFA</span>
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-gray-400">Dépensé ce mois</p>
+                </>
+              ) : (
+                <>
+                  <p className={`mt-2 text-3xl font-black leading-none ${secteurDetail.solde >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {secteurDetail.solde >= 0 ? '+' : ''}{fmt(secteurDetail.solde)}<span className="ml-1 text-sm font-bold text-gray-400">FCFA</span>
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-gray-400">Solde du mois (revenus − dépenses)</p>
+                </>
+              )}
             </div>
 
             {/* Tuiles chiffrées */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl bg-white p-3 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Recettes</p>
-                <p className="mt-0.5 font-bold text-green-700">{secteurDetail.aRevenu ? `${fmt(secteurDetail.recette)} FCFA` : '— non suivi'}</p>
-              </div>
+              {!masquerRevenu && (
+                <div className="rounded-xl bg-white p-3 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Revenus</p>
+                  <p className="mt-0.5 font-bold text-green-700">{fmt(secteurDetail.recette)} FCFA</p>
+                  {secteurDetail.apportPau > 0 && (
+                    <p className="mt-0.5 text-[10px] text-violet-600">💜 dont {fmt(secteurDetail.apportPau)} FCFA d'apport du PAU</p>
+                  )}
+                  {secteurDetail.versementsClient > 0 && (
+                    <p className="mt-0.5 text-[10px] text-teal-600">🧑‍💼 dont {fmt(secteurDetail.versementsClient)} FCFA reçus de clients (projets)</p>
+                  )}
+                  {secteurDetail.revenuManuel > 0 && (
+                    <p className="mt-0.5 text-[10px] text-violet-600">✍️ dont {fmt(secteurDetail.revenuManuel)} FCFA saisis manuellement</p>
+                  )}
+                </div>
+              )}
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Dépenses</p>
                 <p className="mt-0.5 font-bold text-amber-600">{fmt(secteurDetail.depense)} FCFA</p>
-                {secteurDetail.rembourseCeMois > 0 && (
-                  <p className="mt-0.5 text-[10px] text-violet-600">💜 dont {fmt(secteurDetail.rembourseCeMois)} FCFA crédités (remboursement PAU)</p>
-                )}
               </div>
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Budget alloué</p>
@@ -421,6 +504,26 @@ export default function RecettesDepenses({ secteurId = null }) {
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
                   <div className={`h-2 rounded-full ${barColor(secteurDetail.statut)}`} style={{ width: `${Math.min(100, secteurDetail.pct)}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Revenus manuels du mois — ajout/suppression directs */}
+            {!masquerRevenu && secteurDetail.revenusManuelsDuMois?.length > 0 && (
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Revenus saisis manuellement ({secteurDetail.revenusManuelsDuMois.length})</p>
+                <div className="max-h-48 space-y-1 overflow-y-auto">
+                  {secteurDetail.revenusManuelsDuMois.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 rounded-lg bg-violet-50/60 px-2.5 py-1.5 text-xs">
+                      <span className="whitespace-nowrap text-gray-500">{formatDateShort(r.date)}</span>
+                      <span className="min-w-0 flex-1 truncate text-gray-700">{r.description || '—'}</span>
+                      <span className="whitespace-nowrap font-bold text-violet-700">{fmt(r.montant)}</span>
+                      {!lectureSeule && (
+                        <button onClick={() => supprimerRevenuManuel(r)} title="Supprimer"
+                          className="shrink-0 rounded p-0.5 text-gray-300 hover:bg-red-50 hover:text-red-500"><Trash2 size={12} /></button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -510,6 +613,49 @@ export default function RecettesDepenses({ secteurId = null }) {
           </div>
           )
         })()}
+      </Modal>
+
+      {/* Ajout manuel d'un revenu */}
+      <Modal open={!!ajoutRevenu} onClose={() => setAjoutRevenu(null)} size="sm"
+        title="Ajouter un revenu"
+        panelClassName={theme.gradient}>
+        {ajoutRevenu && (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-white p-3 shadow-sm space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Secteur</label>
+                <select value={ajoutRevenu.secteurId} onChange={(e) => setAjoutRevenu((r) => ({ ...r, secteurId: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-300">
+                  {secteursSansRevenuAuto.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+                <p className="mt-1 text-[11px] text-gray-400">Réservé aux secteurs sans facturation automatique — les autres ont déjà leur revenu calculé depuis leurs factures.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant (FCFA)</label>
+                <input type="number" min="0" autoFocus value={ajoutRevenu.montant}
+                  onChange={(e) => setAjoutRevenu((r) => ({ ...r, montant: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-300" placeholder="0" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+                <input type="date" value={ajoutRevenu.date}
+                  onChange={(e) => setAjoutRevenu((r) => ({ ...r, date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Description <span className="font-normal text-gray-400">(optionnel)</span></label>
+                <input value={ajoutRevenu.description}
+                  onChange={(e) => setAjoutRevenu((r) => ({ ...r, description: e.target.value }))}
+                  placeholder="ex : Subvention reçue, vente ponctuelle, remboursement…"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAjoutRevenu(null)}>Annuler</Button>
+              <Button onClick={confirmerAjoutRevenu} loading={revenuSaving}>Ajouter</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

@@ -43,7 +43,7 @@ export default function AgroModule() {
       <Route index element={<Dashboard />} />
       <Route path="saisie" element={<Saisie />} />
       <Route path="factures" element={<Factures />} />
-      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="agro" /> : <AccesRefuse />} />
+      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="agro" masquerRevenu /> : <AccesRefuse />} />
       <Route path="analyses" element={canViewPilotage(role) ? <Analyses /> : <AccesRefuse />} />
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />

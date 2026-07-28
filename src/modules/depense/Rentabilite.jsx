@@ -11,8 +11,8 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, MOIS_LABELS } from './data'
-import { depensesSecteurMois, totalDepenses, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
-import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
+import { depensesSecteurMois, totalDepenses, depensesProjetVersSecteurs, coutsMatieresBriqueterie, versementsClientVersSecteurs } from './logic'
+import { revenuSecteur } from './revenus'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
@@ -21,6 +21,8 @@ export default function Rentabilite() {
   const { data: depensesReelles }     = useCollection('depense_depenses')
   const { data: depensesProjet }      = useCollection('projet_depenses')
   const { data: projetsTous }         = useCollection('projets')
+  const { data: versementsClientTous }= useCollection('projet_versements_client')
+  const { data: revenusManuelsTous }  = useCollection('depense_revenus_manuels')
   const { data: inventairesBriq }     = useCollection('evenementiel_inventaires')
   const { data: paiementsGarderie }   = useCollection('garderie_paiements')
   const { data: facturesAgro }        = useCollection('agro_factures')
@@ -35,6 +37,10 @@ export default function Rentabilite() {
     ...coutsMatieresBriqueterie(inventairesBriq)
   ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
+  // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu.
+  const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
+    [versementsClientTous, projetsTous])
+
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
   const [annee, setAnnee] = useState(now.getFullYear())
@@ -48,16 +54,15 @@ export default function Rentabilite() {
   }
 
   const secteurs = useMemo(() => SECTEURS
-    .filter((s) => SECTEURS_AVEC_REVENU.includes(s.id))
     .map((s) => {
-      const revenu = revenuSecteur(collections, s.id, annee, mois)
+      const revenu = revenuSecteur(collections, s.id, annee, mois, depenses, versementsClientRoutes, revenusManuelsTous)
       const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
       const marge = revenu - depense
       const margePct = revenu > 0 ? Math.round((marge / revenu) * 100) : null
       return { ...s, revenu, depense, marge, margePct }
     })
     .sort((a, b) => b.marge - a.marge),
-  [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
 
   const totalRevenu  = secteurs.reduce((s, x) => s + x.revenu, 0)
   const totalDepense = secteurs.reduce((s, x) => s + x.depense, 0)
@@ -110,7 +115,7 @@ export default function Rentabilite() {
       </div>
 
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Compare le revenu <strong>réellement encaissé/facturé</strong> de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Foncier, Comptabilité, E-G.Pro et Direction n'ont pas de revenu propre suivi dans l'application — ils n'apparaissent pas ici.
+        Compare le revenu de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie, + apports du PAU comptés en revenu) à sa dépense <strong>décaissée</strong> du même mois. Les secteurs sans facturation propre ni apport du PAU ce mois-là affichent un revenu à 0.
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

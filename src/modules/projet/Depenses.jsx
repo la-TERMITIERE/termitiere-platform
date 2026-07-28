@@ -73,6 +73,10 @@ export default function Depenses() {
   const peutModifier = true
   // La secrétaire, l'agent, le superviseur et le chef de projet ne suppriment pas.
   const peutSupprimer = !['chef_projet', 'secretaire', 'agent', 'superviseur', 'partenaire'].includes(role)
+  // L'agent n'a accès qu'aux dépenses du mois en cours et du mois précédent (fenêtre
+  // glissante de 2 mois) et ne voit pas les KPI globaux (budget/dépenses/solde),
+  // réservés à la hiérarchie.
+  const restreintMoisCourant = role === 'agent'
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.
@@ -139,12 +143,34 @@ export default function Depenses() {
 
   // ── Données filtrées ─────────────────────────────────────────────────────
 
-  const liste = useMemo(() =>
+  // Base filtrée par projet/catégorie (sans restriction de mois) — sert de référence pour
+  // calculer des totaux TOUJOURS exacts (versé/reste par tâche), même quand l'affichage
+  // lui-même est restreint au mois en cours pour l'agent (cf. `liste` juste après) : un
+  // reste affiché ne doit jamais ignorer un versement fait un mois précédent, sous peine
+  // de laisser l'agent re-verser un montant déjà soldé.
+  const baseFiltree = useMemo(() =>
     depenses
       .filter((d) => !filtreProjet    || d.projetId  === filtreProjet)
-      .filter((d) => !filtreCategorie || d.categorie === filtreCategorie)
-      .sort((a, b) => (b.date || 0) - (a.date || 0)),
+      .filter((d) => !filtreCategorie || d.categorie === filtreCategorie),
   [depenses, filtreProjet, filtreCategorie])
+
+  // Liste réellement affichée : pour l'agent, uniquement les dépenses du mois en cours
+  // et du mois précédent (fenêtre glissante de 2 mois) — restriction d'AFFICHAGE
+  // seulement, pas de calcul.
+  const liste = useMemo(() => {
+    let l = baseFiltree
+    if (restreintMoisCourant) {
+      const now = new Date()
+      const moisPrecedent = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      l = l.filter((d) => {
+        if (!d.date) return false
+        const dd = new Date(d.date)
+        const memeQue = (ref) => dd.getFullYear() === ref.getFullYear() && dd.getMonth() === ref.getMonth()
+        return memeQue(now) || memeQue(moisPrecedent)
+      })
+    }
+    return [...l].sort((a, b) => (b.date || 0) - (a.date || 0))
+  }, [baseFiltree, restreintMoisCourant])
 
   const totalFiltre = useMemo(() => liste.reduce((s, d) => s + (Number(d.montant) || 0), 0), [liste])
 
@@ -162,17 +188,24 @@ export default function Depenses() {
     return CATEGORIES.filter((c) => map[c.id]).map((c) => ({ ...c, total: map[c.id] }))
   }, [liste])
 
-  // Dépenses regroupées par tâche (suivi tâche → prestataire)
+  // Dépenses regroupées par tâche (suivi tâche → prestataire). Les LIGNES affichées
+  // viennent de `liste` (restreinte au mois en cours pour l'agent) mais le total
+  // Versé/Reste vient de `baseFiltree` (historique complet) pour rester exact.
   const groupesParTache = useMemo(() => {
-    const map = {}
+    const mapAffiche = {}
     liste.forEach((d) => {
       const key = d.tacheId || '__aucune__'
-      if (!map[key]) map[key] = []
-      map[key].push(d)
+      if (!mapAffiche[key]) mapAffiche[key] = []
+      mapAffiche[key].push(d)
     })
-    const groups = Object.entries(map).map(([key, deps]) => {
+    const totauxComplets = {}
+    baseFiltree.forEach((d) => {
+      const key = d.tacheId || '__aucune__'
+      totauxComplets[key] = (totauxComplets[key] || 0) + (Number(d.montant) || 0)
+    })
+    const groups = Object.entries(mapAffiche).map(([key, deps]) => {
       const tache = key === '__aucune__' ? null : taches.find((t) => t.id === key)
-      const totalVerse = deps.reduce((s, d) => s + (Number(d.montant) || 0), 0)
+      const totalVerse = totauxComplets[key] || 0
       const prevu = tache ? (Number(tache.montantPrevu) || 0) : 0
       return { key, tache, deps, totalVerse, prevu, reste: prevu - totalVerse }
     })
@@ -183,7 +216,7 @@ export default function Depenses() {
       return (a.tache?.titre || '').localeCompare(b.tache?.titre || '')
     })
     return groups
-  }, [liste, taches])
+  }, [liste, baseFiltree, taches])
 
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
@@ -345,15 +378,17 @@ export default function Depenses() {
 
   return (
     <div className="space-y-4">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard title={<span className="flex items-center gap-1">Budget total <InfoBulle texte="Somme des budgets prévus de tous les projets." /></span>}
-          value={formatMoney(kpi.totalBudget)} icon={Wallet} accent="#0d9488" />
-        <StatCard title={<span className="flex items-center gap-1">Dépenses totales <InfoBulle texte="Somme de toutes les dépenses enregistrées dans le module." /></span>}
-          value={formatMoney(kpi.totalDepenses)} icon={TrendingDown} accent="#f59e0b" />
-        <StatCard title={<span className="flex items-center gap-1">Solde restant <InfoBulle texte="Budget total − Dépenses totales. Vert = sous contrôle, Rouge = budget dépassé." /></span>}
-          value={formatMoney(kpi.ecart)} icon={Wallet} accent={kpi.ecart >= 0 ? '#16a34a' : '#ef4444'} />
-      </div>
+      {/* KPIs — réservés à la hiérarchie, pas à l'agent */}
+      {!restreintMoisCourant && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <StatCard title={<span className="flex items-center gap-1">Budget total <InfoBulle texte="Somme des budgets prévus de tous les projets." /></span>}
+            value={formatMoney(kpi.totalBudget)} icon={Wallet} accent="#0d9488" />
+          <StatCard title={<span className="flex items-center gap-1">Dépenses totales <InfoBulle texte="Somme de toutes les dépenses enregistrées dans le module." /></span>}
+            value={formatMoney(kpi.totalDepenses)} icon={TrendingDown} accent="#f59e0b" />
+          <StatCard title={<span className="flex items-center gap-1">Solde restant <InfoBulle texte="Budget total − Dépenses totales. Vert = sous contrôle, Rouge = budget dépassé." /></span>}
+            value={formatMoney(kpi.ecart)} icon={Wallet} accent={kpi.ecart >= 0 ? '#16a34a' : '#ef4444'} />
+        </div>
+      )}
 
       {/* Filtres + bouton */}
       <div className="flex flex-wrap items-center gap-2">
@@ -452,14 +487,18 @@ export default function Depenses() {
               {/* Lignes-cartes */}
               {g.deps.map((d) => {
                 const projet = projets.find((p) => p.id === d.projetId)
+                const tache  = d.tacheId ? taches.find((t) => t.id === d.tacheId) : null
                 return (
                   <div key={d.id} onClick={() => setDetail(d)}
                     className="group flex cursor-pointer items-start gap-4 rounded-2xl border-l-[3px] border-teal-400 bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_6px_18px_-6px_rgba(13,148,136,0.2)] hover:ring-teal-200">
-                    {/* Corps : date, projet, description, prestataire */}
+                    {/* Corps : date, projet, tâche, description, prestataire */}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="whitespace-nowrap text-xs font-semibold text-gray-500">{formatDateShort(d.date)}</span>
                         {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
+                        {/* Tâche qui justifie la dépense — affichée explicitement, pas seulement
+                            déduite de l'en-tête de groupe (qui peut être hors écran). */}
+                        {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
                         <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">{catLabel(d.categorie)}</span>
                         {d.depuisBesoin && (
                           <Badge tone={(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).tone}>

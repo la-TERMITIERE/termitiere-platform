@@ -41,7 +41,7 @@ export default function EvenementielModule() {
       <Route path="ventes" element={<Ventes />} />
       <Route path="factures" element={<Factures />} />
       <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
-      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="evenementiel" /> : <AccesRefuse />} />
+      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
       <Route path="demandes" element={<Demandes />} />
       <Route path="params" element={<Params />} />
       <Route path="clients" element={<Clients />} />

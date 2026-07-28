@@ -34,14 +34,14 @@ export async function approuverSortie(f, user) {
   await creerDemandesFacture(f, user)
   await updateItem('agro_factures', f.id, { statut: 'sortie_approuvee', sortieApprouveeLe: horo(), sortieApprouveePar: user.nom })
   await audit('agro', 'FACTURE_SORTIE_APPROUVEE', `${f.numero} — sortie autorisée`)
-  await notify({ type: 'approuve', title: 'Sortie approuvée ✅', body: `Facture ${f.numero} — vous pouvez certifier ou signaler un écart`, module: 'agro', forUsers: [f.createdBy], excludeUid: user.uid, link: '/agro/demandes' })
+  await notify({ type: 'approuve', title: 'Sortie approuvée ✅', body: `Facture ${f.numero} — vous pouvez certifier ou signaler un écart`, module: 'agro', forUsers: [f.createdByUid], excludeUid: user.uid, link: '/agro/demandes' })
 }
 
 // ② bis Hiérarchie : refuse la sortie → retour brouillon (modifiable par l'agent).
 export async function refuserSortie(f, user, motif = '') {
   await updateItem('agro_factures', f.id, { statut: 'refusee', refuseLe: horo(), refusePar: user.nom, refusMotif: (motif || '').trim() })
   await audit('agro', 'FACTURE_SORTIE_REFUSEE', `${f.numero}${motif ? ' — ' + motif : ''}`)
-  await notify({ type: 'refus', title: 'Sortie refusée ⛔', body: `Facture ${f.numero}${motif ? ' — ' + motif : ''}`, module: 'agro', forUsers: [f.createdBy], excludeUid: user.uid, link: '/agro/demandes' })
+  await notify({ type: 'refus', title: 'Sortie refusée ⛔', body: `Facture ${f.numero}${motif ? ' — ' + motif : ''}`, module: 'agro', forUsers: [f.createdByUid], excludeUid: user.uid, link: '/agro/demandes' })
 }
 
 // ③ Agent : certifie la facture (CA enregistré, impression). Renvoie le total TTC.
@@ -69,7 +69,7 @@ export async function appliquerAjustement(f, user, ajustements) {
     lignesReelles, ecartAjuste: true, ecartAjusteLe: horo(), ecartAjustePar: user.nom
   })
   await audit('agro', 'FACTURE_ECART_AJUSTE', `${f.numero} — quantités réelles ajustées`)
-  await notify({ type: 'approuve', title: 'Quantités ajustées ✅', body: `Facture ${f.numero} — vous pouvez certifier la facture ajustée`, module: 'agro', forUsers: [f.createdBy], excludeUid: user.uid, link: '/agro/factures' })
+  await notify({ type: 'approuve', title: 'Quantités ajustées ✅', body: `Facture ${f.numero} — vous pouvez certifier la facture ajustée`, module: 'agro', forUsers: [f.createdByUid], excludeUid: user.uid, link: '/agro/factures' })
 }
 
 export async function rouvrir(f) {
@@ -127,7 +127,7 @@ export async function trancherCorrectif(f, user, accepte, commentaire = '') {
     type: accepte ? 'approuve' : 'refus',
     title: accepte ? 'Correctif appliqué ✅' : 'Correctif refusé ⛔',
     body: `Facture ${f.numero} — ${accepte ? 'quantités corrigées, stock et CA réajustés' : 'les quantités certifiées restent inchangées'}`,
-    module: 'agro', forUsers: [c.par || f.createdBy], excludeUid: user.uid, link: '/agro/factures'
+    module: 'agro', forUsers: [c.par || f.createdByUid], excludeUid: user.uid, link: '/agro/factures'
   })
 }
 

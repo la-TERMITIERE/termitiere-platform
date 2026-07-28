@@ -1,6 +1,6 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -17,8 +17,9 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, budgetRestantSecteur } from './logic'
 import { notifierBeneficiaire } from './notifications'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -100,6 +101,11 @@ export default function Depenses() {
   const { user, role } = useAuth()
   const isAdmin = isFullAccessRole(role)
   const lectureSeule = isReadOnlyRole(role)
+  // L'agent n'a accès qu'aux dépenses du mois en cours et du mois précédent (même
+  // fenêtre glissante de 2 mois que pour E-G.Pro, cf. projet/Depenses.jsx).
+  const restreintMoisCourant = role === 'agent'
+  const moisCourantStr    = todayStr().slice(0, 7)
+  const moisPrecedentStr  = (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` })()
   const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
@@ -152,8 +158,14 @@ export default function Depenses() {
       const q = recherche.toLowerCase()
       rows = rows.filter((d) => (d.description || '').toLowerCase().includes(q))
     }
+    if (restreintMoisCourant) {
+      rows = rows.filter((d) => {
+        const m = (d.date || '').slice(0, 7)
+        return m === moisCourantStr || m === moisPrecedentStr
+      })
+    }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreSource, filtreMois, recherche])
+  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreSource, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
 
   // Total financé par le PAU (apport personnel) sur la liste affichée — traçabilité.
   const totalApportPau = useMemo(
@@ -163,6 +175,47 @@ export default function Depenses() {
   )
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
+
+  // Export Excel — reprend le format du carnet papier : Date, Libellé, Montant,
+  // Nom de l'agréeur (bénéficiaire — celui à qui la somme est destinée, avec son
+  // numéro s'il est connu via son compte utilisateur), Source (de financement).
+  // Exporte exactement la liste affichée à l'écran (mêmes filtres, même restriction
+  // de mois pour l'agent).
+  function exportExcel() {
+    const rows = liste.map((d) => {
+      const secteur = SECTEURS.find((s) => s.id === d.secteurId)
+      let agreeur = d.beneficiaireNom || ''
+      if (d.beneficiaireUid) {
+        const u = users.find((x) => x.uid === d.beneficiaireUid)
+        if (u?.telephone) agreeur = agreeur ? `${agreeur} (${u.telephone})` : u.telephone
+      }
+      return {
+        date: formatDateShort(d.date),
+        libelle: d.description || CATEGORIES_DEPENSE.find((c) => c.id === d.categorie)?.label || d.categorie || '—',
+        montant: Number(d.montant) || 0,
+        agreeur: agreeur || '—',
+        source: SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]?.label || '—',
+        secteur: secteur?.label || d.secteurId
+      }
+    })
+    exportRapportExcel({
+      filename: `depenses-${filtreMois || 'toutes'}.xlsx`,
+      sections: [{
+        id: 'depenses', name: 'Dépenses', title: 'Extraction des dépenses',
+        subtitle: filtreMois ? `Période : ${filtreMois}` : 'Toutes périodes',
+        columns: [
+          { key: 'date', label: 'Date', width: 14 },
+          { key: 'libelle', label: 'Libellé', width: 30 },
+          { key: 'montant', label: 'Montant', width: 16, type: 'money' },
+          { key: 'agreeur', label: "Nom de l'agréeur", width: 26 },
+          { key: 'source', label: 'Source', width: 20 },
+          { key: 'secteur', label: 'Secteur', width: 20 }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', montant: rows.reduce((s, r) => s + r.montant, 0) }
+      }]
+    })
+  }
 
   // Suggestions de catégories : catégories prédéfinies + celles déjà saisies par les utilisateurs.
   const categorieSuggestions = useMemo(() => {
@@ -201,33 +254,55 @@ export default function Depenses() {
     }
   }
 
-  // Crée une nouvelle dépense en appliquant le circuit d'autorisation :
-  //  • imprévue (hors budget) OU montant > SEUIL_APPROBATION_PAU → demande envoyée au PAU
-  //    (statut « en attente ») ;
-  //  • sinon → décaissée immédiatement.
+  // Raison pour laquelle une dépense (E-DÉPENSES uniquement — E-G.Pro a son propre
+  // circuit via les besoins) devient une demande d'autorisation, ou null si aucune.
+  // Utilisée à la fois pour la soumission et pour l'indication en direct dans le
+  // formulaire, afin que l'utilisateur le voie avant même d'enregistrer.
+  function raisonAutorisation(d) {
+    const montant = Number(d.montant) || 0
+    if (d.imprevue) return 'dépense imprévue'
+    if (montant > SEUIL_APPROBATION_PAU) return `dépasse ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA`
+    const restant = budgetRestantSecteur(budgets, depenses, d.secteurId, d.date)
+    if (restant !== null && montant > restant) return `dépasse le budget restant du secteur (${restant.toLocaleString('fr-FR')} FCFA)`
+    return null
+  }
+
+  // Crée une nouvelle dépense en appliquant le circuit d'autorisation : imprévue, ou
+  // montant > seuil, ou montant > budget restant du secteur → demande envoyée au PAU
+  // (statut « en attente ») ; sinon → décaissée immédiatement.
   // Utilisé aussi bien pour la saisie unitaire que pour l'ajout multiple (lot).
   async function soumettreNouvelleDepense(d) {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     const id = genId()
     const montant = Number(d.montant) || 0
-    const grosseDepense = montant > SEUIL_APPROBATION_PAU
-    const statutInitial = (d.imprevue || grosseDepense) ? 'en_attente' : 'decaissee'
+    const raison = raisonAutorisation(d)
+    const statutInitial = raison ? 'en_attente' : 'decaissee'
     const depenseFinale = { ...d, id, montant, statut: statutInitial, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
     await setItem('depense_depenses', id, depenseFinale)
-    await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${montant.toLocaleString('fr-FR')} FCFA${grosseDepense ? ' (> seuil → demande PAU)' : ''}${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, categorie: d.categorie, montant, imprevue: !!d.imprevue, grosseDepense, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
+    await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
     if (statutInitial === 'en_attente') {
       // Demande d'autorisation → alerte le PAU (et le super admin) dans sa cloche + push.
       await notify({
         type: 'warning',
         title: `💰 Demande de décaissement — ${secteur?.label || d.secteurId}`,
-        body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · ${grosseDepense ? `dépasse ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA` : 'dépense imprévue'}. En attente de votre autorisation.`,
+        body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · ${raison}. En attente de votre autorisation.`,
         module: 'depense', forRoles: ['pau', 'super_admin'], excludeUid: user?.uid, link: '/depense/autorisations'
       })
+      // Confirme aussi à la personne qui a saisi la dépense que sa demande est bien
+      // partie en autorisation, sans quoi elle n'apprend son sort qu'à la décision du PAU.
+      if (user?.uid) {
+        await notify({
+          type: 'info',
+          title: '⏳ Dépense envoyée en demande d\'autorisation',
+          body: `${montant.toLocaleString('fr-FR')} FCFA · ${secteur?.label || d.secteurId} — ${raison}. En attente de la décision du PAU.`,
+          module: 'depense', forUsers: [user.uid], link: '/depense/autorisations'
+        })
+      }
     } else {
       await notifierBeneficiaire(depenseFinale, secteur?.label || d.secteurId)
     }
     await alerterSiDepassement(depenseFinale, secteur)
-    return { statutInitial, grosseDepense }
+    return { statutInitial }
   }
 
   async function handleSave() {
@@ -241,12 +316,10 @@ export default function Depenses() {
     setSaving(true)
     try {
       if (modal.isNew) {
-        const { statutInitial, grosseDepense } = await soumettreNouvelleDepense(d)
+        const { statutInitial } = await soumettreNouvelleDepense(d)
         toast.success(
           statutInitial === 'en_attente'
-            ? (grosseDepense
-                ? `Dépense supérieure à ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA — demande envoyée au PAU pour autorisation ✓`
-                : 'Demande de décaissement soumise — en attente d\'autorisation ✓')
+            ? 'Demande de décaissement soumise — en attente d\'autorisation ✓'
             : 'Dépense enregistrée ✓'
         )
       } else {
@@ -334,7 +407,7 @@ export default function Depenses() {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Une dépense <strong>imprévue</strong> (hors budget), ou toute dépense <strong>supérieure à {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong>, devient automatiquement une <strong>demande envoyée au PAU</strong> et passe par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget du secteur.
+        <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Elle devient quand même une <strong>demande envoyée au PAU</strong> si elle est <strong>imprévue</strong> (hors budget), si son montant dépasse <strong>{SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong>, ou si elle dépasse le <strong>budget restant du secteur</strong> ce mois-ci — et passe alors par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget.
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -350,6 +423,8 @@ export default function Depenses() {
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
           <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
+            min={restreintMoisCourant ? moisPrecedentStr : undefined}
+            max={restreintMoisCourant ? moisCourantStr : undefined}
             className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <div>
@@ -382,6 +457,7 @@ export default function Depenses() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
+          <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
           {!lectureSeule && <Button variant="outline" onClick={openLot}><Layers size={16} /> Ajout multiple</Button>}
           {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
         </div>
@@ -577,7 +653,7 @@ export default function Depenses() {
                   ))}
                 </div>
               </FormGroup>
-              <FormGroup label="Source de financement" hint="Qui a payé : la trésorerie de l'entreprise ou l'apport personnel du PAU. (Traçabilité — n'affecte pas les calculs.)">
+              <FormGroup label="Source de financement" hint="Qui a payé : la trésorerie de l'entreprise ou l'apport personnel du PAU. Un apport du PAU compte comme un revenu du secteur (Bilan/Rentabilité), en plus de rester une dette à lui rembourser.">
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => (
                     <button key={k} type="button" onClick={() => set('sourceFinancement', k)}
@@ -593,13 +669,21 @@ export default function Depenses() {
                   <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
                     <label className="flex cursor-pointer items-start gap-2 text-sm">
                       <input type="radio" name="type-depense" checked={!modal.data.imprevue} onChange={() => set('imprevue', false)} className="mt-0.5" />
-                      <span><strong>Prévue</strong> — déjà budgétée, comptée immédiatement (pas d'autorisation nécessaire)</span>
+                      <span><strong>Prévue</strong> — déjà budgétée, comptée immédiatement (sauf montant trop élevé, voir ci-dessous)</span>
                     </label>
                     <label className="flex cursor-pointer items-start gap-2 text-sm">
                       <input type="radio" name="type-depense" checked={!!modal.data.imprevue} onChange={() => set('imprevue', true)} className="mt-0.5" />
                       <span><strong>Imprévue</strong> — hors budget, passe par l'autorisation de décaissement</span>
                     </label>
                   </div>
+                  {(() => {
+                    const raison = raisonAutorisation(modal.data)
+                    return raison ? (
+                      <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">
+                        💰 Cette dépense sera envoyée en demande d'autorisation au PAU — {raison}.
+                      </p>
+                    ) : null
+                  })()}
                 </FormGroup>
               )}
               <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
@@ -695,7 +779,7 @@ export default function Depenses() {
         {lot && (
           <div className="space-y-3">
             <p className="rounded-xl border border-amber-200/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
-              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Toute ligne <strong>supérieure à {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong> devient une <strong>demande envoyée au PAU</strong> pour autorisation.
+              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Une ligne devient une <strong>demande envoyée au PAU</strong> si elle est cochée <strong>imprévue</strong>, si le montant dépasse {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA, ou si elle dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
             </p>
 
             <div className="hidden gap-2 px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 sm:grid sm:grid-cols-12">
@@ -703,13 +787,14 @@ export default function Depenses() {
               <span className="sm:col-span-2">Catégorie</span>
               <span className="sm:col-span-2">Montant</span>
               <span className="sm:col-span-2">Date</span>
-              <span className="sm:col-span-2">Description</span>
+              <span className="sm:col-span-1">Description</span>
+              <span className="sm:col-span-1">Imprévue</span>
               <span className="sm:col-span-1" />
             </div>
 
             <div className="space-y-2">
               {lot.map((r, i) => {
-                const versPau = Number(r.montant) > SEUIL_APPROBATION_PAU
+                const raison = raisonAutorisation(r)
                 return (
                   <div key={i} className="grid grid-cols-2 items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 sm:grid-cols-12">
                     <div className="sm:col-span-3">
@@ -726,13 +811,16 @@ export default function Depenses() {
                     </div>
                     <div className="sm:col-span-2">
                       <Input type="number" min="0" value={r.montant} onChange={(e) => setLigne(i, 'montant', e.target.value)} placeholder="0" />
-                      {versPau && <span className="mt-0.5 block text-[10px] font-semibold text-violet-600">→ demande PAU</span>}
+                      {raison && <span className="mt-0.5 block text-[10px] font-semibold text-violet-600">→ demande PAU</span>}
                     </div>
                     <div className="sm:col-span-2">
                       <Input type="date" value={r.date} onChange={(e) => setLigne(i, 'date', e.target.value)} />
                     </div>
-                    <div className="col-span-2 sm:col-span-2">
+                    <div className="col-span-2 sm:col-span-1">
                       <Input value={r.description} onChange={(e) => setLigne(i, 'description', e.target.value)} placeholder="(optionnel)" />
+                    </div>
+                    <div className="flex items-center justify-center sm:col-span-1" title="Dépense imprévue → demande envoyée au PAU">
+                      <input type="checkbox" checked={!!r.imprevue} onChange={(e) => setLigne(i, 'imprevue', e.target.checked)} />
                     </div>
                     <div className="col-span-2 flex justify-end sm:col-span-1 sm:justify-center">
                       <button type="button" onClick={() => retirerLigne(i)} disabled={lot.length <= 1}

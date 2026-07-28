@@ -6,12 +6,14 @@ import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import PiecesJointes from '../../shared/ui/PiecesJointes'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem, updateItem, addItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, UNITES_SUPERFICIE, uniteSuperficie } from './data'
 import { SECTEURS as SECTEURS_DEPENSE } from '../depense/data'
+import { SECTEUR_PAR_TYPE_PROJET } from '../depense/logic'
 import { avancementProjet, genererNumProjet, projetsVisibles } from './logic'
-import { formatDateShort, formatMoney, formatDateTime } from '../../utils/formatters'
+import { formatDateShort, formatMoney, formatDateTime, genId, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { ROLES } from '../../core/roles'
@@ -197,18 +199,30 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha' }
+const VIDE = { nom: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha', pourClient: true, clientNom: '', montantContrat: '', usageInterne: '', versementMontant: '', versementDate: '' }
 
 // Couleur d'accent (barre latérale de la carte) selon le statut du projet.
 const STATUT_ACCENT = { planification: '#3b82f6', en_cours: '#f59e0b', en_pause: '#94a3b8', termine: '#16a34a', annule: '#dc2626' }
 // Emoji illustrant le type de projet.
 const TYPE_EMOJI = { construction: '🏗️', amenagement: '🌳', informatique: '💻', agricole: '🌱', elevage: '🐄', commercial: '📈', evenementiel: '🎪', autre: '📦' }
+// Style des boutons de choix (priorité, unité…) selon le ton associé — cohérent avec Badge.
+const TONE_BOUTON = {
+  neutral: 'border-gray-400 bg-gray-50 text-gray-800',
+  info:    'border-sky-400 bg-sky-50 text-sky-800',
+  warning: 'border-amber-400 bg-amber-50 text-amber-800',
+  danger:  'border-red-400 bg-red-50 text-red-800'
+}
+// Secteur E-DÉPENSES concerné par un projet — même priorité que la passerelle réelle
+// (depensesProjetVersSecteurs) : secteur explicite en premier, sinon déduit du type.
+const secteurEffectif = (p) =>
+  SECTEURS_DEPENSE.find((s) => s.id === (p.secteurId || SECTEUR_PAR_TYPE_PROJET[p.type] || 'divers'))
 
 export default function Projets() {
   const { data: projetsTous }  = useCollection('projets')
   const { data: taches }       = useCollection('projet_taches')
   const { data: depenses }     = useCollection('projet_depenses')
   const { data: commentaires } = useCollection('projet_commentaires')
+  const { data: versementsClientTous } = useCollection('projet_versements_client')
   const { data: users }        = useCollection('users')
   const [generatingPdf, setGeneratingPdf] = useState(null)
   const { user, role }    = useAuthStore()
@@ -227,6 +241,15 @@ export default function Projets() {
     depenses.forEach((d) => { if (d.projetId) map[d.projetId] = (map[d.projetId] || 0) + (Number(d.montant) || 0) })
     return map
   }, [depenses])
+
+  // Total reçu du client par projet — versements enregistrés dans la fiche du projet.
+  const recuParProjet = useMemo(() => {
+    const map = {}
+    versementsClientTous.forEach((v) => { if (v.projetId) map[v.projetId] = (map[v.projetId] || 0) + (Number(v.montant) || 0) })
+    return map
+  }, [versementsClientTous])
+  const versementsDuProjet = (projetId) =>
+    versementsClientTous.filter((v) => v.projetId === projetId).sort((a, b) => (b.date || 0) - (a.date || 0))
   useEffect(() => { marquerVoletVu(user?.uid, 'projetProjets') }, [user?.uid])
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState(VIDE)
@@ -237,7 +260,7 @@ export default function Projets() {
   const searchRef = useRef(null)
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreResponsable, setFiltreResponsable] = useState('')
-  const [tri, setTri]               = useState('date_desc')
+  const [filtreSecteur, setFiltreSecteur] = useState('')
   const [mesProjets, setMesProjets] = useState(false)
   const [detail, setDetail]         = useState(null)
   const [commTexte, setCommTexte]   = useState('')
@@ -286,6 +309,39 @@ export default function Projets() {
     } finally { setRevSaving(false) }
   }
 
+  // Versements reçus du client — chaque versement est une écriture indépendante (comme les
+  // versements aux prestataires dans Tâches), pour garder l'historique complet des paiements.
+  const [versementForm, setVersementForm] = useState(null) // { projetId, montant, date, note } quand ouvert
+  const [versSaving, setVersSaving]        = useState(false)
+
+  const ouvrirVersementClient = (p) => setVersementForm({ projetId: p.id, montant: '', date: todayStr(), note: '' })
+
+  const confirmerVersementClient = async () => {
+    if (!versementForm) return
+    const montant = Number(versementForm.montant)
+    if (!montant || montant <= 0) return
+    setVersSaving(true)
+    try {
+      const id = genId()
+      await setItem('projet_versements_client', id, {
+        id, projetId: versementForm.projetId, montant,
+        date: versementForm.date ? new Date(versementForm.date).getTime() : Date.now(),
+        note: versementForm.note.trim(),
+        enregistrePar: user?.nom || user?.login || null, enregistreParUid: user?.uid || null,
+        createdAt: Date.now()
+      })
+      const projetNom = projets.find((p) => p.id === versementForm.projetId)?.nom || ''
+      await audit('projet', 'projet_versement_client', `${montant.toLocaleString('fr-FR')} FCFA reçus — ${projetNom}`)
+      setVersementForm(null)
+    } finally { setVersSaving(false) }
+  }
+
+  const supprimerVersementClient = async (v) => {
+    if (!window.confirm(`Supprimer ce versement de ${formatMoney(v.montant)} ?`)) return
+    await removeItem('projet_versements_client', v.id)
+    await audit('projet', 'projet_versement_client_supprime', `${formatMoney(v.montant)} — ${v.id}`)
+  }
+
   const nomConnecte = user?.nom || user?.login || ''
 
   // Suggestions de recherche — liste des projets déjà inscrits correspondant à la saisie.
@@ -307,34 +363,16 @@ export default function Projets() {
     [...new Set(projets.map((p) => p.responsable).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
   [projets])
 
-  const liste = useMemo(() => {
-    let result = projets
+  const liste = useMemo(() => projets
       .filter((p) => (!search || p.nom?.toLowerCase().includes(search.toLowerCase()) || p.num?.includes(search)))
       .filter((p) => !filtreStatut || p.statut === filtreStatut)
       .filter((p) => !filtreResponsable || p.responsable === filtreResponsable)
+      .filter((p) => !filtreSecteur || secteurEffectif(p)?.id === filtreSecteur)
       .filter((p) => !mesProjets || !nomConnecte || p.responsable === nomConnecte)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+  [projets, search, filtreStatut, filtreResponsable, filtreSecteur, mesProjets, nomConnecte])
 
-    switch (tri) {
-      case 'nom_asc':    result = [...result].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')); break
-      case 'nom_desc':   result = [...result].sort((a, b) => (b.nom || '').localeCompare(a.nom || '')); break
-      case 'date_desc':  result = [...result].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); break
-      case 'date_asc':   result = [...result].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); break
-      case 'fin_asc':    result = [...result].sort((a, b) => (a.dateFin || Infinity) - (b.dateFin || Infinity)); break
-      case 'priorite':   result = [...result].sort((a, b) => {
-        const ordre = { critique: 0, haute: 1, normale: 2, basse: 3 }
-        return (ordre[a.priorite] ?? 9) - (ordre[b.priorite] ?? 9)
-      }); break
-      case 'avancement': result = [...result].sort((a, b) => {
-        const pctA = avancementProjet(taches.filter((t) => t.projetId === a.id), a)
-        const pctB = avancementProjet(taches.filter((t) => t.projetId === b.id), b)
-        return pctB - pctA
-      }); break
-      case 'budget_desc': result = [...result].sort((a, b) => (Number(b.budget) || 0) - (Number(a.budget) || 0)); break
-    }
-    return result
-  }, [projets, taches, search, filtreStatut, filtreResponsable, tri, mesProjets, nomConnecte])
-
-  const openCreate = () => { setForm(VIDE); setEditing(null); setModal(true) }
+  const openCreate = () => { setForm({ ...VIDE, versementDate: todayStr() }); setEditing(null); setModal(true) }
   const openEdit   = (p) => {
     setForm({
       nom: p.nom || '', type: p.type || 'autre', secteurId: p.secteurId || '', statut: p.statut || 'planification',
@@ -344,45 +382,79 @@ export default function Projets() {
       dateFin:   p.dateFin   ? new Date(p.dateFin).toISOString().slice(0,10)   : '',
       dureeIndeterminee: !!p.dureeIndeterminee,
       budget: p.budget ?? '', description: p.description || '',
-      superficie: p.superficie ?? '', superficieUnite: p.superficieUnite || 'ha'
+      superficie: p.superficie ?? '', superficieUnite: p.superficieUnite || 'ha',
+      // Projets déjà créés avant l'ajout de ce champ : traités comme « client » par défaut
+      // (cas majoritaire) — seule la valeur explicitement à false reste « entreprise ».
+      pourClient: p.pourClient !== false, clientNom: p.clientNom || '',
+      // Repli sur l'ancien champ « budget » pour les projets client créés avant la fusion
+      // des deux montants, afin que le champ ne semble pas vide alors qu'un montant existe déjà.
+      montantContrat: (p.montantContrat ?? (p.pourClient !== false ? p.budget : null)) ?? '',
+      usageInterne: p.usageInterne || '',
+      versementMontant: '', versementDate: todayStr()
     })
     setEditing(p)
     setModal(true)
   }
 
-  // Le budget est optionnel — un projet peut être créé avant que le budget soit établi.
-  // S'il est saisi, il doit être positif.
-  const budgetValide = form.budget === '' || Number(form.budget) > 0
+  // Le budget/montant du contrat est optionnel — un projet peut être créé avant qu'il soit
+  // établi. S'il est saisi, il doit être positif. Pour un projet client, un seul montant est
+  // saisi (« Montant du contrat ») et sert à la fois de budget de dépense et de somme due par
+  // le client — c'est le même argent (cf. échange avec l'utilisateur, pas deux montants distincts).
+  const budgetValide  = form.pourClient  || form.budget === ''         || Number(form.budget) > 0
+  const contratValide = !form.pourClient || form.montantContrat === '' || Number(form.montantContrat) > 0
 
   const handleSave = async () => {
-    if (!form.nom.trim() || !budgetValide) return
+    if (!form.nom.trim() || !budgetValide || !contratValide) return
     setSaving(true)
     try {
       const now = Date.now()
+      const { versementMontant, versementDate, ...projetForm } = form
+      const montant = form.pourClient
+        ? (form.montantContrat !== '' ? Number(form.montantContrat) : null)
+        : (form.budget !== '' ? Number(form.budget) : null)
+      let projetId = editing?.id
       if (editing) {
         await setItem('projets', editing.id, {
           ...editing,
-          ...form,
+          ...projetForm,
           dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
           dateFin:   (!form.dureeIndeterminee && form.dateFin) ? new Date(form.dateFin).getTime() : null,
-          budget:   form.budget   !== '' ? Number(form.budget)   : null,
+          budget: montant,
+          montantContrat: form.pourClient ? montant : null,
           superficie: (form.type === 'agricole' && form.superficie !== '') ? Number(form.superficie) : null,
           updatedAt: now
         })
         await audit('projet', 'projet_modifie', `${form.nom} (${editing.id})`)
       } else {
         const num = genererNumProjet(projets.length + 1)
-        const id  = `prj_${now}`
-        await setItem('projets', id, {
-          id, num, ...form,
+        projetId = `prj_${now}`
+        await setItem('projets', projetId, {
+          id: projetId, num, ...projetForm,
           dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
           dateFin:   (!form.dureeIndeterminee && form.dateFin) ? new Date(form.dateFin).getTime() : null,
-          budget: form.budget !== '' ? Number(form.budget) : null,
+          budget: montant,
+          montantContrat: form.pourClient ? montant : null,
           superficie: (form.type === 'agricole' && form.superficie !== '') ? Number(form.superficie) : null,
           createdAt: now, updatedAt: now,
           createdBy: user?.uid || null
         })
         await audit('projet', 'projet_cree', `${form.nom} (${num})`)
+      }
+
+      // Versement optionnel du client — saisi en même temps que le montant du contrat,
+      // pour éviter de devoir rouvrir la fiche juste après création (comme dans Tâches).
+      const montantVerse = form.pourClient ? Number(versementMontant) || 0 : 0
+      if (montantVerse > 0) {
+        const versId = genId()
+        await setItem('projet_versements_client', versId, {
+          id: versId, projetId,
+          montant: montantVerse,
+          date: versementDate ? new Date(versementDate).getTime() : now,
+          note: '',
+          enregistrePar: user?.nom || user?.login || null, enregistreParUid: user?.uid || null,
+          createdAt: now
+        })
+        await audit('projet', 'projet_versement_client', `${montantVerse.toLocaleString('fr-FR')} FCFA reçus — ${form.nom}`)
       }
       setModal(false)
     } finally {
@@ -507,16 +579,10 @@ export default function Projets() {
         </select>
         <select
           className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
-          value={tri} onChange={(e) => setTri(e.target.value)}
+          value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}
         >
-          <option value="date_desc">Plus récent</option>
-          <option value="date_asc">Plus ancien</option>
-          <option value="nom_asc">Nom A → Z</option>
-          <option value="nom_desc">Nom Z → A</option>
-          <option value="fin_asc">Échéance proche</option>
-          <option value="priorite">Priorité</option>
-          <option value="avancement">Avancement ↓</option>
-          <option value="budget_desc">Budget ↓</option>
+          <option value="">Tous les secteurs</option>
+          {SECTEURS_DEPENSE.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
         {nomConnecte && (
           <button
@@ -580,6 +646,12 @@ export default function Projets() {
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
                           <span className="font-mono">{p.num}</span>
                           <span>· {TYPES_PROJET.find((t) => t.id === p.type)?.label || p.type}</span>
+                          {secteurEffectif(p) && (
+                            <span className="flex items-center gap-1">
+                              · <span className="h-2 w-2 rounded-full" style={{ background: secteurEffectif(p).color }} />
+                              {secteurEffectif(p).label}
+                            </span>
+                          )}
                         </div>
                         {p.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{p.description}</p>}
                       </div>
@@ -587,6 +659,11 @@ export default function Projets() {
 
                     {/* Méta : responsable, dates, superficie */}
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      {p.pourClient !== false
+                        ? (p.clientNom
+                            ? <span className="rounded-full bg-violet-50 px-2 py-0.5 font-medium text-violet-700">🧑‍💼 Client : {p.clientNom}</span>
+                            : <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">⚠ Client à préciser</span>)
+                        : <span className="rounded-full bg-teal-50 px-2 py-0.5 font-medium text-teal-700">🏢 {p.usageInterne ? `Entreprise : ${p.usageInterne}` : 'Projet entreprise'}</span>}
                       {p.responsable && <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">👤 {p.responsable}</span>}
                       {p.dateDebut && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">📅 {formatDateShort(p.dateDebut)}{!p.dureeIndeterminee && p.dateFin ? ` → ${formatDateShort(p.dateFin)}` : ''}</span>}
                       {p.dureeIndeterminee && <span className="rounded-full bg-gray-100 px-2 py-0.5 italic text-gray-400">Durée indéterminée</span>}
@@ -604,7 +681,7 @@ export default function Projets() {
                           <span className="text-gray-500">Reste <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
                         </div>
                         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200/70">
-                          <div className={`h-2 rounded-full transition-all ${pctBudget >= 100 ? 'bg-red-500' : pctBudget >= 80 ? 'bg-amber-500' : 'bg-teal-500'}`}
+                          <div className={`h-2 rounded-full transition-all ${reste <= 0 ? 'bg-red-500' : pctBudget >= 80 ? 'bg-amber-500' : 'bg-teal-500'}`}
                             style={{ width: `${Math.min(100, pctBudget)}%` }} />
                         </div>
                         {reste < 0 && (
@@ -695,10 +772,16 @@ export default function Projets() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Priorité</label>
-                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  value={form.priorite} onChange={(e) => setForm((f) => ({ ...f, priorite: e.target.value }))}>
-                  {Object.entries(PRIORITES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(PRIORITES).map(([k, v]) => (
+                    <button key={k} type="button" onClick={() => setForm((f) => ({ ...f, priorite: k }))}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                        form.priorite === k ? TONE_BOUTON[v.tone] : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}>
+                      {form.priorite === k ? '✓ ' : ''}{v.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -740,11 +823,13 @@ export default function Projets() {
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="block text-xs font-medium text-gray-600">Date fin prévue</label>
-                  <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                    <input type="checkbox" checked={form.dureeIndeterminee}
-                      onChange={(e) => setForm((f) => ({ ...f, dureeIndeterminee: e.target.checked, dateFin: e.target.checked ? '' : f.dateFin }))} />
-                    Durée indéterminée
-                  </label>
+                  <button type="button"
+                    onClick={() => setForm((f) => ({ ...f, dureeIndeterminee: !f.dureeIndeterminee, dateFin: !f.dureeIndeterminee ? '' : f.dateFin }))}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      form.dureeIndeterminee ? 'border-teal-400 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                    }`}>
+                    {form.dureeIndeterminee ? '✓ ' : ''}♾️ Durée indéterminée
+                  </button>
                 </div>
                 <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 disabled:bg-gray-50 disabled:text-gray-400"
                   disabled={form.dureeIndeterminee}
@@ -761,10 +846,17 @@ export default function Projets() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-600">Unité</label>
-                  <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                    value={form.superficieUnite} onChange={(e) => setForm((f) => ({ ...f, superficieUnite: e.target.value }))}>
-                    {Object.entries(UNITES_SUPERFICIE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
+                  <ChampAutocomplete
+                    value={form.superficieUnite}
+                    onChange={(v) => setForm((f) => ({ ...f, superficieUnite: v }))}
+                    suggestions={Object.values(UNITES_SUPERFICIE)}
+                    getLabel={(v) => v.label}
+                    onSelect={(v) => setForm((f) => ({ ...f, superficieUnite: v.court }))}
+                    placeholder="ex : ha, a, m²…"
+                    accent="green"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">Choisis une suggestion ou tape une unité libre (ex : acre, planche…).</p>
                 </div>
               </div>
             )}
@@ -774,14 +866,87 @@ export default function Projets() {
           <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
             <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">💰 Budget & description</p>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Budget prévu (FCFA)</label>
-              <input type="number" min="0"
-                placeholder="Laisser vide si le budget n'est pas encore établi"
-                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.budget !== '' && !budgetValide ? 'border-red-300' : 'border-gray-200'}`}
-                value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
-              {form.budget !== '' && !budgetValide
-                ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
-                : <p className="mt-1 text-[11px] text-gray-400">Optionnel — peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
+              <label className="mb-1 block text-xs font-medium text-gray-600">Ce projet est…</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: true,  label: '🧑‍💼 Pour un client' },
+                  { id: false, label: '🏢 Pour l\'entreprise' }
+                ].map((opt) => (
+                  <button key={String(opt.id)} type="button"
+                    onClick={() => setForm((f) => ({
+                      ...f, pourClient: opt.id,
+                      clientNom: opt.id ? f.clientNom : '',
+                      montantContrat: opt.id ? f.montantContrat : '',
+                      usageInterne: opt.id ? '' : f.usageInterne
+                    }))}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      form.pourClient === opt.id
+                        ? (opt.id ? 'border-violet-400 bg-violet-50 text-violet-800' : 'border-teal-400 bg-teal-50 text-teal-800')
+                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                    }`}>
+                    {form.pourClient === opt.id ? '✓ ' : ''}{opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">
+                {form.pourClient
+                  ? 'Les dépenses de ce projet seront classées en Exploitation dans E-DÉPENSES (charge courante, en face du revenu du client).'
+                  : 'Projet pour l\'entreprise elle-même — les dépenses seront classées en Investissement dans E-DÉPENSES.'}
+              </p>
+              {form.pourClient && (
+                <input className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="Nom du client"
+                  value={form.clientNom} onChange={(e) => setForm((f) => ({ ...f, clientNom: e.target.value }))} />
+              )}
+              {!form.pourClient && (
+                <input className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="Usage interne (ex : Entrepôt Lomé, Véhicule flotte…)"
+                  value={form.usageInterne} onChange={(e) => setForm((f) => ({ ...f, usageInterne: e.target.value }))} />
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                {form.pourClient ? 'Montant du contrat (FCFA)' : 'Budget prévu (FCFA)'}
+              </label>
+              {form.pourClient ? (
+                <>
+                  <input type="number" min="0"
+                    placeholder="Somme convenue avec le client — laisser vide si pas encore chiffrée"
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantContrat !== '' && !contratValide ? 'border-red-300' : 'border-gray-200'}`}
+                    value={form.montantContrat} onChange={(e) => setForm((f) => ({ ...f, montantContrat: e.target.value }))} />
+                  {form.montantContrat !== '' && !contratValide
+                    ? <p className="mt-1 text-[11px] text-red-500">Le montant du contrat doit être supérieur à 0.</p>
+                    : <p className="mt-1 text-[11px] text-gray-400">C'est à la fois ce que le client doit payer et le budget de dépense du chantier.</p>}
+
+                  <label className="mb-1 mt-3 block text-xs font-medium text-gray-600">
+                    {editing ? 'Nouveau versement reçu (FCFA)' : 'Montant déjà déposé par le client (FCFA)'}
+                    <span className="ml-1 font-normal text-gray-400">(optionnel)</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="number" min="0"
+                      placeholder="0"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      value={form.versementMontant} onChange={(e) => setForm((f) => ({ ...f, versementMontant: e.target.value }))} />
+                    <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      value={form.versementDate} onChange={(e) => setForm((f) => ({ ...f, versementDate: e.target.value }))} />
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {editing
+                      ? "Renseigne un montant pour enregistrer un nouveau versement reçu du client, en plus de ceux déjà reçus. Laisse à 0 (ou vide) si rien de nouveau."
+                      : "Le client peut déposer une partie ou la totalité de la somme dès la création du projet — laisse à 0 (ou vide) s'il n'a encore rien versé."}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <input type="number" min="0"
+                    placeholder="Laisser vide si le budget n'est pas encore établi"
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.budget !== '' && !budgetValide ? 'border-red-300' : 'border-gray-200'}`}
+                    value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
+                  {form.budget !== '' && !budgetValide
+                    ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
+                    : <p className="mt-1 text-[11px] text-gray-400">Optionnel — peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
+                </>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
@@ -791,7 +956,7 @@ export default function Projets() {
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.nom.trim() || !budgetValide}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
+            <Button onClick={handleSave} disabled={saving || !form.nom.trim() || !budgetValide || !contratValide}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
           </div>
         </div>
       </Modal>
@@ -810,6 +975,14 @@ export default function Projets() {
           const coutParUnite = (d.type === 'agricole' && superficie > 0 && depense > 0) ? depense / superficie : null
           const pct = avancementProjet(tachesDuProjet, { ...d, depenses: depense })
           const typeLabel = TYPES_PROJET.find((t) => t.id === d.type)?.label || d.type || '—'
+          // Repli sur l'ancien champ « budget » pour les projets client enregistrés avant la
+          // fusion des deux montants, tant qu'ils n'ont pas été réenregistrés.
+          const contrat  = Number(d.pourClient !== false ? (d.montantContrat ?? d.budget) : d.montantContrat) || 0
+          const recu     = recuParProjet[d.id] || 0
+          const resteDu  = contrat - recu
+          const pctRecu  = contrat > 0 ? Math.min(100, Math.round((recu / contrat) * 100)) : 0
+          const marge    = contrat > 0 ? contrat - depense : null
+          const versements = versementsDuProjet(d.id)
 
           return (
             <div className="space-y-4">
@@ -830,6 +1003,21 @@ export default function Projets() {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-gray-500">Type : </span><span className="font-semibold">{typeLabel}</span></div>
+                <div>
+                  <span className="text-gray-500">Secteur : </span>
+                  <span className="font-semibold">
+                    {secteurEffectif(d) && <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: secteurEffectif(d).color }} />}
+                    {secteurEffectif(d)?.label || '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">{d.pourClient !== false ? 'Client : ' : 'Bénéficiaire : '}</span>
+                  {d.pourClient !== false
+                    ? (d.clientNom
+                        ? <span className="font-semibold">{d.clientNom}</span>
+                        : <span className="font-semibold text-amber-600">⚠ À préciser</span>)
+                    : <span className="font-semibold">{d.usageInterne || "Projet pour l'entreprise"}</span>}
+                </div>
                 <div><span className="text-gray-500">Responsable : </span><span className="font-semibold">{d.responsable || '—'}</span></div>
                 <div><span className="text-gray-500">Début : </span><span className="font-semibold">{d.dateDebut ? formatDateShort(d.dateDebut) : '—'}</span></div>
                 <div>
@@ -858,6 +1046,55 @@ export default function Projets() {
                 </div>
               )}
 
+              {/* Suivi du client — montant du contrat, versements reçus, marge */}
+              {d.pourClient !== false && (contrat > 0 || versements.length > 0) && (
+                <div className="rounded-2xl border border-violet-100/70 bg-violet-50/60 p-3.5 shadow-sm backdrop-blur-sm">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase text-violet-700">💰 Suivi du client</p>
+                    {!lectureSeule && (
+                      <button onClick={() => ouvrirVersementClient(d)}
+                        className="rounded-lg border border-violet-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-violet-700 shadow-sm transition-all duration-200 hover:bg-violet-50 hover:shadow-[0_0_14px_2px_rgba(124,58,237,0.45)]">
+                        + Versement reçu
+                      </button>
+                    )}
+                  </div>
+                  {contrat > 0 ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                        <span className="text-gray-500">Contrat : <b className="text-gray-700">{formatMoney(contrat)}</b></span>
+                        <span className="text-gray-500">Reçu : <b className="text-violet-700">{formatMoney(recu)}</b></span>
+                        <span className="text-gray-500">Reste dû : <b className={resteDu > 0 ? 'text-amber-600' : 'text-green-600'}>{formatMoney(resteDu > 0 ? resteDu : 0)}</b></span>
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-gray-200/70">
+                        <div className={`h-1.5 rounded-full transition-all ${resteDu <= 0 ? 'bg-green-500' : 'bg-violet-500'}`} style={{ width: `${pctRecu}%` }} />
+                      </div>
+                      {marge !== null && (
+                        <p className={`mt-2 text-xs font-bold ${marge >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          Marge (contrat − dépenses du chantier) : {marge >= 0 ? '+' : ''}{formatMoney(marge)}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500">Montant du contrat non renseigné — édite le projet pour le préciser. {recu > 0 && `Déjà reçu : ${formatMoney(recu)}.`}</p>
+                  )}
+                  {versements.length > 0 && (
+                    <div className="mt-3 space-y-1.5 border-t border-violet-100 pt-2">
+                      <p className="text-xs font-semibold text-gray-500">Versements reçus</p>
+                      {versements.map((v) => (
+                        <div key={v.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
+                          <span className="text-gray-500">{formatDateShort(v.date)}</span>
+                          {v.note && <span className="min-w-0 flex-1 truncate text-gray-500 italic">« {v.note} »</span>}
+                          <span className="font-mono font-bold text-gray-700">{formatMoney(v.montant)}</span>
+                          {!lectureSeule && (
+                            <button onClick={() => supprimerVersementClient(v)} className="text-gray-300 hover:text-red-500"><Trash2 size={13} /></button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Suivi budgétaire */}
               {budget > 0 && (
                 <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3.5 shadow-sm backdrop-blur-sm">
@@ -874,7 +1111,7 @@ export default function Projets() {
                     <span className="text-gray-500">Reste : <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
                   </div>
                   <div className="mt-2 h-1.5 rounded-full bg-gray-200/70">
-                    <div className={`h-1.5 rounded-full transition-all ${pctBudget >= 100 ? 'bg-red-500' : 'bg-amber-500'}`}
+                    <div className={`h-1.5 rounded-full transition-all ${reste <= 0 ? 'bg-red-500' : 'bg-amber-500'}`}
                       style={{ width: `${Math.min(100, pctBudget)}%` }} />
                   </div>
                   {reste < 0 && (
@@ -1012,6 +1249,37 @@ export default function Projets() {
               <Button variant="ghost" onClick={() => setRevision(null)}>Annuler</Button>
               <Button onClick={confirmerRevision} disabled={revSaving || !revMontant || Number(revMontant) <= 0 || !revMotif.trim()}>
                 {revSaving ? 'Enregistrement…' : 'Confirmer la révision'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Versement reçu du client */}
+      <Modal open={!!versementForm} onClose={() => setVersementForm(null)} title="Versement reçu du client" size="sm">
+        {versementForm && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Montant reçu (FCFA) *</label>
+              <input type="number" min="0" autoFocus
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                value={versementForm.montant} onChange={(e) => setVersementForm((f) => ({ ...f, montant: e.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Date</label>
+              <input type="date" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                value={versementForm.date} onChange={(e) => setVersementForm((f) => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Note (optionnel)</label>
+              <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                placeholder="ex : Acompte, solde final…"
+                value={versementForm.note} onChange={(e) => setVersementForm((f) => ({ ...f, note: e.target.value }))} />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setVersementForm(null)}>Annuler</Button>
+              <Button onClick={confirmerVersementClient} disabled={versSaving || !versementForm.montant || Number(versementForm.montant) <= 0}>
+                {versSaving ? 'Enregistrement…' : 'Enregistrer'}
               </Button>
             </div>
           </div>

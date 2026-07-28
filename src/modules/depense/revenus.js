@@ -1,5 +1,6 @@
 // Agrège les revenus RÉELLEMENT réalisés dans les autres modules, par secteur et par mois.
 // Lecture seule : aucune écriture croisée, on ne fait que sommer des collections existantes.
+import { revenuPauSecteurMois, revenuClientSecteurMois, revenuManuelSecteurMois } from './logic'
 
 // Garderie : paiements mensuels (mois/annee) + paiements journaliers (date), montant réellement encaissé.
 export function revenuGarderie(paiements, annee, mois) {
@@ -37,11 +38,21 @@ export function revenuLogistique(factures, annee, mois) {
 // Secteurs pour lesquels un revenu réel est disponible ailleurs dans l'application.
 export const SECTEURS_AVEC_REVENU = ['garderie', 'agro', 'logistique', 'evenementiel']
 
-export function revenuSecteur(collections, secteurId, annee, mois) {
+// `depenses` (optionnel) : liste complète des dépenses du module — sert à retrouver l'apport
+// du PAU du secteur/mois (cf. revenuPauSecteurMois). `versementsClientRoutes` (optionnel) :
+// versements clients des projets E-G.Pro déjà routés par secteur (cf. versementsClientVersSecteurs)
+// — sert à compter les paiements reçus des clients comme un revenu. `revenusManuels` (optionnel) :
+// revenus saisis à la main (cf. revenuManuelSecteurMois), pour les secteurs sans facturation
+// automatique. Sans eux, seul le revenu factures est retourné.
+export function revenuSecteur(collections, secteurId, annee, mois, depenses = [], versementsClientRoutes = [], revenusManuels = []) {
   const { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel } = collections
-  if (secteurId === 'garderie') return revenuGarderie(paiementsGarderie, annee, mois)
-  if (secteurId === 'agro') return revenuAgro(facturesAgro, annee, mois)
-  if (secteurId === 'logistique') return revenuLogistique(facturesLogistique, annee, mois)
-  if (secteurId === 'evenementiel') return revenuFactures(facturesEvenementiel, annee, mois)
-  return 0
+  let revenu = 0
+  if (secteurId === 'garderie') revenu = revenuGarderie(paiementsGarderie, annee, mois)
+  else if (secteurId === 'agro') revenu = revenuAgro(facturesAgro, annee, mois)
+  else if (secteurId === 'logistique') revenu = revenuLogistique(facturesLogistique, annee, mois)
+  else if (secteurId === 'evenementiel') revenu = revenuFactures(facturesEvenementiel, annee, mois)
+  return revenu
+    + revenuPauSecteurMois(depenses, secteurId, annee, mois)
+    + revenuClientSecteurMois(versementsClientRoutes, secteurId, annee, mois)
+    + revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois)
 }
