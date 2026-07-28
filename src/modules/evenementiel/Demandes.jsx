@@ -127,14 +127,16 @@ export default function Demandes() {
     else if (statut === 'certifie') {
       patch.certifiePar = user.nom; patch.certifieLe = horodate
       patch.dateDecision = horodate
+      patch.stockDecremente = true // idempotence : cf. AutoApproveWorkflow
       if (!d.approuveN1Par) { patch.approuveN1Par = user.nom; patch.approuveN1Le = horodate }
     } else { patch.refusePar = user.nom; patch.dateDecision = horodate }
     await updateItem('evenementiel_demandes', d.id, patch)
 
     if (statut === 'certifie') {
       await updateItem('evenementiel_ventes', d.venteId, { statut: 'autorisee' })
-      // Sortie autorisée : on décrémente le stock prêt (ou caillasses) des briques vendues.
-      const vente = ventes.find((v) => v.id === d.venteId)
+      // Sortie autorisée : on décrémente le stock prêt (ou caillasses) des briques
+      // vendues — sauf si le système l'a déjà fait (idempotence via stockDecremente).
+      const vente = !d.stockDecremente && ventes.find((v) => v.id === d.venteId)
       const maj = vente && retirerVenteDuStock(inventaires, vente)
       if (maj) {
         await setItem('evenementiel_inventaires', maj.date, {
