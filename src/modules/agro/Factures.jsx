@@ -132,6 +132,9 @@ export default function Factures() {
       } else {
         payload.numero = genNumero('FAC', factures.length)
         payload.createdBy = user.nom
+        // Distinct de `createdBy` (nom affiché) : identifiant stable pour cibler les
+        // notifications individuelles (forUsers attend un uid/login, pas un nom).
+        payload.createdByUid = user.uid || user.login || null
         payload.statut = 'brouillon'   // ← toute nouvelle facture démarre en brouillon
         await addItem('agro_factures', payload)
         await audit('agro', 'FACTURE', `${payload.numero} (brouillon) — ${formatMoney(totalTTC)}`)

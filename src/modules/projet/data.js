@@ -11,13 +11,16 @@ export const TYPES_PROJET = [
   { id: 'autre', label: 'Autre', description: 'Projet ne rentrant pas dans les catégories ci-dessus' }
 ]
 
-// Unités de superficie — projets agricoles (surface cultivée).
+// Unités de superficie — projets agricoles (surface cultivée). Suggestions de base ; le
+// champ de saisie (ChampAutocomplete) accepte aussi toute unité libre non listée ici.
 export const UNITES_SUPERFICIE = {
   ha:  { label: 'Hectares (ha)',      court: 'ha' },
   are: { label: 'Ares (a)',           court: 'a'  },
   m2:  { label: 'Mètres carrés (m²)', court: 'm²' }
 }
-export const uniteSuperficie = (u) => UNITES_SUPERFICIE[u]?.court || 'ha'
+// `u` peut être une ancienne clé (ha/are/m2) ou déjà le texte court d'une unité saisie
+// librement (ex: "acre", "planche") — dans ce cas on l'affiche telle quelle.
+export const uniteSuperficie = (u) => UNITES_SUPERFICIE[u]?.court || u || 'ha'
 
 export const STATUTS_PROJET = {
   planification: { label: 'Planification', tone: 'info' },

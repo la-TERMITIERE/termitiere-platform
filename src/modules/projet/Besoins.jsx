@@ -23,7 +23,7 @@ import { formatDateShort, formatDateTime, genId, todayStr } from '../../utils/fo
 import { STATUTS_PROJET, PRIORITES } from './data'
 import { marquerVoletVu } from './vues'
 import { projetsVisibles, scopeParProjets } from './logic'
-import { SECTEUR_PAR_TYPE_PROJET, NATURE_DEPENSE_PROJET } from '../depense/logic'
+import { SECTEUR_PAR_TYPE_PROJET, natureFluxProjet } from '../depense/logic'
 import { STATUTS_DECAISSEMENT } from '../depense/data'
 
 const CATEGORIES_BESOIN = [
@@ -262,8 +262,24 @@ export default function Besoins() {
 
   const handleDelete = async (b) => {
     if (!peutSupprimer) return
-    if (!window.confirm('Supprimer ce besoin ?')) return
+    // Un besoin validé a créé une demande de décaissement dans E-DÉPENSES — recherchée par
+    // b.depenseId (lien direct) ET par besoinId sur la dépense (lien inverse, toujours posé
+    // par creerDemandeDecaissement) pour ne pas manquer les besoins créés avant que le lien
+    // direct soit fiabilisé. Tant qu'elle est en_attente, elle disparaît avec le besoin. Dès
+    // qu'un approbateur l'a approuvée (ou a fortiori décaissée), elle devient un engagement
+    // réel — comme une dépense — et n'est plus supprimable depuis ici.
+    const decaissements = depenseDepensesTous.filter((d) => d.id === b.depenseId || (d.source === 'besoin' && d.besoinId === b.id))
+    if (decaissements.some((d) => d.statut !== 'en_attente')) {
+      toast.error('Cette demande a déjà été approuvée — elle est désormais un engagement réel dans E-DÉPENSES, impossible de la supprimer ici.')
+      return
+    }
+    const confirmMsg = decaissements.length
+      ? 'Supprimer ce besoin ? La demande de décaissement en attente dans E-DÉPENSES sera retirée aussi.'
+      : 'Supprimer ce besoin ?'
+    if (!window.confirm(confirmMsg)) return
+    for (const d of decaissements) await removeItem('depense_depenses', d.id)
     await removeItem('projet_besoins', b.id)
+    await audit('projet', 'besoin_supprime', b.titre)
   }
 
   const changerStatut = async (b, statut) => {
@@ -299,7 +315,7 @@ export default function Besoins() {
   // Valider un besoin crée AUSSITÔT une demande de décaissement dans E-DÉPENSES (même
   // circuit que toutes les autres dépenses : Autorisation de décaissement → secrétaire
   // approuve/décaisse). Une fois décaissée, elle apparaît naturellement partout : dans
-  // E-DÉPENSES (source de vérité), dans le secteur concerné (Recettes & Budget, qui lit
+  // E-DÉPENSES (source de vérité), dans le secteur concerné (Revenus & Budget, qui lit
   // directement depense_depenses par secteurId), et ici même dans E-G.Pro en lecture
   // seule (voir le volet Dépenses, qui reprend les dépenses `source: 'besoin'`).
   async function creerDemandeDecaissement(b) {
@@ -314,7 +330,7 @@ export default function Besoins() {
       date: todayStr(),
       description: [projet?.nom, tache?.titre, b.titre].filter(Boolean).join(' — '),
       noteOrigine: b.note || '',
-      natureFlux: NATURE_DEPENSE_PROJET,
+      natureFlux: natureFluxProjet(projet),
       sourceFinancement: 'entreprise',
       statut: 'en_attente',
       source: 'besoin', besoinId: b.id,
@@ -326,14 +342,23 @@ export default function Besoins() {
     return id
   }
 
+  // Destinataires d'une décision (validation/refus) : le demandeur ET le chef de projet
+  // concerné (souvent une personne différente, ex. un agent qui demande pour le compte
+  // du projet) — sans doublon ni auto-notification de la personne qui valide/refuse.
+  const destinatairesDecision = (b) => {
+    const projet = projets.find((p) => p.id === b.projetId)
+    return [...new Set([b.demandeParUid, projet?.responsableUid].filter((uid) => uid && uid !== user?.uid))]
+  }
+
   async function validerBesoin(b) {
     const depenseId = await creerDemandeDecaissement(b)
     await updateItem('projet_besoins', b.id, {
       validation: 'valide', valideParText: user?.nom || user?.login || '—', valideLe: Date.now(), depenseId
     })
     await audit('projet', 'besoin_valide', `${b.titre} — demande de décaissement créée (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
-    if (b.demandeParUid && b.demandeParUid !== user?.uid) {
-      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} — envoyé en autorisation de décaissement`, module: 'projet', forUsers: [b.demandeParUid], link: '/projet/besoins' }).catch(() => {})
+    const destinataires = destinatairesDecision(b)
+    if (destinataires.length) {
+      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} — envoyé en autorisation de décaissement`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
     }
     await notify({
       type: 'demande', title: '💰 Décaissement à traiter',
@@ -344,8 +369,9 @@ export default function Besoins() {
   async function refuserBesoin(b, motif = '') {
     await updateItem('projet_besoins', b.id, { validation: 'refuse', motifRefus: motif, statut: 'annule', refuseParText: user?.nom || user?.login || '—', refuseLe: Date.now() })
     await audit('projet', 'besoin_refuse', `${b.titre}${motif ? ' — ' + motif : ''}`)
-    if (b.demandeParUid && b.demandeParUid !== user?.uid) {
-      await notify({ type: 'refus', title: '❌ Besoin refusé', body: `${b.titre}${motif ? ' — ' + motif : ''}`, module: 'projet', forUsers: [b.demandeParUid], link: '/projet/besoins' }).catch(() => {})
+    const destinataires = destinatairesDecision(b)
+    if (destinataires.length) {
+      await notify({ type: 'refus', title: '❌ Besoin refusé', body: `${b.titre}${motif ? ' — ' + motif : ''}`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
     }
   }
   const demanderRefus = async (b) => {

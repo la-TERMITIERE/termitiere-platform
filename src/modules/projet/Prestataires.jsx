@@ -1,7 +1,8 @@
 // Annuaire des prestataires — dérivé de l'historique des tâches et dépenses de tous les projets.
 import { useState, useMemo } from 'react'
-import { Phone, Wrench, Wallet, FolderKanban, X, Trash2 } from 'lucide-react'
+import { Phone, Wrench, Wallet, FolderKanban, Trash2, Receipt } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem } from '../../core/db'
 import { safeKey } from '../../core/users'
@@ -113,45 +114,73 @@ export default function Prestataires() {
         </div>
       )}
 
-      {selection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setSelection(null)}>
-          <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/50 bg-white/90 p-5 shadow-[0_32px_64px_-16px_rgba(26,26,26,0.35)] backdrop-blur-xl backdrop-saturate-150" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-start justify-between">
-              <div>
-                <p className="text-lg font-bold text-gray-800">{selection.nom}</p>
-                <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
-                  {selection.metier && <span className="flex items-center gap-1"><Wrench size={12} />{metierLabel(selection.metier)}</span>}
-                  {selection.telephone && <span className="flex items-center gap-1"><Phone size={12} />{selection.telephone}</span>}
+      <Modal open={!!selection} onClose={() => setSelection(null)} title="Fiche prestataire"
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        {selection && (
+          <div className="space-y-4">
+            {/* En-tête glassmorphism — nom + coordonnées bien visibles */}
+            <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.92) 0%, rgba(15,84,80,0.88) 100%)' }}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg font-extrabold text-white shadow-sm backdrop-blur-sm">
+                  {selection.nom.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-extrabold leading-snug">{selection.nom}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {selection.metier && (
+                      <span className="flex items-center gap-1 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                        <Wrench size={11} />{metierLabel(selection.metier)}
+                      </span>
+                    )}
+                    {selection.telephone && (
+                      <span className="flex items-center gap-1 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                        <Phone size={11} />{selection.telephone}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <button onClick={() => setSelection(null)} className="rounded p-1 text-gray-400 hover:text-gray-700"><X size={16} /></button>
             </div>
 
-            <div className="mb-3 flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2">
-              <Wallet size={14} className="text-teal-600" />
-              <span className="text-sm font-bold text-teal-800">{formatMoney(selection.totalVerse)}</span>
-              <span className="text-xs text-teal-600">versés sur {selection.nbProjets} projet(s)</span>
-            </div>
-
-            <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Historique des paiements</p>
-            {!selection.paiements.length ? (
-              <p className="text-sm text-gray-400">Aucun paiement enregistré pour l'instant.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {selection.paiements.map((pmt, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2.5 text-sm">
-                    <div>
-                      <p className="font-medium text-gray-700">{pmt.projetNom || 'Projet inconnu'}</p>
-                      <p className="text-xs text-gray-400">{pmt.date ? formatDateShort(pmt.date) : '—'}</p>
-                    </div>
-                    <p className="font-mono font-semibold text-gray-700">{formatMoney(pmt.montant)}</p>
-                  </div>
-                ))}
+            {/* Total versé — mis en avant */}
+            <div className="rounded-2xl border border-teal-100/70 bg-white/70 p-4 shadow-sm backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-teal-700">
+                <Wallet size={13} /> Total versé
               </div>
-            )}
+              <p className="mt-1 text-2xl font-black leading-none text-gray-900">
+                {formatMoney(selection.totalVerse)}<span className="ml-1 text-xs font-bold text-gray-400">FCFA</span>
+              </p>
+              <p className="mt-1 text-[11px] text-gray-400">sur {selection.nbProjets} projet{selection.nbProjets > 1 ? 's' : ''}</p>
+            </div>
+
+            {/* Historique des paiements */}
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">
+                <Receipt size={13} /> Historique des paiements
+              </p>
+              {!selection.paiements.length ? (
+                <p className="rounded-2xl bg-white/60 py-6 text-center text-sm text-gray-400 backdrop-blur-sm">Aucun paiement enregistré pour l'instant.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {selection.paiements.map((pmt, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-2xl bg-white/80 px-3.5 py-2.5 text-sm shadow-sm backdrop-blur-sm transition-colors hover:bg-white">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                        <FolderKanban size={15} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-gray-700">{pmt.projetNom || 'Projet inconnu'}</p>
+                        <p className="text-xs text-gray-400">{pmt.date ? formatDateShort(pmt.date) : '—'}</p>
+                      </div>
+                      <p className="shrink-0 font-mono font-bold text-gray-800">{formatMoney(pmt.montant)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

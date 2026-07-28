@@ -61,9 +61,15 @@ export default function Sidebar({ open, onClose }) {
 
   // Filtre les liens de navigation selon le rôle (`roles`) et les permissions
   // par utilisateur (`perm`, ex. « partenaires » = accès donné par la direction).
-  const canSeeNav = (item) =>
-    (!item.roles || item.roles.includes(role)) &&
-    (!item.perm || (item.perm === 'partenaires' && canManagePartenaires(role, user)))
+  // Quand un item porte À LA FOIS `roles` ET `perm`, c'est une alternative (OU) : le
+  // rôle explicite donne accès même sans la permission individuelle — sert par exemple
+  // à donner l'onglet Partenaires (lecture seule) à un rôle précis dans un seul module,
+  // sans changer son accès dans les autres modules ni toucher au reste des permissions.
+  const canSeeNav = (item) => {
+    if (item.roles && item.roles.includes(role)) return true
+    if (item.perm === 'partenaires' && canManagePartenaires(role, user)) return true
+    return !item.roles && !item.perm
+  }
   let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
 
   // Maxi Logistique : la nav intra-module n'a de sens qu'à l'intérieur d'un site.

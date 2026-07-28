@@ -8,7 +8,7 @@ export const SECTEURS = [
   { id: 'bat',          label: 'MAXI BAT',           color: '#0d9488' },
   { id: 'evenementiel', label: 'BRIQUETERIE',        color: '#7c3aed' },
   { id: 'garderie',     label: 'GARDERIE',           color: '#E8390E' },
-  { id: 'divers',       label: 'DIVERS / HORS SECTEUR', color: '#64748b' }
+  { id: 'divers',       label: 'HORS SECTEUR', color: '#64748b' }
 ]
 
 export const CATEGORIES_DEPENSE = [
@@ -32,18 +32,19 @@ export const NATURES_FLUX = {
 }
 export const natureFluxDefaut = 'exploitation'
 
-// Source de financement de la dépense — traçabilité pure (n'affecte pas les calculs
-// de budget/trésorerie). Distingue l'argent de l'entreprise de l'apport personnel
-// du promoteur (PAU), utile pour suivre ce que le PAU a investi de sa poche.
+// Source de financement de la dépense — distingue l'argent de l'entreprise de l'apport
+// personnel du promoteur (PAU). Un apport du PAU compte comme un revenu du secteur/mois
+// (cf. revenuPauSecteurMois) en plus de rester une dette envers lui (cf. Dashboard).
 export const SOURCES_FINANCEMENT = {
   entreprise: { label: 'Fonds de l\'entreprise', tone: 'info',    desc: 'Payé avec la trésorerie / les revenus de l\'entreprise.' },
   pau:        { label: 'Apport du PAU',          tone: 'purple',  desc: 'Payé par le promoteur (PAU) avec son argent personnel.' }
 }
 export const sourceFinancementDefaut = 'entreprise'
 
-// Seuil au-delà duquel une dépense devient automatiquement une demande d'autorisation
-// envoyée au PAU (au lieu d'être décaissée directement). Toute dépense > ce montant
-// passe par le circuit en_attente → approuvée → décaissée.
+// Seuil au-delà duquel une dépense E-DÉPENSES (saisie directe, hors E-G.Pro qui a son
+// propre circuit via les besoins) devient automatiquement une demande d'autorisation
+// envoyée au PAU — même si elle est « prévue ». S'ajoute au dépassement du budget alloué
+// du secteur (cf. budgetRestantSecteur dans logic.js) : n'importe lequel des deux suffit.
 export const SEUIL_APPROBATION_PAU = 20000
 
 // Circuit d'autorisation de décaissement (2 niveaux) :

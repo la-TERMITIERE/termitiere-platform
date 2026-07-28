@@ -16,13 +16,15 @@ export const SECTEUR_PAR_TYPE_PROJET = {
   autre:        'divers'
 }
 
-// Nature de flux des dépenses de projet : toute dépense engagée dans un projet/chantier
-// E-G.Pro est un engagement ponctuel (développement d'un actif ou d'une opération), pas
-// une charge de fonctionnement courant. On la classe donc systématiquement en
-// « Investissement » — ainsi elle n'écrase pas le solde d'EXPLOITATION, qui doit refléter
-// le seul fonctionnement récurrent (revenus réels vs charges courantes). Le montant reste
-// bien comptabilisé (solde d'investissement + solde global), il est juste au bon endroit.
-export const NATURE_DEPENSE_PROJET = 'investissement'
+// Nature de flux d'une dépense de projet : un projet CLIENT (cas majoritaire — `pourClient`
+// !== false) est un chantier facturé, dont la dépense est une charge d'EXPLOITATION à mettre
+// en face du revenu du client. Un projet pour l'entreprise elle-même (`pourClient === false`,
+// ex. l'entreprise construit son propre actif) reste un engagement ponctuel hors fonctionnement
+// courant, classé en INVESTISSEMENT. Les projets créés avant ce champ sont traités comme
+// « client » par défaut (cas majoritaire — cf. Projets.jsx → openEdit).
+export function natureFluxProjet(projet) {
+  return projet?.pourClient === false ? 'investissement' : natureFluxDefaut
+}
 
 // ── Passerelle en lecture seule avec E-G.Pro (module Projet) ────────────────
 // Les dépenses de projet (`projet_depenses`) sont saisies et gérées exclusivement
@@ -48,7 +50,7 @@ export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], ta
       date: d.date ? new Date(d.date).toISOString().slice(0, 10) : '',
       description: [projet?.nom, tache?.titre, d.description].filter(Boolean).join(' — ') || d.description || '',
       noteOrigine: d.description || '',
-      natureFlux: NATURE_DEPENSE_PROJET,
+      natureFlux: natureFluxProjet(projet),
       // Source de financement saisie dans E-G.Pro (apport du PAU ou fonds entreprise) :
       // transmise telle quelle pour que le suivi de l'apport du PAU (Dashboard / Analyses) la voie.
       sourceFinancement: d.sourceFinancement || 'entreprise',
@@ -64,6 +66,37 @@ export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], ta
       typePaiement: d.typePaiement || ''
     }
   })
+}
+
+// ── Passerelle en lecture seule avec les versements clients (E-G.Pro) ───────
+// Un versement reçu d'un client (saisi dans la fiche du projet) est routé vers le secteur
+// que concerne réellement le projet — même correspondance que les dépenses de projet — pour
+// être compté comme un revenu réellement encaissé du secteur (cf. revenuClientSecteurMois).
+export function versementsClientVersSecteurs(versementsClient = [], projets = []) {
+  return versementsClient.map((v) => {
+    const projet = projets.find((p) => p.id === v.projetId)
+    return {
+      ...v,
+      secteurId: projet?.secteurId || SECTEUR_PAR_TYPE_PROJET[projet?.type] || 'divers',
+      date: v.date ? new Date(v.date).toISOString().slice(0, 10) : ''
+    }
+  })
+}
+
+// Revenu (versements clients de projets E-G.Pro) d'un secteur sur un mois donné.
+// `versementsRoutes` = résultat de versementsClientVersSecteurs (déjà rattaché à un secteur).
+export function revenuClientSecteurMois(versementsRoutes, secteurId, annee, mois) {
+  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+  return totalDepenses(versementsRoutes.filter((v) => v.secteurId === secteurId && (v.date || '').startsWith(prefixe)))
+}
+
+// Revenu saisi manuellement (collection `depense_revenus_manuels`) — pour les secteurs
+// sans source de facturation automatique (ex. Hors secteur, MAXI BAT) : une rentrée
+// d'argent ponctuelle qui ne vient ni d'une facture de module, ni d'un apport du PAU,
+// ni d'un versement client E-G.Pro (ex. subvention, vente ponctuelle, remboursement reçu).
+export function revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois) {
+  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+  return totalDepenses(revenusManuels.filter((r) => r.secteurId === secteurId && (r.date || '').startsWith(prefixe)))
 }
 
 // ── Passerelle en lecture seule avec la Briqueterie (module Événementiel) ────
@@ -114,21 +147,22 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois) {
   return depenses.filter((d) => d.secteurId === secteurId && (d.date || '').startsWith(prefixe) && estDecaissee(d))
 }
 
-// Remboursements au PAU rattachés à un secteur donné, sur un mois donné. Le PAU finance
-// une dépense d'un secteur précis (apport ponctuel) ; quand l'entreprise le rembourse, ce
-// montant crédite le budget du secteur concerné — la dépense financée par le PAU n'entame
-// plus durablement sa capacité budgétaire, puisqu'elle est restituée.
-export function remboursementsSecteurMois(remboursements, secteurId, annee, mois) {
-  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
-  return remboursements.filter((r) => r.secteurId === secteurId && (r.date || '').startsWith(prefixe))
+// Reste du budget alloué à un secteur pour le mois d'une date (format YYYY-MM-DD) —
+// null si aucun budget n'est défini pour ce secteur/mois (pas de comparaison possible,
+// donc pas de déclenchement d'autorisation sur ce seul critère).
+export function budgetRestantSecteur(budgets, depenses, secteurId, dateStr) {
+  const [annee, mois] = (dateStr || '').split('-').map(Number)
+  if (!annee || !mois || !secteurId) return null
+  const alloue = budgetSecteur(budgets, secteurId, annee, mois)
+  if (alloue <= 0) return null
+  return alloue - totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois))
 }
 
-// Dépense nette d'un secteur sur un mois : dépenses décaissées moins les remboursements au
-// PAU rattachés à ce secteur ce même mois.
-export function depenseNetteSecteurMois(depenses, remboursements, secteurId, annee, mois) {
-  const brut = totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois))
-  const rembourse = totalDepenses(remboursementsSecteurMois(remboursements, secteurId, annee, mois))
-  return brut - rembourse
+// Apport du PAU compté comme un revenu du secteur/mois concerné : l'argent injecté par
+// le PAU (financement personnel) est une entrée pour l'entreprise, même si elle doit le
+// lui restituer — cette dette est suivie séparément (Dashboard, indépendamment du mois).
+export function revenuPauSecteurMois(depenses, secteurId, annee, mois) {
+  return totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois).filter((d) => d.sourceFinancement === 'pau'))
 }
 
 // Dépenses en attente d'approbation ou approuvées (à décaisser).
@@ -149,11 +183,11 @@ export function statutBudget(pct) {
 }
 
 // Secteurs dont le budget est en alerte (≥80%) ou dépassé (≥100%) pour un mois donné.
-export function secteursEnAlerte(budgets, depenses, annee, mois, remboursements = []) {
+export function secteursEnAlerte(budgets, depenses, annee, mois) {
   return SECTEURS
     .map((s) => {
       const alloue = budgetSecteur(budgets, s.id, annee, mois)
-      const depense = depenseNetteSecteurMois(depenses, remboursements, s.id, annee, mois)
+      const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
       const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
       return { ...s, alloue, depense, pct, statut: statutBudget(pct) }
     })

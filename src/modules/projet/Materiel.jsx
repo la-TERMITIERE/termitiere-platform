@@ -6,7 +6,7 @@
 // (livraison) augmente le stock, chaque sortie (utilisation) le diminue. Le
 // stock actuel = somme des entrées − somme des sorties (jamais négatif).
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, ChevronDown, ChevronUp, Ban } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -89,7 +89,6 @@ export default function Materiel() {
   const [mouvement, setMouvement]   = useState(null) // { materiel, type: 'entree' | 'sortie' }
   const [mvtQte, setMvtQte]         = useState('')
   const [mvtNote, setMvtNote]       = useState('')
-  const [historiqueOuvert, setHistoriqueOuvert] = useState(null) // id du matériel dont l'historique est ouvert
   const [detail, setDetail] = useState(null)
 
   const liste = useMemo(() =>
@@ -262,134 +261,56 @@ export default function Materiel() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
           {liste.map((m) => {
             const projet = projets.find((p) => p.id === m.projetId)
             const st = STATUTS_MATERIEL[m.statut] || STATUTS_MATERIEL.sur_site
             const et = ETATS_MATERIEL[m.etat] || ETATS_MATERIEL.bon_etat
-            const mvts = [...(m.mouvements || [])].sort((a, b) => (b.date || 0) - (a.date || 0))
             const stock = calculerStock(m.mouvements || [])
-            const sorti = calculerSorties(m.mouvements || [])
-            const historiqueVisible = historiqueOuvert === m.id
             return (
-              <Card key={m.id} className="card-hover space-y-2" onClick={() => setDetail(m)}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-800 truncate">{m.nom}</p>
+              <Card key={m.id} className="card-hover !p-0" onClick={() => setDetail(m)}>
+                <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  {/* Nom + badges */}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-gray-800">{m.nom}</p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                       {projet && <Badge tone="primary">{projet.nom}</Badge>}
                       <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700">{catLabel(m.categorie)}</span>
+                      <Badge tone={st.tone}>{st.label}</Badge>
+                      <Badge tone={et.tone}>{et.label}</Badge>
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <Badge tone={st.tone}>{st.label}</Badge>
-                    <Badge tone={et.tone}>{et.label}</Badge>
+
+                  {/* Stock */}
+                  <div className="shrink-0 text-right">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">En stock</p>
+                    <p className="text-lg font-extrabold text-teal-700 leading-tight">
+                      {stock} <span className="text-xs font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
+                    </p>
                   </div>
-                </div>
 
-                {/* Stock — toujours affiché, quelle que soit la catégorie */}
-                <div className="rounded-2xl bg-white/60 px-3 py-2.5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                        <div>
-                          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">En stock</p>
-                          <p className="text-2xl font-extrabold text-teal-700">
-                            {stock} <span className="text-sm font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
-                          </p>
-                        </div>
-                        {sorti > 0 && (
-                          <div>
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Sorti</p>
-                            <p className="text-lg font-bold text-amber-600">
-                              {sorti} <span className="text-xs font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        <Button size="sm" variant="success" onClick={() => ouvrirMouvement(m, 'entree')}>
-                          <PlusCircle size={14} /> Entrée
-                        </Button>
-                        <Button size="sm" variant="danger" onClick={() => ouvrirMouvement(m, 'sortie')}>
-                          <MinusCircle size={14} /> Sortie
-                        </Button>
-                        {stock > 0 && (
-                          <Button size="sm" variant="outline" onClick={() => marquerEpuise(m)} title="À utiliser quand la quantité restante ne peut pas être estimée (sable, gravier…)">
-                            <Ban size={14} /> Épuisé
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    {mvts.length > 0 && (
-                      <button onClick={(e) => { e.stopPropagation(); setHistoriqueOuvert(historiqueVisible ? null : m.id) }}
-                        className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-teal-600 hover:text-teal-800">
-                        {historiqueVisible ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        {historiqueVisible ? 'Masquer' : 'Voir'} l'historique ({mvts.length} mouvement{mvts.length > 1 ? 's' : ''})
-                      </button>
+                  {/* Actions de stock — toujours visibles */}
+                  <div className="flex shrink-0 gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="success" onClick={() => ouvrirMouvement(m, 'entree')}>
+                      <PlusCircle size={14} /> Entrée
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => ouvrirMouvement(m, 'sortie')}>
+                      <MinusCircle size={14} /> Sortie
+                    </Button>
+                    {stock > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => marquerEpuise(m)} title="À utiliser quand la quantité restante ne peut pas être estimée (sable, gravier…)">
+                        <Ban size={14} /> Épuisé
+                      </Button>
                     )}
-                    {historiqueVisible && (
-                      <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto border-t border-gray-100 pt-2" onClick={(e) => e.stopPropagation()}>
-                        {mvts.map((mv) => (
-                          <div key={mv.id} className="flex items-center justify-between gap-2 text-[11px]">
-                            <div className="min-w-0">
-                              <span className={mv.type === 'entree' ? 'text-green-600' : 'text-red-500'}>
-                                {mv.type === 'entree' ? '+ ' : '− '}{mv.quantite} {m.unite || ''} {mv.note ? `— ${mv.note}` : ''}
-                              </span>
-                              <span className="ml-1 text-gray-400">· {formatDateShort(mv.date)} · {mv.auteur || '—'}</span>
-                            </div>
-                            <span className="flex shrink-0 items-center gap-1">
-                              <button onClick={() => ouvrirEditionMouvement(m, mv)} title="Corriger ce mouvement"
-                                className="rounded border border-teal-200 bg-teal-50 p-0.5 text-teal-600 hover:bg-teal-100"><Pencil size={11} /></button>
-                              {peutSupprimer && (
-                                <button onClick={() => supprimerMouvement(m, mv)} title="Supprimer ce mouvement"
-                                  className="rounded border border-red-200 bg-red-50 p-0.5 text-red-600 hover:bg-red-100"><Trash2 size={11} /></button>
-                              )}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                  </div>
+
+                  {/* Modifier / Supprimer */}
+                  <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => openEdit(m)} className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
+                    {peutSupprimer && (
+                      <button onClick={() => handleDelete(m)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
                     )}
-                </div>
-
-                {m.dateEntree && <p className="text-xs text-gray-500">Arrivé sur site le {formatDateShort(m.dateEntree)}</p>}
-                {m.note && <p className="text-sm text-gray-600 italic">« {m.note} »</p>}
-                <p className="text-[11px] text-gray-400">
-                  Suivi par {m.responsable || '—'}{m.createdAt ? ` · ${formatDateTime(m.createdAt)}` : ''}
-                </p>
-
-                <div className="flex flex-wrap gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-                  {m.categorie !== 'consommable' && (
-                    <>
-                      {m.etat !== 'bon_etat' && (
-                        <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'bon_etat')}>
-                          <CheckCircle2 size={13} /> Bon état
-                        </Button>
-                      )}
-                      {m.etat === 'bon_etat' && (
-                        <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'a_reparer')}>
-                          <AlertTriangle size={13} /> À réparer
-                        </Button>
-                      )}
-                      {m.etat !== 'hors_service' && (
-                        <Button size="sm" variant="outline" onClick={() => changerEtat(m, 'hors_service')}>
-                          <XCircle size={13} /> Hors service
-                        </Button>
-                      )}
-                      {m.statut === 'sur_site' ? (
-                        <Button size="sm" variant="outline" onClick={() => changerStatut(m, 'retourne')}>
-                          <RotateCcw size={13} /> Retourné
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => changerStatut(m, 'sur_site')}>
-                          Remettre sur site
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  <button onClick={() => openEdit(m)} className="ml-auto rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
-                  {peutSupprimer && (
-                    <button onClick={() => handleDelete(m)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
-                  )}
+                  </div>
                 </div>
               </Card>
             )
@@ -401,7 +322,9 @@ export default function Materiel() {
       <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail"
         panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (() => {
-          const d = detail
+          // Version à jour (les mouvements/statut/état ajoutés depuis la fiche doivent
+          // apparaître immédiatement sans fermer la modale).
+          const d = materiels.find((x) => x.id === detail.id) || detail
           const projet = projets.find((p) => p.id === d.projetId)
           const st = STATUTS_MATERIEL[d.statut] || STATUTS_MATERIEL.sur_site
           const et = ETATS_MATERIEL[d.etat] || ETATS_MATERIEL.bon_etat
@@ -463,9 +386,47 @@ export default function Materiel() {
                           </span>
                           <span className="ml-1 text-gray-400">· {formatDateShort(mv.date)} · {mv.auteur || '—'}</span>
                         </div>
+                        <span className="flex shrink-0 items-center gap-1">
+                          <button onClick={() => ouvrirEditionMouvement(d, mv)} title="Corriger ce mouvement"
+                            className="rounded border border-teal-200 bg-teal-50 p-0.5 text-teal-600 hover:bg-teal-100"><Pencil size={11} /></button>
+                          {peutSupprimer && (
+                            <button onClick={() => supprimerMouvement(d, mv)} title="Supprimer ce mouvement"
+                              className="rounded border border-red-200 bg-red-50 p-0.5 text-red-600 hover:bg-red-100"><Trash2 size={11} /></button>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* État / statut — hors consommables (outillage, véhicules, gros équipement) */}
+              {d.categorie !== 'consommable' && (
+                <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                  {d.etat !== 'bon_etat' && (
+                    <Button size="sm" variant="outline" onClick={() => changerEtat(d, 'bon_etat')}>
+                      <CheckCircle2 size={13} /> Bon état
+                    </Button>
+                  )}
+                  {d.etat === 'bon_etat' && (
+                    <Button size="sm" variant="outline" onClick={() => changerEtat(d, 'a_reparer')}>
+                      <AlertTriangle size={13} /> À réparer
+                    </Button>
+                  )}
+                  {d.etat !== 'hors_service' && (
+                    <Button size="sm" variant="outline" onClick={() => changerEtat(d, 'hors_service')}>
+                      <XCircle size={13} /> Hors service
+                    </Button>
+                  )}
+                  {d.statut === 'sur_site' ? (
+                    <Button size="sm" variant="outline" onClick={() => changerStatut(d, 'retourne')}>
+                      <RotateCcw size={13} /> Retourné
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => changerStatut(d, 'sur_site')}>
+                      Remettre sur site
+                    </Button>
+                  )}
                 </div>
               )}
 

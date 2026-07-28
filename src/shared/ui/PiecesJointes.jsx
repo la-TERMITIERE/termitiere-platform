@@ -22,7 +22,8 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
       for (const f of files) {
         try {
           const piece = await lireFichier(f)
-          await onAdd?.({ ...piece, rubrique: rubrique || '', proprietaire: proprietaire.trim(), legende: legende.trim() })
+          const rubriqueLabel = rubriques?.find((r) => r.id === rubrique)?.label || ''
+          await onAdd?.({ ...piece, rubrique: rubrique || '', rubriqueLabel, proprietaire: proprietaire.trim(), legende: legende.trim() })
         } catch (e) {
           toast.error(`${f.name} : ${e.message}`)
         }
