@@ -1,6 +1,6 @@
 // Production briques — cycle 24h ou 48h, consommation matières auto, ajout stock appatam.
 import { useMemo, useState } from 'react'
-import { Factory, Plus } from 'lucide-react'
+import { Factory, Plus, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -29,6 +29,7 @@ export default function Production() {
 
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
+  const [detail, setDetail] = useState(null) // production consultée (détail par catégorie)
 
   const liste = useMemo(() => [...productions].sort((a, b) => (a.date < b.date ? 1 : -1)), [productions])
 
@@ -103,12 +104,56 @@ export default function Production() {
             { key: 'machine', label: 'Machine' },
             { key: 'totalBriques', label: 'Total briques', align: 'right', render: (r) => formatNumber(r.totalBriques) },
             { key: 'caillasses', label: 'Caillasses', align: 'right' },
-            { key: 'agentNom', label: 'Agent' }
+            { key: 'agentNom', label: 'Agent' },
+            { key: 'actions', label: '', align: 'right', render: (r) => (
+              <button onClick={() => setDetail(r)} title="Voir le détail par catégorie" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+            ) }
           ]}
           rows={liste}
           empty="Aucune production enregistrée."
         />
       </Card>
+
+      {/* Détail d'une production : quantités produites PAR CATÉGORIE (pas juste le total). */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? `Production ${detail.num}` : ''}
+        footer={<Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>}
+        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        {detail && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/70 p-3 sm:grid-cols-4">
+              <div><p className="text-[10px] font-bold uppercase text-gray-400">Date</p><p className="font-semibold">{detail.date}</p></div>
+              <div><p className="text-[10px] font-bold uppercase text-gray-400">Cycle</p><p className="font-semibold">{detail.duree}h</p></div>
+              <div><p className="text-[10px] font-bold uppercase text-gray-400">Machine</p><p className="font-semibold">{detail.machine || '—'}</p></div>
+              <div><p className="text-[10px] font-bold uppercase text-gray-400">Agent</p><p className="font-semibold">{detail.agentNom || '—'}</p></div>
+            </div>
+            <div className="overflow-hidden rounded-lg bg-white">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr><th className="px-3 py-2 text-left">Catégorie produite</th><th className="px-3 py-2 text-right">Quantité</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(detail.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0).map((l, i) => (
+                    <tr key={i}><td className="px-3 py-2 font-semibold text-gray-800">{l.briqueNom}</td><td className="px-3 py-2 text-right font-extrabold text-violet-700">{formatNumber(l.qte)}</td></tr>
+                  ))}
+                  {(parseInt(detail.caillasses) || 0) > 0 && (
+                    <tr className="bg-gray-50/50"><td className="px-3 py-2 font-semibold text-gray-600">Caillasses (cassées)</td><td className="px-3 py-2 text-right font-bold text-gray-600">{formatNumber(detail.caillasses)}</td></tr>
+                  )}
+                  {!(detail.lignes || []).some((l) => (parseInt(l.qte) || 0) > 0) && (
+                    <tr><td colSpan={2} className="py-6 text-center text-gray-400">Aucune catégorie renseignée.</td></tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-violet-50/60">
+                    <td className="px-3 py-2 text-right text-xs font-bold uppercase text-gray-500">Total briques</td>
+                    <td className="px-3 py-2 text-right text-base font-extrabold text-violet-700">{formatNumber(detail.totalBriques || 0)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {detail.notes && <p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-gray-600">📝 {detail.notes}</p>}
+          </div>
+        )}
+      </Modal>
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title="Enregistrer une production"
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={enregistrer}><Factory size={16} /> Enregistrer</Button></>}>

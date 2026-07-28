@@ -29,20 +29,20 @@ export default function StatCard({
       )}
       {/* min-w-0 partout : sans lui, un montant long pousse la carte au lieu d'être tronqué. */}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs" title={title}>{title}</p>
-        {hasVar ? (
-          <div className="flex min-w-0 items-baseline gap-1.5">
-            <span className={`inline-flex shrink-0 items-center gap-0.5 text-xl font-extrabold leading-tight sm:text-2xl ${up ? 'text-green-600' : 'text-red-600'}`}>
-              {up ? <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" /> : <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />}
+        <div className="flex items-start justify-between gap-1.5">
+          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs" title={title}>{title}</p>
+          {/* L'écart est une PASTILLE discrète : la valeur reste l'élément dominant
+              et lisible (avant, l'écart écrasait la valeur → peu ergonomique). */}
+          {hasVar && (
+            <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${up ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               {up ? '+' : ''}{variation}
             </span>
-            <span className="break-words text-xs font-semibold text-gray-400 sm:text-sm" title={String(value ?? '')}>{value}</span>
-          </div>
-        ) : (
-          // Pas de troncature : un montant long passe à la ligne / rétrécit, mais
-          // reste TOUJOURS entièrement lisible (demande direction — plus de « 7 M… »).
-          <p className="break-words text-lg font-extrabold leading-tight sm:text-xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
-        )}
+          )}
+        </div>
+        {/* Pas de troncature : un montant long passe à la ligne / rétrécit, mais
+            reste TOUJOURS entièrement lisible (demande direction — plus de « 7 M… »). */}
+        <p className="break-words text-lg font-extrabold leading-tight sm:text-xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
         {(variationLabel || sub) && (
           <p className="mt-0.5 truncate text-[11px] text-gray-400" title={variationLabel || sub}>{variationLabel || sub}</p>
         )}
