@@ -112,8 +112,9 @@ export default function NotificationBell() {
                 </button>
               )}
               {mine.length > 0 && (
-                <button onClick={dismissAll} className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-gray-600 hover:underline">
-                  <X size={12} /> Effacer
+                <button onClick={() => { if (confirm('Effacer toutes les notifications affichées ?')) dismissAll() }}
+                  className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-red-600 hover:underline">
+                  <X size={12} /> Tout effacer
                 </button>
               )}
             </div>
@@ -143,23 +144,15 @@ export default function NotificationBell() {
                 return (
                   <div
                     key={n.id}
-                    className="group relative flex w-full items-start gap-3 border-b border-gray-50 px-3 py-2.5"
+                    className="relative flex w-full items-start gap-2 border-b border-gray-50 py-2.5 pl-3 pr-1"
                     style={isUnread ? { background: `${theme.color}0f`, borderLeft: `3px solid ${theme.color}` } : { borderLeft: '3px solid transparent' }}
                   >
-                    {/* Bouton dismiss par notification */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); dismiss(n.id) }}
-                      className="absolute right-2 top-2 hidden rounded p-0.5 text-gray-300 hover:bg-gray-100 hover:text-gray-600 group-hover:flex"
-                      title="Masquer"
-                    >
-                      <X size={12} />
-                    </button>
                     <button
                       onClick={() => onClickNotif(n)}
                       className="flex min-w-0 flex-1 items-start gap-3 text-left hover:opacity-80"
                     >
                       <span className="mt-0.5 text-lg leading-none">{EMOJI[n.type] || '🔔'}</span>
-                      <span className="min-w-0 flex-1 pr-4">
+                      <span className="min-w-0 flex-1">
                         {n.module && (
                           <span className="block text-[10px] font-bold uppercase tracking-wide" style={{ color: theme.color }}>
                             {theme.nom}
@@ -172,6 +165,16 @@ export default function NotificationBell() {
                         {n.body && <span className="mt-0.5 block truncate text-xs text-gray-500">{n.body}</span>}
                         <span className="mt-0.5 block text-[11px] text-gray-400">{timeAgo(n.createdAt)}</span>
                       </span>
+                    </button>
+                    {/* Effacer CETTE notification — toujours visible (indispensable au
+                        toucher : pas de survol sur mobile). */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismiss(n.id) }}
+                      className="mt-0.5 shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                      title="Effacer cette notification"
+                      aria-label="Effacer cette notification"
+                    >
+                      <X size={16} />
                     </button>
                   </div>
                 )
@@ -191,7 +194,7 @@ export default function NotificationBell() {
 
           {mine.length > 0 && (
             <p className="border-t border-gray-100 px-3 py-2 text-center text-[11px] text-gray-400">
-              Les notifications disparaissent automatiquement 5 min après lecture.
+              Touchez une notification pour l’ouvrir · le ✕ l’efface définitivement.
             </p>
           )}
         </div>

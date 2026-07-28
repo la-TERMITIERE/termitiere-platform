@@ -26,7 +26,30 @@ quand l'appli est fermée.
   dans les réglages du navigateur (cadenas 🔒 à côté de l'adresse).
 - Sur iPhone, l'app doit être **ajoutée à l'écran d'accueil** (Partager →
   « Sur l'écran d'accueil ») pour que les notifications soient autorisées : c'est
-  une limite d'iOS, pas de l'application.
+  une limite d'iOS, pas de l'application. Une carte dédiée explique cette étape
+  aux utilisateurs iPhone (sinon le push est techniquement impossible).
+
+## Gérer les notifications dans la cloche
+- Les notifications **restent** jusqu'à ce que l'utilisateur les efface lui-même
+  (plus d'auto-effacement après 5 min, qui les faisait « disparaître puis
+  réapparaître »).
+- **Effacer une seule** : le **✕** à droite de chaque notification (toujours
+  visible, y compris au toucher sur mobile). L'effacement est **persistant par
+  utilisateur** (`dismissedBy/{uid}`) — elle ne revient plus au rechargement, et
+  n'affecte pas les autres destinataires de la même notification.
+- **Tout effacer** : vide **tout** ce qui est affiché (lues comprises), après
+  confirmation.
+- Toucher une notification l'**ouvre** (va sur la page concernée) et la marque lue.
+
+## Pourquoi « ça marche sur PC mais pas sur mobile »
+Sur PC, l'app est souvent ouverte → bandeau + notification système fonctionnent
+sans push. Sur mobile, l'app est fermée → il faut le **vrai push**, qui exige :
+1. la permission accordée sur l'appareil (carte « Activer ») ;
+2. sur **iPhone**, l'app **installée** à l'écran d'accueil (voir ci-dessus) ;
+3. les clés **VAPID** cohérentes entre le client et Netlify, **et le site
+   redéployé** après leur mise en place (cf. section serveur).
+Si l'un manque, le mobile ne reçoit rien tandis que le PC (app ouverte) semble
+fonctionner.
 
 ## Côté serveur (à faire une fois)
 Le push « appli fermée » passe par la fonction `netlify/functions/send-push.js`,

@@ -14,7 +14,6 @@ import { updateItem } from '../core/db'
 import { useAlertesStore, setBadgeApp } from '../core/alertes'
 
 const MOUNT_TS = Date.now()
-const AUTO_DISMISS_MS = 5 * 60 * 1000 // 5 minutes
 // Types « importants » : alerte plus longue, son plus marqué, notification
 // système persistante (demandes d'autorisation, refus, alertes).
 const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
@@ -39,6 +38,12 @@ function matchesModule(n, activeModule) {
   if (!n.module) return true // notifs globales (compte, système…)
   return n.module === activeModule
 }
+
+// Vrai si l'utilisateur a lu / effacé la notif. Sur Firebase (prod), la clé
+// `champ/uid` crée un objet imbriqué ({ [uid]: true }) ; en mode démo (localStorage)
+// elle reste une clé plate ("champ/uid"). On accepte les deux pour un comportement
+// identique dans les deux environnements.
+const aMarque = (n, champ, uid) => !!(n?.[champ]?.[uid] || n?.[`${champ}/${uid}`])
 
 // Notification SYSTÈME (hors de l'onglet) — passe par le service worker quand il
 // est disponible : c'est le seul chemin qui fonctionne sur Android/PWA.
@@ -70,10 +75,9 @@ export function useNotifications() {
   const shownRef = useRef(new Set())
   const montrerAlerte = useAlertesStore((s) => s.montrer)
 
-  // IDs dismissés manuellement (état local, disparaît au rechargement)
+  // IDs effacés — retrait local immédiat, doublé d'un effacement persistant en
+  // base (dismissedBy) pour que la notification ne revienne pas au rechargement.
   const [dismissed, setDismissed] = useState(new Set())
-  // { id: timestamp } — moment où la notif a été lue, pour auto-dismiss après 5 min
-  const [readAt, setReadAt] = useState({})
 
   // Toutes MES notifications, tous modules confondus. Sert aux alertes et à la
   // pastille : une demande d'autorisation doit m'alerter même si je suis en train
@@ -84,7 +88,10 @@ export function useNotifications() {
         .filter((n) =>
           isFor(n, user, role) &&
           (!n.module || hasModule(n.module)) &&
-          !dismissed.has(n.id)
+          !dismissed.has(n.id) &&
+          // Effacement PERSISTANT par utilisateur : une notif effacée ne revient
+          // plus au rechargement (contrairement à l'ancien masquage local).
+          !aMarque(n, 'dismissedBy', user?.uid)
         )
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
     [data, user, role, dismissed, hasModule]
@@ -98,33 +105,19 @@ export function useNotifications() {
 
   // Notifications non-lues (non dismissées)
   const unread = useMemo(
-    () => mine.filter((n) => !(n.readBy && n.readBy[user?.uid])),
+    () => mine.filter((n) => !aMarque(n, 'readBy', user?.uid)),
     [mine, user]
   )
 
   // Non-lues tous modules confondus (pastille onglet / icône appli).
   const unreadAll = useMemo(
-    () => toutes.filter((n) => !(n.readBy && n.readBy[user?.uid])),
+    () => toutes.filter((n) => !aMarque(n, 'readBy', user?.uid)),
     [toutes, user]
   )
 
-  // Auto-dismiss : 5 min après avoir été marquée lue
-  useEffect(() => {
-    if (!user) return
-    const timers = []
-    Object.entries(readAt).forEach(([id, ts]) => {
-      const remaining = AUTO_DISMISS_MS - (Date.now() - ts)
-      if (remaining <= 0) {
-        setDismissed((prev) => new Set([...prev, id]))
-      } else {
-        const t = setTimeout(() => {
-          setDismissed((prev) => new Set([...prev, id]))
-        }, remaining)
-        timers.push(t)
-      }
-    })
-    return () => timers.forEach((t) => clearTimeout(t))
-  }, [readAt, user])
+  // Les notifications RESTENT dans la cloche jusqu'à ce que l'utilisateur les
+  // efface lui-même (comme WhatsApp) — plus d'auto-effacement après lecture, qui
+  // faisait « disparaître puis réapparaître » les notifications de façon confuse.
 
   // Alerte à chaque nouvelle notification : bandeau heads-up si l'app est à
   // l'écran, notification système si elle est en arrière-plan / minimisée.
@@ -134,7 +127,7 @@ export function useNotifications() {
       if (shownRef.current.has(n.id)) continue
       shownRef.current.add(n.id)
       if ((n.createdAt || 0) < MOUNT_TS) continue
-      if (n.readBy && n.readBy[user.uid]) continue
+      if (aMarque(n, 'readBy', user.uid)) continue
       const urgent = TYPES_URGENTS.includes(n.type)
       if (document.visibilityState === 'hidden') {
         notifSysteme(n)
@@ -158,21 +151,24 @@ export function useNotifications() {
   const markRead = useCallback((id) => {
     if (!user) return
     updateItem('notifications', id, { [`readBy/${user.uid}`]: true })
-    setReadAt((prev) => ({ ...prev, [id]: Date.now() }))
   }, [user])
 
   const markAllRead = useCallback(() => {
     unread.forEach((n) => markRead(n.id))
   }, [unread, markRead])
 
+  // Efface UNE notification : persistant par utilisateur (dismissedBy) + retrait
+  // local immédiat pour un ressenti instantané. Marque aussi comme lue.
   const dismiss = useCallback((id) => {
-    markRead(id)
+    if (user) updateItem('notifications', id, { [`readBy/${user.uid}`]: true, [`dismissedBy/${user.uid}`]: true })
     setDismissed((prev) => new Set([...prev, id]))
-  }, [markRead])
+  }, [user])
 
+  // « Tout effacer » vide TOUT ce qui est affiché dans la cloche (lues comprises),
+  // pas seulement les non-lues — c'était la cause du « ça ne s'efface pas ».
   const dismissAll = useCallback(() => {
-    unread.forEach((n) => dismiss(n.id))
-  }, [unread, dismiss])
+    mine.forEach((n) => dismiss(n.id))
+  }, [mine, dismiss])
 
   return { mine, unread, unreadAll, markRead, markAllRead, dismiss, dismissAll }
 }
