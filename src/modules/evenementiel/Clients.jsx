@@ -13,7 +13,10 @@ import { isReadOnlyRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 
-const empty = () => ({ nom: '', telephone: '', adresse: '' })
+const empty = () => ({ nom: '', telephone: '', adresse: '', profession: '' })
+
+// Professions courantes (statistiques) — l'utilisateur peut aussi saisir la sienne.
+const PROFESSIONS = ['Maçon', 'Architecte', 'Entrepreneur BTP', 'Ingénieur', 'Promoteur immobilier', 'Particulier', 'Revendeur', 'Autre']
 
 export default function Clients() {
   const { data: clients } = useCollection('evenementiel_clients')
@@ -37,6 +40,7 @@ export default function Clients() {
         <Table
           columns={[
             { key: 'nom', label: 'Nom' },
+            { key: 'profession', label: 'Profession', render: (r) => r.profession || '—' },
             { key: 'telephone', label: 'Téléphone' },
             { key: 'adresse', label: 'Adresse' },
             { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
@@ -55,6 +59,13 @@ export default function Clients() {
         {modal && (
           <>
             <FormGroup label="Nom" required><Input value={modal.data.nom} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, nom: e.target.value } }))} /></FormGroup>
+            <FormGroup label="Profession" hint="pour les statistiques (qui achète le plus)">
+              <Input list="briq-professions" value={modal.data.profession || ''} placeholder="ex : Maçon, Architecte…"
+                onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, profession: e.target.value } }))} />
+              <datalist id="briq-professions">
+                {PROFESSIONS.map((p) => <option key={p} value={p} />)}
+              </datalist>
+            </FormGroup>
             <FormGroup label="Téléphone"><Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} /></FormGroup>
             <FormGroup label="Adresse"><Input value={modal.data.adresse} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, adresse: e.target.value } }))} /></FormGroup>
           </>

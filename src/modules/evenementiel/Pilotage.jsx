@@ -27,6 +27,14 @@ export default function Pilotage() {
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: demandes } = useCollection('evenementiel_demandes')
+  const { data: clientsRef } = useCollection('evenementiel_clients')
+
+  // Profession par nom de client (référentiel) — pour les statistiques par métier.
+  const professionDe = useMemo(() => {
+    const m = {}
+    clientsRef.forEach((c) => { if (c.nom) m[c.nom.trim().toLowerCase()] = (c.profession || '').trim() })
+    return m
+  }, [clientsRef])
 
   const { start, end, preset, node: periodNode } = usePeriodSelect('30')
   const [scope, setScope] = useState(TOUTES)
@@ -67,7 +75,8 @@ export default function Pilotage() {
       id: b.id, nom: b.nom, color: PALETTE[i % PALETTE.length],
       ca, ventes, prod,
       pret: dernier?.briques?.[b.id]?.pret || 0,
-      sechage: dernier?.briques?.[b.id]?.sechage || 0
+      sechage: dernier?.briques?.[b.id]?.sechage || 0,
+      caillasses: dernier?.briques?.[b.id]?.caillasses || 0
     }
   }), [types, facturesP, productionsP, dernier])
 
@@ -107,12 +116,24 @@ export default function Pilotage() {
         : (f.lignes || []).filter((l) => ligneBrique(l) === scope)
             .reduce((a, l) => a + (l.total || (parseInt(l.qte) || 0) * (parseFloat(l.prixUnit) || 0)), 0)
       if (scope !== TOUTES && montant <= 0) return
-      const cur = map[nom] || { nom, montant: 0, nb: 0 }
+      const cur = map[nom] || { nom, montant: 0, nb: 0, profession: professionDe[nom.toLowerCase()] || '' }
       cur.montant += montant; cur.nb += 1
       map[nom] = cur
     })
     return Object.values(map).sort((a, b) => b.montant - a.montant)
-  }, [facturesP, scope])
+  }, [facturesP, scope, professionDe])
+
+  // Répartition des ventes par PROFESSION (qui achète le plus : maçons, architectes…).
+  const parProfession = useMemo(() => {
+    const map = {}
+    clientsServis.forEach((c) => {
+      const prof = c.profession || 'Non précisée'
+      const cur = map[prof] || { prof, montant: 0, nbClients: 0, nb: 0 }
+      cur.montant += c.montant; cur.nbClients += 1; cur.nb += c.nb
+      map[prof] = cur
+    })
+    return Object.values(map).sort((a, b) => b.montant - a.montant)
+  }, [clientsServis])
 
   // Matières (global) : consommées & coût d'achat sur la période.
   const mat = useMemo(() => {
@@ -300,6 +321,7 @@ export default function Pilotage() {
                 <th className="px-2 py-2 text-center">Ventes</th>
                 <th className="px-2 py-2 text-center">Prêt</th>
                 <th className="px-2 py-2 text-center">Séchage</th>
+                <th className="px-2 py-2 text-center">Caillasses</th>
                 <th className="px-2 py-2 text-right">Chiffre d'affaires</th>
               </tr>
             </thead>
@@ -311,14 +333,70 @@ export default function Pilotage() {
                   <td className="px-2 py-1.5 text-center text-green-600">{formatNumber(t.ventes)}</td>
                   <td className="px-2 py-1.5 text-center font-bold">{formatNumber(t.pret)}</td>
                   <td className="px-2 py-1.5 text-center text-amber-600">{formatNumber(t.sechage)}</td>
+                  <td className="px-2 py-1.5 text-center text-gray-500">{t.caillasses ? formatNumber(t.caillasses) : '—'}</td>
                   <td className="px-2 py-1.5 text-right font-bold text-sky-700">{formatMoney(t.ca)}</td>
                 </tr>
               ))}
-              {!parType.length && <tr><td colSpan={6} className="py-6 text-center text-gray-400">Aucun type de brique.</td></tr>}
+              {!parType.length && <tr><td colSpan={7} className="py-6 text-center text-gray-400">Aucun type de brique.</td></tr>}
             </tbody>
           </table>
         </div>
       </Card>
+
+      {/* Clients : classement par CA + répartition par profession (statistiques) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Classement des clients (CA · factures)">
+          <div className="max-h-80 overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
+                <tr><th className="px-3 py-2 text-left">Client</th><th className="px-3 py-2 text-left">Profession</th><th className="px-2 py-2 text-center">Fact.</th><th className="px-3 py-2 text-right">CA</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {clientsServis.map((c, i) => (
+                  <tr key={c.nom} className="hover:bg-violet-50/50">
+                    <td className="px-3 py-1.5 font-semibold">{i < 3 && ['🥇', '🥈', '🥉'][i]} {c.nom}</td>
+                    <td className="px-3 py-1.5 text-xs text-gray-500">{c.profession || '—'}</td>
+                    <td className="px-2 py-1.5 text-center">{formatNumber(c.nb)}</td>
+                    <td className="px-3 py-1.5 text-right font-bold text-sky-700">{formatMoney(c.montant)}</td>
+                  </tr>
+                ))}
+                {!clientsServis.length && <tr><td colSpan={4} className="py-6 text-center text-gray-400">Aucun client facturé sur la période.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card title="Ventes par profession — qui achète le plus">
+          {parProfession.length ? (
+            <>
+              <div className="h-48">
+                <Doughnut
+                  data={{
+                    labels: parProfession.map((p) => p.prof),
+                    datasets: [{ data: parProfession.map((p) => p.montant), backgroundColor: parProfession.map((p, i) => PALETTE[i % PALETTE.length]) }]
+                  }}
+                  options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }}
+                />
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {parProfession.map((p, i) => {
+                  const max = Math.max(1, ...parProfession.map((x) => x.montant))
+                  return (
+                    <div key={p.prof} className="flex items-center gap-2">
+                      <span className="w-28 shrink-0 truncate text-xs font-medium text-gray-600">{p.prof}</span>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                        <div className="h-full rounded-full" style={{ width: `${(p.montant / max) * 100}%`, background: PALETTE[i % PALETTE.length] }} />
+                      </div>
+                      <span className="w-24 shrink-0 text-right text-xs font-bold text-gray-600">{formatMoney(p.montant)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-gray-400">Renseignez la <strong>profession</strong> dans la fiche client pour affiner ces statistiques.</p>
+            </>
+          ) : <p className="py-16 text-center text-sm text-gray-400">Aucune vente facturée sur la période.</p>}
+        </Card>
+      </div>
 
       {/* Matières premières : arrivages, consommation, stock */}
       <Card title="Matières premières — arrivages, consommation, stock">

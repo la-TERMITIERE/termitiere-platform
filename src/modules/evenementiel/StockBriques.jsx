@@ -1,6 +1,6 @@
 // Stock briques — appatam → séchage → prêtes · caillasses.
 // + Stock des matières premières (ciment, gravier, sable) : arrivages & consommation.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -42,6 +42,9 @@ export default function StockBriques() {
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
+  // État chargé depuis la base (référence) : sert à ne sauvegarder que l'ÉCART
+  // saisi par l'agent, sans jamais écraser une décrémentation de vente concurrente.
+  const loadedRef = useRef({})
   const [matStock, setMatStock] = useState({})
   const [saving, setSaving] = useState(false)
   const [transferModal, setTransferModal] = useState(null)
@@ -68,6 +71,7 @@ export default function StockBriques() {
       }
     })
     setStock(s)
+    loadedRef.current = s
   }, [date, inventaires, briques])
 
   // Chargement du stock matières : saisie du jour, sinon report du solde de la veille.
@@ -155,6 +159,26 @@ export default function StockBriques() {
     setSaving(true)
     try {
       const inv = getInventaire(inventaires, date) || {}
+      // Fusion anti-écrasement : on applique l'ÉCART saisi par l'agent SUR l'état
+      // le plus frais en base. Ainsi une vente certifiée (qui décrémente `pret`)
+      // pendant que la page est ouverte n'est JAMAIS annulée par un enregistrement
+      // de stock — la cause première du « ça ne diminue pas » signalé par l'agent.
+      const ETATS = ['appatam', 'sechage', 'pret', 'caillasses']
+      const baseline = loadedRef.current || {}
+      const briquesData = {}
+      briques.forEach((b) => {
+        const local = stock[b.id] || {}
+        const base = baseline[b.id] || {}
+        const dbCur = inv.briques?.[b.id] || {}
+        const merged = {}
+        ETATS.forEach((e) => {
+          const localV = parseInt(local[e]) || 0
+          const baseV = parseInt(base[e]) || 0
+          const dbV = dbCur[e] != null ? (parseInt(dbCur[e]) || 0) : baseV
+          merged[e] = Math.max(0, dbV + (localV - baseV))
+        })
+        briquesData[b.id] = merged
+      })
       // Recompose le stock matières (init + arrivages − consommations production).
       const matieresData = {}
       matieres.forEach((m) => {
@@ -171,7 +195,7 @@ export default function StockBriques() {
         }
       })
       await setItem('evenementiel_inventaires', date, {
-        ...inv, date, briques: stock, savedAt: ts(), agentId: user.uid, agentNom: user.nom,
+        ...inv, date, briques: briquesData, savedAt: ts(), agentId: user.uid, agentNom: user.nom,
         matieres: matieresData
       })
       await audit('evenementiel', 'STOCK_BRIQUES', `Stock briques du ${date}`)
@@ -199,10 +223,16 @@ export default function StockBriques() {
 
     setStock((s) => {
       const src = { ...s[briqueId], [from]: (s[briqueId][from] || 0) - q }
-      // Casse : la quantité s'ajoute au total caillasses (ligne « caillasses »).
+      // Casse : la quantité s'ajoute AU compteur caillasses DU TYPE concerné
+      // (visibilité des cassés par catégorie) ET au stock caillasses vendable
+      // global (ligne « caillasses », vendue séparément à son tarif).
       if (to === 'caillasses') {
         const cc = s.caillasses || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
-        return { ...s, [briqueId]: src, caillasses: { ...cc, caillasses: (cc.caillasses || 0) + q } }
+        return {
+          ...s,
+          [briqueId]: { ...src, caillasses: (src.caillasses || 0) + q },
+          caillasses: { ...cc, caillasses: (cc.caillasses || 0) + q }
+        }
       }
       return { ...s, [briqueId]: { ...src, [to]: (s[briqueId][to] || 0) + q } }
     })
@@ -257,7 +287,9 @@ export default function StockBriques() {
                     <EtatCell value={d.appatam} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#7c3aed" onChange={(v) => setEtat(b.id, 'appatam', v)} />
                     <EtatCell value={d.sechage} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#b45309" onChange={(v) => setEtat(b.id, 'sechage', v)} />
                     <EtatCell value={d.pret} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#15803d" onChange={(v) => setEtat(b.id, 'pret', v)} />
-                    <EtatCell value={d.caillasses} editable={peutSaisir && b.id === 'caillasses'} disabled={b.id !== 'caillasses'} color="#4b5563" onChange={(v) => setEtat(b.id, 'caillasses', v)} />
+                    {/* Caillasses : compteur par type en lecture seule (alimenté par la
+                        casse) ; la ligne « caillasses » reste éditable (stock vendable). */}
+                    <EtatCell value={d.caillasses} editable={peutSaisir && b.id === 'caillasses'} disabled={false} color="#4b5563" onChange={(v) => setEtat(b.id, 'caillasses', v)} />
                     <td className="px-2 py-2">
                       {b.id !== 'caillasses' && peutSaisir && TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
                         <button key={t.to} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: t.to, qte: 1, dateSechage: '' })}
