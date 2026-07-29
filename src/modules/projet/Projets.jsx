@@ -16,7 +16,7 @@ import { avancementProjet, genererNumProjet, projetsVisibles } from './logic'
 import { formatDateShort, formatMoney, formatDateTime, genId, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
-import { ROLES } from '../../core/roles'
+import { ROLES, FULL_ACCESS_ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
 import { genererRapportProjetPDF } from './rapportPdf'
 import { marquerVoletVu } from './vues'
@@ -224,6 +224,7 @@ export default function Projets() {
   const { data: commentaires } = useCollection('projet_commentaires')
   const { data: versementsClientTous } = useCollection('projet_versements_client')
   const { data: users }        = useCollection('users')
+  const { data: notificationsTous } = useCollection('notifications')
   const [generatingPdf, setGeneratingPdf] = useState(null)
   const { user, role }    = useAuthStore()
   // Seuls le superviseur et le partenaire sont en lecture seule stricte. La secrétaire
@@ -439,6 +440,19 @@ export default function Projets() {
           createdBy: user?.uid || null
         })
         await audit('projet', 'projet_cree', `${form.nom} (${num})`)
+        // Nouveau projet : les collaborateurs affectés (+ le responsable) et
+        // l'administration doivent le savoir dès sa création.
+        const destinatairesProjet = [...new Set([
+          form.responsableUid,
+          ...(form.collaborateurs || []).map((c) => c.uid)
+        ].filter(Boolean))]
+        await notify({
+          type: 'info',
+          title: `📁 Nouveau projet — ${form.nom}`,
+          body: `${form.nom} (${num})${form.responsable ? ` — responsable : ${form.responsable}` : ''}.`,
+          module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers: destinatairesProjet, excludeUid: user?.uid,
+          link: '/projet/projets', state: { openProjetId: projetId }
+        }).catch(() => {})
       }
 
       // Versement optionnel du client — saisi en même temps que le montant du contrat,
@@ -466,6 +480,10 @@ export default function Projets() {
     if (!peutSupprimer) return
     if (!window.confirm(`Supprimer le projet "${p.nom}" ?`)) return
     await removeItem('projets', p.id)
+    // Les notifications d'alerte (projet terminé, en retard, budget dépassé…) référencent
+    // ce projet — un projet supprimé ne doit plus laisser de notification derrière lui.
+    const notifsLiees = notificationsTous.filter((n) => n.projetId === p.id)
+    await Promise.all(notifsLiees.map((n) => removeItem('notifications', n.id)))
     await audit('projet', 'projet_supprime', `${p.nom} (${p.id})`)
   }
 

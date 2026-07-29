@@ -63,7 +63,7 @@ function Alerte({ a, index }) {
     if (user) updateItem('notifications', a.id, { [`readBy/${user.uid}`]: true }).catch(() => {})
     setSortie(true)
     setTimeout(() => fermer(a.id), 150)
-    if (a.link) navigate(a.link)
+    if (a.link) navigate(a.link, a.state ? { state: a.state } : undefined)
   }
 
   const duree = a.urgent ? DUREE_URGENTE_MS : DUREE_MS

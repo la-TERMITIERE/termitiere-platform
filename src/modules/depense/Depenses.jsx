@@ -1,5 +1,6 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -146,6 +147,20 @@ export default function Depenses() {
   // projet modifie la dépense dans E-G.Pro pendant qu'elle est ouverte ici, le détail
   // se met à jour tout seul (la liste `depenses` est en temps réel).
   const detail = detailId ? depenses.find((d) => d.id === detailId) || null : null
+
+  // Ouverture directe du détail d'une dépense depuis une notification (ex. apport du
+  // PAU) — évite de devoir la rechercher dans la liste. `filtreMois` seul (sans
+  // openDepenseId) sert quand plusieurs dépenses sont concernées à la fois (ex.
+  // dépenses récurrentes reconduites) : la liste s'ouvre déjà filtrée sur le bon mois.
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const { openDepenseId, filtreMois: moisVoulu } = location.state || {}
+    if (!openDepenseId && !moisVoulu) return
+    if (openDepenseId) setDetailId(openDepenseId)
+    if (moisVoulu) setFiltreMois(moisVoulu)
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state])
 
   const liste = useMemo(() => {
     let rows = [...depenses]
@@ -300,6 +315,17 @@ export default function Depenses() {
       }
     } else {
       await notifierBeneficiaire(depenseFinale, secteur?.label || d.secteurId)
+    }
+    // Apport personnel du PAU : information réservée à l'administration (compte
+    // comme un revenu du secteur et reste une dette à lui restituer, cf. Dashboard).
+    if ((d.sourceFinancement || sourceFinancementDefaut) === 'pau') {
+      await notify({
+        type: 'info',
+        title: `💜 Apport du PAU — ${secteur?.label || d.secteurId}`,
+        body: `${montant.toLocaleString('fr-FR')} FCFA financés personnellement par le PAU${d.description ? ` — ${d.description}` : ''}.`,
+        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
+        link: '/depense/liste', state: { openDepenseId: id }
+      }).catch(() => {})
     }
     await alerterSiDepassement(depenseFinale, secteur)
     return { statutInitial }
@@ -659,7 +685,7 @@ export default function Depenses() {
                     <button key={k} type="button" onClick={() => set('sourceFinancement', k)}
                       className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
                       title={v.desc}>
-                      {(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? '✓ ' : ''}{v.label}
+                      {(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? '✓ ' : ''}{k === 'pau' ? '💜 ' : ''}{v.label}
                     </button>
                   ))}
                 </div>

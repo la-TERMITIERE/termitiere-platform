@@ -1,17 +1,19 @@
 // Suivi des dépenses détaillé par projet.
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText, Paperclip } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import StatCard from '../../shared/ui/StatCard'
+import PiecesJointes from '../../shared/ui/PiecesJointes'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuthStore } from '../../core/auth'
 import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
+import { ouvrirPiece } from '../../utils/fichiers'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { STATUTS_PROJET } from './data'
@@ -107,6 +109,24 @@ export default function Depenses() {
   const [detail, setDetail] = useState(null)
 
   const notesDeDepense = (depId) => notes.filter((n) => n.depenseId === depId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+
+  // Justificatifs (reçus, factures…) attachés à la dépense — un ou plusieurs fichiers,
+  // même mécanisme que les documents de projet (composant partagé PiecesJointes).
+  const handleAddPieceDepense = async (piece) => {
+    if (!detail) return
+    const pieces = [...(detail.pieces || []), { ...piece, id: `pj_${Date.now()}` }]
+    await updateItem('projet_depenses', detail.id, { pieces, updatedAt: Date.now() })
+    setDetail((d) => ({ ...d, pieces }))
+    await audit('projet', 'depense_justificatif_ajoute', `${piece.nom} → ${catLabel(detail.categorie)} (${formatMoney(detail.montant)})`)
+  }
+
+  const handleRemovePieceDepense = async (piece) => {
+    if (!detail) return
+    if (!window.confirm(`Supprimer "${piece.nom}" ?`)) return
+    const pieces = (detail.pieces || []).filter((p) => p.id !== piece.id)
+    await updateItem('projet_depenses', detail.id, { pieces, updatedAt: Date.now() })
+    setDetail((d) => ({ ...d, pieces }))
+  }
 
   const prestatairesConnus = useMemo(() => nomsPrestatairesConnus(depenses, taches), [depenses, taches])
   const coordPrestataires  = useMemo(() => coordonneesPrestataires(depenses, taches), [depenses, taches])
@@ -526,6 +546,19 @@ export default function Depenses() {
 
                     {/* Actions */}
                     <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+                      {(d.pieces || []).length > 0 && (
+                        <button
+                          onClick={() => (d.pieces.length === 1 ? ouvrirPiece(d.pieces[0]) : setDetail(d))}
+                          title={d.pieces.length === 1 ? 'Voir le justificatif' : `Voir les ${d.pieces.length} justificatifs`}
+                          className="relative rounded-lg bg-gray-100 p-1.5 text-gray-500 shadow-sm transition-all hover:scale-105 hover:bg-teal-500 hover:text-white">
+                          <Paperclip size={13} />
+                          {d.pieces.length > 1 && (
+                            <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-teal-500 text-[8px] font-bold text-white">
+                              {d.pieces.length}
+                            </span>
+                          )}
+                        </button>
+                      )}
                       <button onClick={() => setNoteDepId(noteDepId === d.id ? null : d.id)}
                         title="Commentaires"
                         className={`relative rounded-lg p-1.5 shadow-sm transition-all hover:scale-105 ${noteDepId === d.id ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-teal-500 hover:text-white'}`}>
@@ -592,6 +625,15 @@ export default function Depenses() {
                 </div>
               )}
 
+              <div className="border-t border-gray-100 pt-3">
+                <PiecesJointes
+                  pieces={d.pieces || []}
+                  onAdd={handleAddPieceDepense}
+                  onRemove={handleRemovePieceDepense}
+                  label="Justificatifs (reçus, factures…)"
+                />
+              </div>
+
               <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
                 <Button variant="ghost" onClick={() => { setDetail(null); setNoteDepId(d.id) }}>
                   <MessageSquare size={14} className="mr-1" />Commentaires
@@ -617,6 +659,7 @@ export default function Depenses() {
             open={!!noteDepId}
             onClose={() => { setNoteDepId(null); setNoteTexte('') }}
             title={dep ? `Commentaires — ${dep.description || catLabel(dep.categorie)}` : 'Commentaires'}
+            panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200"
           >
             {dep && (
               <>
@@ -665,7 +708,8 @@ export default function Depenses() {
       })()}
 
       {/* Modal */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier la dépense' : 'Nouvelle dépense'}>
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier la dépense' : 'Nouvelle dépense'}
+        panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Projet *</label>

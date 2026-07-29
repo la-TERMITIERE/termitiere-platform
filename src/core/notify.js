@@ -21,14 +21,16 @@ const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
 //  - link : route ouverte au clic, ex. '/agro/demandes'
 export async function notify({
   type = 'info', title, body = '', module = '',
-  forRoles = [], forUsers = [], excludeUid = null, link = ''
+  forRoles = [], forUsers = [], excludeUid = null, link = '',
+  ...extra // ex. { projetId } : conservé sur le document pour un nettoyage ciblé
+           // plus tard (ex. suppression des notifs d'un projet supprimé).
 }) {
   if (!title) return
   let id = null
   try {
     id = await addItem('notifications', {
       type, title, body, module, forRoles, forUsers,
-      excludeUid: excludeUid || null, link, readBy: {}
+      excludeUid: excludeUid || null, link, readBy: {}, ...extra
     })
   } catch (e) {
     console.warn('[notify] échec :', e)

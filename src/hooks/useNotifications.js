@@ -154,7 +154,7 @@ export function useNotifications() {
       } else {
         montrerAlerte({
           id: n.id, type: n.type, title: n.title, body: n.body,
-          module: n.module, link: lienNotif(n), urgent
+          module: n.module, link: lienNotif(n), state: n.state, urgent
         })
       }
     }

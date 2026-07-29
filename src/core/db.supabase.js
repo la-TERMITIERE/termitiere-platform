@@ -65,6 +65,21 @@ export async function removeItem(name, id) {
   if (error) throw new Error(error.message)
 }
 
+// Réclame une ligne de façon ATOMIQUE : s'appuie sur la contrainte d'unicité de
+// `id` — l'INSERT échoue avec le code 23505 si quelqu'un d'autre a déjà réclamé
+// cet id entre-temps. Voir db.firebase.js pour l'équivalent RTDB (transaction).
+export async function claimOnce(name, id, data = {}) {
+  checkRate(name, 'write')
+  data = sanitizeData(data)
+  const payload = { ...data, createdAt: Date.now() }
+  const { error } = await supabase.from(table(name)).insert({ id, data: payload, created_at: new Date().toISOString() })
+  if (error) {
+    if (error.code === '23505') return false
+    throw new Error(error.message)
+  }
+  return true
+}
+
 // « Temps réel » par interrogation périodique. Renvoie une fonction de désinscription.
 export function subscribeCollection(name, callback) {
   let stopped = false

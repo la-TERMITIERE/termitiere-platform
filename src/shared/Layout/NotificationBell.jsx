@@ -68,7 +68,7 @@ export default function NotificationBell() {
     markRead(n.id)
     setOpen(false)
     // Toujours ouvrir la page concernée (repli sur le module, jamais l'accueil).
-    navigate(lienNotif(n))
+    navigate(lienNotif(n), n.state ? { state: n.state } : undefined)
   }
 
   const nUnread = unread.length
