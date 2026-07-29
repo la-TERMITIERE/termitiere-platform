@@ -11,7 +11,7 @@
 //  - L'EF Final du jour devient l'EF Initial du jour suivant.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Save, Send, CheckCircle2, Plus, Trash2, Lock } from 'lucide-react'
+import { Save, Send, CheckCircle2, Plus, Trash2, Lock, Pencil, History } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -34,7 +34,7 @@ import {
   ENTREE_TYPES_ANIMAL, SORTIE_TYPES_SAISIE_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_SAISIE_ALIMENT,
   labelRequis, nouvellesSortiesNotifiable, nouvellesEntreesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
 } from './logic'
-import { APPROVER_ROLES } from '../../core/roles'
+import { APPROVER_ROLES, isFullAccessRole } from '../../core/roles'
 
 export default function Saisie() {
   const { user, role } = useAuth()
@@ -65,8 +65,12 @@ export default function Saisie() {
 
   // Seuls les agents peuvent saisir ; admins et contrôleurs sont en lecture seule.
   const peutSaisir = role === 'agent'
-  // EF Initial : lecture seule pour tout le monde (reporté automatiquement de la veille).
+  // EF Initial : reporté automatiquement de la veille, donc verrouillé en saisie.
+  // MAIS la direction (accès total) peut le RÉAJUSTER après un audit — l'app et le
+  // réel divergent parfois — via un ajustement tracé et signalé (cf. ajusterInit).
+  const peutAjusterInit = isFullAccessRole(role)
   const peutEditerInit = false
+  const [initModal, setInitModal] = useState(null) // { kind, id, nom, ancien }
 
   // Droits de saisie par catégorie (matrice RBAC). On lit le profil EN DIRECT
   // (collection users) pour que tout changement de droits soit pris en compte sans
@@ -96,7 +100,7 @@ export default function Saisie() {
     especes.forEach((e) => {
       const saved = inv.animaux?.[e.id]
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'animaux')
-      a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties, malades: saved?.malades || 0 }
+      a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties, malades: saved?.malades || 0, initAjuste: saved?.initAjuste || null }
     })
     setAnim(a)
 
@@ -104,7 +108,7 @@ export default function Saisie() {
     aliments.forEach((x) => {
       const saved = inv.aliments?.[x.id]
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'aliments')
-      al[x.id] = { init: initOf(saved, prevInv?.aliments?.[x.id]?.fin, x.id), entrees, sorties }
+      al[x.id] = { init: initOf(saved, prevInv?.aliments?.[x.id]?.fin, x.id), entrees, sorties, initAjuste: saved?.initAjuste || null }
     })
     setAlim(al)
   }, [date, inventaires, especes, aliments, seedInit])
@@ -112,11 +116,74 @@ export default function Saisie() {
   const existing = getInventaire(inventaires, date)
   const dejaSaisi = existing && existing.savedAt
 
+  // Ajustements d'effectif initial du jour — signalés à toute l'équipe sur la page.
+  const ajustementsJour = useMemo(() => {
+    const nomDe = (kind, id) => (kind === 'animaux' ? especes : aliments).find((x) => x.id === id)?.nom || id
+    const out = []
+    ;['animaux', 'aliments'].forEach((kind) => {
+      Object.entries(existing?.[kind] || {}).forEach(([id, node]) => {
+        if (node?.initAjuste) out.push({ kind, id, nom: nomDe(kind, id), ...node.initAjuste })
+      })
+    })
+    return out.sort((a, b) => (b.le || 0) - (a.le || 0))
+  }, [existing, especes, aliments])
+
   const setInit = (kind, id, val) => {
     const v = Math.max(0, parseFloat(val) || 0)
     const setter = kind === 'animaux' ? setAnim : setAlim
     markDirty()
     setter((s) => ({ ...s, [id]: { ...s[id], init: v } }))
+  }
+
+  // RÉAJUSTEMENT de l'effectif initial par la direction (après audit).
+  // Recalcule le nœud de l'article avec le nouvel EF Initial en CONSERVANT ses
+  // mouvements (entrées/sorties/malades/ventes auto), écrit un marqueur `initAjuste`
+  // (qui, quand, ancien→nouveau, motif) VISIBLE de tous, audite et signale.
+  // Ne touche ni les autres articles, ni `savedAt` : la fusion RTDB est ciblée.
+  async function ajusterInit({ kind, id, nom, nouveau, motif }) {
+    if (!user) return toast.error('Session expirée — reconnectez-vous')
+    const collKey = kind === 'animaux' ? 'animaux' : 'aliments'
+    const src = kind === 'animaux' ? anim : alim
+    const d = src[id] || { init: 0, entrees: [], sorties: [] }
+    const ancien = parseFloat(d.init) || 0
+    const val = Math.max(0, parseFloat(nouveau) || 0)
+    if (val === ancien) return toast.error('La valeur est identique — aucun ajustement.')
+
+    const inv = getInventaire(inventaires, date)
+    const autoSor = autoSorOf(id, kind)
+    const mIn = kind === 'animaux' ? (mutIn[id] || 0) : 0
+    const agg = kind === 'animaux'
+      ? agregerAnimal({ ...d, init: val }, autoSor, mIn)
+      : agregerAliment({ ...d, init: val }, autoSor)
+    const existingNode = inv?.[collKey]?.[id] || {}
+    const marqueur = { par: user.login, parNom: user.nom, le: ts(), ancien, nouveau: val, motif: (motif || '').trim() }
+    const node = {
+      ...existingNode, ...agg,
+      entrees: d.entrees || [], sorties: d.sorties || [], autoSor,
+      ...(kind === 'animaux' ? { malades: Math.max(0, parseInt(d.malades) || 0) } : {}),
+      initAjuste: marqueur
+    }
+    const collMap = { ...(inv?.[collKey] || {}), [id]: node }
+
+    try {
+      await setItem('agro_inventaires', date, { date, [collKey]: collMap })
+      await audit('agro', 'AJUST_EF_INITIAL',
+        `EF Initial ${nom} (${date}) : ${ancien} → ${val}${marqueur.motif ? ` — ${marqueur.motif}` : ''}`,
+        { date, article: nom, ancien, nouveau: val, motif: marqueur.motif })
+      await notify({
+        type: 'alerte',
+        title: `Effectif initial réajusté — ${nom}`,
+        body: `${date} · ${ancien} → ${val} (par ${user.nom})${marqueur.motif ? `\nMotif : ${marqueur.motif}` : ''}`,
+        module: 'agro',
+        forRoles: [...APPROVER_ROLES, 'agent', 'superviseur'],
+        excludeUid: user.uid,
+        link: '/agro/saisie'
+      })
+      toast.success(`Effectif initial de ${nom} réajusté (${ancien} → ${val}) ✓ — équipe notifiée`)
+      setInitModal(null)
+    } catch (e) {
+      toast.error('Erreur : ' + e.message)
+    }
   }
 
   // Nombre d'animaux MALADES du jour (par espèce) — base du taux de morbidité.
@@ -320,7 +387,7 @@ export default function Saisie() {
           <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
             <tr>
               <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
-              <th className="bg-gray-50 px-2 py-2" title="Reporté automatiquement de la veille — verrouillé">EF Initial 🔒</th>
+              <th className="bg-gray-50 px-2 py-2" title={peutAjusterInit ? 'Reporté de la veille — réajustable après audit (crayon)' : 'Reporté automatiquement de la veille — verrouillé'}>EF Initial {peutAjusterInit ? '✏️' : '🔒'}</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Entrées</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
               <th className="bg-gray-50 px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
@@ -348,15 +415,30 @@ export default function Saisie() {
                         )}
                       </td>
                       <td className="px-2 py-1.5 text-center">
-                        <input
-                          type="number" min="0" value={d.init ?? 0}                           readOnly={!peutEditerInit}
-                          title={peutEditerInit ? undefined : 'Reporté automatiquement de la veille'}
-                          onChange={(e) => setInit(kind, a.id, e.target.value)}
-                          onFocus={(e) => peutEditerInit && e.target.select()}
-                          className={`w-16 rounded border px-1 py-1 text-center text-sm focus:outline-none ${
-                            peutEditerInit ? 'border-gray-200 focus:border-primary' : 'num-readonly cursor-not-allowed border-gray-200'
-                          }`}
-                        />
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number" min="0" value={d.init ?? 0} readOnly={!peutEditerInit}
+                            title={peutEditerInit ? undefined : 'Reporté automatiquement de la veille'}
+                            onChange={(e) => setInit(kind, a.id, e.target.value)}
+                            onFocus={(e) => peutEditerInit && e.target.select()}
+                            className={`w-16 rounded border px-1 py-1 text-center text-sm focus:outline-none ${
+                              peutEditerInit ? 'border-gray-200 focus:border-primary'
+                                : d.initAjuste ? 'num-readonly border-amber-300 bg-amber-50 text-amber-800'
+                                : 'num-readonly cursor-not-allowed border-gray-200'
+                            }`}
+                          />
+                          {peutAjusterInit && (
+                            <button type="button" onClick={() => setInitModal({ kind, id: a.id, nom: a.nom, ancien: d.init ?? 0 })}
+                              title="Réajuster l'effectif initial (après audit)"
+                              className="rounded p-1 text-gray-400 hover:bg-amber-100 hover:text-amber-700">
+                              <Pencil size={13} />
+                            </button>
+                          )}
+                          {d.initAjuste && (
+                            <span title={`Réajusté par ${d.initAjuste.parNom} : ${d.initAjuste.ancien} → ${d.initAjuste.nouveau}${d.initAjuste.motif ? ` — ${d.initAjuste.motif}` : ''}`}
+                              className="cursor-help text-amber-600"><History size={13} /></span>
+                          )}
+                        </div>
                       </td>
                       <MvtCell total={totEnt} dir="entree"
                         onClick={() => setMvtModal({ id: a.id, kind, dir: 'entree', nom: a.nom })} />
@@ -422,6 +504,18 @@ export default function Saisie() {
             : `🔑 Vos catégories autorisées : ${catsAutorisees.join(', ')}.`}
         </div>
       )}
+      {ajustementsJour.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="mb-1 flex items-center gap-1 font-bold"><History size={14} /> Effectif initial réajusté ({date}) — après audit</p>
+          {ajustementsJour.map((x, i) => (
+            <p key={i}>
+              • <strong>{x.nom}</strong> : {x.ancien} → <strong>{x.nouveau}</strong>
+              <span className="text-amber-700"> par {x.parNom}{x.le ? ` · ${formatDateTime(x.le)}` : ''}</span>
+              {x.motif ? ` — « ${x.motif} »` : ''}
+            </p>
+          ))}
+        </div>
+      )}
       {!dejaSaisi && draftSavedAt && (
         <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} — vos données sont en sécurité même sans clic sur « Enregistrer ». Pensez tout de même à enregistrer pour notifier les responsables.
@@ -478,6 +572,14 @@ export default function Saisie() {
         user={user}
         peutSaisir={peutSaisir}
         onChange={(lignes) => setLignes(mvtModal.kind, mvtModal.id, mvtModal.dir, lignes)}
+      />
+
+      {/* Modal réajustement de l'effectif initial (direction, après audit) */}
+      <AjustInitModal
+        modal={initModal}
+        date={date}
+        onClose={() => setInitModal(null)}
+        onSave={ajusterInit}
       />
 
       {/* Modal ajout d'article */}
@@ -693,6 +795,52 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
       </div>
 
       {peutSaisir && <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter une ligne</Button>}
+    </Modal>
+  )
+}
+
+// Fenêtre de réajustement de l'effectif initial (direction, après audit).
+// Impose un motif : l'ajustement est tracé et signalé à toute l'équipe.
+function AjustInitModal({ modal, date, onClose, onSave }) {
+  const [val, setVal] = useState('')
+  const [motif, setMotif] = useState('')
+
+  useEffect(() => {
+    if (modal) { setVal(String(modal.ancien ?? 0)); setMotif('') }
+  }, [modal])
+
+  if (!modal) return null
+  const nouveau = Math.max(0, parseFloat(val) || 0)
+  const ecart = nouveau - (parseFloat(modal.ancien) || 0)
+
+  function submit() {
+    if (!motif.trim()) return toast.error('Motif obligatoire — ex. : constat d’audit du jour')
+    onSave({ kind: modal.kind, id: modal.id, nom: modal.nom, nouveau, motif })
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Réajuster l'effectif initial — ${modal.nom}`}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button variant="warning" onClick={submit}>Réajuster & signaler</Button></>}>
+      <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        Réservé à la direction. À utiliser lorsque l'<strong>effectif réel constaté</strong> (audit, comptage) diffère de l'app.
+        L'ajustement s'applique <strong>à partir du {date}</strong> (l'EF Final se reporte sur les jours suivants), il est <strong>tracé</strong> et <strong>signalé à l'équipe</strong>.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <FormGroup label="Effectif actuel (app)">
+          <Input value={modal.ancien ?? 0} readOnly className="bg-gray-100" />
+        </FormGroup>
+        <FormGroup label="Effectif réel constaté" required>
+          <Input type="number" min="0" value={val} onChange={(e) => setVal(e.target.value)} autoFocus />
+        </FormGroup>
+      </div>
+      {ecart !== 0 && (
+        <p className={`mb-2 text-sm font-semibold ${ecart > 0 ? 'text-green-700' : 'text-red-600'}`}>
+          Écart : {ecart > 0 ? '+' : ''}{ecart} tête(s)
+        </p>
+      )}
+      <FormGroup label="Motif de l'ajustement" required hint="Visible dans le journal et la notification envoyée à l'équipe.">
+        <Input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex. : comptage d'audit du 12/08 — 2 décès non saisis" />
+      </FormGroup>
     </Modal>
   )
 }
