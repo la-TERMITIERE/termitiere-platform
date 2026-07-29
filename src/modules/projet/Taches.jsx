@@ -100,7 +100,8 @@ const RUBRIQUES_TACHE = [
 const VIDE_TACHE = {
   titre: '', projetId: '', phase: '', assignee: '', priorite: 'normale', statut: 'a_faire', dateDebut: '', echeance: '', montantPrevu: '', note: '',
   prestataireNom: '', prestataireMetier: '', prestataireTelephone: '',
-  versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr(), versementSource: 'entreprise'
+  versementActif: false, versementMontant: '', versementType: 'total', versementDate: todayStr(), versementSource: 'entreprise',
+  piecesEnAttente: []
 }
 
 // Couleur d'accent (barre latérale de la carte) selon le statut de la tâche.
@@ -212,7 +213,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
     setSaving(true)
     try {
       const now = Date.now()
-      const { versementActif, versementMontant, versementType, versementDate, versementSource, ...tacheForm } = form
+      const { versementActif, versementMontant, versementType, versementDate, versementSource, piecesEnAttente, ...tacheForm } = form
       const payload = {
         ...tacheForm,
         dateDebut: form.dateDebut ? new Date(form.dateDebut).getTime() : null,
@@ -226,7 +227,10 @@ function OngletTaches({ taches, projets, users, depenses }) {
         await audit('projet', 'tache_modifiee', form.titre)
       } else {
         tacheId = `tache_${now}`
-        await setItem('projet_taches', tacheId, { id: tacheId, ...payload, createdAt: now, createdBy: user?.uid || null })
+        // Les pièces jointes ajoutées avant même l'enregistrement (bufferisées
+        // localement, faute d'id de tâche) sont incluses directement à la création.
+        const pieces = (piecesEnAttente || []).map((p) => ({ ...p, createdAt: now, ajouteParUid: user?.uid || null }))
+        await setItem('projet_taches', tacheId, { id: tacheId, ...payload, pieces, createdAt: now, createdBy: user?.uid || null })
         await audit('projet', 'tache_creee', form.titre)
       }
 
@@ -678,8 +682,8 @@ function OngletTaches({ taches, projets, users, depenses }) {
             </div>
           )}
 
-          {editingLive && (
-            <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            {editingLive ? (
               <PiecesJointes
                 pieces={editingLive.pieces || []}
                 onAdd={(piece) => ajouterPiece(editingLive, piece)}
@@ -687,13 +691,19 @@ function OngletTaches({ taches, projets, users, depenses }) {
                 label="📎 Pièces jointes (factures, devis…)"
                 rubriques={RUBRIQUES_TACHE}
               />
-            </div>
-          )}
-          {!editingLive && (
-            <p className="text-center text-[11px] text-gray-400">
-              Les pièces jointes (factures, devis…) pourront être ajoutées une fois la tâche enregistrée.
-            </p>
-          )}
+            ) : (
+              // Nouvelle tâche : pas encore d'id, donc les pièces sont bufferisées
+              // localement dans le formulaire et enregistrées avec la tâche à la
+              // création (cf. handleSave) — plus besoin d'enregistrer puis rouvrir.
+              <PiecesJointes
+                pieces={form.piecesEnAttente || []}
+                onAdd={(piece) => setForm((f) => ({ ...f, piecesEnAttente: [...(f.piecesEnAttente || []), { ...piece, id: `pj_${Date.now()}` }] }))}
+                onRemove={(piece) => setForm((f) => ({ ...f, piecesEnAttente: (f.piecesEnAttente || []).filter((p) => p.id !== piece.id) }))}
+                label="📎 Pièces jointes (factures, devis…)"
+                rubriques={RUBRIQUES_TACHE}
+              />
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>

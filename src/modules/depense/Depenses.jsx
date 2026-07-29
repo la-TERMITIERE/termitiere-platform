@@ -37,7 +37,7 @@ const empty = () => ({
   secteurId: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
   natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut,
-  beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: ''
+  beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
 // ── Champ bénéficiaire (membre de l'entreprise) : saisie libre + suggestions ──
@@ -567,6 +567,7 @@ export default function Depenses() {
                           <p className="text-gray-400">
                             → 👤 <span className="font-semibold text-gray-700">{d.beneficiaireNom}</span>
                             {d.beneficiaireFonction ? <span className="text-gray-400"> · {d.beneficiaireFonction}</span> : ''}
+                            {d.beneficiaireTelephone ? <span className="text-gray-400"> · ☎ {d.beneficiaireTelephone}</span> : ''}
                             <span className="ml-1 text-[10px] text-gray-400">
                               {d.beneficiaireUid
                                 ? (d.recuConfirme ? '✅ reçu confirmé' : d.statut === 'decaissee' ? '⏳ à confirmer' : '')
@@ -724,38 +725,44 @@ export default function Depenses() {
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="font-medium normal-case text-amber-500">(optionnel — qui reçoit l'argent)</span></p>
               <div className="mb-2 flex gap-2">
                 <button type="button"
-                  onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', '') }}
+                  onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
                   className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType !== 'externe' ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500'}`}>
                   Membre de l'entreprise
                 </button>
                 <button type="button"
-                  onClick={() => { set('beneficiaireType', 'externe'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', '') }}
+                  onClick={() => { set('beneficiaireType', 'externe'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
                   className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType === 'externe' ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500'}`}>
                   Externe (fournisseur, prestataire…)
                 </button>
               </div>
 
               {modal.data.beneficiaireType === 'externe' ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <FormGroup label="Nom de la personne">
                     <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
                   </FormGroup>
                   <FormGroup label="Profession / fonction">
                     <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Maçon" />
                   </FormGroup>
+                  <FormGroup label="Contact (téléphone)">
+                    <Input value={modal.data.beneficiaireTelephone} onChange={(e) => set('beneficiaireTelephone', e.target.value)} placeholder="ex: 90 00 00 00" />
+                  </FormGroup>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <FormGroup label="Nom du bénéficiaire">
                     <ChampBeneficiaire
                       value={modal.data.beneficiaireNom}
                       onChange={(v) => { set('beneficiaireNom', v); set('beneficiaireUid', '') }}
-                      onSelectUser={(u) => { set('beneficiaireUid', u.uid); set('beneficiaireNom', u.nom || ''); set('beneficiaireFonction', u.poste || '') }}
+                      onSelectUser={(u) => { set('beneficiaireUid', u.uid); set('beneficiaireNom', u.nom || ''); set('beneficiaireFonction', u.poste || ''); set('beneficiaireTelephone', u.telephone || '') }}
                       users={users}
                     />
                   </FormGroup>
                   <FormGroup label="Fonction (optionnel)">
                     <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Comptable" />
+                  </FormGroup>
+                  <FormGroup label="Contact (téléphone)">
+                    <Input value={modal.data.beneficiaireTelephone} onChange={(e) => set('beneficiaireTelephone', e.target.value)} placeholder="ex: 90 00 00 00" />
                   </FormGroup>
                 </div>
               )}

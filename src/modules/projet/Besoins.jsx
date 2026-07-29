@@ -76,7 +76,8 @@ const BUCKET_DEVIS = (categorie) => (categorie === 'main_oeuvre' ? 'Main d\'œuv
 
 const VIDE = {
   projetId: '', tacheId: '', section: '', titre: '', categorie: 'materiaux',
-  unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: ''
+  unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: '',
+  piecesEnAttente: []
 }
 const ligneVide = () => ({ categorie: 'materiaux', titre: '', unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: '' })
 
@@ -203,8 +204,9 @@ export default function Besoins() {
       const now = Date.now()
       const quantite = Number(form.quantite) || 0
       const prixUnitaire = Number(form.prixUnitaire) || 0
+      const { piecesEnAttente, ...formSansPieces } = form
       const payload = {
-        ...form,
+        ...formSansPieces,
         titre: form.titre.trim(),
         quantite, prixUnitaire, montant: quantite * prixUnitaire,
         dateSouhaitee: form.dateSouhaitee ? new Date(form.dateSouhaitee).getTime() : null,
@@ -214,8 +216,11 @@ export default function Besoins() {
         await setItem('projet_besoins', editing.id, { ...editing, ...payload })
         await audit('projet', 'besoin_modifie', payload.titre)
       } else {
+        // Les pièces jointes ajoutées avant même l'enregistrement (bufferisées
+        // localement, faute d'id de besoin) sont incluses directement à la création.
+        const pieces = (piecesEnAttente || []).map((p) => ({ ...p, createdAt: now, ajouteParUid: user?.uid || null }))
         await addItem('projet_besoins', {
-          ...payload, statut: 'a_traiter', validation: 'en_attente', createdAt: now,
+          ...payload, pieces, statut: 'a_traiter', validation: 'en_attente', createdAt: now,
           demandePar: user?.nom || user?.login || null, demandeParUid: user?.uid || null
         })
         await audit('projet', 'besoin_cree', payload.titre)
@@ -753,7 +758,9 @@ export default function Besoins() {
             </FormGroup>
           </div>
 
-          {/* Pièces jointes (devis, facture pro forma…) — jointes une fois le besoin créé. */}
+          {/* Pièces jointes (devis, facture pro forma…) — bufferisées localement à la
+              création (pas encore d'id de besoin), enregistrées avec lui à la sauvegarde
+              (cf. handleSave). En édition, elles s'ajoutent directement en base. */}
           <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
             {editingLive ? (
               <PiecesJointes
@@ -766,7 +773,14 @@ export default function Besoins() {
                 withLegende
               />
             ) : (
-              <p className="text-xs text-gray-500">📎 Enregistrez d'abord le besoin, puis rouvrez-le (✏️) pour joindre un devis ou tout autre fichier.</p>
+              <PiecesJointes
+                pieces={form.piecesEnAttente || []}
+                onAdd={(piece) => setForm((f) => ({ ...f, piecesEnAttente: [...(f.piecesEnAttente || []), { ...piece, id: `pj_${Date.now()}` }] }))}
+                onRemove={(piece) => setForm((f) => ({ ...f, piecesEnAttente: (f.piecesEnAttente || []).filter((p) => p.id !== piece.id) }))}
+                rubriques={RUBRIQUES_BESOIN}
+                label="📎 Pièces jointes (devis, facture pro forma…)"
+                withLegende
+              />
             )}
           </div>
 

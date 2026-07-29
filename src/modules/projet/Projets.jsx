@@ -199,7 +199,7 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha', pourClient: true, clientNom: '', montantContrat: '', usageInterne: '', versementMontant: '', versementDate: '' }
+const VIDE = { nom: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha', pourClient: true, clientNom: '', clientTelephone: '', montantContrat: '', usageInterne: '', versementMontant: '', versementDate: '' }
 
 // Couleur d'accent (barre latérale de la carte) selon le statut du projet.
 const STATUT_ACCENT = { planification: '#3b82f6', en_cours: '#f59e0b', en_pause: '#94a3b8', termine: '#16a34a', annule: '#dc2626' }
@@ -386,7 +386,7 @@ export default function Projets() {
       superficie: p.superficie ?? '', superficieUnite: p.superficieUnite || 'ha',
       // Projets déjà créés avant l'ajout de ce champ : traités comme « client » par défaut
       // (cas majoritaire) — seule la valeur explicitement à false reste « entreprise ».
-      pourClient: p.pourClient !== false, clientNom: p.clientNom || '',
+      pourClient: p.pourClient !== false, clientNom: p.clientNom || '', clientTelephone: p.clientTelephone || '',
       // Repli sur l'ancien champ « budget » pour les projets client créés avant la fusion
       // des deux montants, afin que le champ ne semble pas vide alors qu'un montant existe déjà.
       montantContrat: (p.montantContrat ?? (p.pourClient !== false ? p.budget : null)) ?? '',
@@ -894,6 +894,7 @@ export default function Projets() {
                     onClick={() => setForm((f) => ({
                       ...f, pourClient: opt.id,
                       clientNom: opt.id ? f.clientNom : '',
+                      clientTelephone: opt.id ? f.clientTelephone : '',
                       montantContrat: opt.id ? f.montantContrat : '',
                       usageInterne: opt.id ? '' : f.usageInterne
                     }))}
@@ -912,9 +913,14 @@ export default function Projets() {
                   : 'Projet pour l\'entreprise elle-même — les dépenses seront classées en Investissement dans E-DÉPENSES.'}
               </p>
               {form.pourClient && (
-                <input className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="Nom du client"
-                  value={form.clientNom} onChange={(e) => setForm((f) => ({ ...f, clientNom: e.target.value }))} />
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="Nom du client"
+                    value={form.clientNom} onChange={(e) => setForm((f) => ({ ...f, clientNom: e.target.value }))} />
+                  <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="Contact client (téléphone)"
+                    value={form.clientTelephone} onChange={(e) => setForm((f) => ({ ...f, clientTelephone: e.target.value }))} />
+                </div>
               )}
               {!form.pourClient && (
                 <input className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
@@ -1032,7 +1038,7 @@ export default function Projets() {
                   <span className="text-gray-500">{d.pourClient !== false ? 'Client : ' : 'Bénéficiaire : '}</span>
                   {d.pourClient !== false
                     ? (d.clientNom
-                        ? <span className="font-semibold">{d.clientNom}</span>
+                        ? <span className="font-semibold">{d.clientNom}{d.clientTelephone ? <span className="font-normal text-gray-500"> · ☎ {d.clientTelephone}</span> : ''}</span>
                         : <span className="font-semibold text-amber-600">⚠ À préciser</span>)
                     : <span className="font-semibold">{d.usageInterne || "Projet pour l'entreprise"}</span>}
                 </div>

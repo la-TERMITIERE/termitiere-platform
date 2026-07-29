@@ -381,7 +381,7 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
             <div className="rounded-xl bg-white/70 p-3">
               <div className="flex items-center gap-1.5 text-violet-500">
                 <HandCoins size={13} />
@@ -402,13 +402,6 @@ export default function Dashboard() {
                 <p className="text-[10px] font-semibold uppercase tracking-wide">Fonds propres (cumulé)</p>
               </div>
               <p className="mt-1 text-base font-bold text-gray-700">{financement.cumulEntreprise.toLocaleString('fr-FR')} FCFA</p>
-            </div>
-            <div className="rounded-xl bg-white/70 p-3">
-              <div className="flex items-center gap-1.5 text-amber-600">
-                <Receipt size={13} />
-                <p className="text-[10px] font-semibold uppercase tracking-wide">Budget alloué (mois)</p>
-              </div>
-              <p className="mt-1 text-base font-bold text-amber-700">{totalAlloue.toLocaleString('fr-FR')} FCFA</p>
             </div>
           </div>
 
