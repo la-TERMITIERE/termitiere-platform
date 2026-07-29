@@ -309,18 +309,19 @@ export default function Demandes() {
         )}
       </div>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="p-0">
+       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-3 py-2 text-left">N°</th>
-              <th className="px-3 py-2">Vente / Client</th>
-              <th className="px-3 py-2">Brique</th>
-              <th className="px-3 py-2 text-center">Qté</th>
-              <th className="px-3 py-2">Chargement</th>
-              <th className="px-3 py-2">Validation</th>
-              <th className="px-3 py-2">Statut</th>
-              <th className="px-3 py-2" />
+          <thead className="text-xs uppercase text-gray-500">
+            <tr className="bg-gray-50">
+              <th className="sticky left-0 top-0 z-30 bg-gray-50 px-3 py-2 text-left" style={{ width: '110px' }}>N°</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Vente / Client</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Brique</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2 text-center">Qté</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Chargement</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Validation</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Statut</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -331,8 +332,8 @@ export default function Demandes() {
               const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
               const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
               return (
-              <tr key={d.id} className={enCorrectif ? 'bg-amber-50/50' : ''}>
-                <td className="px-3 py-2 font-mono text-xs">{d.num}</td>
+              <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
+                <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white group-hover:bg-gray-50'}`} style={{ width: '110px' }}>{d.num}</td>
                 <td className="px-3 py-2"><span className="font-semibold">{d.venteNum}</span><br /><span className="text-xs text-gray-500">{d.clientNom}</span></td>
                 <td className="px-3 py-2 font-semibold">{d.briqueNom}</td>
                 <td className="px-3 py-2 text-center">{d.qte}</td>
@@ -378,6 +379,7 @@ export default function Demandes() {
           </tbody>
         </table>
         {!filtrees.length && <p className="py-10 text-center text-gray-400">Aucune demande.</p>}
+       </div>
       </Card>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Demande d'autorisation de sortie"

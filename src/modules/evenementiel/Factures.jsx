@@ -165,7 +165,7 @@ export default function Factures() {
   const totaux = modal ? calcTotaux(modal.facture) : null
 
   const columns = [
-    { key: 'numero', label: 'N°' },
+    { key: 'numero', label: 'N°', sticky: true, width: '110px' },
     { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
     { key: 'client', label: 'Client', render: (r) => r.client?.nom },
     { key: 'totalTTC', label: 'Total TTC', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> },
@@ -190,7 +190,7 @@ export default function Factures() {
       </div>
 
       <Card className="p-0">
-        <Table columns={columns} rows={liste} empty="Aucune facture." />
+        <Table stickyHeader columns={columns} rows={liste} empty="Aucune facture." />
       </Card>
 
       {/* Consultation d'une facture — lecture seule */}
