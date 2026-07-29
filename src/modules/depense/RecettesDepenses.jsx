@@ -13,10 +13,11 @@ import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole } from '../../core/roles'
+import { isReadOnlyRole, FULL_ACCESS_ROLES } from '../../core/roles'
 import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
+import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, STATUTS_DECAISSEMENT } from './data'
@@ -171,6 +172,14 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
           ? `${revision.secteurLabel} — budget alloué ${fmt(nouveau)} FCFA`
           : `${revision.secteurLabel} — ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${motif})`,
         { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
+      // Réservé à l'administration : montant alloué/révisé pour un secteur.
+      await notify({
+        type: 'info',
+        title: estAllocation ? `💰 Budget alloué — ${revision.secteurLabel}` : `🔄 Budget révisé — ${revision.secteurLabel}`,
+        body: estAllocation ? `${fmt(nouveau)} FCFA alloués pour ${MOIS_LABELS[mois - 1]} ${annee}.` : `${fmt(ancien)} → ${fmt(nouveau)} FCFA — ${motif}`,
+        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
+        link: '/depense/recettes-depenses', state: { openSecteurId: revision.secteurId, annee, mois }
+      }).catch(() => {})
       toast.success(estAllocation ? 'Budget alloué ✓' : 'Budget révisé ✓')
       setRevision(null)
     } finally {

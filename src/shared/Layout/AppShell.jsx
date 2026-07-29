@@ -10,6 +10,8 @@ import AutoApproveDemandes from '../AutoApproveDemandes'
 import AutoApproveSortiesFacture from '../AutoApproveSortiesFacture'
 import AutoApproveWorkflow from '../AutoApproveWorkflow'
 import ProjetAlerteWatcher from '../ProjetAlerteWatcher'
+import ProjetPurgeWatcher from '../ProjetPurgeWatcher'
+import DepensePurgeWatcher from '../DepensePurgeWatcher'
 import ProjetAutoDemarrage from '../ProjetAutoDemarrage'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -27,7 +29,9 @@ export default function AppShell() {
       {hasModule('logistique') && <AutoApproveWorkflow collection="logistique_demandes" module="logistique" />}
       {hasModule('evenementiel') && <AutoApproveWorkflow collection="evenementiel_demandes" module="evenementiel" />}
       {hasModule('projet') && <ProjetAlerteWatcher />}
+      {hasModule('projet') && <ProjetPurgeWatcher />}
       {hasModule('projet') && <ProjetAutoDemarrage />}
+      {hasModule('depense') && <DepensePurgeWatcher />}
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onMenuToggle={() => setSidebarOpen((o) => !o)} />

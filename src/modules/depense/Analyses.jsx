@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Wallet, HeartHandshake } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
 import { SECTEURS, MOIS_LABELS, sourceFinancementDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesNatureMois, natureFlux, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
@@ -14,6 +15,11 @@ const now = new Date()
 const PALETTE = ['#B45309', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
 
 export default function Analyses() {
+  const { role } = useAuth()
+  // L'agent voit l'onglet (suivi de ses propres dépenses) mais pas les figures
+  // financières réservées à l'administration : revenus, dette/apports du PAU,
+  // budget alloué par secteur — même restriction que le Dashboard.
+  const restreintAgent = role === 'agent'
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: depensesProjet }  = useCollection('projet_depenses')
@@ -75,10 +81,12 @@ export default function Analyses() {
 
   // Par secteur : 3 barres côte à côte — Budget alloué (cible) · Dépenses courantes ·
   // Investissements — pour comparer directement les trois montants d'un même secteur.
+  // L'agent n'a pas droit au budget alloué (figure réservée à l'administration) : le
+  // dataset correspondant est simplement omis pour lui, les 2 autres restent utiles.
   const barData = {
     labels: parSecteur.map((s) => s.label),
     datasets: [
-      { label: 'Budget alloué', data: parSecteur.map((s) => s.alloue), backgroundColor: 'rgba(148,163,184,0.55)', borderColor: '#64748b', borderWidth: 1, borderRadius: 6 },
+      ...(restreintAgent ? [] : [{ label: 'Budget alloué', data: parSecteur.map((s) => s.alloue), backgroundColor: 'rgba(148,163,184,0.55)', borderColor: '#64748b', borderWidth: 1, borderRadius: 6 }]),
       { label: 'Dépenses courantes', data: parSecteur.map((s) => s.depExpl), backgroundColor: 'rgba(220,38,38,0.65)', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6 },
       { label: 'Investissements', data: parSecteur.map((s) => s.depInv), backgroundColor: 'rgba(180,83,9,0.6)', borderColor: '#B45309', borderWidth: 1, borderRadius: 6 }
     ]
@@ -126,7 +134,8 @@ export default function Analyses() {
   const lineData = {
     labels: tendance.map((t) => t.label),
     datasets: [
-      { label: 'Revenus', data: tendance.map((t) => t.revenu), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.12)', tension: 0.3, fill: true, borderWidth: 3, pointRadius: 3, pointBackgroundColor: '#059669' },
+      // Revenus réservés à l'administration — omis pour l'agent.
+      ...(restreintAgent ? [] : [{ label: 'Revenus', data: tendance.map((t) => t.revenu), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.12)', tension: 0.3, fill: true, borderWidth: 3, pointRadius: 3, pointBackgroundColor: '#059669' }]),
       { label: 'Dépenses courantes', data: tendance.map((t) => t.depExploitation), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.08)', tension: 0.3, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#dc2626' },
       { label: 'Investissements (projets)', data: tendance.map((t) => t.depInvestissement), borderColor: '#B45309', backgroundColor: 'rgba(180,83,9,0.06)', tension: 0.3, borderWidth: 2, borderDash: [6, 4], pointRadius: 3, pointBackgroundColor: '#B45309' }
     ]
@@ -183,10 +192,12 @@ export default function Analyses() {
           value={`${resteAPayer.toLocaleString('fr-FR')} FCFA`}
           sub="Approuvé / en attente, non décaissé"
           icon={Wallet} accent="#d97706" />
-        <StatCard title="Dette envers le PAU"
-          value={`${financementPau.detteNette.toLocaleString('fr-FR')} FCFA`}
-          sub={financementPau.cumulPau === 0 ? 'Aucun apport enregistré' : financementPau.detteNette === 0 ? '✓ Soldée' : `${financementPau.cumulRembourse.toLocaleString('fr-FR')} FCFA déjà restitués`}
-          icon={HeartHandshake} accent={financementPau.detteNette > 0 ? '#7c3aed' : '#059669'} />
+        {!restreintAgent && (
+          <StatCard title="Dette envers le PAU"
+            value={`${financementPau.detteNette.toLocaleString('fr-FR')} FCFA`}
+            sub={financementPau.cumulPau === 0 ? 'Aucun apport enregistré' : financementPau.detteNette === 0 ? '✓ Soldée' : `${financementPau.cumulRembourse.toLocaleString('fr-FR')} FCFA déjà restitués`}
+            icon={HeartHandshake} accent={financementPau.detteNette > 0 ? '#7c3aed' : '#059669'} />
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -199,9 +210,11 @@ export default function Analyses() {
         </button>
       </div>
 
-      <Card title="Tendance sur 6 mois — revenus vs dépenses (tous secteurs)">
+      <Card title={restreintAgent ? 'Tendance sur 6 mois — dépenses (tous secteurs)' : 'Tendance sur 6 mois — revenus vs dépenses (tous secteurs)'}>
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#059669' }} /> Revenus réellement encaissés/facturés</span>
+          {!restreintAgent && (
+            <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#059669' }} /> Revenus réellement encaissés/facturés</span>
+          )}
           <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Dépenses courantes (fonctionnement)</span>
           <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#B45309' }} /> Investissements (projets, ponctuels)</span>
         </div>
@@ -210,31 +223,35 @@ export default function Analyses() {
         </div>
       </Card>
 
-      <Card title="Dette envers le PAU — évolution sur 6 mois">
-        {financementPau.cumulPau === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">
-            Aucun apport du PAU enregistré. Marquez une dépense « Apport du PAU » à la saisie pour le suivre ici.
-          </p>
-        ) : (
-          <>
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200/60 bg-violet-50/50 px-3 py-2 text-xs">
-              <span className="font-bold text-violet-900">Dette restante : {financementPau.detteNette.toLocaleString('fr-FR')} FCFA</span>
-              <span className="text-gray-500">— Apporté {financementPau.cumulPau.toLocaleString('fr-FR')} · Remboursé {financementPau.cumulRembourse.toLocaleString('fr-FR')}</span>
-              <span className="ml-auto rounded-full bg-white px-2.5 py-0.5 font-bold text-violet-700 shadow-sm">{financementPau.pct}% du financement total</span>
-            </div>
-            <div style={{ height: 280 }}>
-              <Line data={pauChartData} options={pauChartOptions} />
-            </div>
-            <p className="mt-2 text-[11px] text-gray-400">
-              Cumul depuis le début, tous secteurs confondus. La dette diminue à mesure des remboursements enregistrés (Dashboard) — traçabilité pure, n'affecte pas les budgets.
+      {!restreintAgent && (
+        <Card title="Dette envers le PAU — évolution sur 6 mois">
+          {financementPau.cumulPau === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">
+              Aucun apport du PAU enregistré. Marquez une dépense « Apport du PAU » à la saisie pour le suivre ici.
             </p>
-          </>
-        )}
-      </Card>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200/60 bg-violet-50/50 px-3 py-2 text-xs">
+                <span className="font-bold text-violet-900">Dette restante : {financementPau.detteNette.toLocaleString('fr-FR')} FCFA</span>
+                <span className="text-gray-500">— Apporté {financementPau.cumulPau.toLocaleString('fr-FR')} · Remboursé {financementPau.cumulRembourse.toLocaleString('fr-FR')}</span>
+                <span className="ml-auto rounded-full bg-white px-2.5 py-0.5 font-bold text-violet-700 shadow-sm">{financementPau.pct}% du financement total</span>
+              </div>
+              <div style={{ height: 280 }}>
+                <Line data={pauChartData} options={pauChartOptions} />
+              </div>
+              <p className="mt-2 text-[11px] text-gray-400">
+                Cumul depuis le début, tous secteurs confondus. La dette diminue à mesure des remboursements enregistrés (Dashboard) — traçabilité pure, n'affecte pas les budgets.
+              </p>
+            </>
+          )}
+        </Card>
+      )}
 
-      <Card title={`Budget vs dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+      <Card title={restreintAgent ? `Dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}` : `Budget vs dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}`}>
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#94a3b8' }} /> Budget alloué (cible)</span>
+          {!restreintAgent && (
+            <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#94a3b8' }} /> Budget alloué (cible)</span>
+          )}
           <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Dépenses courantes</span>
           <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#B45309' }} /> Investissements (projets)</span>
         </div>

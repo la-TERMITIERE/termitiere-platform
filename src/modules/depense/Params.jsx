@@ -1,6 +1,6 @@
 // Paramètres Dépenses — export des dépenses + réinitialisation.
-import { useState } from 'react'
-import { FileSpreadsheet, FileText, FileDown, Trash2, AlertTriangle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { FileSpreadsheet, FileText, FileDown, Trash2, AlertTriangle, Archive, Save, RotateCcw } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -8,12 +8,77 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { usePDF } from '../../hooks/usePDF'
 import { isFullAccessRole } from '../../core/roles'
-import { removeItem } from '../../core/db'
+import { removeItem, setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { SECTEURS } from './data'
+
+// Conservation des données : au bout de combien d'années les dépenses E-DÉPENSES
+// sont supprimées automatiquement. Réglage INDÉPENDANT de celui d'E-G.Pro (chaque
+// module a sa propre durée de conservation, dans sa propre collection de
+// paramètres) — voir DepensePurgeWatcher pour le mécanisme de purge lui-même.
+function SectionConservation() {
+  const { role } = useAuth()
+  const peutModifier = isFullAccessRole(role)
+  const { data: configs } = useCollection('depense_params')
+  const [annees, setAnnees] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  useEffect(() => {
+    const cfg = configs.find((c) => c.id === 'retention')
+    setAnnees(cfg?.anneesDepenses ? String(cfg.anneesDepenses) : '')
+  }, [configs])
+
+  const handleSave = async () => {
+    if (!peutModifier) return
+    setSaving(true)
+    try {
+      const n = Number(annees) || 0
+      await setItem('depense_params', 'retention', { id: 'retention', anneesDepenses: n, updatedAt: Date.now() })
+      await audit('depense', 'retention_modifiee', n > 0 ? `Purge des dépenses de plus de ${n} an(s)` : 'Purge automatique désactivée')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><Archive size={15} className="text-slate-500" />Conservation des données</span>}>
+      <p className="mb-4 text-xs text-gray-500">
+        Supprime automatiquement les dépenses E-DÉPENSES de plus de X années. Réglage propre à ce module (indépendant d'E-G.Pro).
+      </p>
+      <div className="rounded-2xl border border-slate-200/60 bg-slate-50/70 p-4 backdrop-blur-sm">
+        <p className="text-sm font-semibold text-slate-700">Purge des anciennes dépenses</p>
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="number" min={0} max={50} disabled={!peutModifier}
+            placeholder="désactivé"
+            className="w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-gray-100 disabled:text-gray-500"
+            value={annees}
+            onChange={(e) => setAnnees(e.target.value)}
+          />
+          <span className="text-sm font-semibold text-slate-600">an(s)</span>
+        </div>
+        <p className="mt-2 text-[10px] text-slate-500">
+          Laisser vide ou 0 = purge désactivée (rien n'est supprimé automatiquement).
+        </p>
+      </div>
+
+      {peutModifier ? (
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><RotateCcw size={14} className="mr-1.5 animate-spin" />Enregistrement…</> : <><Save size={14} className="mr-1.5" />Enregistrer</>}
+          </Button>
+          {saved && <span className="text-xs font-semibold text-green-600">✓ Enregistré</span>}
+        </div>
+      ) : (
+        <p className="mt-4 text-xs italic text-gray-400">Réservé à la direction.</p>
+      )}
+    </Card>
+  )
+}
 
 const ENTETES = ['Date', 'Secteur', 'Catégorie', 'Montant (FCFA)', 'Description', 'Enregistré par']
 
@@ -161,6 +226,8 @@ export default function Params() {
           })}
         </div>
       </Card>
+
+      <SectionConservation />
 
       {isAdmin && (
         <Card title="Réinitialisation des données" className="border-red-200">

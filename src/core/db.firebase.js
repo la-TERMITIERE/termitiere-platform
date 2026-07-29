@@ -11,7 +11,8 @@ import {
   set as rtdbSet,
   update as rtdbUpdate,
   remove as rtdbRemove,
-  push as rtdbPush
+  push as rtdbPush,
+  runTransaction
 } from 'firebase/database'
 import { rtdb, isFirebaseConfigured } from './firebase'
 import { sanitizeData } from './sanitize'
@@ -127,6 +128,29 @@ export async function removeItem(name, id) {
     return
   }
   await rtdbRemove(docRef(name, id))
+}
+
+// Réclame un document de façon ATOMIQUE : n'écrit que si `id` n'existe pas encore,
+// renvoie true si CET appel a gagné la réclamation, false si quelqu'un d'autre l'a
+// déjà réclamé (ex. deux sessions ouvertes en même temps). Contrairement à
+// getOne()+setItem(), il n'y a pas de fenêtre de course entre la lecture et
+// l'écriture — utilisé pour garantir qu'une notification n'est envoyée qu'UNE
+// SEULE fois même si plusieurs utilisateurs ont l'appli ouverte simultanément.
+export async function claimOnce(name, id, data = {}) {
+  checkRate(name, 'write')
+  data = sanitizeData(data)
+  if (!isFirebaseConfigured) {
+    const arr = demoRead(name)
+    if (arr.some((x) => x.id === id)) return false
+    arr.push({ id, ...data, createdAt: Date.now() })
+    demoWrite(name, arr)
+    return true
+  }
+  const { committed } = await runTransaction(docRef(name, id), (current) => {
+    if (current !== null) return undefined // avorte : déjà réclamé par quelqu'un d'autre
+    return { ...data, createdAt: Date.now() }
+  })
+  return committed
 }
 
 export const ts = () => Date.now()

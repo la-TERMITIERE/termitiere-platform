@@ -14,11 +14,12 @@ import { formatDateShort, todayStr } from '../../utils/formatters'
 import { useAuthStore } from '../../core/auth'
 import { projetsVisibles, scopeParProjets } from './logic'
 
-// Réapparition d'une alerte fermée sur le Dashboard : au bout de 2 min, tant que le
-// quota quotidien n'est pas atteint. Après 5 fermetures dans la même journée, elle
-// se tait jusqu'au lendemain (reset automatique, cf. visibiliteAlerte ci-dessous).
+// Fermer une alerte sur le Dashboard la fait taire jusqu'au LENDEMAIN (reset
+// automatique, cf. visibiliteAlerte ci-dessous) — une seule fermeture suffit, pas
+// besoin de la refermer plusieurs fois. Elle ne revient que si le jour change et
+// que la condition est toujours vraie (pas corrigée).
 const REAPPARITION_MS  = 2 * 60 * 1000
-const MAX_FERMETURES   = 5
+const MAX_FERMETURES   = 1
 
 function visibiliteAlerte(alerteId, fermetures) {
   const f = fermetures.find((x) => x.id === alerteId)

@@ -1,6 +1,6 @@
 // Dashboard Dépenses — budget alloué vs dépensé, par secteur, pour le mois en cours.
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake, HandCoins, History } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake, HandCoins, History, BellRing, X } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -8,10 +8,12 @@ import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
+import { notify } from '../../core/notify'
+import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
@@ -20,6 +22,26 @@ const now = new Date()
 const REAL_ANNEE = now.getFullYear()
 const REAL_MOIS = now.getMonth() + 1
 
+// Fermer une alerte sur le Dashboard la fait taire jusqu'au LENDEMAIN — une seule
+// fermeture suffit (reset automatique) — même mécanique que E-G.Pro.
+const REAPPARITION_MS = 2 * 60 * 1000
+const MAX_FERMETURES  = 1
+
+function visibiliteAlerte(alerteId, fermetures) {
+  const f = fermetures.find((x) => x.id === alerteId)
+  if (!f) return true
+  if (f.jour !== todayStr()) return true // nouveau jour → on repart de zéro
+  if ((f.compteur || 0) >= MAX_FERMETURES) return false // quota atteint → silence jusqu'à demain
+  return Date.now() - (f.dernierFermeture || 0) >= REAPPARITION_MS
+}
+
+const TYPE_ALERTE = {
+  budget_depasse:   { color: 'text-red-600',   ring: 'ring-red-200',   bg: 'bg-red-50/80',   icon: AlertTriangle, label: 'Budget dépassé'  },
+  budget_attention: { color: 'text-amber-600', ring: 'ring-amber-200', bg: 'bg-amber-50/80',  icon: AlertTriangle, label: 'Budget en alerte' },
+  demande:          { color: 'text-amber-600', ring: 'ring-amber-200', bg: 'bg-amber-50/80',  icon: Stamp,         label: 'Décaissement à traiter' },
+  reconduction:     { color: 'text-sky-600',   ring: 'ring-sky-200',   bg: 'bg-sky-50/80',    icon: Repeat,        label: 'Dépense à reconduire' }
+}
+
 export default function Dashboard() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: depensesReelles } = useCollection('depense_depenses')
@@ -27,6 +49,7 @@ export default function Dashboard() {
   const { data: projetsTous }     = useCollection('projets')
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
   const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
+  const { data: fermeesDashboard } = useCollection('depense_alertes_dashboard_fermees')
   // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
   const depenses = useMemo(() => [
     ...depensesReelles,
@@ -35,6 +58,7 @@ export default function Dashboard() {
   ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
   const { user, role } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   // L'agent n'a pas accès aux KPI financiers globaux (budget alloué, dette PAU, secteurs
   // en dépassement) ni au détail des revenus/financement — seulement au total dépensé et
   // au reste, dont il a besoin pour suivre sa propre saisie.
@@ -46,6 +70,28 @@ export default function Dashboard() {
   const [remboursement, setRemboursement] = useState(null) // { montant, date, motif } quand le modal est ouvert
   const [rembSaving, setRembSaving] = useState(false)
   const [histoRembOuvert, setHistoRembOuvert] = useState(false)
+
+  // Ouvre directement l'historique des remboursements PAU depuis la notification
+  // « Remboursement au PAU » — évite d'avoir à cliquer sur « Historique » soi-même.
+  useEffect(() => {
+    if (!location.state?.openHistoriqueRemb) return
+    setHistoRembOuvert(true)
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state])
+
+  // Revérifie périodiquement si une alerte fermée doit réapparaître (délai de 2 min écoulé).
+  const [, relancerVerif] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => relancerVerif((n) => n + 1), 15 * 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const fermerSurDashboard = (a) => {
+    const jour = todayStr()
+    const existant = fermeesDashboard.find((f) => f.id === a.id)
+    const compteur = (existant?.jour === jour ? (existant.compteur || 0) : 0) + 1
+    setItem('depense_alertes_dashboard_fermees', a.id, { id: a.id, compteur, dernierFermeture: Date.now(), jour })
+  }
 
   const changerMois = (delta) => {
     let m = mois + delta, a = annee
@@ -108,6 +154,13 @@ export default function Dashboard() {
         enregistrePar: user?.nom || user?.login || '—', createdAt: Date.now()
       })
       await audit('depense', 'PAU_REMBOURSEMENT', `${montant.toLocaleString('fr-FR')} FCFA remboursés au PAU — ${secteurLabel}${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`, { montant, date: remboursement.date, secteurId: remboursement.secteurId })
+      // Réservé à l'administration : mouvement de restitution d'une dette envers le PAU.
+      await notify({
+        type: 'info', title: `💜 Remboursement au PAU — ${secteurLabel}`,
+        body: `${montant.toLocaleString('fr-FR')} FCFA restitués${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}.`,
+        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
+        link: '/depense', state: { openHistoriqueRemb: true }
+      }).catch(() => {})
       toast.success('Remboursement enregistré ✓ — budget crédité pour ' + secteurLabel)
       setRemboursement(null)
     } finally {
@@ -142,11 +195,56 @@ export default function Dashboard() {
         })
       }
       await audit('depense', 'DEPENSE_RECONDUITE', `${depensesAReconduire.length} dépense(s) récurrente(s) reconduite(s)`, { count: depensesAReconduire.length })
+      // Réservé à l'administration : des dépenses récurrentes viennent d'être
+      // reconduites automatiquement sur le mois en cours.
+      const totalReconduit = depensesAReconduire.reduce((s, d) => s + (Number(d.montant) || 0), 0)
+      await notify({
+        type: 'info', title: `🔁 ${depensesAReconduire.length} dépense(s) récurrente(s) reconduite(s)`,
+        body: `${totalReconduit.toLocaleString('fr-FR')} FCFA reconduits sur ${MOIS_LABELS[mois - 1]} ${annee}.`,
+        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
+        link: '/depense/liste', state: { filtreMois: `${annee}-${String(mois).padStart(2, '0')}` }
+      }).catch(() => {})
       toast.success(`${depensesAReconduire.length} dépense(s) reconduite(s) ✓`)
     } finally {
       setReconduisant(false)
     }
   }
+
+  // Alertes unifiées (budget, décaissements en attente, reconduction) — même
+  // présentation/comportement que le widget « Alertes » d'E-G.Pro : une carte,
+  // dismiss (✕) avec réapparition après 2 min (5x/jour max), clic → détail.
+  // Réservé à l'administration comme le reste des KPI financiers.
+  const alertesCard = useMemo(() => {
+    const out = []
+    alertes.forEach((s) => {
+      out.push({
+        id: `budget_${s.id}_${annee}-${mois}`,
+        type: s.statut.key === 'depasse' ? 'budget_depasse' : 'budget_attention',
+        message: `${s.label} — ${s.pct}% consommé (${s.depense.toLocaleString('fr-FR')} / ${s.alloue.toLocaleString('fr-FR')} FCFA)`,
+        secteurId: s.id
+      })
+    })
+    if (enAttenteCount > 0) {
+      out.push({
+        id: 'demandes_decaissement',
+        type: 'demande',
+        message: `${enAttenteCount} demande${enAttenteCount > 1 ? 's' : ''} en attente d'autorisation`
+      })
+    }
+    if (depensesAReconduire.length > 0) {
+      out.push({
+        id: 'reconduction',
+        type: 'reconduction',
+        message: `${depensesAReconduire.length} dépense${depensesAReconduire.length > 1 ? 's' : ''} récurrente${depensesAReconduire.length > 1 ? 's' : ''} à reconduire ce mois-ci`
+      })
+    }
+    return out
+  }, [alertes, enAttenteCount, depensesAReconduire, annee, mois])
+
+  const alertesVisibles = useMemo(
+    () => alertesCard.filter((a) => visibiliteAlerte(a.id, fermeesDashboard)),
+    [alertesCard, fermeesDashboard]
+  )
 
   return (
     <div className="space-y-5">
@@ -176,90 +274,52 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* ── Demandes de décaissement à traiter ── */}
-      {enAttenteCount > 0 && (
-        <button onClick={() => navigate('/depense/autorisations')}
-          className="group flex w-full items-center gap-3 rounded-2xl border-l-4 border-amber-500 bg-gradient-to-r from-amber-50/95 via-amber-50/70 to-amber-50/30 px-4 py-3.5 text-left shadow-[0_16px_36px_-16px_rgba(180,83,9,0.28)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_44px_-16px_rgba(180,83,9,0.38)]">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 shadow-[0_4px_10px_-2px_rgba(180,83,9,0.5)]">
-            <Stamp size={18} className="text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-bold text-amber-900">{enAttenteCount} demande{enAttenteCount > 1 ? 's' : ''} de décaissement à traiter</p>
-            <p className="text-xs text-amber-600">Cliquez pour ouvrir l'autorisation de décaissement</p>
-          </div>
-          <span className="shrink-0 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-bold text-white">{enAttenteCount}</span>
-          <ChevronRight size={18} className="shrink-0 text-amber-400 transition-transform group-hover:translate-x-0.5" />
-        </button>
-      )}
-
-      {/* ── Alerte secteurs en attention / dépassement ── */}
-      {alertes.length > 0 && (() => {
-        const nbDepasses = alertes.filter((s) => s.statut.key === 'depasse').length
-        const nbAttention = alertes.length - nbDepasses
-        const ouvrirSecteur = (s) => navigate('/depense/recettes-depenses', { state: { openSecteurId: s.id, annee, mois } })
+      {/* ── Alertes (budget, décaissements en attente, reconduction) ── */}
+      {!restreintAgent && alertesVisibles.length > 0 && (() => {
+        const critiques = alertesVisibles.filter((a) => a.type === 'budget_depasse' || a.type === 'demande').length
         return (
-          <div className="group w-full rounded-2xl border-l-4 border-red-500 bg-gradient-to-r from-red-50/95 via-red-50/70 to-red-50/30 px-4 py-3.5 shadow-[0_16px_36px_-16px_rgba(220,38,38,0.28)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_44px_-16px_rgba(220,38,38,0.38)]">
-            <button onClick={() => navigate('/depense/recettes-depenses')} title="Voir tous les secteurs"
-              className="flex w-full flex-wrap items-center gap-3 text-left">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500 shadow-[0_4px_10px_-2px_rgba(220,38,38,0.5)]">
-                <AlertTriangle size={18} className="text-white" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-red-900">{alertes.length} secteur{alertes.length > 1 ? 's' : ''} à surveiller</p>
-                <p className="text-xs text-red-500">
-                  {MOIS_LABELS[mois - 1]} {annee}
-                  {nbDepasses > 0 && <span className="ml-1.5">· {nbDepasses} dépassé{nbDepasses > 1 ? 's' : ''}</span>}
-                  {nbAttention > 0 && <span className="ml-1.5">· {nbAttention} en attention</span>}
-                </p>
-              </div>
-              <span className="shrink-0 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white">{alertes.length}</span>
-              <ChevronRight size={18} className="shrink-0 text-red-400 transition-transform group-hover:translate-x-0.5" />
-            </button>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {alertes.map((s) => {
-                const depasse = s.statut.key === 'depasse'
+          <Card title={
+            <span className="flex items-center gap-2">
+              <BellRing size={15} className={critiques ? 'text-red-500' : 'text-amber-500'} />
+              Alertes
+              {critiques > 0 && <span className="ml-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{critiques}</span>}
+              <span className="ml-auto text-[11px] font-normal text-gray-400">{alertesVisibles.length} active{alertesVisibles.length > 1 ? 's' : ''}</span>
+            </span>
+          }>
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {alertesVisibles.map((a) => {
+                const cfg = TYPE_ALERTE[a.type]
+                const Icone = cfg.icon
+                const onClickAlerte = () => {
+                  if (a.type === 'demande') navigate('/depense/autorisations')
+                  else if (a.type === 'reconduction') reconduireDepenses()
+                  else navigate('/depense/recettes-depenses', { state: { openSecteurId: a.secteurId, annee, mois } })
+                }
                 return (
-                  <button key={s.id} onClick={() => ouvrirSecteur(s)} title="Voir le détail de ce secteur"
-                    className={`rounded-xl border bg-white/80 px-3 py-2 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${depasse ? 'border-red-200 hover:border-red-300' : 'border-amber-200 hover:border-amber-300'}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`truncate text-xs font-bold ${depasse ? 'text-red-700' : 'text-amber-700'}`}>
-                        {depasse ? '🔴' : '🟠'} {s.label}
-                      </span>
-                      <span className={`shrink-0 text-xs font-black ${depasse ? 'text-red-700' : 'text-amber-700'}`}>{s.pct}%</span>
+                  <div key={a.id} onClick={onClickAlerte} title={a.type === 'reconduction' ? 'Reconduire maintenant' : 'Aller corriger'}
+                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border border-white/60 px-3 py-2.5 shadow-sm ring-1 backdrop-blur-sm transition-all hover:shadow-md hover:brightness-95 ${cfg.bg} ${cfg.ring}`}>
+                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm ${cfg.color}`}>
+                      <Icone size={14} />
                     </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                      <div className={`h-1.5 rounded-full ${depasse ? 'bg-red-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, s.pct)}%` }} />
+                    <div className="min-w-0 flex-1">
+                      <span className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</span>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">{a.message}</p>
                     </div>
-                  </button>
+                    <button onClick={(e) => { e.stopPropagation(); fermerSurDashboard(a) }} title="Masquer 2 min"
+                      className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/80 hover:text-gray-700">
+                      <X size={14} />
+                    </button>
+                  </div>
                 )
               })}
             </div>
-          </div>
+          </Card>
         )
       })()}
 
-      {/* ── Dépenses récurrentes à reconduire ── */}
-      {depensesAReconduire.length > 0 && (
-        <button onClick={reconduireDepenses} disabled={reconduisant}
-          className="group flex w-full items-center gap-3 rounded-2xl border-l-4 border-sky-500 bg-gradient-to-r from-sky-50/95 via-sky-50/70 to-sky-50/30 px-4 py-3.5 text-left shadow-[0_16px_36px_-16px_rgba(2,132,199,0.28)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_44px_-16px_rgba(2,132,199,0.38)] disabled:opacity-60 disabled:hover:translate-y-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 shadow-[0_4px_10px_-2px_rgba(2,132,199,0.5)]">
-            <Repeat size={18} className="text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-bold text-sky-900">{depensesAReconduire.length} dépense{depensesAReconduire.length > 1 ? 's' : ''} récurrente{depensesAReconduire.length > 1 ? 's' : ''} à reconduire ce mois-ci</p>
-            <p className="text-xs text-sky-600">
-              {reconduisant ? 'Reconduction en cours…' : 'Cliquez pour les ajouter automatiquement au mois en cours'}
-            </p>
-          </div>
-          {!reconduisant && <ChevronRight size={18} className="shrink-0 text-sky-400 transition-transform group-hover:translate-x-0.5" />}
-        </button>
-      )}
-
-      <div className={`grid grid-cols-2 gap-3 ${restreintAgent ? '' : 'lg:grid-cols-4'}`}>
-        {!restreintAgent && (
-          <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#B45309"
-            onClick={() => navigate('/depense/recettes-depenses')} />
-        )}
+      <div className={`grid grid-cols-2 gap-3 ${restreintAgent ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+        <StatCard title="Budget alloué" value={`${totalAlloue.toLocaleString('fr-FR')} FCFA`} icon={Receipt} accent="#B45309"
+          onClick={restreintAgent ? undefined : () => navigate('/depense/recettes-depenses')} />
         <StatCard title="Total dépensé" value={`${totalDepense.toLocaleString('fr-FR')} FCFA`} icon={TrendingDown} accent="#dc2626"
           onClick={() => navigate('/depense/liste')} />
         <StatCard title="Reste global" value={`${(totalAlloue - totalDepense).toLocaleString('fr-FR')} FCFA`} icon={Wallet}
@@ -274,10 +334,14 @@ export default function Dashboard() {
 
       {/* Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) et lui doit
           encore restituer. Le remboursement réduit la dette nette — traçabilité complète. */}
-      {!restreintAgent && financement.cumulPau > 0 && (
-        <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-3 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+      {!restreintAgent && financement.cumulPau > 0 && (() => {
+        const pctRestitue = financement.cumulPau > 0 ? Math.min(100, Math.round((financement.cumulRembourse / financement.cumulPau) * 100)) : 0
+        return (
+        <div className="rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 via-purple-50/60 to-violet-50/40 px-4 py-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-wrap items-center gap-2">
-            <HeartHandshake size={18} className="text-violet-600" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 shadow-[0_4px_10px_-2px_rgba(124,58,237,0.5)]">
+              <HeartHandshake size={16} className="text-white" />
+            </div>
             <p className="font-bold text-violet-900">Dette envers le PAU</p>
             <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-violet-700 shadow-sm">{financement.pct}% du financement total</span>
             <div className="ml-auto flex items-center gap-2">
@@ -296,37 +360,57 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Dette nette — l'info la plus importante, mise en avant */}
-          <div className="mt-2 rounded-xl bg-white/70 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Dette restante (à restituer)</p>
-            <p className={`text-2xl font-black ${financement.detteNette > 0 ? 'text-violet-800' : 'text-green-700'}`}>
-              {financement.detteNette.toLocaleString('fr-FR')} FCFA
-              {financement.detteNette === 0 && <span className="ml-2 text-sm font-bold text-green-600">✓ Soldée</span>}
+          {/* Dette nette — l'info la plus importante, mise en avant, avec la barre
+              de restitution intégrée juste en dessous pour lire les deux d'un coup. */}
+          <div className="mt-3 rounded-xl bg-white/80 px-3.5 py-3 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Dette restante (à restituer)</p>
+                <p className={`text-lg font-extrabold leading-snug ${financement.detteNette > 0 ? 'text-violet-800' : 'text-green-700'}`}>
+                  {financement.detteNette.toLocaleString('fr-FR')} <span className="text-xs font-semibold text-violet-400">FCFA</span>
+                  {financement.detteNette === 0 && <span className="ml-2 text-xs font-bold text-green-600">✓ Soldée</span>}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold text-green-700">{pctRestitue}% restitué</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-violet-100">
+              <div className="h-1.5 rounded-full bg-gradient-to-r from-green-400 to-green-600 transition-all" style={{ width: `${pctRestitue}%` }} />
+            </div>
+            <p className="mt-1.5 text-[10px] text-gray-400">
+              Basé sur la « Source de financement » de chaque dépense + les remboursements enregistrés.
             </p>
           </div>
 
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Apporté (cumulé)</p>
-              <p className="text-lg font-black text-violet-800">{financement.cumulPau.toLocaleString('fr-FR')} FCFA</p>
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-white/70 p-3">
+              <div className="flex items-center gap-1.5 text-violet-500">
+                <HandCoins size={13} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide">Apporté (cumulé)</p>
+              </div>
+              <p className="mt-1 text-base font-bold text-violet-800">{financement.cumulPau.toLocaleString('fr-FR')} FCFA</p>
             </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Déjà remboursé (cumulé)</p>
-              <p className="text-lg font-black text-green-700">{financement.cumulRembourse.toLocaleString('fr-FR')} FCFA</p>
+            <div className="rounded-xl bg-white/70 p-3">
+              <div className="flex items-center gap-1.5 text-green-600">
+                <History size={13} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide">Déjà remboursé (cumulé)</p>
+              </div>
+              <p className="mt-1 text-base font-bold text-green-700">{financement.cumulRembourse.toLocaleString('fr-FR')} FCFA</p>
             </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Fonds propres de l'entreprise (cumulé)</p>
-              <p className="text-lg font-black text-gray-700">{financement.cumulEntreprise.toLocaleString('fr-FR')} FCFA</p>
+            <div className="rounded-xl bg-white/70 p-3">
+              <div className="flex items-center gap-1.5 text-gray-500">
+                <Wallet size={13} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide">Fonds propres (cumulé)</p>
+              </div>
+              <p className="mt-1 text-base font-bold text-gray-700">{financement.cumulEntreprise.toLocaleString('fr-FR')} FCFA</p>
+            </div>
+            <div className="rounded-xl bg-white/70 p-3">
+              <div className="flex items-center gap-1.5 text-amber-600">
+                <Receipt size={13} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide">Budget alloué (mois)</p>
+              </div>
+              <p className="mt-1 text-base font-bold text-amber-700">{totalAlloue.toLocaleString('fr-FR')} FCFA</p>
             </div>
           </div>
-
-          {/* Barre de remboursement de la dette */}
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70">
-            <div className="h-2 rounded-full bg-green-500" style={{ width: `${financement.cumulPau > 0 ? Math.min(100, Math.round((financement.cumulRembourse / financement.cumulPau) * 100)) : 0}%` }} />
-          </div>
-          <p className="mt-1.5 text-[11px] text-violet-500">
-            {financement.cumulPau > 0 ? Math.round((financement.cumulRembourse / financement.cumulPau) * 100) : 0}% de la dette déjà restituée. Basé sur la « Source de financement » de chaque dépense + les remboursements enregistrés.
-          </p>
 
           {histoRembOuvert && remboursementsPau.length > 0 && (
             <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto rounded-xl bg-white/70 p-2">
@@ -343,7 +427,8 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* Modal enregistrement d'un remboursement au PAU */}
       <Modal open={!!remboursement} onClose={() => setRemboursement(null)} size="sm" title="Rembourser le PAU"
@@ -386,32 +471,60 @@ export default function Dashboard() {
 
       <Card title="Répartition par secteur">
         <div className="space-y-2.5">
-          {parSecteur.map((s) => (
-            <div key={s.id} className="rounded-2xl border border-gray-200/60 bg-white/60 p-3.5 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150 transition-shadow hover:shadow-[0_14px_30px_-14px_rgba(26,26,26,0.18)]"
-              style={{ borderLeft: `4px solid ${s.color}` }}>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-bold text-gray-800">{s.label}</span>
-                <Badge tone={s.statut.tone}>{s.statut.label}</Badge>
-                <div className="ml-auto text-right text-sm text-gray-500">
-                  <strong className="text-gray-800">{s.depense.toLocaleString('fr-FR')}</strong>
-                  {restreintAgent
-                    ? <span className="text-gray-400"> · reste {s.reste.toLocaleString('fr-FR')} FCFA</span>
-                    : <span className="text-gray-400"> / {s.alloue.toLocaleString('fr-FR')} FCFA</span>}
+          {parSecteur.map((s) => {
+            // Aucun budget alloué : le calcul de % force artificiellement 100% « Dépassé »
+            // dès la moindre dépense (0 FCFA alloué), ce qui est trompeur — on distingue ce
+            // cas plutôt que d'afficher une fausse alerte de dépassement.
+            const sansBudget = s.alloue === 0
+            const peutAllouer = !restreintAgent && sansBudget
+            return (
+              <div key={s.id}
+                onClick={peutAllouer ? () => navigate('/depense/recettes-depenses', { state: { openSecteurId: s.id, annee, mois } }) : undefined}
+                title={peutAllouer ? 'Cliquer pour allouer un budget à ce secteur' : undefined}
+                className={`rounded-2xl border border-gray-200/60 bg-white/60 p-3.5 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150 transition-shadow hover:shadow-[0_14px_30px_-14px_rgba(26,26,26,0.18)] ${peutAllouer ? 'cursor-pointer' : ''}`}
+                style={{ borderLeft: `4px solid ${s.color}` }}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold text-gray-800">{s.label}</span>
+                  {sansBudget
+                    ? <Badge tone="neutral">Budget non défini</Badge>
+                    : <Badge tone={s.statut.tone}>{s.statut.label}</Badge>}
+                  <div className="ml-auto text-right text-sm text-gray-500">
+                    <strong className="text-gray-800">{s.depense.toLocaleString('fr-FR')} FCFA</strong>
+                    {sansBudget
+                      ? <span className="text-gray-400"> / {s.alloue.toLocaleString('fr-FR')} FCFA alloué</span>
+                      : (restreintAgent
+                        ? <span className="text-gray-400"> · reste {s.reste.toLocaleString('fr-FR')} FCFA</span>
+                        : <span className="text-gray-400"> / {s.alloue.toLocaleString('fr-FR')} FCFA</span>)}
+                  </div>
                 </div>
+                {sansBudget ? (
+                  <>
+                    {/* Ligne discrète : rouge doux (pas le rouge d'alerte plein) quand il y a
+                        de la dépense sans budget en face — signale l'avancement sans fausse
+                        alarme de « dépassement ». Vide si rien n'a encore été dépensé. */}
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                      {s.depense > 0 && <div className="h-1.5 rounded-full bg-red-200" style={{ width: '100%' }} />}
+                    </div>
+                    <p className="mt-1.5 text-xs italic text-gray-400">
+                      {peutAllouer ? 'Aucun budget alloué — cliquez pour en définir un.' : 'Aucun budget alloué pour ce secteur.'}
+                    </p>
+                  </>
+                ) : (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className={`h-2.5 rounded-full transition-all ${s.statut.key === 'depasse' ? 'bg-red-500' : s.statut.key === 'attention' ? 'bg-amber-500' : 'bg-green-500'}`}
+                        style={{ width: `${Math.min(s.pct, 100)}%` }}
+                      />
+                    </div>
+                    <span className={`w-10 shrink-0 text-right text-xs font-bold ${s.statut.key === 'depasse' ? 'text-red-600' : s.statut.key === 'attention' ? 'text-amber-600' : 'text-green-600'}`}>
+                      {s.pct}%
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
-                  <div
-                    className={`h-2.5 rounded-full transition-all ${s.statut.key === 'depasse' ? 'bg-red-500' : s.statut.key === 'attention' ? 'bg-amber-500' : 'bg-green-500'}`}
-                    style={{ width: `${Math.min(s.pct, 100)}%` }}
-                  />
-                </div>
-                <span className={`w-10 shrink-0 text-right text-xs font-bold ${s.statut.key === 'depasse' ? 'text-red-600' : s.statut.key === 'attention' ? 'text-amber-600' : 'text-green-600'}`}>
-                  {s.pct}%
-                </span>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </Card>
 

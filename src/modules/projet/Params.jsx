@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Trash2, AlertTriangle, RotateCcw, Bell, Save } from 'lucide-react'
+import { Trash2, AlertTriangle, RotateCcw, Bell, Save, Archive } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -103,6 +103,71 @@ function SectionSeuils() {
   )
 }
 
+// Conservation des données : au bout de combien d'années les dépenses des projets
+// déjà CLÔTURÉS (terminé/annulé) sont supprimées automatiquement. Ne touche jamais
+// aux dépenses d'un projet encore actif (planification/en_cours/en_pause), pour ne
+// jamais fausser un calcul de solde/reste encore en cours d'utilisation.
+function SectionConservation() {
+  const { role } = useAuthStore()
+  const peutModifier = FULL_ACCESS_ROLES.includes(role)
+  const { data: configs } = useCollection('projet_params')
+  const [annees, setAnnees] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  useEffect(() => {
+    const cfg = configs.find((c) => c.id === 'retention')
+    setAnnees(cfg?.anneesDepenses ? String(cfg.anneesDepenses) : '')
+  }, [configs])
+
+  const handleSave = async () => {
+    if (!peutModifier) return
+    setSaving(true)
+    try {
+      const n = Number(annees) || 0
+      await setItem('projet_params', 'retention', { id: 'retention', anneesDepenses: n, updatedAt: Date.now() })
+      await audit('projet', 'retention_modifiee', n > 0 ? `Purge des dépenses de projets clôturés après ${n} an(s)` : 'Purge automatique désactivée')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><Archive size={15} className="text-slate-500" />Conservation des données</span>}>
+      <p className="mb-4 text-xs text-gray-500">
+        Supprime automatiquement les dépenses des projets déjà <strong>terminés ou annulés</strong> depuis plus de X années — n'affecte jamais un projet encore actif.
+      </p>
+      <div className="rounded-2xl border border-slate-200/60 bg-slate-50/70 p-4 backdrop-blur-sm">
+        <p className="text-sm font-semibold text-slate-700">Purge des dépenses des projets clôturés</p>
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="number" min={0} max={50} disabled={!peutModifier}
+            placeholder="désactivé"
+            className="w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-gray-100 disabled:text-gray-500"
+            value={annees}
+            onChange={(e) => setAnnees(e.target.value)}
+          />
+          <span className="text-sm font-semibold text-slate-600">an(s) après la clôture</span>
+        </div>
+        <p className="mt-2 text-[10px] text-slate-500">
+          Laisser vide ou 0 = purge désactivée (rien n'est supprimé automatiquement).
+        </p>
+      </div>
+
+      {peutModifier ? (
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><RotateCcw size={14} className="mr-1.5 animate-spin" />Enregistrement…</> : <><Save size={14} className="mr-1.5" />Enregistrer</>}
+          </Button>
+          {saved && <span className="text-xs font-semibold text-green-600">✓ Enregistré</span>}
+        </div>
+      ) : (
+        <p className="mt-4 text-xs italic text-gray-400">Réservé à la direction.</p>
+      )}
+    </Card>
+  )
+}
+
 export default function Params() {
   const { role } = useAuthStore()
   const peutReinitialiser = FULL_ACCESS_ROLES.includes(role)
@@ -167,6 +232,8 @@ export default function Params() {
       </Card>
 
       <SectionSeuils />
+
+      <SectionConservation />
 
       {/* ── Zone danger — réservée à la direction (accès total) ─────────────── */}
       {peutReinitialiser && (

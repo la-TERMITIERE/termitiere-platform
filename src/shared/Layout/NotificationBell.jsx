@@ -67,7 +67,7 @@ export default function NotificationBell() {
   function onClickNotif(n) {
     markRead(n.id)
     setOpen(false)
-    if (n.link) navigate(n.link)
+    if (n.link) navigate(n.link, n.state ? { state: n.state } : undefined)
   }
 
   const nUnread = unread.length

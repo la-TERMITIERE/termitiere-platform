@@ -20,4 +20,5 @@ export const addItem = impl.addItem
 export const setItem = impl.setItem
 export const updateItem = impl.updateItem
 export const removeItem = impl.removeItem
+export const claimOnce = impl.claimOnce
 export const ts = impl.ts

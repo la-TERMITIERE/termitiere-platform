@@ -17,17 +17,35 @@ var NOM_MODULE = {
   projet: 'E-G.Pro', depense: 'E-DÉPENSES'
 }
 
+// Logo du module concerné (grande image affichée dans la notification système) —
+// pour identifier d'un coup d'œil de quelle appli vient l'alerte. Modules sans
+// logo dédié : repli sur le logo général LA TERMITIÈRE.
+var LOGO_MODULE = {
+  agro: '/maxi-agro-logo.png',
+  logistique: '/logo_maxi_logistique.png',
+  garderie: '/garderie-logo.png'
+}
+
+// Vrai si la chaîne contient déjà un emoji — sert à ne pas doubler l'icône
+// quand le titre applicatif en porte déjà un (ex. « 💰 Demande de décaissement »).
+function contientEmoji(s) {
+  try { return /\p{Extended_Pictographic}/u.test(s || '') } catch (e) { return false }
+}
+
 self.addEventListener('push', function (event) {
   var data = {}
   try { data = event.data ? event.data.json() : {} } catch (e) {
     data = { title: 'LA TERMITIÈRE', body: event.data ? event.data.text() : '' }
   }
-  var emoji = EMOJI[data.type] || '🔔'
   var module = NOM_MODULE[data.module] || 'LA TERMITIÈRE'
-  var title = emoji + ' ' + (data.title || 'LA TERMITIÈRE')
+  var titreBrut = data.title || 'LA TERMITIÈRE'
+  // N'ajoute l'emoji générique du type que si le titre n'en porte pas déjà un —
+  // évite le doublon visuel (« ⚠️ 💰 Demande… ») présent sur la quasi-totalité
+  // des notifications, qui incluent déjà leur propre emoji.
+  var title = contientEmoji(titreBrut) ? titreBrut : ((EMOJI[data.type] || '🔔') + ' ' + titreBrut)
   var options = {
     body: data.body || '',
-    icon: '/icon-192.png',
+    icon: LOGO_MODULE[data.module] || '/termitiere-logo.png',
     badge: '/icon-192.png',
     tag: data.tag || undefined,
     // Remplace la notification de même tag et re-alerte l'utilisateur.
@@ -39,7 +57,7 @@ self.addEventListener('push', function (event) {
     // Nom du module concerné, affiché sous le titre sur Android.
     silent: false,
     data: { url: data.url || '/', module: data.module || '' },
-    actions: [{ action: 'ouvrir', title: 'Voir' }, { action: 'fermer', title: 'Ignorer' }],
+    actions: [{ action: 'ouvrir', title: '👀 Voir détails' }, { action: 'fermer', title: 'Ignorer' }],
     vibrate: data.urgent ? [90, 60, 90, 60, 140] : [70, 45, 70]
   }
   // Sur les plateformes qui l'affichent, préfixe le corps du module concerné.
