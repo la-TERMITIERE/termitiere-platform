@@ -62,6 +62,25 @@ export default function Dashboard() {
   const nbVentesPrec = ventes.filter((v) => inPrev(v.date)).length
   const demandesActives = demandes.filter((d) => estActif(d.statut))
 
+  // Total de BRIQUES vendues sur la période (somme des quantités des lignes) +
+  // répartition par catégorie de brique (comme « Prêt à vendre »).
+  const briquesVendues = useMemo(
+    () => ventesDuMois.reduce((s, v) => s + (v.lignes || []).reduce((a, l) => a + (parseInt(l.qte) || 0), 0), 0),
+    [ventesDuMois]
+  )
+  const briquesVenduesPrec = useMemo(
+    () => ventes.filter((v) => inPrev(v.date)).reduce((s, v) => s + (v.lignes || []).reduce((a, l) => a + (parseInt(l.qte) || 0), 0), 0),
+    [ventes, prevStart, prevEnd]
+  )
+  const ventesParCategorie = useMemo(() => {
+    const map = {}
+    ventesDuMois.forEach((v) => (v.lignes || []).forEach((l) => {
+      const nom = l.briqueNom || l.briqueId || '—'
+      map[nom] = (map[nom] || 0) + (parseInt(l.qte) || 0)
+    }))
+    return Object.entries(map).map(([nom, qte]) => ({ nom, qte })).sort((a, b) => b.qte - a.qte)
+  }, [ventesDuMois])
+
   const parType = useMemo(() => {
     if (!dernier?.briques) return []
     return briques.filter((b) => b.id !== 'caillasses').map((b) => ({
@@ -72,9 +91,12 @@ export default function Dashboard() {
     })).filter((p) => p.stock > 0)
   }, [dernier, briques])
 
+  // Couleurs cardinales bien distinctes (rouge, orange, vert, bleu, jaune…) —
+  // remplacent l'ancienne palette « tout en violet » où les parts se confondaient.
+  const CARDINALES = ['#dc2626', '#ea580c', '#16a34a', '#0284c7', '#ca8a04', '#7c3aed', '#0d9488', '#db2777', '#4f46e5', '#65a30d']
   const repartition = {
     labels: parType.map((p) => p.nom),
-    datasets: [{ data: parType.map((p) => p.stock), backgroundColor: ['#7c3aed', '#6366f1', '#8b5cf6', '#a855f7', '#c026d3', '#d946ef', '#ec4899'] }]
+    datasets: [{ data: parType.map((p) => p.stock), backgroundColor: parType.map((_, i) => CARDINALES[i % CARDINALES.length]) }]
   }
 
   const fluxMois = {
@@ -161,39 +183,29 @@ export default function Dashboard() {
           ) })} />
         <StatCard title="Prêtes à vendre" value={formatNumber(stockPret)} icon={Package} accent="#16a34a"
           sub="par type — cliquer" onClick={() => setDetail({ titre: 'Briques prêtes à vendre', render: tableStock('pret') })} />
-        <StatCard title="Ventes période" value={formatNumber(ventesDuMois.length)} icon={ShoppingCart} accent="#ca8a04"
-          variation={comparable ? ventesDuMois.length - nbVentesPrec : undefined}
-          variationLabel={`${formatMoney(ventesMontant)} · cliquer`}
-          sub={`${formatMoney(ventesMontant)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Ventes de la période', render: (
+        <StatCard title="Briques vendues" value={formatNumber(briquesVendues)} icon={ShoppingCart} accent="#ca8a04"
+          variation={comparable ? briquesVendues - briquesVenduesPrec : undefined}
+          variationLabel={`${ventesDuMois.length} vente(s) · ${formatMoney(ventesMontant)} · cliquer`}
+          onClick={() => setDetail({ titre: 'Briques vendues — par catégorie', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">N°</th>
-                    <th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-center">Briques</th>
-                    <th className="px-4 py-3 text-right">Montant</th>
-                  </tr>
+                  <tr><th className="px-4 py-3 text-left">Catégorie</th><th className="px-4 py-3 text-right">Quantité vendue</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {ventesDuMois.map((v, i) => (
-                    <tr key={v.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{formatDateShort(v.date)}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{v.num}</td>
-                      <td className="px-4 py-2.5 font-semibold text-gray-800">{v.clientNom || '—'}</td>
-                      <td className="px-4 py-2.5 text-center font-bold text-gray-700">
-                        {formatNumber((v.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0))}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-base font-extrabold text-amber-700">{formatMoney(v.total || 0)}</td>
+                  {ventesParCategorie.map((c, i) => (
+                    <tr key={c.nom} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                      <td className="px-4 py-2.5 font-semibold text-gray-800">{c.nom}</td>
+                      <td className="px-4 py-2.5 text-right text-base font-extrabold text-amber-700">{formatNumber(c.qte)}</td>
                     </tr>
                   ))}
-                  {!ventesDuMois.length && <tr><td colSpan={5} className="bg-white py-8 text-center text-sm text-gray-400">Aucune vente sur la période.</td></tr>}
+                  {!ventesParCategorie.length && <tr><td colSpan={2} className="bg-white py-8 text-center text-sm text-gray-400">Aucune vente sur la période.</td></tr>}
                 </tbody>
-                {ventesDuMois.length > 0 && (
+                {ventesParCategorie.length > 0 && (
                   <tfoot>
                     <tr className="border-t border-gray-200 bg-violet-50/60">
-                      <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total</td>
-                      <td className="px-4 py-3 text-right text-base font-extrabold text-amber-700">{formatMoney(ventesMontant)}</td>
+                      <td className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total briques</td>
+                      <td className="px-4 py-3 text-right text-base font-extrabold text-amber-700">{formatNumber(briquesVendues)}</td>
                     </tr>
                   </tfoot>
                 )}
@@ -202,21 +214,35 @@ export default function Dashboard() {
           ) })} />
         <StatCard title="CA période" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
           variation={comparable ? caMois - caMoisPrec : undefined} variationLabel={`période préc. : ${formatMoney(caMoisPrec)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Factures de la période', render: (
+          onClick={() => setDetail({ titre: 'Chiffre d’affaires — par client & catégorie', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                  <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-right">Total TTC</th></tr>
+                  <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-left">Briques achetées (catégorie × qté)</th><th className="px-4 py-3 text-center">Total briques</th><th className="px-4 py-3 text-right">Total TTC</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f, i) => (
+                  {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f, i) => {
+                    const lignes = (f.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0)
+                    const totalBr = lignes.reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
+                    return (
                     <tr key={f.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{formatDateShort(f.date)}</td>
-                      <td className="px-4 py-2.5 font-semibold text-gray-800">{f.client?.nom || '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-base font-extrabold text-sky-700">{formatMoney(f.totalTTC || 0)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 align-top font-mono text-xs text-gray-500">{formatDateShort(f.date)}</td>
+                      <td className="px-4 py-2.5 align-top font-semibold text-gray-800">{f.client?.nom || '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          {lignes.map((l, k) => (
+                            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                              {l.article || l.articleId || '—'} <span className="font-extrabold">{formatNumber(l.qte)}</span>
+                            </span>
+                          ))}
+                          {!lignes.length && <span className="text-xs text-gray-400">—</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-center align-top font-bold text-gray-700">{formatNumber(totalBr)}</td>
+                      <td className="px-4 py-2.5 text-right align-top text-base font-extrabold text-sky-700">{formatMoney(f.totalTTC || 0)}</td>
                     </tr>
-                  ))}
-                  {!facturesDuMois.length && <tr><td colSpan={3} className="bg-white py-8 text-center text-sm text-gray-400">Aucune facture sur la période.</td></tr>}
+                  )})}
+                  {!facturesDuMois.length && <tr><td colSpan={5} className="bg-white py-8 text-center text-sm text-gray-400">Aucune facture sur la période.</td></tr>}
                 </tbody>
               </table>
             </div>

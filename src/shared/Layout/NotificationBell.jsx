@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Check, BellRing, BellOff, X, Volume2, VolumeX, ChevronRight } from 'lucide-react'
-import { useNotifications } from '../../hooks/useNotifications'
+import { useNotifications, lienNotif } from '../../hooks/useNotifications'
 import { useAuth } from '../../hooks/useAuth'
 import { subscribeToPush, pushSupported } from '../../core/push'
 import { sonActif, setSonActif, jouerDing } from '../../core/alertes'
@@ -67,7 +67,8 @@ export default function NotificationBell() {
   function onClickNotif(n) {
     markRead(n.id)
     setOpen(false)
-    if (n.link) navigate(n.link)
+    // Toujours ouvrir la page concernée (repli sur le module, jamais l'accueil).
+    navigate(lienNotif(n))
   }
 
   const nUnread = unread.length
@@ -111,8 +112,8 @@ export default function NotificationBell() {
                   <Check size={13} /> Tout lu
                 </button>
               )}
-              {mine.length > 0 && (
-                <button onClick={() => { if (confirm('Effacer toutes les notifications affichées ?')) dismissAll() }}
+              {unreadAll.length + mine.length > 0 && (
+                <button onClick={() => { if (confirm('Effacer TOUTES les notifications (toutes les applications) ? Les nouvelles continueront d’arriver.')) dismissAll() }}
                   className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-red-600 hover:underline">
                   <X size={12} /> Tout effacer
                 </button>

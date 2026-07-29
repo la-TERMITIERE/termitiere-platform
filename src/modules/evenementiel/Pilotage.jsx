@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   BadgeDollarSign, TrendingUp, TrendingDown, ShoppingCart,
-  Percent, Users, Boxes
+  Percent, Users, Boxes, Factory
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
@@ -106,6 +106,21 @@ export default function Pilotage() {
   )
   const ventesMontant = ventesP.reduce((s, v) => s + (v.total || 0), 0)
 
+  // Total de BRIQUES vendues sur la période (dans le périmètre) + par catégorie.
+  const ligneDansScope = (l) => scope === TOUTES || l.briqueId === scope
+  const briquesVenduesP = useMemo(
+    () => ventesP.reduce((s, v) => s + (v.lignes || []).filter(ligneDansScope).reduce((a, l) => a + (parseInt(l.qte) || 0), 0), 0),
+    [ventesP, scope]
+  )
+  const ventesParCategorie = useMemo(() => {
+    const map = {}
+    ventesP.forEach((v) => (v.lignes || []).filter(ligneDansScope).forEach((l) => {
+      const nom = l.briqueNom || l.briqueId || '—'
+      map[nom] = (map[nom] || 0) + (parseInt(l.qte) || 0)
+    }))
+    return Object.entries(map).map(([nom, qte]) => ({ nom, qte })).sort((a, b) => b.qte - a.qte)
+  }, [ventesP, scope])
+
   // Clients servis : clients distincts facturés sur la période, avec leur poids.
   const clientsServis = useMemo(() => {
     const map = {}
@@ -163,6 +178,9 @@ export default function Pilotage() {
   const prixPrev = ventesPrev ? caPrev / ventesPrev : 0
   const ecoulPrev = prodPrev ? (ventesPrev / prodPrev) * 100 : 0
   const nbVentesPrev = comparable ? ventes.filter((v) => inPrev(v.date) && venteDansScope(v)).length : 0
+  const briquesVenduesPrev = comparable
+    ? ventes.filter((v) => inPrev(v.date) && venteDansScope(v)).reduce((s, v) => s + (v.lignes || []).filter(ligneDansScope).reduce((a, l) => a + (parseInt(l.qte) || 0), 0), 0)
+    : 0
   const nbClientsPrev = comparable
     ? new Set(facturesPrev.map((f) => (f.client?.nom || '').trim() || '—')).size
     : 0
@@ -211,9 +229,9 @@ export default function Pilotage() {
 
   const kpis = [
     { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#7c3aed' },
-    { id: 'ventesTot', title: 'Ventes de la période', value: formatNumber(ventesP.length), delta: pct(ventesP.length, nbVentesPrev), up: true, sub: formatMoney(ventesMontant), icon: ShoppingCart, color: '#15803d' },
+    { id: 'ventesTot', title: 'Briques vendues', value: formatNumber(briquesVenduesP), delta: pct(briquesVenduesP, briquesVenduesPrev), up: true, sub: `${ventesP.length} vente(s) · ${formatMoney(ventesMontant)}`, icon: ShoppingCart, color: '#15803d' },
     { id: 'ecoul', title: 'Taux d\'écoulement', value: `${tauxEcoulement.toFixed(0)} %`, deltaPP: comparable ? (tauxEcoulement - ecoulPrev) : null, up: true, sub: 'ventes ÷ production', icon: Percent, color: '#0d9488' },
-    { id: 'prix', title: 'Prix moyen / brique', value: formatMoney(prixMoyen), delta: pct(prixMoyen, prixPrev), up: true, sub: 'CA ÷ volume vendu', icon: TrendingUp, color: '#0891b2' },
+    { id: 'prodTot', title: 'Production totale', value: formatNumber(prodTotal), delta: pct(prodTotal, prodPrev), up: true, sub: 'briques produites', icon: Factory, color: '#7c3aed' },
     { id: 'clients', title: 'Clients servis', value: formatNumber(clientsServis.length), delta: pct(clientsServis.length, nbClientsPrev), up: true, sub: `${formatNumber(nbFactures)} facture(s)`, icon: Users, color: '#0891b2' }
   ]
 
@@ -426,7 +444,7 @@ export default function Pilotage() {
       </Card>
 
       <PilotageModal id={modal} onClose={() => setModal(null)} scopeLabel={scopeLabel}
-        data={{ facturesP, productionsP, parType, ligneBrique, scope, ventesP, ventesMontant, clientsServis }} />
+        data={{ facturesP, productionsP, parType, ligneBrique, scope, ventesP, ventesMontant, clientsServis, ventesParCategorie, briquesVenduesP, prodTotal }} />
     </div>
   )
 }
@@ -445,8 +463,8 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
   if (!id) return null
   const titles = {
     ca: 'Factures de la période', panier: 'Factures de la période', prix: 'Factures de la période',
-    prod: 'Productions de la période', ecoul: 'Productions de la période',
-    ventesTot: 'Ventes de la période', clients: 'Clients servis',
+    prod: 'Productions de la période', ecoul: 'Productions de la période', prodTot: 'Productions de la période',
+    ventesTot: 'Briques vendues par catégorie', clients: 'Clients servis',
     ventes: 'Ventes par type', pret: 'Stock par type', autos: 'Autorisations', prodType: 'Détail'
   }
   let content = null
@@ -454,21 +472,18 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
     content = (
       <table className="w-full text-sm">
         <thead className="bg-gray-50 text-xs uppercase">
-          <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">N°</th><th className="p-2 text-left">Client</th><th className="p-2 text-center">Briques</th><th className="p-2 text-right">Montant</th></tr>
+          <tr><th className="p-2 text-left">Catégorie</th><th className="p-2 text-right">Quantité vendue</th></tr>
         </thead>
-        <tbody>{data.ventesP.map((v) => (
-          <tr key={v.id} className="border-t">
-            <td className="p-2">{formatDateShort(v.date)}</td>
-            <td className="p-2 font-mono text-xs text-gray-500">{v.num}</td>
-            <td className="p-2">{v.clientNom || '—'}</td>
-            <td className="p-2 text-center font-semibold">{formatNumber((v.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0))}</td>
-            <td className="p-2 text-right font-bold text-green-700">{formatMoney(v.total || 0)}</td>
+        <tbody>{data.ventesParCategorie.map((c) => (
+          <tr key={c.nom} className="border-t">
+            <td className="p-2 font-semibold">{c.nom}</td>
+            <td className="p-2 text-right text-base font-extrabold text-green-700">{formatNumber(c.qte)}</td>
           </tr>
-        ))}{!data.ventesP.length && <tr><td colSpan={5} className="p-4 text-center text-gray-400">Aucune vente sur la période.</td></tr>}</tbody>
-        {data.ventesP.length > 0 && (
+        ))}{!data.ventesParCategorie.length && <tr><td colSpan={2} className="p-4 text-center text-gray-400">Aucune vente sur la période.</td></tr>}</tbody>
+        {data.ventesParCategorie.length > 0 && (
           <tfoot><tr className="border-t bg-gray-50">
-            <td colSpan={4} className="p-2 text-right text-xs font-bold uppercase text-gray-500">Montant total</td>
-            <td className="p-2 text-right text-base font-extrabold text-green-700">{formatMoney(data.ventesMontant)}</td>
+            <td className="p-2 text-right text-xs font-bold uppercase text-gray-500">Total briques</td>
+            <td className="p-2 text-right text-base font-extrabold text-green-700">{formatNumber(data.briquesVenduesP)}</td>
           </tr></tfoot>
         )}
       </table>
@@ -498,7 +513,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
         ))}{!rows.length && <tr><td colSpan={3} className="p-4 text-center text-gray-400">Aucune facture.</td></tr>}</tbody>
       </table>
     )
-  } else if (['prod', 'ecoul'].includes(id)) {
+  } else if (['prod', 'ecoul', 'prodTot'].includes(id)) {
     const rows = [...data.productionsP].sort((a, b) => (a.date < b.date ? 1 : -1))
     content = (
       <table className="w-full text-sm">

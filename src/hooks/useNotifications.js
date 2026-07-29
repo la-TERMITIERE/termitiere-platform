@@ -10,10 +10,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useCollection } from './useFirestore'
 import { useAuth } from './useAuth'
-import { updateItem } from '../core/db'
+import { updateItem, setItem } from '../core/db'
 import { useAlertesStore, setBadgeApp } from '../core/alertes'
 
 const MOUNT_TS = Date.now()
+
+// Lien d'ouverture d'une notification. Repli sur la page du module concerné
+// (au lieu de l'accueil) quand la notification n'a pas de lien précis — pour ne
+// plus « retomber sur l'accueil » en cliquant une notification.
+export const lienNotif = (n) => n?.link || (n?.module ? `/${n.module}` : '/')
 // Types « importants » : alerte plus longue, son plus marqué, notification
 // système persistante (demandes d'autorisation, refus, alertes).
 const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
@@ -58,7 +63,7 @@ async function notifSysteme(n) {
     renotify: true,
     requireInteraction: urgent,
     vibrate: urgent ? [90, 60, 90, 60, 140] : [70, 45, 70],
-    data: { url: n.link || '/' }
+    data: { url: lienNotif(n) }
   }
   try {
     const reg = await navigator.serviceWorker?.getRegistration()
@@ -70,6 +75,7 @@ async function notifSysteme(n) {
 export function useNotifications() {
   const { user, role, hasModule } = useAuth()
   const { data } = useCollection('notifications')
+  const { data: prefs } = useCollection('notif_prefs')
   const location = useLocation()
   const activeModule = location.pathname.split('/')[1] || '' // '' = portail
   const shownRef = useRef(new Set())
@@ -78,6 +84,23 @@ export function useNotifications() {
   // IDs effacés — retrait local immédiat, doublé d'un effacement persistant en
   // base (dismissedBy) pour que la notification ne revienne pas au rechargement.
   const [dismissed, setDismissed] = useState(new Set())
+
+  // Horodatage « tout effacer » PAR UTILISATEUR : toute notification créée avant
+  // ce moment est considérée comme effacée. Un seul enregistrement remet la
+  // pastille à zéro d'un coup — indispensable avec des centaines de notifications
+  // historiques (sinon le « 9+ » ne partait jamais). Repli local instantané.
+  const [clearedLocal, setClearedLocal] = useState(0)
+  const clearedAt = useMemo(() => {
+    const row = prefs.find((p) => p.id === user?.uid)
+    return Math.max(row?.clearedAt || 0, clearedLocal)
+  }, [prefs, user, clearedLocal])
+
+  // Une notification est-elle « éteinte » pour l'utilisateur (effacée une-par-une
+  // OU antérieure au dernier « tout effacer ») ?
+  const eteinte = useCallback(
+    (n) => dismissed.has(n.id) || aMarque(n, 'dismissedBy', user?.uid) || ((n.createdAt || 0) <= clearedAt),
+    [dismissed, user, clearedAt]
+  )
 
   // Toutes MES notifications, tous modules confondus. Sert aux alertes et à la
   // pastille : une demande d'autorisation doit m'alerter même si je suis en train
@@ -88,13 +111,10 @@ export function useNotifications() {
         .filter((n) =>
           isFor(n, user, role) &&
           (!n.module || hasModule(n.module)) &&
-          !dismissed.has(n.id) &&
-          // Effacement PERSISTANT par utilisateur : une notif effacée ne revient
-          // plus au rechargement (contrairement à l'ancien masquage local).
-          !aMarque(n, 'dismissedBy', user?.uid)
+          !eteinte(n)
         )
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-    [data, user, role, dismissed, hasModule]
+    [data, user, role, hasModule, eteinte]
   )
 
   // Ce qu'affiche la cloche : cloisonné au module courant.
@@ -134,7 +154,7 @@ export function useNotifications() {
       } else {
         montrerAlerte({
           id: n.id, type: n.type, title: n.title, body: n.body,
-          module: n.module, link: n.link, urgent
+          module: n.module, link: lienNotif(n), urgent
         })
       }
     }
@@ -164,11 +184,15 @@ export function useNotifications() {
     setDismissed((prev) => new Set([...prev, id]))
   }, [user])
 
-  // « Tout effacer » vide TOUT ce qui est affiché dans la cloche (lues comprises),
-  // pas seulement les non-lues — c'était la cause du « ça ne s'efface pas ».
+  // « Tout effacer » = efface TOUTES les notifications de l'utilisateur, tous
+  // modules confondus, en UNE écriture (horodatage). Remet la pastille à zéro
+  // même avec des centaines de notifications historiques — la vraie cause du
+  // « 9+ qui ne part jamais ». Effet immédiat (clearedLocal) + persistant.
   const dismissAll = useCallback(() => {
-    mine.forEach((n) => dismiss(n.id))
-  }, [mine, dismiss])
+    const t = Date.now()
+    setClearedLocal(t)
+    if (user) setItem('notif_prefs', user.uid, { clearedAt: t }).catch(() => {})
+  }, [user])
 
   return { mine, unread, unreadAll, markRead, markAllRead, dismiss, dismissAll }
 }

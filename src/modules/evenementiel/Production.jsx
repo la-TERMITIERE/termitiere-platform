@@ -97,8 +97,9 @@ export default function Production() {
       )}
       <Card className="p-0">
         <Table
+          stickyHeader
           columns={[
-            { key: 'num', label: 'N°' },
+            { key: 'num', label: 'N°', sticky: true, width: '110px' },
             { key: 'date', label: 'Date' },
             { key: 'duree', label: 'Durée', render: (r) => `${r.duree}h` },
             { key: 'machine', label: 'Machine' },

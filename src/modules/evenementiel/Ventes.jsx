@@ -108,8 +108,9 @@ export default function Ventes() {
       </div>
       <Card className="p-0">
         <Table
+          stickyHeader
           columns={[
-            { key: 'num', label: 'N°' },
+            { key: 'num', label: 'N°', sticky: true, width: '95px' },
             { key: 'clientNom', label: 'Client' },
             { key: 'dateChargement', label: 'Chargement', render: (r) => formatDateShort(r.dateChargement) },
             { key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> },
