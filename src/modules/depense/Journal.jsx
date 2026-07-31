@@ -23,6 +23,10 @@ const EVENTS = {
   DECAISSEMENT_REFUSE:   { label: 'Décaissement refusé',           emoji: '❌' },
   DECAISSEMENT_CERTIFIE: { label: 'Décaissement certifié',         emoji: '🏁' },
   PAU_REMBOURSEMENT:     { label: 'Remboursement au PAU',          emoji: '💜' },
+  BANQUE_MOUVEMENT_CREATE: { label: 'Mouvement bancaire enregistré', emoji: '🏦' },
+  BANQUE_MOUVEMENT_EDIT:   { label: 'Mouvement bancaire modifié',    emoji: '✏️' },
+  BANQUE_MOUVEMENT_DELETE: { label: 'Mouvement bancaire supprimé',   emoji: '🗑️' },
+  BANQUE_SOLDE_INITIAL:    { label: 'Solde d\'ouverture modifié',    emoji: '🏦' },
   RESET:                 { label: 'Réinitialisation',              emoji: '♻️' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }

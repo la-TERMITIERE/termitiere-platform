@@ -47,25 +47,29 @@ export const FINANCE_VIEW_ROLES = ['super_admin', 'pau', 'ge', 'directeur', 'adm
 export const READONLY_ROLES = ['superviseur', 'partenaire']
 export const isReadOnlyRole = (r) => READONLY_ROLES.includes(r)
 
-// E-G.Pro : volet Paramètres — tout le monde SAUF la secrétaire/l'agent (administratif)
-// et le chef de projet (terrain).
-export const PROJET_VOLETS_RESTREINTS_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => !['secretaire', 'agent', 'chef_projet', 'partenaire'].includes(v))
-  .concat(['admin', 'controleur'])
-
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
 // secrétaire/l'agent (administratif) et le chef de projet (terrain, cloisonné à ses projets).
 export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)
   .filter((v) => !['secretaire', 'agent', 'chef_projet'].includes(v))
   .concat(['admin', 'controleur'])
 
-// E-G.Pro : volet Journal — historique global des actions, en lecture seule pour
-// tout le monde SAUF le chef de projet (terrain) et la secrétaire. La secrétaire
-// est exclue volontairement : ce volet trace notamment son niveau de fiabilité
-// (saisies, corrections…) et elle ne doit pas pouvoir consulter ce suivi sur elle-même.
-export const PROJET_JOURNAL_ROLES = ROLES.map((r) => r.value)
-  .filter((v) => !['chef_projet', 'secretaire'].includes(v))
-  .concat(['admin', 'controleur'])
+// Volets « Journal et Historique » et « Paramètres » — réservés à l'administration
+// (super-admin, PAU, GE, directeur/directrice, admin) dans TOUS les modules. Tout le
+// reste de la hiérarchie (gérant, superviseur, contrôleur, chefs de projet, secrétaires,
+// agents, partenaires…) en est exclu : ces volets tracent l'activité de tous, y compris
+// la leur, et exposent la configuration sensible du module.
+export const ADMIN_VOLETS_ROLES = FULL_ACCESS_ROLES
+
+// MAXI LOGISTIQUE : rôles qui ne doivent voir AUCUN montant (tarifs, totaux, frais,
+// dépenses) — la secrétaire valide les sorties de matériel sur la quantité et le
+// motif, jamais sur la valeur financière de la prestation.
+export const LOGISTIQUE_SANS_MONTANT_ROLES = ['secretaire']
+export const logistiqueVoitMontants = (r) => !LOGISTIQUE_SANS_MONTANT_ROLES.includes(r)
+
+// MAXI LOGISTIQUE : la secrétaire approuve au 1er niveau (comme un `gerant`), mais
+// ne certifie jamais — la certification approuve la facture (impact CA) et reste
+// donc à la direction (CERTIFIER_ROLES).
+export const logistiquePeutApprouver = (r) => isApproverRole(r) || r === 'secretaire'
 
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les
 // projets dont ils sont désignés « Responsable » (p.responsableUid) ou « Collaborateur »
