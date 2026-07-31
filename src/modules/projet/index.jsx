@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Dashboard from './Dashboard'
 import Projets from './Projets'
+import ProjetsExplorer from './ProjetsExplorer'
 import Taches from './Taches'
+import TachesExplorer from './TachesExplorer'
 import Planning from './Planning'
 import Documents from './Documents'
 import Galerie from './Galerie'
@@ -33,8 +35,15 @@ export default function ProjetModule() {
   return (
     <Routes>
       <Route index element={<Dashboard />} />
-      <Route path="projets" element={<Projets />} />
-      <Route path="taches" element={<Taches />} />
+      <Route path="projets" element={<ProjetsExplorer />} />
+      <Route path="projets/liste" element={<Projets />} />
+      <Route path="projets/:secteurId" element={<ProjetsExplorer />} />
+      <Route path="projets/:secteurId/:projetId" element={<ProjetsExplorer />} />
+      <Route path="projets/:secteurId/:projetId/:phase" element={<ProjetsExplorer />} />
+      <Route path="taches" element={<TachesExplorer />} />
+      <Route path="taches/liste" element={<Taches />} />
+      <Route path="taches/:secteurId" element={<TachesExplorer />} />
+      <Route path="taches/:secteurId/:phase" element={<TachesExplorer />} />
       <Route path="planning"   element={<Planning />} />
       <Route path="documents"  element={<Documents />} />
       <Route path="galerie"    element={<Galerie />} />

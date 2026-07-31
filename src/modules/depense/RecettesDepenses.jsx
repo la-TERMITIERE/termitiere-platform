@@ -13,7 +13,7 @@ import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole, FULL_ACCESS_ROLES } from '../../core/roles'
+import { isReadOnlyRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -59,7 +59,12 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
-  const { user, role } = useAuth()
+  const { user, role: roleReel } = useAuth()
+  // Écran partagé : embarqué dans d'autres modules via `secteurId` (leur onglet
+  // « Dépense »), où la restriction E-DÉPENSES ne s'applique pas. Seule l'instance
+  // standalone d'E-DÉPENSES (« Revenus & Budget », sans secteurId) ramène
+  // super_admin/admin/directeur au niveau agent (cf. depenseRoleEffectif).
+  const role = secteurId ? roleReel : depenseRoleEffectif(roleReel)
   const lectureSeule = isReadOnlyRole(role)
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }

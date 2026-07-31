@@ -13,7 +13,7 @@ import Journal from './Journal'
 import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole, canViewFinance } from '../../core/roles'
+import { isFullAccessRole, canViewFinance, depenseRoleEffectif } from '../../core/roles'
 
 function AccesRefuseAdmin() {
   return (
@@ -36,18 +36,22 @@ function AccesRefuse() {
 }
 
 export default function DepenseModule() {
-  const { role } = useAuth()
+  // super_admin/admin/directeur sont traités comme un agent DANS CE MODULE
+  // uniquement (cf. depenseRoleEffectif) — seuls pau, ge et info gardent l'accès
+  // complet à E-DÉPENSES. Le reste des rôles n'est pas affecté par la substitution.
+  const { role: roleReel } = useAuth()
+  const role = depenseRoleEffectif(roleReel)
   return (
     <Routes>
       <Route index element={<Dashboard />} />
       <Route path="liste" element={<Depenses />} />
-      <Route path="recettes-depenses" element={<RecettesDepenses />} />
+      <Route path="recettes-depenses" element={canViewFinance(role) ? <RecettesDepenses /> : <AccesRefuse />} />
       {/* Ancien écran « Budgets » fusionné dans « Bilan par secteur » — redirige les liens existants. */}
       <Route path="budgets" element={<Navigate to="/depense/recettes-depenses" replace />} />
       <Route path="autorisations" element={<Autorisations />} />
       <Route path="analyses" element={<Analyses />} />
-      <Route path="rentabilite" element={<Rentabilite />} />
-      <Route path="flux" element={<Flux />} />
+      <Route path="rentabilite" element={canViewFinance(role) ? <Rentabilite /> : <AccesRefuse />} />
+      <Route path="flux" element={canViewFinance(role) ? <Flux /> : <AccesRefuse />} />
       <Route path="banque" element={canViewFinance(role) ? <Banque /> : <AccesRefuse />} />
       <Route path="partenaires" element={<Partenaires module="depense" />} />
       <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />

@@ -10,12 +10,16 @@ import { useAuth } from '../../hooks/useAuth'
 import { SECTEURS, MOIS_LABELS, sourceFinancementDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesNatureMois, natureFlux, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
+import { depenseRoleEffectif } from '../../core/roles'
 
 const now = new Date()
 const PALETTE = ['#B45309', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
 
 export default function Analyses() {
-  const { role } = useAuth()
+  const { role: roleReel } = useAuth()
+  // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
+  // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
+  const role = depenseRoleEffectif(roleReel)
   // L'agent voit l'onglet (suivi de ses propres dépenses) mais pas les figures
   // financières réservées à l'administration : revenus, dette/apports du PAU,
   // budget alloué par secteur — même restriction que le Dashboard.

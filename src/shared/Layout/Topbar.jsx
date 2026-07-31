@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { getModule, MODULE_NAV } from '../modules'
 import NotificationBell from './NotificationBell'
 import { MODULE_THEME } from './moduleTheme'
+import { useCollection } from '../../hooks/useFirestore'
 
 export default function Topbar({ onMenuToggle, user }) {
   const location = useLocation()
@@ -13,6 +14,14 @@ export default function Topbar({ onMenuToggle, user }) {
   const { color, color2, logo, nom } = theme
   const hasModuleLogo = !!logo
 
+  // E-G.Pro : au fond du parcours secteur → projet → catégorie, on affiche le NOM
+  // DU PROJET plutôt que le libellé générique « Projets » — plus utile pour se
+  // repérer une fois dans le détail. `/projet/projets/<secteur>/<projetId>[/...]`.
+  const projetsMatch = location.pathname.match(/^\/projet\/projets\/([^/]+)\/([^/]+)/)
+  const projetIdCourant = projetsMatch && projetsMatch[1] !== 'liste' ? projetsMatch[2] : null
+  const { data: projetsPourTitre } = useCollection(projetIdCourant ? 'projets' : null)
+  const projetCourant = projetIdCourant ? projetsPourTitre.find((p) => p.id === projetIdCourant) : null
+
   // Rubrique active
   let subLabel = 'Accueil'
   if (mod) {
@@ -21,6 +30,7 @@ export default function Topbar({ onMenuToggle, user }) {
       .find((n) => location.pathname === n.to || (!n.end && location.pathname.startsWith(n.to)))
     const label = match?.label || ''
     subLabel = (!label || label === 'Dashboard' || label === 'Tableau de bord') ? nom : label
+    if (projetCourant) subLabel = projetCourant.nom
   } else if (location.pathname === '/dashboard') {
     subLabel = 'Tableau de bord global'
   } else if (location.pathname === '/utilisateurs') {

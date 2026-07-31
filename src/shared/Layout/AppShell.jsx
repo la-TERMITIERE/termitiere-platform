@@ -37,7 +37,7 @@ export default function AppShell() {
         <Topbar user={user} onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <OfflineBanner />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="relative -mt-2 overflow-hidden rounded-[28px] md:-mt-3">
+          <div className="relative -mt-2 md:-mt-3">
             <Outlet />
           </div>
         </main>

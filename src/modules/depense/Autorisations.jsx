@@ -10,7 +10,7 @@ import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isApproverRole, isCertifierRole, FULL_ACCESS_ROLES } from '../../core/roles'
+import { isApproverRole, isCertifierRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
@@ -30,7 +30,11 @@ const ACTION_INFO = {
 const STATUT_ACCENT = { en_attente: '#d97706', approuvee: '#0ea5e9', decaissee: '#16a34a', refusee: '#dc2626' }
 
 export default function Autorisations() {
-  const { user, role } = useAuth()
+  const { user, role: roleReel } = useAuth()
+  // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
+  // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici,
+  // y compris pour approuver/certifier/supprimer un décaissement.
+  const role = depenseRoleEffectif(roleReel)
   const { data: depenses } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: projets }  = useCollection('projets')

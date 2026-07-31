@@ -13,7 +13,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
-import { FULL_ACCESS_ROLES } from '../../core/roles'
+import { FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
@@ -56,7 +56,10 @@ export default function Dashboard() {
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
   ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
-  const { user, role } = useAuth()
+  const { user, role: roleReel } = useAuth()
+  // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
+  // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
+  const role = depenseRoleEffectif(roleReel)
   const navigate = useNavigate()
   const location = useLocation()
   // L'agent n'a pas accès aux KPI financiers globaux (budget alloué, dette PAU, secteurs

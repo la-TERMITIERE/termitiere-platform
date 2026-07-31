@@ -2,6 +2,13 @@
 import { SEUILS_DEFAUT } from './data'
 import { formatDateShort } from '../../utils/formatters'
 import { PROJET_ROLES_CLOISONNES } from '../../core/roles'
+import { SECTEURS as SECTEURS_DEPENSE } from '../depense/data'
+import { SECTEUR_PAR_TYPE_PROJET } from '../depense/logic'
+
+// Secteur E-DÉPENSES concerné par un projet — même priorité que la passerelle réelle
+// (depensesProjetVersSecteurs) : secteur explicite en premier, sinon déduit du type.
+export const secteurEffectif = (p) =>
+  SECTEURS_DEPENSE.find((s) => s.id === (p.secteurId || SECTEUR_PAR_TYPE_PROJET[p.type] || 'divers'))
 
 // Cloisonnement par projet : un rôle cloisonné (ex. chef de projet) ne voit que les
 // projets dont il est désigné « Responsable » (p.responsableUid) OU ajouté comme

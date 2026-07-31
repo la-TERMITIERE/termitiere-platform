@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react'
 import { Plus, FilePen, Trash2, Landmark, ArrowDownCircle, ArrowUpCircle, Pencil, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -28,7 +27,7 @@ const empty = () => ({ date: todayStr(), type: 'depot', libelle: '', origine: ''
 
 // Suggestions de libellé/origine — celles du relevé (dépôt de recette, retrait chèque…)
 // + secteurs de l'entreprise, pour retrouver vite les motifs récurrents.
-const LIBELLES_SUGGERES = ['DEPOT', 'RETRAIT', 'RETRAIT CHEQUE', 'ALIMENTATION CAISSE']
+const LIBELLES_SUGGERES = ['DEPOT', 'RETRAIT', 'RETRAIT CHEQUE', 'ALIMENTATION CAISSE', 'AJUSTEMENT / RÉGULARISATION']
 const ORIGINES_SECTEURS = SECTEURS.map((s) => `RECETTE ${s.label}`)
 
 export default function Banque() {
@@ -283,8 +282,16 @@ export default function Banque() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
-          <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <div className="flex items-center gap-1.5">
+            <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            {filtreMois && (
+              <button type="button" onClick={() => setFiltreMois('')} title="Voir toutes les périodes"
+                className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50">
+                Tout voir
+              </button>
+            )}
+          </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
@@ -295,7 +302,6 @@ export default function Banque() {
       <Table
         columns={[
           { key: 'date', label: 'Date', render: (m) => m.__ouverture ? null : <span className="whitespace-nowrap text-xs font-semibold text-gray-700">{formatDateShort(m.date)}</span> },
-          { key: 'type', label: 'Type', render: (m) => m.__ouverture ? null : <Badge tone={TYPES_MOUVEMENT_BANQUE[m.type]?.tone}>{TYPES_MOUVEMENT_BANQUE[m.type]?.label || m.type}</Badge> },
           { key: 'libelle', label: 'Libellé / Origine', render: (m) => m.__ouverture ? (
             <p className="font-extrabold uppercase tracking-wide text-gray-500">{m.libelle}</p>
           ) : (
@@ -305,11 +311,12 @@ export default function Banque() {
             </div>
           ) },
           { key: 'personne', label: 'Personne en charge', render: (m) => m.__ouverture ? null : (m.personne || <span className="text-gray-300">—</span>) },
-          { key: 'montant', label: 'Montant', align: 'right', render: (m) => m.__ouverture ? null : (
-            <span className={`font-bold ${m.type === 'depot' ? 'text-blue-600' : 'text-red-600'}`}>
-              {m.type === 'depot' ? '+' : '-'}{Number(m.montant).toLocaleString('fr-FR')}
-            </span>
-          ) },
+          { key: 'debit', label: 'Débit', align: 'right', render: (m) => (!m.__ouverture && m.type === 'depot') ? (
+            <span className="font-bold text-blue-600">+{Number(m.montant).toLocaleString('fr-FR')}</span>
+          ) : null },
+          { key: 'credit', label: 'Crédit', align: 'right', render: (m) => (!m.__ouverture && m.type === 'retrait') ? (
+            <span className="font-bold text-red-600">-{Number(m.montant).toLocaleString('fr-FR')}</span>
+          ) : null },
           { key: 'solde', label: 'Solde', align: 'right', render: (m) => <span className="font-extrabold text-gray-900">{m.solde.toLocaleString('fr-FR')}</span> },
           { key: 'actions', label: '', align: 'right', render: (m) => !lectureSeule && !m.__ouverture && (
             <div className="flex justify-end gap-1">
@@ -335,7 +342,7 @@ export default function Banque() {
             <div className={`pointer-events-none absolute -right-16 -top-16 -z-10 h-52 w-52 rounded-full opacity-30 blur-3xl transition-colors ${modal.data.type === 'depot' ? 'bg-blue-500' : 'bg-red-500'}`} />
             <div className="pointer-events-none absolute -bottom-20 -left-14 -z-10 h-48 w-48 rounded-full bg-amber-500 opacity-20 blur-3xl" />
 
-            {/* Type de mouvement */}
+            {/* Type de mouvement : sens (Dépôt/Retrait) + précision (type d'action) */}
             <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🏦 Type de mouvement</p>
               <div className="flex gap-2">
@@ -350,6 +357,9 @@ export default function Banque() {
                   )
                 })}
               </div>
+              <FormGroup label="Type d'action" className="mt-3" hint="Précise le motif exact : DEPOT, RETRAIT CHEQUE N°…, ALIMENTATION CAISSE…">
+                <ChampAutocomplete value={modal.data.libelle} onChange={(v) => set('libelle', v)} suggestions={libelleSuggestions} placeholder="ex: DEPOT" accent="amber" />
+              </FormGroup>
             </div>
 
             {/* Détails */}
@@ -359,9 +369,6 @@ export default function Banque() {
                 <FormGroup label="Date *"><Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} /></FormGroup>
                 <FormGroup label="Montant (FCFA) *"><Input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)} placeholder="ex: 100000" /></FormGroup>
               </div>
-              <FormGroup label="Libellé" className="mt-1" hint="Ex: DEPOT, RETRAIT CHEQUE N°…">
-                <ChampAutocomplete value={modal.data.libelle} onChange={(v) => set('libelle', v)} suggestions={libelleSuggestions} placeholder="ex: DEPOT" accent="amber" />
-              </FormGroup>
             </div>
 
             {/* Traçabilité */}
