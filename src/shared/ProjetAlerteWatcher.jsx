@@ -37,7 +37,7 @@ const TITRES = {
 const TYPES_AVEC_FICHE_PROJET = ['projet_retard', 'budget_depasse', 'avancement_zero', 'termine']
 function lienDetail(alerte) {
   return TYPES_AVEC_FICHE_PROJET.includes(alerte.type)
-    ? { link: '/projet/projets', state: { openProjetId: alerte.projetId } }
+    ? { link: '/projet/projets/liste', state: { openProjetId: alerte.projetId } }
     : { link: '/projet' }
 }
 

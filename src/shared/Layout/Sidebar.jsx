@@ -1,14 +1,58 @@
 // Navigation latérale : en-tête marque + nav portail + nav intra-module + footer utilisateur.
 // Mobile : panneau coulissant avec overlay. Desktop : fixe 260px.
-import { useMemo } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, LogOut, Users, UserCircle, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { NavLink, Link, useLocation } from 'react-router-dom'
+import { Home, LayoutDashboard, LogOut, Users, UserCircle, X, ChevronRight, ChevronDown } from 'lucide-react'
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel, canManagePartenaires } from '../../core/roles'
+import { roleLabel, canManagePartenaires, depenseRoleEffectif } from '../../core/roles'
 import { estActif } from '../workflow'
 import { calculerBadges } from '../nouveautes'
+import { projetsVisibles, scopeParProjets, secteurEffectif } from '../../modules/projet/logic'
+import { SECTEURS as SECTEURS_PROJET } from '../../modules/depense/data'
+
+// Menu « Projets » imbriqué — un seul niveau dans la barre latérale (secteurs,
+// texte lisible) : cliquer sur un secteur NAVIGUE vers le grand écran, qui affiche
+// ses projets, catégories et tâches (bien plus de place que la barre latérale).
+function ProjetsNavMenu({ item, secteursMenu, badgeCount, isActive, onNavigate }) {
+  const [ouvert, setOuvert] = useState(isActive)
+
+  const itemClass = `flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+    isActive ? 'bg-white/20 text-white shadow-[0_16px_32px_-12px_rgba(0,0,0,0.45),0_4px_10px_-4px_rgba(0,0,0,0.3)]'
+      : 'text-white/80 hover:bg-white/10 hover:text-white'
+  }`
+
+  return (
+    <div>
+      <button type="button" onClick={() => setOuvert((o) => !o)} className={itemClass}>
+        <item.icon size={18} /> {item.label}
+        {badgeCount > 0 && (
+          <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold">{badgeCount}</span>
+        )}
+        {ouvert ? <ChevronDown size={15} className={badgeCount > 0 ? '' : 'ml-auto'} /> : <ChevronRight size={15} className={badgeCount > 0 ? '' : 'ml-auto'} />}
+      </button>
+
+      {ouvert && (
+        <div className="ml-3 mt-1 space-y-0.5 border-l border-white/15 pl-2">
+          {secteursMenu.map((s) => (
+            <Link key={s.id} to={`/projet/projets/${s.id}`} onClick={onNavigate}
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-white/75 transition-all hover:bg-white/10 hover:text-white">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+              <span className="flex-1 truncate">{s.label}</span>
+              <span className="text-xs font-normal text-white/40">{s.nbProjets}</span>
+              <ChevronRight size={13} className="text-white/40" />
+            </Link>
+          ))}
+          <Link to="/projet/projets/liste" onClick={onNavigate}
+            className="mt-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-white/60 transition-all hover:bg-white/10 hover:text-white">
+            📁 Liste complète des projets
+          </Link>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
@@ -49,6 +93,17 @@ export default function Sidebar({ open, onClose }) {
     ...nouveautesBadges
   }
 
+  // Menu imbriqué « Projets » — un seul niveau (secteurs) dans la barre latérale ;
+  // projets/catégories/tâches s'affichent sur le grand écran (cf. ProjetsExplorer.jsx).
+  const secteursMenu = useMemo(() => {
+    const projetsVisiblesList = projetsVisibles(projetsDoc, user, role)
+    return SECTEURS_PROJET.map((s) => {
+      const projetsSecteur = projetsVisiblesList.filter((p) => secteurEffectif(p)?.id === s.id)
+      const tachesSecteur = scopeParProjets(tachesDoc, projetsSecteur)
+      return { ...s, nbProjets: projetsSecteur.length, nbTaches: tachesSecteur.length }
+    })
+  }, [projetsDoc, tachesDoc, user, role])
+
   const accentColor = activeModule?.color || '#BC3C31'
 
   const linkBase =
@@ -65,9 +120,13 @@ export default function Sidebar({ open, onClose }) {
   // rôle explicite donne accès même sans la permission individuelle — sert par exemple
   // à donner l'onglet Partenaires (lecture seule) à un rôle précis dans un seul module,
   // sans changer son accès dans les autres modules ni toucher au reste des permissions.
+  // E-DÉPENSES : super_admin/admin/directeur y sont traités comme un agent (décision
+  // explicite, cf. depenseRoleEffectif) — seuls pau, ge et info gardent l'accès
+  // complet à ce module. N'affecte que la nav de CE module, pas les autres.
+  const navRole = activeModule?.id === 'depense' ? depenseRoleEffectif(role) : role
   const canSeeNav = (item) => {
-    if (item.roles && item.roles.includes(role)) return true
-    if (item.perm === 'partenaires' && canManagePartenaires(role, user)) return true
+    if (item.roles && item.roles.includes(navRole)) return true
+    if (item.perm === 'partenaires' && canManagePartenaires(navRole, user)) return true
     return !item.roles && !item.perm
   }
   let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
@@ -189,14 +248,21 @@ export default function Sidebar({ open, onClose }) {
                 {moduleTitle}
               </p>
               {moduleNav.map((item) => (
-                <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
-                  <item.icon size={18} /> {item.label}
-                  {item.badgeKey && badges[item.badgeKey] > 0 && (
-                    <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold">
-                      {badges[item.badgeKey]}
-                    </span>
-                  )}
-                </NavLink>
+                item.to === '/projet/projets' ? (
+                  <ProjetsNavMenu key={item.to} item={item} secteursMenu={secteursMenu}
+                    badgeCount={item.badgeKey && badges[item.badgeKey] > 0 ? badges[item.badgeKey] : 0}
+                    isActive={location.pathname.startsWith('/projet/projets') && !location.pathname.startsWith('/projet/projets/liste')}
+                    onNavigate={onClose} />
+                ) : (
+                  <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
+                    <item.icon size={18} /> {item.label}
+                    {item.badgeKey && badges[item.badgeKey] > 0 && (
+                      <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold">
+                        {badges[item.badgeKey]}
+                      </span>
+                    )}
+                  </NavLink>
+                )
               ))}
             </>
           )}

@@ -109,7 +109,7 @@ const STATUT_TACHE_ACCENT = { a_faire: '#94a3b8', en_cours: '#f59e0b', en_revisi
 
 // ─── Onglet Tâches ────────────────────────────────────────────────────────────
 
-function OngletTaches({ taches, projets, users, depenses }) {
+export function OngletTaches({ taches, projets, users, depenses, initialFiltrePhase = '' }) {
   const { user, role }        = useAuthStore()
   // La secrétaire et l'agent ont un accès complet aux tâches (créer, modifier, démarrer,
   // soumettre, valider) — seule la SUPPRESSION leur reste interdite.
@@ -135,7 +135,7 @@ function OngletTaches({ taches, projets, users, depenses }) {
   const [saving, setSaving]   = useState(false)
   const [filtreProjet, setFiltreProjet] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
-  const [filtrePhase, setFiltrePhase]   = useState('')
+  const [filtrePhase, setFiltrePhase]   = useState(initialFiltrePhase)
   const [filtreResponsable, setFiltreResponsable] = useState('')
   const [mesTaches, setMesTaches]       = useState(false)
   const [detail, setDetail]             = useState(null)

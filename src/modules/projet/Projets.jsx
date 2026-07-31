@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, ChevronDown, X, Play, CheckCircle2, FileDown, Loader2 } from 'lucide-react'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
+import { Plus, Pencil, Trash2, ChevronDown, X, Play, CheckCircle2, FileDown, Loader2, ArrowLeft } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -11,8 +11,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem, updateItem, addItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, UNITES_SUPERFICIE, uniteSuperficie } from './data'
 import { SECTEURS as SECTEURS_DEPENSE } from '../depense/data'
-import { SECTEUR_PAR_TYPE_PROJET } from '../depense/logic'
-import { avancementProjet, genererNumProjet, projetsVisibles } from './logic'
+import { avancementProjet, genererNumProjet, projetsVisibles, secteurEffectif } from './logic'
 import { formatDateShort, formatMoney, formatDateTime, genId, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
@@ -212,11 +211,6 @@ const TONE_BOUTON = {
   warning: 'border-amber-400 bg-amber-50 text-amber-800',
   danger:  'border-red-400 bg-red-50 text-red-800'
 }
-// Secteur E-DÉPENSES concerné par un projet — même priorité que la passerelle réelle
-// (depensesProjetVersSecteurs) : secteur explicite en premier, sinon déduit du type.
-const secteurEffectif = (p) =>
-  SECTEURS_DEPENSE.find((s) => s.id === (p.secteurId || SECTEUR_PAR_TYPE_PROJET[p.type] || 'divers'))
-
 export default function Projets() {
   const { data: projetsTous }  = useCollection('projets')
   const { data: taches }       = useCollection('projet_taches')
@@ -451,7 +445,7 @@ export default function Projets() {
           title: `📁 Nouveau projet — ${form.nom}`,
           body: `${form.nom} (${num})${form.responsable ? ` — responsable : ${form.responsable}` : ''}.`,
           module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers: destinatairesProjet, excludeUid: user?.uid,
-          link: '/projet/projets', state: { openProjetId: projetId }
+          link: '/projet/projets/liste', state: { openProjetId: projetId }
         }).catch(() => {})
       }
 
@@ -530,7 +524,7 @@ export default function Projets() {
         await notify({
           type: 'info', title: `💬 Commentaire — ${detail.nom}`,
           body: `${user?.nom || user?.login || 'Quelqu\'un'} : ${texte.slice(0, 140)}`,
-          module: 'projet', forUsers: [detail.responsableUid], link: '/projet/projets'
+          module: 'projet', forUsers: [detail.responsableUid], link: '/projet/projets/liste', state: { openProjetId: detail.id }
         }).catch(() => {})
       }
       setCommTexte('')
@@ -552,6 +546,9 @@ export default function Projets() {
 
   return (
     <div className="space-y-4">
+      <Link to="/projet/projets" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+        <ArrowLeft size={14} /> Explorer par secteur
+      </Link>
       <div className="flex flex-wrap items-center gap-2">
         <div ref={searchRef} className="relative flex-1 min-w-[200px]">
           <input

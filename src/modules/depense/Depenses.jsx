@@ -22,7 +22,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, budgetRestantSecteur } from './logic'
 import { notifierBeneficiaire } from './notifications'
-import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole } from '../../core/roles'
+import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
 
 // Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
@@ -99,7 +99,10 @@ function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
 }
 
 export default function Depenses() {
-  const { user, role } = useAuth()
+  const { user, role: roleReel } = useAuth()
+  // super_admin/admin/directeur sont traités comme un agent dans E-DÉPENSES (cf.
+  // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
+  const role = depenseRoleEffectif(roleReel)
   const isAdmin = isFullAccessRole(role)
   const lectureSeule = isReadOnlyRole(role)
   // L'agent n'a accès qu'aux dépenses du mois en cours et du mois précédent (même

@@ -32,10 +32,10 @@ export default function ProjetAutoDemarrage() {
           type: 'info',
           title: '🚀 Projet démarré automatiquement',
           body: `${p.nom} a atteint sa date de début et passe « En cours ».`,
-          module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, link: '/projet/projets'
+          module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, link: '/projet/projets/liste', state: { openProjetId: p.id }
         })
         if (forUsers.length) {
-          pushToUsers(forUsers, { title: '🚀 Projet démarré automatiquement', body: p.nom, url: '/projet/projets' })
+          pushToUsers(forUsers, { title: '🚀 Projet démarré automatiquement', body: p.nom, url: '/projet/projets/liste' })
         }
       } catch (e) { /* best effort — un autre client réessaiera au prochain tick */ }
     }

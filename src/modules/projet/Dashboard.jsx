@@ -46,7 +46,7 @@ const TONE_BAR = {
 
 // Volet à ouvrir au clic sur une alerte — on ouvre directement la fiche du projet
 // ou de la tâche concernée (pas juste la liste générale), là où se fait la correction.
-const VOLET_PAR_CIBLE = { projet: '/projet/projets', tache: '/projet/taches' }
+const VOLET_PAR_CIBLE = { projet: '/projet/projets/liste', tache: '/projet/taches/liste' }
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -181,7 +181,7 @@ export default function Dashboard() {
                       {resteOuvert && (
                         <div className="space-y-1 border-t border-white/60 px-3 py-2">
                           {a.details.map((d) => (
-                            <div key={d.tacheId} onClick={() => navigate('/projet/taches', { state: { openTacheId: d.tacheId } })}
+                            <div key={d.tacheId} onClick={() => navigate('/projet/taches/liste', { state: { openTacheId: d.tacheId } })}
                               title="Aller corriger"
                               className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-white/70">
                               <span className="min-w-0 truncate text-gray-600">
