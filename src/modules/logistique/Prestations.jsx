@@ -16,7 +16,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { isApproverRole, isReadOnlyRole } from '../../core/roles'
+import { isApproverRole, isReadOnlyRole, logistiqueVoitMontants } from '../../core/roles'
 import { catColor } from './data'
 import { nbJoursInclus } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -33,6 +33,8 @@ export default function Prestations() {
   const { user, role } = useAuth()
   const site = useSite()
   const peutApprouver = isApproverRole(role) // gérant / direction : valident la prestation
+  // La secrétaire ne voit aucun montant de location (tarifs, totaux, frais, dépenses).
+  const voitMontants = logistiqueVoitMontants(role)
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: clients } = useCollection('logistique_clients')
   const { data: allRetours } = useCollection('logistique_retours')
@@ -264,7 +266,8 @@ export default function Prestations() {
             { key: 'num', label: 'N°', sticky: true, width: '96px' },
             { key: 'clientNom', label: 'Client', sticky: true, width: '130px' },
             { key: 'periode', label: 'Période', render: (r) => `${formatDateShort(r.dateDebut)} → ${formatDateShort(r.dateFin)}` },
-            { key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> },
+            // Colonne « Montant » retirée pour la secrétaire (cf. voitMontants).
+            ...(voitMontants ? [{ key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> }] : []),
             { key: 'statut', label: 'Facturation', render: (r) => <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge> },
             { key: 'etat', label: 'État', render: (r) => { const s = statutOp(r); return <Badge tone={s.tone}>{s.label}</Badge> } },
             { key: 'appr', label: 'Appro.', align: 'center', render: (r) => r.approuvee
@@ -416,81 +419,186 @@ export default function Prestations() {
           const pris = (detail.lignes || []).filter((l) => l.materielId).reduce((a, l) => a + (parseInt(l.qte) || 0), 0)
           const rendu = rets.reduce((a, r) => a + (parseInt(r.qte) || 0), 0)
           return (
-          <div className="space-y-2 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={s.tone}>{s.label}</Badge>
-              <Badge tone={STATUTS[detail.statut]?.tone}>{STATUTS[detail.statut]?.label || detail.statut}</Badge>
+          <div className="space-y-3 text-sm">
+            {/* En-tête glassmorphism — le montant total, l'information la plus
+                recherchée, devient lisible d'un coup d'œil au lieu d'être une
+                petite ligne perdue sous le tableau. */}
+            <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(188,60,49,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(107,26,16,0.88) 100%)' }}>
+              {voitMontants ? (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Total de la prestation</p>
+                  <p className="mt-0.5 text-2xl font-black leading-tight">{formatMoney(detail.total)}</p>
+                </>
+              ) : (
+                // Secrétaire : le numéro remplace le montant en information principale.
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70">Prestation</p>
+                  <p className="mt-0.5 text-lg font-black leading-tight">{detail.num}</p>
+                </>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{s.label}</span>
+                <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{STATUTS[detail.statut]?.label || detail.statut}</span>
+                <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                  {detail.approuvee ? '✅ Approuvée' : '⏳ En attente d\'approbation'}
+                </span>
+              </div>
             </div>
-            <div className="rounded-lg bg-white p-3">
-              <p><strong>Client :</strong> {detail.clientNom}</p>
-              {detail.evenement && <p><strong>Événement :</strong> {detail.evenement}</p>}
-              <p><strong>Période :</strong> {formatDateShort(detail.dateDebut)} → {formatDateShort(detail.dateFin)}</p>
-              {detail.lieu && <p><strong>Lieu :</strong> {detail.lieu}</p>}
-              {detail.factureNum && <p><strong>Facture :</strong> {detail.factureNum}</p>}
-              {detail.agentNom && <p><strong>Saisie par :</strong> {detail.agentNom}</p>}
-              <p><strong>Approbation :</strong> {detail.approuvee
-                ? `✅ ${detail.approuveePar || ''}${detail.approuveeLe ? ' · ' + detail.approuveeLe : ''}`
-                : '⏳ en attente'}</p>
-            </div>
-            <div className="mt-2 overflow-x-auto rounded-lg bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2 text-left">Matériel</th><th className="p-2">Qté</th><th className="p-2">Jours</th><th className="p-2">Tarif/j</th><th className="p-2 text-right">Montant</th></tr></thead>
-              <tbody>
-                {(detail.lignes || []).map((l, i) => (
-                  <tr key={i} className="border-t"><td className="p-2">{l.materielNom}{l.autre ? <span className="ml-1 text-[10px] text-gray-400">(autre)</span> : null}</td><td className="p-2 text-center">{l.qte}</td><td className="p-2 text-center">{l.nbJours || 1}</td><td className="p-2 text-center">{formatMoney(l.tarifUnitaire)}</td><td className="p-2 text-right font-bold">{formatMoney(l.montant)}</td></tr>
-                ))}
-                {(detail.frais || []).map((x, i) => (
-                  <tr key={`f${i}`} className="border-t bg-amber-50/40"><td className="p-2 text-amber-700">{x.label} <span className="text-[10px]">(frais)</span></td><td className="p-2 text-center">—</td><td className="p-2 text-center">—</td><td className="p-2 text-center">—</td><td className="p-2 text-right font-bold">{formatMoney(x.montant)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-            <p className="text-right font-extrabold">Total : {formatMoney(detail.total)}</p>
 
-            {/* Dépenses internes — modifiables « plus tard » tant que non facturée */}
-            {(detail.type === 'prestation' || (detail.depenses || []).length > 0) && (
-              <div className="mt-2 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 p-3">
-                <p className="mb-1 flex items-center gap-1 text-xs font-bold uppercase text-orange-700"><Coins size={13} /> Dépenses internes (hors facturation)</p>
+            {/* Informations — en grille plutôt qu'en liste, pour balayer du regard */}
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Informations</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
+                <ChampInfo label="Client" value={detail.clientNom} />
+                {detail.evenement && <ChampInfo label="Événement" value={detail.evenement} />}
+                <ChampInfo label="Période" value={`${formatDateShort(detail.dateDebut)} → ${formatDateShort(detail.dateFin)}`} />
+                {detail.lieu && <ChampInfo label="Lieu" value={detail.lieu} />}
+                {detail.factureNum && <ChampInfo label="Facture" value={detail.factureNum} />}
+                {detail.agentNom && <ChampInfo label="Saisie par" value={detail.agentNom} />}
+                <ChampInfo label="Approbation" value={detail.approuvee
+                  ? `${detail.approuveePar || '—'}${detail.approuveeLe ? ' · ' + detail.approuveeLe : ''}`
+                  : 'En attente'} />
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="p-2.5 text-left font-semibold">Matériel</th>
+                      <th className="p-2.5 font-semibold">Qté</th>
+                      <th className="p-2.5 font-semibold">Jours</th>
+                      {voitMontants && <th className="p-2.5 font-semibold">Tarif/j</th>}
+                      {voitMontants && <th className="p-2.5 text-right font-semibold">Montant</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detail.lignes || []).map((l, i) => (
+                      <tr key={i} className="border-t border-gray-100">
+                        <td className="p-2.5 font-medium text-gray-700">{l.materielNom}{l.autre ? <span className="ml-1 text-[10px] text-gray-400">(autre)</span> : null}</td>
+                        <td className="p-2.5 text-center text-gray-600">{l.qte}</td>
+                        <td className="p-2.5 text-center text-gray-600">{l.nbJours || 1}</td>
+                        {voitMontants && <td className="p-2.5 text-center text-gray-600">{formatMoney(l.tarifUnitaire)}</td>}
+                        {voitMontants && <td className="p-2.5 text-right font-bold text-gray-900">{formatMoney(l.montant)}</td>}
+                      </tr>
+                    ))}
+                    {/* Lignes de frais : purement financières — sans intérêt (et masquées)
+                        pour un profil qui ne voit pas les montants. */}
+                    {voitMontants && (detail.frais || []).map((x, i) => (
+                      <tr key={`f${i}`} className="border-t border-gray-100 bg-amber-50/40">
+                        <td className="p-2.5 text-amber-700">{x.label} <span className="text-[10px]">(frais)</span></td>
+                        <td className="p-2.5 text-center text-gray-400">—</td>
+                        <td className="p-2.5 text-center text-gray-400">—</td>
+                        <td className="p-2.5 text-center text-gray-400">—</td>
+                        <td className="p-2.5 text-right font-bold text-amber-800">{formatMoney(x.montant)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {voitMontants && (
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50">
+                        <td className="p-2.5 text-xs font-bold uppercase tracking-wide text-gray-600" colSpan={4}>Total</td>
+                        <td className="p-2.5 text-right text-base font-black text-gray-900">{formatMoney(detail.total)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
+
+            {/* Dépenses internes — modifiables « plus tard » tant que non facturée.
+                Bloc entièrement financier : masqué aux profils sans accès aux montants. */}
+            {voitMontants && (detail.type === 'prestation' || (detail.depenses || []).length > 0) && (
+              <div className="rounded-2xl border border-orange-200/70 bg-orange-50/60 p-4 shadow-sm">
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700">
+                  <Coins size={13} /> Dépenses internes <span className="font-normal normal-case text-orange-500">(hors facturation)</span>
+                </p>
                 {!isReadOnlyRole(role) && detail.statut === 'brouillon' ? (
                   <>
                     {depLater.map((x, i) => (
-                      <div key={i} className="mt-1 grid grid-cols-2 gap-2 md:grid-cols-12">
+                      <div key={i} className="mt-1.5 grid grid-cols-2 gap-2 md:grid-cols-12">
                         <Input className="col-span-2 md:col-span-7" value={x.label} onChange={(e) => setDepLater((a) => a.map((y, k) => (k === i ? { ...y, label: e.target.value } : y)))} placeholder="Intitulé (ex : Frais de mission…)" />
                         <Input className="md:col-span-4" type="number" min="0" value={x.montant} onChange={(e) => setDepLater((a) => a.map((y, k) => (k === i ? { ...y, montant: e.target.value } : y)))} placeholder="Montant" />
-                        <button type="button" onClick={() => setDepLater((a) => a.filter((_, k) => k !== i))} className="flex items-center justify-center text-red-500 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
+                        <button type="button" onClick={() => setDepLater((a) => a.filter((_, k) => k !== i))} title="Retirer cette ligne" className="flex items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
                       </div>
                     ))}
-                    <div className="mt-2 flex items-center gap-2">
+                    {!depLater.length && <p className="text-xs text-orange-500/80">Aucune dépense — ajoutez-en une si la prestation a généré des frais internes.</p>}
+                    <div className="mt-3 flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setDepLater((a) => [...a, { label: '', montant: 0 }])}><Plus size={14} /> Dépense</Button>
-                      <Button size="sm" onClick={saveDepensesLater} loading={depSaving}><Save size={14} /> Enregistrer les dépenses</Button>
+                      <Button size="sm" onClick={saveDepensesLater} loading={depSaving}><Save size={14} /> Enregistrer</Button>
                     </div>
                   </>
                 ) : (
                   (detail.depenses || []).length
-                    ? (detail.depenses || []).map((x, i) => (
-                        <div key={i} className="flex justify-between text-xs text-orange-900"><span>{x.label}</span><span className="font-semibold">{formatMoney(x.montant)}</span></div>
-                      ))
+                    ? <div className="space-y-1">
+                        {(detail.depenses || []).map((x, i) => (
+                          <div key={i} className="flex justify-between rounded-lg bg-white/70 px-2.5 py-1.5 text-xs text-orange-900">
+                            <span>{x.label}</span><span className="font-semibold">{formatMoney(x.montant)}</span>
+                          </div>
+                        ))}
+                      </div>
                     : <p className="text-xs text-gray-400">Aucune dépense renseignée.</p>
                 )}
                 {(detail.depenses || []).length > 0 && (
-                  <p className="mt-1 text-right text-xs font-bold text-orange-700">Total : {formatMoney((detail.depenses || []).reduce((s, x) => s + (x.montant || 0), 0))}</p>
+                  <p className="mt-2 border-t border-orange-200/60 pt-2 text-right text-xs font-bold text-orange-700">
+                    Total dépenses : {formatMoney((detail.depenses || []).reduce((s, x) => s + (x.montant || 0), 0))}
+                  </p>
                 )}
               </div>
             )}
 
-            <div className="mt-2 rounded-lg bg-gray-50 p-3">
-              <p className="mb-1 text-xs font-bold uppercase text-gray-500">Suivi des retours</p>
-              {pris > 0
-                ? <p className="text-sm">{rendu} / {pris} pièce(s) retournée(s){rendu >= pris ? ' — ✅ retour complet' : ' — ⏳ retour en attente'}</p>
-                : <p className="text-sm text-gray-400">Aucun matériel du référentiel à retourner.</p>}
-              {rets.map((r, i) => (
-                <p key={i} className="text-xs text-gray-500">• {formatDateShort(r.date)} — {r.qte} × {r.materielNom} ({r.type}){r.motif ? ` — ${r.motif}` : ''}</p>
-              ))}
+            {/* Suivi des retours — une barre de progression rend le « où en est-on »
+                lisible immédiatement, au lieu d'un simple ratio en texte. */}
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Suivi des retours</p>
+              {pris > 0 ? (() => {
+                const complet = rendu >= pris
+                const pct = Math.min(100, Math.round((rendu / pris) * 100))
+                return (
+                  <>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-base font-bold text-gray-800">
+                        {rendu} <span className="text-sm font-normal text-gray-400">/ {pris} pièce(s) retournée(s)</span>
+                      </p>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${complet ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {complet ? '✅ Retour complet' : '⏳ Retour en attente'}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+                      <div className={`h-2 rounded-full transition-all ${complet ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </>
+                )
+              })() : <p className="text-sm text-gray-400">Aucun matériel du référentiel à retourner.</p>}
+              {rets.length > 0 && (
+                <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
+                  {rets.map((r, i) => (
+                    <p key={i} className="text-xs text-gray-500">
+                      <span className="font-mono text-[11px] text-gray-400">{formatDateShort(r.date)}</span>
+                      {' — '}<span className="font-semibold text-gray-600">{r.qte} × {r.materielNom}</span>
+                      {' '}<span className="text-gray-400">({r.type})</span>{r.motif ? ` — ${r.motif}` : ''}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           )
         })()}
       </Modal>
+    </div>
+  )
+}
+
+// Champ d'information (libellé au-dessus, valeur en dessous) — présentation en
+// grille du détail d'une prestation, plus lisible qu'une suite de « label : valeur ».
+function ChampInfo({ label, value }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="truncate font-semibold text-gray-800" title={value || ''}>{value || '—'}</p>
     </div>
   )
 }

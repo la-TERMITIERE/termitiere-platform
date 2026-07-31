@@ -9,7 +9,7 @@ const SIZES = {
   xl: 'max-w-4xl'
 }
 
-export default function Modal({ open, onClose, title, children, footer, size = 'md', panelClassName = 'bg-white' }) {
+export default function Modal({ open, onClose, title, children, footer, size = 'md', panelClassName = 'bg-white', overlayClassName = 'bg-black/50' }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => e.key === 'Escape' && onClose?.()
@@ -25,7 +25,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 ${overlayClassName}`}
       onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}
       role="dialog"
       aria-modal="true"

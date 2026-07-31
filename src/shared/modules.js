@@ -6,7 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_VOLETS_RESTREINTS_ROLES, PROJET_PILOTAGE_ROLES, PROJET_JOURNAL_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -107,8 +107,8 @@ export const MODULE_NAV = {
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
     { label: 'Partenaires', to: '/agro/partenaires', icon: Handshake, perm: 'partenaires' },
-    { label: 'Journal et Historique', to: '/agro/journal', icon: BookOpen },
-    { label: 'Paramètres', to: '/agro/params', icon: Settings }
+    { label: 'Journal et Historique', to: '/agro/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres', to: '/agro/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   logistique: [
     { label: 'Dashboard', to: '/logistique', icon: LayoutDashboard, end: true },
@@ -123,8 +123,8 @@ export const MODULE_NAV = {
     { label: 'Clients', to: '/logistique/clients', icon: UserCircle },
     { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory },
     { label: 'Partenaires', to: '/logistique/partenaires', icon: Handshake, perm: 'partenaires' },
-    { label: 'Journal et Historique', to: '/logistique/journal', icon: BookOpen },
-    { label: 'Paramètres', to: '/logistique/params', icon: Settings }
+    { label: 'Journal et Historique', to: '/logistique/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres', to: '/logistique/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   evenementiel: [
     { label: 'Dashboard', to: '/evenementiel', icon: LayoutDashboard, end: true },
@@ -135,8 +135,8 @@ export const MODULE_NAV = {
     { label: 'Pilotage & Analyses', to: '/evenementiel/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Dépense', to: '/evenementiel/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
-    { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen },
-    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings },
+    { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: ADMIN_VOLETS_ROLES },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle },
     { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires' }
   ],
@@ -144,8 +144,8 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/foncier', icon: LayoutDashboard, end: true },
     { label: 'Dossiers fonciers', to: '/foncier/dossiers', icon: FileText },
     { label: 'Partenaires', to: '/foncier/partenaires', icon: Handshake, perm: 'partenaires' },
-    { label: 'Journal et Historique', to: '/foncier/journal', icon: BookOpen },
-    { label: 'Paramètres', to: '/foncier/params', icon: Settings }
+    { label: 'Journal et Historique', to: '/foncier/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres', to: '/foncier/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
@@ -167,8 +167,8 @@ export const MODULE_NAV = {
     // qui reste nécessaire pour ajouter/modifier/supprimer un partenaire.
     { label: 'Partenaires', to: '/projet/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] },
     { label: 'Rapports',    to: '/projet/rapports',    icon: PieChart },
-    { label: 'Journal et Historique', to: '/projet/journal', icon: BookOpen, roles: PROJET_JOURNAL_ROLES },
-    { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: PROJET_VOLETS_RESTREINTS_ROLES }
+    { label: 'Journal et Historique', to: '/projet/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   garderie: [
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
@@ -182,8 +182,8 @@ export const MODULE_NAV = {
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur','partenaire'] },
     { label: 'Dépense', to: '/garderie/finances', icon: Scale,          roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire'] },
     { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires' },
-    { label: 'Journal et Historique', to: '/garderie/journal', icon: BookOpen,       roles: [...FULL_ACCESS_ROLES,'gerant','superviseur','partenaire'] },
-    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: [...FULL_ACCESS_ROLES] }
+    { label: 'Journal et Historique', to: '/garderie/journal', icon: BookOpen,       roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ADMIN_VOLETS_ROLES }
   ],
   depense: [
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
@@ -193,8 +193,9 @@ export const MODULE_NAV = {
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: [...FINANCE_VIEW_ROLES, 'agent'] },
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
+    { label: 'Compte bancaire',              to: '/depense/banque',      icon: Landmark,        roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
-    { label: 'Journal et Historique',        to: '/depense/journal',      icon: BookOpen,        roles: FINANCE_VIEW_ROLES },
-    { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: FINANCE_VIEW_ROLES }
+    { label: 'Journal et Historique',        to: '/depense/journal',      icon: BookOpen,        roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: ADMIN_VOLETS_ROLES }
   ]
 }

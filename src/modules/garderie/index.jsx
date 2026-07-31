@@ -61,7 +61,7 @@ export default function GarderieModule() {
       } />
       <Route path="partenaires" element={<Partenaires module="garderie" />} />
       <Route path="journal" element={
-        <GarderieGuard roles={ROLES_DIRECTION}><Journal /></GarderieGuard>
+        <GarderieGuard roles={ROLES_ADMIN}><Journal /></GarderieGuard>
       } />
       <Route path="params" element={
         <GarderieGuard roles={ROLES_ADMIN}><Params /></GarderieGuard>

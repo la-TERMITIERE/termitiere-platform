@@ -5,13 +5,16 @@
 // Présentation RESPONSIVE (téléphone : cartes empilées ; écran large : tableau).
 import { formatNumber, formatMoney } from '../../utils/formatters'
 
+// `masquerMontants` : cache toute valeur financière (colonne Montant + total) pour
+// les profils qui valident sur la quantité et le motif seulement — ex. la secrétaire
+// en MAXI LOGISTIQUE. Par défaut false : les autres modules ne changent pas.
 export default function DemandeDetail({
   demandeur, dateHeure, client, motif, sortieLabel = 'Sortie prévue', sortieValue,
-  items = [], montant, statutNode, trail = []
+  items = [], montant, statutNode, trail = [], masquerMontants = false
 }) {
   const totalQte = items.reduce((s, it) => s + (parseInt(it.qte) || 0), 0)
   const hasStock = items.some((it) => it.stock !== undefined && it.stock !== null)
-  const hasMontant = items.some((it) => it.montant !== undefined && it.montant !== null)
+  const hasMontant = !masquerMontants && items.some((it) => it.montant !== undefined && it.montant !== null)
   const alerte = items.some((it) => it.stock !== undefined && (parseInt(it.qte) || 0) > it.stock)
 
   return (
@@ -52,7 +55,7 @@ export default function DemandeDetail({
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-gray-500">
                   {it.stock !== undefined && <span>Stock : <strong className={ko ? 'text-red-600' : 'text-gray-700'}>{formatNumber(it.stock)}</strong></span>}
                   {reste !== null && <span>Restant après : <strong className={ko ? 'text-red-600' : 'text-gray-700'}>{formatNumber(reste)}</strong>{ko ? ' ⚠️' : ''}</span>}
-                  {it.montant !== undefined && <span className="ml-auto font-semibold text-gray-700">{formatMoney(it.montant)}</span>}
+                  {!masquerMontants && it.montant !== undefined && <span className="ml-auto font-semibold text-gray-700">{formatMoney(it.montant)}</span>}
                 </div>
               </div>
             )
@@ -101,7 +104,7 @@ export default function DemandeDetail({
         </p>
       )}
 
-      {montant !== undefined && montant !== null && (
+      {!masquerMontants && montant !== undefined && montant !== null && (
         <p className="text-right text-sm font-extrabold text-gray-800">Montant total : {formatMoney(montant)}</p>
       )}
 

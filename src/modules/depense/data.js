@@ -57,6 +57,13 @@ export const STATUTS_DECAISSEMENT = {
   refusee:    { label: 'Refusée', tone: 'danger' }
 }
 
+// Compte bancaire — types de mouvement (dépôt = entrée d'argent en banque, retrait
+// = sortie). `signe` sert au calcul du solde courant (cf. Banque.jsx).
+export const TYPES_MOUVEMENT_BANQUE = {
+  depot:   { label: 'Dépôt',   tone: 'success', signe: 1 },
+  retrait: { label: 'Retrait', tone: 'danger',  signe: -1 }
+}
+
 export const MOIS_LABELS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'

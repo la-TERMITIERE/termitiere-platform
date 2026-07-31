@@ -11,6 +11,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { logistiqueVoitMontants } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -28,6 +29,8 @@ export default function Factures() {
   const { user, role } = useAuth()
   const site = useSite()
   const peutFacturer = role === 'agent'
+  // La secrétaire consulte les factures (suivi administratif) sans en voir la valeur.
+  const voitMontants = logistiqueVoitMontants(role)
   const { data: allFactures } = useCollection('logistique_factures')
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: allDemandes } = useCollection('logistique_demandes')
@@ -106,7 +109,8 @@ export default function Factures() {
             { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
             { key: 'clientNom', label: 'Client' },
             { key: 'prestationNum', label: 'Prestation' },
-            { key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> },
+            // Colonne « Montant » retirée pour la secrétaire (cf. voitMontants).
+            ...(voitMontants ? [{ key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> }] : []),
             { key: 'statut', label: 'Statut', render: (r) => {
               const s = F_STATUTS[r.statut] || F_STATUTS.brouillon
               const auto = /syst/i.test(r.approuveePar || '')
@@ -157,18 +161,21 @@ export default function Factures() {
                 { label: 'Prestation', render: (l) => l.materielNom || 'Élément' },
                 { label: 'Qté', align: 'center', render: (l) => formatNumber(l.qte || 0) },
                 { label: 'Jours', align: 'center', render: (l) => formatNumber(l.nbJours || 1) },
-                { label: 'Tarif / jour', align: 'right', render: (l) => formatMoney(l.tarifUnitaire || 0) },
-                { label: 'Montant', align: 'right', render: (l) => formatMoney(l.montant || 0) }
+                // Colonnes et pied de tableau financiers : masqués à la secrétaire.
+                ...(voitMontants ? [
+                  { label: 'Tarif / jour', align: 'right', render: (l) => formatMoney(l.tarifUnitaire || 0) },
+                  { label: 'Montant', align: 'right', render: (l) => formatMoney(l.montant || 0) }
+                ] : [])
               ]}
               lignes={detail.lignes || []}
               vide="Aucune ligne sur cette facture."
-              pied={[
+              pied={voitMontants ? [
                 { label: 'Sous-total matériel', value: totalLignes },
                 { label: 'Frais supplémentaires', value: totalFrais || null },
                 { label: 'Total', value: detail.totalTTC ?? detail.totalHT ?? 0, fort: true }
-              ]}
+              ] : []}
             >
-              {(detail.frais || []).length > 0 && (
+              {voitMontants && (detail.frais || []).length > 0 && (
                 <div className="rounded-lg bg-amber-50/60 px-3 py-2">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">Frais supplémentaires</p>
                   {(detail.frais || []).map((x, i) => (
@@ -187,10 +194,10 @@ export default function Factures() {
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={emettre}><FileText size={16} /> Émettre</Button></>}>
         <FormGroup label="Prestation à facturer" required>
           <Select value={prestId} onChange={(e) => setPrestId(e.target.value)}>
-            {aFacturer.map((p) => <option key={p.id} value={p.id}>{p.num} — {p.clientNom} ({formatMoney(p.total)})</option>)}
+            {aFacturer.map((p) => <option key={p.id} value={p.id}>{p.num} — {p.clientNom}{voitMontants ? ` (${formatMoney(p.total)})` : ''}</option>)}
           </Select>
         </FormGroup>
-        {prestId && (() => {
+        {voitMontants && prestId && (() => {
           const p = prestations.find((x) => x.id === prestId)
           return p ? <p className="mt-2 text-sm text-gray-600">Montant TTC : <strong>{formatMoney(p.total)}</strong></p> : null
         })()}

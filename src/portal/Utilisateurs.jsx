@@ -1,7 +1,7 @@
 // Gestion des utilisateurs de la plateforme (portail, admin uniquement).
 // Permet d'attribuer à chaque utilisateur ses droits d'accès aux modules.
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Pencil, ShieldCheck } from 'lucide-react'
+import { Plus, Trash2, Pencil, ShieldCheck, Eye } from 'lucide-react'
 import Card from '../shared/ui/Card'
 import Button from '../shared/ui/Button'
 import Modal from '../shared/ui/Modal'
@@ -14,8 +14,8 @@ import ChampAutocomplete from '../shared/forms/ChampAutocomplete'
 import { useUsersStore } from '../core/users'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
-import { MODULES } from '../shared/modules'
-import { ROLES, isViewAllRole, roleLabel, roleTone } from '../core/roles'
+import { MODULES, MODULE_NAV } from '../shared/modules'
+import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
 import { SITES } from '../modules/logistique/site/useSite'
 
@@ -29,9 +29,15 @@ const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [],
 const SECTEURS_DEFAUT = MODULES.map((m) => m.nom)
 const POSTES_DEFAUT = ['Gérant', 'Comptable', 'Responsable RH', 'Chef de projet', 'Chef de chantier', 'Secrétaire', 'Agent de saisie', 'Superviseur', 'Tata', 'Chauffeur', 'Magasinier']
 
+function hexToRgba(hex, alpha) {
+  const n = parseInt(hex.replace('#', ''), 16)
+  return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`
+}
+
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
   const [modal, setModal] = useState(null) // { data, isNew }
+  const [detailUser, setDetailUser] = useState(null)
 
   useEffect(() => { load() }, [load])
 
@@ -45,6 +51,18 @@ export default function Utilisateurs() {
 
   function openNew() { setModal({ data: empty(), isNew: true }) }
   function openEdit(u) { setModal({ data: { ...empty(), ...u, pass: u.pass || '' }, isNew: false }) }
+
+  // Volets visibles par cet utilisateur dans un module donné — même règle que la
+  // nav réelle (cf. Sidebar.jsx → canSeeNav) : rôle explicite (`roles`) ou permission
+  // individuelle (`perm`, ex. gerePartenaires) ; sans l'un ou l'autre, ouvert à tous.
+  function voletsVisibles(u, moduleId) {
+    const canSee = (item) => {
+      if (item.roles && item.roles.includes(u.role)) return true
+      if (item.perm === 'partenaires' && canManagePartenaires(u.role, u)) return true
+      return !item.roles && !item.perm
+    }
+    return (MODULE_NAV[moduleId] || []).filter(canSee)
+  }
 
   function toggleModule(id) {
     setModal((m) => {
@@ -136,6 +154,7 @@ export default function Utilisateurs() {
             { key: 'actif', label: 'Statut', align: 'center', render: (r) => r.actif === false ? <Badge tone="danger">Inactif</Badge> : <Badge tone="success">Actif</Badge> },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
+                <button onClick={() => setDetailUser(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" title="Voir les détails d'accès"><Eye size={16} /></button>
                 <button onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
                 <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
               </div>
@@ -277,6 +296,85 @@ export default function Utilisateurs() {
               </label>
             </FormGroup>
           </>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!detailUser}
+        onClose={() => setDetailUser(null)}
+        title={detailUser ? `Accès de ${detailUser.nom}` : ''}
+        footer={<Button variant="ghost" onClick={() => setDetailUser(null)}>Fermer</Button>}
+        overlayClassName="bg-gradient-to-br from-[#1A1A1A]/75 via-[#6B1A10]/55 to-[#BC3C31]/45 backdrop-blur-sm"
+        panelClassName="relative overflow-hidden border border-white/60 bg-white/75 backdrop-blur-2xl"
+      >
+        {detailUser && (
+          <div className="relative space-y-4">
+            {/* Halos décoratifs LA TERMITIÈRE — rouge brique + anthracite */}
+            <div className="pointer-events-none absolute -right-16 -top-20 -z-10 h-56 w-56 rounded-full opacity-40 blur-3xl" style={{ background: '#BC3C31' }} />
+            <div className="pointer-events-none absolute -bottom-24 -left-16 -z-10 h-56 w-56 rounded-full opacity-30 blur-3xl" style={{ background: '#1A1A1A' }} />
+
+            {/* En-tête utilisateur — carte verre dépoli */}
+            <div
+              className="flex items-center gap-3 rounded-xl border p-3 shadow-sm backdrop-blur-md"
+              style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35))', borderColor: 'rgba(188,60,49,0.22)' }}
+            >
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white shadow-md ring-2 ring-white/60"
+                style={{ background: 'linear-gradient(135deg, #D9594B, #8F2A20)' }}
+              >
+                {(detailUser.nom || '?').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-gray-900">{detailUser.nom}</p>
+                <p className="truncate text-xs text-gray-500">{detailUser.poste || detailUser.login}</p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <Badge tone={roleTone(detailUser.role)}>{roleLabel(detailUser.role)}</Badge>
+                {isReadOnlyRole(detailUser.role) && <Badge tone="info">Lecture seule</Badge>}
+                {isViewAllRole(detailUser.role) && <Badge tone="primary">Tous les modules</Badge>}
+              </div>
+            </div>
+
+            {(isViewAllRole(detailUser.role) ? MODULES : MODULES.filter((m) => (detailUser.modules || []).includes(m.id))).length === 0 && (
+              <p className="rounded-xl border border-dashed border-gray-200 bg-white/60 p-4 text-center text-sm text-gray-400 backdrop-blur-md">
+                Aucun accès module attribué.
+              </p>
+            )}
+
+            {/* Cartes modules — verre dépoli léger */}
+            {(isViewAllRole(detailUser.role) ? MODULES : MODULES.filter((m) => (detailUser.modules || []).includes(m.id))).map((m) => {
+              const volets = voletsVisibles(detailUser, m.id)
+              return (
+                <div key={m.id} className="overflow-hidden rounded-xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md transition-shadow hover:shadow-md">
+                  <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ background: hexToRgba(m.color, 0.1), borderBottom: `1px solid ${hexToRgba(m.color, 0.18)}` }}>
+                    <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm" style={{ background: m.color }}>
+                      <m.icon size={12} /> {m.nom}
+                    </span>
+                    {m.id === 'logistique' && (
+                      <span className="text-xs font-medium text-gray-500">
+                        {(detailUser.logistiqueSites || []).length ? detailUser.logistiqueSites.join(' · ') : 'aucun site'}
+                      </span>
+                    )}
+                    <span className="ml-auto shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold shadow-sm" style={{ color: m.color }}>
+                      {volets.length} volet{volets.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {volets.length ? (
+                    <ul className="grid grid-cols-2 gap-x-4 gap-y-0.5 p-3">
+                      {volets.map((v) => (
+                        <li key={v.to} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-white">
+                          <v.icon size={14} className="shrink-0 text-gray-400" />
+                          <span className="truncate">{v.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="p-3 text-xs text-gray-400">Aucun volet accessible.</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </Modal>
     </div>

@@ -22,7 +22,7 @@ import AutoCarryForwardLogistique from './AutoCarryForwardLogistique'
 import { Lock } from 'lucide-react'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 
 function AccesRefuse() {
@@ -31,6 +31,16 @@ function AccesRefuse() {
       <Lock className="mx-auto mb-3 text-amber-600" size={32} />
       <p className="font-bold text-amber-900">Accès réservé à la hiérarchie</p>
       <p className="mt-1 text-sm text-amber-700">Le pilotage et les analyses ne sont pas accessibles avec votre profil.</p>
+    </div>
+  )
+}
+
+function AccesRefuseAdmin() {
+  return (
+    <div className="mx-auto mt-10 max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+      <Lock className="mx-auto mb-3 text-amber-600" size={32} />
+      <p className="font-bold text-amber-900">Accès réservé à l'administration</p>
+      <p className="mt-1 text-sm text-amber-700">Ce volet n'est accessible qu'aux membres de l'administration.</p>
     </div>
   )
 }
@@ -74,8 +84,8 @@ function SiteApp() {
         <Route path="clients" element={<Clients />} />
         <Route path="fournisseurs" element={<Fournisseurs />} />
         <Route path="partenaires" element={<Partenaires module="logistique" />} />
-        <Route path="journal" element={<Journal />} />
-        <Route path="params" element={<Params />} />
+        <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
+        <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
         <Route path="*" element={<Navigate to="." replace />} />
       </Routes>
     </SiteProvider>

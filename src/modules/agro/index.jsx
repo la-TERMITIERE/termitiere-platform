@@ -17,7 +17,7 @@ import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useAgroStore } from './store/agroStore'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole } from '../../core/roles'
 
 // Garde d'accès : Pilotage & Analyses réservé à la hiérarchie (pas les agents).
 function AccesRefuse() {
@@ -26,6 +26,17 @@ function AccesRefuse() {
       <Lock className="mx-auto mb-3 text-amber-600" size={32} />
       <p className="font-bold text-amber-900">Accès réservé à la hiérarchie</p>
       <p className="mt-1 text-sm text-amber-700">Le pilotage et les analyses ne sont pas accessibles avec votre profil.</p>
+    </div>
+  )
+}
+
+// Garde d'accès : Journal et Paramètres réservés à l'administration.
+function AccesRefuseAdmin() {
+  return (
+    <div className="mx-auto mt-10 max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+      <Lock className="mx-auto mb-3 text-amber-600" size={32} />
+      <p className="font-bold text-amber-900">Accès réservé à l'administration</p>
+      <p className="mt-1 text-sm text-amber-700">Ce volet n'est accessible qu'aux membres de l'administration.</p>
     </div>
   )
 }
@@ -48,8 +59,8 @@ export default function AgroModule() {
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />
       <Route path="partenaires" element={<Partenaires module="agro" />} />
-      <Route path="journal" element={<Journal />} />
-      <Route path="params" element={<Params />} />
+      <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
+      <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
     </Routes>
     </>
   )

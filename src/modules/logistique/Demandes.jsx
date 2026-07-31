@@ -4,7 +4,7 @@
 //   • la facture passe « approuvée » → elle compte alors dans le chiffre d'affaires ;
 //   • le matériel loué est décompté du stock magasin (sorties auto, cf. logic.autoSorties).
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, RotateCcw, Eye } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Eye, CheckCircle2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -20,7 +20,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { dernierStock } from './logic'
-import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
+import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole, logistiquePeutApprouver, logistiqueVoitMontants } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
@@ -49,8 +49,19 @@ export default function Demandes() {
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: allInventaires } = useCollection('logistique_inventaires')
   const materiel = useLogistiqueStore((s) => s.materiel)
-  const isManager = canManage()
+  const isFullManager = canManage() // gérant / direction : accès total, à tout statut
   const isCertifier = canCertify()
+  // Montants masqués pour la secrétaire : elle valide sur la quantité et le motif,
+  // pas sur la valeur financière de la prestation.
+  const voitMontants = logistiqueVoitMontants(role)
+  // La secrétaire approuve au 1er niveau dans CE module uniquement (sans être ajoutée
+  // à APPROVER_ROLES, qui lui ouvrirait aussi MAXI-AGRO et la Briqueterie). Elle ne
+  // certifie jamais : la certification approuve la facture, donc reste à la direction.
+  // Et son accès est borné à l'étape « en_attente » : une fois la demande sortie de
+  // cet état (par elle ou par quelqu'un d'autre), elle sort définitivement de son
+  // périmètre — plus de décision, plus de correctif, plus même la simple consultation.
+  const peutGererDemande = (d) => isFullManager || (logistiquePeutApprouver(role) && normaliserStatut(d.statut) === 'en_attente')
+  const peutVoirDetail = (d) => role !== 'secretaire' || normaliserStatut(d.statut) === 'en_attente'
 
   const liste = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
@@ -187,6 +198,15 @@ export default function Demandes() {
         body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — approuvée par ${user.nom}`,
         module: 'logistique', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
+      // Le demandeur doit savoir que sa demande est approuvée — sans cela il n'apprenait
+      // son sort qu'à la certification (2e niveau), parfois bien plus tard.
+      if (d.demandeur && d.demandeur !== user.login) {
+        await notify({
+          type: 'approuve', title: 'Sortie approuvée ✅',
+          body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — approuvée par ${user.nom}. En attente de certification.`,
+          module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/demandes`
+        })
+      }
     } else if (statut === 'certifie') {
       await notify({
         type: 'success', title: 'Sortie autorisée · facture approuvée ✅',
@@ -359,11 +379,13 @@ export default function Demandes() {
           <tbody className="divide-y divide-gray-100">
             {filtrees.map((d) => {
               const sn = normaliserStatut(d.statut)
-              const acts = actionsDemande(d.statut, { canManage: isManager, canCertify: isCertifier })
+              const gereCetteDemande = peutGererDemande(d)
+              const voitCeDetail = peutVoirDetail(d)
+              const acts = actionsDemande(d.statut, { canManage: gereCetteDemande, canCertify: isCertifier })
               const totalQte = (d.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0) || d.qte || 0
               const enCorrectif = correctifEnCours(d)
-              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
-              const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
+              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande })
+              const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: gereCetteDemande })
               return (
               <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
                 <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white'} group-hover:bg-gray-50`}>{d.num}</td>
@@ -382,12 +404,19 @@ export default function Demandes() {
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap items-center justify-end gap-1">
-                    {/* Consultation ouverte à tous : la même fiche, sans les actions. */}
-                    <button onClick={() => setDecision({ demande: d, lecture: true })} title="Voir le détail"
-                      className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-                    {(acts.length > 0 || enCorrectif) && isManager && (
-                      <button onClick={() => setDecision({ demande: d })} className="rounded bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/20">
-                        {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
+                    {/* Consultation ouverte à tous — SAUF la secrétaire une fois la demande
+                        sortie de « en_attente » : passé ce point, elle n'a plus à la rouvrir. */}
+                    {voitCeDetail && (
+                      <button onClick={() => setDecision({ demande: d, lecture: true })} title="Voir le détail"
+                        className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                    )}
+                    {/* Action prioritaire (approuver/certifier/traiter le correctif) : bien
+                        visible plutôt qu'une pastille discrète — c'est l'action attendue. */}
+                    {(acts.length > 0 || enCorrectif) && gereCetteDemande && (
+                      <button onClick={() => setDecision({ demande: d })}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-emerald-600/40 transition-colors hover:bg-emerald-700">
+                        <CheckCircle2 size={14} />
+                        {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Approuver'}
                       </button>
                     )}
                     {relancable && (
@@ -416,7 +445,7 @@ export default function Demandes() {
         footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}>Soumettre</Button></>}>
         <FormGroup label="Facture liée (brouillon)" required>
           <Select value={form.factureId} onChange={(e) => choisirFacture(e.target.value)}>
-            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} — {f.clientNom} ({formatMoney(f.totalTTC)})</option>)}
+            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} — {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
           </Select>
         </FormGroup>
         {formPresta && (
@@ -459,7 +488,7 @@ export default function Demandes() {
         footer={decision?.lecture
           ? <Button variant="ghost" onClick={() => setDecision(null)}>Fermer</Button>
           : <><Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-            {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: isManager }) && (
+            {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) }) && (
               <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
             )}
             {decision && correctifEnCours(decision.demande) ? (
@@ -467,7 +496,7 @@ export default function Demandes() {
                 <Button variant="danger" loading={busy} onClick={() => trancherCorrectif(false)}>Refuser le correctif</Button>
                 <Button variant="success" loading={busy} onClick={() => trancherCorrectif(true)}>Appliquer le correctif</Button>
               </>
-            ) : decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
+            ) : decision && actionsDemande(decision.demande.statut, { canManage: peutGererDemande(decision.demande), canCertify: isCertifier }).map((a) => (
               <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
                 {a.label}
               </Button>
@@ -504,6 +533,7 @@ export default function Demandes() {
                 sortieValue={d.dateSortie ? formatDateShort(d.dateSortie) : null}
                 items={items}
                 montant={fac?.totalTTC}
+                masquerMontants={!voitMontants}
                 statutNode={<Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>}
                 trail={[
                   { label: 'Approuvé (N1)', value: d.approuveN1Par ? `${d.approuveN1Par}${d.approuveN1Le ? ' · ' + d.approuveN1Le : ''}` : '' },
@@ -521,7 +551,15 @@ export default function Demandes() {
                   <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="text-xs uppercase text-gray-400">
-                      <tr><th className="px-3 py-1.5 text-left">Prestation</th><th className="px-2 py-1.5 text-center">Qté</th><th className="px-2 py-1.5 text-center">Jours</th><th className="px-2 py-1.5 text-right">Prix unit.</th><th className="px-3 py-1.5 text-right">Montant</th></tr>
+                      <tr>
+                        <th className="px-3 py-1.5 text-left">Prestation</th>
+                        <th className="px-2 py-1.5 text-center">Qté</th>
+                        <th className="px-2 py-1.5 text-center">Jours</th>
+                        {/* Colonnes financières retirées pour la secrétaire : elle valide
+                            sur la quantité et le motif, jamais sur le montant. */}
+                        {voitMontants && <th className="px-2 py-1.5 text-right">Prix unit.</th>}
+                        {voitMontants && <th className="px-3 py-1.5 text-right">Montant</th>}
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {(fac.lignes || []).map((l, i) => (
@@ -529,21 +567,24 @@ export default function Demandes() {
                           <td className="px-3 py-1.5 font-semibold">{l.materielNom || 'Élément'}</td>
                           <td className="px-2 py-1.5 text-center">{l.qte ?? '—'}</td>
                           <td className="px-2 py-1.5 text-center">{l.nbJours || 1}</td>
-                          <td className="px-2 py-1.5 text-right">{formatMoney(l.tarifUnitaire || 0)}</td>
-                          <td className="px-3 py-1.5 text-right font-bold">{formatMoney(l.montant || 0)}</td>
+                          {voitMontants && <td className="px-2 py-1.5 text-right">{formatMoney(l.tarifUnitaire || 0)}</td>}
+                          {voitMontants && <td className="px-3 py-1.5 text-right font-bold">{formatMoney(l.montant || 0)}</td>}
                         </tr>
                       ))}
                       {(fac.frais || []).map((x, i) => (
                         <tr key={`f${i}`} className="bg-amber-50/40">
                           <td className="px-3 py-1.5 text-amber-700">{x.label} <span className="text-[10px]">(frais)</span></td>
-                          <td className="px-2 py-1.5 text-center">—</td><td className="px-2 py-1.5 text-center">—</td><td className="px-2 py-1.5 text-center">—</td>
-                          <td className="px-3 py-1.5 text-right font-bold">{formatMoney(x.montant || 0)}</td>
+                          <td className="px-2 py-1.5 text-center">—</td><td className="px-2 py-1.5 text-center">—</td>
+                          {voitMontants && <td className="px-2 py-1.5 text-center">—</td>}
+                          {voitMontants && <td className="px-3 py-1.5 text-right font-bold">{formatMoney(x.montant || 0)}</td>}
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot>
-                      <tr className="border-t bg-gray-50"><td colSpan={4} className="px-3 py-2 text-right font-bold">Total</td><td className="px-3 py-2 text-right font-extrabold text-secondary">{formatMoney(fac.totalTTC ?? fac.totalHT ?? 0)}</td></tr>
-                    </tfoot>
+                    {voitMontants && (
+                      <tfoot>
+                        <tr className="border-t bg-gray-50"><td colSpan={4} className="px-3 py-2 text-right font-bold">Total</td><td className="px-3 py-2 text-right font-extrabold text-secondary">{formatMoney(fac.totalTTC ?? fac.totalHT ?? 0)}</td></tr>
+                      </tfoot>
+                    )}
                   </table>
                   </div>
                 ) : (
