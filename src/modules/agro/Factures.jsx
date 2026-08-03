@@ -10,6 +10,7 @@ import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriang
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -386,7 +387,7 @@ export default function Factures() {
 
       {/* Modal écart : ajustement des quantités réelles par la hiérarchie */}
       {/* Consultation d'une facture — lecture seule */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" {...glassModalProps(COULEUR_MODULE.agro)}
         title={detail ? `Facture ${detail.numero}` : ''}
         footer={<>
           <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>

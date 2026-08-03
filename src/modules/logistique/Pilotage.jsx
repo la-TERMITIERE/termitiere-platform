@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { useCollection } from '../../hooks/useFirestore'
 import { useLogistiqueStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
@@ -534,7 +535,7 @@ export default function Pilotage() {
           sommeDepenses, caTotal, depensesTotal, solde
         }} />
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''} {...glassModalProps(COULEUR_MODULE.logistique)}>
         <div className="overflow-x-auto rounded-lg border border-gray-100">{detail?.render}</div>
       </Modal>
     </div>

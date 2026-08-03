@@ -4,6 +4,7 @@ import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -835,7 +836,7 @@ export default function Incidents() {
       </Modal>
 
       {/* ── Modal : Carnet de vaccination (checklist) ── */}
-      <Modal open={!!carnetModal} onClose={() => setCarnetModal(null)} size="lg"
+      <Modal open={!!carnetModal} onClose={() => setCarnetModal(null)} size="lg" {...glassModalProps(COULEUR_MODULE.garderie)}
         title={carnetModal ? `💉 Carnet de vaccination — ${carnetModal.enfantNom}` : ''}
         footer={
           <>

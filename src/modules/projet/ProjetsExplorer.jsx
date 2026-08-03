@@ -2,18 +2,28 @@
 // tâches (la « phase » de la tâche, propre à CE projet) → tâches — plutôt qu'une
 // liste plate de tous les projets mélangés. La fiche projet complète (création,
 // budget, client…) reste accessible via « Voir la liste complète des projets ».
-import { useEffect, useMemo } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronDown, FolderKanban, ListChecks, LayoutList } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, useParams, useNavigate } from 'react-router-dom'
+import { ChevronRight, ChevronDown, FolderKanban, ListChecks, LayoutList, Plus, Pencil, Trash2, Info } from 'lucide-react'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuthStore } from '../../core/auth'
 import Badge from '../../shared/ui/Badge'
+import Button from '../../shared/ui/Button'
+import DetailProjetModal from './DetailProjetModal'
+import { removeItem } from '../../core/db'
+import { audit } from '../../core/audit'
+import { toast } from '../../core/notifications'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
 import { SECTEURS } from '../depense/data'
 import { STATUTS_PROJET } from './data'
 import { OngletTaches } from './Taches'
 import { iconeCategorie, emojiCategorie, NON_CLASSEES, PALETTE_CATEGORIES } from './categoriesTaches'
 import { marquerVoletVu } from './vues'
+import { isReadOnlyRole, PROJET_ROLES_CLOISONNES } from '../../core/roles'
+
+// Les rôles cloisonnés (chef de projet) ne travaillent que sur des chantiers BTP —
+// pas d'écran de choix de secteur pour eux : accès direct à MAXI BAT.
+const SECTEUR_CLOISONNE = 'bat'
 
 function EnTete({ icon: Icon, accent, titre, sousTitre }) {
   return (
@@ -45,7 +55,7 @@ function FilDAriane({ items }) {
   )
 }
 
-function CarteChoix({ to, color, icon: Icon, titre, sousTitre, badge }) {
+function CarteChoix({ to, color, icon: Icon, titre, sousTitre, badge, actions }) {
   return (
     <Link to={to}
       className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
@@ -58,6 +68,11 @@ function CarteChoix({ to, color, icon: Icon, titre, sousTitre, badge }) {
         <p className="text-sm text-gray-500">{sousTitre}</p>
       </div>
       {badge}
+      {actions && (
+        <div className="flex shrink-0 items-center gap-1" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
+          {actions}
+        </div>
+      )}
       <ChevronRight size={22} className="text-gray-300 transition-transform group-hover:translate-x-1" />
     </Link>
   )
@@ -70,9 +85,23 @@ export default function ProjetsExplorer() {
   const { data: projetsTous }  = useCollection('projets')
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: depensesTous } = useCollection('projet_depenses')
+  const { data: depenseDepensesTous } = useCollection('depense_depenses')
   const { data: users }        = useCollection('users')
+  const { data: notificationsTous } = useCollection('notifications')
+  const [detailProjet, setDetailProjet] = useState(null)
 
   useEffect(() => { marquerVoletVu(user?.uid, 'projetProjets') }, [user?.uid])
+
+  const peutSupprimer = !isReadOnlyRole(role) && !['secretaire', 'agent', 'chef_projet'].includes(role)
+
+  async function supprimerProjet(p) {
+    if (!window.confirm(`Supprimer le projet "${p.nom}" ?`)) return
+    await removeItem('projets', p.id)
+    const notifsLiees = notificationsTous.filter((n) => n.projetId === p.id)
+    await Promise.all(notifsLiees.map((n) => removeItem('notifications', n.id)))
+    await audit('projet', 'projet_supprime', `${p.nom} (${p.id})`)
+    toast.success(`« ${p.nom} » supprimé ✓`)
+  }
 
   // Cloisonnement (chef de projet) déjà géré ici — identique à Projets.jsx/Taches.jsx.
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
@@ -136,6 +165,14 @@ export default function ProjetsExplorer() {
   }, [tachesDuProjet, phaseParam])
 
   const secteurActuel = SECTEURS.find((s) => s.id === secteurId)
+
+  // Chef de projet : pas de choix de secteur, direction MAXI BAT — le cloisonnement
+  // (projetsVisibles) filtre déjà à ses seuls projets, cette redirection lui évite
+  // de voir/choisir des secteurs où il n'a de toute façon jamais rien. Placée après
+  // tous les hooks pour ne jamais changer leur nombre d'un rendu à l'autre.
+  if (PROJET_ROLES_CLOISONNES.includes(role) && secteurId !== SECTEUR_CLOISONNE) {
+    return <Navigate to="/projet/projets/bat" replace />
+  }
 
   // ── Étape 4 : tâches de la catégorie, pour le projet ──
   if (secteurId && projetId && phaseParam) {
@@ -217,7 +254,14 @@ export default function ProjetsExplorer() {
   if (secteurId) {
     return (
       <div className="space-y-5">
-        <FilDAriane items={[{ label: 'Projets', to: '/projet/projets' }, { label: secteurActuel?.label || secteurId }]} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FilDAriane items={[{ label: 'Projets', to: '/projet/projets' }, { label: secteurActuel?.label || secteurId }]} />
+          {!isReadOnlyRole(role) && (
+            <Button onClick={() => navigate('/projet/projets/liste', { state: { openCreateSecteurId: secteurId } })}>
+              <Plus size={16} /> Nouveau projet
+            </Button>
+          )}
+        </div>
         <EnTete icon={FolderKanban} accent={secteurActuel?.color || '#0d9488'}
           titre={`${secteurActuel?.label || secteurId} — Projets`}
           sousTitre="Choisissez un projet pour voir ses catégories de tâches" />
@@ -233,10 +277,36 @@ export default function ProjetsExplorer() {
                 <CarteChoix key={p.id} to={`/projet/projets/${secteurId}/${p.id}`}
                   color={secteurActuel?.color || '#0d9488'} icon={FolderKanban}
                   titre={p.nom} sousTitre={`${p.nbTaches} tâche${p.nbTaches > 1 ? 's' : ''}`}
-                  badge={<Badge tone={statut.tone}>{statut.label}</Badge>} />
+                  badge={<Badge tone={statut.tone}>{statut.label}</Badge>}
+                  actions={(
+                    <>
+                      <button onClick={() => setDetailProjet(p)}
+                        title="Voir les détails (budget / dépenses)" className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-100">
+                        <Info size={15} />
+                      </button>
+                      {!isReadOnlyRole(role) && (
+                        <>
+                          <button onClick={() => navigate('/projet/projets/liste', { state: { openEditProjetId: p.id } })}
+                            title="Modifier" className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100">
+                            <Pencil size={15} />
+                          </button>
+                          {peutSupprimer && (
+                            <button onClick={() => supprimerProjet(p)}
+                              title="Supprimer" className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100">
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )} />
               )
             })}
           </div>
+        )}
+        {detailProjet && (
+          <DetailProjetModal projet={detailProjet} depensesProjetTous={depensesTous}
+            depenseDepensesTous={depenseDepensesTous} onClose={() => setDetailProjet(null)} icon={FolderKanban} />
         )}
       </div>
     )

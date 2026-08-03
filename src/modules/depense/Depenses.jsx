@@ -16,14 +16,20 @@ import { setItem, removeItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
-import { todayStr, genId, formatDateShort } from '../../utils/formatters'
+import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, budgetRestantSecteur } from './logic'
-import { notifierBeneficiaire } from './notifications'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
+
+// Les dépenses des chantiers (secteur MAXI BAT) sont désormais réunies dans le
+// volet BTP d'E-G.Pro — exclues d'ici pour ne plus les afficher deux fois, et
+// retirées des secteurs proposables pour éviter d'en saisir de nouvelles ici.
+const SECTEUR_BTP_EXCLU = 'bat'
+const SECTEURS_SANS_BTP = SECTEURS.filter((s) => s.id !== SECTEUR_BTP_EXCLU)
 
 // Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
 const SOURCE_INFO = {
@@ -114,9 +120,11 @@ export default function Depenses() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
 
-  // Dépenses de E-G.Pro (secteur MAXI BAT) incluses en lecture seule dans la liste,
-  // avec tous les détails (projet, tâche, prestataire) — pas de double saisie ici,
-  // elles restent gérées uniquement depuis E-G.Pro.
+  // Dépenses de E-G.Pro (secteurs autres que MAXI BAT) incluses en lecture seule
+  // dans la liste, avec tous les détails (projet, tâche, prestataire) — pas de
+  // double saisie ici, elles restent gérées depuis E-G.Pro. Les dépenses de
+  // chantier (secteur BAT) sont exclues : elles vivent désormais uniquement dans
+  // le volet BTP d'E-G.Pro (onglet Dépenses), pas ici.
   const { data: depensesProjet } = useCollection('projet_depenses')
   const { data: projetsTous }    = useCollection('projets')
   const { data: tachesTous }     = useCollection('projet_taches')
@@ -126,7 +134,7 @@ export default function Depenses() {
       ...depensesReelles,
       ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
       ...coutsMatieresBriqueterie(inventairesBriq)
-    ],
+    ].filter((d) => d.secteurId !== SECTEUR_BTP_EXCLU),
     [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq]
   )
   useEffect(() => { marquerVoletVu(user?.uid, 'depenseDepenses') }, [user?.uid])
@@ -158,10 +166,16 @@ export default function Depenses() {
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    const { openDepenseId, filtreMois: moisVoulu } = location.state || {}
-    if (!openDepenseId && !moisVoulu) return
+    const { openDepenseId, filtreMois: moisVoulu, openCreateSecteurId, filtreSource: sourceVoulue } = location.state || {}
+    if (!openDepenseId && !moisVoulu && !openCreateSecteurId && !sourceVoulue) return
     if (openDepenseId) setDetailId(openDepenseId)
     if (moisVoulu) setFiltreMois(moisVoulu)
+    // Bouton « Ajouter une dépense » depuis le volet Dépense d'un secteur (agro,
+    // logistique…) — ouvre directement le formulaire, secteur déjà pré-rempli.
+    if (openCreateSecteurId) setModal({ data: { ...empty(), secteurId: openCreateSecteurId }, isNew: true })
+    // Clic sur « Dette envers le PAU » (Dashboard/Analyses) — arrive ici déjà filtré
+    // sur les seules dépenses financées par le PAU, pour voir où l'argent est passé.
+    if (sourceVoulue) setFiltreSource(sourceVoulue)
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state])
 
@@ -274,65 +288,12 @@ export default function Depenses() {
 
   // Raison pour laquelle une dépense (E-DÉPENSES uniquement — E-G.Pro a son propre
   // circuit via les besoins) devient une demande d'autorisation, ou null si aucune.
-  // Utilisée à la fois pour la soumission et pour l'indication en direct dans le
-  // formulaire, afin que l'utilisateur le voie avant même d'enregistrer.
-  function raisonAutorisation(d) {
-    const montant = Number(d.montant) || 0
-    if (d.imprevue) return 'dépense imprévue'
-    if (montant > SEUIL_APPROBATION_PAU) return `dépasse ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA`
-    const restant = budgetRestantSecteur(budgets, depenses, d.secteurId, d.date)
-    if (restant !== null && montant > restant) return `dépasse le budget restant du secteur (${restant.toLocaleString('fr-FR')} FCFA)`
-    return null
-  }
+  // Utilisée pour l'indication en direct dans le formulaire, avant même d'enregistrer.
+  const raisonAutorisation = (d) => raisonAutorisationPartagee(d, { budgets, depenses })
 
-  // Crée une nouvelle dépense en appliquant le circuit d'autorisation : imprévue, ou
-  // montant > seuil, ou montant > budget restant du secteur → demande envoyée au PAU
-  // (statut « en attente ») ; sinon → décaissée immédiatement.
-  // Utilisé aussi bien pour la saisie unitaire que pour l'ajout multiple (lot).
-  async function soumettreNouvelleDepense(d) {
-    const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-    const id = genId()
-    const montant = Number(d.montant) || 0
-    const raison = raisonAutorisation(d)
-    const statutInitial = raison ? 'en_attente' : 'decaissee'
-    const depenseFinale = { ...d, id, montant, statut: statutInitial, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
-    await setItem('depense_depenses', id, depenseFinale)
-    await audit('depense', 'DEPENSE_CREATE', `${secteur?.label || d.secteurId} — ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
-    if (statutInitial === 'en_attente') {
-      // Demande d'autorisation → alerte le PAU (et le super admin) dans sa cloche + push.
-      await notify({
-        type: 'warning',
-        title: `💰 Demande de décaissement — ${secteur?.label || d.secteurId}`,
-        body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · ${raison}. En attente de votre autorisation.`,
-        module: 'depense', forRoles: ['pau', 'super_admin'], excludeUid: user?.uid, link: '/depense/autorisations'
-      })
-      // Confirme aussi à la personne qui a saisi la dépense que sa demande est bien
-      // partie en autorisation, sans quoi elle n'apprend son sort qu'à la décision du PAU.
-      if (user?.uid) {
-        await notify({
-          type: 'info',
-          title: '⏳ Dépense envoyée en demande d\'autorisation',
-          body: `${montant.toLocaleString('fr-FR')} FCFA · ${secteur?.label || d.secteurId} — ${raison}. En attente de la décision du PAU.`,
-          module: 'depense', forUsers: [user.uid], link: '/depense/autorisations'
-        })
-      }
-    } else {
-      await notifierBeneficiaire(depenseFinale, secteur?.label || d.secteurId)
-    }
-    // Apport personnel du PAU : information réservée à l'administration (compte
-    // comme un revenu du secteur et reste une dette à lui restituer, cf. Dashboard).
-    if ((d.sourceFinancement || sourceFinancementDefaut) === 'pau') {
-      await notify({
-        type: 'info',
-        title: `💜 Apport du PAU — ${secteur?.label || d.secteurId}`,
-        body: `${montant.toLocaleString('fr-FR')} FCFA financés personnellement par le PAU${d.description ? ` — ${d.description}` : ''}.`,
-        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
-        link: '/depense/liste', state: { openDepenseId: id }
-      }).catch(() => {})
-    }
-    await alerterSiDepassement(depenseFinale, secteur)
-    return { statutInitial }
-  }
+  // Crée une nouvelle dépense en appliquant le circuit d'autorisation (partagé avec
+  // RecettesDepenses.jsx → bouton « Ajouter une dépense » de chaque secteur métier).
+  const soumettreNouvelleDepense = (d) => soumettreNouvelleDepensePartagee(d, { user, budgets, depenses })
 
   async function handleSave() {
     if (saving) return
@@ -460,7 +421,7 @@ export default function Depenses() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
           <Select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}>
             <option value="">Tous les secteurs</option>
-            {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </Select>
         </div>
         <div>
@@ -638,10 +599,10 @@ export default function Depenses() {
             <div className="rounded-xl border border-amber-100 bg-white p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Secteur *">
+                <FormGroup label="Secteur *" hint="Chantiers BTP : à saisir depuis le volet BTP d'E-G.Pro, pas ici.">
                   <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
                     <option value="">— Choisir —</option>
-                    {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </Select>
                 </FormGroup>
                 <FormGroup label="Catégorie *">
@@ -836,7 +797,7 @@ export default function Depenses() {
                     <div className="sm:col-span-3">
                       <Select value={r.secteurId} onChange={(e) => setLigne(i, 'secteurId', e.target.value)}>
                         <option value="">— Secteur —</option>
-                        {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </Select>
                     </div>
                     <div className="sm:col-span-2">

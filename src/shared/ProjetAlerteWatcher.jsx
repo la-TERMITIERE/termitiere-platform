@@ -1,10 +1,12 @@
 // Notifications automatiques des alertes E-G.Pro — remplace l'ancien onglet Alertes.
 // Destinataires : le responsable du projet concerné + les membres de la direction.
-// Une alerte non résolue relance une notification toutes les 2 minutes, jusqu'à
-// 3 fois ; passé ce quota, elle se tait jusqu'au lendemain (nouveau cycle de 3).
+// Une alerte non résolue relance une notification :
+//   - « Budget dépassé » : une seule fois par JOUR.
+//   - tout le reste (projet en retard, tâche en dépassement, tâche en retard,
+//     aucun avancement) : une seule fois par SEMAINE (7 jours depuis le dernier envoi).
 // « Projet terminé » est une bonne nouvelle : une seule notification, jamais répétée.
-// « Aucun avancement » : une seule notification par JOUR (pas de relance toutes les
-// 2 minutes, un projet stagnant reste stagnant pendant des jours).
+// « Reste à payer » reste groupé, visible uniquement dans le bandeau du Dashboard —
+// jamais poussé en notification (trop fréquent pour relancer en boucle).
 //
 // Composant « headless » (aucun rendu) monté globalement dans AppShell pour les
 // utilisateurs disposant du module projet : la vérification tourne tant que
@@ -18,9 +20,8 @@ import { genererAlertes } from '../modules/projet/logic'
 import { SEUILS_DEFAUT } from '../modules/projet/data'
 import { todayStr } from '../utils/formatters'
 
-const REPEAT_MS    = 2 * 60 * 1000 // 2 minutes entre deux relances
-const MAX_REPEATS  = 3             // 3 relances max par jour
-const CHECK_MS     = 20 * 1000 // fréquence de vérification (assez fine pour ne pas rater le créneau de 2 min)
+const CHECK_MS    = 20 * 1000            // fréquence de vérification
+const SEMAINE_MS  = 7 * 24 * 60 * 60 * 1000 // délai minimum entre deux relances « hebdo »
 
 const TITRES = {
   projet_retard:   '⏰ Projet en retard',
@@ -46,8 +47,8 @@ export default function ProjetAlerteWatcher() {
   const { data: taches }  = useCollection('projet_taches')
   const { data: depenses } = useCollection('projet_depenses')
   const { data: configs } = useCollection('projet_params')
-  const traiteesTermine = useRef(new Set()) // évite de re-vérifier "termine" déjà envoyé cette session
-  const traiteesAvancementJour = useRef(new Set()) // idem pour "aucun avancement", par jour
+  const traiteesTermine = useRef(new Set())  // évite de re-vérifier "termine" déjà envoyé cette session
+  const traiteesJour    = useRef(new Set())  // idem pour les alertes journalières (budget dépassé), par jour
 
   useEffect(() => {
     let annule = false
@@ -78,13 +79,13 @@ export default function ProjetAlerteWatcher() {
         return
       }
 
-      if (alerte.type === 'avancement_zero') {
+      if (alerte.type === 'budget_depasse') {
         // Une seule notification par jour : réclamation atomique sur une clé datée
         // (contrairement à « termine », elle doit pouvoir se redéclencher le lendemain
-        // si le projet est toujours sans avancement).
+        // si le budget est toujours dépassé).
         const cleJour = `${alerte.id}_${todayStr()}`
-        if (traiteesAvancementJour.current.has(cleJour)) return
-        traiteesAvancementJour.current.add(cleJour)
+        if (traiteesJour.current.has(cleJour)) return
+        traiteesJour.current.add(cleJour)
         const gagne = await claimOnce('projet_alertes_notif', cleJour, { envoyeLe: Date.now() }).catch(() => false)
         if (!gagne) return
         await notify({
@@ -95,21 +96,18 @@ export default function ProjetAlerteWatcher() {
         return
       }
 
-      const today = todayStr()
+      // Tout le reste (projet en retard, tâche en dépassement, tâche en retard,
+      // aucun avancement) : une seule notification par semaine tant que l'alerte persiste.
       const track = await getOne('projet_alertes_notif', alerte.id).catch(() => null)
-      const memeJour = track?.jour === today
-      const compteur = memeJour ? (track.compteur || 0) : 0
-      const dernierEnvoi = memeJour ? (track.dernierEnvoi || 0) : 0
-
-      if (compteur >= MAX_REPEATS) return // quota du jour atteint → silence jusqu'à demain
-      if (dernierEnvoi && Date.now() - dernierEnvoi < REPEAT_MS) return // pas encore 1 minute
+      const dernierEnvoi = track?.dernierEnvoi || 0
+      if (dernierEnvoi && Date.now() - dernierEnvoi < SEMAINE_MS) return
 
       await notify({
         type: 'warning', title: titre, body: `${alerte.projetNom} — ${alerte.message}`,
         module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, ...lienDetail(alerte),
         projetId: alerte.projetId
       }).catch(() => {})
-      await setItem('projet_alertes_notif', alerte.id, { compteur: compteur + 1, dernierEnvoi: Date.now(), jour: today }).catch(() => {})
+      await setItem('projet_alertes_notif', alerte.id, { dernierEnvoi: Date.now() }).catch(() => {})
     }
 
     function verifier() {

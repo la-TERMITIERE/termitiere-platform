@@ -6,6 +6,7 @@ import { Plus, FileDown, Trash2, Pencil, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Table from '../../shared/ui/Table'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -194,7 +195,7 @@ export default function Factures() {
       </Card>
 
       {/* Consultation d'une facture — lecture seule */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" {...glassModalProps(COULEUR_MODULE.evenementiel)}
         title={detail ? `Facture ${detail.numero}` : ''}
         footer={<>
           <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>

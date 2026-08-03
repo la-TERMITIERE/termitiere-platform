@@ -145,6 +145,13 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
+    // Arrivée depuis TachesExplorer (« Nouvelle tâche ») : ouvre directement le
+    // formulaire de création.
+    if (location.state?.openCreate) {
+      openCreate()
+      navigate(location.pathname, { replace: true, state: {} })
+      return
+    }
     const id = location.state?.openTacheId
     if (!id) return
     const t = taches.find((x) => x.id === id)
@@ -393,8 +400,8 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                       <Badge tone={PRIORITES[t.priorite]?.tone}>{PRIORITES[t.priorite]?.label}</Badge>
                       {enRetard && <Badge tone="danger">⏰ En retard</Badge>}
                       {t.pieces?.length > 0 && (
-                        <span className="flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                          <Paperclip size={10} /> {t.pieces.length}
+                        <span className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 shadow-sm">
+                          <Paperclip size={11} strokeWidth={2.5} /> {t.pieces.length}
                         </span>
                       )}
                     </div>
