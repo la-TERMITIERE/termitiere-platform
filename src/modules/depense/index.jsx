@@ -4,6 +4,7 @@ import { Lock } from 'lucide-react'
 import Dashboard from './Dashboard'
 import Depenses from './Depenses'
 import RecettesDepenses from './RecettesDepenses'
+import SourcesRevenus from './SourcesRevenus'
 import Autorisations from './Autorisations'
 import Analyses from './Analyses'
 import Rentabilite from './Rentabilite'
@@ -46,6 +47,7 @@ export default function DepenseModule() {
       <Route index element={<Dashboard />} />
       <Route path="liste" element={<Depenses />} />
       <Route path="recettes-depenses" element={canViewFinance(role) ? <RecettesDepenses /> : <AccesRefuse />} />
+      <Route path="revenus" element={isFullAccessRole(role) ? <SourcesRevenus /> : <AccesRefuseAdmin />} />
       {/* Ancien écran « Budgets » fusionné dans « Bilan par secteur » — redirige les liens existants. */}
       <Route path="budgets" element={<Navigate to="/depense/recettes-depenses" replace />} />
       <Route path="autorisations" element={<Autorisations />} />

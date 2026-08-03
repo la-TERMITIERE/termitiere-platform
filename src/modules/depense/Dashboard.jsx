@@ -1,6 +1,6 @@
 // Dashboard Dépenses — budget alloué vs dépensé, par secteur, pour le mois en cours.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake, HandCoins, History, BellRing, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake, HandCoins, History, BellRing, X, Eye } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -348,6 +348,11 @@ export default function Dashboard() {
             <p className="font-bold text-violet-900">Dette envers le PAU</p>
             <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-violet-700 shadow-sm">{financement.pct}% du financement total</span>
             <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => navigate('/depense/liste', { state: { filtreSource: 'pau' } })}
+                title="Voir sur quoi le PAU a mis son argent"
+                className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-600 shadow-sm hover:bg-violet-50">
+                <Eye size={12} /> Voir le détail
+              </button>
               {financement.cumulRembourse > 0 && (
                 <button onClick={() => setHistoRembOuvert((o) => !o)}
                   className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-600 shadow-sm hover:bg-violet-50">
@@ -365,7 +370,9 @@ export default function Dashboard() {
 
           {/* Dette nette — l'info la plus importante, mise en avant, avec la barre
               de restitution intégrée juste en dessous pour lire les deux d'un coup. */}
-          <div className="mt-3 rounded-xl bg-white/80 px-3.5 py-3 shadow-sm">
+          <div onClick={() => navigate('/depense/liste', { state: { filtreSource: 'pau' } })}
+            title="Voir sur quoi le PAU a mis son argent"
+            className="mt-3 cursor-pointer rounded-xl bg-white/80 px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Dette restante (à restituer)</p>

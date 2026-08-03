@@ -87,21 +87,43 @@ export default function Params() {
     }
   }
 
-  // Réinitialisation complète de toutes les données garderie
+  // Réinitialisation complète de toutes les données garderie — y compris ce qui a
+  // « fuité » vers d'autres modules pendant les essais : le Journal (audit_global,
+  // filtré module='garderie') et les dépenses/budgets/revenus E-DÉPENSES saisis sous
+  // le secteur GARDERIE, pour qu'aucun total ailleurs (KPI, budget, Sources de
+  // revenus…) ne reste faussé par des données de test après le nettoyage.
   async function reinitialiserTout() {
     setResetting(true)
     try {
-      const collections = [
-        'garderie_enfants', 'garderie_presences', 'garderie_paiements',
-        'garderie_incidents', 'garderie_soins', 'garderie_vaccinations', 'garderie_taches', 'garderie_menus', 'garderie_repas',
+      const collectionsGarderie = [
+        'garderie_enfants', 'garderie_parents', 'garderie_presences', 'garderie_paiements',
+        'garderie_incidents', 'garderie_soins', 'garderie_vaccinations', 'garderie_taches',
+        'garderie_routine_items', 'garderie_routine_checks', 'garderie_menus', 'garderie_repas',
         'garderie_journaliers', 'garderie_nutrition', 'garderie_personnel'
       ]
-      for (const col of collections) {
+      for (const col of collectionsGarderie) {
         const rows = await getAll(col)
         await Promise.all(rows.map((r) => removeItem(col, r.id)))
       }
-      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées')
-      toast.success('Toutes les données ont été effacées ✓')
+
+      // Dépenses/budgets/revenus manuels E-DÉPENSES saisis sous le secteur garderie —
+      // sans quoi ils continueraient de compter dans les totaux d'autres écrans.
+      for (const col of ['depense_depenses', 'depense_budgets', 'depense_revenus_manuels']) {
+        const rows = await getAll(col)
+        await Promise.all(rows.filter((r) => r.secteurId === 'garderie').map((r) => removeItem(col, r.id)))
+      }
+
+      // Notifications liées à la garderie (moins critique, mais évite des liens morts
+      // dans la cloche de notification vers des données qui n'existent plus).
+      const notifs = await getAll('notifications')
+      await Promise.all(notifs.filter((n) => n.module === 'garderie').map((n) => removeItem('notifications', n.id)))
+
+      // Historique (Journal) : toutes les entrées d'essai concernant la garderie.
+      const audits = await getAll('audit_global')
+      await Promise.all(audits.filter((a) => a.module === 'garderie').map((a) => removeItem('audit_global', a.id)))
+
+      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (y compris historique et dépenses E-DÉPENSES liées)')
+      toast.success('Toutes les données garderie ont été effacées ✓')
       setConfirmReset(false)
     } catch (err) {
       toast.error('Erreur lors de la réinitialisation')
@@ -318,8 +340,10 @@ export default function Params() {
           {/* Tout réinitialiser */}
           <Card title="⚠️ Tout réinitialiser" className="border border-red-200">
             <p className="mb-3 text-sm text-gray-500">
-              Efface <strong>toutes les données</strong> de la garderie : enfants, présences, paiements,
-              incidents, soins, vaccinations, tâches, menus, repas, nutrition et personnel.
+              Efface <strong>toutes les données</strong> de la garderie : enfants, parents, présences, paiements,
+              incidents, soins, vaccinations, tâches, menus, repas, nutrition et personnel — <strong>ainsi que</strong> les
+              entrées du Journal (historique) concernant la garderie, et toute dépense/budget/revenu E-DÉPENSES saisi
+              sous le secteur GARDERIE (pour qu'aucun total d'un autre module ne reste faussé par des essais).
               <strong className="text-red-600"> Cette action est irréversible.</strong>
             </p>
             {!confirmReset ? (

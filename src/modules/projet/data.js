@@ -66,17 +66,10 @@ export const ETAPES_PAR_TYPE = {
   autre:        []
 }
 
-// Libellé au singulier du champ "Phase" (adapté au type de projet).
-export const LIBELLE_ETAPE_SINGULIER = {
-  construction: 'Niveau de construction',
-  amenagement:  'Phase d\'aménagement',
-  informatique: 'Phase du projet',
-  agricole:     'Étape de culture',
-  elevage:      'Étape d\'élevage',
-  commercial:   'Phase commerciale',
-  evenementiel: 'Phase de l\'événement',
-  autre:        'Étape du projet'
-}
+// Libellé du champ "Phase" — uniformisé en « Catégorie » partout (même terminologie
+// que les volets Projets/Tâches/BTP, qui parlent tous de « catégorie de tâches »),
+// au lieu d'un libellé différent par type de projet.
+export const LIBELLE_ETAPE_SINGULIER = 'Catégorie'
 
 // Suggestions de tâches par type de projet — évitent de tout ressaisir à chaque fois.
 export const TACHES_SUGGESTIONS_PAR_TYPE = {
@@ -96,7 +89,21 @@ export const tachesSuggestions = (type) =>
     : [...new Set(Object.values(TACHES_SUGGESTIONS_PAR_TYPE).flat())]
 
 export const etapesDefaut = (type) => ETAPES_PAR_TYPE[type] || ETAPES_PAR_TYPE.autre
-export const libelleEtape  = (type) => LIBELLE_ETAPE_SINGULIER[type] || LIBELLE_ETAPE_SINGULIER.autre
+export const libelleEtape  = () => LIBELLE_ETAPE_SINGULIER
 
 // Seuils par défaut de déclenchement des alertes — réglables dans Paramètres.
 export const SEUILS_DEFAUT = { budget: 100, inactivite: 7 }
+
+// Catégories de dépense de projet — partagées entre l'écran Dépenses et le volet BTP
+// (détail par chantier). Vit ici plutôt que dans Depenses.jsx pour que ce dernier ne
+// garde qu'un export de composant (React Fast Refresh évite ainsi un remount complet
+// de l'app à chaque modification du fichier en développement).
+export const CATEGORIES_DEPENSE_PROJET = [
+  { id: 'main_oeuvre',  label: 'Main d\'œuvre'   },
+  { id: 'materiaux',    label: 'Matériaux'        },
+  { id: 'equipement',   label: 'Équipement'       },
+  { id: 'transport',    label: 'Transport'        },
+  { id: 'sous_traitance', label: 'Sous-traitance' },
+  { id: 'administratif', label: 'Administratif'   },
+  { id: 'autre',        label: 'Autre'            }
+]

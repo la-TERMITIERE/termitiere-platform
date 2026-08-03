@@ -19,6 +19,7 @@ export const VOLETS_SUIVIS = {
   projetTaches:    { collection: 'projet_taches',    champDate: 'createdAt', champCreateur: 'createdBy' },
   projetDepenses:  { collection: 'projet_depenses',  champDate: 'createdAt', champCreateur: 'ajouteParUid' },
   projetBesoins:   { collection: 'projet_besoins',   champDate: 'createdAt', champCreateur: 'demandeParUid' },
+  projetPropositions: { collection: 'projet_propositions', champDate: 'createdAt', champCreateur: 'demandeParUid' },
   projetMateriel:  { collection: 'projet_materiels', champDate: 'createdAt', champCreateur: 'ajouteParUid' },
   projetDocuments: { collections: ['projets', 'projet_taches'], champTableau: 'pieces',  champDate: 'createdAt', champCreateur: 'ajouteParUid' },
   projetGalerie:   { collections: ['projets'],                  champTableau: 'galerie', champDate: 'date',      champCreateur: 'ajouteParUid' },

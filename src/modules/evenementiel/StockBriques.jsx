@@ -5,6 +5,7 @@ import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus } from 'lucide-rea
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -434,7 +435,7 @@ export default function StockBriques() {
       </Modal>
 
       {/* Détail des mouvements d'une matière (arrivages + consommations) */}
-      <Modal open={!!matDetail} onClose={() => setMatDetail(null)} title={matDetail ? `Mouvements — ${matDetail.nom}` : ''}>
+      <Modal open={!!matDetail} onClose={() => setMatDetail(null)} title={matDetail ? `Mouvements — ${matDetail.nom}` : ''} {...glassModalProps(COULEUR_MODULE.evenementiel)}>
         {matDetail && (() => {
           const c = matStock[matDetail.id] || { init: 0, entrees: [], consommations: [] }
           return (

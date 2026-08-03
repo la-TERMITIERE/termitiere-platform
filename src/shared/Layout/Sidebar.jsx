@@ -6,11 +6,16 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, X, ChevronRight, Chev
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel, canManagePartenaires, depenseRoleEffectif } from '../../core/roles'
+import { roleLabel, canManagePartenaires, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
 import { estActif } from '../workflow'
 import { calculerBadges } from '../nouveautes'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from '../../modules/projet/logic'
 import { SECTEURS as SECTEURS_PROJET } from '../../modules/depense/data'
+
+// Secteur unique auquel un rôle cloisonné (chef de projet) travaille — mêmes chantiers
+// que le volet BTP réservé à l'administration. Le menu latéral ne doit lui proposer que
+// celui-ci, pas les 6 secteurs (les autres seraient de toute façon vides pour lui).
+const SECTEUR_CLOISONNE = 'bat'
 
 // Menu « Projets » imbriqué — un seul niveau dans la barre latérale (secteurs,
 // texte lisible) : cliquer sur un secteur NAVIGUE vers le grand écran, qui affiche
@@ -81,10 +86,12 @@ export default function Sidebar({ open, onClose }) {
   const { data: projetBesoins }  = useCollection('projet_besoins')
   const { data: projetMateriel } = useCollection('projet_materiels')
   const { data: depenseDepenses }= useCollection('depense_depenses')
+  const { data: projetPropositions } = useCollection('projet_propositions')
   const nouveautesBadges = useMemo(() => calculerBadges({
     projets: projetsDoc, projet_taches: tachesDoc, projet_depenses: projetDepenses,
-    projet_besoins: projetBesoins, projet_materiels: projetMateriel, depense_depenses: depenseDepenses
-  }, derniereVues, user?.uid), [projetsDoc, tachesDoc, projetDepenses, projetBesoins, projetMateriel, depenseDepenses, derniereVues, user?.uid])
+    projet_besoins: projetBesoins, projet_materiels: projetMateriel, depense_depenses: depenseDepenses,
+    projet_propositions: projetPropositions
+  }, derniereVues, user?.uid), [projetsDoc, tachesDoc, projetDepenses, projetBesoins, projetMateriel, depenseDepenses, projetPropositions, derniereVues, user?.uid])
 
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,
@@ -97,7 +104,10 @@ export default function Sidebar({ open, onClose }) {
   // projets/catégories/tâches s'affichent sur le grand écran (cf. ProjetsExplorer.jsx).
   const secteursMenu = useMemo(() => {
     const projetsVisiblesList = projetsVisibles(projetsDoc, user, role)
-    return SECTEURS_PROJET.map((s) => {
+    const secteurs = PROJET_ROLES_CLOISONNES.includes(role)
+      ? SECTEURS_PROJET.filter((s) => s.id === SECTEUR_CLOISONNE)
+      : SECTEURS_PROJET
+    return secteurs.map((s) => {
       const projetsSecteur = projetsVisiblesList.filter((p) => secteurEffectif(p)?.id === s.id)
       const tachesSecteur = scopeParProjets(tachesDoc, projetsSecteur)
       return { ...s, nbProjets: projetsSecteur.length, nbTaches: tachesSecteur.length }

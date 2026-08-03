@@ -5,15 +5,20 @@
 // La liste complète (recherche libre, tous filtres) reste accessible via
 // « Voir toutes les tâches ».
 import { useEffect, useMemo } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronDown, ListChecks, LayoutList } from 'lucide-react'
+import { Link, Navigate, useParams, useNavigate } from 'react-router-dom'
+import { ChevronRight, ChevronDown, ListChecks, LayoutList, Plus } from 'lucide-react'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuthStore } from '../../core/auth'
+import Button from '../../shared/ui/Button'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
 import { SECTEURS } from '../depense/data'
 import { OngletTaches } from './Taches'
 import { iconeCategorie, emojiCategorie, NON_CLASSEES, PALETTE_CATEGORIES } from './categoriesTaches'
 import { marquerVoletVu } from './vues'
+import { isReadOnlyRole, PROJET_ROLES_CLOISONNES } from '../../core/roles'
+
+// Les rôles cloisonnés (chef de projet) ne travaillent que sur des chantiers BTP.
+const SECTEUR_CLOISONNE = 'bat'
 
 function EnTete({ icon: Icon, accent, titre, sousTitre }) {
   return (
@@ -120,6 +125,12 @@ export default function TachesExplorer() {
 
   const secteurActuel = SECTEURS.find((s) => s.id === secteurId)
 
+  // Chef de projet : pas de choix de secteur, direction MAXI BAT directement. Placée
+  // après tous les hooks pour ne jamais changer leur nombre d'un rendu à l'autre.
+  if (PROJET_ROLES_CLOISONNES.includes(role) && secteurId !== SECTEUR_CLOISONNE) {
+    return <Navigate to="/projet/taches/bat" replace />
+  }
+
   // ── Étape 3 : tâches de la catégorie, tous projets du secteur ──
   if (secteurId && phaseParam) {
     return (
@@ -147,7 +158,14 @@ export default function TachesExplorer() {
   if (secteurId) {
     return (
       <div className="space-y-5">
-        <FilDAriane items={[{ label: 'Tâches', to: '/projet/taches' }, { label: secteurActuel?.label || secteurId }]} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FilDAriane items={[{ label: 'Tâches', to: '/projet/taches' }, { label: secteurActuel?.label || secteurId }]} />
+          {!isReadOnlyRole(role) && (
+            <Button onClick={() => navigate('/projet/taches/liste', { state: { openCreate: true } })}>
+              <Plus size={16} /> Nouvelle tâche
+            </Button>
+          )}
+        </div>
         <EnTete icon={ListChecks} accent={secteurActuel?.color || '#0d9488'}
           titre={`${secteurActuel?.label || secteurId} — Catégories de tâches`}
           sousTitre="Toutes les tâches de ce secteur, groupées par catégorie (tous projets confondus)" />
@@ -191,6 +209,13 @@ export default function TachesExplorer() {
   // ── Étape 1 : choix du secteur ──
   return (
     <div className="space-y-5">
+      {!isReadOnlyRole(role) && (
+        <div className="flex justify-end">
+          <Button onClick={() => navigate('/projet/taches/liste', { state: { openCreate: true } })}>
+            <Plus size={16} /> Nouvelle tâche
+          </Button>
+        </div>
+      )}
       <EnTete icon={ListChecks} accent="#0d9488" titre="Tâches"
         sousTitre="Choisissez un secteur pour parcourir ses tâches par catégorie" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

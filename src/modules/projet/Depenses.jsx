@@ -16,24 +16,14 @@ import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../util
 import { ouvrirPiece } from '../../utils/fichiers'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
-import { STATUTS_PROJET } from './data'
+import { STATUTS_PROJET, CATEGORIES_DEPENSE_PROJET as CATEGORIES } from './data'
 import { STATUTS_DECAISSEMENT } from '../depense/data'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-
-const CATEGORIES = [
-  { id: 'main_oeuvre',  label: 'Main d\'œuvre'   },
-  { id: 'materiaux',    label: 'Matériaux'        },
-  { id: 'equipement',   label: 'Équipement'       },
-  { id: 'transport',    label: 'Transport'        },
-  { id: 'sous_traitance', label: 'Sous-traitance' },
-  { id: 'administratif', label: 'Administratif'   },
-  { id: 'autre',        label: 'Autre'            }
-]
 
 // Source de financement d'une dépense de projet — transmise à E-DÉPENSES pour le suivi
 // de l'apport du PAU. Valeurs identiques à E-DÉPENSES ('entreprise' / 'pau').
@@ -60,7 +50,11 @@ function ChampCategorie({ value, onChange }) {
   )
 }
 
-export default function Depenses() {
+// `secteurSeul`/`secteurExclu` : permet de réutiliser cet écran cantonné à un seul
+// secteur (ex. le volet BTP, qui embarque ce même suivi de dépenses restreint aux
+// chantiers) ou en excluant un secteur (ex. l'onglet « Dépenses » général d'E-G.Pro,
+// qui n'affiche plus les dépenses BTP — désormais réunies dans le volet BTP).
+export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
   const { data: projetsTous }  = useCollection('projets')
   const { data: depensesTous } = useCollection('projet_depenses')
   const { data: tachesTous }   = useCollection('projet_taches')
@@ -82,7 +76,13 @@ export default function Depenses() {
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDepenses') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs dépenses/tâches.
-  const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  // + restriction de secteur optionnelle (cf. `secteurSeul`/`secteurExclu` ci-dessus).
+  const projets  = useMemo(() => {
+    let liste = projetsVisibles(projetsTous, user, role)
+    if (secteurSeul)  liste = liste.filter((p) => secteurEffectif(p)?.id === secteurSeul)
+    if (secteurExclu) liste = liste.filter((p) => secteurEffectif(p)?.id !== secteurExclu)
+    return liste
+  }, [projetsTous, user, role, secteurSeul, secteurExclu])
   const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
   const depenses = useMemo(() => {
     const projetIds = new Set(projets.map((p) => p.id))

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import FicheDetail from '../../shared/ui/FicheDetail'
@@ -130,7 +131,7 @@ export default function Ventes() {
       </Card>
 
       {/* Consultation d'une vente — lecture seule */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" {...glassModalProps(COULEUR_MODULE.evenementiel)}
         title={detail ? `Vente ${detail.num}` : ''}
         footer={<Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>}>
         {detail && (

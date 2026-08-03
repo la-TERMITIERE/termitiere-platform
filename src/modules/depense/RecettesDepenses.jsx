@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Trash2, Send, CheckCircle2 } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -20,9 +20,10 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
-import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, STATUTS_DECAISSEMENT } from './data'
+import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
 import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
+import { soumettreNouvelleDepense } from './depenseActions'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
@@ -43,6 +44,15 @@ const badgePct = (statut) => statut.key === 'depasse' ? 'bg-red-100 text-red-700
 const barColor = (statut) => statut.key === 'depasse' ? 'bg-red-500'
   : statut.key === 'attention' ? 'bg-amber-500' : 'bg-teal-500'
 
+// Secteurs avec une équipe identifiable (via `user.modules`) capable de confirmer la
+// réception d'un budget — les autres (MAXI BAT, Hors secteur) gardent l'allocation
+// instantanée d'avant, faute de destinataire clair pour la validation.
+const SECTEURS_AVEC_VALIDATION = ['agro', 'logistique', 'evenementiel', 'garderie']
+const ROUTE_FINANCES_PAR_SECTEUR = {
+  agro: '/agro/finances', logistique: '/logistique/finances',
+  evenementiel: '/evenementiel/finances', garderie: '/garderie/finances'
+}
+
 // `secteurId` optionnel : quand il est fourni (vue intégrée dans un module métier), l'écran
 // est restreint à ce seul secteur. Sans lui, il affiche tous les secteurs (E-DÉPENSES).
 // `masquerRevenu` : vue « Dépense » pure pour les modules intégrés — cache les revenus/solde
@@ -59,6 +69,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
+  const { data: usersTous }           = useCollection('users')
   const { user, role: roleReel } = useAuth()
   // Écran partagé : embarqué dans d'autres modules via `secteurId` (leur onglet
   // « Dépense »), où la restriction E-DÉPENSES ne s'applique pas. Seule l'instance
@@ -80,7 +91,14 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
     [versementsClientTous, projetsTous])
 
-  const secteursAffiches = useMemo(() => secteurId ? SECTEURS.filter((s) => s.id === secteurId) : SECTEURS, [secteurId])
+  // MAXI BAT (chantiers) n'apparaît plus dans la vue standalone d'E-DÉPENSES : son
+  // bilan (recettes/dépenses/budget) est désormais géré exclusivement depuis le volet
+  // BTP d'E-G.Pro (réservé à l'administration), qui embarque ce même écran avec
+  // `secteurId="bat"` — cette exclusion ne s'applique donc qu'à la vue sans secteur.
+  const secteursAffiches = useMemo(
+    () => secteurId ? SECTEURS.filter((s) => s.id === secteurId) : SECTEURS.filter((s) => s.id !== 'bat'),
+    [secteurId]
+  )
   const theme = THEME_PAR_SECTEUR[secteurId] || THEME_PAR_SECTEUR.default
 
   const [annee, setAnnee] = useState(now.getFullYear())
@@ -96,6 +114,11 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   // (Hors secteur, MAXI BAT) : { secteurId, montant, date, description }.
   const [ajoutRevenu, setAjoutRevenu] = useState(null)
   const [revenuSaving, setRevenuSaving] = useState(false)
+  // Ajout d'une dépense depuis le volet Dépense d'un secteur métier (agro,
+  // logistique…) — même circuit d'autorisation que l'écran E-DÉPENSES, sans quitter
+  // le module (cf. bouton « Ajouter une dépense » dans la nav mois ci-dessous).
+  const [nouvelleDepense, setNouvelleDepense] = useState(null)
+  const [depenseSaving, setDepenseSaving] = useState(false)
 
   const changerMois = (delta) => {
     let m = mois + delta, a = annee
@@ -120,7 +143,10 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return {
       ...s, recette, apportPau, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, solde: recette - depense,
-      budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || []
+      budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
+      // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
+      montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
+      proposeParText: budgetDoc?.proposeParText || null, motifPropose: budgetDoc?.motifPropose || null
     }
   }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
 
@@ -155,6 +181,10 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
     setRevMotif('')
   }
 
+  // Uids des membres du secteur (via `user.modules`) — destinataires de la demande de
+  // confirmation de réception d'un budget alloué/révisé.
+  const uidsDuSecteur = (sId) => usersTous.filter((u) => (u.modules || []).includes(sId)).map((u) => u.uid).filter(Boolean)
+
   const confirmerRevision = async () => {
     if (!revision) return
     const nouveau = Number(revMontant)
@@ -167,6 +197,38 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
     setRevSaving(true)
     try {
       const ancien = revision.montantActuel
+
+      // Secteurs avec équipe identifiable : le montant n'est pas appliqué tout de suite —
+      // il reste « proposé » jusqu'à ce que le secteur confirme l'avoir reçu (cf.
+      // validerReceptionBudget). Les autres (MAXI BAT, Hors secteur) gardent l'ancien
+      // comportement instantané, faute de destinataire clair pour valider.
+      if (SECTEURS_AVEC_VALIDATION.includes(revision.secteurId)) {
+        await setItem('depense_budgets', revision.id, {
+          id: revision.id, secteurId: revision.secteurId, annee, mois, montant: ancien, revisions: revision.revisions,
+          montantPropose: nouveau, motifPropose: motif, statutValidation: 'en_attente',
+          proposeParText: user?.nom || user?.login || '—', proposeParUid: user?.uid || null, proposeLe: Date.now(),
+          updatedAt: Date.now()
+        })
+        await audit('depense', estAllocation ? 'BUDGET_PROPOSE' : 'BUDGET_REVISION_PROPOSEE',
+          `${revision.secteurLabel} — ${fmt(nouveau)} FCFA proposés, en attente de confirmation`,
+          { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
+        // Le secteur (pas l'administration) doit confirmer la réception avant que le
+        // montant ne compte comme « Budget alloué » dans les KPI.
+        const destinataires = uidsDuSecteur(revision.secteurId)
+        if (destinataires.length) {
+          await notify({
+            type: 'demande',
+            title: `💰 Budget proposé — ${revision.secteurLabel}`,
+            body: `${fmt(nouveau)} FCFA pour ${MOIS_LABELS[mois - 1]} ${annee} — confirmez la réception pour l'activer.`,
+            module: 'depense', forUsers: destinataires, excludeUid: user?.uid,
+            link: ROUTE_FINANCES_PAR_SECTEUR[revision.secteurId] || '/depense/recettes-depenses'
+          }).catch(() => {})
+        }
+        toast.success('Budget proposé — en attente de confirmation du secteur ✓')
+        setRevision(null)
+        return
+      }
+
       const entry = { id: genId(), ancien, nouveau, motif, date: Date.now(), auteur: user?.nom || user?.login || '—' }
       const revisions = [...revision.revisions, entry]
       await setItem('depense_budgets', revision.id, {
@@ -192,6 +254,37 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
     }
   }
 
+  // Le secteur confirme avoir reçu le budget proposé → il devient enfin le montant
+  // actif (compté dans « Budget alloué » partout : KPI, alertes de dépassement…).
+  const [validationBusy, setValidationBusy] = useState(null) // budgetId en cours
+  async function validerReceptionBudget(s) {
+    if (validationBusy) return
+    setValidationBusy(s.budgetId)
+    try {
+      const ancien = s.alloue
+      const nouveau = s.montantPropose
+      const entry = {
+        id: genId(), ancien, nouveau, motif: `${s.motifPropose || 'Allocation'} — confirmé reçu`,
+        date: Date.now(), auteur: user?.nom || user?.login || '—'
+      }
+      const revisions = [...s.revisionsBudget, entry]
+      await setItem('depense_budgets', s.budgetId, {
+        id: s.budgetId, secteurId: s.id, annee, mois, montant: nouveau, revisions,
+        montantPropose: null, motifPropose: null, statutValidation: null, updatedAt: Date.now()
+      })
+      await audit('depense', 'BUDGET_RECEPTION_CONFIRMEE', `${s.label} — ${fmt(nouveau)} FCFA confirmés reçus`, { secteurId: s.id, annee, mois, ancien, nouveau })
+      await notify({
+        type: 'success', title: `✅ Budget confirmé reçu — ${s.label}`,
+        body: `${fmt(nouveau)} FCFA confirmés par ${user?.nom || user?.login || '—'} pour ${MOIS_LABELS[mois - 1]} ${annee}.`,
+        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
+        link: '/depense/recettes-depenses', state: { openSecteurId: s.id, annee, mois }
+      }).catch(() => {})
+      toast.success('Réception confirmée ✓')
+    } finally {
+      setValidationBusy(null)
+    }
+  }
+
   // Suppression du budget alloué d'un secteur pour le mois → retour à « Non défini ».
   const supprimerBudget = async () => {
     if (!revision) return
@@ -208,8 +301,13 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   }
 
   // Ajout manuel d'un revenu — réservé aux secteurs sans facturation automatique
-  // (Hors secteur, MAXI BAT) ; le secteur se choisit dans le formulaire.
-  const secteursSansRevenuAuto = useMemo(() => SECTEURS.filter((s) => !SECTEURS_AVEC_REVENU.includes(s.id)), [])
+  // (Hors secteur, MAXI BAT) ; le secteur se choisit dans le formulaire. Restreint au
+  // seul `secteurId` si fourni (vue intégrée) ; sinon aligné sur `secteursAffiches` —
+  // MAXI BAT exclu de la vue standalone d'E-DÉPENSES (cf. secteursAffiches ci-dessus).
+  const secteursSansRevenuAuto = useMemo(
+    () => secteursAffiches.filter((s) => !SECTEURS_AVEC_REVENU.includes(s.id)),
+    [secteursAffiches]
+  )
   const ouvrirAjoutRevenu = () => setAjoutRevenu({ secteurId: secteursSansRevenuAuto[0]?.id || '', montant: '', date: todayStr(), description: '' })
 
   const confirmerAjoutRevenu = async () => {
@@ -235,6 +333,26 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
     }
   }
 
+  const ouvrirNouvelleDepense = () => setNouvelleDepense({
+    categorie: '', montant: '', date: todayStr(), description: '',
+    natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false
+  })
+
+  const confirmerNouvelleDepense = async () => {
+    if (!nouvelleDepense || !secteurId) return
+    if (!nouvelleDepense.categorie) return toast.error('Catégorie requise')
+    if (!nouvelleDepense.montant || Number(nouvelleDepense.montant) <= 0) return toast.error('Montant requis')
+    if (!nouvelleDepense.date) return toast.error('Date requise')
+    setDepenseSaving(true)
+    try {
+      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId }, { user, budgets, depenses })
+      toast.success(statutInitial === 'en_attente' ? 'Demande de décaissement soumise — en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
+      setNouvelleDepense(null)
+    } finally {
+      setDepenseSaving(false)
+    }
+  }
+
   const supprimerRevenuManuel = async (r) => {
     if (!window.confirm(`Supprimer ce revenu de ${fmt(r.montant)} FCFA ?`)) return
     await removeItem('depense_revenus_manuels', r.id)
@@ -248,6 +366,13 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
         <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
         <span className="text-lg font-extrabold text-gray-800">{MOIS_LABELS[mois - 1]} {annee}</span>
         <button onClick={() => changerMois(1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronRight size={16} /></button>
+        {/* Vue « Dépense » d'un module métier (agro, logistique…) : saisir une dépense
+            de ce secteur sans quitter le module, ni dépendre d'un accès à E-DÉPENSES
+            (que ces rôles n'ont pas forcément) — même circuit d'autorisation, embarqué
+            directement ici (cf. confirmerNouvelleDepense → depenseActions.js). */}
+        {masquerRevenu && secteurId && !lectureSeule && (
+          <Button onClick={ouvrirNouvelleDepense} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter une dépense</Button>
+        )}
         {!masquerRevenu && !lectureSeule && (
           <Button onClick={ouvrirAjoutRevenu} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter un revenu</Button>
         )}
@@ -340,6 +465,26 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
                 </div>
               )}
             </div>
+
+            {/* Budget proposé, en attente de confirmation par le secteur — tant que ce
+                n'est pas confirmé, « Budget » ci-dessus reste sur l'ancien montant actif. */}
+            {s.montantPropose != null && (
+              <div className="border-t border-amber-100 bg-amber-50/70 px-4 py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Send size={13} className="shrink-0 text-amber-600" />
+                  <span className="text-xs text-amber-800">
+                    <b>{fmt(s.montantPropose)} FCFA</b> proposés par {s.proposeParText}
+                    {s.motifPropose ? ` — ${s.motifPropose}` : ''} · en attente de confirmation de réception
+                  </span>
+                  {!lectureSeule && (
+                    <button onClick={() => validerReceptionBudget(s)} disabled={validationBusy === s.budgetId}
+                      className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-60">
+                      <CheckCircle2 size={13} /> {validationBusy === s.budgetId ? 'Confirmation…' : 'Confirmer la réception'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Revenu manuel — indication seule ; l'ajout se fait via le bouton en haut de l'écran */}
             {!masquerRevenu && !SECTEURS_AVEC_REVENU.includes(s.id) && s.revenuManuel > 0 && (
@@ -571,8 +716,15 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
         panelClassName={theme.gradient}>
         {revision && (() => {
           const estAllocation = revision.montantActuel === 0
+          const requiertValidation = SECTEURS_AVEC_VALIDATION.includes(revision.secteurId)
           return (
           <div className="space-y-4">
+            {requiertValidation && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                <Send size={12} className="mr-1 inline" /> Ce montant sera envoyé au secteur pour confirmation — il ne comptera
+                comme « Budget alloué » qu'une fois la réception confirmée.
+              </div>
+            )}
             <div className="rounded-xl bg-white p-3 shadow-sm">
               {estAllocation ? (
                 <div>
@@ -606,7 +758,9 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
                 {revision.montantActuel > 0 && !lectureSeule
                   ? <Button size="sm" variant="danger" onClick={supprimerBudget} loading={revSaving}>🗑️ Supprimer le budget</Button>
                   : <span />}
-                <Button size="sm" onClick={confirmerRevision} loading={revSaving}>{estAllocation ? 'Allouer' : 'Confirmer la révision'}</Button>
+                <Button size="sm" onClick={confirmerRevision} loading={revSaving}>
+                  {requiertValidation ? 'Envoyer au secteur' : (estAllocation ? 'Allouer' : 'Confirmer la révision')}
+                </Button>
               </div>
             </div>
 
@@ -667,6 +821,67 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setAjoutRevenu(null)}>Annuler</Button>
               <Button onClick={confirmerAjoutRevenu} loading={revenuSaving}>Ajouter</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Ajout d'une dépense depuis le volet Dépense d'un secteur métier — même circuit
+          d'autorisation qu'E-DÉPENSES (imprévue / seuil / budget restant → demande PAU,
+          sinon décaissée immédiatement), cf. confirmerNouvelleDepense. */}
+      <Modal open={!!nouvelleDepense} onClose={() => setNouvelleDepense(null)} size="sm"
+        title="Ajouter une dépense"
+        panelClassName={theme.gradient}>
+        {nouvelleDepense && (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-white p-3 shadow-sm space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Catégorie</label>
+                <select value={nouvelleDepense.categorie} onChange={(e) => setNouvelleDepense((d) => ({ ...d, categorie: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300">
+                  <option value="">— Choisir —</option>
+                  {CATEGORIES_DEPENSE.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant (FCFA)</label>
+                <input type="number" min="0" autoFocus value={nouvelleDepense.montant}
+                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, montant: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+                <input type="date" value={nouvelleDepense.date}
+                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Description <span className="font-normal text-gray-400">(optionnel)</span></label>
+                <input value={nouvelleDepense.description}
+                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, description: e.target.value }))}
+                  placeholder="ex : Achat de fournitures, réparation véhicule…"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Source de financement</label>
+                <select value={nouvelleDepense.sourceFinancement} onChange={(e) => setNouvelleDepense((d) => ({ ...d, sourceFinancement: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300">
+                  {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <input type="checkbox" checked={nouvelleDepense.imprevue}
+                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, imprevue: e.target.checked }))} />
+                Dépense imprévue (hors budget)
+              </label>
+              <p className="text-[11px] text-gray-400">
+                Devient une <strong>demande envoyée au PAU</strong> si imprévue, si le montant dépasse le seuil, ou si elle
+                dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setNouvelleDepense(null)}>Annuler</Button>
+              <Button onClick={confirmerNouvelleDepense} loading={depenseSaving}>Enregistrer</Button>
             </div>
           </div>
         )}

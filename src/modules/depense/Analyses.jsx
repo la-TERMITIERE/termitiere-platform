@@ -1,6 +1,7 @@
 // Analyses Dépenses — budget vs dépensé par secteur, répartition par catégorie.
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { ChevronLeft, ChevronRight, Wallet, HeartHandshake } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -16,6 +17,7 @@ const now = new Date()
 const PALETTE = ['#B45309', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
 
 export default function Analyses() {
+  const navigate = useNavigate()
   const { role: roleReel } = useAuth()
   // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
   // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
@@ -200,7 +202,8 @@ export default function Analyses() {
           <StatCard title="Dette envers le PAU"
             value={`${financementPau.detteNette.toLocaleString('fr-FR')} FCFA`}
             sub={financementPau.cumulPau === 0 ? 'Aucun apport enregistré' : financementPau.detteNette === 0 ? '✓ Soldée' : `${financementPau.cumulRembourse.toLocaleString('fr-FR')} FCFA déjà restitués`}
-            icon={HeartHandshake} accent={financementPau.detteNette > 0 ? '#7c3aed' : '#059669'} />
+            icon={HeartHandshake} accent={financementPau.detteNette > 0 ? '#7c3aed' : '#059669'}
+            onClick={financementPau.cumulPau === 0 ? undefined : () => navigate('/depense/liste', { state: { filtreSource: 'pau' } })} />
         )}
       </div>
 

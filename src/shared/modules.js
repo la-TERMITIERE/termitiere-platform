@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
@@ -153,13 +153,18 @@ export const MODULE_NAV = {
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
     { label: 'Pilotage & Contrôle', to: '/projet/pilotage', icon: Gauge, roles: PROJET_PILOTAGE_ROLES },
+    { label: 'Charge de travail', to: '/projet/charge-travail', icon: Users, roles: PROJET_PILOTAGE_ROLES },
     { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban, badgeKey: 'projetProjets' },
     { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks, badgeKey: 'projetTaches' },
+    { label: 'BTP',         to: '/projet/btp',         icon: HardHat, roles: ADMIN_VOLETS_ROLES },
     { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
     { label: 'Documents',   to: '/projet/documents',   icon: Paperclip, badgeKey: 'projetDocuments' },
     { label: 'Galerie photos', to: '/projet/galerie',  icon: Images, badgeKey: 'projetGalerie' },
     { label: 'Dépenses',    to: '/projet/depenses',    icon: Wallet, badgeKey: 'projetDepenses', roles: PROJET_DEPENSES_ROLES },
     { label: 'Besoins',      to: '/projet/besoins',      icon: PackagePlus, badgeKey: 'projetBesoins' },
+    // Ouvert à tout le monde, volontairement sans `roles` — n'importe qui doit pouvoir
+    // proposer un projet ; seule l'administration approuve/rejette (dans l'écran lui-même).
+    { label: 'Propositions', to: '/projet/propositions', icon: Lightbulb, badgeKey: 'projetPropositions' },
     { label: 'Matériel & Matériaux', to: '/projet/materiel', icon: Wrench, badgeKey: 'projetMateriel' },
     { label: 'Prestataires', to: '/projet/prestataires', icon: UserCircle },
     // `roles: ['agent']` en plus de `perm` : l'agent E-G.Pro voit cet onglet (en lecture
@@ -189,6 +194,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet, badgeKey: 'depenseDepenses' },
     { label: 'Revenus & Budget',            to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: ADMIN_VOLETS_ROLES },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: [...FINANCE_VIEW_ROLES, 'agent'] },
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },

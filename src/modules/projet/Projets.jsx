@@ -266,6 +266,25 @@ export default function Projets() {
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
+    // Arrivée depuis ProjetsExplorer (« Nouveau projet » sur un secteur) : ouvre
+    // directement le formulaire de création, secteur déjà pré-rempli.
+    const createSecteurId = location.state?.openCreateSecteurId
+    if (createSecteurId) {
+      setForm({ ...VIDE, secteurId: createSecteurId, versementDate: todayStr() })
+      setEditing(null)
+      setModal(true)
+      navigate(location.pathname, { replace: true, state: {} })
+      return
+    }
+    // Arrivée depuis le volet BTP (bouton ✏️ sur une carte de chantier) : ouvre
+    // directement le formulaire de modification de ce projet.
+    const editId = location.state?.openEditProjetId
+    if (editId) {
+      const p = projets.find((x) => x.id === editId)
+      if (p) openEdit(p)
+      navigate(location.pathname, { replace: true, state: {} })
+      return
+    }
     const id = location.state?.openProjetId
     if (!id) return
     const p = projets.find((x) => x.id === id)
