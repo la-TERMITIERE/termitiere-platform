@@ -51,7 +51,8 @@ export default function EvenementielModule() {
       <Route path="ventes" element={<Ventes />} />
       <Route path="factures" element={<Factures />} />
       <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
-      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
+      {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
+      <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
       <Route path="demandes" element={<Demandes />} />
       <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
       <Route path="clients" element={<Clients />} />

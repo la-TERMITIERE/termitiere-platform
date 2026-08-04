@@ -78,7 +78,8 @@ function SiteApp() {
         <Route path="saisie" element={<SaisieMagasin />} />
         <Route path="prestations" element={<Prestations />} />
         <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
-        <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="logistique" masquerRevenu /> : <AccesRefuse />} />
+        {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
+        <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="logistique" masquerRevenu /> : <AccesRefuse />} />
         <Route path="factures" element={<Factures />} />
         <Route path="demandes" element={<Demandes />} />
         <Route path="retours" element={<Retours />} />

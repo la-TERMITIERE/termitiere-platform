@@ -12,7 +12,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { logistiqueVoitMontants } from '../../core/roles'
+import { logistiqueVoitMontants, logistiqueVoitValidateur } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -30,8 +30,10 @@ export default function Factures() {
   const { user, role } = useAuth()
   const site = useSite()
   const peutFacturer = role === 'agent'
-  // La secrétaire consulte les factures (suivi administratif) sans en voir la valeur.
+  // La secrétaire voit désormais les montants de facturation (accès explicitement
+  // accordé) mais pas qui a approuvé la facture (cf. `voitValidateur`).
   const voitMontants = logistiqueVoitMontants(role)
+  const voitValidateur = logistiqueVoitValidateur(role)
   const { data: allFactures } = useCollection('logistique_factures')
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: allDemandes } = useCollection('logistique_demandes')
@@ -50,7 +52,14 @@ export default function Factures() {
   // L'agent garde la main : il facture une prestation dès qu'elle est en brouillon
   // (pas besoin d'approbation préalable). L'approbation viendra via l'autorisation de sortie.
   const aFacturer = prestations.filter((p) => p.statut === 'brouillon')
-  const liste = useMemo(() => [...factures].sort((a, b) => (a.date < b.date ? 1 : -1)), [factures])
+  const [filtreDateDebut, setFiltreDateDebut] = useState('')
+  const [filtreDateFin, setFiltreDateFin] = useState('')
+  const liste = useMemo(() => {
+    return [...factures]
+      .filter((f) => !filtreDateDebut || (f.date || '') >= filtreDateDebut)
+      .filter((f) => !filtreDateFin || (f.date || '') <= filtreDateFin)
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [factures, filtreDateDebut, filtreDateFin])
 
   async function emettre() {
     const p = prestations.find((x) => x.id === prestId)
@@ -102,6 +111,20 @@ export default function Factures() {
           </Button>
         </div>
       )}
+      <div className="flex flex-wrap items-end gap-2">
+        <FormGroup label="Du">
+          <input type="date" className="input-base" value={filtreDateDebut} onChange={(e) => setFiltreDateDebut(e.target.value)} />
+        </FormGroup>
+        <FormGroup label="Au">
+          <input type="date" className="input-base" value={filtreDateFin} onChange={(e) => setFiltreDateFin(e.target.value)} />
+        </FormGroup>
+        {(filtreDateDebut || filtreDateFin) && (
+          <button onClick={() => { setFiltreDateDebut(''); setFiltreDateFin('') }}
+            className="mb-0.5 text-xs font-semibold text-gray-400 hover:text-gray-600 hover:underline">
+            Réinitialiser
+          </button>
+        )}
+      </div>
       <Card className="p-0">
         <Table
           stickyHeader
@@ -118,7 +141,7 @@ export default function Factures() {
               return (
                 <div>
                   <Badge tone={s.tone}>{s.label}</Badge>
-                  {r.statut === 'approuvee' && r.approuveePar && (
+                  {voitValidateur && r.statut === 'approuvee' && r.approuveePar && (
                     <p className="mt-0.5 text-[10px] text-gray-500">{auto ? '🤖' : '✅'} {r.approuveePar}{r.approuveeLe ? ` · ${formatDateShort(r.approuveeLe)}` : ''}</p>
                   )}
                 </div>
@@ -156,7 +179,8 @@ export default function Factures() {
                 { label: 'Période', value: detail.dateDebut ? `${formatDateShort(detail.dateDebut)} → ${formatDateShort(detail.dateFin)}` : null },
                 { label: 'Site', value: siteLabel(detail.site || site) },
                 { label: 'Émise par', value: detail.agentNom },
-                { label: 'Approuvée par', value: detail.approuveePar ? `${detail.approuveePar}${detail.approuveeLe ? ' · ' + detail.approuveeLe : ''}` : null }
+                // L'identité du validateur reste réservée à l'administration/direction.
+                { label: 'Approuvée par', value: voitValidateur && detail.approuveePar ? `${detail.approuveePar}${detail.approuveeLe ? ' · ' + detail.approuveeLe : ''}` : null }
               ]}
               colonnes={[
                 { label: 'Prestation', render: (l) => l.materielNom || 'Élément' },

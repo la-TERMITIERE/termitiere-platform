@@ -60,15 +60,16 @@ function CarteChoix({ to, color, icon: Icon, titre, sousTitre, badge, actions })
     <Link to={to}
       className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
       <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: color }} />
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white" style={{ background: color }}>
-        <Icon size={22} />
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white" style={{ background: color }}>
+        <Icon size={18} />
       </span>
       <div className="min-w-0 flex-1">
         {/* Le nom occupe seule toute la largeur de la ligne (le badge est descendu à
             côté du sous-titre) — sans ce partage, il se tronquait bien trop vite dans
-            la grille à 3 colonnes, malgré la même hauteur/largeur de carte. */}
-        <p className="truncate text-lg font-extrabold text-gray-900" title={titre}>{titre}</p>
-        <div className="flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
+            la grille à 3 colonnes, malgré la même hauteur/largeur de carte. Police
+            réduite (+ icône plus petite) pour laisser encore plus de place au nom. */}
+        <p className="truncate text-sm font-bold text-gray-900" title={titre}>{titre}</p>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
           <span>{sousTitre}</span>
           {badge}
         </div>

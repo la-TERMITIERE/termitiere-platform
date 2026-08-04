@@ -54,7 +54,7 @@ export default function FicheDetail({
                 {lignes.map((l, i) => (
                   <tr key={i}>
                     {colonnes.map((c, j) => (
-                      <td key={j} className={`px-3 py-2 ${align(c.align)} ${j === 0 ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>
+                      <td key={j} className={`px-3 py-2 ${align(c.align)} ${j === 0 ? 'font-semibold text-gray-800' : 'font-medium text-gray-700'}`}>
                         {c.render(l, i)}
                       </td>
                     ))}
