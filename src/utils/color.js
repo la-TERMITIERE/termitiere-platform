@@ -19,9 +19,11 @@ export const COULEUR_MODULE = {
 // flouté légèrement teinté, panneau translucide clair avec une pointe de la couleur.
 export function glassModalProps(color) {
   return {
-    overlayClassName: 'backdrop-blur-sm',
-    overlayStyle: { background: `linear-gradient(135deg, ${teinterHex('#1A1A1A', 0.55)}, ${teinterHex(color, 0.45)})` },
+    overlayClassName: 'backdrop-blur-md',
+    overlayStyle: { background: `linear-gradient(135deg, ${teinterHex('#1A1A1A', 0.65)}, ${teinterHex(color, 0.55)})` },
     panelClassName: 'relative overflow-hidden border border-white/60 backdrop-blur-2xl',
-    panelStyle: { background: `linear-gradient(160deg, ${teinterHex('#ffffff', 0.85)}, ${teinterHex(color, 0.12)})` }
+    // Panneau plus opaque (0.85 → 0.96) : le contenu de la page derrière (flouté)
+    // transparaissait encore assez pour rendre certains textes difficiles à lire.
+    panelStyle: { background: `linear-gradient(160deg, ${teinterHex('#ffffff', 0.96)}, ${teinterHex(color, 0.08)})` }
   }
 }

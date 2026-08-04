@@ -56,7 +56,8 @@ export default function AgroModule() {
       <Route path="routine" element={<TachesRoutinieres />} />
       <Route path="saisie" element={<Saisie />} />
       <Route path="factures" element={<Factures />} />
-      <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="agro" masquerRevenu /> : <AccesRefuse />} />
+      {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
+      <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="agro" masquerRevenu /> : <AccesRefuse />} />
       <Route path="analyses" element={canViewPilotage(role) ? <Analyses /> : <AccesRefuse />} />
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />

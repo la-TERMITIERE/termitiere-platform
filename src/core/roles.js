@@ -63,10 +63,16 @@ export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)
 export const ADMIN_VOLETS_ROLES = FULL_ACCESS_ROLES
 
 // MAXI LOGISTIQUE : rôles qui ne doivent voir AUCUN montant (tarifs, totaux, frais,
-// dépenses) — la secrétaire valide les sorties de matériel sur la quantité et le
-// motif, jamais sur la valeur financière de la prestation.
-export const LOGISTIQUE_SANS_MONTANT_ROLES = ['secretaire']
+// dépenses). Historiquement la secrétaire en était privée — accès explicitement
+// accordé depuis (cf. Factures.jsx/Prestations.jsx qui l'ajoutent en plus de ce
+// groupe), cette liste ne sert donc plus qu'aux rôles encore restreints.
+export const LOGISTIQUE_SANS_MONTANT_ROLES = []
 export const logistiqueVoitMontants = (r) => !LOGISTIQUE_SANS_MONTANT_ROLES.includes(r)
+
+// MAXI LOGISTIQUE : la secrétaire voit les montants mais pas QUI a approuvé une
+// facture/prestation (juste le fait que c'est approuvé) — l'identité du validateur
+// reste réservée aux gérants/direction.
+export const logistiqueVoitValidateur = (r) => r !== 'secretaire'
 
 // MAXI LOGISTIQUE : la secrétaire approuve au 1er niveau (comme un `gerant`), mais
 // ne certifie jamais — la certification approuve la facture (impact CA) et reste
