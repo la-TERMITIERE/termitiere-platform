@@ -21,7 +21,7 @@ import FormGroup from '../forms/FormGroup'
 import Input from '../forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { setItem, removeItem, addItem } from '../../core/db'
+import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { isFullAccessRole, isReadOnlyRole } from '../../core/roles'
@@ -139,9 +139,12 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
     ;(async () => {
       if (legacySansCategorie) await Promise.all(items.map((it) => removeItem(itemsCol, it.id)))
       const now = Date.now()
-      await Promise.all(seedTaches.map((t, i) =>
-        addItem(itemsCol, { id: genId(), titre: t.titre, categorie: t.categorie, ordre: i, createdBy: user.nom, createdAt: now + i })
-      ))
+      // setItem (et non addItem) : la clé du document EST l'id — indispensable pour
+      // que Modifier/Supprimer visent le bon document (cf. snapToRows).
+      await Promise.all(seedTaches.map((t, i) => {
+        const id = genId()
+        return setItem(itemsCol, id, { id, titre: t.titre, categorie: t.categorie, ordre: i, createdBy: user.nom, createdAt: now + i })
+      }))
       audit(moduleId, 'TACHES_ROUTINE_SEED', `${seedTaches.length} tâches routinières initialisées`)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
