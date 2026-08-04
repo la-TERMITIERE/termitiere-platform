@@ -159,6 +159,30 @@ export default function Dashboard() {
     }
   }, [morbiditeSerie, morbiditePrevision])
 
+  // Courbe de croissance PAR ESPÈCE : évolution de l'effectif (EF final) au fil
+  // des saisies de la période — une ligne colorée par espèce du périmètre.
+  const croissanceChart = useMemo(() => {
+    const pts = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const labels = pts.map((i) => i.date?.slice(5))
+    // Une espèce n'apparaît que si elle a au moins un effectif non nul sur la période
+    // (évite un fouillis de lignes plates à zéro pour les espèces non élevées).
+    const especesTracees = especesScope.filter((e) => pts.some((inv) => (inv.animaux?.[e.id]?.fin || 0) > 0))
+    const n = Math.max(1, especesTracees.length)
+    const datasets = especesTracees.map((e, i) => {
+      // Palette bien répartie sur la roue chromatique (teintes distinctes par espèce).
+      const teinte = Math.round((360 / n) * i)
+      const couleur = `hsl(${teinte} 70% 45%)`
+      return {
+        label: e.nom,
+        data: pts.map((inv) => inv.animaux?.[e.id]?.fin ?? null),
+        borderColor: couleur,
+        backgroundColor: couleur,
+        tension: 0.3, pointRadius: 2, spanGaps: true, fill: false
+      }
+    })
+    return { labels, datasets, vide: !datasets.length || !labels.length }
+  }, [invPeriode, especesScope])
+
   // Répartition (effectif). « Toutes » → par CATÉGORIE ; une catégorie sélectionnée
   // → par ESPÈCE de cette catégorie (comme le détail par espèce plus bas).
   const repartition = useMemo(() => {
@@ -303,6 +327,21 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Courbe de croissance par espèce (évolution de l'effectif) */}
+      <Card title={`Courbe de croissance par espèce — ${scopeLabel}`}>
+        <p className="mb-2 text-[11px] text-gray-400">Évolution de l'effectif (EF final) de chaque espèce au fil des saisies de la période.</p>
+        <div className="h-72">
+          {!croissanceChart.vide
+            ? <Line data={croissanceChart} options={{
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatNumber(c.parsed.y)} têtes` } } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0, callback: (v) => formatNumber(v) } } }
+              }} />
+            : <p className="py-16 text-center text-sm text-gray-400">Pas assez de saisies sur la période pour tracer une courbe de croissance.</p>}
+        </div>
+      </Card>
 
       {/* Détail par espèce du périmètre */}
       <Card title={`Détail par espèce — ${scopeLabel}`}>
