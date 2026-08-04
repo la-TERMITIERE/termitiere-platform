@@ -7,3 +7,7 @@ backups/
 **/.sbinfo.json
 **/serviceAccount*.json
 **/*-service-account*.json
+# Chaîne de connexion PostgreSQL écrite par run-migration.mjs : contient le mot de
+# passe de la base EN CLAIR. A déjà fuité une fois en étant commitée — ne jamais
+# versionner (cf. audit sécurité 2026-08-04).
+**/.connection-url.txt

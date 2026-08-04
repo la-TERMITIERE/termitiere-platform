@@ -18,6 +18,7 @@ import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, getOne, setItem, addItem, subscribeCollection } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
+import { oublierAbonnementPush } from './push'
 
 // Cible auto-hébergée : authentification via Supabase Auth (identités réelles + RLS).
 const USE_SUPABASE_AUTH = import.meta.env.VITE_USE_SUPABASE === 'true'
@@ -388,6 +389,39 @@ export const useAuthStore = create((set, get) => ({
     if (USE_SUPABASE_AUTH && supabase) { try { await supabase.auth.signOut() } catch (e) { /* ignore */ } }
     if (auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
     _unsubOwnProfile?.(); _unsubOwnProfile = null
+
+    // POSTE PARTAGÉ : la déconnexion ne vidait rien. Le cache du service worker
+    // (réponses Firebase = factures, salaires, dossiers d'enfants…) et l'abonnement
+    // aux notifications survivaient à la déconnexion : l'utilisateur suivant pouvait
+    // lire les données du précédent et recevait ses notifications. (Audit 2026-08-04)
+    try {
+      // ⚠️ `serviceWorker.ready` NE SE RÉSOUT JAMAIS si aucun service worker n'est
+      // enregistré (mode développement, navigateur sans PWA, enregistrement échoué).
+      // Sans ce délai de garde, la déconnexion restait bloquée indéfiniment.
+      const reg = await Promise.race([
+        navigator.serviceWorker?.ready ?? Promise.resolve(null),
+        new Promise((r) => setTimeout(() => r(null), 1500))
+      ])
+      const sub = await reg?.pushManager?.getSubscription?.()
+      if (sub) {
+        const endpoint = sub.toJSON()?.endpoint
+        await sub.unsubscribe().catch(() => {})
+        if (endpoint) await oublierAbonnementPush(endpoint)
+      }
+    } catch (e) { /* best effort — ne doit jamais empêcher la déconnexion */ }
+    try {
+      if (typeof caches !== 'undefined') {
+        const noms = await caches.keys()
+        await Promise.all(noms.filter((n) => /firebase|rtdb/i.test(n)).map((n) => caches.delete(n)))
+      }
+    } catch (e) { /* best effort */ }
+    try {
+      // Données métier du mode démo, écrites en clair dans le navigateur.
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('termitiere_col_') || k.startsWith('termitiere_demo_'))
+        .forEach((k) => localStorage.removeItem(k))
+    } catch (e) { /* best effort */ }
+
     localStorage.removeItem(DEMO_SESSION_KEY)
     set({ user: null, role: null, modules: [] })
   },

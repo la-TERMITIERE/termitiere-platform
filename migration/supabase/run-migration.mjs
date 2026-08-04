@@ -89,6 +89,9 @@ console.log(`   legacy_maxiagro : ${lr.rows[0].c} nœud(s)`)
 console.log('   utilisateurs par rôle : ' + ur.rows.map(r => `${r.role || '?'}=${r.n}`).join(', '))
 
 await client.end()
-fs.writeFileSync(new URL('./.connection-url.txt', import.meta.url), url + '\n')
+// N'ÉCRIT PLUS la chaîne de connexion sur le disque : elle contient le mot de passe
+// de la base en clair, et le fichier a fini par être commité (fuite du 2026-08-04).
+// Le mot de passe reste disponible là où il doit l'être : dans la variable
+// d'environnement SUPABASE_DB_URL / le coffre-fort d'entreprise.
 console.log(`\n${dbTotal === total ? '✅ MIGRATION RÉUSSIE' : '❌ ÉCART'} — Supabase contient ${dbTotal}/${total} enregistrements.`)
 process.exit(dbTotal === total ? 0 : 1)

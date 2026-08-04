@@ -1,16 +1,24 @@
-// ⚠️ FICHIER OBSOLÈTE — conservé uniquement parce que d'anciens documents y renvoient.
+// RÈGLES DE SÉCURITÉ — ÉTAGE 2.
 //
-// Son contenu d'origine était TROMPEUR : présenté comme « le verrouillage », il
-// accordait en réalité `.read`/`.write` sur TOUT `tp/` à n'importe quel compte
-// authentifié, SANS protection du rôle, SANS protection de `users_secret` et SANS
-// journal d'audit inviolable. Le publier AFFAIBLISSAIT la sécurité.
+// ⚠️ NE PAS PUBLIER SANS LA VÉRIFICATION CI-DESSOUS. Cet étage ferme `users` et
+// `users_secret`, dont dépend la connexion de REPLI. Si la connexion serveur ne
+// fonctionne pas, PLUS PERSONNE NE PEUT SE CONNECTER.
 //
-// Il reprend désormais à l'identique l'ÉTAGE 1 (database.rules.json), afin qu'une
-// publication par erreur reste sûre.
+// VÉRIFICATION PRÉALABLE OBLIGATOIRE (5 minutes) :
+//   1. Netlify → Site settings → Environment variables : la variable
+//      FIREBASE_SERVICE_ACCOUNT existe et contient le JSON complet du compte de
+//      service (Console Firebase → Paramètres du projet → Comptes de service →
+//      Générer une nouvelle clé privée).
+//   2. Déployer, puis se connecter normalement à l'application.
+//   3. Onglet Réseau du navigateur : la requête POST /.netlify/functions/login
+//      doit répondre 200 avec un `token`.
+//      Si elle répond `not_configured`, la connexion passe encore par le repli :
+//      NE PAS publier cet étage — corriger d'abord la variable.
 //
-// → Utilisez directement :
-//     database.rules.json         (étage 1 — publiable immédiatement)
-//     database.rules.etage2.json  (étage 2 — après vérification de la connexion serveur)
+// ROLLBACK : republier database.rules.json (étage 1), la connexion revient.
+//
+// Cet étage supprime le dernier accès public : hachages de mots de passe,
+// téléphones et annuaire ne sont plus lisibles sans compte.
 {
   "rules": {
     ".read": false,
@@ -22,8 +30,10 @@
     },
 
     "tp": {
+      // Annuaire : lisible par un utilisateur authentifié uniquement
+      // (ciblage des notifications, page Utilisateurs).
       "users": {
-        ".read": true,
+        ".read": "auth != null",
         ".indexOn": ["login"],
         "$uid": {
           ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/))",
@@ -51,9 +61,12 @@
         }
       },
 
+      // FERMÉ AUX CLIENTS. Seul le SDK Admin (netlify/functions/login.js) y accède
+      // — il ignore les règles. Le changement de mot de passe reste possible sur
+      // son propre nœud.
       "users_secret": {
-        ".read": true,
         "$uid": {
+          ".read": false,
           ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/))"
         }
       },
