@@ -21,17 +21,55 @@ Un mot de passe de base **Supabase** était également commité en clair dans gi
 
 ---
 
-## ÉTAPE 1 — À faire MAINTENANT (30 min, dans les consoles)
+## ⚠️ LE VRAI BLOCAGE : Firebase Authentication n'est pas activé
 
-### 1.1 Fermer la base
-Console Firebase → **Realtime Database** → onglet **Règles** → remplacer par le
-contenu de **`database.rules.json`** → **Publier**.
+Vérifié le 2026-08-04 : l'API d'authentification du projet répond
+`CONFIGURATION_NOT_FOUND`. **Firebase Auth n'a jamais été activé.**
 
-Effet immédiat : plus aucune lecture ni écriture sans compte, hors `users` /
-`users_secret` (nécessaires à la connexion — voir étape 3).
+Conséquence : **aucun utilisateur n'a de session Firebase**, même après s'être
+connecté dans l'application (la connexion compare le mot de passe côté navigateur).
+`auth` vaut toujours `null`.
 
-> **Rollback** si quoi que ce soit casse : republier les anciennes règles. Gardez
-> une copie de l'écran avant modification.
+C'est pour cette raison que la base a été laissée ouverte : sans authentification,
+c'est la seule façon dont l'application fonctionne. Et c'est pour cette raison que
+**publier les règles strictes bloquerait immédiatement TOUS les utilisateurs** :
+ils se connecteraient mais ne verraient plus aucune donnée.
+
+**Cette étape conditionne tout le reste.**
+
+---
+
+## ÉTAPE 1 — DÉJÀ FAITE ✅ (règles de transition publiées)
+
+Des règles de transition ont été **publiées le 2026-08-04** (`database.rules.transition.json`).
+Elles ferment ce qui pouvait l'être sans authentification, sans aucun risque :
+
+| Test anonyme | Avant | Après |
+|---|---|---|
+| Écriture à la racine | 200 | **401** |
+| Lecture du nœud hérité `maxiagro` | ouvert | **401** |
+| **Effacement total de la base** | possible | **401** |
+| Suppression d'une entrée du journal d'audit | possible | **401** |
+| Sauvegarde `GET /tp.json` | 200 | **200** (préservée) |
+| Application (lecture/écriture) | 200 | **200** (préservée) |
+
+⚠️ **Ce qui reste ouvert** : les collections sous `tp/` sont toujours lisibles et
+inscriptibles sans compte. C'est indissociable de l'absence d'authentification.
+Seule l'étape 1 bis ci-dessous permet de le fermer.
+
+## ÉTAPE 1 bis — ACTIVER L'AUTHENTIFICATION (à faire par vous, ~10 min)
+
+1. Console Firebase → **Authentication** → **Get started**
+2. Onglet **Sign-in method** → activer **E-mail/Mot de passe** (le premier seulement,
+   pas « lien e-mail »)
+3. Demander à **chaque utilisateur de se connecter une fois** : l'application crée
+   alors automatiquement son compte Firebase (migration déjà prévue dans le code).
+   Vérifier leur apparition dans **Authentication → Users**.
+4. Quand tous les comptes actifs y figurent, publier **`database.rules.json`**
+   (Realtime Database → Règles), puis suivre l'étape 3 pour l'étage 2.
+
+> **Rollback** à tout moment : republier `database.rules.transition.json`,
+> l'application refonctionne immédiatement.
 
 ### 1.2 Changer les mots de passe compromis
 Ces mots de passe sont **publics** (ils étaient dans le code source livré au
@@ -83,11 +121,13 @@ une sauvegarde jamais restaurée n'est pas une sauvegarde.
 
 ---
 
-## ÉTAPE 3 — Fermer le dernier trou (après vérification)
+## ÉTAPE 3 — Fermer le dernier trou (après l'étape 1 bis)
 
 `users` et `users_secret` restent lisibles sans compte, car la connexion de
 **repli** en dépend. Pour les fermer :
 
+0. **Prérequis : l'étape 1 bis doit être faite** (authentification activée et
+   comptes migrés), sinon rien de tout cela n'est possible.
 1. Vérifier que `FIREBASE_SERVICE_ACCOUNT` est bien dans Netlify (étape 2).
 2. Déployer, se connecter, et vérifier dans l'onglet **Réseau** du navigateur que
    `POST /.netlify/functions/login` répond **200 avec un `token`**.

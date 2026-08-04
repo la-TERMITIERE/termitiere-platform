@@ -1,6 +1,7 @@
 {
   "database": {
-    "rules": "database.rules.json"
+    "_comment": "Règles ACTUELLEMENT déployables. Firebase Auth n'étant pas encore activé, les règles strictes (database.rules.json puis database.rules.etage2.json) bloqueraient tous les utilisateurs. Basculer sur database.rules.json une fois l'authentification activée — cf. docs/URGENCE-SECURITE.md.",
+    "rules": "database.rules.transition.json"
   },
   "firestore": {
     "rules": "firestore.rules",
