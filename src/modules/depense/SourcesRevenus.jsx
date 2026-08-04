@@ -4,17 +4,24 @@
 // données actuelles ne sont que des essais), filtrable par secteur — même présentation
 // que l'écran « Dépenses » (tableau, filtres, clic sur une ligne pour le détail).
 import { useMemo, useState, useEffect } from 'react'
-import { TrendingUp, Search, Eye } from 'lucide-react'
+import { TrendingUp, Search, Eye, Building2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { formatDateShort, formatMoney } from '../../utils/formatters'
+import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { SECTEURS } from './data'
+import { getModule } from '../../shared/modules'
+import { SECTEURS, MOIS_LABELS } from './data'
+
+// Logo/icône de chaque secteur — reprend celui de son module métier (agro, logistique…)
+// pour que la carte KPI soit reconnaissable au premier coup d'œil, pas un pictogramme
+// générique. « Hors secteur » (divers) et « MAXI BAT » n'ont pas de module dédié.
+const iconeSecteur = (id) => getModule(id)?.icon || Building2
 import { versementsClientVersSecteurs, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
 import { marquerVoletVu } from '../../shared/nouveautes'
 
@@ -99,19 +106,49 @@ export default function SourcesRevenus() {
   const [recherche, setRecherche]         = useState('')
   const [detail, setDetail]               = useState(null)
 
-  const liste = useMemo(() => {
+  // Base commune (secteur/source/recherche) SANS le mois — sert de socle pour les KPI
+  // "Aujourd'hui" et "Mois" ci-dessous, qui ont chacun leur propre période fixe plutôt
+  // que de dépendre du filtre Mois choisi pour le tableau.
+  const baseFiltree = useMemo(() => {
     let rows = [...lignes]
     if (filtreSecteur) rows = rows.filter((l) => l.secteurId === filtreSecteur)
     if (filtreType)    rows = rows.filter((l) => l.type === filtreType)
-    if (filtreMois)    rows = rows.filter((l) => (l.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
       rows = rows.filter((l) => l.libelle.toLowerCase().includes(q) || (l.tiers || '').toLowerCase().includes(q))
     }
     return rows
-  }, [lignes, filtreSecteur, filtreType, filtreMois, recherche])
+  }, [lignes, filtreSecteur, filtreType, recherche])
+
+  const liste = useMemo(() => {
+    if (!filtreMois) return baseFiltree
+    return baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+  }, [baseFiltree, filtreMois])
 
   const total = liste.reduce((s, l) => s + l.montant, 0)
+
+  // KPI par secteur — un par secteur RÉELLEMENT présent dans les données (pas une
+  // liste figée : un nouveau secteur générateur de revenu ajoute automatiquement sa
+  // propre carte). Somme du JOUR par défaut ; si un mois est choisi dans le filtre,
+  // la même carte bascule sur la somme de CE mois — pas besoin de deux jeux de KPI.
+  const aujourdhui = todayStr()
+  const periodeLabel = filtreMois
+    ? `${MOIS_LABELS[Number(filtreMois.slice(5, 7)) - 1]} ${filtreMois.slice(0, 4)}`
+    : "Aujourd'hui"
+  const kpiParSecteur = useMemo(() => {
+    // La carte existe pour tout secteur ayant DÉJÀ eu du revenu (peu importe quand) —
+    // sinon un secteur sans rien aujourd'hui disparaissait complètement de la vue au
+    // lieu d'afficher simplement 0 FCFA. Seule la SOMME affichée est bornée à la période.
+    const periode = filtreMois
+      ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+      : baseFiltree.filter((l) => l.date === aujourdhui)
+    const sommesPeriode = new Map()
+    periode.forEach((l) => sommesPeriode.set(l.secteurId, (sommesPeriode.get(l.secteurId) || 0) + l.montant))
+    const secteursConnus = new Set(baseFiltree.map((l) => l.secteurId))
+    return [...secteursConnus]
+      .map((id) => ({ secteur: SECTEURS.find((s) => s.id === id) || { id, label: id, color: '#64748b' }, montant: sommesPeriode.get(id) || 0 }))
+      .sort((a, b) => b.montant - a.montant || a.secteur.label.localeCompare(b.secteur.label))
+  }, [baseFiltree, filtreMois, aujourdhui])
   const secteurDetail = detail ? SECTEURS.find((s) => s.id === detail.secteurId) : null
   const couleurDetail = secteurDetail?.color || COULEUR_MODULE.depense
 
@@ -127,6 +164,18 @@ export default function SourcesRevenus() {
           <p className="text-sm text-white/80">Toutes les entrées d'argent réelles — factures, apports du PAU, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
         </div>
       </div>
+
+      {/* KPI par secteur — une carte par secteur générateur de revenu réellement présent
+          dans les données (un nouveau secteur ajoute automatiquement sa carte). Somme du
+          jour par défaut, ou du mois choisi dans le filtre ci-dessous. */}
+      {kpiParSecteur.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {kpiParSecteur.map(({ secteur, montant }) => (
+            <StatCard key={secteur.id} title={secteur.label} value={formatMoney(montant)}
+              sub={periodeLabel} icon={iconeSecteur(secteur.id)} accent={secteur.color} />
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[160px]">

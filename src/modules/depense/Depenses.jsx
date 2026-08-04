@@ -175,7 +175,10 @@ export default function Depenses() {
     if (openCreateSecteurId) setModal({ data: { ...empty(), secteurId: openCreateSecteurId }, isNew: true })
     // Clic sur « Dette envers le PAU » (Dashboard/Analyses) — arrive ici déjà filtré
     // sur les seules dépenses financées par le PAU, pour voir où l'argent est passé.
-    if (sourceVoulue) setFiltreSource(sourceVoulue)
+    // La dette est un CUMUL depuis le début (pas juste le mois en cours) : on efface
+    // aussi le filtre de mois (par défaut sur le mois courant), sans quoi un apport
+    // d'un mois précédent restait invisible — « Aucune dépense trouvée » à tort.
+    if (sourceVoulue) { setFiltreSource(sourceVoulue); setFiltreMois('') }
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state])
 

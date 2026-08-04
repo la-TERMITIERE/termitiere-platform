@@ -28,11 +28,12 @@ export default function Flux() {
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
 
   // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
+  // MAXI BAT (chantiers) est exclu : son flux de trésorerie vit exclusivement dans le volet BTP d'E-G.Pro.
   const depenses = useMemo(() => [
     ...depensesReelles,
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 

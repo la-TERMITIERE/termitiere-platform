@@ -183,8 +183,11 @@ export function statutBudget(pct) {
 }
 
 // Secteurs dont le budget est en alerte (≥80%) ou dépassé (≥100%) pour un mois donné.
+// MAXI BAT (chantiers) est exclu des alertes de budget par secteur : son suivi
+// vit exclusivement dans le volet BTP d'E-G.Pro, pas sur le Dashboard E-DÉPENSES.
 export function secteursEnAlerte(budgets, depenses, annee, mois) {
   return SECTEURS
+    .filter((s) => s.id !== 'bat')
     .map((s) => {
       const alloue = budgetSecteur(budgets, s.id, annee, mois)
       const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))

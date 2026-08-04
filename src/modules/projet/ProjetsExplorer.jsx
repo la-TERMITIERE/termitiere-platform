@@ -64,10 +64,15 @@ function CarteChoix({ to, color, icon: Icon, titre, sousTitre, badge, actions })
         <Icon size={22} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-lg font-extrabold text-gray-900">{titre}</p>
-        <p className="text-sm text-gray-500">{sousTitre}</p>
+        {/* Le nom occupe seule toute la largeur de la ligne (le badge est descendu à
+            côté du sous-titre) — sans ce partage, il se tronquait bien trop vite dans
+            la grille à 3 colonnes, malgré la même hauteur/largeur de carte. */}
+        <p className="truncate text-lg font-extrabold text-gray-900" title={titre}>{titre}</p>
+        <div className="flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
+          <span>{sousTitre}</span>
+          {badge}
+        </div>
       </div>
-      {badge}
       {actions && (
         <div className="flex shrink-0 items-center gap-1" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
           {actions}
