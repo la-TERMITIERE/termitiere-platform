@@ -9,6 +9,7 @@
 // l'application est ouverte, même si personne n'est sur la page des demandes.
 import { useEffect, useRef } from 'react'
 import { useCollection } from '../hooks/useFirestore'
+import { useAuth } from '../hooks/useAuth'
 import { updateItem, ts } from '../core/db'
 import { audit } from '../core/audit'
 import { notify } from '../core/notify'
@@ -20,18 +21,20 @@ import { estFinal } from './workflow'
 const DELAI_MS = 10 * 60 * 1000 // 10 minutes sans décision → approbation auto
 const CHECK_MS = 30 * 1000      // fréquence de vérification
 
-// Horodatage de création (createdAt ajouté par addItem ; repli sur date + heure).
+// Horodatage de création. On n'utilise QUE `createdAt`, posé à l'écriture.
+// L'ancien repli sur `date` + `heure` — deux champs saisis par le DEMANDEUR —
+// permettait d'antidater une demande pour la faire approuver automatiquement
+// sur-le-champ. Renvoie null si l'horodatage est absent ou incohérent :
+// la demande exige alors une décision humaine. (Audit sécurité 2026-08-04)
 function createdMs(d) {
-  if (typeof d.createdAt === 'number') return d.createdAt
-  if (d.date) {
-    const t = new Date(`${d.date}T${d.heure || '00:00'}:00`).getTime()
-    if (!Number.isNaN(t)) return t
-  }
-  return Date.now()
+  if (typeof d.createdAt !== 'number' || !Number.isFinite(d.createdAt)) return null
+  if (d.createdAt > Date.now() + 60000) return null
+  return d.createdAt
 }
 
 export default function AutoApproveDemandes() {
   const { data: demandes } = useCollection('agro_demandes')
+  const moi = useAuth((s) => s.user?.login)
   const traitees = useRef(new Set()) // évite de retraiter la même demande
 
   useEffect(() => {
@@ -77,7 +80,12 @@ export default function AutoApproveDemandes() {
       for (const d of demandes) {
         if (estFinal(d.statut)) continue // déjà certifiée ou refusée
         if (traitees.current.has(d.id)) continue
-        if (now - createdMs(d) < DELAI_MS) continue
+        // Le navigateur du demandeur ne valide pas sa propre demande : ce
+        // composant tourne chez chaque utilisateur connecté, laissons un tiers.
+        if (moi && d.demandeur && d.demandeur === moi) continue
+        const cree = createdMs(d)
+        if (cree === null) continue // horodatage non fiable → décision humaine
+        if (now - cree < DELAI_MS) continue
         traitees.current.add(d.id)
         if (!annule) autoApprouver(d)
       }
@@ -86,7 +94,7 @@ export default function AutoApproveDemandes() {
     verifier()
     const timer = setInterval(verifier, CHECK_MS)
     return () => { annule = true; clearInterval(timer) }
-  }, [demandes])
+  }, [demandes, moi])
 
   return null
 }

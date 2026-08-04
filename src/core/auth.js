@@ -15,7 +15,7 @@ import {
   signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
-import { getAll, getOne, setItem, addItem, subscribeCollection } from './db'
+import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 import { oublierAbonnementPush } from './push'
@@ -456,3 +456,8 @@ export const useAuthStore = create((set, get) => ({
 
   clearError: () => set({ error: null })
 }))
+
+// Branche le verrou « lecture seule » de la couche de données sur le rôle courant.
+// Fait ici (et non par un import direct dans db.js) pour éviter un cycle
+// d'importation : auth.js dépend déjà de db.js.
+_brancherRoleCourant(() => useAuthStore.getState().role)
