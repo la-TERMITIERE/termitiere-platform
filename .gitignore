@@ -17,3 +17,17 @@ serviceAccountKey.json
 .firebase
 firebase-debug.log
 *.serviceaccount.json
+
+# Secrets & sauvegardes — élargi après l'audit sécurité du 2026-08-04
+.env.production
+.env.development
+**/.connection-url.txt
+*.pem
+*.key
+*.p12
+*.pfx
+# Sauvegardes de la base (contiennent TOUTES les données personnelles)
+tp-*.json
+tp-*.json.enc
+*-export.json
+backups/

@@ -55,6 +55,15 @@ export default function Autorisations() {
 
   const peutApprouver = isApproverRole(role)
   const peutCertifier = isCertifierRole(role)
+
+  // SÉPARATION DES POUVOIRS (audit sécurité 2026-08-04) : une même personne
+  // pouvait saisir un décaissement, l'approuver PUIS le certifier — l'argent
+  // sortait sans qu'aucun second regard n'intervienne.
+  //  - `estMienne`      : je suis à l'origine de la demande → je ne décide pas.
+  //  - `approuveeParMoi`: j'ai déjà approuvé au 1er niveau → la certification
+  //                       (2e niveau) revient obligatoirement à quelqu'un d'autre.
+  const estMienne = (d) => !!user && (d.enregistreParUid === user.uid || d.enregistrePar === user.nom)
+  const approuveeParMoi = (d) => !!user?.nom && d.approuveePar === user.nom
   // Suppression réservée à l'administration — seulement tant qu'aucun niveau
   // d'approbation n'a encore statué (sinon c'est un engagement réel, cf. refuser).
   const peutSupprimer = FULL_ACCESS_ROLES.includes(role)
@@ -286,8 +295,12 @@ export default function Autorisations() {
                 </div>
               )}
 
-              {/* Actions selon statut + rôle */}
-              {d.statut === 'en_attente' && peutApprouver && (
+              {/* Actions selon statut + rôle.
+                  SÉPARATION DES POUVOIRS : on ne décide jamais sur sa propre demande,
+                  et le certificateur ne peut pas être celui qui a approuvé au 1er
+                  niveau. Sans cela, une même personne pouvait saisir un décaissement,
+                  l'approuver et le certifier — argent sorti en trois clics. */}
+              {d.statut === 'en_attente' && peutApprouver && !estMienne(d) && (
                 <div className="flex gap-2 pt-1">
                   <Button variant="success" disabled={busy} onClick={() => ouvrirAction(d, 'approuver')} className="flex-1">
                     <Check size={15} /> Approuver
@@ -297,7 +310,7 @@ export default function Autorisations() {
                   </Button>
                 </div>
               )}
-              {d.statut === 'approuvee' && peutCertifier && (
+              {d.statut === 'approuvee' && peutCertifier && !estMienne(d) && !approuveeParMoi(d) && (
                 <div className="flex gap-2 pt-1">
                   <Button variant="success" disabled={busy} onClick={() => ouvrirAction(d, 'certifier')} className="flex-1">
                     <BadgeCheck size={15} /> Certifier (décaisser)
@@ -307,10 +320,17 @@ export default function Autorisations() {
                   </Button>
                 </div>
               )}
-              {d.statut === 'en_attente' && !peutApprouver && (
+              {/* Messages explicites : l'utilisateur comprend pourquoi il ne peut pas agir. */}
+              {estMienne(d) && ['en_attente', 'approuvee'].includes(d.statut) && (
+                <p className="flex items-center gap-1 text-xs text-amber-600"><Clock size={13} /> Votre propre demande — elle doit être validée par quelqu'un d'autre</p>
+              )}
+              {d.statut === 'approuvee' && peutCertifier && !estMienne(d) && approuveeParMoi(d) && (
+                <p className="flex items-center gap-1 text-xs text-amber-600"><Stamp size={13} /> Vous avez déjà approuvé — la certification revient à un autre décideur</p>
+              )}
+              {d.statut === 'en_attente' && !peutApprouver && !estMienne(d) && (
                 <p className="flex items-center gap-1 text-xs text-gray-500"><Clock size={13} /> En attente d'un responsable habilité à approuver</p>
               )}
-              {d.statut === 'approuvee' && !peutCertifier && (
+              {d.statut === 'approuvee' && !peutCertifier && !estMienne(d) && (
                 <p className="flex items-center gap-1 text-xs text-gray-500"><Stamp size={13} /> En attente d'un décideur habilité à certifier</p>
               )}
               {peutSupprimer && (

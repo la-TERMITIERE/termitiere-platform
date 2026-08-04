@@ -18,7 +18,7 @@ import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { dernierStockBriques, retirerVenteDuStock, appliquerDeltasStockBriques } from './logic'
 import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
-import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande } from '../../shared/workflow'
+import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande, estAuteurDemande } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
 import CorrectifCompare from '../../shared/demandes/CorrectifCompare'
@@ -327,7 +327,10 @@ export default function Demandes() {
           <tbody className="divide-y divide-gray-100">
             {filtrees.map((d) => {
               const sn = normaliserStatut(d.statut)
-              const acts = actionsDemande(d.statut, { canManage: isManager, canCertify: isCertifier })
+              const acts = actionsDemande(d.statut, {
+                canManage: isManager, canCertify: isCertifier,
+                estAuteur: estAuteurDemande(d, user), dejaApprouvePar: d.approuveN1Par, moiNom: user?.nom
+              })
               const enCorrectif = correctifEnCours(d)
               const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
               const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
@@ -441,7 +444,11 @@ export default function Demandes() {
                 <Button variant="danger" loading={busy} onClick={() => trancherCorrectif(false)}>Refuser le correctif</Button>
                 <Button variant="success" loading={busy} onClick={() => trancherCorrectif(true)}>Appliquer le correctif</Button>
               </>
-            ) : decision && actionsDemande(decision.demande.statut, { canManage: isManager, canCertify: isCertifier }).map((a) => (
+            ) : decision && actionsDemande(decision.demande.statut, {
+              canManage: isManager, canCertify: isCertifier,
+              estAuteur: estAuteurDemande(decision.demande, user),
+              dejaApprouvePar: decision.demande.approuveN1Par, moiNom: user?.nom
+            }).map((a) => (
               <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
                 {a.label}
               </Button>

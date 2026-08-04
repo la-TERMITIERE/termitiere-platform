@@ -118,11 +118,12 @@ export default function Params() {
       const notifs = await getAll('notifications')
       await Promise.all(notifs.filter((n) => n.module === 'garderie').map((n) => removeItem('notifications', n.id)))
 
-      // Historique (Journal) : toutes les entrées d'essai concernant la garderie.
-      const audits = await getAll('audit_global')
-      await Promise.all(audits.filter((a) => a.module === 'garderie').map((a) => removeItem('audit_global', a.id)))
+      // Le JOURNAL D'AUDIT n'est volontairement PAS effacé : il retrace qui a fait
+      // quoi, y compris cette réinitialisation. Un journal effaçable depuis
+      // l'application ne prouve plus rien — et il est désormais en ajout seul dans
+      // les règles de la base (la suppression serait refusée par le serveur).
 
-      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (y compris historique et dépenses E-DÉPENSES liées)')
+      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (dépenses E-DÉPENSES liées incluses ; journal conservé)')
       toast.success('Toutes les données garderie ont été effacées ✓')
       setConfirmReset(false)
     } catch (err) {

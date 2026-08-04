@@ -122,7 +122,19 @@ export function ouvrirPiece(piece) {
   if ((piece.type || '').startsWith('image/')) {
     const w = window.open()
     if (!w) return
-    w.document.write(`<img src="${piece.dataURL}" style="max-width:100%;margin:auto;display:block" alt="${piece.nom || ''}">`)
+    // Construction par le DOM et NON par document.write : le nom du fichier est
+    // fourni par l'utilisateur ; injecté dans du HTML, un nom tel que
+    // `" onerror=... .jpg` exécutait du script dans une page de même origine
+    // (vol de session / exfiltration de données). Ici, `alt` et `src` sont posés
+    // comme valeurs, jamais interprétés comme du balisage. (Audit 2026-08-04)
+    try {
+      const img = w.document.createElement('img')
+      img.src = piece.dataURL
+      img.alt = piece.nom || ''
+      img.style.cssText = 'max-width:100%;margin:auto;display:block'
+      w.document.body.appendChild(img)
+      w.document.title = piece.nom || 'Pièce jointe'
+    } catch { /* onglet fermé entre-temps */ }
   } else {
     // PDF ou autre : conversion data URL → Blob puis ouverture via URL.createObjectURL
     try {

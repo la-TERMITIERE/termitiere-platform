@@ -1,33 +1,102 @@
+// RÈGLES DE SÉCURITÉ — Realtime Database (ÉTAGE 1, publiable immédiatement).
+//
+// Révision du 2026-08-04 après audit de sécurité. Constat vérifié en conditions
+// réelles : la base était lisible ET inscriptible par N'IMPORTE QUI sur Internet
+// (GET /tp.json -> 200 sur 54 collections dont garderie_enfants, foncier_pieces,
+// users_secret ; PUT à la racine -> 200).
+//
+// CE QUE CET ÉTAGE CORRIGE :
+//   1. Racine FERMÉE par défaut. L'ancienne règle "$legacy" accordait la lecture
+//      ET l'écriture PUBLIQUES à tout ce qui n'est pas sous tp/.
+//   2. Le nœud hérité `maxiagro` exige désormais une authentification.
+//   3. ESCALADE DE PRIVILÈGE COLMATÉE : un utilisateur ne peut plus modifier son
+//      propre `role`, `modules`, `actif`, `gerePartenaires` ni son `login`.
+//      (Il pouvait se promouvoir super_admin depuis la console du navigateur.)
+//   4. `users_secret` n'est plus modifiable que par son titulaire ou un admin
+//      (n'importe qui pouvait écraser le mot de passe d'autrui).
+//   5. Journal d'audit en AJOUT SEUL : ni modification ni suppression possible.
+//
+// POURQUOI `users` ET `users_secret` RESTENT LISIBLES SANS COMPTE :
+//   La connexion de repli (src/core/auth.js) lit ces deux nœuds AVANT toute
+//   authentification. Les fermer sans avoir vérifié que la connexion serveur
+//   (netlify/functions/login.js + FIREBASE_SERVICE_ACCOUNT) fonctionne
+//   BLOQUERAIT TOUT LE MONDE DEHORS. C'est l'objet de l'étage 2.
+//
+// ÉTAGE 2 : voir database.rules.etage2.json (ferme le dernier accès public).
+//
+// ÉTAPE SUIVANTE (hors règles) : cloisonner les collections métier par rôle et
+// par module — aujourd'hui tout compte authentifié lit/écrit tout.
 {
   "rules": {
+    ".read": false,
+    ".write": false,
+
+    // Données de l'ancienne app embarquée /apps/maxi-agro/.
+    // Étaient PUBLIQUES en lecture et en écriture. À archiver puis supprimer.
+    "maxiagro": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
     "tp": {
       "users": {
+        // Lecture ouverte : requise par la connexion de repli (findByLogin)
+        // et par l'annuaire. Fermée à l'étage 2.
+        ".read": true,
         ".indexOn": ["login"],
         "$uid": {
-          ".read": "auth != null",
-          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')"
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/))",
+
+          // Verrous anti-escalade : ces champs ne changent que par un administrateur.
+          // (.validate s'applique même quand le parent autorise l'écriture.)
+          "role": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "modules": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "actif": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "gerePartenaires": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "agroCategories": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "logistiqueSites": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          // Un login modifiable permettait de détourner l'identité d'un autre
+          // compte (doublon exploité par orderByChild('login') côté serveur).
+          "login": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          }
         }
       },
+
+      // Hachages PBKDF2 + sels. Lecture ouverte requise par la connexion de repli
+      // — FERMÉE à l'étage 2. Écriture : titulaire ou administrateur uniquement.
       "users_secret": {
+        ".read": true,
         "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/))"
         }
       },
+
+      // Journal inviolable : ajout seul, y compris pour un administrateur.
       "audit_global": {
-        ".read": "auth != null && (root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')",
+        ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/)",
         "$entryId": {
           ".write": "auth != null && !data.exists() && newData.exists()"
         }
       },
+
+      // Collections métier : authentification exigée.
       "$other": {
         ".read": "auth != null",
         ".write": "auth != null"
       }
-    },
-    "$legacy": {
-      ".read": true,
-      ".write": true
     }
   }
 }
