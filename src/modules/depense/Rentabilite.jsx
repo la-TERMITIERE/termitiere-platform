@@ -31,11 +31,12 @@ export default function Rentabilite() {
 
   // Comme Dashboard/Analyses/Flux : on inclut les dépenses de chantier E-G.Pro et le coût
   // des matières Briqueterie pour que la marge par secteur reflète toutes les dépenses réelles.
+  // MAXI BAT (chantiers) est exclu : sa rentabilité vit exclusivement dans le volet BTP d'E-G.Pro.
   const depenses = useMemo(() => [
     ...depensesReelles,
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
 
   // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu.
   const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
@@ -54,6 +55,7 @@ export default function Rentabilite() {
   }
 
   const secteurs = useMemo(() => SECTEURS
+    .filter((s) => s.id !== 'bat')
     .map((s) => {
       const revenu = revenuSecteur(collections, s.id, annee, mois, depenses, versementsClientRoutes, revenusManuelsTous)
       const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))

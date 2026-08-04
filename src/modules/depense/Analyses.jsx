@@ -37,11 +37,13 @@ export default function Analyses() {
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
   // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
+  // MAXI BAT (chantiers) est exclu : ces dépenses — et les apports du PAU qui les financent —
+  // sont réunies exclusivement dans le volet BTP d'E-G.Pro, jamais ici.
   const depenses = useMemo(() => [
     ...depensesReelles,
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
   const [annee, setAnnee] = useState(now.getFullYear())
@@ -61,7 +63,8 @@ export default function Analyses() {
     [depenses]
   )
 
-  const parSecteur = useMemo(() => SECTEURS.map((s) => {
+  // MAXI BAT est écarté ici aussi — son suivi budgétaire vit dans le volet BTP d'E-G.Pro.
+  const parSecteur = useMemo(() => SECTEURS.filter((s) => s.id !== 'bat').map((s) => {
     const listeMois = depensesSecteurMois(depenses, s.id, annee, mois)
     return {
       ...s,

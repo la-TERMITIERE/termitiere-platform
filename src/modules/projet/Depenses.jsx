@@ -1,6 +1,6 @@
 // Suivi des dépenses détaillé par projet.
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText, Paperclip } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Plus, Pencil, Trash2, Wallet, TrendingDown, ChevronDown, MessageSquare, Send, FileSpreadsheet, FileText, Paperclip, HandCoins } from 'lucide-react'
 import InfoBulle from '../../shared/ui/InfoBulle'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
@@ -56,7 +56,7 @@ function ChampCategorie({ value, onChange }) {
 // qui n'affiche plus les dépenses BTP — désormais réunies dans le volet BTP).
 export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
   const { data: projetsTous }  = useCollection('projets')
-  const { data: depensesTous } = useCollection('projet_depenses')
+  const { data: depensesTous, loading: depensesLoading } = useCollection('projet_depenses')
   const { data: tachesTous }   = useCollection('projet_taches')
   const { data: notes }        = useCollection('projet_depenses_notes')
   // Dépenses créées côté E-DÉPENSES à la validation d'un besoin (source de vérité =
@@ -96,6 +96,19 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
       }))
     return [...scopeParProjets(depensesTous, projets), ...depuisBesoins]
   }, [depensesTous, depenseDepensesTous, projets])
+
+  // Migration : le BTP est intégralement financé par le PAU — toute dépense de
+  // chantier déjà enregistrée sous une autre source (ou sans source) est corrigée
+  // une seule fois vers 'pau'. `updateItem` modifie le document EN PLACE (pas de
+  // création), donc aucun doublon n'est produit ; `migPauRef` empêche de relancer
+  // la correction à chaque re-rendu ou changement de collection en temps réel.
+  const migPauRef = useRef(false)
+  useEffect(() => {
+    if (secteurSeul !== 'bat' || depensesLoading || migPauRef.current) return
+    const aCorriger = depenses.filter((d) => !d.depuisBesoin && d.sourceFinancement !== 'pau')
+    migPauRef.current = true
+    aCorriger.forEach((d) => updateItem('projet_depenses', d.id, { sourceFinancement: 'pau' }))
+  }, [secteurSeul, depensesLoading, depenses])
 
   const [filtreProjet, setFiltreProjet]     = useState('')
   const [filtreCategorie, setFiltreCateg]   = useState('')
@@ -201,6 +214,15 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
     return { totalBudget, totalDepenses, ecart: totalBudget - totalDepenses }
   }, [projets, depenses])
 
+  // Apports du PAU (BTP uniquement) : dépenses de chantier dont la « Source de
+  // financement » est l'apport du PAU — recap KPI + détail au clic, cf. `pauListe`.
+  const depensesPau = useMemo(
+    () => depenses.filter((d) => d.sourceFinancement === 'pau').sort((a, b) => (b.date || 0) - (a.date || 0)),
+    [depenses]
+  )
+  const totalPau = useMemo(() => depensesPau.reduce((s, d) => s + (Number(d.montant) || 0), 0), [depensesPau])
+  const [pauListe, setPauListe] = useState(false)
+
   // Par catégorie
   const parCategorie = useMemo(() => {
     const map = {}
@@ -240,7 +262,10 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
 
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
-  const openCreate = () => { setForm({ ...VIDE, projetId: filtreProjet }); setEditing(null); setModal(true) }
+  const openCreate = () => {
+    setForm({ ...VIDE, projetId: filtreProjet, sourceFinancement: secteurSeul === 'bat' ? 'pau' : VIDE.sourceFinancement })
+    setEditing(null); setModal(true)
+  }
 
   // Solde de la tâche sélectionnée dans le formulaire — affiché pour que l'utilisateur
   // voie le montant arrêté, ce qui a déjà été versé (y compris par d'autres versements),
@@ -273,7 +298,8 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
       fournisseur: g.tache.prestataireNom || '',
       prestataireMetier: g.tache.prestataireMetier || '',
       prestataireTelephone: g.tache.prestataireTelephone || '',
-      typePaiement: 'total'
+      typePaiement: 'total',
+      sourceFinancement: secteurSeul === 'bat' ? 'pau' : VIDE.sourceFinancement
     })
     setEditing(null)
     setModal(true)
@@ -290,7 +316,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
       prestataireMetier:    d.prestataireMetier    || '',
       prestataireTelephone: d.prestataireTelephone || '',
       typePaiement:         d.typePaiement         || 'total',
-      sourceFinancement:    d.sourceFinancement    || 'entreprise'
+      sourceFinancement:    d.sourceFinancement    || (secteurSeul === 'bat' ? 'pau' : 'entreprise')
     })
     setEditing(d); setModal(true)
   }
@@ -302,6 +328,9 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
       const now = Date.now()
       const payload = {
         ...form,
+        // Le BTP est intégralement financé par le PAU — imposé ici aussi, indépendamment
+        // de ce que contient le formulaire (le sélecteur est masqué pour ce secteur).
+        sourceFinancement: secteurSeul === 'bat' ? 'pau' : form.sourceFinancement,
         montant: Number(form.montant),
         date: form.date ? new Date(form.date).getTime() : now,
         updatedAt: now
@@ -400,13 +429,17 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
     <div className="space-y-4">
       {/* KPIs — réservés à la hiérarchie, pas à l'agent */}
       {!restreintMoisCourant && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <div className={`grid grid-cols-2 gap-3 ${secteurSeul === 'bat' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
           <StatCard title={<span className="flex items-center gap-1">Budget total <InfoBulle texte="Somme des budgets prévus de tous les projets." /></span>}
             value={formatMoney(kpi.totalBudget)} icon={Wallet} accent="#0d9488" />
           <StatCard title={<span className="flex items-center gap-1">Dépenses totales <InfoBulle texte="Somme de toutes les dépenses enregistrées dans le module." /></span>}
             value={formatMoney(kpi.totalDepenses)} icon={TrendingDown} accent="#f59e0b" />
           <StatCard title={<span className="flex items-center gap-1">Solde restant <InfoBulle texte="Budget total − Dépenses totales. Vert = sous contrôle, Rouge = budget dépassé." /></span>}
             value={formatMoney(kpi.ecart)} icon={Wallet} accent={kpi.ecart >= 0 ? '#16a34a' : '#ef4444'} />
+          {secteurSeul === 'bat' && (
+            <StatCard title={<span className="flex items-center gap-1">Apports du PAU <InfoBulle texte="Somme des dépenses de chantier financées par un apport du PAU. Cliquez pour voir le détail." /></span>}
+              value={formatMoney(totalPau)} icon={HandCoins} accent="#7c3aed" onClick={() => setPauListe(true)} />
+          )}
         </div>
       )}
 
@@ -520,6 +553,12 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                             déduite de l'en-tête de groupe (qui peut être hors écran). */}
                         {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
                         <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">{catLabel(d.categorie)}</span>
+                        {d.sourceFinancement === 'pau' && (
+                          <span title="Financée par un apport du PAU"
+                            className="flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                            <HandCoins size={11} /> Apport du PAU
+                          </span>
+                        )}
                         {d.depuisBesoin && (
                           <Badge tone={(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).tone}>
                             🔗 Besoin validé — {(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).label}
@@ -606,6 +645,11 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                   <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
                     {TYPES_PAIEMENT_PRESTA[d.typePaiement || 'total']?.label || 'Somme totale'}
                   </span>
+                  {d.sourceFinancement === 'pau' && (
+                    <span className="flex items-center gap-1 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                      <HandCoins size={12} /> Apport du PAU
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -647,6 +691,34 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
             </div>
           )
         })()}
+      </Modal>
+
+      {/* Détail des apports du PAU (BTP) — liste des dépenses financées par le PAU, clic → détail complet */}
+      <Modal open={pauListe} onClose={() => setPauListe(false)} title="Apports du PAU — détail"
+        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="space-y-3">
+          <div className="rounded-xl bg-white/70 px-3 py-2 text-sm font-bold text-violet-800">
+            Total : {formatMoney(totalPau)} · {depensesPau.length} dépense{depensesPau.length > 1 ? 's' : ''}
+          </div>
+          <div className="max-h-[60vh] space-y-1.5 overflow-y-auto">
+            {depensesPau.length === 0 && (
+              <p className="py-6 text-center text-sm text-gray-500">Aucune dépense financée par le PAU pour l'instant.</p>
+            )}
+            {depensesPau.map((d) => {
+              const projet = projets.find((p) => p.id === d.projetId)
+              return (
+                <button key={d.id} onClick={() => { setPauListe(false); setDetail(d) }}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl bg-white/80 px-3 py-2.5 text-left shadow-sm transition-colors hover:bg-white">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-800">{projet?.nom || '—'} · {catLabel(d.categorie)}</p>
+                    <p className="truncate text-xs text-gray-500">{d.description || '—'} · {formatDateShort(d.date)}</p>
+                  </div>
+                  <span className="shrink-0 font-mono text-sm font-bold text-violet-700">{formatMoney(d.montant)}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </Modal>
 
       {/* Fenêtre commentaires dépense */}
@@ -805,14 +877,23 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
               Source de financement
               <span className="ml-1 font-normal text-gray-400">— qui paie cette dépense ?</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {SOURCES_FIN.map((s) => (
-                <button key={s.id} type="button" onClick={() => setForm((f) => ({ ...f, sourceFinancement: s.id }))}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.sourceFinancement === s.id ? (s.id === 'pau' ? 'border-violet-400 bg-violet-50 text-violet-800' : 'border-teal-400 bg-teal-50 text-teal-800') : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}>
-                  {form.sourceFinancement === s.id ? '✓ ' : ''}{s.id === 'pau' ? '💜 ' : ''}{s.label}
-                </button>
-              ))}
-            </div>
+            {secteurSeul === 'bat' ? (
+              // Le BTP (chantiers) est intégralement financé par le PAU — pas de choix à
+              // faire, ni de risque d'oubli de le cocher : c'est fixé pour toutes les
+              // dépenses de ce secteur (cf. `handleSave` qui l'impose aussi côté sauvegarde).
+              <div className="flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800">
+                <HandCoins size={14} /> Apport du PAU — tout le BTP est financé par le PAU
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {SOURCES_FIN.map((s) => (
+                  <button key={s.id} type="button" onClick={() => setForm((f) => ({ ...f, sourceFinancement: s.id }))}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${form.sourceFinancement === s.id ? (s.id === 'pau' ? 'border-violet-400 bg-violet-50 text-violet-800' : 'border-teal-400 bg-teal-50 text-teal-800') : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}>
+                    {form.sourceFinancement === s.id ? '✓ ' : ''}{s.id === 'pau' ? '💜 ' : ''}{s.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="mt-1 text-[11px] text-gray-400">
               « Apport du PAU » remonte automatiquement dans E-DÉPENSES (suivi de l'apport du promoteur).
             </p>

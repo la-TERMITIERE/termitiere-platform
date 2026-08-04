@@ -6,6 +6,7 @@ import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import SiteChooser from './SiteChooser'
 import Dashboard from './Dashboard'
 import SaisieMagasin from './SaisieMagasin'
+import TachesRoutinieres from './TachesRoutinieres'
 import Prestations from './Prestations'
 import Factures from './Factures'
 import Demandes from './Demandes'
@@ -73,6 +74,7 @@ function SiteApp() {
     <SiteProvider site={site}>
       <Routes>
         <Route index element={<Dashboard />} />
+        <Route path="routine" element={<TachesRoutinieres />} />
         <Route path="saisie" element={<SaisieMagasin />} />
         <Route path="prestations" element={<Prestations />} />
         <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />

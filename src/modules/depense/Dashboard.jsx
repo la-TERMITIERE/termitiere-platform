@@ -51,11 +51,13 @@ export default function Dashboard() {
   const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const { data: fermeesDashboard } = useCollection('depense_alertes_dashboard_fermees')
   // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
+  // MAXI BAT (chantiers) est exclu : ces dépenses — et les apports du PAU qui les financent —
+  // sont réunies exclusivement dans le volet BTP d'E-G.Pro, jamais ici (cf. Depenses.jsx/SourcesRevenus.jsx).
   const depenses = useMemo(() => [
     ...depensesReelles,
     ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
   const { user, role: roleReel } = useAuth()
   // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
   // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
@@ -103,7 +105,9 @@ export default function Dashboard() {
     setMois(m); setAnnee(a)
   }
 
-  const parSecteur = useMemo(() => SECTEURS.map((s) => {
+  // MAXI BAT (chantiers) est écarté de la répartition par secteur — son budget/suivi
+  // vit exclusivement dans le volet BTP d'E-G.Pro.
+  const parSecteur = useMemo(() => SECTEURS.filter((s) => s.id !== 'bat').map((s) => {
     const alloue = budgetSecteur(budgets, s.id, annee, mois)
     const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)

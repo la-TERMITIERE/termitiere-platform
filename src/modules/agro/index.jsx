@@ -6,6 +6,7 @@ import { Routes, Route } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import Dashboard from './Dashboard'
 import Saisie from './Saisie'
+import TachesRoutinieres from './TachesRoutinieres'
 import Factures from './Factures'
 import Analyses from './Analyses'
 import Sante from './Sante'
@@ -52,6 +53,7 @@ export default function AgroModule() {
     <AutoCarryForward />
     <Routes>
       <Route index element={<Dashboard />} />
+      <Route path="routine" element={<TachesRoutinieres />} />
       <Route path="saisie" element={<Saisie />} />
       <Route path="factures" element={<Factures />} />
       <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="agro" masquerRevenu /> : <AccesRefuse />} />

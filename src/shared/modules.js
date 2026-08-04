@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
@@ -99,6 +99,7 @@ export const getModule = (id) => MODULES.find((m) => m.id === id)
 
 export const MODULE_NAV = {
   agro: [
+    { label: 'Tâches Routinières', to: '/agro/routine', icon: Repeat },
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
@@ -111,6 +112,7 @@ export const MODULE_NAV = {
     { label: 'Paramètres', to: '/agro/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   logistique: [
+    { label: 'Tâches Routinières', to: '/logistique/routine', icon: Repeat },
     { label: 'Dashboard', to: '/logistique', icon: LayoutDashboard, end: true },
     { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
@@ -176,6 +178,7 @@ export const MODULE_NAV = {
     { label: 'Paramètres',  to: '/projet/params',      icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   garderie: [
+    { label: 'Tâches Routinières', to: '/garderie/routine',   icon: Repeat },
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
     { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby,            roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire','tata'] },
     { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users,           roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie'] },
@@ -194,7 +197,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet, badgeKey: 'depenseDepenses' },
     { label: 'Revenus & Budget',            to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
-    { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: ADMIN_VOLETS_ROLES },
+    { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: [...ADMIN_VOLETS_ROLES, 'secretaire'] },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: [...FINANCE_VIEW_ROLES, 'agent'] },
     { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },

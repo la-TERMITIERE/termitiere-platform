@@ -8,6 +8,7 @@ import PresencesEnfants from './PresencesEnfants'
 import Paiements from './Paiements'
 import Incidents from './Incidents'
 import Taches from './Taches'
+import TachesRoutinieres from './TachesRoutinieres'
 import Cantine from './Cantine'
 import Journal from './Journal'
 import Params from './Params'
@@ -37,6 +38,7 @@ export default function GarderieModule() {
   return (
     <Routes>
       <Route index element={<Dashboard />} />
+      <Route path="routine" element={<TachesRoutinieres />} />
       <Route path="presences" element={<PresencesEnfants />} />
       <Route path="cantine"   element={<Cantine />} />
       <Route path="incidents" element={<Incidents />} />
