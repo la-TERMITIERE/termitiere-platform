@@ -1,0 +1,34 @@
+// 🚨 RÈGLES D'URGENCE — VERROUILLAGE TOTAL. À N'UTILISER QU'EN CONNAISSANCE DE CAUSE.
+//
+// CE QUE ÇA FAIT : plus AUCUN accès à la base, ni lecture ni écriture, par personne.
+// La fuite de données s'arrête instantanément et complètement.
+//
+// CE QUE ÇA COÛTE :
+//   • L'APPLICATION NE FONCTIONNE PLUS. Vos équipes se connectent mais ne voient
+//     rien et ne peuvent rien saisir. Activité à l'arrêt.
+//   • La SAUVEGARDE nocturne échoue également (elle lit sans authentification).
+//     Vous recevrez l'e-mail d'alerte. Vos sauvegardes précédentes restent intactes
+//     dans votre boîte mail.
+//
+// QUAND L'UTILISER : si vous estimez que l'exposition des données (santé
+// d'enfants, pièces d'identité, salaires) est plus grave qu'une interruption de
+// service de quelques heures — par exemple le temps de pouvoir accéder à la
+// console Firebase pour activer l'authentification.
+//
+// POUR L'APPLIQUER :
+//     npx firebase-tools deploy --only database
+//   après avoir mis "rules": "database.rules.urgence.json" dans firebase.json
+//
+// POUR REVENIR EN ARRIÈRE (l'application refonctionne immédiatement) :
+//   remettre "rules": "database.rules.transition.json" dans firebase.json,
+//   puis relancer la même commande.
+//
+// LA VRAIE SORTIE DE CRISE reste l'activation de Firebase Authentication
+// (console → Authentication → Get started), qui ferme la fuite SANS arrêter
+// l'activité. Ce fichier n'est qu'un coupe-circuit d'attente.
+{
+  "rules": {
+    ".read": false,
+    ".write": false
+  }
+}

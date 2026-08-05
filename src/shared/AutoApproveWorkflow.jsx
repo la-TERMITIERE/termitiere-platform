@@ -8,6 +8,7 @@
 // tant que l'application est ouverte, même si aucun administrateur n'est sur la page.
 import { useEffect, useRef } from 'react'
 import { useCollection } from '../hooks/useFirestore'
+import { useAuth } from '../hooks/useAuth'
 import { updateItem, setItem, getAll, ts } from '../core/db'
 import { audit } from '../core/audit'
 import { notify } from '../core/notify'
@@ -21,14 +22,21 @@ const DELAI_MS = 10 * 60 * 1000 // 10 minutes sans décision → certification a
 const CHECK_MS = 30 * 1000      // fréquence de vérification
 const AUTEUR = 'Système (auto · 10 min)'
 
-// Horodatage de création (createdAt ajouté par addItem ; repli sur date + heure).
+// Horodatage de création. On n'utilise QUE `createdAt`, posé par la couche de
+// données au moment de l'écriture. (Audit sécurité 2026-08-04)
+//
+// L'ancien repli sur `date` + `heure` était exploitable : ces deux champs sont
+// saisis par le DEMANDEUR lui-même. Il suffisait d'antidater sa demande pour
+// qu'elle soit immédiatement « certifiée automatiquement », sans attendre les
+// 10 minutes et sans qu'aucun responsable ne la voie passer.
+//
+// Renvoie null si l'horodatage est absent ou incohérent → aucune certification
+// automatique (une demande sans date fiable doit être traitée par un humain).
 function createdMs(d) {
-  if (typeof d.createdAt === 'number') return d.createdAt
-  if (d.date) {
-    const t = new Date(`${d.date}T${d.heure || '00:00'}:00`).getTime()
-    if (!Number.isNaN(t)) return t
-  }
-  return Date.now()
+  if (typeof d.createdAt !== 'number' || !Number.isFinite(d.createdAt)) return null
+  // Un `createdAt` dans le futur est forcément faux : on refuse aussi.
+  if (d.createdAt > Date.now() + 60000) return null
+  return d.createdAt
 }
 
 // Effets métier de la certification, par module (mêmes écritures que la décision manuelle).
@@ -61,6 +69,7 @@ async function effetsCertification(module, d, horodate) {
 
 export default function AutoApproveWorkflow({ collection, module, lien = `/${module}/demandes` }) {
   const { data: demandes } = useCollection(collection)
+  const moi = useAuth((s) => s.user?.login)
   const traitees = useRef(new Set())
 
   useEffect(() => {
@@ -100,7 +109,15 @@ export default function AutoApproveWorkflow({ collection, module, lien = `/${mod
         if (estFinal(d.statut)) continue        // déjà certifiée ou refusée
         if (correctifEnCours(d)) continue        // un correctif en cours se tranche à la main
         if (traitees.current.has(d.id)) continue
-        if (now - createdMs(d) < DELAI_MS) continue
+        // SÉPARATION DES POUVOIRS : ce composant tourne dans le navigateur de
+        // CHAQUE utilisateur connecté, y compris celui du demandeur. Sans ce
+        // garde-fou, c'était l'onglet du demandeur lui-même qui certifiait sa
+        // propre sortie de stock. On laisse le navigateur d'un TIERS le faire.
+        if (moi && d.demandeur && d.demandeur === moi) continue
+        const cree = createdMs(d)
+        // Horodatage absent ou incohérent → décision humaine obligatoire.
+        if (cree === null) continue
+        if (now - cree < DELAI_MS) continue
         traitees.current.add(d.id)
         if (!annule) autoCertifier(d)
       }
@@ -109,7 +126,7 @@ export default function AutoApproveWorkflow({ collection, module, lien = `/${mod
     verifier()
     const timer = setInterval(verifier, CHECK_MS)
     return () => { annule = true; clearInterval(timer) }
-  }, [demandes, collection, module, lien])
+  }, [demandes, collection, module, lien, moi])
 
   return null
 }
