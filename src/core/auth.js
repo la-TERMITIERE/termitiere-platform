@@ -12,6 +12,7 @@ import {
   signInWithEmailAndPassword,
   signInWithCustomToken,
   createUserWithEmailAndPassword,
+  onAuthStateChanged,
   signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
@@ -200,6 +201,24 @@ export const useAuthStore = create((set, get) => ({
           set({ user: null, role: null, modules: [] })
         }
       }).catch(() => {})
+    }
+
+    // MÊME EXIGENCE POUR FIREBASE (corrigé le 2026-08-05).
+    // La session locale était restaurée SANS vérifier qu'une session Firebase
+    // existe. Tant que la base était ouverte, cela passait inaperçu. Depuis son
+    // verrouillage, l'utilisateur se voyait « connecté » alors que la base
+    // refusait toutes ses lectures : l'application s'ouvrait avec des compteurs
+    // à zéro partout, sans le moindre message d'erreur.
+    // On force donc la reconnexion, qui crée (ou réutilise) le compte Firebase.
+    if (isFirebaseConfigured && !USE_SUPABASE_AUTH && auth) {
+      onAuthStateChanged(auth, (fbUser) => {
+        if (fbUser) return // session Firebase valide : rien à faire
+        if (!localStorage.getItem(DEMO_SESSION_KEY)) return // déjà déconnecté
+        console.warn('[auth] session locale sans session Firebase — reconnexion requise')
+        localStorage.removeItem(DEMO_SESSION_KEY)
+        _unsubOwnProfile?.(); _unsubOwnProfile = null
+        set({ user: null, role: null, modules: [], ready: true, error: 'Votre session a expiré — reconnectez-vous.' })
+      })
     }
     try {
       const raw = localStorage.getItem(DEMO_SESSION_KEY)
