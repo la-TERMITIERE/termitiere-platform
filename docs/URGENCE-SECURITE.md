@@ -21,7 +21,49 @@ Un mot de passe de base **Supabase** était également commité en clair dans gi
 
 ---
 
-## ⚠️ LE VRAI BLOCAGE : Firebase Authentication n'est pas activé
+# ✅ ÉTAT AU 5 AOÛT 2026 — LA BRÈCHE EST FERMÉE
+
+Firebase Authentication a été activé, et les **règles strictes sont publiées**.
+Vérifié en conditions réelles :
+
+| Test | Sans compte | Avec un compte |
+|---|---|---|
+| Lire `garderie_enfants` (santé d'enfants) | **401** | 200 |
+| Lire `foncier_pieces` (scans de CNI) | **401** | 200 |
+| Lire `rh_employes` (salaires) | **401** | 200 |
+| Lire toute la base d'un coup | **401** | — |
+| Écrire une donnée | **401** | 200 |
+| Lire `users` / `users_secret` (connexion) | 200 | 200 |
+
+`users` et `users_secret` restent lisibles : la connexion en dépend. Ils se
+ferment à l'étape 3 (étage 2), une fois la connexion serveur vérifiée.
+
+### ⚠️ UNE ACTION RESTE À FAIRE — la sauvegarde automatique
+
+La sauvegarde nocturne lisait la base **sans authentification**. Elle ne le peut
+plus (c'est le but). Elle vous enverra une **alerte** au lieu d'échouer en silence.
+
+**Pour la remettre en route (2 min)** : Netlify → Site settings → Environment
+variables → ajouter `FIREBASE_SERVICE_ACCOUNT` avec le JSON complet obtenu via
+Console Firebase → ⚙️ Paramètres du projet → **Comptes de service** → *Générer une
+nouvelle clé privée*.
+
+> La même variable réactive aussi la vérification d'identité de `send-push`
+> (notifications), désormais fermée par défaut. **Une seule variable, deux
+> fonctions rétablies.**
+
+**En attendant, vous n'êtes pas sans sauvegarde** :
+```bash
+npm run sauvegarde              # sauvegarde immédiate (utilise votre session Firebase)
+npm run sauvegarde -- --chiffrer  # version chiffrée
+```
+Testé contre la base verrouillée : 55 collections, 5 892 enregistrements, 5,46 Mo.
+Une sauvegarde du 5 août 2026 est déjà présente à la racine du projet
+(`tp-2026-08-05.json`, ignorée par git — **à mettre en lieu sûr**).
+
+---
+
+## ⚠️ LE VRAI BLOCAGE (résolu le 5 août) : Firebase Authentication n'était pas activé
 
 Vérifié le 2026-08-04 : l'API d'authentification du projet répond
 `CONFIGURATION_NOT_FOUND`. **Firebase Auth n'a jamais été activé.**
