@@ -158,4 +158,29 @@ export async function claimOnce(name, id, data = {}) {
   return committed
 }
 
+// Répare les documents créés par erreur avec un `addItem(..., { id: <valeur imposée>, ... })` :
+// `addItem` génère TOUJOURS sa propre clé RTDB (push key) — un champ `id` fourni dans les
+// données est simplement ignoré pour l'écriture, mais `snapToRows` (ci-dessus) le fait
+// ensuite gagner sur la vraie clé RTDB en le relisant. Résultat : `item.id` (vu par
+// l'appli) ≠ la vraie clé du document, donc tout `setItem`/`removeItem(name, item.id)`
+// ultérieur vise un chemin qui n'existe pas — il CRÉE un doublon au lieu de modifier
+// (setItem) ou ne fait rien (removeItem, silencieusement, puisque rien n'existe à ce
+// chemin). Cette fonction déplace chaque document mal placé vers la clé `data.id`
+// (celle que l'appli utilise déjà partout) et supprime l'ancien, sans jamais dupliquer.
+export async function repairCustomIds(name) {
+  if (!isFirebaseConfigured) return { repaired: 0 } // mode démo : tableau plat, pas de clé séparée — non concerné
+  const snap = await rtdbGet(colRef(name))
+  const val = snap.val()
+  if (!val) return { repaired: 0 }
+  let repaired = 0
+  for (const [vraieCle, data] of Object.entries(val)) {
+    if (data && data.id && data.id !== vraieCle) {
+      await rtdbSet(docRef(name, data.id), data)
+      await rtdbRemove(docRef(name, vraieCle))
+      repaired++
+    }
+  }
+  return { repaired }
+}
+
 export const ts = () => Date.now()
