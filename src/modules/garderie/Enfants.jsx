@@ -71,17 +71,20 @@ export default function Enfants() {
     markEnfantDeleted(target.id)
     setToDelete(null)
     try {
-      // Étape 1 (critique) : statut 'supprime' en base — seule garantie fiable après
-      // rechargement, puisque le masquage local (deletedEnfantIds) est éphémère.
-      await setItem('garderie_enfants', target.id, { ...target, statut: 'supprime', id: target.id })
+      // Suppression RÉELLE et définitive : l'enregistrement quitte la base.
+      //
+      // L'ancienne logique écrivait d'abord un statut 'supprime' (pierre tombale)
+      // et ne tentait la vraie suppression qu'en « best-effort », avec un
+      // `.catch()` silencieux. Résultat : au moindre échec, l'enfant restait en
+      // base indéfiniment — masqué dans l'écran, mais bien présent dans les
+      // données. C'est précisément ce comportement qui est corrigé ici : plus de
+      // pierre tombale, et un échec est signalé au lieu d'être avalé.
+      await removeItem('garderie_enfants', target.id)
       audit('garderie', 'ENFANT_DELETE', `${target.prenom} ${target.nom}`)
       toast.success(`${target.prenom} ${target.nom} supprimé(e) ✓`)
-      // Étape 2 (best-effort) : suppression complète — un échec ici n'est pas grave,
-      // le statut 'supprime' suffit déjà à le garder caché ; "Nettoyer" rattrapera le reste.
-      await removeItem('garderie_enfants', target.id).catch(() => {})
     } catch (err) {
-      // Échec réel (ex. droits Firebase) : on démasque et on prévient l'utilisateur
-      // au lieu de prétendre que la suppression a marché.
+      // Échec réel : on démasque et on prévient, au lieu de prétendre que la
+      // suppression a marché alors que l'enfant est toujours en base.
       unmarkEnfantDeleted(target.id)
       toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} — réessayez.`)
     } finally {
@@ -359,17 +362,24 @@ export default function Enfants() {
       {/* ══ ONGLET INSCRITS ══ */}
       {onglet === 'inscrits' && <>
 
-      {/* Avertissement enfants bloqués en statut 'sorti' */}
-      {enfants.filter((e) => (e.statut === 'sorti' || e.statut === 'supprime') && !deletedEnfantIds.has(e.id)).length > 0 && (
+      {/* Reliquats d'anciennes suppressions incomplètes (statut 'supprime' laissé
+          en base par l'ancienne logique). « Sorti » est EXCLU : c'est un statut
+          métier normal — un enfant qui a quitté la garderie — et non une
+          suppression ratée. L'inclure ici faisait effacer définitivement, d'un
+          simple clic sur « Nettoyer », des enfants parfaitement légitimes avec
+          tout leur historique (présences, paiements). */}
+      {enfants.filter((e) => e.statut === 'supprime' && !deletedEnfantIds.has(e.id)).length > 0 && (
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800 flex items-center justify-between">
-          <p>⚠️ {enfants.filter((e) => e.statut === 'sorti' || e.statut === 'supprime').length} enfant(s) en suppression incomplète — masqués mais pas encore nettoyés.</p>
+          <p>⚠️ {enfants.filter((e) => e.statut === 'supprime').length} enfant(s) en suppression incomplète — masqués mais encore présents en base.</p>
           <button
             onClick={async () => {
-              const aNettoyer = enfants.filter((e) => e.statut === 'sorti' || e.statut === 'supprime')
+              const aNettoyer = enfants.filter((e) => e.statut === 'supprime')
+              let echecs = 0
               for (const e of aNettoyer) {
-                await removeItem('garderie_enfants', e.id).catch(() => {})
+                try { await removeItem('garderie_enfants', e.id) } catch { echecs++ }
               }
-              toast.success(`${aNettoyer.length} enfant(s) nettoyé(s) ✓`)
+              if (echecs) toast.error(`${aNettoyer.length - echecs} nettoyé(s), ${echecs} échec(s) — réessayez.`)
+              else toast.success(`${aNettoyer.length} enfant(s) nettoyé(s) ✓`)
             }}
             className="ml-3 rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold text-white hover:bg-orange-600 shrink-0">
             Nettoyer

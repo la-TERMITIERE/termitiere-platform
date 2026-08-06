@@ -1,6 +1,7 @@
 {
   "database": {
-    "rules": "database.rules.json"
+    "//": "ATTENTION — pointe volontairement sur les règles de TRANSITION, seules déployables aujourd'hui. `database.rules.json` (étage 1) exige `auth != null` alors que Firebase Authentication n'est PAS activé sur le projet : le déployer couperait l'accès aux données à TOUS les utilisateurs. Ne rebasculer sur database.rules.json qu'après l'ÉTAPE A décrite en tête de database.rules.transition.json.",
+    "rules": "database.rules.transition.json"
   },
   "firestore": {
     "rules": "firestore.rules",

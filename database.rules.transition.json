@@ -1,0 +1,92 @@
+// RÈGLES DE TRANSITION — CE FICHIER EST CELUI ACTUELLEMENT DÉPLOYÉ.
+//
+// POURQUOI DES RÈGLES DE TRANSITION PLUTÔT QUE LES RÈGLES STRICTES ?
+//
+//   Firebase Authentication n'est PAS ACTIVÉ sur le projet max-agro-83baf.
+//   Vérifié le 2026-08-04 : l'API d'authentification répond CONFIGURATION_NOT_FOUND.
+//   Conséquence : AUCUN utilisateur ne possède de session Firebase — `auth` vaut
+//   toujours `null`, y compris après une connexion réussie dans l'application
+//   (la connexion se fait aujourd'hui en comparant le mot de passe côté navigateur).
+//
+//   Toute règle exigeant `auth != null` couperait donc l'accès aux données à
+//   TOUT LE MONDE : les utilisateurs se connecteraient mais ne verraient plus rien.
+//   C'est aussi la raison pour laquelle la base a été laissée ouverte : sans
+//   authentification, c'est la seule façon dont l'application fonctionne.
+//
+// CE QUE CES RÈGLES FERMENT MALGRÉ TOUT (sans aucun risque de blocage) :
+//   1. LA RACINE. L'ancienne règle `$legacy` accordait lecture ET ÉCRITURE
+//      publiques à tout ce qui est hors de `tp/` — vérifié : un PUT anonyme à la
+//      racine répondait 200. N'importe qui pouvait écrire dans votre base.
+//      (Le nœud hérité `maxiagro` devient inaccessible : l'app embarquée qui
+//      l'utilisait s'authentifiait en anonyme, ce qui échoue déjà aujourd'hui.)
+//   2. LE JOURNAL D'AUDIT devient INVIOLABLE : ajout seul, ni modification ni
+//      suppression — même pour un administrateur, même via l'API REST.
+//
+// CE QU'ELLES NE PEUVENT PAS ENCORE FERMER :
+//   `tp/` reste lisible et inscriptible sans compte. C'est INDISSOCIABLE de
+//   l'absence d'authentification. Pour le fermer, il faut IMPÉRATIVEMENT :
+//
+//     ÉTAPE A — Console Firebase → Authentication → Get started →
+//               activer le fournisseur « E-mail/Mot de passe ».
+//     ÉTAPE B — Chaque utilisateur se connecte une fois : l'application crée
+//               alors automatiquement son compte Firebase (migration prévue dans
+//               src/core/auth.js). Vérifier dans Authentication → Users.
+//     ÉTAPE C — Publier alors database.rules.json (étage 1), puis, après
+//               vérification de la connexion serveur, database.rules.etage2.json.
+//
+//   Tant que l'ÉTAPE A n'est pas faite, la base ne peut pas être refermée.
+//   Voir docs/URGENCE-SECURITE.md.
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "tp": {
+      // Lecture au niveau de `tp` : indispensable à la SAUVEGARDE, qui fait un
+      // GET /tp.json en un seul appel. Sans cette ligne, la sauvegarde nocturne
+      // s'arrêterait — ce qui est précisément le piège à éviter.
+      ".read": true,
+
+      // Aucune écriture n'est accordée AU NIVEAU de `tp` : un PUT /tp.json qui
+      // remplacerait ou effacerait toute la base d'un coup est désormais REFUSÉ.
+      // Les écritures ne sont possibles que collection par collection, ci-dessous.
+
+      // INDEX OBLIGATOIRE : la connexion cherche le profil par le champ `login`
+      // (orderByChild). Sans cet index, la requête échoue en HTTP 400 et PLUS
+      // PERSONNE NE PEUT SE CONNECTER. Oublié une première fois le 2026-08-05 :
+      // ne jamais retirer cette ligne d'un jeu de règles.
+      "users": {
+        ".indexOn": ["login"],
+
+        // ── CORRECTIF 2026-08-06 — NE PAS RETIRER ────────────────────────────
+        // Sans cette ligne, la GESTION DES UTILISATEURS est totalement bloquée :
+        // création, modification et suppression échouent en PERMISSION_DENIED.
+        //
+        // Pourquoi : en RTDB, un enfant NOMMÉ a priorité sur le joker `$other`
+        // du même niveau. `users` n'était déclaré que pour porter `.indexOn` —
+        // cette simple déclaration le faisait donc SORTIR du `".write": true`
+        // de `$other`, sans lui accorder de droit d'écriture en remplacement.
+        // Et comme `tp` n'accorde volontairement aucune écriture (voir ci-dessus),
+        // `tp/users` n'héritait de rien : toute écriture était refusée.
+        //
+        // `true` rétablit exactement l'intention d'origine — le même niveau
+        // d'ouverture que toutes les autres collections via `$other`. Cela
+        // n'ouvre donc rien de plus que ce qui l'est déjà : la fermeture réelle
+        // viendra de l'ÉTAPE A (activation de Firebase Authentication).
+        ".write": true
+      },
+
+      // Journal d'audit : ajout seul. Ni modification, ni suppression.
+      "audit_global": {
+        "$entryId": {
+          ".write": "!data.exists() && newData.exists()"
+        }
+      },
+
+      // Reste des collections : ouvert, faute d'authentification (cf. en-tête).
+      "$other": {
+        ".write": true
+      }
+    }
+  }
+}

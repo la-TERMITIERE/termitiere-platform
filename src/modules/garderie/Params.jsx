@@ -118,15 +118,28 @@ export default function Params() {
       const notifs = await getAll('notifications')
       await Promise.all(notifs.filter((n) => n.module === 'garderie').map((n) => removeItem('notifications', n.id)))
 
-      // Historique (Journal) : toutes les entrées d'essai concernant la garderie.
-      const audits = await getAll('audit_global')
-      await Promise.all(audits.filter((a) => a.module === 'garderie').map((a) => removeItem('audit_global', a.id)))
+      // Historique (Journal) : tentative de nettoyage des entrées garderie, en
+      // BEST-EFFORT et jamais bloquante. Les règles de la base rendent le journal
+      // d'audit INVIOLABLE (ajout seul, ni modification ni suppression) — c'est
+      // délibéré. Sans ce garde-fou, le refus de suppression remontait en
+      // exception et faisait afficher « Erreur lors de la réinitialisation »
+      // ALORS QUE toutes les données venaient d'être correctement effacées.
+      let journalConserve = 0
+      try {
+        const audits = await getAll('audit_global')
+        const aEffacer = audits.filter((a) => a.module === 'garderie')
+        for (const a of aEffacer) {
+          try { await removeItem('audit_global', a.id) } catch { journalConserve++ }
+        }
+      } catch { /* journal illisible : sans importance ici */ }
 
-      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (y compris historique et dépenses E-DÉPENSES liées)')
-      toast.success('Toutes les données garderie ont été effacées ✓')
+      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (y compris dépenses E-DÉPENSES liées)')
+      toast.success(journalConserve
+        ? `Données garderie effacées ✓ — ${journalConserve} entrée(s) du Journal conservée(s) (historique inviolable)`
+        : 'Toutes les données garderie ont été effacées ✓')
       setConfirmReset(false)
     } catch (err) {
-      toast.error('Erreur lors de la réinitialisation')
+      toast.error('Erreur lors de la réinitialisation : ' + (err?.message || err))
     } finally {
       setResetting(false)
     }

@@ -1,3 +1,13 @@
+// ⚠️ NE PAS DÉPLOYER EN L'ÉTAT — RÈGLES « ÉTAGE 1 », POUR PLUS TARD.
+//
+// Ces règles exigent `auth != null` partout. Or Firebase Authentication n'est
+// PAS ACTIVÉ sur le projet max-agro-83baf : `auth` vaut donc TOUJOURS `null`,
+// même après une connexion réussie dans l'application. Les déployer aujourd'hui
+// couperait l'accès aux données à TOUS les utilisateurs, sans exception.
+//
+// Le fichier réellement déployé est `database.rules.transition.json` (c'est lui
+// que vise `firebase.json`). Voir son en-tête pour l'ÉTAPE A (activation de
+// Firebase Authentication), préalable obligatoire au passage à ce fichier-ci.
 {
   "rules": {
     "tp": {
@@ -5,17 +15,17 @@
         ".indexOn": ["login"],
         "$uid": {
           ".read": "auth != null",
-          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')"
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'info' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')"
         }
       },
       "users_secret": {
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'info' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')"
         }
       },
       "audit_global": {
-        ".read": "auth != null && (root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')",
+        ".read": "auth != null && (root.child('tp/users').child(auth.uid).child('role').val() === 'super_admin' || root.child('tp/users').child(auth.uid).child('role').val() === 'info' || root.child('tp/users').child(auth.uid).child('role').val() === 'pau' || root.child('tp/users').child(auth.uid).child('role').val() === 'ge' || root.child('tp/users').child(auth.uid).child('role').val() === 'directeur' || root.child('tp/users').child(auth.uid).child('role').val() === 'admin')",
         "$entryId": {
           ".write": "auth != null && !data.exists() && newData.exists()"
         }
