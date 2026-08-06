@@ -78,18 +78,40 @@ export const UNITES_ALIMENT = ['kg', 'sacs', 'litres', 'unités', 'tonnes', 'bal
 // « VOLAILLES » est désormais éclatée en CANARDS, DINDONS, PINTADES, POULETS.
 export const CAT_ANIMAUX = ['OVINS', 'BOVINS', 'CAPRINS', 'CANARDS', 'DINDONS', 'PINTADES', 'POULETS']
 export const CAT_ALIMENTS = ['ALIMENTS', 'DIVERS']
+// Palette « cardinale » : 7 teintes FRANCHES et bien distinctes (rouge, bleu, vert,
+// orange, violet, cyan, rose). Objectif accessibilité : aucune paire de la même
+// teinte à deux clartés (pas « deux verts »), pour rester lisible même en cas de
+// vision réduite. Chaque catégorie a une teinte séparée sur la roue chromatique.
 export const CAT_COLORS = {
-  OVINS: '#0284c7',
-  BOVINS: '#7c3aed',
-  CAPRINS: '#16a34a',
-  CANARDS: '#0891b2',
-  DINDONS: '#be123c',
-  PINTADES: '#d97706',
-  POULETS: '#ea580c',
-  VOLAILLES: '#ea580c', // conservé (compat anciennes données avant migration)
+  OVINS: '#2563EB',    // bleu franc
+  BOVINS: '#7C3AED',   // violet
+  CAPRINS: '#16A34A',  // vert
+  CANARDS: '#0891B2',  // cyan / turquoise
+  DINDONS: '#DC2626',  // rouge
+  PINTADES: '#EA580C', // orange
+  POULETS: '#DB2777',  // rose / magenta
+  VOLAILLES: '#DB2777', // conservé (compat anciennes données avant migration)
   ALIMENTS: '#0369a1',
   DIVERS: '#64748b'
 }
+
+// Palette qualitative « cardinale » pour les SÉRIES par espèce (courbes,
+// segments d'anneau) : teintes franches et très distinctes, jamais la même
+// teinte déclinée en clair/foncé. Sert au détail espèce par espèce à l'intérieur
+// d'une catégorie (la catégorie ne compte jamais plus de ~6 espèces).
+export const SERIE_COLORS = [
+  '#DC2626', // rouge
+  '#2563EB', // bleu
+  '#16A34A', // vert
+  '#EA580C', // orange
+  '#7C3AED', // violet
+  '#0891B2', // cyan
+  '#DB2777', // rose
+  '#CA8A04', // or / moutarde
+  '#475569', // ardoise
+  '#65A30D'  // vert-lime
+]
+export const serieColor = (i) => SERIE_COLORS[(((i | 0) % SERIE_COLORS.length) + SERIE_COLORS.length) % SERIE_COLORS.length]
 
 // ─────────── Workflow de FACTURATION (sortie de stock) ───────────
 // brouillon → sortie_demandee → sortie_approuvee → certifiee

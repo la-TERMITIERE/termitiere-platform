@@ -14,7 +14,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { canViewFinance } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
-import { CAT_ANIMAUX, catColor, factureStatut } from './data'
+import { CAT_ANIMAUX, catColor, serieColor, factureStatut } from './data'
 import { agregerAchatsVentes, previsionSerie } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
@@ -159,19 +159,37 @@ export default function Dashboard() {
     }
   }, [morbiditeSerie, morbiditePrevision])
 
-  // Courbe de croissance PAR ESPÈCE : évolution de l'effectif (EF final) au fil
-  // des saisies de la période — une ligne colorée par espèce du périmètre.
+  // Courbe de croissance de l'effectif (EF final) au fil des saisies de la période.
+  // - Vue « Toutes » : 7 courbes AGRÉGÉES, une par CATÉGORIE (lisible — plus de
+  //   fouillis de ~21 lignes par espèce). Couleurs cardinales distinctes.
+  // - Vue d'une catégorie : DÉTAIL espèce par espèce des animaux qui la composent.
   const croissanceChart = useMemo(() => {
     const pts = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
     const labels = pts.map((i) => i.date?.slice(5))
-    // Une espèce n'apparaît que si elle a au moins un effectif non nul sur la période
-    // (évite un fouillis de lignes plates à zéro pour les espèces non élevées).
+
+    if (scope === TOUTES) {
+      // Une courbe par catégorie = somme des effectifs des espèces de la catégorie.
+      const datasets = cats.map((c) => {
+        const esp = especes.filter((e) => e.cat === c)
+        const data = pts.map((inv) => esp.reduce((s, e) => s + (inv.animaux?.[e.id]?.fin || 0), 0))
+        return { cat: c, data, has: data.some((v) => v > 0) }
+      }).filter((d) => d.has).map((d) => {
+        const couleur = catColor(d.cat)
+        return {
+          label: d.cat, data: d.data,
+          borderColor: couleur, backgroundColor: couleur,
+          tension: 0.3, pointRadius: 2, borderWidth: 2, spanGaps: true, fill: false
+        }
+      })
+      return { labels, datasets, vide: !datasets.length || !labels.length, parEspece: false }
+    }
+
+    // Détail : une ligne par espèce de la catégorie sélectionnée. Une espèce
+    // n'apparaît que si elle a au moins un effectif non nul sur la période
+    // (évite les lignes plates à zéro pour les espèces non élevées).
     const especesTracees = especesScope.filter((e) => pts.some((inv) => (inv.animaux?.[e.id]?.fin || 0) > 0))
-    const n = Math.max(1, especesTracees.length)
     const datasets = especesTracees.map((e, i) => {
-      // Palette bien répartie sur la roue chromatique (teintes distinctes par espèce).
-      const teinte = Math.round((360 / n) * i)
-      const couleur = `hsl(${teinte} 70% 45%)`
+      const couleur = serieColor(i) // teintes cardinales distinctes (pas de dégradé de clarté)
       return {
         label: e.nom,
         data: pts.map((inv) => inv.animaux?.[e.id]?.fin ?? null),
@@ -180,8 +198,8 @@ export default function Dashboard() {
         tension: 0.3, pointRadius: 2, spanGaps: true, fill: false
       }
     })
-    return { labels, datasets, vide: !datasets.length || !labels.length }
-  }, [invPeriode, especesScope])
+    return { labels, datasets, vide: !datasets.length || !labels.length, parEspece: true }
+  }, [invPeriode, especesScope, especes, cats, scope])
 
   // Répartition (effectif). « Toutes » → par CATÉGORIE ; une catégorie sélectionnée
   // → par ESPÈCE de cette catégorie (comme le détail par espèce plus bas).
@@ -193,12 +211,10 @@ export default function Dashboard() {
       }))
       return { parEspece: false, rows, data: { labels: rows.map((r) => r.label), datasets: [{ data: rows.map((r) => r.total), backgroundColor: rows.map((r) => r.color) }] } }
     }
-    // Palette dérivée de la couleur de la catégorie (dégradé d'opacités) pour les espèces.
-    const base = catColor(scope)
-    const shade = (i, n) => base + Math.round(255 * (0.45 + 0.55 * (n > 1 ? (n - 1 - i) / (n - 1) : 1))).toString(16).padStart(2, '0')
-    const n = especesScope.length
+    // Couleurs cardinales distinctes par espèce (pas de dégradé de clarté d'une
+    // même teinte : chaque espèce a une couleur franche différente).
     const rows = especesScope.map((e, i) => ({
-      label: e.nom, color: shade(i, n),
+      label: e.nom, color: serieColor(i),
       total: dernier?.animaux?.[e.id]?.fin || 0
     }))
     return { parEspece: true, rows, data: { labels: rows.map((r) => r.label), datasets: [{ data: rows.map((r) => r.total), backgroundColor: rows.map((r) => r.color) }] } }
@@ -328,9 +344,13 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Courbe de croissance par espèce (évolution de l'effectif) */}
-      <Card title={`Courbe de croissance par espèce — ${scopeLabel}`}>
-        <p className="mb-2 text-[11px] text-gray-400">Évolution de l'effectif (EF final) de chaque espèce au fil des saisies de la période.</p>
+      {/* Courbe de croissance : par catégorie (vue « Toutes ») ou par espèce (catégorie sélectionnée) */}
+      <Card title={scope === TOUTES ? 'Courbe de croissance par catégorie' : `Courbe de croissance par espèce — ${scopeLabel}`}>
+        <p className="mb-2 text-[11px] text-gray-400">
+          {scope === TOUTES
+            ? "Évolution de l'effectif total de chaque catégorie au fil des saisies. Cliquez une catégorie ci-dessus pour voir le détail espèce par espèce."
+            : "Évolution de l'effectif (EF final) de chaque espèce de la catégorie au fil des saisies de la période."}
+        </p>
         <div className="h-72">
           {!croissanceChart.vide
             ? <Line data={croissanceChart} options={{
