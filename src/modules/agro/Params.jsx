@@ -118,11 +118,17 @@ function DonneesTab() {
   const [resetting, setResetting] = useState(false)
   const COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante']
   // Collections vidées par la réinitialisation totale (tout repart à zéro).
-  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins', 'audit_global', 'notifications']
+  // ⚠️ `audit_global` en est VOLONTAIREMENT exclu : c'est le journal de TOUTE la
+  // plateforme (tous modules), et un journal qu'on peut effacer depuis l'écran
+  // qu'il est censé surveiller ne prouve plus rien. Il est d'ailleurs désormais en
+  // ajout seul dans les règles de la base (database.rules.json) : la suppression
+  // serait refusée par le serveur. Idem pour `notifications`, qui appartient aux
+  // autres modules et n'a pas à être vidé depuis Maxi-Agro.
+  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins']
 
   async function reinitialiserTout() {
     if (!isAdmin) return toast.error('Action réservée à l\'administrateur')
-    if (!confirm('⚠️ ATTENTION : ceci supprime DÉFINITIVEMENT toutes les saisies, factures, demandes, fiches santé, le stock de vaccins, le journal et les notifications. Tout repart à zéro (000000). Continuer ?')) return
+    if (!confirm('⚠️ ATTENTION : ceci supprime DÉFINITIVEMENT toutes les saisies, factures, demandes, fiches santé et le stock de vaccins de Maxi-Agro. Tout repart à zéro (000000).\n\nLe journal d\'audit est conservé (traçabilité). Continuer ?')) return
     if (!confirm('Dernière confirmation : action IRRÉVERSIBLE. Réinitialiser maintenant ?')) return
     setResetting(true)
     try {

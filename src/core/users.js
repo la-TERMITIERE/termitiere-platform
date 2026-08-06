@@ -128,15 +128,14 @@ export const useUsersStore = create((set, get) => ({
       set({ users: list })
       return
     }
-    const id = u.uid || u.id || safeKey(u.login)
-    try {
-      await removeItem('users', id)
-      // Le secret (hash + sel) vit dans une collection SÉPARÉE : sans cette
-      // seconde suppression, le mot de passe du compte supprimé restait en base
-      // et était réattribué à tout nouveau compte recréé sous la même clé.
-      await removeItem('users_secret', id).catch(() => {})
-    } catch (e) {
-      throw new Error(messageErreurEcriture(e))
+    const cle = u.uid || u.id || safeKey(u.login)
+    await removeItem('users', cle)
+    // Le secret (sel + hachage du mot de passe) doit partir AVEC le compte :
+    // il restait auparavant en base indéfiniment, orphelin. (Audit 2026-08-04)
+    try { await removeItem('users_secret', cle) } catch (e) { /* déjà absent */ }
+    if (cle !== safeKey(u.login)) {
+      // Comptes hérités : le secret a pu être enregistré sous la clé du login.
+      try { await removeItem('users_secret', safeKey(u.login)) } catch (e) { /* ignore */ }
     }
     await audit('portail', 'USER_DELETE', `${u.login} — ${u.nom || ''}`)
     await get().load()

@@ -118,25 +118,13 @@ export default function Params() {
       const notifs = await getAll('notifications')
       await Promise.all(notifs.filter((n) => n.module === 'garderie').map((n) => removeItem('notifications', n.id)))
 
-      // Historique (Journal) : tentative de nettoyage des entrées garderie, en
-      // BEST-EFFORT et jamais bloquante. Les règles de la base rendent le journal
-      // d'audit INVIOLABLE (ajout seul, ni modification ni suppression) — c'est
-      // délibéré. Sans ce garde-fou, le refus de suppression remontait en
-      // exception et faisait afficher « Erreur lors de la réinitialisation »
-      // ALORS QUE toutes les données venaient d'être correctement effacées.
-      let journalConserve = 0
-      try {
-        const audits = await getAll('audit_global')
-        const aEffacer = audits.filter((a) => a.module === 'garderie')
-        for (const a of aEffacer) {
-          try { await removeItem('audit_global', a.id) } catch { journalConserve++ }
-        }
-      } catch { /* journal illisible : sans importance ici */ }
+      // Le JOURNAL D'AUDIT n'est volontairement PAS effacé : il retrace qui a fait
+      // quoi, y compris cette réinitialisation. Un journal effaçable depuis
+      // l'application ne prouve plus rien — et il est désormais en ajout seul dans
+      // les règles de la base (la suppression serait refusée par le serveur).
 
-      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (y compris dépenses E-DÉPENSES liées)')
-      toast.success(journalConserve
-        ? `Données garderie effacées ✓ — ${journalConserve} entrée(s) du Journal conservée(s) (historique inviolable)`
-        : 'Toutes les données garderie ont été effacées ✓')
+      audit('garderie', 'RESET_TOUT', 'Toutes les données garderie réinitialisées (dépenses E-DÉPENSES liées incluses ; journal conservé)')
+      toast.success('Toutes les données garderie ont été effacées ✓')
       setConfirmReset(false)
     } catch (err) {
       toast.error('Erreur lors de la réinitialisation : ' + (err?.message || err))

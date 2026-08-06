@@ -88,6 +88,13 @@ export async function subscribeToPush(user) {
   }
 }
 
+// Retire l'enregistrement d'un abonnement push (appelé à la déconnexion) : sans
+// cela, l'utilisateur suivant sur un poste partagé continuait de recevoir les
+// notifications du précédent. Best effort — ne bloque jamais la déconnexion.
+export async function oublierAbonnementPush(endpoint) {
+  try { if (endpoint) await removeItem('push_subs', keyFor(endpoint)) } catch { /* ignore */ }
+}
+
 // Pousse une notification (title/body/url) aux abonnements des utilisateurs ciblés.
 export async function pushToUsers(uids, payload) {
   try {

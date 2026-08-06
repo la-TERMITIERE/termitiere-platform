@@ -45,7 +45,11 @@ function demoGenId() {
 // Convertit l'objet {id: data} de la RTDB en tableau [{ id, ...data }].
 function snapToRows(val) {
   if (!val) return []
-  return Object.entries(val).map(([id, data]) => ({ id, ...(data || {}) }))
+  // La CLÉ du document fait foi : elle est placée en DERNIER pour l'emporter sur
+  // un éventuel champ `id` stocké dans les données. Sinon un document créé via
+  // addItem (clé auto) mais portant un champ `id` différent devenait inadressable
+  // (modifier créait un doublon, supprimer ne trouvait rien) — cf. Tâches Routinières.
+  return Object.entries(val).map(([id, data]) => ({ ...(data || {}), id }))
 }
 
 const colRef = (name) => ref(rtdb, `${ROOT}/${name}`)
@@ -86,7 +90,8 @@ export async function addItem(name, data) {
   if (!isFirebaseConfigured) {
     const arr = demoRead(name)
     const id = demoGenId()
-    arr.push({ id, ...payload })
+    // `id` en dernier : la clé générée fait foi (parité avec le mode Firebase).
+    arr.push({ ...payload, id })
     demoWrite(name, arr)
     return id
   }

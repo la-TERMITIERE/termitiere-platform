@@ -61,9 +61,22 @@ export async function handler(event) {
   if (rateLimited(ip)) {
     return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de requêtes' }) }
   }
+  // ⚠️ Correctif « fail-open » (audit 2026-08-04) : `verifyCaller` renvoie `null`
+  // quand le SDK Admin n'est pas configuré. L'ancien test ne rejetait que `false`,
+  // si bien qu'une variable FIREBASE_SERVICE_ACCOUNT absente ou mal formée
+  // désactivait TOUTE l'authentification et ouvrait l'endpoint à l'anonyme.
+  // On refuse désormais aussi l'absence de vérification.
   const caller = await verifyCaller(event)
-  if (caller === false) {
-    return { statusCode: 401, body: JSON.stringify({ ok: false, error: 'Authentification requise' }) }
+  if (!caller) {
+    return {
+      statusCode: 401,
+      body: JSON.stringify({
+        ok: false,
+        error: caller === null
+          ? 'Vérification impossible : FIREBASE_SERVICE_ACCOUNT absent ou invalide côté serveur.'
+          : 'Authentification requise'
+      })
+    }
   }
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
     return { statusCode: 200, body: JSON.stringify({ ok: false, skipped: 'Push non configuré (VAPID_PUBLIC / VAPID_PRIVATE manquants)' }) }
@@ -72,10 +85,17 @@ export async function handler(event) {
   try { body = JSON.parse(event.body || '{}') } catch { return { statusCode: 400, body: JSON.stringify({ ok: false, error: 'JSON invalide' }) } }
 
   const { subscriptions = [], payload = {} } = body
+  // Le lien d'ouverture doit rester INTERNE : un `url` absolu fourni par l'appelant
+  // permettait d'envoyer aux dirigeants une notification d'apparence légitime
+  // pointant vers un site d'hameçonnage. (Audit 2026-08-04)
+  const lienInterne = (u) => {
+    const s = String(u || '/')
+    return /^\/(?!\/)/.test(s) ? s : '/'
+  }
   const data = JSON.stringify({
     title: payload.title || 'LA TERMITIÈRE',
     body: payload.body || '',
-    url: payload.url || '/',
+    url: lienInterne(payload.url),
     tag: payload.tag,
     // Contexte utilisé par le service worker pour composer une notification
     // riche (emoji du type, nom du module, urgence) — cf. public/push-handler.js.

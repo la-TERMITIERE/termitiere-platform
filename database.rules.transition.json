@@ -51,31 +51,6 @@
       // remplacerait ou effacerait toute la base d'un coup est désormais REFUSÉ.
       // Les écritures ne sont possibles que collection par collection, ci-dessous.
 
-      // INDEX OBLIGATOIRE : la connexion cherche le profil par le champ `login`
-      // (orderByChild). Sans cet index, la requête échoue en HTTP 400 et PLUS
-      // PERSONNE NE PEUT SE CONNECTER. Oublié une première fois le 2026-08-05 :
-      // ne jamais retirer cette ligne d'un jeu de règles.
-      "users": {
-        ".indexOn": ["login"],
-
-        // ── CORRECTIF 2026-08-06 — NE PAS RETIRER ────────────────────────────
-        // Sans cette ligne, la GESTION DES UTILISATEURS est totalement bloquée :
-        // création, modification et suppression échouent en PERMISSION_DENIED.
-        //
-        // Pourquoi : en RTDB, un enfant NOMMÉ a priorité sur le joker `$other`
-        // du même niveau. `users` n'était déclaré que pour porter `.indexOn` —
-        // cette simple déclaration le faisait donc SORTIR du `".write": true`
-        // de `$other`, sans lui accorder de droit d'écriture en remplacement.
-        // Et comme `tp` n'accorde volontairement aucune écriture (voir ci-dessus),
-        // `tp/users` n'héritait de rien : toute écriture était refusée.
-        //
-        // `true` rétablit exactement l'intention d'origine — le même niveau
-        // d'ouverture que toutes les autres collections via `$other`. Cela
-        // n'ouvre donc rien de plus que ce qui l'est déjà : la fermeture réelle
-        // viendra de l'ÉTAPE A (activation de Firebase Authentication).
-        ".write": true
-      },
-
       // Journal d'audit : ajout seul. Ni modification, ni suppression.
       "audit_global": {
         "$entryId": {

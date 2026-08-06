@@ -12,12 +12,14 @@ import {
   signInWithEmailAndPassword,
   signInWithCustomToken,
   createUserWithEmailAndPassword,
+  onAuthStateChanged,
   signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
-import { getAll, getOne, setItem, addItem, subscribeCollection } from './db'
+import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
+import { oublierAbonnementPush } from './push'
 
 // Cible auto-hébergée : authentification via Supabase Auth (identités réelles + RLS).
 const USE_SUPABASE_AUTH = import.meta.env.VITE_USE_SUPABASE === 'true'
@@ -199,6 +201,24 @@ export const useAuthStore = create((set, get) => ({
           set({ user: null, role: null, modules: [] })
         }
       }).catch(() => {})
+    }
+
+    // MÊME EXIGENCE POUR FIREBASE (corrigé le 2026-08-05).
+    // La session locale était restaurée SANS vérifier qu'une session Firebase
+    // existe. Tant que la base était ouverte, cela passait inaperçu. Depuis son
+    // verrouillage, l'utilisateur se voyait « connecté » alors que la base
+    // refusait toutes ses lectures : l'application s'ouvrait avec des compteurs
+    // à zéro partout, sans le moindre message d'erreur.
+    // On force donc la reconnexion, qui crée (ou réutilise) le compte Firebase.
+    if (isFirebaseConfigured && !USE_SUPABASE_AUTH && auth) {
+      onAuthStateChanged(auth, (fbUser) => {
+        if (fbUser) return // session Firebase valide : rien à faire
+        if (!localStorage.getItem(DEMO_SESSION_KEY)) return // déjà déconnecté
+        console.warn('[auth] session locale sans session Firebase — reconnexion requise')
+        localStorage.removeItem(DEMO_SESSION_KEY)
+        _unsubOwnProfile?.(); _unsubOwnProfile = null
+        set({ user: null, role: null, modules: [], ready: true, error: 'Votre session a expiré — reconnectez-vous.' })
+      })
     }
     try {
       const raw = localStorage.getItem(DEMO_SESSION_KEY)
@@ -388,6 +408,39 @@ export const useAuthStore = create((set, get) => ({
     if (USE_SUPABASE_AUTH && supabase) { try { await supabase.auth.signOut() } catch (e) { /* ignore */ } }
     if (auth) { try { await fbSignOut(auth) } catch (e) { /* ignore */ } }
     _unsubOwnProfile?.(); _unsubOwnProfile = null
+
+    // POSTE PARTAGÉ : la déconnexion ne vidait rien. Le cache du service worker
+    // (réponses Firebase = factures, salaires, dossiers d'enfants…) et l'abonnement
+    // aux notifications survivaient à la déconnexion : l'utilisateur suivant pouvait
+    // lire les données du précédent et recevait ses notifications. (Audit 2026-08-04)
+    try {
+      // ⚠️ `serviceWorker.ready` NE SE RÉSOUT JAMAIS si aucun service worker n'est
+      // enregistré (mode développement, navigateur sans PWA, enregistrement échoué).
+      // Sans ce délai de garde, la déconnexion restait bloquée indéfiniment.
+      const reg = await Promise.race([
+        navigator.serviceWorker?.ready ?? Promise.resolve(null),
+        new Promise((r) => setTimeout(() => r(null), 1500))
+      ])
+      const sub = await reg?.pushManager?.getSubscription?.()
+      if (sub) {
+        const endpoint = sub.toJSON()?.endpoint
+        await sub.unsubscribe().catch(() => {})
+        if (endpoint) await oublierAbonnementPush(endpoint)
+      }
+    } catch (e) { /* best effort — ne doit jamais empêcher la déconnexion */ }
+    try {
+      if (typeof caches !== 'undefined') {
+        const noms = await caches.keys()
+        await Promise.all(noms.filter((n) => /firebase|rtdb/i.test(n)).map((n) => caches.delete(n)))
+      }
+    } catch (e) { /* best effort */ }
+    try {
+      // Données métier du mode démo, écrites en clair dans le navigateur.
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('termitiere_col_') || k.startsWith('termitiere_demo_'))
+        .forEach((k) => localStorage.removeItem(k))
+    } catch (e) { /* best effort */ }
+
     localStorage.removeItem(DEMO_SESSION_KEY)
     set({ user: null, role: null, modules: [] })
   },
@@ -422,3 +475,8 @@ export const useAuthStore = create((set, get) => ({
 
   clearError: () => set({ error: null })
 }))
+
+// Branche le verrou « lecture seule » de la couche de données sur le rôle courant.
+// Fait ici (et non par un import direct dans db.js) pour éviter un cycle
+// d'importation : auth.js dépend déjà de db.js.
+_brancherRoleCourant(() => useAuthStore.getState().role)
