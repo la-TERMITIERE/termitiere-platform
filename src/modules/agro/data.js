@@ -82,34 +82,41 @@ export const CAT_ALIMENTS = ['ALIMENTS', 'DIVERS']
 // orange, violet, cyan, rose). Objectif accessibilité : aucune paire de la même
 // teinte à deux clartés (pas « deux verts »), pour rester lisible même en cas de
 // vision réduite. Chaque catégorie a une teinte séparée sur la roue chromatique.
+// Chaque couleur appartient à une FAMILLE différente : une seule teinte par
+// famille (un seul rouge, un seul vert, un seul bleu…), aucune paire « claire /
+// foncée » de la même teinte, et surtout aucune paire quasi-confondable pour l'œil
+// (pas rouge+orange, pas rouge+rose). Le NOIR est utilisé volontairement pour
+// écarter au maximum les sept catégories. Seul couple restant un peu proche à 7
+// couleurs : cyan ↔ bleu (turquoise clair vs bleu franc) — assumé et lisible.
 export const CAT_COLORS = {
-  OVINS: '#2563EB',    // bleu franc
-  BOVINS: '#7C3AED',   // violet
-  CAPRINS: '#16A34A',  // vert
-  CANARDS: '#0891B2',  // cyan / turquoise
+  OVINS: '#2563EB',    // bleu
+  BOVINS: '#7E22CE',   // violet
+  CAPRINS: '#15803D',  // vert
+  CANARDS: '#06B6D4',  // cyan / turquoise
   DINDONS: '#DC2626',  // rouge
-  PINTADES: '#EA580C', // orange
-  POULETS: '#DB2777',  // rose / magenta
-  VOLAILLES: '#DB2777', // conservé (compat anciennes données avant migration)
+  PINTADES: '#CA8A04', // jaune / or (surtout PAS orange)
+  POULETS: '#111827',  // noir
+  VOLAILLES: '#111827', // conservé (compat anciennes données avant migration)
   ALIMENTS: '#0369a1',
   DIVERS: '#64748b'
 }
 
-// Palette qualitative « cardinale » pour les SÉRIES par espèce (courbes,
-// segments d'anneau) : teintes franches et très distinctes, jamais la même
-// teinte déclinée en clair/foncé. Sert au détail espèce par espèce à l'intérieur
-// d'une catégorie (la catégorie ne compte jamais plus de ~6 espèces).
+// Palette qualitative pour les SÉRIES par espèce (courbes, segments d'anneau).
+// Même principe : les 7 premières sont issues de familles franchement distinctes
+// (rouge, bleu, vert, jaune, violet, cyan, noir) ; orange / rose / gris ne servent
+// qu'au-delà (rare : une catégorie dépasse rarement 6 espèces). Jamais deux teintes
+// d'une même famille en tête de liste, jamais rouge collé à orange ou rose.
 export const SERIE_COLORS = [
   '#DC2626', // rouge
   '#2563EB', // bleu
-  '#16A34A', // vert
-  '#EA580C', // orange
-  '#7C3AED', // violet
-  '#0891B2', // cyan
-  '#DB2777', // rose
-  '#CA8A04', // or / moutarde
-  '#475569', // ardoise
-  '#65A30D'  // vert-lime
+  '#15803D', // vert
+  '#CA8A04', // jaune / or
+  '#7E22CE', // violet
+  '#06B6D4', // cyan
+  '#111827', // noir
+  '#DB2777', // rose (rare)
+  '#EA580C', // orange (rare)
+  '#6B7280'  // gris (rare)
 ]
 export const serieColor = (i) => SERIE_COLORS[(((i | 0) % SERIE_COLORS.length) + SERIE_COLORS.length) % SERIE_COLORS.length]
 
