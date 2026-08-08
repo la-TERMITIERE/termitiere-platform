@@ -31,7 +31,36 @@ import { glassModalProps } from '../../utils/color'
 const PALETTE_CATEGORIES = ['#0d9488', '#B45309', '#7c3aed', '#0369a1', '#dc2626', '#16a34a', '#d97706', '#64748b']
 const CATEGORIE_DEFAUT = 'Autres tâches'
 
-export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches = [], color = '#0d9488', titre = 'Tâches Routinières', description }) {
+// ── Traçabilité par personne ──
+// Chaque coche/décoche est empilée dans `evenements`. Pour connaître l'état ACTUEL
+// d'une personne, on ne garde que son DERNIER événement (une personne qui coche
+// puis décoche n'est plus « effectué »).
+function derniersParUtilisateur(evenements) {
+  const m = new Map()
+  ;(evenements || []).forEach((ev) => {
+    const cle = ev.uid || ev.par || 'inconnu'
+    const prec = m.get(cle)
+    if (!prec || ev.le > prec.le) m.set(cle, ev)
+  })
+  return [...m.values()]
+}
+// Personnes actuellement en état « effectué » (dernier événement = coche), triées
+// par heure de coche croissante.
+function effectuesActuels(evenements) {
+  return derniersParUtilisateur(evenements)
+    .filter((ev) => ev.action === 'check')
+    .sort((a, b) => a.le - b.le)
+}
+// Vrai dès qu'au moins une personne est en état « effectué » (compteurs).
+function auMoinsUnEffectue(evenements) {
+  return derniersParUtilisateur(evenements).some((ev) => ev.action === 'check')
+}
+
+// `perUserCategories` : noms de catégories où la complétion est PAR PERSONNE
+// (chacun coche pour soi, aucune coche ne vaut pour les autres) — ex. l'entretien
+// des infrastructures MAXI-AGRO, que chaque agent doit réaliser individuellement.
+// Les autres catégories restent en complétion PARTAGÉE (un clic = fait pour tous).
+export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches = [], color = '#0d9488', titre = 'Tâches Routinières', description, perUserCategories = [] }) {
   const { user, role } = useAuth()
   const itemsCol = `${collectionPrefix}_items`
   const checksCol = `${collectionPrefix}_checks`
@@ -75,15 +104,31 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
   // précédent) — si plusieurs personnes cochent/décochent tour à tour la même
   // tâche dans la journée, la trace de chacune reste consultable (administration
   // et directeurs uniquement, cf. `peutVoirTracabilite`).
-  async function toggle(item) {
+  async function toggle(item, perUser = false) {
     if (!peutAgir || !estAujourdhui) return
     const id = `${date}_${item.id}`
     const existant = checksDate[item.id]
-    const estFait = !!existant?.fait
-    const evenement = { par: user.nom || '', role, le: Date.now(), action: estFait ? 'uncheck' : 'check' }
+    const evenementsActuels = existant?.evenements || []
+    // État de référence : en mode PAR PERSONNE, l'état de CET utilisateur (son
+    // dernier événement) ; en mode partagé, l'état GLOBAL de la tâche.
+    let estFait
+    if (perUser) {
+      const mien = evenementsActuels
+        .filter((e) => (e.uid ? e.uid === user.uid : e.par === user.nom))
+        .sort((a, b) => a.le - b.le).pop()
+      estFait = mien?.action === 'check'
+    } else {
+      estFait = !!existant?.fait
+    }
+    const evenement = { par: user.nom || '', uid: user.uid || '', role, le: Date.now(), action: estFait ? 'uncheck' : 'check' }
+    const evenements = [...evenementsActuels, evenement]
+    // `fait` global : en mode partagé il reflète le nouvel état ; en mode par
+    // personne il vaut « au moins une personne a effectué » (pour les compteurs).
+    const faitGlobal = perUser ? auMoinsUnEffectue(evenements) : !estFait
     await setItem(checksCol, id, {
-      id, itemId: item.id, date, fait: !estFait,
-      evenements: [...(existant?.evenements || []), evenement]
+      id, itemId: item.id, date, fait: faitGlobal,
+      ...(perUser ? { perUser: true } : {}),
+      evenements
     })
     audit(moduleId, estFait ? 'TACHE_ROUTINE_DECOCHEE' : 'TACHE_ROUTINE_COCHEE', item.titre)
     toast.success(estFait ? 'Décoché' : 'Tâche marquée comme effectuée ✓')
@@ -203,6 +248,9 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
       {categories.map(([cat, taches], ci) => {
         const faitesCat = taches.filter((t) => checksDate[t.id]?.fait).length
         const c = PALETTE_CATEGORIES[ci % PALETTE_CATEGORIES.length]
+        // Catégorie à complétion PAR PERSONNE : chacun coche pour soi et voit la
+        // liste de tous ceux qui l'ont effectuée (nom + heure).
+        const perUser = perUserCategories.includes(cat)
         return (
           <div key={cat}>
             <div className="mb-2 flex items-center gap-2">
@@ -213,16 +261,24 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
             <Card className="p-0 divide-y divide-gray-100">
               {taches.map((it) => {
                 const check = checksDate[it.id]
-                const fait = !!check?.fait
+                const evenements = check?.evenements || []
                 const cliquable = peutAgir && estAujourdhui
-                // Historique de traçabilité : toutes les coches (pas les décoches) du
-                // jour, dans l'ordre chronologique — réservé à l'administration/direction.
-                const historiqueCoches = peutVoirTracabilite
-                  ? (check?.evenements || []).filter((ev) => ev.action === 'check').sort((a, b) => a.le - b.le)
-                  : []
+                // Personnes actuellement en état « effectué » (dernier événement = coche).
+                const effectues = effectuesActuels(evenements)
+                const jeLaiFaite = effectues.some((ev) => (ev.uid ? ev.uid === user.uid : ev.par === user.nom))
+                // État affiché de la ligne :
+                //  - PAR PERSONNE → MON état (la tâche est « faite » pour moi si je l'ai cochée) ;
+                //  - PARTAGÉ      → état global de la tâche.
+                const fait = perUser ? jeLaiFaite : !!check?.fait
+                // Liste « effectué par » à afficher :
+                //  - PAR PERSONNE → visible par TOUT LE MONDE (chacun voit qui a fait) ;
+                //  - PARTAGÉ      → réservé à l'administration / direction (traçabilité).
+                const listeEffectues = perUser
+                  ? effectues
+                  : (peutVoirTracabilite ? evenements.filter((ev) => ev.action === 'check').sort((a, b) => a.le - b.le) : [])
                 return (
                   <div key={it.id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${fait ? 'bg-green-50/40' : cliquable ? 'hover:bg-gray-50' : ''}`}>
-                    <button onClick={() => toggle(it)} disabled={!cliquable}
+                    <button onClick={() => toggle(it, perUser)} disabled={!cliquable}
                       className="mt-0.5 shrink-0 disabled:cursor-default" title={fait ? 'Décocher' : 'Marquer comme effectuée'}>
                       {fait
                         ? <CheckCircle2 size={22} className="text-green-500" />
@@ -230,12 +286,16 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
                     </button>
                     <div className="flex-1 min-w-0">
                       <p className={`font-semibold ${fait ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{it.titre}</p>
+                      {perUser && !jeLaiFaite && cliquable && (
+                        <p className="mt-0.5 text-[11px] font-medium text-amber-600">À effectuer par chaque agent — cochez lorsque vous l'avez faite.</p>
+                      )}
                       {it.personnalisee && it.createdBy && peutVoirTracabilite && (
                         <p className="mt-0.5 text-xs text-gray-400">Ajouté par {it.createdBy}</p>
                       )}
-                      {fait && peutVoirTracabilite && (
+                      {listeEffectues.length > 0 && (
                         <div className="mt-0.5 space-y-0.5">
-                          {historiqueCoches.map((ev, i) => (
+                          {perUser && <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Effectué par</p>}
+                          {listeEffectues.map((ev, i) => (
                             <p key={i} className="text-xs font-semibold text-green-600">
                               ✓ {new Date(ev.le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} — {ev.par || 'Inconnu'}
                             </p>
