@@ -33,6 +33,10 @@ export default function TachesRoutinieresAgro() {
       color={COULEUR_MODULE.agro}
       titre="Tâches Routinières — MAXI-AGRO"
       description="Tâches définies en réunion du 03 août par la direction (DR-DS), à vérifier chaque jour par les agents de la ferme."
+      // Complétion PAR PERSONNE : l'entretien des infrastructures doit être réalisé
+      // et coché individuellement par chaque agent (la coche d'un agent ne vaut pas
+      // pour les autres) ; la liste de tous ceux qui l'ont effectuée est visible de tous.
+      perUserCategories={['Entretien, organisation et suivi des infrastructures']}
     />
   )
 }
