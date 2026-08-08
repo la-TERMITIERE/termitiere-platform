@@ -102,13 +102,19 @@ export default function SourcesRevenus() {
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreType, setFiltreType]       = useState('')
-  const [filtreMois, setFiltreMois]       = useState('')
+  // Filtre de PÉRIODE fusionné dans un seul champ : un unique sélecteur de date
+  // (`filtreDate`), doublé d'un bouton « Jour / Mois » (`granulariteDate`) qui décide
+  // si cette date filtre le jour exact ou tout son mois — au lieu de deux champs
+  // séparés (Jour + Mois) qu'il fallait remplir/effacer indépendamment.
+  const [filtreDate, setFiltreDate]           = useState('')
+  const [granulariteDate, setGranulariteDate] = useState('jour')
+  const filtreMois = filtreDate ? filtreDate.slice(0, 7) : ''
   const [recherche, setRecherche]         = useState('')
   const [detail, setDetail]               = useState(null)
 
-  // Base commune (secteur/source/recherche) SANS le mois — sert de socle pour les KPI
-  // "Aujourd'hui" et "Mois" ci-dessous, qui ont chacun leur propre période fixe plutôt
-  // que de dépendre du filtre Mois choisi pour le tableau.
+  // Base commune (secteur/source/recherche) SANS période — sert de socle pour les KPI
+  // "Aujourd'hui"/"Jour"/"Mois" ci-dessous, qui ont chacun leur propre période plutôt
+  // que de dépendre du filtre choisi pour le tableau.
   const baseFiltree = useMemo(() => {
     let rows = [...lignes]
     if (filtreSecteur) rows = rows.filter((l) => l.secteurId === filtreSecteur)
@@ -121,34 +127,40 @@ export default function SourcesRevenus() {
   }, [lignes, filtreSecteur, filtreType, recherche])
 
   const liste = useMemo(() => {
-    if (!filtreMois) return baseFiltree
-    return baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
-  }, [baseFiltree, filtreMois])
+    if (!filtreDate) return baseFiltree
+    if (granulariteDate === 'mois') return baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+    return baseFiltree.filter((l) => l.date === filtreDate)
+  }, [baseFiltree, filtreDate, filtreMois, granulariteDate])
 
   const total = liste.reduce((s, l) => s + l.montant, 0)
 
   // KPI par secteur — un par secteur RÉELLEMENT présent dans les données (pas une
   // liste figée : un nouveau secteur générateur de revenu ajoute automatiquement sa
-  // propre carte). Somme du JOUR par défaut ; si un mois est choisi dans le filtre,
-  // la même carte bascule sur la somme de CE mois — pas besoin de deux jeux de KPI.
+  // propre carte). Somme du JOUR courant par défaut ; dès qu'une date est choisie dans
+  // le filtre, la même carte bascule sur la somme de ce jour précis ou de son mois
+  // entier (selon `granulariteDate`) — pas besoin de plusieurs jeux de KPI.
   const aujourdhui = todayStr()
-  const periodeLabel = filtreMois
-    ? `${MOIS_LABELS[Number(filtreMois.slice(5, 7)) - 1]} ${filtreMois.slice(0, 4)}`
-    : "Aujourd'hui"
+  const periodeLabel = !filtreDate
+    ? "Aujourd'hui"
+    : granulariteDate === 'mois'
+      ? `${MOIS_LABELS[Number(filtreMois.slice(5, 7)) - 1]} ${filtreMois.slice(0, 4)}`
+      : formatDateShort(filtreDate)
   const kpiParSecteur = useMemo(() => {
     // La carte existe pour tout secteur ayant DÉJÀ eu du revenu (peu importe quand) —
     // sinon un secteur sans rien aujourd'hui disparaissait complètement de la vue au
     // lieu d'afficher simplement 0 FCFA. Seule la SOMME affichée est bornée à la période.
-    const periode = filtreMois
-      ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
-      : baseFiltree.filter((l) => l.date === aujourdhui)
+    const periode = !filtreDate
+      ? baseFiltree.filter((l) => l.date === aujourdhui)
+      : granulariteDate === 'mois'
+        ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+        : baseFiltree.filter((l) => l.date === filtreDate)
     const sommesPeriode = new Map()
     periode.forEach((l) => sommesPeriode.set(l.secteurId, (sommesPeriode.get(l.secteurId) || 0) + l.montant))
     const secteursConnus = new Set(baseFiltree.map((l) => l.secteurId))
     return [...secteursConnus]
       .map((id) => ({ secteur: SECTEURS.find((s) => s.id === id) || { id, label: id, color: '#64748b' }, montant: sommesPeriode.get(id) || 0 }))
       .sort((a, b) => b.montant - a.montant || a.secteur.label.localeCompare(b.secteur.label))
-  }, [baseFiltree, filtreMois, aujourdhui])
+  }, [baseFiltree, filtreDate, filtreMois, granulariteDate, aujourdhui])
   const secteurDetail = detail ? SECTEURS.find((s) => s.id === detail.secteurId) : null
   const couleurDetail = secteurDetail?.color || COULEUR_MODULE.depense
 
@@ -186,9 +198,29 @@ export default function SourcesRevenus() {
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
-          <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          {/* Un seul champ de date pour les deux usages : le bouton Jour/Mois à côté
+              décide si la date choisie filtre ce jour précis ou tout son mois. */}
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Période</label>
+          <div className="flex items-center gap-1">
+            <input type="date" value={filtreDate} onChange={(e) => setFiltreDate(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            <div className="flex rounded-lg border border-gray-200 p-0.5 text-xs font-semibold">
+              <button onClick={() => setGranulariteDate('jour')} title="Filtrer sur ce jour précis"
+                className="rounded-md px-2 py-1 transition-colors"
+                style={granulariteDate === 'jour' ? { background: COULEUR_MODULE.depense, color: '#fff' } : { color: '#6b7280' }}>
+                Jour
+              </button>
+              <button onClick={() => setGranulariteDate('mois')} title="Filtrer sur tout le mois de cette date"
+                className="rounded-md px-2 py-1 transition-colors"
+                style={granulariteDate === 'mois' ? { background: COULEUR_MODULE.depense, color: '#fff' } : { color: '#6b7280' }}>
+                Mois
+              </button>
+            </div>
+            {filtreDate && (
+              <button onClick={() => setFiltreDate('')} title="Effacer le filtre de période"
+                className="rounded-lg px-2 py-2 text-xs font-semibold text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
+            )}
+          </div>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>

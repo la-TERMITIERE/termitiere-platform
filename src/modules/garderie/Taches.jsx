@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Plus, ListChecks, CheckCircle2, Circle, FilePen, Trash2, Lock, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, ListChecks, CheckCircle2, Circle, FilePen, Trash2, Lock, ChevronDown, ChevronRight, TrendingUp, Award, Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
