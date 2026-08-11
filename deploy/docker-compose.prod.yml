@@ -16,6 +16,7 @@ services:
     environment:
       DOMAIN_APP: "${DOMAIN_APP}"
       DOMAIN_API: "${DOMAIN_API}"
+      DOMAIN_SITE: "${DOMAIN_SITE}"
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -27,4 +28,3 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-

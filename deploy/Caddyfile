@@ -1,14 +1,17 @@
 # Caddy — HTTPS automatique (Let's Encrypt) + service de l'app + reverse-proxy API.
-# Les domaines viennent des variables d'environnement DOMAIN_APP / DOMAIN_API
-# (définies dans deploy/.env, injectées par docker-compose).
 
-# --- Application web (SPA React) ---
+# Les domaines viennent des variables d'environnement DOMAIN_APP / DOMAIN_API / DOMAIN_SITE
+# définies dans deploy/.env et injectées par docker-compose.
+
+# --- Application ---
+
 {$DOMAIN_APP} {
     encode gzip
+
     root * /srv/app
-    # SPA : toute route inconnue renvoie index.html (le routeur React prend le relais).
     try_files {path} /index.html
     file_server
+
     header {
         X-Frame-Options "SAMEORIGIN"
         X-Content-Type-Options "nosniff"
@@ -16,7 +19,22 @@
     }
 }
 
-# --- API Supabase (passerelle Kong du stack Supabase self-hosted, port hôte 8000) ---
+# --- API Supabase ---
+
 {$DOMAIN_API} {
     reverse_proxy host.docker.internal:8000
+}
+
+# --- Site vitrine ---
+
+{$DOMAIN_SITE} {
+    encode gzip
+
+    reverse_proxy termitiere-vitrine:80
+
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
 }

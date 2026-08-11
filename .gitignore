@@ -21,3 +21,7 @@ firebase-debug.log
 .env.auth
 cert.pem
 *.copi
+
+# Fichiers locaux de déploiement VPS
+deploy/.env.deploy
+deploy/Caddyfile.backup

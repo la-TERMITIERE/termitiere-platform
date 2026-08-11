@@ -7,7 +7,14 @@
 
 services:
   web:
-    image: ghcr.io/la-termitiere/termitiere-platform:latest
+    build:
+      context: ..                      # racine du dépôt
+      dockerfile: deploy/Dockerfile
+      args:
+        VITE_USE_SUPABASE: "true"
+        VITE_SUPABASE_URL: "https://${DOMAIN_API}"
+        VITE_SUPABASE_ANON_KEY: "${VITE_SUPABASE_ANON_KEY}"
+    image: termitiere-web
     container_name: termitiere-web
     restart: unless-stopped
     ports:
@@ -16,10 +23,12 @@ services:
     environment:
       DOMAIN_APP: "${DOMAIN_APP}"
       DOMAIN_API: "${DOMAIN_API}"
+      DOMAIN_SITE: "${DOMAIN_SITE}"
     extra_hosts:
+      # Permet à Caddy (dans le conteneur) d'atteindre le Kong de Supabase sur l'hôte.
       - "host.docker.internal:host-gateway"
     volumes:
-      - caddy_data:/data
+      - caddy_data:/data       # certificats Let's Encrypt (persistés)
       - caddy_config:/config
 
 volumes:
