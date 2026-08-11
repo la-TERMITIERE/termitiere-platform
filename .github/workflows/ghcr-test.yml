@@ -70,8 +70,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: GHCR_TOKEN
           script: |
-
-
             set -e
 
             cd ~/termitiere-platform
@@ -86,18 +84,17 @@ jobs:
             echo "Login GHCR..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
 
-            echo "Saving current image..."
-            OLD_IMAGE=$(docker inspect termitiere-web --format '{{.Config.Image}}')
-            OLD_TAG=$(echo "$OLD_IMAGE" | cut -d':' -f2)
+            echo "Saving current deployment..."
 
-            echo "Current image : $OLD_IMAGE"
-            echo "Current tag   : $OLD_TAG"
+            OLD_TAG=$(grep '^IMAGE_TAG=' deploy/.env.deploy 2>/dev/null | tail -1 | cut -d'=' -f2- || true)
+
+            echo "Current deployed tag : ${OLD_TAG:-none}"
 
             echo "Pull new image..."
             docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT
 
             echo "Creating deploy env..."
-            echo "IMAGE_TAG=$SHA_SHORT" >> deploy/.env.deploy
+            echo "IMAGE_TAG=$SHA_SHORT" > deploy/.env.deploy
 
             echo "Restart containers..."
             docker compose \
@@ -109,23 +106,29 @@ jobs:
             sleep 10
 
             echo "Health check..."
+
             if curl -f -s https://app.latermitiere.com > /dev/null; then
               echo "✅ Deploy OK"
+              echo "Deployed image: ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT"
 
             else
               echo "❌ Health check failed"
-              echo "Rollback to $OLD_TAG"
 
-              echo "IMAGE_TAG=$OLD_TAG" >> deploy/.env.deploy
+              if [ -n "$OLD_TAG" ]; then
+                echo "Rollback to $OLD_TAG"
 
-              docker compose \
-                --env-file deploy/.env.deploy \
-                -f deploy/docker-compose.prod.yml \
-                up -d --force-recreate
+                echo "IMAGE_TAG=$OLD_TAG" > deploy/.env.deploy
 
-              echo "✅ Rollback completed"
+                docker compose \
+                  --env-file deploy/.env.deploy \
+                  -f deploy/docker-compose.prod.yml \
+                  up -d --force-recreate
+
+                echo "✅ Rollback completed"
+              else
+                echo "⚠️ No previous IMAGE_TAG found."
+                echo "❌ Rollback impossible."
+              fi
 
               exit 1
             fi
-
-
