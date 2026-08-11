@@ -963,6 +963,47 @@ tbody tr:hover td { background: #f0fdf4; }
       <!-- Catégories personnalisées (dynamiques) -->
       <div id="customCatStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:12px;"></div>
 
+      <!-- ===== NAISSANCES · DÉCÈS · VENTES ===== -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div class="card-title" style="margin:0;">🐣 Naissances · 💀 Décès · 🛒 Ventes</div>
+          <small style="font-size:11px;color:var(--text-light);">
+            Période : <strong id="ndvPerLabel">—</strong> · cliquez une carte pour le détail
+          </small>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card clickable" style="border-left-color:var(--success);" onclick="showDashKpiDetail('naissances')">
+            <span class="stat-arrow">›</span>
+            <div class="stat-label">🐣 Naissances</div>
+            <div class="stat-value" id="dashNaissances">0</div>
+            <div class="stat-sub" id="dashNaissancesSub">—</div>
+          </div>
+          <div class="stat-card clickable" style="border-left-color:var(--danger);" onclick="showDashKpiDetail('deces')">
+            <span class="stat-arrow">›</span>
+            <div class="stat-label">💀 Décès</div>
+            <div class="stat-value" id="dashDeces">0</div>
+            <div class="stat-sub" id="dashDecesSub">—</div>
+          </div>
+          <div class="stat-card clickable" style="border-left-color:var(--info);" onclick="showDashKpiDetail('ventes')">
+            <span class="stat-arrow">›</span>
+            <div class="stat-label">🛒 Ventes</div>
+            <div class="stat-value" id="dashVentes">0</div>
+            <div class="stat-sub" id="dashVentesSub">—</div>
+          </div>
+          <div class="stat-card clickable" style="border-left-color:var(--primary);" onclick="showDashKpiDetail('ventes')">
+            <span class="stat-arrow">›</span>
+            <div class="stat-label">💰 CA ventes</div>
+            <div class="stat-value" id="dashCA" style="font-size:22px;">0</div>
+            <div class="stat-sub">FCFA</div>
+          </div>
+        </div>
+
+        <div class="chart-wrap" style="margin-top:14px;"><canvas id="chartNDV"></canvas></div>
+
+        <div id="dashVentesRecentes" style="margin-top:12px;"></div>
+      </div>
+
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
           <div class="card-title" style="margin:0;" id="evoTitle">📈 Évolution des effectifs</div>
@@ -975,9 +1016,9 @@ tbody tr:hover td { background: #f0fdf4; }
               <option value="365">1 an</option>
               <option value="custom">📅 Personnalisé</option>
             </select>
-            <input type="date" id="dashDateFrom" class="form-control" style="display:none;font-size:12px;padding:5px 8px;width:auto;" onchange="renderChartEvolution()">
+            <input type="date" id="dashDateFrom" class="form-control" style="display:none;font-size:12px;padding:5px 8px;width:auto;" onchange="renderChartEvolution(); renderDashNDV();">
             <span id="dashDateSep" style="display:none;font-size:12px;color:var(--text-light);">→</span>
-            <input type="date" id="dashDateTo" class="form-control" style="display:none;font-size:12px;padding:5px 8px;width:auto;" onchange="renderChartEvolution()">
+            <input type="date" id="dashDateTo" class="form-control" style="display:none;font-size:12px;padding:5px 8px;width:auto;" onchange="renderChartEvolution(); renderDashNDV();">
           </div>
         </div>
         <div class="chart-wrap"><canvas id="chartEvolution"></canvas></div>
@@ -2664,7 +2705,7 @@ function saveSaisie() {
 }
 
 // ========== DASHBOARD ==========
-let chartEvo = null, chartRep = null, chartMov = null;
+let chartEvo = null, chartRep = null, chartMov = null, chartNDV = null;
 
 function renderDashboard() {
   // Dernière saisie disponible
@@ -2705,9 +2746,370 @@ function renderDashboard() {
     }
   }
 
+  // Naissances / Décès / Ventes sur la période choisie
+  renderDashNDV();
+
   // Graphiques
   renderChartEvolution();
   renderChartRepartition(totals);
+}
+
+// ========== NAISSANCES · DÉCÈS · VENTES (dashboard) ==========
+// Plage de dates pilotée par le sélecteur de période du dashboard
+function getDashRange() {
+  const periodeVal = document.getElementById('dashPeriode')?.value || '30';
+  let startDate, endDate = new Date();
+
+  if (periodeVal === 'custom') {
+    const fromVal = document.getElementById('dashDateFrom')?.value;
+    const toVal   = document.getElementById('dashDateTo')?.value;
+    startDate = fromVal ? new Date(fromVal) : new Date(endDate.getTime() - 30*86400000);
+    endDate   = toVal   ? new Date(toVal)   : endDate;
+  } else {
+    const days = parseInt(periodeVal) || 30;
+    startDate = new Date(endDate.getTime() - (days-1)*86400000);
+  }
+
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const from = fmt(startDate), to = fmt(endDate);
+  const label = periodeVal === 'custom'
+    ? from + ' → ' + to
+    : ({ '7':'7 jours','30':'30 jours','90':'3 mois','180':'6 mois','365':'1 an' }[periodeVal] || periodeVal + ' jours');
+
+  return { from, to, label };
+}
+
+// Agrège naissances, décès et ventes sur la plage du dashboard
+function computeDashNDV() {
+  const { from, to, label } = getDashRange();
+
+  let naiss = 0, dec = 0, initTot = 0;
+  const byDayN = {}, byDayD = {};
+  Object.keys(DB.inventaires).forEach(d => {
+    if (d < from || d > to) return;
+    const inv = DB.inventaires[d];
+    let n = 0, m = 0;
+    DB.especes.forEach(e => {
+      const v = (inv.animaux && inv.animaux[e.id]) || {};
+      n += v.naiss || 0;
+      m += v.dec   || 0;
+      initTot += v.init || 0;
+    });
+    naiss += n; dec += m;
+    byDayN[d] = n; byDayD[d] = m;
+  });
+
+  const especeIds = new Set(DB.especes.map(e => e.id));
+  const factures = (DB.factures || []).filter(f => f.date >= from && f.date <= to)
+                                      .sort((a,b) => (a.date < b.date ? 1 : -1));
+  let ca = 0, tetes = 0, articles = 0;
+  const byDayV = {};
+  factures.forEach(f => {
+    ca += f.totalTTC || 0;
+    byDayV[f.date] = (byDayV[f.date] || 0) + (f.totalTTC || 0);
+    (f.lignes || []).forEach(l => {
+      if (especeIds.has(l.id)) tetes += l.qty || 0;
+      else articles += l.qty || 0;
+    });
+  });
+
+  return { from, to, label, naiss, dec, initTot, byDayN, byDayD, byDayV, factures, ca, tetes, articles };
+}
+
+function renderDashNDV() {
+  const s = computeDashNDV();
+
+  const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+  setTxt('ndvPerLabel', s.label);
+  setTxt('dashNaissances', s.naiss);
+  setTxt('dashNaissancesSub', s.naiss ? s.naiss + ' tête(s) nées' : 'Aucune naissance');
+  setTxt('dashDeces', s.dec);
+  const tauxMort = s.initTot ? ((s.dec / s.initTot) * 100).toFixed(2) : '0.00';
+  setTxt('dashDecesSub', 'Mortalité ' + tauxMort + '%');
+  setTxt('dashVentes', s.factures.length);
+  setTxt('dashVentesSub', s.factures.length
+    ? `${s.tetes} tête(s) · ${s.articles} article(s)`
+    : 'Aucune facture');
+  setTxt('dashCA', new Intl.NumberFormat('fr-FR').format(Math.round(s.ca)));
+
+  renderChartNDV(s);
+  renderDashVentesRecentes(s);
+}
+
+function renderChartNDV(s) {
+  const ctx = document.getElementById('chartNDV');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (chartNDV) { chartNDV.destroy(); chartNDV = null; }
+
+  // Jours de la plage
+  const days = [];
+  const cur = new Date(s.from + 'T00:00:00'), end = new Date(s.to + 'T00:00:00');
+  while (cur <= end) {
+    days.push(cur.getFullYear() + '-' + String(cur.getMonth()+1).padStart(2,'0') + '-' + String(cur.getDate()).padStart(2,'0'));
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (!days.length) return;
+
+  // Au-delà de 2 mois : regroupement par mois pour rester lisible
+  const parMois = days.length > 62;
+  const buckets = [], labels = [];
+  days.forEach(d => {
+    const key = parMois ? d.slice(0,7) : d;
+    if (!buckets.length || buckets[buckets.length-1].key !== key) {
+      buckets.push({ key, dates: [] });
+      labels.push(parMois
+        ? key.slice(5) + '/' + key.slice(2,4)
+        : d.slice(8) + '/' + d.slice(5,7));
+    }
+    buckets[buckets.length-1].dates.push(d);
+  });
+
+  const sum = (bk, map) => bk.dates.reduce((t,d) => t + (map[d] || 0), 0);
+  const dataN = buckets.map(b => sum(b, s.byDayN));
+  const dataD = buckets.map(b => sum(b, s.byDayD));
+  const dataV = buckets.map(b => sum(b, s.byDayV));
+
+  chartNDV = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { type:'bar',  label:'🐣 Naissances', data:dataN, backgroundColor:'#22c55e', borderRadius:4, yAxisID:'y', order:2 },
+        { type:'bar',  label:'💀 Décès',      data:dataD, backgroundColor:'#ef4444', borderRadius:4, yAxisID:'y', order:2 },
+        { type:'line', label:'🛒 Ventes (FCFA)', data:dataV, borderColor:'#3498db',
+          backgroundColor:'rgba(52,152,219,0.12)', borderWidth:2, tension:0.3,
+          pointRadius:2, pointHoverRadius:5, fill:true, yAxisID:'y1', order:1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: c => c.dataset.yAxisID === 'y1'
+              ? ' ' + c.dataset.label + ' : ' + formatMoney(c.parsed.y)
+              : ' ' + c.dataset.label + ' : ' + c.parsed.y + ' tête(s)'
+          }
+        }
+      },
+      scales: {
+        x:  { grid: { display: false }, ticks: { color: '#64748b', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+        y:  { position: 'left', beginAtZero: true, title: { display: true, text: 'Têtes', color: '#64748b', font: { size: 10 } },
+              grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#64748b', precision: 0 } },
+        y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'FCFA', color: '#3498db', font: { size: 10 } },
+              grid: { drawOnChartArea: false }, ticks: { color: '#3498db',
+                callback: v => new Intl.NumberFormat('fr-FR', { notation: 'compact' }).format(v) } }
+      }
+    }
+  });
+}
+
+function renderDashVentesRecentes(s) {
+  const div = document.getElementById('dashVentesRecentes');
+  if (!div) return;
+  if (!s.factures.length) {
+    div.innerHTML = `<div style="text-align:center;color:var(--text-light);font-size:12px;padding:8px;">
+      🛒 Aucune vente enregistrée sur cette période</div>`;
+    return;
+  }
+  const rows = s.factures.slice(0, 5).map(f => `
+    <tr>
+      <td style="font-size:12px;">${f.date}</td>
+      <td><strong>${f.client && f.client.nom ? f.client.nom : '—'}</strong>
+          <br><small style="color:var(--text-light)">${f.num}</small></td>
+      <td style="text-align:center;">${(f.lignes||[]).reduce((t,l)=>t+(l.qty||0),0)}</td>
+      <td style="text-align:right;font-weight:700;color:var(--primary);">${formatMoney(f.totalTTC||0)}</td>
+    </tr>`).join('');
+  div.innerHTML = `
+    <div style="font-weight:700;color:var(--secondary);font-size:13px;margin-bottom:6px;">
+      🧾 Dernières ventes ${s.factures.length > 5 ? `<small style="font-weight:400;color:var(--text-light)">(5 sur ${s.factures.length})</small>` : ''}
+    </div>
+    <div class="table-wrap"><table><thead><tr>
+      <th>Date</th><th>Client</th><th style="text-align:center">Qté</th><th style="text-align:right">Montant</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// Détail au clic sur les cartes Naissances / Décès / Ventes du dashboard
+function showDashKpiDetail(kpi) {
+  const s = computeDashNDV();
+  const cfgs = {
+    naissances: { title: '🐣 Naissances — ' + s.label, color: '#27ae60', key: 'naiss' },
+    deces:      { title: '💀 Décès — '      + s.label, color: '#e74c3c', key: 'dec'   },
+    ventes:     { title: '🛒 Ventes — '     + s.label, color: '#3498db' }
+  };
+  const cfg = cfgs[kpi]; if (!cfg) return;
+  document.getElementById('modalDetailHeader').style.background = cfg.color;
+  document.getElementById('modalDetailTitle').innerText = cfg.title;
+
+  let html = '';
+
+  if (kpi === 'ventes') {
+    const panier = s.factures.length ? s.ca / s.factures.length : 0;
+    html += `
+      <div class="kpi-mini-grid">
+        <div class="kpi-mini-card" style="background:${cfg.color}18;border-left-color:${cfg.color};">
+          <div class="kpi-mini-label">Chiffre d'affaires</div>
+          <div class="kpi-mini-value" style="color:${cfg.color};font-size:18px;">${formatMoney(s.ca)}</div>
+        </div>
+        <div class="kpi-mini-card">
+          <div class="kpi-mini-label">Factures</div>
+          <div class="kpi-mini-value">${s.factures.length}</div>
+        </div>
+        <div class="kpi-mini-card">
+          <div class="kpi-mini-label">Panier moyen</div>
+          <div class="kpi-mini-value" style="font-size:16px;">${s.factures.length ? formatMoney(panier) : '—'}</div>
+        </div>
+        <div class="kpi-mini-card">
+          <div class="kpi-mini-label">Vendu</div>
+          <div class="kpi-mini-value" style="font-size:16px;">${s.tetes} tête(s)<br><small style="font-size:11px;color:var(--text-light);">${s.articles} article(s)</small></div>
+        </div>
+      </div>`;
+
+    // Top articles vendus
+    const byArt = {};
+    s.factures.forEach(f => (f.lignes||[]).forEach(l => {
+      if (!byArt[l.nom]) byArt[l.nom] = { qty: 0, total: 0 };
+      byArt[l.nom].qty   += l.qty || 0;
+      byArt[l.nom].total += l.total || 0;
+    }));
+    const arts = Object.entries(byArt).sort(([,a],[,b]) => b.total - a.total);
+    if (arts.length) {
+      html += `<div style="font-weight:700;color:var(--secondary);margin:14px 0 8px;font-size:13px;">🏆 Articles les plus vendus</div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>Article</th><th style="text-align:center">Qté</th><th style="text-align:right">Montant</th><th style="text-align:right">%</th>
+        </tr></thead><tbody>`;
+      const totArt = arts.reduce((t,[,v]) => t + v.total, 0);
+      arts.forEach(([nom,v], i) => {
+        const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+        html += `<tr>
+          <td><strong>${rank} ${nom}</strong></td>
+          <td style="text-align:center;font-weight:700;">${v.qty}</td>
+          <td style="text-align:right;color:${cfg.color};font-weight:700;">${formatMoney(v.total)}</td>
+          <td style="text-align:right;font-size:12px;">${totArt ? ((v.total/totArt)*100).toFixed(0) : 0}%</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // Détail des factures
+    if (s.factures.length) {
+      html += `<div style="font-weight:700;color:var(--secondary);margin:14px 0 8px;font-size:13px;">🧾 Détail des ventes</div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>Date</th><th>N° facture</th><th>Client</th><th>Agent</th><th style="text-align:right">TTC</th>
+        </tr></thead><tbody>`;
+      s.factures.forEach(f => {
+        html += `<tr>
+          <td style="font-size:12px;">${f.date}</td>
+          <td style="font-size:12px;">${f.num}</td>
+          <td><strong>${f.client && f.client.nom ? f.client.nom : '—'}</strong></td>
+          <td style="font-size:12px;color:var(--text-light);">${f.agent || '—'}</td>
+          <td style="text-align:right;font-weight:700;">${formatMoney(f.totalTTC||0)}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+    } else {
+      html += `<div class="empty"><div class="icon">🛒</div><p>Aucune vente sur cette période</p></div>`;
+    }
+
+  } else {
+    // Naissances / Décès
+    const byDay = kpi === 'naissances' ? s.byDayN : s.byDayD;
+    const total = kpi === 'naissances' ? s.naiss : s.dec;
+    const jours = Object.keys(byDay).filter(d => byDay[d] > 0).sort();
+    let maxVal = 0, maxDate = '—';
+    jours.forEach(d => { if (byDay[d] > maxVal) { maxVal = byDay[d]; maxDate = d; } });
+
+    const byEspece = {};
+    Object.keys(DB.inventaires).forEach(d => {
+      if (d < s.from || d > s.to) return;
+      const inv = DB.inventaires[d];
+      DB.especes.forEach(e => {
+        const v = (inv.animaux && inv.animaux[e.id]) || {};
+        byEspece[e.id] = (byEspece[e.id] || 0) + (v[cfg.key] || 0);
+      });
+    });
+
+    html += `
+      <div class="kpi-mini-grid">
+        <div class="kpi-mini-card" style="background:${cfg.color}18;border-left-color:${cfg.color};">
+          <div class="kpi-mini-label">Total période</div>
+          <div class="kpi-mini-value" style="color:${cfg.color};">${total}</div>
+        </div>
+        <div class="kpi-mini-card">
+          <div class="kpi-mini-label">Pic (1 jour)</div>
+          <div class="kpi-mini-value">${maxVal}</div>
+          <div style="font-size:10px;color:var(--text-light);">${maxDate}</div>
+        </div>
+        <div class="kpi-mini-card">
+          <div class="kpi-mini-label">Moy / jour actif</div>
+          <div class="kpi-mini-value" style="color:var(--accent);">${jours.length ? (total/jours.length).toFixed(1) : '0'}</div>
+        </div>
+        <div class="kpi-mini-card">
+          <div class="kpi-mini-label">Jours concernés</div>
+          <div class="kpi-mini-value">${jours.length}</div>
+        </div>
+      </div>`;
+
+    const esp = Object.entries(byEspece).filter(([,v]) => v > 0).sort(([,a],[,b]) => b - a);
+    if (esp.length) {
+      html += `<div style="font-weight:700;color:var(--secondary);margin:14px 0 8px;font-size:13px;">Par espèce</div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>Espèce</th><th>Catégorie</th><th style="text-align:right">Nombre</th><th style="text-align:right">%</th>
+        </tr></thead><tbody>`;
+      esp.forEach(([id,val]) => {
+        const e = DB.especes.find(x => x.id === id); if (!e) return;
+        html += `<tr>
+          <td><strong>${e.nom}</strong></td>
+          <td><span class="badge">${e.cat}</span></td>
+          <td style="text-align:right;font-size:16px;font-weight:700;color:${cfg.color};">${val}</td>
+          <td style="text-align:right;">${total ? ((val/total)*100).toFixed(0) : 0}%</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    if (kpi === 'deces') {
+      const motifLabels = { maladie:'🦠 Maladie', accident:'💥 Accident', vol:'🕵️ Vol',
+                            predateur:'🐾 Prédateur', indetermine:'❓ Indéterminé', autre:'📝 Autre' };
+      const rows = [];
+      Object.keys(DB.inventaires).sort().forEach(d => {
+        if (d < s.from || d > s.to) return;
+        const inv = DB.inventaires[d];
+        DB.especes.forEach(e => {
+          const v = (inv.animaux && inv.animaux[e.id]) || null;
+          if (v && v.dec > 0) rows.push({ date: d, espece: e.nom, cat: e.cat, nb: v.dec,
+                                          motif: v.decMotif || '—', detail: v.decDetail || '' });
+        });
+      });
+      if (rows.length) {
+        html += `<div style="font-weight:700;color:#e74c3c;margin:14px 0 8px;font-size:13px;">📋 Détail des décès avec motif</div>
+          <div class="table-wrap"><table><thead><tr>
+            <th>Date</th><th>Espèce</th><th>Cat.</th><th style="text-align:center">Nb</th><th>Motif</th><th>Précisions</th>
+          </tr></thead><tbody>`;
+        rows.forEach(r => {
+          html += `<tr>
+            <td>${r.date}</td>
+            <td><strong>${r.espece}</strong></td>
+            <td><span class="badge">${r.cat}</span></td>
+            <td style="text-align:center;font-weight:700;color:#e74c3c;">${r.nb}</td>
+            <td>${motifLabels[r.motif] || r.motif}</td>
+            <td style="color:var(--text-light);font-size:12px;">${r.detail}</td>
+          </tr>`;
+        });
+        html += `</tbody></table></div>`;
+      }
+    }
+
+    if (!total) {
+      html += `<div class="empty"><div class="icon">${kpi === 'naissances' ? '🐣' : '✅'}</div>
+        <p>Aucun${kpi === 'naissances' ? 'e naissance' : ' décès'} sur cette période</p></div>`;
+    }
+  }
+
+  document.getElementById('modalDetailBody').innerHTML = html;
+  document.getElementById('modalDetail').classList.add('show');
 }
 
 function onDashPeriodeChange() {
@@ -2726,6 +3128,7 @@ function onDashPeriodeChange() {
     fromEl.value = d.toISOString().slice(0,10);
   }
   renderChartEvolution();
+  renderDashNDV();
 }
 
 function renderChartEvolution() {
