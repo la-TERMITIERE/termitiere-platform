@@ -94,12 +94,12 @@ jobs:
             docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT
 
             echo "Creating deploy env..."
-            cat > deploy/.env.deploy <<EOF
-            IMAGE_TAG=$SHA_SHORT
-            DOMAIN_APP=app.latermitiere.com
-            DOMAIN_API=api.latermitiere.com
-            DOMAIN_SITE=latermitiere.com
-            EOF
+            {
+              echo "IMAGE_TAG=$SHA_SHORT"
+              echo "DOMAIN_APP=app.latermitiere.com"
+              echo "DOMAIN_API=api.latermitiere.com"
+              echo "DOMAIN_SITE=latermitiere.com"
+            } > deploy/.env.deploy
 
             echo "Restart containers..."
             docker compose \
@@ -111,34 +111,39 @@ jobs:
             sleep 10
 
             echo "Health check..."
-
-            if curl -f -s https://app.latermitiere.com > /dev/null; then
+            
+            if curl -f -sS --max-time 20 https://app.latermitiere.com > /dev/null; then
               echo "✅ Deploy OK"
               echo "Deployed image: ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT"
-
             else
               echo "❌ Health check failed"
-
+            
+              echo "Container status:"
+              docker ps -a --filter "name=termitiere-web"
+            
+              echo "Container logs:"
+              docker logs --tail 100 termitiere-web || true
+            
               if [ -n "$OLD_TAG" ]; then
                 echo "Rollback to $OLD_TAG"
-
-                cat > deploy/.env.deploy <<EOF
-                IMAGE_TAG=$OLD_TAG
-                DOMAIN_APP=app.latermitiere.com
-                DOMAIN_API=api.latermitiere.com
-                DOMAIN_SITE=latermitiere.com
-                EOF
-
+            
+                {
+                  echo "IMAGE_TAG=$OLD_TAG"
+                  echo "DOMAIN_APP=app.latermitiere.com"
+                  echo "DOMAIN_API=api.latermitiere.com"
+                  echo "DOMAIN_SITE=latermitiere.com"
+                } > deploy/.env.deploy
+            
                 docker compose \
                   --env-file deploy/.env.deploy \
                   -f deploy/docker-compose.prod.yml \
                   up -d --force-recreate
-
+            
                 echo "✅ Rollback completed"
               else
                 echo "⚠️ No previous IMAGE_TAG found."
                 echo "❌ Rollback impossible."
               fi
-
+            
               exit 1
             fi
