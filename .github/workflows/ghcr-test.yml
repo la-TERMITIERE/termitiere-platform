@@ -94,7 +94,12 @@ jobs:
             docker pull ghcr.io/$OWNER/termitiere-platform:$SHA_SHORT
 
             echo "Creating deploy env..."
-            echo "IMAGE_TAG=$SHA_SHORT" > deploy/.env.deploy
+            cat > deploy/.env.deploy <<EOF
+            IMAGE_TAG=$SHA_SHORT
+            DOMAIN_APP=app.latermitiere.com
+            DOMAIN_API=api.latermitiere.com
+            DOMAIN_SITE=latermitiere.com
+            EOF
 
             echo "Restart containers..."
             docker compose \
@@ -117,7 +122,12 @@ jobs:
               if [ -n "$OLD_TAG" ]; then
                 echo "Rollback to $OLD_TAG"
 
-                echo "IMAGE_TAG=$OLD_TAG" > deploy/.env.deploy
+                cat > deploy/.env.deploy <<EOF
+                IMAGE_TAG=$OLD_TAG
+                DOMAIN_APP=app.latermitiere.com
+                DOMAIN_API=api.latermitiere.com
+                DOMAIN_SITE=latermitiere.com
+                EOF
 
                 docker compose \
                   --env-file deploy/.env.deploy \
