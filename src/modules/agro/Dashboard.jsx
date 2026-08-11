@@ -6,7 +6,7 @@
 // - Le CA n'est compté que sur les factures CERTIFIÉES.
 import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet } from 'lucide-react'
+import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
@@ -41,7 +41,8 @@ export default function Dashboard() {
   const [from, setFrom] = useState(addDays(todayStr(), -30))
   const [to, setTo] = useState(todayStr())
   const [scope, setScope] = useState(TOUTES)
-  const [modalKey, setModalKey] = useState(null) // 'mortalite' | 'morbidite' | 'croissance' | 'ventes' | 'ca'
+  // 'naissances' | 'deces' | 'mortalite' | 'letalite' | 'morbidite' | 'croissance' | 'ventes' | 'ca'
+  const [modalKey, setModalKey] = useState(null)
 
   const isDaily = preset === 'journalier'
 
@@ -106,6 +107,20 @@ export default function Dashboard() {
     }
   }, [especesScope, dernier, invPeriode])
 
+  // Naissances / décès de la période PRÉCÉDENTE (même durée) — pour les évolutions.
+  const indPrec = useMemo(() => {
+    const nbDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+    const prevEnd = addDays(start, -1)
+    const prevStart = addDays(prevEnd, -(nbDays - 1))
+    let naiss = 0, dec = 0
+    tri.filter((i) => i.date >= prevStart && i.date <= prevEnd)
+      .forEach((inv) => especesScope.forEach((e) => {
+        const a = inv.animaux?.[e.id]
+        if (a) { naiss += a.naiss || 0; dec += a.dec || 0 }
+      }))
+    return { naiss, dec, prevStart, prevEnd }
+  }, [tri, start, end, especesScope])
+
   // Ventes (volume) du périmètre + comparaison période précédente.
   const ventes = useMemo(() => {
     const nbDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
@@ -132,6 +147,47 @@ export default function Dashboard() {
     const liste = certifs.filter((f) => f.date >= start && f.date <= end && montant(f) > 0).sort((a, b) => (a.date < b.date ? 1 : -1))
     return { courant: sumIn(start, end), precedent: sumIn(prevStart, prevEnd), liste, prevStart, prevEnd }
   }, [factures, start, end, scope, catById])
+
+  // Naissances · Décès · Ventes au fil de la période.
+  // Barres = têtes nées / mortes (axe gauche), courbe = volume vendu (axe droit).
+  // Au-delà de 62 jours, on regroupe par mois pour garder un graphique lisible.
+  const ndvChart = useMemo(() => {
+    const pts = [...invPeriode].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const spanJours = Math.round((new Date(end) - new Date(start)) / 86400000) + 1
+    const parMois = spanJours > 62
+    const cle = (d) => (parMois ? d.slice(0, 7) : d)
+
+    const acc = {}
+    const bucket = (d) => {
+      const k = cle(d)
+      if (!acc[k]) acc[k] = { naiss: 0, dec: 0, ventes: 0 }
+      return acc[k]
+    }
+    pts.forEach((inv) => {
+      const b = bucket(inv.date)
+      especesScope.forEach((e) => {
+        const a = inv.animaux?.[e.id]
+        if (a) { b.naiss += a.naiss || 0; b.dec += a.dec || 0 }
+      })
+    })
+    ventes.liste.forEach((v) => { bucket(v.date).ventes += v.qte || 0 })
+
+    const cles = Object.keys(acc).sort()
+    const labels = cles.map((k) => (parMois ? `${k.slice(5, 7)}/${k.slice(2, 4)}` : k.slice(5)))
+    const totalTrace = cles.reduce((s, k) => s + acc[k].naiss + acc[k].dec + acc[k].ventes, 0)
+
+    return {
+      vide: !cles.length || totalTrace === 0,
+      data: {
+        labels,
+        datasets: [
+          { type: 'bar', label: 'Naissances', data: cles.map((k) => acc[k].naiss), backgroundColor: '#16a34a', borderRadius: 4, yAxisID: 'y', order: 2 },
+          { type: 'bar', label: 'Décès', data: cles.map((k) => acc[k].dec), backgroundColor: '#dc2626', borderRadius: 4, yAxisID: 'y', order: 2 },
+          { type: 'line', label: 'Ventes (volume)', data: cles.map((k) => acc[k].ventes), borderColor: '#0d9488', backgroundColor: 'rgba(13,148,136,0.12)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2, yAxisID: 'y1', order: 1 }
+        ]
+      }
+    }
+  }, [invPeriode, especesScope, ventes, start, end])
 
   // Série de morbidité (scope) + prévision 7 jours.
   const morbiditeSerie = useMemo(() => {
@@ -304,6 +360,8 @@ export default function Dashboard() {
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs — {scopeLabel}</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Indic title="Effectif en stock" value={formatNumber(ind.effectif)} icon={Boxes} color="#2563eb" sub={`${especesScope.length} espèce(s)`} />
+          <Indic title="Naissances" value={formatNumber(ind.naiss)} icon={Egg} color="#16a34a" sub={`${naissancesDetail.length} enregistrement(s)`} delta={ind.naiss - indPrec.naiss} onClick={() => setModalKey('naissances')} />
+          <Indic title="Décès" value={formatNumber(ind.dec)} icon={HeartCrack} color="#dc2626" sub={`${decesDetail.length} enregistrement(s)`} delta={ind.dec - indPrec.dec} invert onClick={() => setModalKey('deces')} />
           <Indic title="Taux de mortalité" value={`${ind.mortalite.toFixed(1)} %`} icon={HeartPulse} color="#dc2626" sub={`${ind.dec} décès`} onClick={() => setModalKey('mortalite')} />
           <Indic title="Taux de létalité" value={`${ind.letalite.toFixed(1)} %`} icon={Skull} color="#991b1b" sub={`${ind.dec} décès / ${ind.casMaladie} cas`} onClick={() => setModalKey('letalite')} />
           <Indic title="Taux de morbidité" value={`${ind.morbidite.toFixed(1)} %`} icon={Stethoscope} color="#d97706" sub={`${ind.malades} malade(s)`} onClick={() => setModalKey('morbidite')} />
@@ -343,6 +401,33 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Naissances · Décès · Ventes au fil de la période */}
+      <Card title={`Naissances · Décès · Ventes — ${scopeLabel}`}>
+        <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+          <span className="font-semibold text-green-600">🐣 {formatNumber(ind.naiss)} naissance(s)</span>
+          <span className="font-semibold text-red-600">💀 {formatNumber(ind.dec)} décès</span>
+          <span className="font-semibold text-teal-600">🛒 {formatNumber(ventes.courant)} vendue(s)</span>
+          {showFinance && <span className="font-semibold text-purple-600">💰 {formatMoney(ca.courant)}</span>}
+          <span className="text-gray-400">— barres : têtes (axe gauche) · courbe : volume vendu (axe droit)</span>
+        </div>
+        <div className="h-72">
+          {!ndvChart.vide
+            ? <Bar data={ndvChart.data} options={{
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                  legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+                  tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatNumber(c.parsed.y)}` } }
+                },
+                scales: {
+                  y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Têtes', font: { size: 10 } }, ticks: { precision: 0, callback: (v) => formatNumber(v) } },
+                  y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'Ventes', color: '#0d9488', font: { size: 10 } }, grid: { drawOnChartArea: false }, ticks: { precision: 0, color: '#0d9488', callback: (v) => formatNumber(v) } }
+                }
+              }} />
+            : <p className="py-16 text-center text-sm text-gray-400">Aucune naissance, aucun décès ni vente enregistré sur la période.</p>}
+        </div>
+      </Card>
 
       {/* Courbe de croissance : par catégorie (vue « Toutes ») ou par espèce (catégorie sélectionnée) */}
       <Card title={scope === TOUTES ? 'Courbe de croissance par catégorie' : `Courbe de croissance par espèce — ${scopeLabel}`}>
@@ -400,6 +485,24 @@ export default function Dashboard() {
       </Card>
 
       {/* ─────── Modales détaillées (scope courant) ─────── */}
+      <Modal open={modalKey === 'naissances'} onClose={() => setModalKey(null)} size="lg" title={`Naissances — ${scopeLabel}`}
+        panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+          <strong>{formatNumber(ind.naiss)}</strong> naissance(s) sur la période — période préc. : {formatNumber(indPrec.naiss)}
+        </p>
+        <p className="my-2 text-xs italic text-gray-400">Détail des naissances saisies, de la plus récente à la plus ancienne.</p>
+        <DetailTable rows={naissancesDetail} cols={['Date', 'Espèce', 'Nés', 'Agent']} render={(n) => [formatDateShort(n.date), n.espece, n.qte, n.agent]} empty="Aucune naissance sur la période." />
+      </Modal>
+
+      <Modal open={modalKey === 'deces'} onClose={() => setModalKey(null)} size="lg" title={`Décès — ${scopeLabel}`}
+        panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+          <strong>{formatNumber(ind.dec)}</strong> décès sur la période — période préc. : {formatNumber(indPrec.dec)}
+        </p>
+        <p className="my-2 text-xs italic text-gray-400">Détail des décès saisis, avec leur motif quand il a été renseigné.</p>
+        <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
+      </Modal>
+
       <Modal open={modalKey === 'mortalite'} onClose={() => setModalKey(null)} size="lg" title={`Mortalité — ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Taux : <strong>{ind.mortalite.toFixed(1)} %</strong> — {ind.dec} décès / {formatNumber(ind.base)} têtes (effectif initial)</p>
@@ -460,7 +563,9 @@ function ScopeTab({ active, color, onClick, children }) {
   )
 }
 
-function Indic({ title, value, icon: Icon, color, sub, delta, money, onClick }) {
+// `invert` : une hausse est une MAUVAISE nouvelle (décès) — on inverse le code couleur.
+function Indic({ title, value, icon: Icon, color, sub, delta, money, invert, onClick }) {
+  const favorable = invert ? delta < 0 : delta > 0
   return (
     <button onClick={onClick} disabled={!onClick}
       className={`card p-3 text-left transition-all ${onClick ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
@@ -471,7 +576,7 @@ function Indic({ title, value, icon: Icon, color, sub, delta, money, onClick }) 
       <div className="flex items-baseline gap-1">
         <p className="text-xl font-extrabold" style={{ color }}>{value}</p>
         {delta !== undefined && delta !== 0 && (
-          <span className={`text-xs font-bold ${delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-xs font-bold ${favorable ? 'text-green-600' : 'text-red-600'}`}>
             {delta > 0 ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
             {money ? formatMoney(Math.abs(delta)) : Math.abs(delta)}
           </span>
