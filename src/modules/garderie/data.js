@@ -8,6 +8,27 @@ export const GROUPES_AGE = [
   { id: 'grande_section', label: 'Grande section', desc: '5 – 6 ans' }
 ]
 
+// La Termitière fait tourner deux programmes distincts au sein d'E-GARDERIE : la
+// garderie (0-2 ans) et la maternelle (3-6 ans, petite/moyenne/grande section — les
+// classes maternelles classiques). Choisi explicitement à l'inscription (cf.
+// Enfants.jsx), en plus du groupe d'âge précis, pour que « garderie ou maternelle »
+// soit une information de premier niveau (filtre, statistiques…), pas seulement
+// déductible du groupe.
+export const PROGRAMMES_ENFANT = [
+  { id: 'garderie',   label: 'Garderie',   desc: '0 – 2 ans', tone: 'info' },
+  { id: 'maternelle', label: 'Maternelle', desc: '3 – 6 ans', tone: 'success' }
+]
+
+export const GROUPES_PAR_PROGRAMME = {
+  garderie: ['nourrisson', 'bambin'],
+  maternelle: ['petite_section', 'moyenne_section', 'grande_section']
+}
+
+// Programme auquel appartient un groupe d'âge — sert de repli pour les fiches
+// enregistrées avant l'ajout du champ `programme` explicite.
+export const programmeDuGroupe = (groupeId) =>
+  GROUPES_PAR_PROGRAMME.maternelle.includes(groupeId) ? 'maternelle' : 'garderie'
+
 export const STATUTS_ENFANT = {
   actif:    { label: 'Actif',    tone: 'success' },
   suspendu: { label: 'Suspendu', tone: 'warning' },

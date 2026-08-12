@@ -16,7 +16,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
-import { GROUPES_AGE, STATUTS_ENFANT } from './data'
+import { GROUPES_AGE, STATUTS_ENFANT, PROGRAMMES_ENFANT, GROUPES_PAR_PROGRAMME, programmeDuGroupe } from './data'
 import { calcAge, groupeRecommande, tarifSuggere, aImpayes } from './logic'
 import { useGarderieStore } from './store/garderieStore'
 
@@ -29,7 +29,7 @@ const emptyJournalier = () => ({
 
 const empty = () => ({
   nom: '', prenom: '', photo: '', dateNaissance: '', ageSaisi: '', sexe: 'F',
-  groupe: '', statut: 'actif',
+  programme: '', groupe: '', statut: 'actif',
   typeAbonnement: 'mensuel',
   allergies: '', infoMedicale: '',
   parentId: '', parentNom: '', parentContact: '',
@@ -49,6 +49,7 @@ export default function Enfants() {
 
   const [onglet, setOnglet]   = useState('inscrits')
   const [recherche, setRecherche] = useState('')
+  const [filtreProgramme, setFiltreProgramme] = useState('')
   const [filtreGroupe, setFiltreGroupe] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('actif')
   const [filtreMois, setFiltreMois]   = useState('')
@@ -97,6 +98,7 @@ export default function Enfants() {
     // on exclut AUSSI sur le statut persisté en base, seule source fiable après reload.
     let rows = enfants.filter((e) => !deletedEnfantIds.has(e.id) && e.statut !== 'supprime')
     if (filtreStatut) rows = rows.filter((e) => e.statut === filtreStatut)
+    if (filtreProgramme) rows = rows.filter((e) => (e.programme || programmeDuGroupe(e.groupe)) === filtreProgramme)
     if (filtreGroupe) rows = rows.filter((e) => e.groupe === filtreGroupe)
     if (filtreAnnee)  rows = rows.filter((e) => (e.dateInscription || '').startsWith(filtreAnnee))
     if (filtreMois)   rows = rows.filter((e) => {
@@ -112,16 +114,19 @@ export default function Enfants() {
       rows = rows.filter((e) => `${e.prenom} ${e.nom} ${e.parentNom}`.toLowerCase().includes(q))
     }
     return rows.sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1)
-  }, [enfants, recherche, filtreGroupe, filtreStatut, filtreAnnee, filtreMois, filtreJour, deletedEnfantIds])
+  }, [enfants, recherche, filtreProgramme, filtreGroupe, filtreStatut, filtreAnnee, filtreMois, filtreJour, deletedEnfantIds])
 
   function openCreate() { setModal({ data: empty(), isNew: true }) }
-  function openEdit(e)  { setModal({ data: { ...empty(), ...e }, isNew: false, id: e.id }) }
+  // Fiches créées avant l'ajout du champ `programme` : déduit du groupe pour que le
+  // sélecteur s'ouvre déjà cohérent, plutôt que vide.
+  function openEdit(e)  { setModal({ data: { ...empty(), ...e, programme: e.programme || programmeDuGroupe(e.groupe) }, isNew: false, id: e.id }) }
 
   async function handleSave() {
     if (saving) return
     const d = modal.data
     if (!d.nom.trim() || !d.prenom.trim()) return toast.error('Nom et prénom requis')
     if (!d.dateNaissance && !d.ageSaisi?.trim()) return toast.error('Date de naissance ou âge requis')
+    if (!d.programme) return toast.error('Programme requis (garderie ou maternelle)')
     if (!d.groupe) return toast.error('Groupe requis')
     if (!d.parentNom?.trim()) return toast.error('Nom du parent / tuteur requis')
     if (!d.parentContact?.trim()) return toast.error('Contact principal du parent requis')
@@ -399,10 +404,18 @@ export default function Enfants() {
           />
         </div>
         <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Programme</label>
+          <Select value={filtreProgramme} onChange={(e) => setFiltreProgramme(e.target.value)}>
+            <option value="">Garderie + Maternelle</option>
+            {PROGRAMMES_ENFANT.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </Select>
+        </div>
+        <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Groupe</label>
           <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)}>
             <option value="">Tous les groupes</option>
-            {GROUPES_AGE.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+            {(filtreProgramme ? GROUPES_AGE.filter((g) => GROUPES_PAR_PROGRAMME[filtreProgramme].includes(g.id)) : GROUPES_AGE)
+              .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
           </Select>
         </div>
         <div>
@@ -456,7 +469,7 @@ export default function Enfants() {
             <tr>
               <th className="px-3 py-2 text-left">Prénom Nom</th>
               <th className="px-3 py-2 text-left">Âge</th>
-              <th className="px-3 py-2 text-left">Groupe</th>
+              <th className="px-3 py-2 text-left">Programme / Groupe</th>
               <th className="px-3 py-2 text-left">Parent / Contact</th>
               <th className="px-3 py-2 text-left">Statut</th>
               <th className="px-3 py-2 text-left">Inscription</th>
@@ -482,7 +495,12 @@ export default function Enfants() {
                   </div>
                 </td>
                 <td className="px-3 py-2 text-gray-600">{calcAge(e.dateNaissance) || e.ageSaisi || '—'}</td>
-                <td className="px-3 py-2">{GROUPES_AGE.find((g) => g.id === e.groupe)?.label || '—'}</td>
+                <td className="px-3 py-2">
+                  <span className={`mr-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${(e.programme || programmeDuGroupe(e.groupe)) === 'maternelle' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {PROGRAMMES_ENFANT.find((p) => p.id === (e.programme || programmeDuGroupe(e.groupe)))?.label}
+                  </span>
+                  {GROUPES_AGE.find((g) => g.id === e.groupe)?.label || '—'}
+                </td>
                 <td className="px-3 py-2">
                   <p>{e.parentNom || '—'}</p>
                   <p className="text-xs text-gray-400">{e.parentContact}</p>
@@ -641,8 +659,10 @@ export default function Enfants() {
               </FormGroup>
               <FormGroup label="Date de naissance">
                 <Input type="date" value={modal.data.dateNaissance} onChange={(e) => {
+                  const g = groupeRecommande(e.target.value)
                   set('dateNaissance', e.target.value)
-                  set('groupe', groupeRecommande(e.target.value))
+                  set('groupe', g)
+                  set('programme', g ? programmeDuGroupe(g) : '')
                   set('ageSaisi', '')
                 }} />
                 {modal.data.dateNaissance && (() => {
@@ -674,10 +694,29 @@ export default function Enfants() {
                   <option value="M">Garçon</option>
                 </Select>
               </FormGroup>
+              <FormGroup label="Programme *" hint="Garderie (0-2 ans) ou maternelle (3-6 ans)">
+                <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+                  {PROGRAMMES_ENFANT.map((p) => (
+                    <button key={p.id} type="button" onClick={() => {
+                      set('programme', p.id)
+                      // Le groupe choisi doit rester cohérent avec le programme — on ne
+                      // le vide que s'il appartient à l'autre programme.
+                      if (!GROUPES_PAR_PROGRAMME[p.id].includes(modal.data.groupe)) set('groupe', '')
+                    }}
+                      className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        modal.data.programme === p.id ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-white'
+                      }`}>
+                      {p.label} <span className="font-normal opacity-80">({p.desc})</span>
+                    </button>
+                  ))}
+                </div>
+              </FormGroup>
               <FormGroup label="Groupe d'âge *">
                 <Select value={modal.data.groupe} onChange={(e) => set('groupe', e.target.value)}>
                   <option value="">— Choisir —</option>
-                  {GROUPES_AGE.map((g) => <option key={g.id} value={g.id}>{g.label} ({g.desc})</option>)}
+                  {GROUPES_AGE
+                    .filter((g) => !modal.data.programme || GROUPES_PAR_PROGRAMME[modal.data.programme].includes(g.id))
+                    .map((g) => <option key={g.id} value={g.id}>{g.label} ({g.desc})</option>)}
                 </Select>
               </FormGroup>
               <FormGroup label="Statut">
@@ -790,7 +829,7 @@ export default function Enfants() {
               </div>
               <h3 className="mt-3 text-xl font-extrabold leading-snug">{detail.prenom} {detail.nom}</h3>
               <p className="mt-0.5 text-sm text-white/80">
-                {calcAge(detail.dateNaissance) || detail.ageSaisi || '—'} · {GROUPES_AGE.find((g) => g.id === detail.groupe)?.label || '—'}
+                {calcAge(detail.dateNaissance) || detail.ageSaisi || '—'} · {PROGRAMMES_ENFANT.find((p) => p.id === (detail.programme || programmeDuGroupe(detail.groupe)))?.label} · {GROUPES_AGE.find((g) => g.id === detail.groupe)?.label || '—'}
               </p>
               <span className="mt-2 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
                 {STATUTS_ENFANT[detail.statut]?.label}

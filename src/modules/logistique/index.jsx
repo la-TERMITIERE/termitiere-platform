@@ -10,6 +10,7 @@ import TachesRoutinieres from './TachesRoutinieres'
 import Prestations from './Prestations'
 import Factures from './Factures'
 import Demandes from './Demandes'
+import SectorBesoins from '../../shared/besoins/SectorBesoins'
 import Retours from './Retours'
 import Referentiel from './Referentiel'
 import Clients from './Clients'
@@ -79,9 +80,10 @@ function SiteApp() {
         <Route path="prestations" element={<Prestations />} />
         <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
         {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
-        <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="logistique" masquerRevenu /> : <AccesRefuse />} />
+        <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="logistique" site={site} masquerRevenu /> : <AccesRefuse />} />
         <Route path="factures" element={<Factures />} />
         <Route path="demandes" element={<Demandes />} />
+        <Route path="besoins" element={<SectorBesoins secteurId="logistique" />} />
         <Route path="retours" element={<Retours />} />
         <Route path="referentiel" element={<Referentiel />} />
         <Route path="clients" element={<Clients />} />

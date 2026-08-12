@@ -1,6 +1,45 @@
 // Calculs budget / dépenses par secteur et par mois.
-import { SECTEURS, natureFluxDefaut } from './data'
+import { SECTEURS, LOGISTIQUE_SITES, natureFluxDefaut } from './data'
 import { METIERS_PRESTATAIRE } from '../projet/prestataire'
+
+// MAXI LOGISTIQUE a un budget alloué distinct par site (Lomé/Kara) — seul secteur
+// scindé ainsi côté E-DÉPENSES (cf. LOGISTIQUE_SITES). Un enregistrement (dépense,
+// budget, apport PAU, revenu manuel/versement) sans `site` est antérieur à ce
+// découpage : il appartient à KARA (décision explicite du 12/08/2026, l'essentiel de
+// cet historique concernant Kara) — à l'INVERSE de la convention opérationnelle du
+// module Logistique (factures, prestations… cf. `matchSite` dans
+// src/modules/logistique/site/useSite.jsx), qui rattache SON legacy à Lomé. Les deux
+// conventions coexistent volontairement : elles couvrent des historiques différents.
+export const siteLogistiqueDe = (row) => row?.site || 'kara'
+
+// Libellé d'affichage d'un secteur, avec le site en suffixe pour Logistique
+// (ex. « MAXI LOGISTIQUE — Kara ») — résout aussi le site des documents hérités sans
+// `site` (cf. siteLogistiqueDe), pour que l'affichage reste cohérent avec le filtrage.
+// `d` = document portant `secteurId`/`site`.
+export function libelleSecteurSite(secteur, d) {
+  if (d?.secteurId === 'logistique') {
+    const site = siteLogistiqueDe(d)
+    const s = LOGISTIQUE_SITES.find((x) => x.id === site)
+    return `${secteur?.label || d.secteurId} — ${s?.label || site}`
+  }
+  return secteur?.label || d?.secteurId
+}
+
+// Liste des « lignes » budget/dépense affichées dans E-DÉPENSES — un secteur = une
+// ligne, SAUF MAXI LOGISTIQUE qui en fait deux (une par site). `excluBat` retire MAXI
+// BAT (suivi exclusivement depuis le volet BTP d'E-G.Pro, pas la vue standalone).
+export function secteursEtSites(excluBat = true) {
+  return SECTEURS
+    .filter((s) => !excluBat || s.id !== 'bat')
+    .flatMap((s) => {
+      if (s.id === 'logistique') {
+        return LOGISTIQUE_SITES.map(({ id: site, label: siteLbl }) => ({
+          ...s, id: `logistique__${site}`, secteurId: 'logistique', site, label: `${s.label} — ${siteLbl}`
+        }))
+      }
+      return [{ ...s, secteurId: s.id, site: null }]
+    })
+}
 
 // Correspondance type de projet (E-G.Pro) → secteur (E-DÉPENSES) : permet de ranger
 // automatiquement chaque dépense de chantier dans le secteur qu'elle concerne réellement,
@@ -85,18 +124,28 @@ export function versementsClientVersSecteurs(versementsClient = [], projets = []
 
 // Revenu (versements clients de projets E-G.Pro) d'un secteur sur un mois donné.
 // `versementsRoutes` = résultat de versementsClientVersSecteurs (déjà rattaché à un secteur).
-export function revenuClientSecteurMois(versementsRoutes, secteurId, annee, mois) {
+export function revenuClientSecteurMois(versementsRoutes, secteurId, annee, mois, site = null) {
   const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
-  return totalDepenses(versementsRoutes.filter((v) => v.secteurId === secteurId && (v.date || '').startsWith(prefixe)))
+  return totalDepenses(versementsRoutes.filter((v) => {
+    if (v.secteurId !== secteurId) return false
+    if (!(v.date || '').startsWith(prefixe)) return false
+    if (secteurId === 'logistique' && site) return siteLogistiqueDe(v) === site
+    return true
+  }))
 }
 
 // Revenu saisi manuellement (collection `depense_revenus_manuels`) — pour les secteurs
 // sans source de facturation automatique (ex. Hors secteur, MAXI BAT) : une rentrée
 // d'argent ponctuelle qui ne vient ni d'une facture de module, ni d'un apport du PAU,
 // ni d'un versement client E-G.Pro (ex. subvention, vente ponctuelle, remboursement reçu).
-export function revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois) {
+export function revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, site = null) {
   const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
-  return totalDepenses(revenusManuels.filter((r) => r.secteurId === secteurId && (r.date || '').startsWith(prefixe)))
+  return totalDepenses(revenusManuels.filter((r) => {
+    if (r.secteurId !== secteurId) return false
+    if (!(r.date || '').startsWith(prefixe)) return false
+    if (secteurId === 'logistique' && site) return siteLogistiqueDe(r) === site
+    return true
+  }))
 }
 
 // ── Passerelle en lecture seule avec la Briqueterie (module Événementiel) ────
@@ -126,12 +175,24 @@ export function coutsMatieresBriqueterie(inventaires = []) {
     }))
 }
 
-// Budget alloué à un secteur pour un mois donné (0 si non défini).
-export function budgetSecteur(budgets, secteurId, annee, mois) {
-  const b = budgets.find((x) =>
-    x.secteurId === secteurId && Number(x.annee) === Number(annee) && Number(x.mois) === Number(mois)
-  )
-  return b ? Number(b.montant) || 0 : 0
+// Document de budget effectif pour secteur+mois (+site pour Logistique). Résout le
+// fallback historique de Kara vers l'ancien document non tagué (cf. siteLogistiqueDe) —
+// Lomé, elle, n'a aucun historique et démarre donc toujours à « non défini ».
+export function budgetDocSecteur(budgets, secteurId, annee, mois, site = null) {
+  const matchMoisSecteur = (x) => x.secteurId === secteurId && Number(x.annee) === Number(annee) && Number(x.mois) === Number(mois)
+  if (secteurId === 'logistique' && site) {
+    const tague = budgets.find((x) => matchMoisSecteur(x) && x.site === site)
+    if (tague) return tague
+    if (site === 'kara') return budgets.find((x) => matchMoisSecteur(x) && !x.site) || null
+    return null
+  }
+  return budgets.find((x) => matchMoisSecteur(x) && !x.site) || null
+}
+
+// Budget alloué à un secteur (+site pour Logistique) pour un mois donné (0 si non défini).
+export function budgetSecteur(budgets, secteurId, annee, mois, site = null) {
+  const doc = budgetDocSecteur(budgets, secteurId, annee, mois, site)
+  return doc ? Number(doc.montant) || 0 : 0
 }
 
 // Une dépense compte dans le budget seulement une fois réellement décaissée
@@ -141,28 +202,35 @@ export function estDecaissee(d) {
   return !d.statut || d.statut === 'decaissee'
 }
 
-// Dépenses décaissées d'un secteur sur un mois donné (compte dans le budget).
-export function depensesSecteurMois(depenses, secteurId, annee, mois) {
+// Dépenses décaissées d'un secteur (+site pour Logistique) sur un mois donné (compte
+// dans le budget).
+export function depensesSecteurMois(depenses, secteurId, annee, mois, site = null) {
   const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
-  return depenses.filter((d) => d.secteurId === secteurId && (d.date || '').startsWith(prefixe) && estDecaissee(d))
+  return depenses.filter((d) => {
+    if (d.secteurId !== secteurId) return false
+    if (!(d.date || '').startsWith(prefixe)) return false
+    if (!estDecaissee(d)) return false
+    if (secteurId === 'logistique' && site) return siteLogistiqueDe(d) === site
+    return true
+  })
 }
 
-// Reste du budget alloué à un secteur pour le mois d'une date (format YYYY-MM-DD) —
-// null si aucun budget n'est défini pour ce secteur/mois (pas de comparaison possible,
-// donc pas de déclenchement d'autorisation sur ce seul critère).
-export function budgetRestantSecteur(budgets, depenses, secteurId, dateStr) {
+// Reste du budget alloué à un secteur (+site pour Logistique) pour le mois d'une date
+// (format YYYY-MM-DD) — null si aucun budget n'est défini pour ce secteur/mois (pas de
+// comparaison possible, donc pas de déclenchement d'autorisation sur ce seul critère).
+export function budgetRestantSecteur(budgets, depenses, secteurId, dateStr, site = null) {
   const [annee, mois] = (dateStr || '').split('-').map(Number)
   if (!annee || !mois || !secteurId) return null
-  const alloue = budgetSecteur(budgets, secteurId, annee, mois)
+  const alloue = budgetSecteur(budgets, secteurId, annee, mois, site)
   if (alloue <= 0) return null
-  return alloue - totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois))
+  return alloue - totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois, site))
 }
 
 // Apport du PAU compté comme un revenu du secteur/mois concerné : l'argent injecté par
 // le PAU (financement personnel) est une entrée pour l'entreprise, même si elle doit le
 // lui restituer — cette dette est suivie séparément (Dashboard, indépendamment du mois).
-export function revenuPauSecteurMois(depenses, secteurId, annee, mois) {
-  return totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois).filter((d) => d.sourceFinancement === 'pau'))
+export function revenuPauSecteurMois(depenses, secteurId, annee, mois, site = null) {
+  return totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois, site).filter((d) => d.sourceFinancement === 'pau'))
 }
 
 // Dépenses en attente d'approbation ou approuvées (à décaisser).
@@ -186,11 +254,10 @@ export function statutBudget(pct) {
 // MAXI BAT (chantiers) est exclu des alertes de budget par secteur : son suivi
 // vit exclusivement dans le volet BTP d'E-G.Pro, pas sur le Dashboard E-DÉPENSES.
 export function secteursEnAlerte(budgets, depenses, annee, mois) {
-  return SECTEURS
-    .filter((s) => s.id !== 'bat')
+  return secteursEtSites(true)
     .map((s) => {
-      const alloue = budgetSecteur(budgets, s.id, annee, mois)
-      const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
+      const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
+      const depense = totalDepenses(depensesSecteurMois(depenses, s.secteurId, annee, mois, s.site))
       const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
       return { ...s, alloue, depense, pct, statut: statutBudget(pct) }
     })

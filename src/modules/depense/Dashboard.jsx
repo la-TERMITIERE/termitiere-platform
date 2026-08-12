@@ -15,7 +15,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie, secteursEtSites } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -107,9 +107,9 @@ export default function Dashboard() {
 
   // MAXI BAT (chantiers) est écarté de la répartition par secteur — son budget/suivi
   // vit exclusivement dans le volet BTP d'E-G.Pro.
-  const parSecteur = useMemo(() => SECTEURS.filter((s) => s.id !== 'bat').map((s) => {
-    const alloue = budgetSecteur(budgets, s.id, annee, mois)
-    const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
+  const parSecteur = useMemo(() => secteursEtSites(true).map((s) => {
+    const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
+    const depense = totalDepenses(depensesSecteurMois(depenses, s.secteurId, annee, mois, s.site))
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return { ...s, alloue, depense, reste: alloue - depense, pct, statut: statutBudget(pct) }
   }), [budgets, depenses, annee, mois])
@@ -196,7 +196,7 @@ export default function Dashboard() {
       for (const d of depensesAReconduire) {
         const id = genId()
         await setItem('depense_depenses', id, {
-          id, secteurId: d.secteurId, categorie: d.categorie, montant: d.montant,
+          id, secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant: d.montant,
           date: todayStr(), description: d.description || '', piece: null,
           recurrente: true, imprevue: false, statut: 'decaissee', enregistrePar: user?.nom || '—', createdAt: Date.now()
         })

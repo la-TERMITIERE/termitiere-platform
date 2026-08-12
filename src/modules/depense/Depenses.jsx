@@ -19,8 +19,8 @@ import { notify } from '../../core/notify'
 import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { SECTEURS, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -40,7 +40,7 @@ const SOURCE_INFO = {
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
 const empty = () => ({
-  secteurId: '', categorie: '', montant: '', date: todayStr(),
+  secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
   natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
@@ -141,6 +141,9 @@ export default function Depenses() {
 
   const [recherche, setRecherche] = useState('')
   const [filtreSecteur, setFiltreSecteur] = useState('')
+  // Sous-filtre site — n'a de sens que pour MAXI LOGISTIQUE (budget/dépenses séparés
+  // par site, cf. LOGISTIQUE_SITES). Réinitialisé si on change de secteur.
+  const [filtreSite, setFiltreSite] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('')
   const [filtreNature, setFiltreNature] = useState('')
   const [filtreSource, setFiltreSource] = useState('')
@@ -185,6 +188,7 @@ export default function Depenses() {
   const liste = useMemo(() => {
     let rows = [...depenses]
     if (filtreSecteur)   rows = rows.filter((d) => d.secteurId === filtreSecteur)
+    if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => siteLogistiqueDe(d) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
     if (filtreSource)    rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === filtreSource)
@@ -200,7 +204,7 @@ export default function Depenses() {
       })
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreCategorie, filtreNature, filtreSource, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
+  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreSource, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
 
   // Total financé par le PAU (apport personnel) sur la liste affichée — traçabilité.
   const totalApportPau = useMemo(
@@ -230,7 +234,7 @@ export default function Depenses() {
         montant: Number(d.montant) || 0,
         agreeur: agreeur || '—',
         source: SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]?.label || '—',
-        secteur: secteur?.label || d.secteurId
+        secteur: libelleSecteurSite(secteur, d)
       }
     })
     exportRapportExcel({
@@ -267,7 +271,7 @@ export default function Depenses() {
   function openEdit(d)  { setModal({ data: { ...empty(), ...d }, isNew: false, id: d.id }) }
 
   // ── Ajout multiple (lot) ──
-  const ligneVide = () => ({ secteurId: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false })
+  const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false })
   function openLot() { setLot([ligneVide(), ligneVide(), ligneVide()]) }
   const setLigne = (i, k, v) => setLot((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
   const ajouterLigne = () => setLot((rows) => [...rows, ligneVide()])
@@ -302,6 +306,7 @@ export default function Depenses() {
     if (saving) return
     const d = modal.data
     if (!d.secteurId) return toast.error('Secteur requis')
+    if (d.secteurId === 'logistique' && !d.site) return toast.error('Site requis (Lomé ou Kara)')
     if (!d.categorie) return toast.error('Catégorie requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     if (!d.date) return toast.error('Date requise')
@@ -318,7 +323,7 @@ export default function Depenses() {
       } else {
         const secteur = SECTEURS.find((s) => s.id === d.secteurId)
         await setItem('depense_depenses', modal.id, { ...d, id: modal.id })
-        await audit('depense', 'DEPENSE_EDIT', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+        await audit('depense', 'DEPENSE_EDIT', `${libelleSecteurSite(secteur, d)} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Dépense mise à jour ✓')
         await alerterSiDepassement({ ...d, id: modal.id }, secteur)
       }
@@ -332,8 +337,8 @@ export default function Depenses() {
   // complète suit le même circuit (décaissée ou demande PAU selon le montant/imprévu).
   async function enregistrerLot() {
     if (savingLot) return
-    const valides = (lot || []).filter((r) => r.secteurId && r.categorie && Number(r.montant) > 0 && r.date)
-    if (valides.length === 0) return toast.error('Aucune ligne complète à enregistrer (secteur, catégorie, montant, date)')
+    const valides = (lot || []).filter((r) => r.secteurId && (r.secteurId !== 'logistique' || r.site) && r.categorie && Number(r.montant) > 0 && r.date)
+    if (valides.length === 0) return toast.error('Aucune ligne complète à enregistrer (secteur, site pour Logistique, catégorie, montant, date)')
     setSavingLot(true)
     try {
       let nbDemandes = 0
@@ -352,15 +357,16 @@ export default function Depenses() {
   async function alerterSiDepassement(d, secteur) {
     const [annee, mois] = (d.date || '').split('-').map(Number)
     if (!annee || !mois) return
-    const alloue = budgetSecteur(budgets, d.secteurId, annee, mois)
+    const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
     if (alloue <= 0) return
-    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois))
+    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct)
     if (statut.key === 'ok') return
+    const libelle = libelleSecteurSite(secteur, d)
     await notify({
       type: statut.key === 'depasse' ? 'danger' : 'warning',
-      title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${secteur?.label || d.secteurId}` : `🟠 Budget en alerte — ${secteur?.label || d.secteurId}`,
+      title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
       module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
@@ -422,11 +428,20 @@ export default function Depenses() {
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
-          <Select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}>
+          <Select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }}>
             <option value="">Tous les secteurs</option>
             {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </Select>
         </div>
+        {filtreSecteur === 'logistique' && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Site</label>
+            <Select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)}>
+              <option value="">Lomé + Kara</option>
+              {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </Select>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Catégorie</label>
           <Select value={filtreCategorie} onChange={(e) => setFiltreCategorie(e.target.value)}>
@@ -505,7 +520,7 @@ export default function Depenses() {
                     <td className={`${cell} rounded-l-2xl border-l-[3px] px-4`} style={{ borderColor: secteurColor }}>
                       <p className="whitespace-nowrap text-xs font-semibold text-gray-700">{formatDateShort(d.date)}</p>
                       <span className="mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: secteurColor + '1a', color: secteurColor }}>
-                        {secteur?.label || d.secteurId}
+                        {libelleSecteurSite(secteur, d)}
                       </span>
                     </td>
 
@@ -608,6 +623,14 @@ export default function Depenses() {
                     {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </Select>
                 </FormGroup>
+                {modal.data.secteurId === 'logistique' && (
+                  <FormGroup label="Site *" hint="Budget alloué séparément par site.">
+                    <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
+                      <option value="">— Choisir —</option>
+                      {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </Select>
+                  </FormGroup>
+                )}
                 <FormGroup label="Catégorie *">
                   <ChampAutocomplete
                     value={modal.data.categorie}
@@ -797,11 +820,17 @@ export default function Depenses() {
                 const raison = raisonAutorisation(r)
                 return (
                   <div key={i} className="grid grid-cols-2 items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 sm:grid-cols-12">
-                    <div className="sm:col-span-3">
+                    <div className="space-y-1 sm:col-span-3">
                       <Select value={r.secteurId} onChange={(e) => setLigne(i, 'secteurId', e.target.value)}>
                         <option value="">— Secteur —</option>
                         {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </Select>
+                      {r.secteurId === 'logistique' && (
+                        <Select value={r.site} onChange={(e) => setLigne(i, 'site', e.target.value)}>
+                          <option value="">— Site —</option>
+                          {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </Select>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <Select value={r.categorie} onChange={(e) => setLigne(i, 'categorie', e.target.value)}>
@@ -879,7 +908,7 @@ export default function Depenses() {
           const src = SOURCES_FINANCEMENT[detail.sourceFinancement || sourceFinancementDefaut]
           const chips = [
             { label: 'Date', value: formatDateShort(detail.date) },
-            { label: 'Secteur', value: secteur?.label || detail.secteurId },
+            { label: 'Secteur', value: libelleSecteurSite(secteur, detail) },
             { label: 'Catégorie', value: detail.categorie || '—' },
             { label: 'Nature de flux', value: nature.label },
             { label: 'Origine', value: origine.label },

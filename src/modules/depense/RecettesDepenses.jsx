@@ -20,8 +20,8 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
-import { SECTEURS, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois } from './logic'
+import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
+import { budgetSecteur, budgetDocSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { soumettreNouvelleDepense } from './depenseActions'
 
@@ -55,9 +55,12 @@ const ROUTE_FINANCES_PAR_SECTEUR = {
 
 // `secteurId` optionnel : quand il est fourni (vue intégrée dans un module métier), l'écran
 // est restreint à ce seul secteur. Sans lui, il affiche tous les secteurs (E-DÉPENSES).
+// `site` optionnel : uniquement pour secteurId="logistique" — restreint en plus au site
+// courant (Lomé/Kara, fourni par la route /logistique/:site/finances) ; les dépenses
+// créées depuis cette vue sont automatiquement taguées à ce site, sans le redemander.
 // `masquerRevenu` : vue « Dépense » pure pour les modules intégrés — cache les revenus/solde
 // et rend le budget en lecture seule (l'allocation ne se fait que depuis E-DÉPENSES).
-export default function RecettesDepenses({ secteurId = null, masquerRevenu = false }) {
+export default function RecettesDepenses({ secteurId = null, site = null, masquerRevenu = false }) {
   const { data: budgets }             = useCollection('depense_budgets')
   const { data: depensesReelles }     = useCollection('depense_depenses')
   const { data: depensesProjet }      = useCollection('projet_depenses')
@@ -95,10 +98,19 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   // bilan (recettes/dépenses/budget) est désormais géré exclusivement depuis le volet
   // BTP d'E-G.Pro (réservé à l'administration), qui embarque ce même écran avec
   // `secteurId="bat"` — cette exclusion ne s'applique donc qu'à la vue sans secteur.
-  const secteursAffiches = useMemo(
-    () => secteurId ? SECTEURS.filter((s) => s.id === secteurId) : SECTEURS.filter((s) => s.id !== 'bat'),
-    [secteurId]
-  )
+  const secteursAffiches = useMemo(() => {
+    if (secteurId) {
+      const s = SECTEURS.find((x) => x.id === secteurId)
+      if (!s) return []
+      if (secteurId === 'logistique') {
+        const siteEffectif = site || 'lome'
+        const siteLbl = LOGISTIQUE_SITES.find((x) => x.id === siteEffectif)?.label || siteEffectif
+        return [{ ...s, secteurId: 'logistique', site: siteEffectif, label: `${s.label} — ${siteLbl}` }]
+      }
+      return [{ ...s, secteurId, site: null }]
+    }
+    return secteursEtSites(true)
+  }, [secteurId, site])
   const theme = THEME_PAR_SECTEUR[secteurId] || THEME_PAR_SECTEUR.default
 
   const [annee, setAnnee] = useState(now.getFullYear())
@@ -128,17 +140,20 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   }
 
   const parSecteur = useMemo(() => secteursAffiches.map((s) => {
-    const budgetId = `${s.id}_${annee}-${String(mois).padStart(2, '0')}`
-    const budgetDoc = budgets.find((b) => b.id === budgetId)
-    const alloue = budgetSecteur(budgets, s.id, annee, mois)
-    const recette = revenuSecteur(collections, s.id, annee, mois, depenses, versementsClientRoutes, revenusManuelsTous)
-    const apportPau = revenuPauSecteurMois(depenses, s.id, annee, mois)
-    const versementsClient = revenuClientSecteurMois(versementsClientRoutes, s.id, annee, mois)
-    const revenuManuel = revenuManuelSecteurMois(revenusManuelsTous, s.id, annee, mois)
+    const budgetDoc = budgetDocSecteur(budgets, s.secteurId, annee, mois, s.site)
+    // Cible le document RÉEL déjà existant (y compris l'ancien document Logistique non
+    // tagué, pour Kara — cf. budgetDocSecteur) ; sans lui, un nouvel id tagué au site
+    // est généré pour la toute première allocation.
+    const budgetId = budgetDoc?.id || (s.site ? `${s.secteurId}_${s.site}_${annee}-${String(mois).padStart(2, '0')}` : `${s.secteurId}_${annee}-${String(mois).padStart(2, '0')}`)
+    const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
+    const recette = revenuSecteur(collections, s.secteurId, annee, mois, depenses, versementsClientRoutes, revenusManuelsTous, s.site)
+    const apportPau = revenuPauSecteurMois(depenses, s.secteurId, annee, mois, s.site)
+    const versementsClient = revenuClientSecteurMois(versementsClientRoutes, s.secteurId, annee, mois, s.site)
+    const revenuManuel = revenuManuelSecteurMois(revenusManuelsTous, s.secteurId, annee, mois, s.site)
     const revenusManuelsDuMois = revenusManuelsTous
-      .filter((r) => r.secteurId === s.id && (r.date || '').startsWith(`${annee}-${String(mois).padStart(2, '0')}`))
+      .filter((r) => r.secteurId === s.secteurId && (r.date || '').startsWith(`${annee}-${String(mois).padStart(2, '0')}`))
       .sort((a, b) => (b.date || 0) - (a.date || 0))
-    const lignes = depensesSecteurMois(depenses, s.id, annee, mois).sort((a, b) => (a.date < b.date ? 1 : -1))
+    const lignes = depensesSecteurMois(depenses, s.secteurId, annee, mois, s.site).sort((a, b) => (a.date < b.date ? 1 : -1))
     const depense = totalDepenses(lignes)
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return {
@@ -176,7 +191,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
   const totalReste   = totalAlloue - totalDepense
 
   const ouvrirRevision = (s) => {
-    setRevision({ id: s.budgetId, secteurId: s.id, secteurLabel: s.label, montantActuel: s.alloue, revisions: s.revisionsBudget })
+    setRevision({ id: s.budgetId, secteurId: s.secteurId, site: s.site, secteurLabel: s.label, montantActuel: s.alloue, revisions: s.revisionsBudget })
     setRevMontant(String(s.alloue || ''))
     setRevMotif('')
   }
@@ -204,7 +219,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
       // comportement instantané, faute de destinataire clair pour valider.
       if (SECTEURS_AVEC_VALIDATION.includes(revision.secteurId)) {
         await setItem('depense_budgets', revision.id, {
-          id: revision.id, secteurId: revision.secteurId, annee, mois, montant: ancien, revisions: revision.revisions,
+          id: revision.id, secteurId: revision.secteurId, site: revision.site || null, annee, mois, montant: ancien, revisions: revision.revisions,
           montantPropose: nouveau, motifPropose: motif, statutValidation: 'en_attente',
           proposeParText: user?.nom || user?.login || '—', proposeParUid: user?.uid || null, proposeLe: Date.now(),
           updatedAt: Date.now()
@@ -221,7 +236,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
             title: `💰 Budget proposé — ${revision.secteurLabel}`,
             body: `${fmt(nouveau)} FCFA pour ${MOIS_LABELS[mois - 1]} ${annee} — confirmez la réception pour l'activer.`,
             module: 'depense', forUsers: destinataires, excludeUid: user?.uid,
-            link: ROUTE_FINANCES_PAR_SECTEUR[revision.secteurId] || '/depense/recettes-depenses'
+            link: revision.secteurId === 'logistique' && revision.site ? `/logistique/${revision.site}/finances` : (ROUTE_FINANCES_PAR_SECTEUR[revision.secteurId] || '/depense/recettes-depenses')
           }).catch(() => {})
         }
         toast.success('Budget proposé — en attente de confirmation du secteur ✓')
@@ -232,7 +247,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
       const entry = { id: genId(), ancien, nouveau, motif, date: Date.now(), auteur: user?.nom || user?.login || '—' }
       const revisions = [...revision.revisions, entry]
       await setItem('depense_budgets', revision.id, {
-        id: revision.id, secteurId: revision.secteurId, annee, mois, montant: nouveau, revisions, updatedAt: Date.now()
+        id: revision.id, secteurId: revision.secteurId, site: revision.site || null, annee, mois, montant: nouveau, revisions, updatedAt: Date.now()
       })
       await audit('depense', estAllocation ? 'BUDGET_ALLOUE' : 'BUDGET_REVISE',
         estAllocation
@@ -269,10 +284,10 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
       }
       const revisions = [...s.revisionsBudget, entry]
       await setItem('depense_budgets', s.budgetId, {
-        id: s.budgetId, secteurId: s.id, annee, mois, montant: nouveau, revisions,
+        id: s.budgetId, secteurId: s.secteurId, site: s.site || null, annee, mois, montant: nouveau, revisions,
         montantPropose: null, motifPropose: null, statutValidation: null, updatedAt: Date.now()
       })
-      await audit('depense', 'BUDGET_RECEPTION_CONFIRMEE', `${s.label} — ${fmt(nouveau)} FCFA confirmés reçus`, { secteurId: s.id, annee, mois, ancien, nouveau })
+      await audit('depense', 'BUDGET_RECEPTION_CONFIRMEE', `${s.label} — ${fmt(nouveau)} FCFA confirmés reçus`, { secteurId: s.secteurId, site: s.site || null, annee, mois, ancien, nouveau })
       await notify({
         type: 'success', title: `✅ Budget confirmé reçu — ${s.label}`,
         body: `${fmt(nouveau)} FCFA confirmés par ${user?.nom || user?.login || '—'} pour ${MOIS_LABELS[mois - 1]} ${annee}.`,
@@ -345,7 +360,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
     if (!nouvelleDepense.date) return toast.error('Date requise')
     setDepenseSaving(true)
     try {
-      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId }, { user, budgets, depenses })
+      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: secteurId === 'logistique' ? (site || 'lome') : undefined }, { user, budgets, depenses })
       toast.success(statutInitial === 'en_attente' ? 'Demande de décaissement soumise — en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
       setNouvelleDepense(null)
     } finally {
@@ -534,7 +549,7 @@ export default function RecettesDepenses({ secteurId = null, masquerRevenu = fal
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Secteur</p>
                   <p className="mt-0.5 flex items-center gap-1.5 font-bold text-gray-800">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: sect?.color || '#64748b' }} />
-                    {sect?.label || detail.secteurId}
+                    {libelleSecteurSite(sect, detail)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white p-3 shadow-sm">

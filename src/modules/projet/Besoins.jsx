@@ -4,7 +4,7 @@
 // (en attente → validé / refusé), distinct du suivi opérationnel (à traiter →
 // en cours → satisfait / annulé).
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, PackagePlus, Play, CheckCircle2, XCircle, Check, X, Layers, Paperclip } from 'lucide-react'
+import { Plus, Pencil, Trash2, PackagePlus, Play, CheckCircle2, XCircle, Check, X, Layers, Paperclip, Eye, MessageSquarePlus } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -20,7 +20,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { formatDateShort, formatDateTime, genId, todayStr } from '../../utils/formatters'
-import { STATUTS_PROJET, PRIORITES } from './data'
+import { PRIORITES } from './data'
 import { marquerVoletVu } from './vues'
 import { projetsVisibles, scopeParProjets } from './logic'
 import { SECTEUR_PAR_TYPE_PROJET, natureFluxProjet } from '../depense/logic'
@@ -68,6 +68,23 @@ const VALIDATION_META = {
   refuse:     { label: '❌ Refusé',                    tone: 'danger'  }
 }
 const validationDe = (b) => b.validation || 'en_attente'
+// Couleur d'accent de la ligne (bordure gauche) — reprend la teinte du badge de
+// validation, même logique que la barre colorée par secteur des lignes de Dépenses.
+const TONE_HEX = { success: '#16a34a', danger: '#dc2626', warning: '#d97706', info: '#0284c7', neutral: '#94a3b8', purple: '#7c3aed' }
+
+// Rôles qui reçoivent les alertes/rappels de besoins (nouveau besoin + relance
+// 3×/jour côté serveur, cf. netlify/functions/besoins-relance.mjs — à garder
+// synchronisée avec cette liste). Ni super_admin ni admin : ce sont des comptes
+// techniques, pas des rôles métier à solliciter sur des décisions d'achat. Le
+// superviseur (lecture seule) est notifié mais ne peut pas valider/refuser
+// (cf. `estAdmin` plus bas, toujours basé sur FULL_ACCESS_ROLES).
+const BESOINS_NOTIF_ROLES = ['pau', 'ge', 'directeur', 'info', 'superviseur']
+
+// Un besoin VALIDÉ quitte la liste 24h après sa validation — la dépense qu'il a
+// générée reste pleinement consultable dans E-DÉPENSES (source de vérité), donc
+// le garder indéfiniment ici n'apporterait rien, à part encombrer la liste des
+// besoins qui nécessitent encore une action.
+const VALIDE_MASQUE_APRES_MS = 24 * 60 * 60 * 1000
 
 // Regroupement type « devis quantitatif et estimatif » : chaque besoin appartient à un
 // OUVRAGE (section du devis, ex. « Cage d'escalier », « Acrotère »…) et sa catégorie le
@@ -88,6 +105,10 @@ export default function Besoins() {
   // Décaissements liés aux besoins validés — pour afficher en direct où en est le paiement
   // (en attente / approuvé / décaissé) sans quitter l'écran Besoins.
   const { data: depenseDepensesTous } = useCollection('depense_depenses')
+  // Numéro du demandeur — affiché sur chaque besoin (liste + détail), à côté du
+  // projet concerné (déjà affiché via `projet.nom`).
+  const { data: usersTous } = useCollection('users')
+  const telephoneDe = (uid) => usersTous.find((u) => (u.uid || u.id) === uid)?.telephone || ''
   const { user, role } = useAuth()
   // Le superviseur crée/modifie/traite les besoins, mais ne les supprime pas.
   // Accès complet pour la secrétaire/l'agent, sauf la suppression (réservée).
@@ -117,6 +138,9 @@ export default function Besoins() {
       .filter((b) => !filtreProjet || b.projetId === filtreProjet)
       .filter((b) => !filtreStatut || b.statut === filtreStatut)
       .filter((b) => !filtreValidation || validationDe(b) === filtreValidation)
+      // Masque les besoins validés depuis plus de 24h (cf. VALIDE_MASQUE_APRES_MS) —
+      // la dépense générée reste consultable dans E-DÉPENSES, source de vérité.
+      .filter((b) => !(validationDe(b) === 'valide' && b.valideLe && Date.now() - b.valideLe > VALIDE_MASQUE_APRES_MS))
       .sort((a, b) => {
         const ordre = { a_traiter: 0, en_cours: 1, satisfait: 2, annule: 3 }
         if (ordre[a.statut] !== ordre[b.statut]) return (ordre[a.statut] ?? 0) - (ordre[b.statut] ?? 0)
@@ -180,18 +204,19 @@ export default function Besoins() {
     [besoins, lot?.projetId]
   )
 
-  // Tout nouveau besoin remonte systématiquement à l'administration (les rôles ayant
-  // pleinement accès à E-G.Pro), en plus du responsable du projet s'il y en a un et
+  // Tout nouveau besoin remonte systématiquement à PAU/GE/directeur/info/superviseur
+  // (cf. BESOINS_NOTIF_ROLES), en plus du responsable du projet s'il y en a un et
   // qu'il n'est pas lui-même le créateur du besoin.
   async function notifierResponsable(projetId, titre) {
     const projet = projets.find((p) => p.id === projetId)
     if (!projet) return
     const forUsers = (projet.responsableUid && projet.responsableUid !== user?.uid) ? [projet.responsableUid] : []
+    const demandeurTel = user?.telephone ? ` · ☎ ${user.telephone}` : ''
     await notify({
       type: 'info',
       title: `📦 Nouveau besoin — ${projet.nom}`,
-      body: `${titre} — en attente de validation`,
-      module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, excludeUid: user?.uid, link: '/projet/besoins'
+      body: `${titre} — en attente de validation · ✍️ ${user?.nom || user?.login || '—'}${demandeurTel}`,
+      module: 'projet', forRoles: BESOINS_NOTIF_ROLES, forUsers, excludeUid: user?.uid, link: '/projet/besoins'
     }).catch(() => {})
   }
 
@@ -309,10 +334,19 @@ export default function Besoins() {
   const [observationEdit, setObservationEdit] = useState(null) // { id, valeur }
   const enregistrerObservation = async () => {
     if (!observationEdit) return
+    const valeur = observationEdit.valeur.trim()
     await updateItem('projet_besoins', observationEdit.id, {
-      observationPau: observationEdit.valeur.trim(),
+      observationPau: valeur,
       observationParText: user?.nom || user?.login || '—', observationLe: Date.now()
     })
+    // Le retour va au demandeur d'origine — c'est lui qui attend une réponse.
+    const b = besoins.find((x) => x.id === observationEdit.id)
+    if (b?.demandeParUid && b.demandeParUid !== user?.uid) {
+      await notify({
+        type: 'info', title: `💬 Réponse à votre besoin — ${b.titre}`,
+        body: valeur, module: 'projet', forUsers: [b.demandeParUid], link: '/projet/besoins'
+      }).catch(() => {})
+    }
     setObservationEdit(null)
   }
 
@@ -341,7 +375,13 @@ export default function Besoins() {
       source: 'besoin', besoinId: b.id,
       projetId: b.projetId, projetNom: projet?.nom || '',
       tacheId: b.tacheId || '', tacheTitre: tache?.titre || '',
-      enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null,
+      // `enregistrePar` doit rester le DEMANDEUR d'origine (b.demandePar), pas la
+      // personne qui valide ici — sinon E-DÉPENSES affiche systématiquement le nom
+      // de l'administrateur/directeur qui a cliqué « Valider » à la place de qui a
+      // réellement fait la demande. La validation elle-même reste tracée séparément
+      // sur le besoin (`valideParText`/`valideLe`, cf. `validerBesoin` ci-dessous).
+      enregistrePar: b.demandePar || user?.nom || user?.login || '—',
+      enregistreParUid: b.demandeParUid || user?.uid || null,
       createdAt: Date.now()
     })
     return id
@@ -368,7 +408,7 @@ export default function Besoins() {
     await notify({
       type: 'demande', title: '💰 Décaissement à traiter',
       body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA (besoin validé par ${user?.nom || '—'})`,
-      module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
+      module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
     }).catch(() => {})
   }
   async function refuserBesoin(b, motif = '') {
@@ -531,7 +571,11 @@ export default function Besoins() {
         </Card>
       )}
 
-      {/* Liste */}
+      {/* Liste — en lignes, même présentation que Dépenses (bordure de couleur à
+          gauche, clic sur la ligne = détail, actions rapides à droite). Les actions
+          moins fréquentes (Prendre en charge/Satisfait/Annuler, Observation du PAU)
+          restent disponibles dans la fenêtre de détail, qui n'est plus en lecture
+          seule — rien de ce qu'offrait la carte n'a été retiré. */}
       {!liste.length ? (
         <Card>
           <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
@@ -540,138 +584,107 @@ export default function Besoins() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {liste.map((b) => {
-            const projet = projets.find((p) => p.id === b.projetId)
-            const tache  = b.tacheId ? tachesTous.find((t) => t.id === b.tacheId) : null
-            const st = STATUTS_BESOIN[b.statut] || STATUTS_BESOIN.a_traiter
-            const vt = VALIDATION_META[validationDe(b)]
-            const refuse = validationDe(b) === 'refuse'
-            const decaissement = b.depenseId ? depenseDepensesTous.find((d) => d.id === b.depenseId) : null
-            return (
-              <Card key={b.id} onClick={() => setDetail(b)}
-                className="cursor-pointer space-y-2 transition-shadow hover:shadow-[0_10px_28px_-16px_rgba(13,148,136,0.28)]">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className={`flex items-center gap-1.5 font-bold truncate ${b.statut === 'satisfait' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                      {b.statut === 'satisfait' && <CheckCircle2 size={15} className="shrink-0 text-green-500" title="Déjà traité" />}
-                      {b.titre}
-                    </p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
-                      {b.section && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">📐 {b.section}</span>}
-                      {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
-                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700">{catLabel(b.categorie)}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${PRIORITES[b.priorite]?.tone === 'danger' ? 'bg-red-50 text-red-700' : PRIORITES[b.priorite]?.tone === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'}`}>
-                        {PRIORITES[b.priorite]?.label || b.priorite}
-                      </span>
-                      {b.pieces?.length > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
-                          <Paperclip size={10} /> {b.pieces.length}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] border-separate border-spacing-y-2.5 text-sm">
+            <thead>
+              <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <th className="px-4 pb-1 text-left font-bold">Date & projet</th>
+                <th className="px-4 pb-1 text-left font-bold">Besoin</th>
+                <th className="px-4 pb-1 text-left font-bold">Demandé par</th>
+                <th className="px-4 pb-1 text-right font-bold">Montant</th>
+                <th className="px-4 pb-1 text-center font-bold">Statut</th>
+                <th className="px-4 pb-1"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {liste.map((b) => {
+                const projet = projets.find((p) => p.id === b.projetId)
+                const tache  = b.tacheId ? tachesTous.find((t) => t.id === b.tacheId) : null
+                const st = STATUTS_BESOIN[b.statut] || STATUTS_BESOIN.a_traiter
+                const vt = VALIDATION_META[validationDe(b)]
+                const refuse = validationDe(b) === 'refuse'
+                const decaissement = b.depenseId ? depenseDepensesTous.find((d) => d.id === b.depenseId) : null
+                const accent = TONE_HEX[vt.tone] || '#94a3b8'
+                const cell = 'bg-white py-3 align-middle transition-colors group-hover:bg-teal-50/40'
+                return (
+                  <tr key={b.id} onClick={() => setDetail(b)}
+                    className="group cursor-pointer shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_6px_18px_-6px_rgba(13,148,136,0.18)] hover:ring-teal-200">
+                    <td className={`${cell} rounded-l-2xl border-l-[3px] px-4`} style={{ borderColor: accent }}>
+                      <p className="whitespace-nowrap text-xs font-semibold text-gray-700">{b.createdAt ? formatDateShort(b.createdAt) : '—'}</p>
+                      {projet && (
+                        <span className="mt-1 inline-block max-w-[140px] truncate whitespace-nowrap rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700" title={projet.nom}>
+                          {projet.nom}
                         </span>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <Badge tone={vt.tone}>{vt.label}</Badge>
-                    <Badge tone={st.tone}>{st.label}</Badge>
-                    {decaissement && (
-                      <Badge tone={(STATUTS_DECAISSEMENT[decaissement.statut] || STATUTS_DECAISSEMENT.decaissee).tone}>
-                        💰 {(STATUTS_DECAISSEMENT[decaissement.statut] || STATUTS_DECAISSEMENT.decaissee).label}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {(Number(b.quantite) > 0 || Number(b.prixUnitaire) > 0) && (
-                  <p className="text-sm text-gray-600">
-                    Qté <b className="text-gray-800">{b.quantite || 0}{b.unite ? ` ${b.unite}` : ''}</b>
-                    {Number(b.prixUnitaire) > 0 && <> × PU <b className="text-gray-800">{Number(b.prixUnitaire).toLocaleString('fr-FR')}</b></>}
-                    {Number(b.montant) > 0 && <> = <b className="text-gray-900">{Number(b.montant).toLocaleString('fr-FR')} FCFA</b></>}
-                  </p>
-                )}
-                {b.dateSouhaitee && <p className="text-xs text-gray-500">Souhaité pour le {formatDateShort(b.dateSouhaitee)}</p>}
-                {b.note && <p className="text-sm text-gray-600 italic">« {b.note} »</p>}
-                {refuse && b.motifRefus && <p className="text-xs text-red-500">Motif du refus : {b.motifRefus}</p>}
-
-                {/* Observation du PAU — comme la colonne « Observation » d'un devis papier.
-                    Visible par tous une fois enregistrée ; modifiable par l'administration. */}
-                <div onClick={(e) => e.stopPropagation()}>
-                {observationEdit?.id === b.id ? (
-                  <div className="space-y-1.5 rounded-xl border border-violet-200 bg-violet-50/50 p-2">
-                    <textarea rows={2} autoFocus value={observationEdit.valeur}
-                      onChange={(e) => setObservationEdit((o) => ({ ...o, valeur: e.target.value }))}
-                      placeholder="Observation du PAU sur ce besoin…"
-                      className="w-full rounded-lg border border-violet-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none" />
-                    <div className="flex justify-end gap-1.5">
-                      <button onClick={() => setObservationEdit(null)} className="rounded-lg px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-white">Annuler</button>
-                      <button onClick={enregistrerObservation} className="rounded-lg bg-violet-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-violet-700">Enregistrer</button>
-                    </div>
-                  </div>
-                ) : b.observationPau ? (
-                  <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-2">
-                    <p className="text-xs text-violet-800">🗨️ <span className="font-semibold">Observation du PAU :</span> {b.observationPau}</p>
-                    {estAdmin && (
-                      <button onClick={() => setObservationEdit({ id: b.id, valeur: b.observationPau })} className="mt-1 text-[10px] font-semibold text-violet-500 hover:text-violet-700">Modifier</button>
-                    )}
-                  </div>
-                ) : estAdmin && (
-                  <button onClick={() => setObservationEdit({ id: b.id, valeur: '' })}
-                    className="self-start text-[11px] font-semibold text-violet-500 hover:text-violet-700">🗨️ + Ajouter une observation</button>
-                )}
-                </div>
-
-                <p className="text-[11px] text-gray-400">
-                  Demandé par {b.demandePar || '—'}{b.createdAt ? ` · ${formatDateTime(b.createdAt)}` : ''}
-                </p>
-
-                {/* Validation par l'administration — priorité d'affichage sur le suivi opérationnel */}
-                {estAdmin && validationDe(b) === 'en_attente' && (
-                  <div onClick={(e) => e.stopPropagation()} className="rounded-xl border border-violet-100 bg-violet-50/50 p-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="success" onClick={() => validerBesoin(b)}><Check size={13} /> Valider</Button>
-                      <Button size="sm" variant="danger" onClick={() => demanderRefus(b)}><X size={13} /> Refuser</Button>
-                    </div>
-                    <p className="mt-1.5 text-[10px] text-violet-500">
-                      Valider envoie {Number(b.montant || 0).toLocaleString('fr-FR')} FCFA en autorisation de décaissement (E-DÉPENSES). Pour ajuster le prix retenu, modifiez d'abord le besoin (✏️), ou laissez une observation.
-                    </p>
-                  </div>
-                )}
-
-                {!refuse && (
-                  <div onClick={(e) => e.stopPropagation()} className="flex flex-wrap gap-2 pt-1">
-                    {b.statut === 'a_traiter' && (
-                      <Button size="sm" variant="outline" onClick={() => changerStatut(b, 'en_cours')}>
-                        <Play size={13} /> Prendre en charge
-                      </Button>
-                    )}
-                    {(b.statut === 'a_traiter' || b.statut === 'en_cours') && (
-                      <Button size="sm" variant="success" onClick={() => changerStatut(b, 'satisfait')}>
-                        <CheckCircle2 size={13} /> Satisfait
-                      </Button>
-                    )}
-                    {b.statut !== 'annule' && b.statut !== 'satisfait' && (
-                      <Button size="sm" variant="danger" onClick={() => changerStatut(b, 'annule')}>
-                        <XCircle size={13} /> Annuler
-                      </Button>
-                    )}
-                    <button onClick={() => openEdit(b)} className="ml-auto rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
-                    {peutSupprimer && (
-                      <button onClick={() => handleDelete(b)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
-                    )}
-                  </div>
-                )}
-                {refuse && (
-                  <div onClick={(e) => e.stopPropagation()} className="flex justify-end gap-2 pt-1">
-                    <button onClick={() => openEdit(b)} className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
-                    {peutSupprimer && (
-                      <button onClick={() => handleDelete(b)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
-                    )}
-                  </div>
-                )}
-              </Card>
-            )
-          })}
+                    </td>
+                    <td className={`${cell} px-4`}>
+                      <p className={`line-clamp-2 max-w-[320px] font-semibold ${b.statut === 'satisfait' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{b.titre}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{catLabel(b.categorie)}</span>
+                        {b.section && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">📐 {b.section}</span>}
+                        {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${PRIORITES[b.priorite]?.tone === 'danger' ? 'bg-red-50 text-red-700' : PRIORITES[b.priorite]?.tone === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'}`}>
+                          {PRIORITES[b.priorite]?.label || b.priorite}
+                        </span>
+                        {b.pieces?.length > 0 && (
+                          <span className="flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700"><Paperclip size={10} /> {b.pieces.length}</span>
+                        )}
+                        {b.observationPau && <span className="text-[10px] font-medium text-violet-600">🗨️ observation</span>}
+                      </div>
+                    </td>
+                    <td className={`${cell} px-4`}>
+                      <p className="text-[11px] text-gray-400">✍️ <span className="font-semibold text-gray-600">{b.demandePar || '—'}</span></p>
+                      {telephoneDe(b.demandeParUid) && <p className="text-[10px] text-gray-400">☎ {telephoneDe(b.demandeParUid)}</p>}
+                      {b.createdAt && <p className="text-[10px] text-gray-400">{formatDateTime(b.createdAt)}</p>}
+                    </td>
+                    <td className={`${cell} whitespace-nowrap px-4 text-right`}>
+                      <span className="text-base font-extrabold text-gray-900">{Number(b.montant || 0).toLocaleString('fr-FR')}</span>
+                      <span className="ml-0.5 text-[10px] font-semibold text-gray-400">FCFA</span>
+                    </td>
+                    <td className={`${cell} px-4 text-center`}>
+                      <div className="flex flex-col items-center gap-1">
+                        <Badge tone={vt.tone}>{vt.label}</Badge>
+                        <Badge tone={st.tone}>{st.label}</Badge>
+                        {decaissement && (
+                          <Badge tone={(STATUTS_DECAISSEMENT[decaissement.statut] || STATUTS_DECAISSEMENT.decaissee).tone}>
+                            💰 {(STATUTS_DECAISSEMENT[decaissement.statut] || STATUTS_DECAISSEMENT.decaissee).label}
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className={`${cell} rounded-r-2xl px-3`} onClick={(e) => e.stopPropagation()}>
+                      {/* Fond teinté + bordure sur chaque icône (pas juste la couleur du
+                          trait) — sinon Valider/Refuser se distinguaient à peine du reste
+                          de la ligne, surtout Valider (vert clair peu contrasté). */}
+                      <div className="flex items-center justify-end gap-1">
+                        {estAdmin && validationDe(b) === 'en_attente' && (
+                          <>
+                            <button onClick={() => validerBesoin(b)} title="Valider"
+                              className="rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-600 transition-colors hover:border-green-300 hover:bg-green-100"><Check size={15} /></button>
+                            <button onClick={() => demanderRefus(b)} title="Refuser"
+                              className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><X size={15} /></button>
+                          </>
+                        )}
+                        {estAdmin && (
+                          <button onClick={() => { setDetail(b); setObservationEdit({ id: b.id, valeur: b.observationPau || '' }) }}
+                            title={b.observationPau ? "Modifier l'observation" : 'Ajouter une observation'}
+                            className="rounded-lg border border-violet-200 bg-violet-50 p-1.5 text-violet-600 transition-colors hover:border-violet-300 hover:bg-violet-100"><MessageSquarePlus size={15} /></button>
+                        )}
+                        <button onClick={() => setDetail(b)} title="Voir le détail"
+                          className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-100"><Eye size={15} /></button>
+                        <button onClick={() => openEdit(b)} title="Modifier"
+                          className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={15} /></button>
+                        {peutSupprimer && (
+                          <button onClick={() => handleDelete(b)} title="Supprimer"
+                            className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={15} /></button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -898,7 +911,8 @@ export default function Besoins() {
         )}
       </Modal>
 
-      {/* Détail d'un besoin — lecture seule, ouvert en cliquant sur sa carte */}
+      {/* Détail d'un besoin, ouvert en cliquant sur sa ligne — regroupe aussi les
+          actions moins fréquentes (validation, suivi opérationnel, observation). */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="md" title="Détail du besoin"
         panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-200/75 backdrop-blur-2xl backdrop-saturate-200"
         footer={<Button variant="outline" onClick={() => setDetail(null)}>Fermer</Button>}>
@@ -969,11 +983,32 @@ export default function Besoins() {
                 </div>
               )}
 
-              {b.observationPau && (
+              {/* Observation du PAU — comme la colonne « Observation » d'un devis papier.
+                  Visible par tous une fois enregistrée ; ajout/modification réservés à
+                  l'administration. Reprend exactement ce que la carte offrait avant. */}
+              {observationEdit?.id === b.id ? (
+                <div className="space-y-1.5 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">🗨️ Observation du PAU</p>
+                  <textarea rows={2} autoFocus value={observationEdit.valeur}
+                    onChange={(e) => setObservationEdit((o) => ({ ...o, valeur: e.target.value }))}
+                    placeholder="Observation du PAU sur ce besoin…"
+                    className="w-full rounded-lg border border-violet-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none" />
+                  <div className="flex justify-end gap-1.5">
+                    <button onClick={() => setObservationEdit(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 hover:bg-white">Annuler</button>
+                    <button onClick={enregistrerObservation} className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-violet-700">Enregistrer</button>
+                  </div>
+                </div>
+              ) : b.observationPau ? (
                 <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">🗨️ Observation du PAU</p>
                   <p className="mt-1 text-violet-800">{b.observationPau}</p>
+                  {estAdmin && (
+                    <button onClick={() => setObservationEdit({ id: b.id, valeur: b.observationPau })} className="mt-1.5 text-xs font-semibold text-violet-500 hover:text-violet-700">Modifier</button>
+                  )}
                 </div>
+              ) : estAdmin && (
+                <button onClick={() => setObservationEdit({ id: b.id, valeur: '' })}
+                  className="self-start text-xs font-semibold text-violet-500 hover:text-violet-700">🗨️ + Ajouter une observation</button>
               )}
 
               {validationDe(b) === 'refuse' && b.motifRefus && (
@@ -982,6 +1017,53 @@ export default function Besoins() {
                   <p className="mt-1 text-red-700">{b.motifRefus}</p>
                 </div>
               )}
+
+              {/* Actions — validation par l'administration, suivi opérationnel,
+                  modifier/supprimer. Regroupe ici tout ce que la carte proposait
+                  auparavant, la ligne de la liste ne gardant que les raccourcis
+                  les plus fréquents (Valider/Refuser, Voir, Modifier, Supprimer). */}
+              {estAdmin && validationDe(b) === 'en_attente' && (
+                <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-violet-500">Validation</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="success" onClick={() => validerBesoin(b)}><Check size={13} /> Valider</Button>
+                    <Button size="sm" variant="danger" onClick={() => demanderRefus(b)}><X size={13} /> Refuser</Button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-violet-500">
+                    Valider envoie {Number(b.montant || 0).toLocaleString('fr-FR')} FCFA en autorisation de décaissement (E-DÉPENSES). Pour ajuster le prix retenu, modifiez d'abord le besoin, ou laissez une observation.
+                  </p>
+                </div>
+              )}
+
+              {!(validationDe(b) === 'refuse') && (
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Suivi opérationnel</p>
+                  <div className="flex flex-wrap gap-2">
+                    {b.statut === 'a_traiter' && (
+                      <Button size="sm" variant="outline" onClick={() => changerStatut(b, 'en_cours')}>
+                        <Play size={13} /> Prendre en charge
+                      </Button>
+                    )}
+                    {(b.statut === 'a_traiter' || b.statut === 'en_cours') && (
+                      <Button size="sm" variant="success" onClick={() => changerStatut(b, 'satisfait')}>
+                        <CheckCircle2 size={13} /> Satisfait
+                      </Button>
+                    )}
+                    {b.statut !== 'annule' && b.statut !== 'satisfait' && (
+                      <Button size="sm" variant="danger" onClick={() => changerStatut(b, 'annule')}>
+                        <XCircle size={13} /> Annuler
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => { setDetail(null); openEdit(b) }}><Pencil size={13} /> Modifier</Button>
+                {peutSupprimer && (
+                  <Button size="sm" variant="danger" onClick={() => { setDetail(null); handleDelete(b) }}><Trash2 size={13} /> Supprimer</Button>
+                )}
+              </div>
 
               {/* Pièces jointes — lecture seule */}
               <div className="rounded-2xl bg-white p-4 shadow-sm">
@@ -993,7 +1075,7 @@ export default function Besoins() {
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Traçabilité</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 font-semibold text-teal-800">
-                    ✍️ Demandé par {b.demandePar || '—'}{b.createdAt ? ` · ${formatDateTime(b.createdAt)}` : ''}
+                    ✍️ Demandé par {b.demandePar || '—'}{telephoneDe(b.demandeParUid) ? ` · ☎ ${telephoneDe(b.demandeParUid)}` : ''}{b.createdAt ? ` · ${formatDateTime(b.createdAt)}` : ''}
                   </span>
                   {b.valideParText && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 font-semibold text-green-800">

@@ -1,7 +1,7 @@
 // Stock briques — appatam → séchage → prêtes · caillasses.
 // + Stock des matières premières (ciment, gravier, sable) : arrivages & consommation.
 import { useEffect, useRef, useState } from 'react'
-import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus } from 'lucide-react'
+import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus, Boxes } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -251,6 +251,20 @@ export default function StockBriques() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Boxes size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Stock briques</h2>
+          <p className="text-sm text-white/80">Appatam → séchage → prêtes à vendre · matières premières</p>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
