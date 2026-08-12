@@ -297,7 +297,7 @@ export default function Btp() {
       )}
 
       {detailProjet && (
-        <DetailProjetModal projet={detailProjet} depensesProjetTous={depensesProjetTous}
+        <DetailProjetModal projet={detailProjet} depensesProjetTous={depensesProjetTous} taches={tachesTous}
           depenseDepensesTous={depenseDepensesTous} onClose={() => setDetailProjet(null)} icon={HardHat} />
       )}
     </div>

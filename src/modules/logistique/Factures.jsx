@@ -1,9 +1,11 @@
 // Facturation logistique — émission obligatoire avant demande d'autorisation de sortie.
 import { useMemo, useState } from 'react'
-import { FileText, Plus, Trash2, Eye } from 'lucide-react'
+import { FileText, Plus, Trash2, Eye, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import StatCard from '../../shared/ui/StatCard'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
@@ -12,7 +14,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { logistiqueVoitMontants, logistiqueVoitValidateur } from '../../core/roles'
+import { logistiqueVoitMontants, logistiqueVoitValidateur, isFullAccessRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -34,6 +36,10 @@ export default function Factures() {
   // accordé) mais pas qui a approuvé la facture (cf. `voitValidateur`).
   const voitMontants = logistiqueVoitMontants(role)
   const voitValidateur = logistiqueVoitValidateur(role)
+  // Le cumul de facturation (KPI) est réservé à l'administration — plus restreint
+  // que `voitMontants` (qui inclut désormais la secrétaire) : c'est un chiffre
+  // agrégé de pilotage, pas un simple montant de facture individuelle.
+  const estAdministration = isFullAccessRole(role)
   const { data: allFactures } = useCollection('logistique_factures')
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: allDemandes } = useCollection('logistique_demandes')
@@ -52,14 +58,30 @@ export default function Factures() {
   // L'agent garde la main : il facture une prestation dès qu'elle est en brouillon
   // (pas besoin d'approbation préalable). L'approbation viendra via l'autorisation de sortie.
   const aFacturer = prestations.filter((p) => p.statut === 'brouillon')
-  const [filtreDateDebut, setFiltreDateDebut] = useState('')
-  const [filtreDateFin, setFiltreDateFin] = useState('')
+  // Filtre de période fusionné (Jour / Mois) — même composant et même comportement
+  // que Sources de revenus (E-DÉPENSES), pour que les deux écrans soient directement
+  // comparables sur exactement la même période.
+  const [modePeriode, setModePeriode] = useState('jour')
+  const [filtreJour, setFiltreJour]   = useState('')
+  const [filtreMois, setFiltreMois]   = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : filtreJour
   const liste = useMemo(() => {
-    return [...factures]
-      .filter((f) => !filtreDateDebut || (f.date || '') >= filtreDateDebut)
-      .filter((f) => !filtreDateFin || (f.date || '') <= filtreDateFin)
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, filtreDateDebut, filtreDateFin])
+    let rows = [...factures]
+    if (filtrePeriodeActif) {
+      rows = modePeriode === 'mois'
+        ? rows.filter((f) => (f.date || '').startsWith(filtreMois))
+        : rows.filter((f) => f.date === filtreJour)
+    }
+    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [factures, modePeriode, filtreJour, filtreMois, filtrePeriodeActif])
+
+  // Cumul de facturation — somme de la liste actuellement filtrée (respecte donc
+  // le filtre de période ci-dessus), toutes factures confondues (brouillon +
+  // approuvée) : c'est le total facturé sur la période, pas seulement le CA reconnu.
+  // Scopé au SITE courant (Lomé ou Kara, cf. `factures`) — c'est pourquoi ce cumul
+  // ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES, qui additionne les
+  // deux sites : ce n'est pas une incohérence, mais deux périmètres différents.
+  const cumulFacturation = useMemo(() => liste.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0), [liste])
 
   async function emettre() {
     const p = prestations.find((x) => x.id === prestId)
@@ -111,19 +133,20 @@ export default function Factures() {
           </Button>
         </div>
       )}
+      {/* Cumul de facturation — réservé à l'administration, recalculé selon le filtre
+          de période ci-dessous. Scopé au site courant : voir la note dans le code
+          (`cumulFacturation`) pour la différence avec le total combiné d'E-DÉPENSES. */}
+      {estAdministration && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard title="Cumul facturation" value={formatMoney(cumulFacturation)}
+            sub={`${liste.length} facture${liste.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
+            icon={Wallet} accent={COULEUR_MODULE.logistique} />
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
-        <FormGroup label="Du">
-          <input type="date" className="input-base" value={filtreDateDebut} onChange={(e) => setFiltreDateDebut(e.target.value)} />
-        </FormGroup>
-        <FormGroup label="Au">
-          <input type="date" className="input-base" value={filtreDateFin} onChange={(e) => setFiltreDateFin(e.target.value)} />
-        </FormGroup>
-        {(filtreDateDebut || filtreDateFin) && (
-          <button onClick={() => { setFiltreDateDebut(''); setFiltreDateFin('') }}
-            className="mb-0.5 text-xs font-semibold text-gray-400 hover:text-gray-600 hover:underline">
-            Réinitialiser
-          </button>
-        )}
+        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois} />
       </div>
       <Card className="p-0">
         <Table

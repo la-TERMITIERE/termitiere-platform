@@ -19,6 +19,7 @@ import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/f
 import { isApproverRole, isReadOnlyRole, logistiqueVoitMontants, logistiqueVoitValidateur } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FicheDetail from '../../shared/ui/FicheDetail'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { catColor } from './data'
 import { nbJoursInclus } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -94,14 +95,21 @@ export default function Prestations() {
     } catch (e) { toast.error(e.message) } finally { setDepSaving(false) }
   }
 
-  const [filtreDateDebut, setFiltreDateDebut] = useState('')
-  const [filtreDateFin, setFiltreDateFin] = useState('')
+  // Filtre de période fusionné (Jour / Mois) — même composant que Facturation et
+  // Sources de revenus (E-DÉPENSES), pour rester directement comparable.
+  const [modePeriode, setModePeriode] = useState('jour')
+  const [filtreJour, setFiltreJour]   = useState('')
+  const [filtreMois, setFiltreMois]   = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : filtreJour
   const liste = useMemo(() => {
-    return [...prestations]
-      .filter((p) => !filtreDateDebut || (p.date || '') >= filtreDateDebut)
-      .filter((p) => !filtreDateFin || (p.date || '') <= filtreDateFin)
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [prestations, filtreDateDebut, filtreDateFin])
+    let rows = [...prestations]
+    if (filtrePeriodeActif) {
+      rows = modePeriode === 'mois'
+        ? rows.filter((p) => (p.date || '').startsWith(filtreMois))
+        : rows.filter((p) => p.date === filtreJour)
+    }
+    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [prestations, modePeriode, filtreJour, filtreMois, filtrePeriodeActif])
 
   function openCreate() {
     setForm({
@@ -271,18 +279,9 @@ export default function Prestations() {
     <div className="space-y-4">
       {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
       <div className="flex flex-wrap items-end gap-2">
-        <FormGroup label="Du">
-          <input type="date" className="input-base" value={filtreDateDebut} onChange={(e) => setFiltreDateDebut(e.target.value)} />
-        </FormGroup>
-        <FormGroup label="Au">
-          <input type="date" className="input-base" value={filtreDateFin} onChange={(e) => setFiltreDateFin(e.target.value)} />
-        </FormGroup>
-        {(filtreDateDebut || filtreDateFin) && (
-          <button onClick={() => { setFiltreDateDebut(''); setFiltreDateFin('') }}
-            className="mb-0.5 text-xs font-semibold text-gray-400 hover:text-gray-600 hover:underline">
-            Réinitialiser
-          </button>
-        )}
+        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois} />
       </div>
       <Card className="p-0">
         <Table

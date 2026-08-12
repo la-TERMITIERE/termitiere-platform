@@ -91,6 +91,23 @@ export const tachesSuggestions = (type) =>
 export const etapesDefaut = (type) => ETAPES_PAR_TYPE[type] || ETAPES_PAR_TYPE.autre
 export const libelleEtape  = () => LIBELLE_ETAPE_SINGULIER
 
+// Catégories indicatives par SECTEUR du projet (agro/logistique/bat/evenementiel=
+// Briqueterie/garderie/divers — cf. SECTEURS dans depense/data.js), en complément des
+// suggestions par type ci-dessus : un projet garde un `type` assez générique (ex.
+// « autre ») mais peut être explicitement rattaché à un secteur métier (`secteurId`)
+// qui, lui, n'a pas toujours de bonnes suggestions côté ETAPES_PAR_TYPE (ex. aucun
+// type ne correspond à « logistique » ou « garderie »). Les deux listes se combinent
+// dans le formulaire — l'utilisateur reste toujours libre de saisir autre chose.
+export const ETAPES_PAR_SECTEUR = {
+  agro:         ['Préparation du sol', 'Semis / Plantation', 'Entretien', 'Récolte', 'Alimentation & entretien (élevage)', 'Suivi sanitaire', 'Commercialisation'],
+  logistique:   ['Réception marchandise', 'Stockage', 'Préparation commande', 'Transport / Livraison', 'Maintenance véhicules', 'Inventaire'],
+  bat:          ['Fondation', 'Élévation', 'Charpente & Toiture', 'Finitions', 'Réception'],
+  evenementiel: ['Approvisionnement matières premières', 'Production', 'Séchage', 'Stockage', 'Vente / Livraison'], // secteur Briqueterie
+  garderie:     ['Aménagement locaux', 'Inscription enfants', 'Recrutement personnel', 'Activités pédagogiques', 'Santé & sécurité'],
+  divers:       []
+}
+export const etapesSecteurDefaut = (secteurId) => ETAPES_PAR_SECTEUR[secteurId] || []
+
 // Seuils par défaut de déclenchement des alertes — réglables dans Paramètres.
 export const SEUILS_DEFAUT = { budget: 100, inactivite: 7 }
 

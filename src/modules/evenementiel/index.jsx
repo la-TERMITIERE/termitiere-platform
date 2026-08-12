@@ -8,6 +8,8 @@ import StockBriques from './StockBriques'
 import Ventes from './Ventes'
 import Factures from './Factures'
 import Demandes from './Demandes'
+import SectorBesoins from '../../shared/besoins/SectorBesoins'
+import Materiel from './Materiel'
 import Pilotage from './Pilotage'
 import Params from './Params'
 import Clients from './Clients'
@@ -54,6 +56,8 @@ export default function EvenementielModule() {
       {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
       <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
       <Route path="demandes" element={<Demandes />} />
+      <Route path="besoins" element={<SectorBesoins secteurId="evenementiel" />} />
+      <Route path="materiel" element={<Materiel />} />
       <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
       <Route path="clients" element={<Clients />} />
       <Route path="partenaires" element={<Partenaires module="evenementiel" />} />

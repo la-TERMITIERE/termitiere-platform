@@ -8,12 +8,12 @@ import Modal from '../../shared/ui/Modal'
 import PiecesJointes from '../../shared/ui/PiecesJointes'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, addItem, updateItem, removeItem } from '../../core/db'
-import { STATUTS_TACHE, PRIORITES, tachesSuggestions, etapesDefaut, libelleEtape } from './data'
+import { STATUTS_TACHE, PRIORITES, tachesSuggestions, etapesDefaut, etapesSecteurDefaut, libelleEtape } from './data'
 import { ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 
 function ChampAssignee({ value, onChange, users }) {
@@ -109,7 +109,10 @@ const STATUT_TACHE_ACCENT = { a_faire: '#94a3b8', en_cours: '#f59e0b', en_revisi
 
 // ─── Onglet Tâches ────────────────────────────────────────────────────────────
 
-export function OngletTaches({ taches, projets, users, depenses, initialFiltrePhase = '' }) {
+// `initialProjetId` (optionnel) : pré-remplit le projet à la création — utilisé
+// quand cet onglet est déjà scopé à un seul projet (cf. ProjetsExplorer.jsx), pour
+// ne pas faire choisir un projet dans une liste qui n'en contient qu'un seul.
+export function OngletTaches({ taches, projets, users, depenses, initialFiltrePhase = '', initialProjetId = '' }) {
   const { user, role }        = useAuthStore()
   // La secrétaire et l'agent ont un accès complet aux tâches (créer, modifier, démarrer,
   // soumettre, valider) — seule la SUPPRESSION leur reste interdite.
@@ -183,7 +186,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
   [taches, projets, filtreProjet, filtreStatut, filtrePhase, filtreResponsable, mesTaches, nomConnecte])
 
-  const openCreate = () => { setForm({ ...VIDE_TACHE, versementDate: todayStr() }); setEditing(null); setModal(true) }
+  const openCreate = () => { setForm({ ...VIDE_TACHE, projetId: initialProjetId, versementDate: todayStr() }); setEditing(null); setModal(true) }
   const openEdit   = (t) => {
     setForm({
       titre: t.titre||'', projetId: t.projetId||'', phase: t.phase||'', assignee: t.assignee||'',
@@ -524,11 +527,16 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                 </select>
               </div>
               {(() => {
-                const typeProjet = projets.find((p) => p.id === form.projetId)?.type
+                const projetForm = projets.find((p) => p.id === form.projetId)
+                const typeProjet = projetForm?.type
+                const secteurProjet = projetForm ? secteurEffectif(projetForm)?.id : null
                 // Les étapes déjà utilisées sur CE projet passent en premier dans les suggestions —
-                // évite de retaper une variante/typo (ex: "demarage" vs "demarrage") pour la même étape.
+                // évite de retaper une variante/typo (ex: "demarage" vs "demarrage") pour la même
+                // étape — puis celles par type de projet, puis celles par secteur (utile quand le
+                // type ne donne pas de bonnes suggestions, ex. logistique/garderie). Simple saisie
+                // libre toujours possible : ce ne sont que des suggestions (ChampAutocomplete).
                 const phasesDuProjet = [...new Set(taches.filter((t) => t.projetId === form.projetId).map((t) => t.phase).filter(Boolean))]
-                const suggestions = [...new Set([...phasesDuProjet, ...etapesDefaut(typeProjet)])]
+                const suggestions = [...new Set([...phasesDuProjet, ...etapesDefaut(typeProjet), ...etapesSecteurDefaut(secteurProjet)])]
                 return (
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-600">{libelleEtape(typeProjet)}</label>
