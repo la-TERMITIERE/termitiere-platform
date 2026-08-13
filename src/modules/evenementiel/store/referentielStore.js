@@ -1,6 +1,6 @@
 // Référentiel briqueterie (Zustand + RTDB).
 import { create } from 'zustand'
-import { MATIERES, BRIQUES, RECETTES_DEFAULT } from '../data'
+import { MATIERES, BRIQUES, RECETTES_DEFAULT, PRIX_SAC_CIMENT_DEFAUT } from '../data'
 import { subscribeCollection, setItem, removeItem } from '../../../core/db'
 
 const COL = 'evenementiel_referentiel'
@@ -11,6 +11,7 @@ export const useBriqueterieStore = create((set, get) => ({
   matieres: MATIERES,
   briques: BRIQUES,
   recettes: RECETTES_DEFAULT,
+  prixSacCiment: PRIX_SAC_CIMENT_DEFAUT, // base du calcul de marge (coût matériel)
   ready: false,
 
   init: () => {
@@ -25,10 +26,12 @@ export const useBriqueterieStore = create((set, get) => ({
       const matieres = rows.filter((r) => r.type === 'matiere').map(({ type, createdAt, ...rest }) => rest)
       const briques = rows.filter((r) => r.type === 'brique').map(({ type, createdAt, ...rest }) => rest)
       const recRow = rows.find((r) => r.type === 'recettes')
+      const margeRow = rows.find((r) => r.type === 'marge')
       set({
         matieres: matieres.length ? matieres : MATIERES,
         briques: briques.length ? briques : BRIQUES,
         recettes: recRow?.data || RECETTES_DEFAULT,
+        prixSacCiment: margeRow?.prixSacCiment ?? PRIX_SAC_CIMENT_DEFAUT,
         ready: true
       })
     })
@@ -38,6 +41,7 @@ export const useBriqueterieStore = create((set, get) => ({
   saveMatiere: (m) => setItem(COL, m.id, { ...m, type: 'matiere' }),
   saveBrique: (b) => setItem(COL, b.id, { ...b, type: 'brique' }),
   saveRecettes: (data) => setItem(COL, 'recettes', { type: 'recettes', data }),
+  saveMarge: (prixSacCiment) => setItem(COL, 'marge', { type: 'marge', prixSacCiment: parseFloat(prixSacCiment) || 0 }),
   removeBrique: (id) => removeItem(COL, id),
   getBrique: (id) => get().briques.find((b) => b.id === id)
 }))
@@ -46,6 +50,7 @@ async function seedDefaults() {
   await Promise.all([
     ...MATIERES.map((m) => setItem(COL, m.id, { ...m, type: 'matiere' })),
     ...BRIQUES.map((b) => setItem(COL, b.id, { ...b, type: 'brique' })),
-    setItem(COL, 'recettes', { type: 'recettes', data: RECETTES_DEFAULT })
+    setItem(COL, 'recettes', { type: 'recettes', data: RECETTES_DEFAULT }),
+    setItem(COL, 'marge', { type: 'marge', prixSacCiment: PRIX_SAC_CIMENT_DEFAUT })
   ])
 }
