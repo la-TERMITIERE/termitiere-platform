@@ -6,16 +6,29 @@ export const MATIERES = [
   { id: 'sable', nom: 'Sable fin', unite: 'm³' }
 ]
 
+// `rendement` = nombre de briques produites avec UN sac de ciment (base du calcul
+// de marge : coût matériel d'une brique = prix du sac ÷ rendement). Valeurs issues
+// du suivi réel (fichier RECETTE) ; ajustables dans les Paramètres.
 export const BRIQUES = [
-  { id: 'b12_creux', nom: '12 creux', tarifVente: 350 },
-  { id: 'b15_creux', nom: '15 creux', tarifVente: 400 },
-  { id: 'b15_pleins', nom: '15 pleins', tarifVente: 450 },
-  { id: 'b12_pleins', nom: '12 pleins', tarifVente: 380 },
-  { id: 'b10_pleins', nom: '10 pleins', tarifVente: 320 },
-  { id: 'hourdis_12', nom: 'Hourdis de 12', tarifVente: 500 },
-  { id: 'hourdis_15', nom: 'Hourdis de 15', tarifVente: 550 },
-  { id: 'caillasses', nom: 'Caillasses (cassées)', tarifVente: 80 }
+  { id: 'b12_creux', nom: '12 creux', tarifVente: 350, rendement: 40 },
+  { id: 'b15_creux', nom: '15 creux', tarifVente: 400, rendement: 36 },
+  { id: 'b15_pleins', nom: '15 pleins', tarifVente: 450, rendement: 25 },
+  { id: 'b12_pleins', nom: '12 pleins', tarifVente: 380, rendement: 30 },
+  { id: 'b10_pleins', nom: '10 pleins', tarifVente: 320, rendement: 36 },
+  { id: 'hourdis_12', nom: 'Hourdis de 12', tarifVente: 500, rendement: 25 },
+  { id: 'hourdis_15', nom: 'Hourdis de 15', tarifVente: 550, rendement: 20 },
+  { id: 'caillasses', nom: 'Caillasses (cassées)', tarifVente: 80, rendement: 0 }
 ]
+
+// Prix par défaut d'un sac de ciment (FCFA) — base du coût matériel par brique.
+export const PRIX_SAC_CIMENT_DEFAUT = 7225
+
+// Rendement par défaut par type (repli quand une brique du référentiel enregistré
+// n'a pas encore de `rendement`). Coût matériel d'une brique = prix du sac ÷ rendement.
+export const RENDEMENTS_DEFAUT = {
+  b12_creux: 40, b15_creux: 36, b15_pleins: 25, b12_pleins: 30,
+  b10_pleins: 36, hourdis_12: 25, hourdis_15: 20, caillasses: 0
+}
 
 // Consommation par 1000 briques produites (ajustable dans Paramètres).
 export const RECETTES_DEFAULT = {

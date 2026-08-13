@@ -1,5 +1,21 @@
 // Logique métier — briqueterie (matières, production, stock briques, autorisations).
 import { estCertifie } from '../../shared/workflow'
+import { RENDEMENTS_DEFAUT } from './data'
+
+// Rendement effectif d'une brique (briques produites avec un sac de ciment) :
+// valeur du référentiel, sinon repli sur le défaut connu du type.
+export const rendementBrique = (b) => {
+  const r = b?.rendement
+  if (r !== undefined && r !== null && r !== '') return parseFloat(r) || 0
+  return RENDEMENTS_DEFAUT[b?.id] || 0
+}
+
+// Coût matériel d'UNE brique = prix du sac de ciment ÷ rendement du type.
+// (0 si le rendement est inconnu — la marge n'est alors pas calculable pour ce type.)
+export const coutMatiereBrique = (b, prixSac) => {
+  const r = rendementBrique(b)
+  return r > 0 ? (parseFloat(prixSac) || 0) / r : 0
+}
 
 export function previousInventoryDate(inventaires, date) {
   const dates = inventaires.map((i) => i.date).filter((d) => d && d < date).sort()

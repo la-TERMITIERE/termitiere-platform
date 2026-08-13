@@ -16,10 +16,11 @@ import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { MATIERES } from './data'
+import { rendementBrique, coutMatiereBrique } from './logic'
 
 export default function Params() {
   const { role } = useAuth()
-  const { briques, recettes, saveRecettes, saveBrique } = useBriqueterieStore()
+  const { briques, recettes, saveRecettes, saveBrique, prixSacCiment, saveMarge } = useBriqueterieStore()
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: productions } = useCollection('evenementiel_productions')
   const { data: ventes } = useCollection('evenementiel_ventes')
@@ -27,6 +28,8 @@ export default function Params() {
 
   const [localRecettes, setLocalRecettes] = useState(recettes)
   const [localTarifs, setLocalTarifs] = useState({})
+  const [localRendements, setLocalRendements] = useState({})
+  const [prixCiment, setPrixCiment] = useState(prixSacCiment)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -35,10 +38,12 @@ export default function Params() {
 
   useEffect(() => {
     setLocalRecettes(recettes)
-    const t = {}
-    briques.forEach((b) => { t[b.id] = b.tarifVente })
+    const t = {}, r = {}
+    briques.forEach((b) => { t[b.id] = b.tarifVente; r[b.id] = rendementBrique(b) })
     setLocalTarifs(t)
+    setLocalRendements(r)
   }, [recettes, briques])
+  useEffect(() => { setPrixCiment(prixSacCiment) }, [prixSacCiment])
 
   const briquesProd = briques.filter((b) => b.id !== 'caillasses')
 
@@ -51,10 +56,12 @@ export default function Params() {
 
   async function saveAll() {
     await saveRecettes(localRecettes)
+    await saveMarge(prixCiment)
     for (const b of briques) {
-      if (localTarifs[b.id] !== undefined) {
-        await saveBrique({ ...b, tarifVente: parseInt(localTarifs[b.id]) || b.tarifVente })
-      }
+      const patch = { ...b }
+      if (localTarifs[b.id] !== undefined) patch.tarifVente = parseInt(localTarifs[b.id]) || b.tarifVente
+      if (localRendements[b.id] !== undefined && localRendements[b.id] !== '') patch.rendement = parseFloat(localRendements[b.id]) || 0
+      await saveBrique(patch)
     }
     toast.success('Paramètres enregistrés ✓')
   }
@@ -168,6 +175,44 @@ export default function Params() {
               <span className="text-xs text-gray-400">{formatMoney(localTarifs[b.id] ?? b.tarifVente)} / unité</span>
             </FormGroup>
           ))}
+        </div>
+      </Card>
+
+      <Card title="Marge — coût du matériel (ciment)">
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <FormGroup label="Prix d'un sac de ciment (FCFA)">
+            <Input type="number" min="0" className="w-40" value={prixCiment} onChange={(e) => setPrixCiment(e.target.value)} />
+          </FormGroup>
+          <p className="pb-2 text-xs text-gray-400">
+            Coût matériel d'une brique = <strong>prix du sac ÷ rendement</strong> du type.
+            Le <strong>rendement</strong> = nombre de briques faites avec un sac de ciment. Utilisé dans l'onglet <strong>Marge &amp; Bénéfice</strong>.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Type de brique</th>
+                <th className="px-2 py-2 text-center">Rendement (briques / sac)</th>
+                <th className="px-3 py-2 text-right">Coût matériel / brique</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {briquesProd.map((b) => (
+                <tr key={b.id}>
+                  <td className="px-3 py-2 font-semibold">{b.nom}</td>
+                  <td className="px-2 py-1.5 text-center">
+                    <Input type="number" min="0" step="1" className="w-24 text-center"
+                      value={localRendements[b.id] ?? ''}
+                      onChange={(e) => setLocalRendements((r) => ({ ...r, [b.id]: e.target.value }))} />
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-semibold text-amber-700">
+                    {formatMoney(Math.round(coutMatiereBrique({ ...b, rendement: localRendements[b.id] }, prixCiment)))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
 
