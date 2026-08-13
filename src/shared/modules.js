@@ -135,7 +135,10 @@ export const MODULE_NAV = {
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
     { label: 'Facturation', to: '/evenementiel/factures', icon: FileText },
     { label: 'Pilotage & Analyses', to: '/evenementiel/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
-    { label: 'Dépense', to: '/evenementiel/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire'] },
+    // Dépense ouverte aussi aux AGENTS : ils saisissent leurs dépenses briqueterie
+    // (revenus masqués, budget en lecture seule) — cf. index.jsx.
+    { label: 'Dépense', to: '/evenementiel/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire', 'agent'] },
+    { label: 'Besoins', to: '/evenementiel/besoins', icon: PackagePlus, badgeKey: 'briqueterieBesoins' },
     { label: 'Autorisations sortie', to: '/evenementiel/demandes', icon: Send, badgeKey: 'briqueterieDemandes' },
     { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: ADMIN_VOLETS_ROLES },

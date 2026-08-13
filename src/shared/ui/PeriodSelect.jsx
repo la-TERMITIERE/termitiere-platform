@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { todayStr, addDays } from '../../utils/formatters'
 
 const PRESETS = [
+  { v: 'mois', label: 'Mois en cours' },
   { v: '7', label: '7 derniers jours' },
   { v: '30', label: '30 derniers jours' },
   { v: '90', label: '90 derniers jours' },
@@ -14,12 +15,17 @@ const PRESETS = [
   { v: 'custom', label: 'Plage personnalisée…' }
 ]
 
-export function usePeriodSelect(defaultPreset = '30') {
+// Premier jour du mois EN COURS ('YYYY-MM-01').
+const debutMoisCourant = () => todayStr().slice(0, 7) + '-01'
+
+// Par défaut : le MOIS EN COURS (du 1er du mois à aujourd'hui).
+export function usePeriodSelect(defaultPreset = 'mois') {
   const [preset, setPreset] = useState(defaultPreset)
-  const [from, setFrom] = useState(addDays(todayStr(), -30))
+  const [from, setFrom] = useState(debutMoisCourant())
   const [to, setTo] = useState(todayStr())
 
   const { start, end } = useMemo(() => {
+    if (preset === 'mois') return { start: debutMoisCourant(), end: todayStr() }
     if (preset === 'all') return { start: '0000-01-01', end: '9999-12-31' }
     if (preset === 'custom') return { start: from, end: to }
     return { start: addDays(todayStr(), -parseInt(preset)), end: todayStr() }

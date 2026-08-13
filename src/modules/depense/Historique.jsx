@@ -37,7 +37,7 @@ export default function Historique() {
   const [filtreType, setFiltreType] = useState('')
   const [recherche, setRecherche] = useState('')
   const [openRow, setOpenRow] = useState(null)
-  const { start, end, node: periodNode } = usePeriodSelect('90')
+  const { start, end, node: periodNode } = usePeriodSelect('mois')
 
   const lignes = useMemo(() => {
     return depenses

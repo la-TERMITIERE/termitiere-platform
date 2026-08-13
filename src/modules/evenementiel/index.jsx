@@ -8,6 +8,7 @@ import StockBriques from './StockBriques'
 import Ventes from './Ventes'
 import Factures from './Factures'
 import Demandes from './Demandes'
+import Besoins from './Besoins'
 import Pilotage from './Pilotage'
 import Params from './Params'
 import Clients from './Clients'
@@ -51,8 +52,10 @@ export default function EvenementielModule() {
       <Route path="ventes" element={<Ventes />} />
       <Route path="factures" element={<Factures />} />
       <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
-      {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
-      <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
+      {/* Dépense : administration/hiérarchie + secrétaire + AGENTS (ils saisissent
+          leurs propres dépenses briqueterie ; revenus masqués, budget en lecture seule). */}
+      <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' || role === 'agent' ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
+      <Route path="besoins" element={<Besoins />} />
       <Route path="demandes" element={<Demandes />} />
       <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
       <Route path="clients" element={<Clients />} />

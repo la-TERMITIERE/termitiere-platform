@@ -35,7 +35,7 @@ export default function Dashboard() {
 
   const [detail, setDetail] = useState(null) // { titre, render }
   const [scope, setScope] = useState(TOUTES) // filtre catégorie (comme Maxi Agro)
-  const { start, end, node: periodNode } = usePeriodSelect('30')
+  const { start, end, node: periodNode } = usePeriodSelect('mois')
 
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
   const dansPeriode = (d) => (d || '') >= start && (d || '') <= end

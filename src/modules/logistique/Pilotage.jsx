@@ -37,7 +37,7 @@ export default function Pilotage() {
   const demandes = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
   const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
 
-  const { start, end, preset, node: periodNode } = usePeriodSelect('30')
+  const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
   const [detail, setDetail] = useState(null) // drill-down analyse (élément / événement / client)

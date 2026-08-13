@@ -23,7 +23,7 @@ export default function Dashboard() {
   const { data: demandes } = useCollection('evenementiel_demandes')
 
   const [detail, setDetail] = useState(null) // { titre, render }
-  const { start, end, preset, node: periodNode } = usePeriodSelect('30')
+  const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
 
   // Période sélectionnée + période précédente équivalente (pour les écarts).
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
