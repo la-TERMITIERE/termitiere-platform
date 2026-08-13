@@ -36,7 +36,7 @@ export default function Pilotage() {
     return m
   }, [clientsRef])
 
-  const { start, end, preset, node: periodNode } = usePeriodSelect('30')
+  const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
 

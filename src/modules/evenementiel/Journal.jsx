@@ -31,7 +31,7 @@ function OngletJournal({ evenements }) {
   const [type, setType] = useState('')
   const [who, setWho] = useState('')
   const [openRow, setOpenRow] = useState(null)
-  const { start, end, node: periodNode } = usePeriodSelect('30')
+  const { start, end, node: periodNode } = usePeriodSelect('mois')
 
   const typesPresents = useMemo(
     () => [...new Set(evenements.map((e) => e.action).filter(Boolean))].sort(),

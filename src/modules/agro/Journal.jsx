@@ -57,7 +57,7 @@ function OngletJournal({ evenements }) {
   const [type, setType] = useState('')      // filtre type d'événement
   const [who, setWho] = useState('')         // filtre utilisateur
   const [openRow, setOpenRow] = useState(null) // ligne dépliée (détails)
-  const { start, end, node: periodNode } = usePeriodSelect('30')
+  const { start, end, node: periodNode } = usePeriodSelect('mois')
 
   // Types présents dans les données (pour alimenter le filtre).
   const typesPresents = useMemo(

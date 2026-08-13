@@ -19,9 +19,10 @@ import { agregerAchatsVentes, previsionSerie } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const PRESETS = [
+  { v: 'mois', label: 'Mois en cours' },
   { v: 'journalier', label: 'Journalier (aujourd\'hui)' },
   { v: '7', label: 'Hebdomadaire (7 jours)' },
-  { v: '30', label: 'Mensuel (30 jours)' },
+  { v: '30', label: '30 derniers jours' },
   { v: '90', label: '90 derniers jours' },
   { v: '180', label: '180 derniers jours' },
   { v: '365', label: 'Cette année (1 an)' },
@@ -37,8 +38,8 @@ export default function Dashboard() {
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
 
-  const [preset, setPreset] = useState('30')
-  const [from, setFrom] = useState(addDays(todayStr(), -30))
+  const [preset, setPreset] = useState('mois')
+  const [from, setFrom] = useState(todayStr().slice(0, 7) + '-01')
   const [to, setTo] = useState(todayStr())
   const [scope, setScope] = useState(TOUTES)
   // 'naissances' | 'deces' | 'mortalite' | 'letalite' | 'morbidite' | 'croissance' | 'ventes' | 'ca'
@@ -47,6 +48,7 @@ export default function Dashboard() {
   const isDaily = preset === 'journalier'
 
   const { start, end } = useMemo(() => {
+    if (preset === 'mois') return { start: todayStr().slice(0, 7) + '-01', end: todayStr() }
     if (preset === 'journalier') return { start: todayStr(), end: todayStr() }
     if (preset === 'custom') return { start: from, end: to }
     return { start: addDays(todayStr(), -parseInt(preset)), end: todayStr() }

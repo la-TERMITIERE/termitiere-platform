@@ -28,7 +28,7 @@ export default function Analyses() {
   const [gran, setGran] = useState('jour')
   const [exportOpen, setExportOpen] = useState(false)
   const [choix, setChoix] = useState(() => Object.fromEntries(SECTIONS_RAPPORT.map((s) => [s.id, true])))
-  const { start, end, node: periodNode } = usePeriodSelect('90')
+  const { start, end, node: periodNode } = usePeriodSelect('mois')
 
   const invPeriode = useMemo(() => inventaires.filter((i) => i.date >= start && i.date <= end), [inventaires, start, end])
 

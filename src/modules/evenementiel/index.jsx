@@ -53,8 +53,9 @@ export default function EvenementielModule() {
       <Route path="ventes" element={<Ventes />} />
       <Route path="factures" element={<Factures />} />
       <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
-      {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
-      <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
+      {/* Dépense : administration/hiérarchie + secrétaire + AGENTS (ils saisissent
+          leurs propres dépenses briqueterie ; revenus masqués, budget en lecture seule). */}
+      <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' || role === 'agent' ? <RecettesDepenses secteurId="evenementiel" masquerRevenu /> : <AccesRefuse />} />
       <Route path="demandes" element={<Demandes />} />
       <Route path="besoins" element={<SectorBesoins secteurId="evenementiel" />} />
       <Route path="materiel" element={<Materiel />} />

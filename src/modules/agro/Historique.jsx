@@ -17,7 +17,7 @@ export default function Historique() {
   const { data: inventaires } = useCollection('agro_inventaires')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
-  const { start, end, node: periodNode } = usePeriodSelect('30')
+  const { start, end, node: periodNode } = usePeriodSelect('mois')
 
   const [sens, setSens] = useState('tous')   // tous | entree | sortie
   const [type, setType] = useState('')        // type de mouvement
