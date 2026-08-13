@@ -127,7 +127,7 @@ export default function Params() {
       toast.success('Toutes les données garderie ont été effacées ✓')
       setConfirmReset(false)
     } catch (err) {
-      toast.error('Erreur lors de la réinitialisation')
+      toast.error('Erreur lors de la réinitialisation : ' + (err?.message || err))
     } finally {
       setResetting(false)
     }

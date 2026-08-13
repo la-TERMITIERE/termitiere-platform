@@ -1,7 +1,12 @@
 // Autorisations de sortie des briques — workflow à deux niveaux :
 // un gérant approuve, puis la Direction / GE certifie (libère le chargement).
+//
+// Même écran, onglet « Location matériel » : les demandes de location de matériel
+// (créées depuis Materiel.jsx → bouton « Louer ») suivent EXACTEMENT le même circuit
+// (approbation puis certification, mêmes rôles) — distinguées par `type: 'location'`
+// (les demandes de sortie briques n'ont pas de `type`, traité comme 'sortie').
 import { useMemo, useState } from 'react'
-import { Plus, Shield, Trash2, RotateCcw, Eye } from 'lucide-react'
+import { Plus, Shield, Trash2, RotateCcw, Eye, KeyRound } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -18,7 +23,7 @@ import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { dernierStockBriques, retirerVenteDuStock, appliquerDeltasStockBriques } from './logic'
 import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
-import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande, estAuteurDemande } from '../../shared/workflow'
+import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande, estAuteurDemande, estActif } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
 import CorrectifCompare from '../../shared/demandes/CorrectifCompare'
@@ -43,6 +48,12 @@ export default function Demandes() {
   const isCertifier = canCertify()
   const lectureSeule = isReadOnlyRole(role)
 
+  // Onglet 'sortie' (briques) ou 'location' (matériel) — même workflow, données
+  // affichées différentes. La création d'une location se fait depuis Materiel.jsx,
+  // pas ici (contextuelle au matériel choisi).
+  const [ongletDemande, setOngletDemande] = useState('sortie')
+  const typeDe = (d) => d.type || 'sortie'
+
   const [filtre, setFiltre] = useState('en_attente')
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null)
@@ -55,12 +66,14 @@ export default function Demandes() {
   // Vente sélectionnée : ses informations (client, briques, quantités) remplissent la demande.
   const selectedVente = ventes.find((v) => v.id === form.venteId) || null
   const estAuteur = (d) => d.demandeur === user.login
-  const nbCorrectifs = useMemo(() => demandes.filter(correctifEnCours).length, [demandes])
+  const nbCorrectifs = useMemo(() => demandes.filter((d) => typeDe(d) === 'sortie' && correctifEnCours(d)).length, [demandes])
+  const demandesOnglet = useMemo(() => demandes.filter((d) => typeDe(d) === ongletDemande), [demandes, ongletDemande])
+  const nbLocationEnAttente = useMemo(() => demandes.filter((d) => typeDe(d) === 'location' && estActif(normaliserStatut(d.statut))).length, [demandes])
   const filtrees = useMemo(() =>
-    [...demandes]
+    [...demandesOnglet]
       .filter((d) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(d) : normaliserStatut(d.statut) === filtre))
       .sort((a, b) => (a.date < b.date ? 1 : -1)),
-  [demandes, filtre])
+  [demandesOnglet, filtre])
 
   const stockDe = (briqueId) => dernierStockBriques(inventaires, briqueId, briqueId === 'caillasses' ? 'caillasses' : 'pret')
 
@@ -132,6 +145,49 @@ export default function Demandes() {
     } else { patch.refusePar = user.nom; patch.dateDecision = horodate }
     await updateItem('evenementiel_demandes', d.id, patch)
 
+    // ── Location matériel — même circuit, effet métier différent : le matériel ne
+    // part « en location » qu'à la CERTIFICATION, jamais avant (comme le stock des
+    // briques n'est décrémenté qu'à la certification). ──
+    if (typeDe(d) === 'location') {
+      if (statut === 'certifie') {
+        await updateItem('evenementiel_materiels', d.materielId, {
+          statut: 'loue', updatedAt: Date.now(),
+          locationEnCours: {
+            demandeId: d.id, locataireNom: d.locataireNom, locataireContact: d.locataireContact || '',
+            dateDebut: d.dateDebut, nombreJours: d.nombreJours, prixTotal: d.prixTotal
+          }
+        })
+        await notify({
+          type: 'success', title: 'Location matériel autorisée ✅',
+          body: `${d.materielNom} — ${d.nombreJours} jour(s) — ${formatMoney(d.prixTotal)} — locataire ${d.locataireNom}`,
+          module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/materiel'
+        })
+        await notify({
+          type: 'info', title: `Location autorisée par ${user.nom} ✅`,
+          body: `${d.materielNom} — demandée par ${d.demandeurNom}`,
+          module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+        })
+      } else if (statut === 'approuve_n1') {
+        await notify({
+          type: 'demande', title: 'Location matériel à certifier 🟡',
+          body: `${d.materielNom} — approuvée par ${user.nom}`,
+          module: 'evenementiel', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+        })
+      } else { // refuse
+        await notify({
+          type: 'refus', title: 'Demande de location refusée ⛔',
+          body: `${d.materielNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+          module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/demandes'
+        })
+      }
+      await audit('evenementiel',
+        statut === 'refuse' ? 'LOCATION_REFUS' : statut === 'certifie' ? 'LOCATION_CERTIFICATION' : 'LOCATION_APPROBATION', d.num)
+      toast.success(statut === 'certifie' ? 'Location certifiée ✓' : statut === 'approuve_n1' ? 'Approuvé — en attente de certification' : 'Demande refusée')
+      setDecision(null)
+      setCommentaire('')
+      return
+    }
+
     if (statut === 'certifie') {
       await updateItem('evenementiel_ventes', d.venteId, { statut: 'autorisee' })
       // Sortie autorisée : on décrémente le stock prêt (ou caillasses) des briques
@@ -185,7 +241,10 @@ export default function Demandes() {
   // ─── Suppression (tant que la demande n'est pas certifiée) ───
   // Le stock n'ayant pas encore bougé, il suffit de rendre la vente au brouillon.
   async function supprimer(d) {
-    if (!confirm(`Supprimer l'autorisation ${d.num} ?\nLa vente ${d.venteNum || ''} redevient un brouillon modifiable.`)) return
+    const msg = typeDe(d) === 'location'
+      ? `Supprimer la demande de location ${d.num} ?`
+      : `Supprimer l'autorisation ${d.num} ?\nLa vente ${d.venteNum || ''} redevient un brouillon modifiable.`
+    if (!confirm(msg)) return
     await run(async () => {
       await removeItem('evenementiel_demandes', d.id)
       if (d.venteId) await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })
@@ -291,18 +350,49 @@ export default function Demandes() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Shield size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Autorisations</h2>
+          <p className="text-sm text-white/80">Sortie de briques et location de matériel — validation à deux niveaux</p>
+        </div>
+      </div>
+
+      {/* Deux onglets, même écran, même workflow — cf. en-tête du fichier. */}
+      <div className="flex gap-2 border-b border-gray-200">
+        {[
+          { id: 'sortie', label: '📦 Sortie briques' },
+          { id: 'location', label: `🔑 Location matériel${nbLocationEnAttente ? ` (${nbLocationEnAttente})` : ''}` }
+        ].map((t) => (
+          <button key={t.id} onClick={() => { setOngletDemande(t.id); setFiltre('en_attente') }}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+              ongletDemande === t.id ? 'border-secondary text-secondary' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <Shield size={16} className="mr-1 inline" />
-        Toute sortie de briques exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) avant le chargement.
+        {ongletDemande === 'sortie'
+          ? <>Toute sortie de briques exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) avant le chargement.</>
+          : <>Toute location de matériel exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) — se demande depuis <strong>Matériel & Matériaux</strong>, bouton « Louer » sur le matériel concerné.</>}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {['en_attente', 'approuve_n1', 'correctif', 'certifie', 'refuse', 'tous'].map((f) => (
+        {(ongletDemande === 'sortie' ? ['en_attente', 'approuve_n1', 'correctif', 'certifie', 'refuse', 'tous'] : ['en_attente', 'approuve_n1', 'certifie', 'refuse', 'tous']).map((f) => (
           <button key={f} onClick={() => setFiltre(f)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filtre === f ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'}`}>
             {f === 'tous' ? 'Toutes' : f === 'correctif' ? `${CORRECTIF_STATUTS.demande.short}${nbCorrectifs ? ` (${nbCorrectifs})` : ''}` : STATUTS[f]?.short || f}
           </button>
         ))}
-        {!lectureSeule && (
+        {!lectureSeule && ongletDemande === 'sortie' && (
           <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
             <Plus size={16} /> Demander une autorisation
           </Button>
@@ -313,6 +403,7 @@ export default function Demandes() {
        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-gray-500">
+            {ongletDemande === 'sortie' ? (
             <tr className="bg-gray-50">
               <th className="sticky left-0 top-0 z-30 bg-gray-50 px-3 py-2 text-left" style={{ width: '110px' }}>N°</th>
               <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Vente / Client</th>
@@ -323,24 +414,46 @@ export default function Demandes() {
               <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Statut</th>
               <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2" />
             </tr>
+            ) : (
+            <tr className="bg-gray-50">
+              <th className="sticky left-0 top-0 z-30 bg-gray-50 px-3 py-2 text-left" style={{ width: '110px' }}>N°</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Matériel / Locataire</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2 text-center">Durée</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2 text-right">Prix</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Validation</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2">Statut</th>
+              <th className="sticky top-0 z-20 bg-gray-50 px-3 py-2" />
+            </tr>
+            )}
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtrees.map((d) => {
               const sn = normaliserStatut(d.statut)
+              const estLocation = typeDe(d) === 'location'
               const acts = actionsDemande(d.statut, {
                 canManage: isManager, canCertify: isCertifier,
                 estAuteur: estAuteurDemande(d, user), dejaApprouvePar: d.approuveN1Par, moiNom: user?.nom
               })
-              const enCorrectif = correctifEnCours(d)
+              const enCorrectif = !estLocation && correctifEnCours(d)
               const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
-              const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
+              const relancable = !estLocation && !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
               return (
               <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
                 <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white group-hover:bg-gray-50'}`} style={{ width: '110px' }}>{d.num}</td>
-                <td className="px-3 py-2"><span className="font-semibold">{d.venteNum}</span><br /><span className="text-xs text-gray-500">{d.clientNom}</span></td>
-                <td className="px-3 py-2 font-semibold">{d.briqueNom}</td>
-                <td className="px-3 py-2 text-center">{d.qte}</td>
-                <td className="px-3 py-2">{d.dateSortie}</td>
+                {estLocation ? (
+                  <>
+                    <td className="px-3 py-2"><span className="font-semibold">{d.materielNom}</span><br /><span className="text-xs text-gray-500">{d.locataireNom}</span></td>
+                    <td className="px-3 py-2 text-center">{d.nombreJours} j.</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatMoney(d.prixTotal)}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-3 py-2"><span className="font-semibold">{d.venteNum}</span><br /><span className="text-xs text-gray-500">{d.clientNom}</span></td>
+                    <td className="px-3 py-2 font-semibold">{d.briqueNom}</td>
+                    <td className="px-3 py-2 text-center">{d.qte}</td>
+                    <td className="px-3 py-2">{d.dateSortie}</td>
+                  </>
+                )}
                 <td className="px-3 py-2 text-xs text-gray-500">
                   {d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : '—'}
                   {d.certifiePar && <span className="block">Certifié : {d.certifiePar}</span>}
@@ -457,19 +570,22 @@ export default function Demandes() {
         {decision && (() => {
           const d = decision.demande
           const sn = normaliserStatut(d.statut)
-          const lignes = d.lignes || []
-          const items = lignes.length
-            ? lignes.map((l) => ({
-                nom: l.briqueNom, qte: parseInt(l.qte) || 0,
-                stock: dernierStockBriques(inventaires, l.briqueId, l.briqueId === 'caillasses' ? 'caillasses' : 'pret'),
-                montant: l.montant
-              }))
-            : [{ nom: d.briqueNom, qte: parseInt(d.qte) || 0 }]
-          const montant = lignes.length ? lignes.reduce((s, l) => s + (l.montant || 0), 0) : undefined
+          const estLocation = typeDe(d) === 'location'
+          const lignes = estLocation ? [] : (d.lignes || [])
+          const items = estLocation
+            ? [{ nom: d.materielNom, qte: 1, montant: d.prixTotal }]
+            : (lignes.length
+              ? lignes.map((l) => ({
+                  nom: l.briqueNom, qte: parseInt(l.qte) || 0,
+                  stock: dernierStockBriques(inventaires, l.briqueId, l.briqueId === 'caillasses' ? 'caillasses' : 'pret'),
+                  montant: l.montant
+                }))
+              : [{ nom: d.briqueNom, qte: parseInt(d.qte) || 0 }])
+          const montant = estLocation ? d.prixTotal : (lignes.length ? lignes.reduce((s, l) => s + (l.montant || 0), 0) : undefined)
           return (
             <>
-              <p className="mb-2 text-sm font-semibold text-gray-800">Vente {d.venteNum}</p>
-              {correctifEnCours(d) && (
+              {!estLocation && <p className="mb-2 text-sm font-semibold text-gray-800">Vente {d.venteNum}</p>}
+              {!estLocation && correctifEnCours(d) && (
                 <div className="mb-3">
                   <CorrectifCompare
                     correctif={d.correctif}
@@ -482,10 +598,10 @@ export default function Demandes() {
               <DemandeDetail
                 demandeur={d.demandeurNom}
                 dateHeure={d.date ? `${formatDateShort(d.date)}${d.heure ? ' ' + d.heure : ''}` : null}
-                client={d.clientNom}
+                client={estLocation ? `${d.locataireNom}${d.locataireContact ? ' · ☎ ' + d.locataireContact : ''} (locataire)` : d.clientNom}
                 motif={d.message}
-                sortieLabel="Chargement prévu"
-                sortieValue={d.dateSortie ? formatDateShort(d.dateSortie) : null}
+                sortieLabel={estLocation ? 'Début de location' : 'Chargement prévu'}
+                sortieValue={estLocation ? (d.dateDebut ? `${formatDateShort(d.dateDebut)} — ${d.nombreJours} jour(s)` : null) : (d.dateSortie ? formatDateShort(d.dateSortie) : null)}
                 items={items}
                 montant={montant}
                 statutNode={<Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>}
@@ -501,7 +617,7 @@ export default function Demandes() {
                       Commentaire de décision : « {d.commentaireDecision} »
                     </p>
                   )}
-                  {d.correctif && !correctifEnCours(d) && (
+                  {!estLocation && d.correctif && !correctifEnCours(d) && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                       {CORRECTIF_STATUTS[d.correctif.statut]?.label} — demandé par {d.correctif.parNom}
                       {d.correctif.traitePar ? `, tranché par ${d.correctif.traitePar}` : ''}

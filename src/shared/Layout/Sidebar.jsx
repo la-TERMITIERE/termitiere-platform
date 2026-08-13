@@ -87,11 +87,13 @@ export default function Sidebar({ open, onClose }) {
   const { data: projetMateriel } = useCollection('projet_materiels')
   const { data: depenseDepenses }= useCollection('depense_depenses')
   const { data: projetPropositions } = useCollection('projet_propositions')
+  const { data: sectorBesoins }  = useCollection('sector_besoins')
+  const { data: evenementielMateriels } = useCollection('evenementiel_materiels')
   const nouveautesBadges = useMemo(() => calculerBadges({
     projets: projetsDoc, projet_taches: tachesDoc, projet_depenses: projetDepenses,
     projet_besoins: projetBesoins, projet_materiels: projetMateriel, depense_depenses: depenseDepenses,
-    projet_propositions: projetPropositions
-  }, derniereVues, user?.uid), [projetsDoc, tachesDoc, projetDepenses, projetBesoins, projetMateriel, depenseDepenses, projetPropositions, derniereVues, user?.uid])
+    projet_propositions: projetPropositions, sector_besoins: sectorBesoins, evenementiel_materiels: evenementielMateriels
+  }, derniereVues, user?.uid), [projetsDoc, tachesDoc, projetDepenses, projetBesoins, projetMateriel, depenseDepenses, projetPropositions, sectorBesoins, evenementielMateriels, derniereVues, user?.uid])
 
   const badges = {
     agroDemandes: facturesAgro.filter((f) => f.statut === 'sortie_demandee' || f.statut === 'modif_demandee').length,

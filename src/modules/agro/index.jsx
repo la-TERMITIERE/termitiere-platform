@@ -11,6 +11,7 @@ import Factures from './Factures'
 import Analyses from './Analyses'
 import Sante from './Sante'
 import Demandes from './Demandes'
+import SectorBesoins from '../../shared/besoins/SectorBesoins'
 import Journal from './Journal'
 import Params from './Params'
 import AutoCarryForward from './AutoCarryForward'
@@ -61,6 +62,7 @@ export default function AgroModule() {
       <Route path="analyses" element={canViewPilotage(role) ? <Analyses /> : <AccesRefuse />} />
       <Route path="sante" element={<Sante />} />
       <Route path="demandes" element={<Demandes />} />
+      <Route path="besoins" element={<SectorBesoins secteurId="agro" />} />
       <Route path="partenaires" element={<Partenaires module="agro" />} />
       <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
       <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />

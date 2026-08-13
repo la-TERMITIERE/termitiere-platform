@@ -11,6 +11,7 @@ import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
@@ -102,13 +103,20 @@ export default function SourcesRevenus() {
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreType, setFiltreType]       = useState('')
-  const [filtreMois, setFiltreMois]       = useState('')
+  // Filtre de PÉRIODE fusionné dans un seul bloc « Période » : un sélecteur de
+  // granularité (Jour / Mois) suivi d'UN SEUL champ de saisie, dont le TYPE change
+  // selon le mode choisi (calendrier jour, ou sélecteur mois/année natif) — plutôt
+  // que deux champs distincts à remplir/effacer chacun de son côté.
+  const [modePeriode, setModePeriode] = useState('jour') // 'jour' | 'mois'
+  const [filtreJour, setFiltreJour]   = useState('')
+  const [filtreMois, setFiltreMois]   = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : filtreJour
   const [recherche, setRecherche]         = useState('')
   const [detail, setDetail]               = useState(null)
 
-  // Base commune (secteur/source/recherche) SANS le mois — sert de socle pour les KPI
-  // "Aujourd'hui" et "Mois" ci-dessous, qui ont chacun leur propre période fixe plutôt
-  // que de dépendre du filtre Mois choisi pour le tableau.
+  // Base commune (secteur/source/recherche) SANS période — sert de socle pour les KPI
+  // "Aujourd'hui"/"Jour"/"Mois" ci-dessous, qui ont chacun leur propre période plutôt
+  // que de dépendre du filtre choisi pour le tableau.
   const baseFiltree = useMemo(() => {
     let rows = [...lignes]
     if (filtreSecteur) rows = rows.filter((l) => l.secteurId === filtreSecteur)
@@ -121,34 +129,40 @@ export default function SourcesRevenus() {
   }, [lignes, filtreSecteur, filtreType, recherche])
 
   const liste = useMemo(() => {
-    if (!filtreMois) return baseFiltree
-    return baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
-  }, [baseFiltree, filtreMois])
+    if (!filtrePeriodeActif) return baseFiltree
+    if (modePeriode === 'mois') return baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+    return baseFiltree.filter((l) => l.date === filtreJour)
+  }, [baseFiltree, modePeriode, filtreJour, filtreMois, filtrePeriodeActif])
 
   const total = liste.reduce((s, l) => s + l.montant, 0)
 
   // KPI par secteur — un par secteur RÉELLEMENT présent dans les données (pas une
   // liste figée : un nouveau secteur générateur de revenu ajoute automatiquement sa
-  // propre carte). Somme du JOUR par défaut ; si un mois est choisi dans le filtre,
-  // la même carte bascule sur la somme de CE mois — pas besoin de deux jeux de KPI.
+  // propre carte). Somme du JOUR courant par défaut ; dès qu'une période est choisie
+  // dans le filtre, la même carte bascule sur la somme de ce jour précis ou de ce mois
+  // entier (selon `modePeriode`) — pas besoin de plusieurs jeux de KPI.
   const aujourdhui = todayStr()
-  const periodeLabel = filtreMois
-    ? `${MOIS_LABELS[Number(filtreMois.slice(5, 7)) - 1]} ${filtreMois.slice(0, 4)}`
-    : "Aujourd'hui"
+  const periodeLabel = !filtrePeriodeActif
+    ? "Aujourd'hui"
+    : modePeriode === 'mois'
+      ? `${MOIS_LABELS[Number(filtreMois.slice(5, 7)) - 1]} ${filtreMois.slice(0, 4)}`
+      : formatDateShort(filtreJour)
   const kpiParSecteur = useMemo(() => {
     // La carte existe pour tout secteur ayant DÉJÀ eu du revenu (peu importe quand) —
     // sinon un secteur sans rien aujourd'hui disparaissait complètement de la vue au
     // lieu d'afficher simplement 0 FCFA. Seule la SOMME affichée est bornée à la période.
-    const periode = filtreMois
-      ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
-      : baseFiltree.filter((l) => l.date === aujourdhui)
+    const periode = !filtrePeriodeActif
+      ? baseFiltree.filter((l) => l.date === aujourdhui)
+      : modePeriode === 'mois'
+        ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+        : baseFiltree.filter((l) => l.date === filtreJour)
     const sommesPeriode = new Map()
     periode.forEach((l) => sommesPeriode.set(l.secteurId, (sommesPeriode.get(l.secteurId) || 0) + l.montant))
     const secteursConnus = new Set(baseFiltree.map((l) => l.secteurId))
     return [...secteursConnus]
       .map((id) => ({ secteur: SECTEURS.find((s) => s.id === id) || { id, label: id, color: '#64748b' }, montant: sommesPeriode.get(id) || 0 }))
       .sort((a, b) => b.montant - a.montant || a.secteur.label.localeCompare(b.secteur.label))
-  }, [baseFiltree, filtreMois, aujourdhui])
+  }, [baseFiltree, modePeriode, filtreJour, filtreMois, filtrePeriodeActif, aujourdhui])
   const secteurDetail = detail ? SECTEURS.find((s) => s.id === detail.secteurId) : null
   const couleurDetail = secteurDetail?.color || COULEUR_MODULE.depense
 
@@ -185,11 +199,11 @@ export default function SourcesRevenus() {
             <Input className="pl-8" placeholder="Libellé, client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
           </div>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
-          <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        {/* Même composant qu'en MAXI LOGISTIQUE (Facturation/Prestations) — garantit
+            un comportement identique pour comparer les deux écrans sur la même période. */}
+        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois} />
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
           <Select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}>

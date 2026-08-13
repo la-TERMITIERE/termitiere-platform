@@ -10,6 +10,7 @@ import { useAuthStore } from '../../core/auth'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import DetailProjetModal from './DetailProjetModal'
+import ProjetFormModal from './ProjetFormModal'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -95,6 +96,9 @@ export default function ProjetsExplorer() {
   const { data: users }        = useCollection('users')
   const { data: notificationsTous } = useCollection('notifications')
   const [detailProjet, setDetailProjet] = useState(null)
+  // Édition d'un projet SANS quitter cet écran (cf. bouton ✏️ sur sa carte) — même
+  // formulaire que Projets.jsx, partagé via ProjetFormModal.
+  const [editProjet, setEditProjet] = useState(null)
 
   useEffect(() => { marquerVoletVu(user?.uid, 'projetProjets') }, [user?.uid])
 
@@ -201,6 +205,7 @@ export default function ProjetsExplorer() {
           users={users}
           depenses={depensesDuProjet}
           initialFiltrePhase={phaseParam === NON_CLASSEES ? '' : phaseParam}
+          initialProjetId={projetActuel?.id || ''}
         />
       </div>
     )
@@ -208,20 +213,35 @@ export default function ProjetsExplorer() {
 
   // ── Étape 3 : catégories de tâches du projet ──
   if (secteurId && projetId) {
+    // Ouvre directement le formulaire de création de tâche (même mécanisme que
+    // TachesExplorer → « Nouvelle tâche »), sur la catégorie « Non classées » —
+    // le formulaire permet de choisir la vraie phase à la volée.
+    const nouvelleTache = () => navigate(
+      `/projet/projets/${secteurId}/${projetId}/${NON_CLASSEES}`,
+      { state: { openCreate: true } }
+    )
     return (
       <div className="space-y-5">
-        <FilDAriane items={[
-          { label: 'Projets', to: '/projet/projets' },
-          { label: secteurActuel?.label || secteurId, to: `/projet/projets/${secteurId}` },
-          { label: projetActuel?.nom || 'Projet' }
-        ]} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FilDAriane items={[
+            { label: 'Projets', to: '/projet/projets' },
+            { label: secteurActuel?.label || secteurId, to: `/projet/projets/${secteurId}` },
+            { label: projetActuel?.nom || 'Projet' }
+          ]} />
+          {!isReadOnlyRole(role) && (
+            <Button onClick={nouvelleTache}><Plus size={16} /> Nouvelle tâche</Button>
+          )}
+        </div>
         <EnTete icon={ListChecks} accent={secteurActuel?.color || '#0d9488'}
           titre={`${projetActuel?.nom || 'Projet'} — Catégories de tâches`}
           sousTitre="Choisissez une catégorie pour voir les tâches correspondantes" />
         {categories.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
-            Aucune tâche enregistrée pour ce projet pour l'instant.
-          </p>
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
+            <p>Aucune tâche enregistrée pour ce projet pour l'instant.</p>
+            {!isReadOnlyRole(role) && (
+              <Button onClick={nouvelleTache} size="sm"><Plus size={14} className="mr-1" />Ajouter la première tâche</Button>
+            )}
+          </div>
         ) : (
           <>
             {/* Menu déroulant — accès direct à une catégorie */}
@@ -292,7 +312,7 @@ export default function ProjetsExplorer() {
                       </button>
                       {!isReadOnlyRole(role) && (
                         <>
-                          <button onClick={() => navigate('/projet/projets/liste', { state: { openEditProjetId: p.id } })}
+                          <button onClick={() => setEditProjet(p)}
                             title="Modifier" className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100">
                             <Pencil size={15} />
                           </button>
@@ -311,9 +331,13 @@ export default function ProjetsExplorer() {
           </div>
         )}
         {detailProjet && (
-          <DetailProjetModal projet={detailProjet} depensesProjetTous={depensesTous}
+          <DetailProjetModal projet={detailProjet} depensesProjetTous={depensesTous} taches={tachesTous}
             depenseDepensesTous={depenseDepensesTous} onClose={() => setDetailProjet(null)} icon={FolderKanban} />
         )}
+        <ProjetFormModal
+          open={!!editProjet} onClose={() => setEditProjet(null)}
+          editingProjet={editProjet} projets={projetsDuSecteur} users={users}
+        />
       </div>
     )
   }

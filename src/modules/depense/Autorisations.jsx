@@ -17,7 +17,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { formatDateShort } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget } from './logic'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { notifierBeneficiaire } from './notifications'
 
 const ACTION_INFO = {
@@ -165,15 +165,16 @@ export default function Autorisations() {
   async function alerterSiDepassement(d, secteur) {
     const [annee, mois] = (d.date || '').split('-').map(Number)
     if (!annee || !mois) return
-    const alloue = budgetSecteur(budgets, d.secteurId, annee, mois)
+    const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
     if (alloue <= 0) return
-    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], d.secteurId, annee, mois))
+    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], d.secteurId, annee, mois, d.site))
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct)
     if (statut.key === 'ok') return
+    const libelle = libelleSecteurSite(secteur, d)
     await notify({
       type: statut.key === 'depasse' ? 'danger' : 'warning',
-      title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${secteur?.label || d.secteurId}` : `🟠 Budget en alerte — ${secteur?.label || d.secteurId}`,
+      title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
       module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
@@ -217,7 +218,7 @@ export default function Autorisations() {
                 style={{ borderLeftColor: STATUT_ACCENT[d.statut] || '#94a3b8' }}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate font-bold text-gray-800">{secteur?.label || d.secteurId}</p>
+                    <p className="truncate font-bold text-gray-800">{libelleSecteurSite(secteur, d)}</p>
                     <Badge tone={st.tone}>{st.label}</Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-gray-500">{d.categorie || '—'} · {formatDateShort(d.date)}</p>
@@ -242,7 +243,7 @@ export default function Autorisations() {
               {/* En-tête glassmorphism — montant bien visible */}
               <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(180,83,9,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
                 style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.92) 0%, rgba(120,53,15,0.88) 100%)' }}>
-                <p className="text-xs text-white/70">{secteur?.label || d.secteurId} · {formatDateShort(d.date)}</p>
+                <p className="text-xs text-white/70">{libelleSecteurSite(secteur, d)} · {formatDateShort(d.date)}</p>
                 <p className="mt-0.5 text-2xl font-black leading-none">{Number(d.montant).toLocaleString('fr-FR')} FCFA</p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{st.label}</span>

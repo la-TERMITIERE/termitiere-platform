@@ -24,7 +24,16 @@ export const VOLETS_SUIVIS = {
   projetDocuments: { collections: ['projets', 'projet_taches'], champTableau: 'pieces',  champDate: 'createdAt', champCreateur: 'ajouteParUid' },
   projetGalerie:   { collections: ['projets'],                  champTableau: 'galerie', champDate: 'date',      champCreateur: 'ajouteParUid' },
   // E-DÉPENSES
-  depenseDepenses: { collection: 'depense_depenses', champDate: 'createdAt', champCreateur: 'enregistreParUid' }
+  depenseDepenses: { collection: 'depense_depenses', champDate: 'createdAt', champCreateur: 'enregistreParUid' },
+  // Besoins par secteur (volet générique, cf. src/shared/besoins/SectorBesoins.jsx) —
+  // une seule collection `sector_besoins` partagée, filtrée par secteur via `filtre`.
+  agroBesoins:         { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'agro' },
+  logistiqueBesoins:   { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'logistique' },
+  evenementielBesoins: { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'evenementiel' },
+  garderieBesoins:     { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'garderie' },
+  foncierBesoins:      { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'foncier' },
+  // Briqueterie
+  evenementielMateriel: { collection: 'evenementiel_materiels', champDate: 'createdAt', champCreateur: 'ajouteParUid' }
 }
 
 // Marque un volet comme vu par l'utilisateur courant (fait disparaître son badge).
@@ -51,6 +60,7 @@ export function calculerBadges(donnees, derniereVues, monUid) {
     } else {
       items = donnees[cfg.collection] || []
     }
+    if (cfg.filtre) items = items.filter(cfg.filtre)
     badges[cle] = items.filter((it) =>
       (it[cfg.champDate] || 0) > vu && it[cfg.champCreateur] && it[cfg.champCreateur] !== monUid
     ).length

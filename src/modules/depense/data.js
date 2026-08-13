@@ -11,6 +11,15 @@ export const SECTEURS = [
   { id: 'divers',       label: 'HORS SECTEUR', color: '#64748b' }
 ]
 
+// MAXI LOGISTIQUE a deux sites indépendants (Lomé/Kara, cf. src/modules/logistique/site/
+// useSite.jsx) avec chacun leur propre budget alloué — c'est le SEUL secteur scindé ainsi
+// dans E-DÉPENSES (budget, suivi de consommation, alertes, saisie de dépense). Mêmes ids
+// que SITES dans useSite.jsx — à garder synchronisés.
+export const LOGISTIQUE_SITES = [
+  { id: 'lome', label: 'Lomé' },
+  { id: 'kara', label: 'Kara' }
+]
+
 export const CATEGORIES_DEPENSE = [
   { id: 'salaires',      label: 'Salaires & primes' },
   { id: 'fournitures',   label: 'Fournitures & matériel' },

@@ -89,4 +89,24 @@ export function subscribeCollection(name, callback) {
   return () => { stopped = true; clearInterval(interval) }
 }
 
+// Répare les lignes créées par erreur avec un `addItem(..., { id: <valeur imposée>, ... })` :
+// `addItem` génère TOUJOURS son propre id — un champ `id` dans les données est ignoré à
+// l'écriture, mais `toRow` (ci-dessus) le fait ensuite gagner sur le vrai id de ligne.
+// Même symptôme que côté Firebase (cf. db.firebase.js → repairCustomIds) : on déplace
+// chaque ligne mal placée vers l'id `data.id` et on supprime l'ancienne.
+export async function repairCustomIds(name) {
+  const { data, error } = await supabase.from(table(name)).select('id,data')
+  if (error || !data) return { repaired: 0 }
+  let repaired = 0
+  for (const row of data) {
+    const idImpose = row.data?.id
+    if (idImpose && idImpose !== row.id) {
+      await supabase.from(table(name)).upsert({ id: idImpose, data: row.data, created_at: new Date().toISOString() })
+      await supabase.from(table(name)).delete().eq('id', row.id)
+      repaired++
+    }
+  }
+  return { repaired }
+}
+
 export const ts = () => Date.now()

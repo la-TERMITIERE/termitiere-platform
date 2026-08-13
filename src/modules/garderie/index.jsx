@@ -10,6 +10,7 @@ import Incidents from './Incidents'
 import Taches from './Taches'
 import TachesRoutinieres from './TachesRoutinieres'
 import Cantine from './Cantine'
+import SectorBesoins from '../../shared/besoins/SectorBesoins'
 import Journal from './Journal'
 import Params from './Params'
 import RecettesDepenses from '../depense/RecettesDepenses'
@@ -45,6 +46,7 @@ export default function GarderieModule() {
       {/* Ancienne URL du volet "Infirmerie & Soins", fusionné dans Incidents — conservée pour les liens existants */}
       <Route path="soins"     element={<Navigate to="/garderie/incidents" replace />} />
       <Route path="taches"    element={<Taches />} />
+      <Route path="besoins"   element={<SectorBesoins secteurId="garderie" />} />
 
       <Route path="enfants" element={
         <GarderieGuard roles={[...ROLES_GESTION, 'tata']}><Enfants /></GarderieGuard>

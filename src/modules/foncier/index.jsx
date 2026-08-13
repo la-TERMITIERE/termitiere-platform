@@ -4,6 +4,7 @@ import { Routes, Route } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import Dashboard from './Dashboard'
 import Dossiers from './Dossiers'
+import SectorBesoins from '../../shared/besoins/SectorBesoins'
 import Journal from './Journal'
 import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
@@ -30,6 +31,7 @@ export default function FoncierModule() {
     <Routes>
       <Route index element={<Dashboard />} />
       <Route path="dossiers" element={<Dossiers />} />
+      <Route path="besoins" element={<SectorBesoins secteurId="foncier" />} />
       <Route path="partenaires" element={<Partenaires module="foncier" />} />
       <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
       <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />

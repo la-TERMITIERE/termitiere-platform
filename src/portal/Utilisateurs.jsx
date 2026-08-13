@@ -108,8 +108,15 @@ export default function Utilisateurs() {
   async function supprimer(u) {
     if (u.login === 'admin') return toast.error("Le compte admin principal ne peut pas être supprimé")
     if (!confirm(`Supprimer l'utilisateur « ${u.nom} » ?`)) return
-    await removeUser(u)
-    toast.success('Utilisateur supprimé')
+    // Sans ce try/catch, un refus des règles de la base échouait en SILENCE :
+    // ni message d'erreur, ni confirmation — la suppression semblait simplement
+    // « ne rien faire ». On affiche désormais la cause, comme pour la création.
+    try {
+      await removeUser(u)
+      toast.success('Utilisateur supprimé')
+    } catch (e) {
+      toast.error('Échec de la suppression : ' + (e?.message || e))
+    }
   }
 
   return (
