@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Plus, UtensilsCrossed, ChevronLeft, ChevronRight, Pencil, CheckCircle2, Clock, Trash2 } from 'lucide-react'
+import { Plus, UtensilsCrossed, ChevronLeft, ChevronRight, Pencil, CheckCircle2, Clock, Trash2, Milk, CalendarDays } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -11,6 +11,7 @@ import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { useGarderieStore } from './store/garderieStore'
 import { journaliersActifsSurDate } from './logic'
 import { removeItem } from '../../core/db'
@@ -35,6 +36,17 @@ function heureEnMinutes(heure) {
   if (!heure) return null
   const [h, m] = heure.split(':').map(Number)
   return h * 60 + m
+}
+
+// Extrait un nombre de mois depuis un texte libre (ex: "3 mois", "5 m", "4") — sert
+// à la fois pour `ageSaisi` (enfants inscrits) et `ageApprox` (journaliers), qui
+// n'ont pas toujours de date de naissance exacte.
+function moisDepuisTexte(texte) {
+  if (!texte) return null
+  const match = String(texte).match(/(\d+)\s*(mois?|m)?/i)
+  if (!match) return null
+  const uniteMois = !match[2] || /mois?|m/i.test(match[2])
+  return uniteMois ? Number(match[1]) : null
 }
 
 const TYPES_LAIT = [
@@ -114,10 +126,10 @@ export default function Cantine() {
       .map((p) => p.enfantId)
   ), [presences, dateFiltre])
 
-  // Nourrissons < 6 mois ET présents ce jour
-  // Détecte aussi les enfants inscrits avec ageSaisi (ex: "3 mois", "5 mois")
-  const nourrissons = useMemo(() =>
-    enfants
+  // Nourrissons < 6 mois ET présents ce jour — inscrits (via date de naissance ou
+  // ageSaisi) ET journaliers (via ageApprox, seule info d'âge dont ils disposent).
+  const nourrissons = useMemo(() => {
+    const inscrits = enfants
       .filter((e) => {
         if (e.statut !== 'actif' || deletedEnfantIds.has(e.id)) return false
         if (!enfantsPresentsIds.has(e.id)) return false
@@ -125,25 +137,21 @@ export default function Cantine() {
         const m = ageMois(e.dateNaissance)
         if (m !== null) return m < 6
         // Vérification par âge saisi (ex: "3 mois", "5 mois", "4")
-        if (e.ageSaisi) {
-          const match = String(e.ageSaisi).match(/(\d+)\s*(mois?|m)?/i)
-          if (match) {
-            const valeur = Number(match[1])
-            const uniteMois = !match[2] || /mois?|m/i.test(match[2])
-            if (uniteMois && valeur < 6) return true
-          }
-        }
+        const mTexte = moisDepuisTexte(e.ageSaisi)
+        if (mTexte !== null && mTexte < 6) return true
         // Groupe nourrisson sans date → inclure par sécurité
         if (e.groupe === 'nourrisson') return true
         return false
       })
-      .map((e) => {
-        const m = ageMois(e.dateNaissance)
-        return { ...e, ageMoisVal: m ?? null }
-      })
-      .sort((a, b) => (a.ageMoisVal ?? 99) - (b.ageMoisVal ?? 99)),
-    [enfants, deletedEnfantIds, enfantsPresentsIds]
-  )
+      .map((e) => ({ ...e, ageMoisVal: ageMois(e.dateNaissance) ?? moisDepuisTexte(e.ageSaisi) }))
+
+    const journaliersNourrissons = journaliersActifsSurDate(journaliers, dateFiltre)
+      .map((j) => ({ ...j, ageMoisVal: moisDepuisTexte(j.ageApprox), _typeEnfant: 'journalier' }))
+      .filter((j) => j.ageMoisVal !== null && j.ageMoisVal < 6)
+
+    return [...inscrits, ...journaliersNourrissons]
+      .sort((a, b) => (a.ageMoisVal ?? 99) - (b.ageMoisVal ?? 99))
+  }, [enfants, deletedEnfantIds, enfantsPresentsIds, journaliers, dateFiltre])
 
   // Biberons du jour par enfant
   const biberonsDuJour = useMemo(() => {
@@ -338,6 +346,20 @@ export default function Cantine() {
 
   return (
     <div className="space-y-5">
+
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <UtensilsCrossed size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Cantine & Repas</h2>
+          <p className="text-sm text-white/80">Biberons, repas et suivi nutritionnel du jour</p>
+        </div>
+      </div>
 
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">
@@ -686,11 +708,16 @@ export default function Cantine() {
                     {/* En-tête enfant */}
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="font-bold text-gray-800">{e.prenom} {e.nom}</p>
+                        <p className="font-bold text-gray-800">
+                          {e.prenom} {e.nom}
+                          {e._typeEnfant === 'journalier' && (
+                            <span className="ml-1.5 text-[10px] font-semibold text-purple-600 bg-purple-50 rounded px-1 align-middle">Journalier</span>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-400">
                           {e.ageMoisVal !== null
                             ? `${e.ageMoisVal} mois ${semaines % 4 > 0 ? `et ${semaines % 4} sem.` : ''} · ${6 - e.ageMoisVal} mois avant la transition`
-                            : e.ageSaisi ? `~${e.ageSaisi}` : 'Groupe nourrisson'}
+                            : e.ageSaisi ? `~${e.ageSaisi}` : e.ageApprox ? `~${e.ageApprox}` : 'Groupe nourrisson'}
                         </p>
                         {prochainH && prochainAvantFermeture && !rappelActif && (
                           <p className="text-[10px] text-green-600 mt-0.5">⏱ Prochain biberon vers {prochainH}</p>
@@ -762,7 +789,8 @@ export default function Cantine() {
         open={!!biberonModal}
         onClose={() => setBiberonModal(null)}
         size="sm"
-        title={biberonModal ? `🍼 Biberon — ${biberonModal.prenom} ${biberonModal.nom}` : ''}
+        {...glassModalProps('#3b82f6')}
+        title="Nouveau biberon"
         footer={
           <>
             <Button variant="outline" onClick={() => setBiberonModal(null)}>Annuler</Button>
@@ -771,7 +799,20 @@ export default function Cantine() {
         }
       >
         {biberonModal && (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* Bandeau héro — bleu (thème nutrition/lait), enfant concerné */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(59,130,246,0.35),0_8px_20px_-8px_rgba(59,130,246,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.88) 0%, rgba(29,78,216,0.85) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#3b82f6', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Milk size={24} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{biberonModal.prenom} {biberonModal.nom}</p>
+                <p className="text-sm text-white/80">{biberonModal.ageMoisVal !== null ? `${biberonModal.ageMoisVal} mois` : (biberonModal.ageSaisi || biberonModal.ageApprox) ? `~${biberonModal.ageSaisi || biberonModal.ageApprox}` : 'Nourrisson'}</p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Heure *">
                 <Input type="time" value={biberonForm.heure}
@@ -808,7 +849,8 @@ export default function Cantine() {
 
       {/* Modal Menu */}
       <Modal open={!!menuModal} onClose={() => setMenuModal(null)} size="md"
-        title={`🍽️ Menu du ${formatDateShort(dateFiltre)}`}
+        {...glassModalProps(COULEUR_MODULE.garderie)}
+        title="Menu du jour"
         footer={
           <>
             <Button variant="outline" onClick={() => setMenuModal(null)} disabled={saving}>Annuler</Button>
@@ -816,16 +858,33 @@ export default function Cantine() {
           </>
         }>
         {menuModal && (
-          <div className="space-y-3">
-            <FormGroup label="🌅 Petit-déjeuner">
+          <div className="space-y-4">
+            {/* Bandeau héro — la date du menu, pas un enfant en particulier */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <CalendarDays size={24} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{formatDateShort(dateFiltre)}</p>
+                <p className="text-sm text-white/80">Menu de la journée</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🌅 Petit-déjeuner</p>
               <Input value={menuModal.data.petitDejeuner} onChange={(e) => setMenu('petitDejeuner', e.target.value)} placeholder="ex: Bouillie de mil, lait…" />
-            </FormGroup>
-            <FormGroup label="🍛 Déjeuner *">
+            </div>
+            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">🍛 Déjeuner *</p>
               <Input value={menuModal.data.dejeuner} onChange={(e) => setMenu('dejeuner', e.target.value)} placeholder="ex: Riz sauce arachide, viande de bœuf" />
-            </FormGroup>
-            <FormGroup label="🍎 Goûter">
+            </div>
+            <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-green-700">🍎 Goûter</p>
               <Input value={menuModal.data.gouter} onChange={(e) => setMenu('gouter', e.target.value)} placeholder="ex: Biscuits, jus de fruit…" />
-            </FormGroup>
+            </div>
+
             <FormGroup label="⚠️ Infos importantes du jour">
               <textarea
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"

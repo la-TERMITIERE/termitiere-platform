@@ -2,7 +2,7 @@
 // par période/type/utilisateur avec export Excel (existant, inchangé) ;
 // « Historique » = archive complète en timeline par jour, sans limite de période.
 import { Fragment, useMemo, useState } from 'react'
-import { FileSpreadsheet, ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
+import { FileSpreadsheet, ChevronRight, ChevronDown, Loader2, BookOpen } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Select from '../../shared/forms/Select'
@@ -209,13 +209,27 @@ export default function Journal() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <BookOpen size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Journal et Historique</h2>
+          <p className="text-sm text-white/80">Toutes les actions enregistrées dans la Garderie</p>
+        </div>
+      </div>
+
       <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
         {[
           { id: 'journal',     label: '📰 Journal' },
           { id: 'historique',  label: '🕐 Historique' }
         ].map((o) => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             {o.label}
           </button>
         ))}

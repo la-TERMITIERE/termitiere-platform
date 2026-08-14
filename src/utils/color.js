@@ -5,6 +5,17 @@ export function teinterHex(hex, alpha) {
   return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`
 }
 
+// Assombrit/éclaircit une couleur hex de `percent` (négatif = plus sombre) — sert à
+// construire le second point d'un dégradé d'en-tête à partir d'une seule couleur.
+export function shadeHex(hex, percent) {
+  const n = parseInt((hex || '#000000').replace('#', ''), 16)
+  const amt = Math.round(2.55 * percent)
+  const r = Math.max(0, Math.min(255, (n >> 16) + amt))
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt))
+  const b = Math.max(0, Math.min(255, (n & 0xff) + amt))
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+}
+
 // Couleur de marque de chaque module (cf. MODULES dans shared/modules.js) — pour
 // teinter les petites fenêtres de détail (factures, dossiers, fiches…) à la couleur
 // du module plutôt qu'en gris/blanc générique.

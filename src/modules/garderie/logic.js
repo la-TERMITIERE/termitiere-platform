@@ -66,7 +66,27 @@ export function aImpayes(paiements, enfantId) {
   )
 }
 
+// Date de fin d'un abonnement « court séjour » (semaines) — date d'inscription +
+// N semaines. Retourne null si les données sont incomplètes.
+export function dateFinCourtSejour(dateInscription, dureeSemaines) {
+  if (!dateInscription || !dureeSemaines) return null
+  const d = new Date(dateInscription)
+  d.setDate(d.getDate() + Number(dureeSemaines) * 7)
+  return d.toISOString().slice(0, 10)
+}
+
+// Nombre de jours restants avant la fin d'un court séjour (négatif si déjà
+// terminé). Sert à l'alerte affichée sur la fiche enfant.
+export function joursAvantFinCourtSejour(dateInscription, dureeSemaines) {
+  const fin = dateFinCourtSejour(dateInscription, dureeSemaines)
+  if (!fin) return null
+  const auj = new Date().toISOString().slice(0, 10)
+  return Math.round((new Date(fin) - new Date(auj)) / 86400000)
+}
+
 // Détecte les enfants mensuels présents ce mois sans paiement renouvelé.
+// Les abonnements annuels et « court séjour » (durée fixe, pas de cycle mensuel)
+// sont exclus de cette vérification.
 export function enfantsSansRenouvellement(enfants, paiements, presences) {
   const now    = new Date()
   const mois   = now.getMonth() + 1
@@ -75,7 +95,7 @@ export function enfantsSansRenouvellement(enfants, paiements, presences) {
 
   return enfants.filter((e) => {
     if (e.statut !== 'actif') return false
-    if (e.typeAbonnement === 'annuel') return false
+    if (e.typeAbonnement === 'annuel' || e.typeAbonnement === 'court_sejour') return false
 
     // Paiement valide ce mois = non journalier + non impayé
     // Triple vérification : par enfantId, OU par nom (fallback si enfantId mal stocké)

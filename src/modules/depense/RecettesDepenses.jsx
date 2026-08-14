@@ -20,6 +20,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
+import { teinterHex, shadeHex } from '../../utils/color'
 import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
 import { budgetSecteur, budgetDocSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
@@ -112,6 +113,13 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     return secteursEtSites(true)
   }, [secteurId, site])
   const theme = THEME_PAR_SECTEUR[secteurId] || THEME_PAR_SECTEUR.default
+  // En-tête : couleur du secteur embarqué, ou ambre par défaut pour la vue
+  // standalone d'E-DÉPENSES (tous secteurs confondus, pas de couleur unique).
+  const headerColor = secteurId ? (SECTEURS.find((s) => s.id === secteurId)?.color || '#B45309') : '#B45309'
+  const headerTitre = secteurId ? (masquerRevenu ? 'Dépenses' : 'Recettes & Dépenses') : 'Revenus & Budget'
+  const headerSousTitre = secteurId
+    ? `${secteursAffiches[0]?.label || ''} — bilan financier mensuel`
+    : 'Bilan financier consolidé — tous les secteurs'
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -376,6 +384,20 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
   return (
     <div className="space-y-5">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: `linear-gradient(135deg, ${teinterHex(headerColor, 0.85)} 0%, ${teinterHex(shadeHex(headerColor, -35), 0.85)} 100%)` }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: headerColor, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Scale size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">{headerTitre}</h2>
+          <p className="text-sm text-white/80">{headerSousTitre}</p>
+        </div>
+      </div>
+
       {/* Navigation mois */}
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>

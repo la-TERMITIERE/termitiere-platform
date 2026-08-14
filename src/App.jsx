@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useAuth } from './hooks/useAuth'
 import AppShell from './shared/Layout/AppShell'
 import LoadingSpinner from './shared/ui/LoadingSpinner'
+import ModuleLoadingSpinner from './shared/ui/ModuleLoadingSpinner'
 import ToastContainer from './shared/ui/Toast'
 import UpdateManager from './shared/UpdateManager'
 import Login from './portal/Login'
@@ -79,7 +80,7 @@ export default function App() {
             path="agro/*"
             element={
               <ModuleGuard moduleId="agro">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="agro" />}>
                   <AgroModule />
                 </Suspense>
               </ModuleGuard>
@@ -89,7 +90,7 @@ export default function App() {
             path="logistique/*"
             element={
               <ModuleGuard moduleId="logistique">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="logistique" />}>
                   <LogistiqueModule />
                 </Suspense>
               </ModuleGuard>
@@ -99,7 +100,7 @@ export default function App() {
             path="evenementiel/*"
             element={
               <ModuleGuard moduleId="evenementiel">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="evenementiel" />}>
                   <EvenementielModule />
                 </Suspense>
               </ModuleGuard>
@@ -109,7 +110,7 @@ export default function App() {
             path="foncier/*"
             element={
               <ModuleGuard moduleId="foncier">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="foncier" />}>
                   <FoncierModule />
                 </Suspense>
               </ModuleGuard>
@@ -119,7 +120,7 @@ export default function App() {
             path="rh/*"
             element={
               <ModuleGuard moduleId="rh">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="rh" />}>
                   <RhModule />
                 </Suspense>
               </ModuleGuard>
@@ -129,7 +130,7 @@ export default function App() {
             path="garderie/*"
             element={
               <ModuleGuard moduleId="garderie">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="garderie" />}>
                   <GarderieModule />
                 </Suspense>
               </ModuleGuard>
@@ -139,7 +140,7 @@ export default function App() {
             path="projet/*"
             element={
               <ModuleGuard moduleId="projet">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="projet" />}>
                   <ProjetModule />
                 </Suspense>
               </ModuleGuard>
@@ -149,7 +150,7 @@ export default function App() {
             path="depense/*"
             element={
               <ModuleGuard moduleId="depense">
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="depense" />}>
                   <DepenseModule />
                 </Suspense>
               </ModuleGuard>

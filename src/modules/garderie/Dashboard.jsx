@@ -330,7 +330,7 @@ export default function Dashboard() {
       {enfantsPartielsNonSoldes.length > 0 && (
         <button
           onClick={() => navigate('/garderie/paiements')}
-          className="w-full rounded-2xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-amber-50/70">
+          className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-colors hover:bg-amber-100">
           <div className="flex items-center gap-3">
             <AlertTriangle size={18} className="text-amber-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -339,7 +339,7 @@ export default function Dashboard() {
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsPartielsNonSoldes.map((e) => (
-                  <span key={e.id} className="rounded-full border border-amber-300/70 bg-amber-100/70 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                  <span key={e.id} className="rounded-full border border-amber-400 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                     {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
                   </span>
                 ))}
@@ -354,7 +354,7 @@ export default function Dashboard() {
       {enfantsAbsentsRepetes.length > 0 && (
         <button
           onClick={() => navigate('/garderie/presences')}
-          className="w-full rounded-2xl border border-orange-200/60 bg-orange-50/50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-orange-50/70">
+          className="w-full rounded-2xl border border-orange-300 bg-orange-50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-colors hover:bg-orange-100">
           <div className="flex items-center gap-3">
             <AlertTriangle size={18} className="text-orange-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -363,7 +363,7 @@ export default function Dashboard() {
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsAbsentsRepetes.map((e) => (
-                  <span key={e.id} className="rounded-full border border-orange-300/70 bg-orange-100/70 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
+                  <span key={e.id} className="rounded-full border border-orange-400 bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
                     {e.prenom} {e.nom} — {e.joursAbsents}j consécutifs
                   </span>
                 ))}
@@ -476,7 +476,7 @@ export default function Dashboard() {
           <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Groupes d'âge</h3>
           <div className="space-y-2">
             {parGroupe.map((g) => (
-              <div key={g.id} className="flex items-center justify-between rounded-2xl bg-orange-50/60 px-3 py-2 text-sm">
+              <div key={g.id} className="flex items-center justify-between rounded-2xl bg-orange-50 px-3 py-2 text-sm">
                 <div>
                   <p className="font-semibold text-orange-900">{g.label}</p>
                   <p className="text-xs text-orange-500">{g.desc}</p>
@@ -564,8 +564,8 @@ export default function Dashboard() {
                       <span className="text-xs text-gray-400">{calcAge(e.dateNaissance)}</span>
                       {e.groupe && <span className="text-xs text-orange-600 font-medium">{GROUPES_AGE.find((g) => g.id === e.groupe)?.label}</span>}
                     </div>
-                    <Badge tone={e.typeAbonnement === 'annuel' ? 'neutral' : 'success'}>
-                      {e.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}
+                    <Badge tone={e.typeAbonnement === 'annuel' ? 'neutral' : e.typeAbonnement === 'court_sejour' ? 'warning' : 'success'}>
+                      {e.typeAbonnement === 'annuel' ? 'Annuel' : e.typeAbonnement === 'court_sejour' ? 'Court séjour' : 'Mensuel'}
                     </Badge>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500">

@@ -99,6 +99,11 @@ export default function ProjetsExplorer() {
   // Édition d'un projet SANS quitter cet écran (cf. bouton ✏️ sur sa carte) — même
   // formulaire que Projets.jsx, partagé via ProjetFormModal.
   const [editProjet, setEditProjet] = useState(null)
+  // Création d'un projet SANS quitter cet écran non plus — avant, le bouton
+  // « Nouveau projet » naviguait vers /projet/projets/liste (la liste TOUS
+  // secteurs confondus), ce qui affichait cette page bien plus lourde en fond
+  // derrière la fenêtre de création. On reste maintenant sur la vue du secteur.
+  const [creationOuverte, setCreationOuverte] = useState(false)
 
   useEffect(() => { marquerVoletVu(user?.uid, 'projetProjets') }, [user?.uid])
 
@@ -283,7 +288,7 @@ export default function ProjetsExplorer() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <FilDAriane items={[{ label: 'Projets', to: '/projet/projets' }, { label: secteurActuel?.label || secteurId }]} />
           {!isReadOnlyRole(role) && (
-            <Button onClick={() => navigate('/projet/projets/liste', { state: { openCreateSecteurId: secteurId } })}>
+            <Button onClick={() => setCreationOuverte(true)}>
               <Plus size={16} /> Nouveau projet
             </Button>
           )}
@@ -335,8 +340,10 @@ export default function ProjetsExplorer() {
             depenseDepensesTous={depenseDepensesTous} onClose={() => setDetailProjet(null)} icon={FolderKanban} />
         )}
         <ProjetFormModal
-          open={!!editProjet} onClose={() => setEditProjet(null)}
-          editingProjet={editProjet} projets={projetsDuSecteur} users={users}
+          open={!!editProjet || creationOuverte}
+          onClose={() => { setEditProjet(null); setCreationOuverte(false) }}
+          editingProjet={editProjet} secteurIdDefaut={secteurId}
+          projets={projetsDuSecteur} users={users}
         />
       </div>
     )

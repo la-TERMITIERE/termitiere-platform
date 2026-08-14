@@ -9,7 +9,7 @@ import { updateItem } from '../core/db'
 import { audit } from '../core/audit'
 import { notify } from '../core/notify'
 import { toast } from '../core/notifications'
-import { VIEW_ALL_ROLES } from '../core/roles'
+import { VIEW_ALL_ROLES, roleLabel } from '../core/roles'
 import Button from '../shared/ui/Button'
 import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
@@ -24,7 +24,7 @@ const LOGOS_ZOOM = {
 
 export default function PortalHome() {
   const navigate = useNavigate()
-  const { user, hasModule, isAdmin } = useAuth()
+  const { user, role, hasModule, isAdmin } = useAuth()
 
   // Paiements décaissés dont je suis le bénéficiaire, pas encore confirmés — visible
   // quel que soit l'accès au module Dépenses (le bénéficiaire n'y a pas forcément accès).
@@ -79,13 +79,46 @@ export default function PortalHome() {
     garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit'
   }
 
+  const heure = new Date().getHours()
+  const salutation = heure < 5 ? 'Bonne nuit' : heure < 18 ? 'Bonjour' : 'Bonsoir'
+  const dateLongue = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900">
-          Bonjour, {user?.nom?.split(' ')[0]} 👋
-        </h1>
-        <p className="text-gray-500">Sélectionnez un module pour commencer.</p>
+      <div className="relative mb-6 overflow-hidden rounded-3xl p-4 text-white shadow-[0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150 sm:p-6 lg:p-8"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(90,20,16,0.92) 100%)' }}>
+        {/* Halos décoratifs — même motif que les cartes de module juste en dessous */}
+        <div className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full opacity-[0.15]" style={{ background: '#ffffff' }} />
+        <div className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full opacity-[0.08]" style={{ background: '#ffffff' }} />
+
+        <div className="relative flex flex-wrap items-center gap-3 sm:gap-5">
+          {/* Anneau qui clignote doucement — même animation que le logo de la barre latérale */}
+          <style>{`
+            @keyframes portal-logo-glow {
+              0%   { box-shadow: 0 0 0 2px #ffffffaa, 0 0 8px 2px #ffffff55; }
+              50%  { box-shadow: 0 0 0 4px #ffffff,   0 0 22px 8px #ffffffb0; }
+              100% { box-shadow: 0 0 0 2px #ffffffaa, 0 0 8px 2px #ffffff55; }
+            }
+          `}</style>
+          <img src="/termitiere-logo.png" alt="La Termitière"
+            onError={(e) => { e.target.src = '/logo-mark.png' }}
+            className="h-12 w-12 shrink-0 rounded-full bg-white object-cover p-2 sm:h-20 sm:w-20 sm:p-3"
+            style={{ animation: 'portal-logo-glow 2.5s ease-in-out infinite' }} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60 sm:text-xs sm:tracking-[0.2em]">{dateLongue}</p>
+            <h1 className="mt-0.5 truncate text-xl font-extrabold leading-tight sm:mt-1 sm:text-3xl lg:text-4xl">
+              {salutation}, {user?.nom?.split(' ')[0]} 👋
+            </h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:mt-2.5">
+              {role && (
+                <span className="rounded-full border border-white/30 bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur-sm sm:px-3 sm:py-1 sm:text-xs">
+                  {roleLabel(role)}
+                </span>
+              )}
+              <span className="text-xs text-white/75 sm:text-sm">Sélectionnez un module pour commencer</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {paiementsAConfirmer.length > 0 && (

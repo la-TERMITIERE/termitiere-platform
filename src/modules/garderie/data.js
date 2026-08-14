@@ -29,6 +29,17 @@ export const GROUPES_PAR_PROGRAMME = {
 export const programmeDuGroupe = (groupeId) =>
   GROUPES_PAR_PROGRAMME.maternelle.includes(groupeId) ? 'maternelle' : 'garderie'
 
+// Type d'abonnement d'un enfant inscrit — au-delà du mensuel/annuel classiques,
+// « court séjour » couvre les enfants présents seulement quelques semaines (2+),
+// avec une date de fin calculée (cf. `dateFinCourtSejour` dans logic.js) plutôt
+// qu'un renouvellement mensuel — le paiement peut néanmoins se faire en plusieurs
+// fois (tranches), comme n'importe quel autre paiement de l'écran Paiements.
+export const TYPES_ABONNEMENT = [
+  { id: 'mensuel',      label: 'Mensuel' },
+  { id: 'annuel',       label: 'Annuel' },
+  { id: 'court_sejour', label: 'Court séjour (semaines)' }
+]
+
 export const STATUTS_ENFANT = {
   actif:    { label: 'Actif',    tone: 'success' },
   suspendu: { label: 'Suspendu', tone: 'warning' },
@@ -43,6 +54,7 @@ export const STATUTS_PRESENCE = {
 
 export const TYPES_PAIEMENT = [
   { id: 'mensuel',       label: 'Mensualité'       },
+  { id: 'court_sejour', label: 'Court séjour'      },
   { id: 'inscription',  label: 'Frais d\'inscription' },
   { id: 'fourniture',   label: 'Fournitures'       },
   { id: 'sortie',       label: 'Sortie scolaire'   },
