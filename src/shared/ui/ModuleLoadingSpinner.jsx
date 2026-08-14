@@ -1,15 +1,19 @@
-// Écran de chargement d'un module (pendant le lazy-load du code-splitting) —
-// affiche le logo/icône DU SECTEUR EN COURS plutôt qu'un spinner générique, au
-// milieu de la page qui serait sinon blanche le temps que le module se charge.
+// Écran de chargement — affiche le logo/icône DU SECTEUR EN COURS (pendant le
+// lazy-load d'un module) ou, sans moduleId, le logo LA TERMITIÈRE (au démarrage
+// de l'app / juste après la connexion), plutôt qu'un spinner générique sur une
+// page qui serait sinon blanche.
 import { getModule } from '../modules'
 
-export default function ModuleLoadingSpinner({ moduleId }) {
-  const m = getModule(moduleId)
-  const color = m?.color || '#BC3C31'
-  const Icon = m?.icon
+const BRAND = { nom: 'LA TERMITIÈRE', color: '#BC3C31', logo: '/termitiere-logo.png' }
+
+export default function ModuleLoadingSpinner({ moduleId, label, fullScreen = false }) {
+  const m = moduleId ? getModule(moduleId) : null
+  const cible = m || BRAND
+  const color = cible.color
+  const Icon = cible.icon
 
   return (
-    <div className="flex h-[70vh] flex-col items-center justify-center gap-4">
+    <div className={`flex flex-col items-center justify-center gap-4 ${fullScreen ? 'h-screen' : 'h-[70vh]'}`}>
       <style>{`
         @keyframes module-loader-spin {
           to { transform: rotate(360deg); }
@@ -23,12 +27,14 @@ export default function ModuleLoadingSpinner({ moduleId }) {
             animation: 'module-loader-spin 0.85s linear infinite'
           }} />
         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_8px_20px_-6px_rgba(0,0,0,0.3)]">
-          {m?.logo
-            ? <img src={m.logo} alt="" className="h-full w-full object-contain p-1.5" />
+          {cible.logo
+            ? <img src={cible.logo} alt=""
+                onError={m ? undefined : (e) => { e.target.src = '/logo-mark.png' }}
+                className="h-full w-full object-contain p-1.5" />
             : Icon ? <Icon size={28} color={color} /> : null}
         </div>
       </div>
-      <p className="text-sm font-semibold" style={{ color }}>{m?.nom || 'Chargement…'}</p>
+      <p className="text-sm font-semibold" style={{ color }}>{label || cible.nom}</p>
     </div>
   )
 }
