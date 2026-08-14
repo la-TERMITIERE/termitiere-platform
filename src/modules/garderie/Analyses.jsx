@@ -1,7 +1,7 @@
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
-import { Users, Baby, CreditCard, TrendingUp, UserCheck, AlertTriangle, CalendarCheck, Star, Wallet } from 'lucide-react'
+import { Users, Baby, CreditCard, TrendingUp, UserCheck, AlertTriangle, CalendarCheck, Star, Wallet, BarChart2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
@@ -65,8 +65,9 @@ export default function Analyses() {
 
   // ── KPIs principaux ──
   const kpis = useMemo(() => {
-    const mensuel = enfantsActifs.filter((e) => e.typeAbonnement !== 'annuel').length
-    const annuel  = enfantsActifs.filter((e) => e.typeAbonnement === 'annuel').length
+    const mensuel     = enfantsActifs.filter((e) => e.typeAbonnement !== 'annuel' && e.typeAbonnement !== 'court_sejour').length
+    const annuel      = enfantsActifs.filter((e) => e.typeAbonnement === 'annuel').length
+    const courtSejour = enfantsActifs.filter((e) => e.typeAbonnement === 'court_sejour').length
     const capacite = params.capaciteMax || 40
     const tauxOccupation = Math.round((enfantsActifs.length / capacite) * 100)
 
@@ -90,7 +91,7 @@ export default function Analyses() {
     const paiementsJo = paiements.filter((p) => p.type === 'journalier' && (p.date || '').startsWith(prefix))
     const revJo   = paiementsJo.reduce((s, p) => s + (Number(p.montantPaye) || 0), 0)
 
-    return { mensuel, annuel, capacite, tauxOccupation, totalPaye, totalDu, nImpayes, joMois: joMois.length, revJo }
+    return { mensuel, annuel, courtSejour, capacite, tauxOccupation, totalPaye, totalDu, nImpayes, joMois: joMois.length, revJo }
   }, [enfantsActifs, paiements, presences, journaliers, moisSel, anneeSel, params])
 
   // ── Présences du mois ──
@@ -258,18 +259,29 @@ export default function Analyses() {
   const BLUE   = '#3b82f6'
   const GREEN  = '#16a34a'
   const PURPLE = '#7c3aed'
+  const AMBER  = '#f59e0b'
 
   const [vue, setVue] = useState('mensuel')
 
   return (
     <div className="space-y-5">
 
-      {/* ── En-tête + onglets + sélecteur ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-extrabold text-gray-800">📊 Analyse & Pilotage</h2>
-          <p className="text-sm text-gray-400">Vue consolidée de la garderie</p>
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <BarChart2 size={28} color="white" />
         </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Analyse & Pilotage</h2>
+          <p className="text-sm text-white/80">Vue consolidée de la garderie</p>
+        </div>
+      </div>
+
+      {/* ── Onglets + sélecteur ── */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-3">
           {/* Onglets */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-semibold">
@@ -527,12 +539,12 @@ export default function Analyses() {
           <div className="flex flex-col gap-4">
             <Doughnut
               data={{
-                labels: ['Mensuel', 'Annuel'],
-                datasets: [{ data: [kpis.mensuel, kpis.annuel], backgroundColor: [BLUE, PURPLE], borderWidth: 0, hoverOffset: 4 }]
+                labels: ['Mensuel', 'Annuel', 'Court séjour'],
+                datasets: [{ data: [kpis.mensuel, kpis.annuel, kpis.courtSejour], backgroundColor: [BLUE, PURPLE, AMBER], borderWidth: 0, hoverOffset: 4 }]
               }}
               options={{ cutout: '70%', plugins: { legend: { position: 'bottom' } } }}
             />
-            <div className="grid grid-cols-2 gap-2 text-center">
+            <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl bg-blue-50 p-3">
                 <p className="text-2xl font-extrabold text-blue-700">{kpis.mensuel}</p>
                 <p className="text-xs text-blue-500">Mensuel</p>
@@ -540,6 +552,10 @@ export default function Analyses() {
               <div className="rounded-xl bg-purple-50 p-3">
                 <p className="text-2xl font-extrabold text-purple-700">{kpis.annuel}</p>
                 <p className="text-xs text-purple-500">Annuel</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 p-3">
+                <p className="text-2xl font-extrabold text-amber-700">{kpis.courtSejour}</p>
+                <p className="text-xs text-amber-500">Court séjour</p>
               </div>
             </div>
           </div>

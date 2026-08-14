@@ -1,5 +1,6 @@
-import { useMemo, useState, useRef } from 'react'
-import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Plus, Eye, Search, FilePen, Trash2, UserPlus, Camera, X, Loader2, UserCheck, UserX, CreditCard, ShieldAlert, Baby, GraduationCap, DoorOpen, ChevronRight } from 'lucide-react'
 import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -16,8 +17,9 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
-import { GROUPES_AGE, STATUTS_ENFANT, PROGRAMMES_ENFANT, GROUPES_PAR_PROGRAMME, programmeDuGroupe } from './data'
-import { calcAge, groupeRecommande, tarifSuggere, aImpayes } from './logic'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { GROUPES_AGE, STATUTS_ENFANT, PROGRAMMES_ENFANT, GROUPES_PAR_PROGRAMME, programmeDuGroupe, MODES_PAIEMENT, TYPES_ABONNEMENT } from './data'
+import { calcAge, groupeRecommande, tarifSuggere, aImpayes, dateFinCourtSejour, joursAvantFinCourtSejour } from './logic'
 import { useGarderieStore } from './store/garderieStore'
 
 const emptyJournalier = () => ({
@@ -30,7 +32,7 @@ const emptyJournalier = () => ({
 const empty = () => ({
   nom: '', prenom: '', photo: '', dateNaissance: '', ageSaisi: '', sexe: 'F',
   programme: '', groupe: '', statut: 'actif',
-  typeAbonnement: 'mensuel',
+  typeAbonnement: 'mensuel', dureeSemaines: '',
   allergies: '', infoMedicale: '',
   parentId: '', parentNom: '', parentContact: '',
   parentContact2: '', parentProfession: '', adresse: '',
@@ -116,7 +118,19 @@ export default function Enfants() {
     return rows.sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1)
   }, [enfants, recherche, filtreProgramme, filtreGroupe, filtreStatut, filtreAnnee, filtreMois, filtreJour, deletedEnfantIds])
 
-  function openCreate() { setModal({ data: empty(), isNew: true }) }
+  // Avant toute inscription, la gérante choisit d'abord le TYPE d'enfant — la suite
+  // (formulaire complet vs fiche journalière) dépend entièrement de ce choix.
+  const [choixInscription, setChoixInscription] = useState(false)
+  function openCreate() { setChoixInscription(true) }
+  function choisirTypeInscription(type) {
+    setChoixInscription(false)
+    if (type === 'journalier') {
+      setJoModal({ data: emptyJournalier(), isNew: true })
+      setJoPaiement({ montantPaye: '', modePaiement: 'espece' })
+    } else {
+      setModal({ data: { ...empty(), programme: type }, isNew: true })
+    }
+  }
   // Fiches créées avant l'ajout du champ `programme` : déduit du groupe pour que le
   // sélecteur s'ouvre déjà cohérent, plutôt que vide.
   function openEdit(e)  { setModal({ data: { ...empty(), ...e, programme: e.programme || programmeDuGroupe(e.groupe) }, isNew: false, id: e.id }) }
@@ -126,11 +140,13 @@ export default function Enfants() {
     const d = modal.data
     if (!d.nom.trim() || !d.prenom.trim()) return toast.error('Nom et prénom requis')
     if (!d.dateNaissance && !d.ageSaisi?.trim()) return toast.error('Date de naissance ou âge requis')
-    if (!d.programme) return toast.error('Programme requis (garderie ou maternelle)')
     if (!d.groupe) return toast.error('Groupe requis')
     if (!d.parentNom?.trim()) return toast.error('Nom du parent / tuteur requis')
     if (!d.parentContact?.trim()) return toast.error('Contact principal du parent requis')
     if (!d.adresse?.trim()) return toast.error('Adresse requise')
+    if (d.typeAbonnement === 'court_sejour' && (!d.dureeSemaines || Number(d.dureeSemaines) < 2)) {
+      return toast.error('Durée du court séjour requise (2 semaines minimum)')
+    }
 
     setSaving(true)
     try {
@@ -218,6 +234,10 @@ export default function Enfants() {
   const [joDelete, setJoDelete] = useState(null)
   const [joDeleting, setJoDeleting] = useState(false)
   const [filtreDateJo, setFiltreDateJo] = useState(todayStr())
+  // Paiement encaissé directement à l'inscription du journalier — évite l'aller-retour
+  // vers Paiements → Journaliers quand le parent paie sur place. Reste facultatif :
+  // laissé vide, le paiement pourra toujours être saisi plus tard comme avant.
+  const [joPaiement, setJoPaiement] = useState({ montantPaye: '', modePaiement: 'espece' })
 
   const journaliersFiltre = useMemo(
     () => journaliers.filter((j) => !filtreDateJo || j.date === filtreDateJo)
@@ -239,7 +259,30 @@ export default function Enfants() {
         const id = genId()
         await setItem('garderie_journaliers', id, { ...d, id })
         audit('garderie', 'JOURNALIER_ADD', `${d.prenom} ${d.nom}`, { date: d.date })
-        toast.success(`${d.prenom} ${d.nom} enregistré(e) ✓`)
+
+        // Paiement encaissé en même temps que l'inscription, si renseigné.
+        const montant = Number(joPaiement.montantPaye)
+        if (montant > 0) {
+          const paiementId = genId()
+          await setItem('garderie_paiements', paiementId, {
+            id: paiementId,
+            type: 'journalier',
+            enfantNom: `${d.prenom} ${d.nom}`,
+            parentNom: d.parentNom.trim(),
+            date: d.date,
+            nombreJours: Number(d.nombreJours) || 1,
+            montantPaye: montant,
+            montantDu: montant,
+            modePaiement: joPaiement.modePaiement,
+            statut: 'paye',
+            notes: ''
+          })
+          audit('garderie', 'JOURNALIER_PAIEMENT', `${d.prenom} ${d.nom}`, { montant })
+          notify({ type: 'info', title: `💰 Paiement journalier — ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
+          toast.success(`${d.prenom} ${d.nom} enregistré(e) — paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
+        } else {
+          toast.success(`${d.prenom} ${d.nom} enregistré(e) ✓`)
+        }
       } else {
         await setItem('garderie_journaliers', joModal.id, { ...d, id: joModal.id })
         audit('garderie', 'JOURNALIER_EDIT', `${d.prenom} ${d.nom}`)
@@ -269,22 +312,37 @@ export default function Enfants() {
 
   const setJo = (k, v) => setJoModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
+  // Le regroupement garderie / maternelle / journaliers se pilote depuis le
+  // menu déroulant de la barre latérale (Sidebar.jsx → EnfantsNavMenu), qui
+  // navigue vers /garderie/enfants?programme=… ou ?vue=journaliers. On
+  // synchronise l'onglet et le filtre programme sur ces paramètres d'URL.
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    const vue = searchParams.get('vue')
+    const programme = searchParams.get('programme')
+    if (vue === 'journaliers') {
+      setOnglet('journaliers')
+    } else {
+      setOnglet('inscrits')
+      setFiltreProgramme(programme === 'garderie' || programme === 'maternelle' ? programme : '')
+    }
+  }, [searchParams])
+
   return (
     <div className="space-y-5">
 
-      {/* Onglets */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'inscrits',    label: '🍼 Enfants inscrits' },
-          { id: 'journaliers', label: '🚪 Enfants journaliers' }
-        ].map((t) => (
-          <button key={t.id} onClick={() => setOnglet(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              onglet === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Baby size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Enfants</h2>
+          <p className="text-sm text-white/80">Garderie · Maternelle · Journaliers — inscriptions et suivi</p>
+        </div>
       </div>
 
       {/* ══ ONGLET JOURNALIERS ══ */}
@@ -305,7 +363,10 @@ export default function Enfants() {
                 className="mt-4 text-xs text-gray-400 hover:text-orange-500 underline">Voir tous</button>
             )}
             <div className="ml-auto">
-              <Button onClick={() => setJoModal({ data: emptyJournalier(), isNew: true })}>
+              <Button onClick={() => {
+                setJoModal({ data: emptyJournalier(), isNew: true })
+                setJoPaiement({ montantPaye: '', modePaiement: 'espece' })
+              }}>
                 <UserPlus size={16} /> Ajouter un journalier
               </Button>
             </div>
@@ -402,13 +463,6 @@ export default function Enfants() {
             value={recherche}
             onChange={(e) => setRecherche(e.target.value)}
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Programme</label>
-          <Select value={filtreProgramme} onChange={(e) => setFiltreProgramme(e.target.value)}>
-            <option value="">Garderie + Maternelle</option>
-            {PROGRAMMES_ENFANT.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-          </Select>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Groupe</label>
@@ -511,7 +565,16 @@ export default function Enfants() {
                 </td>
                 <td className="px-3 py-2 text-xs text-gray-400">
                   <p>{formatDateShort(e.dateInscription)}</p>
-                  {e.typeAbonnement && (
+                  {e.typeAbonnement === 'court_sejour' ? (() => {
+                    const joursRestants = joursAvantFinCourtSejour(e.dateInscription, e.dureeSemaines)
+                    return (
+                      <span className={`font-semibold ${joursRestants !== null && joursRestants <= 7 ? 'text-red-600' : 'text-orange-600'}`}>
+                        Court séjour{joursRestants !== null && (
+                          joursRestants < 0 ? ' — terminé' : ` — fin dans ${joursRestants}j`
+                        )}
+                      </span>
+                    )
+                  })() : e.typeAbonnement && (
                     <span className={`font-semibold ${e.typeAbonnement === 'annuel' ? 'text-purple-600' : 'text-blue-600'}`}>
                       {e.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}
                     </span>
@@ -536,8 +599,35 @@ export default function Enfants() {
 
       </> }
 
+      {/* Choix du type d'inscription — détermine ensuite quel formulaire s'ouvre */}
+      <Modal open={choixInscription} onClose={() => setChoixInscription(false)} size="sm"
+        {...glassModalProps(COULEUR_MODULE.garderie)} title="Nouvelle inscription">
+        <p className="mb-4 text-sm text-gray-500">Choisissez le type d'inscription pour cet enfant :</p>
+        <div className="space-y-2.5">
+          {[
+            { type: 'maternelle', icon: GraduationCap, label: 'Maternelle', sub: 'Enfant inscrit — 3 à 6 ans', color: '#16a34a', tint: 'bg-green-50 border-green-200 hover:border-green-400' },
+            { type: 'garderie',   icon: Baby,           label: 'Garderie',   sub: 'Enfant inscrit — 0 à 2 ans', color: '#3b82f6', tint: 'bg-blue-50 border-blue-200 hover:border-blue-400' },
+            { type: 'journalier', icon: DoorOpen,       label: 'Enfant journalier', sub: "Non inscrit officiellement — dépôt d'une seule journée", color: '#E8390E', tint: 'bg-orange-50 border-orange-200 hover:border-orange-400' }
+          ].map((o) => (
+            <button key={o.type} onClick={() => choisirTypeInscription(o.type)}
+              className={`group flex w-full items-center gap-3.5 rounded-2xl border-2 px-4 py-3.5 text-left shadow-[0_10px_24px_-14px_rgba(26,26,26,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(26,26,26,0.26)] ${o.tint}`}>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: o.color, boxShadow: `0 0 0 3px #ffffff, 0 4px 10px -2px ${o.color}66` }}>
+                <o.icon size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-gray-800">{o.label}</p>
+                <p className="text-xs text-gray-500">{o.sub}</p>
+              </div>
+              <ChevronRight size={18} className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
+            </button>
+          ))}
+        </div>
+      </Modal>
+
       {/* Modal journalier création / édition */}
       <Modal open={!!joModal} onClose={() => setJoModal(null)} size="md"
+        {...glassModalProps(COULEUR_MODULE.garderie)}
         title={joModal?.isNew ? '🚪 Ajouter un enfant journalier' : 'Modifier le journalier'}
         footer={
           <>
@@ -549,6 +639,22 @@ export default function Enfants() {
         }>
         {joModal && (
           <div className="space-y-4">
+            {/* Bandeau héro — nom en direct, comme le formulaire d'inscription classique */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <DoorOpen size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">
+                  {joModal.data.prenom || joModal.data.nom ? `${joModal.data.prenom} ${joModal.data.nom}`.trim() : 'Nouvel enfant journalier'}
+                </p>
+                <p className="text-sm text-white/80">Dépôt d'une seule journée — non inscrit officiellement</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Prénom *">
                 <Input value={joModal.data.prenom} onChange={(e) => setJo('prenom', e.target.value)} />
@@ -567,9 +673,10 @@ export default function Enfants() {
                   onChange={(e) => setJo('nombreJours', e.target.value)} placeholder="ex: 3" />
               </FormGroup>
             </div>
+            </div>
 
-            <div className="rounded-lg border border-orange-100 bg-orange-50 p-3">
-              <p className="mb-2 text-xs font-bold uppercase text-orange-700">Parent / Tuteur</p>
+            <div className="rounded-2xl border border-sky-200 border-l-4 border-l-sky-400 bg-sky-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">👪 Parent / Tuteur</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Nom du parent *">
                   <Input value={joModal.data.parentNom} onChange={(e) => setJo('parentNom', e.target.value)} placeholder="Nom complet du parent" />
@@ -587,9 +694,31 @@ export default function Enfants() {
               🍱 Apporte son propre repas (pas de frais de cuisine)
             </label>
 
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-              💡 Le paiement se fait dans le volet <strong>Paiements → Journaliers</strong>
-            </div>
+            {joModal.isNew ? (
+              <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                <p className="mb-2.5 text-xs font-bold uppercase tracking-wide text-green-700">💰 Paiement (si le parent règle maintenant)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormGroup label="Montant payé (FCFA)">
+                    <Input type="number" min="0" value={joPaiement.montantPaye}
+                      onChange={(e) => setJoPaiement((p) => ({ ...p, montantPaye: e.target.value }))}
+                      placeholder="ex: 5000" />
+                  </FormGroup>
+                  <FormGroup label="Mode de paiement">
+                    <Select value={joPaiement.modePaiement}
+                      onChange={(e) => setJoPaiement((p) => ({ ...p, modePaiement: e.target.value }))}>
+                      {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </Select>
+                  </FormGroup>
+                </div>
+                <p className="mt-2 text-[11px] text-green-600">
+                  Laissez vide si le paiement se fera plus tard — vous pourrez toujours l'enregistrer dans <strong>Paiements → Journaliers</strong>.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                💡 Le paiement se gère dans le volet <strong>Paiements → Journaliers</strong>
+              </div>
+            )}
 
             <FormGroup label="Notes">
               <Input value={joModal.data.notes} onChange={(e) => setJo('notes', e.target.value)} placeholder="Informations complémentaires…" />
@@ -600,6 +729,7 @@ export default function Enfants() {
 
       {/* Modal confirmation suppression journalier */}
       <Modal open={!!joDelete} onClose={() => setJoDelete(null)} size="sm"
+        {...glassModalProps('#dc2626')}
         title="Supprimer ce journalier ?"
         footer={
           <>
@@ -608,138 +738,169 @@ export default function Enfants() {
           </>
         }>
         {joDelete && (
-          <p className="text-sm text-gray-600">
-            Vous allez supprimer <span className="font-bold">{joDelete.prenom} {joDelete.nom}</span> du {formatDateShort(joDelete.date)}.
-            Cette action est <span className="font-semibold text-red-600">irréversible</span>.
-          </p>
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.88) 0%, rgba(127,29,29,0.88) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Trash2 size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{joDelete.prenom} {joDelete.nom}</p>
+                <p className="text-sm text-white/80">Journalier du {formatDateShort(joDelete.date)}</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Vous allez supprimer cet enfant journalier. Cette action est <span className="font-semibold text-red-600">irréversible</span>.
+            </p>
+          </div>
         )}
       </Modal>
 
       {/* Modal création / édition */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="lg"
-        panelClassName="bg-white/90 backdrop-blur-xl backdrop-saturate-150"
+        {...glassModalProps(COULEUR_MODULE.garderie)}
         title={modal?.isNew ? 'Inscrire un enfant' : 'Modifier la fiche enfant'}
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Inscrire' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="space-y-4">
-            {/* Photo de profil */}
-            <div className="flex items-center gap-4 rounded-2xl border border-orange-100/70 bg-orange-50/60 p-3.5 shadow-sm backdrop-blur-sm">
-              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-100 shadow">
+            {/* Bandeau héro — même dégradé/badge lumineux que les en-têtes du module,
+                avec la photo de profil intégrée (au lieu d'une simple carte plate) */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="relative h-20 w-20 shrink-0">
                 {modal.data.photo ? (
-                  <img src={modal.data.photo} alt="Photo de profil" className="h-full w-full object-cover" />
+                  <img src={modal.data.photo} alt="Photo de profil" className="h-20 w-20 rounded-full border-2 border-white/80 object-cover shadow-lg" />
                 ) : (
-                  <Camera size={24} className="text-orange-300" />
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/80 bg-white/20 text-2xl font-bold text-white shadow-lg backdrop-blur-sm">
+                    {modal.data.prenom ? modal.data.prenom[0].toUpperCase() : <Camera size={22} />}
+                  </div>
                 )}
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  title={modal.data.photo ? 'Changer la photo' : 'Ajouter une photo'}
+                  className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-orange-600 text-white shadow hover:bg-orange-700 disabled:opacity-60"
+                >
+                  {photoUploading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+                </button>
                 {modal.data.photo && (
                   <button
                     type="button"
                     onClick={() => set('photo', '')}
                     title="Retirer la photo"
-                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                    className="absolute -top-1 -left-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-red-500 shadow hover:bg-red-50"
                   >
                     <X size={12} />
                   </button>
                 )}
               </div>
-              <div>
-                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                <Button type="button" variant="outline" onClick={() => photoInputRef.current?.click()} loading={photoUploading}>
-                  <Camera size={16} /> {modal.data.photo ? 'Changer la photo' : 'Ajouter une photo'}
-                </Button>
-                <p className="mt-1 text-[11px] text-gray-400">JPG ou PNG, recadrée automatiquement en carré</p>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">
+                  {modal.data.prenom || modal.data.nom ? `${modal.data.prenom} ${modal.data.nom}`.trim() : (modal.isNew ? 'Nouvel enfant' : 'Fiche enfant')}
+                </p>
+                <p className="text-sm text-white/80">Photo JPG ou PNG — recadrée automatiquement en carré</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormGroup label="Prénom *">
-                <Input value={modal.data.prenom} onChange={(e) => set('prenom', e.target.value)} />
-              </FormGroup>
-              <FormGroup label="Nom *">
-                <Input value={modal.data.nom} onChange={(e) => set('nom', e.target.value)} />
-              </FormGroup>
-              <FormGroup label="Date de naissance">
-                <Input type="date" value={modal.data.dateNaissance} onChange={(e) => {
-                  const g = groupeRecommande(e.target.value)
-                  set('dateNaissance', e.target.value)
-                  set('groupe', g)
-                  set('programme', g ? programmeDuGroupe(g) : '')
-                  set('ageSaisi', '')
-                }} />
-                {modal.data.dateNaissance && (() => {
-                  const t = tarifSuggere(modal.data.dateNaissance, GRILLE_TARIFAIRE)
-                  return t ? (
-                    <p className="mt-1 rounded-lg bg-green-50 px-2 py-1 text-xs text-green-700 font-semibold">
-                      💰 Tarif suggéré ({t.label}) : <span className="text-green-800">{t.tarif.toLocaleString('fr-FR')} FCFA / mois</span>
-                    </p>
-                  ) : null
-                })()}
-              </FormGroup>
-              <FormGroup label="Âge (si date inconnue)">
-                <Input
-                  value={modal.data.ageSaisi}
-                  onChange={(e) => {
-                    set('ageSaisi', e.target.value)
-                    if (e.target.value) set('dateNaissance', '')
-                  }}
-                  placeholder="ex: 2 ans, 18 mois…"
-                  disabled={!!modal.data.dateNaissance}
-                />
-                {!modal.data.dateNaissance && !modal.data.ageSaisi && (
-                  <p className="mt-1 text-[10px] text-gray-400">Renseignez la date de naissance OU l'âge</p>
-                )}
-              </FormGroup>
-              <FormGroup label="Sexe">
-                <Select value={modal.data.sexe} onChange={(e) => set('sexe', e.target.value)}>
-                  <option value="F">Fille</option>
-                  <option value="M">Garçon</option>
-                </Select>
-              </FormGroup>
-              <FormGroup label="Programme *" hint="Garderie (0-2 ans) ou maternelle (3-6 ans)">
-                <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
-                  {PROGRAMMES_ENFANT.map((p) => (
-                    <button key={p.id} type="button" onClick={() => {
-                      set('programme', p.id)
-                      // Le groupe choisi doit rester cohérent avec le programme — on ne
-                      // le vide que s'il appartient à l'autre programme.
-                      if (!GROUPES_PAR_PROGRAMME[p.id].includes(modal.data.groupe)) set('groupe', '')
+            {/* 📋 Identité */}
+            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-700">📋 Identité</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Prénom *">
+                  <Input value={modal.data.prenom} onChange={(e) => set('prenom', e.target.value)} />
+                </FormGroup>
+                <FormGroup label="Nom *">
+                  <Input value={modal.data.nom} onChange={(e) => set('nom', e.target.value)} />
+                </FormGroup>
+                <FormGroup label="Date de naissance">
+                  <Input type="date" value={modal.data.dateNaissance} onChange={(e) => {
+                    const g = groupeRecommande(e.target.value)
+                    set('dateNaissance', e.target.value)
+                    set('groupe', g)
+                    set('programme', g ? programmeDuGroupe(g) : '')
+                    set('ageSaisi', '')
+                  }} />
+                  {modal.data.dateNaissance && (() => {
+                    const t = tarifSuggere(modal.data.dateNaissance, GRILLE_TARIFAIRE)
+                    return t ? (
+                      <p className="mt-1 rounded-lg bg-green-50 px-2 py-1 text-xs text-green-700 font-semibold">
+                        💰 Tarif suggéré ({t.label}) : <span className="text-green-800">{t.tarif.toLocaleString('fr-FR')} FCFA / mois</span>
+                      </p>
+                    ) : null
+                  })()}
+                </FormGroup>
+                <FormGroup label="Âge (si date inconnue)">
+                  <Input
+                    value={modal.data.ageSaisi}
+                    onChange={(e) => {
+                      set('ageSaisi', e.target.value)
+                      if (e.target.value) set('dateNaissance', '')
                     }}
-                      className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                        modal.data.programme === p.id ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-white'
-                      }`}>
-                      {p.label} <span className="font-normal opacity-80">({p.desc})</span>
-                    </button>
-                  ))}
-                </div>
-              </FormGroup>
-              <FormGroup label="Groupe d'âge *">
-                <Select value={modal.data.groupe} onChange={(e) => set('groupe', e.target.value)}>
-                  <option value="">— Choisir —</option>
-                  {GROUPES_AGE
-                    .filter((g) => !modal.data.programme || GROUPES_PAR_PROGRAMME[modal.data.programme].includes(g.id))
-                    .map((g) => <option key={g.id} value={g.id}>{g.label} ({g.desc})</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Statut">
-                <Select value={modal.data.statut} onChange={(e) => set('statut', e.target.value)}>
-                  {Object.entries(STATUTS_ENFANT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Type d'abonnement">
-                <Select value={modal.data.typeAbonnement || 'mensuel'} onChange={(e) => set('typeAbonnement', e.target.value)}>
-                  <option value="mensuel">Mensuel</option>
-                  <option value="annuel">Annuel</option>
-                </Select>
-              </FormGroup>
-              <FormGroup label="Date d'inscription">
-                <Input type="date" value={modal.data.dateInscription} onChange={(e) => set('dateInscription', e.target.value)} />
-              </FormGroup>
-              <FormGroup label="Adresse *">
-                <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Quartier, ville…" />
-              </FormGroup>
+                    placeholder="ex: 2 ans, 18 mois…"
+                    disabled={!!modal.data.dateNaissance}
+                  />
+                  {!modal.data.dateNaissance && !modal.data.ageSaisi && (
+                    <p className="mt-1 text-[10px] text-gray-400">Renseignez la date de naissance OU l'âge</p>
+                  )}
+                </FormGroup>
+                <FormGroup label="Sexe">
+                  <Select value={modal.data.sexe} onChange={(e) => set('sexe', e.target.value)}>
+                    <option value="F">Fille</option>
+                    <option value="M">Garçon</option>
+                  </Select>
+                </FormGroup>
+              </div>
             </div>
 
-            <div className="rounded-lg border border-pink-100 bg-orange-50 p-3">
-              <p className="mb-2 text-xs font-bold uppercase text-orange-700">Informations parents / tuteurs</p>
+            {/* 🎓 Scolarité */}
+            <div className="rounded-2xl border border-sky-200 border-l-4 border-l-sky-400 bg-sky-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">🎓 Scolarité</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Groupe d'âge *" hint="Le programme (garderie ou maternelle) en découle automatiquement">
+                  <Select value={modal.data.groupe} onChange={(e) => {
+                    const g = e.target.value
+                    set('groupe', g)
+                    set('programme', g ? programmeDuGroupe(g) : modal.data.programme)
+                  }}>
+                    <option value="">— Choisir —</option>
+                    {GROUPES_AGE
+                      .filter((g) => !modal.data.programme || GROUPES_PAR_PROGRAMME[modal.data.programme].includes(g.id))
+                      .map((g) => <option key={g.id} value={g.id}>{g.label} ({g.desc})</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Statut">
+                  <Select value={modal.data.statut} onChange={(e) => set('statut', e.target.value)}>
+                    {Object.entries(STATUTS_ENFANT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Type d'abonnement">
+                  <Select value={modal.data.typeAbonnement || 'mensuel'} onChange={(e) => set('typeAbonnement', e.target.value)}>
+                    {TYPES_ABONNEMENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  </Select>
+                </FormGroup>
+                {modal.data.typeAbonnement === 'court_sejour' && (
+                  <FormGroup label="Durée (semaines) *">
+                    <Input type="number" min="2" value={modal.data.dureeSemaines}
+                      onChange={(e) => set('dureeSemaines', e.target.value)} placeholder="ex: 3" />
+                    {modal.data.dureeSemaines && modal.data.dateInscription && (
+                      <p className="mt-1 text-xs font-semibold text-orange-600">
+                        → jusqu'au {formatDateShort(dateFinCourtSejour(modal.data.dateInscription, modal.data.dureeSemaines))}
+                      </p>
+                    )}
+                  </FormGroup>
+                )}
+                <FormGroup label="Date d'inscription">
+                  <Input type="date" value={modal.data.dateInscription} onChange={(e) => set('dateInscription', e.target.value)} />
+                </FormGroup>
+              </div>
+            </div>
+
+            {/* 👪 Parent / Tuteur */}
+            <div className="rounded-2xl border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700">👪 Parent / Tuteur</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Nom du parent / tuteur *">
                   <Input value={modal.data.parentNom} onChange={(e) => set('parentNom', e.target.value)} placeholder="Nom complet du parent" />
@@ -753,11 +914,15 @@ export default function Enfants() {
                 <FormGroup label="Profession du parent / tuteur">
                   <Input value={modal.data.parentProfession} onChange={(e) => set('parentProfession', e.target.value)} placeholder="ex: Commerçant, Enseignant…" />
                 </FormGroup>
+                <FormGroup label="Adresse *">
+                  <Input value={modal.data.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Quartier, ville…" />
+                </FormGroup>
               </div>
             </div>
 
-            <div className="rounded-lg border border-orange-100 bg-orange-50 p-3">
-              <p className="mb-2 text-xs font-bold uppercase text-orange-700">Santé & allergies</p>
+            {/* 🏥 Santé & allergies */}
+            <div className="rounded-2xl border border-rose-200 border-l-4 border-l-rose-400 bg-rose-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-rose-700">🏥 Santé & allergies</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Allergies connues">
                   <Input value={modal.data.allergies} onChange={(e) => set('allergies', e.target.value)} placeholder="ex: arachides, lait…" />
@@ -784,6 +949,7 @@ export default function Enfants() {
         onClose={() => setToDelete(null)}
         title="Supprimer cet enfant ?"
         size="sm"
+        {...glassModalProps('#dc2626')}
         footer={
           <>
             <Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button>
@@ -792,10 +958,22 @@ export default function Enfants() {
         }
       >
         {toDelete && (
-          <p className="text-sm text-gray-600">
-            Vous allez supprimer <span className="font-bold text-gray-900">{toDelete.prenom} {toDelete.nom}</span> de la base de données.
-            Cette action est <span className="font-semibold text-red-600">irréversible</span>.
-          </p>
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.88) 0%, rgba(127,29,29,0.88) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Trash2 size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{toDelete.prenom} {toDelete.nom}</p>
+                <p className="text-sm text-white/80">Suppression définitive de la fiche</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Vous allez supprimer cet enfant de la base de données. Cette action est <span className="font-semibold text-red-600">irréversible</span>.
+            </p>
+          </div>
         )}
       </Modal>
 
@@ -869,7 +1047,21 @@ export default function Enfants() {
                 <div className="space-y-1.5">
                   <div><span className="font-semibold text-gray-500">Sexe :</span> {detail.sexe === 'F' ? 'Fille' : 'Garçon'}</div>
                   <div><span className="font-semibold text-gray-500">Inscription :</span> {formatDateShort(detail.dateInscription)}</div>
-                  <div><span className="font-semibold text-gray-500">Abonnement :</span> {detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}</div>
+                  <div>
+                    <span className="font-semibold text-gray-500">Abonnement :</span>{' '}
+                    {detail.typeAbonnement === 'court_sejour'
+                      ? `Court séjour (${detail.dureeSemaines} sem.) — jusqu'au ${formatDateShort(dateFinCourtSejour(detail.dateInscription, detail.dureeSemaines))}`
+                      : detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}
+                  </div>
+                  {detail.typeAbonnement === 'court_sejour' && (() => {
+                    const joursRestants = joursAvantFinCourtSejour(detail.dateInscription, detail.dureeSemaines)
+                    if (joursRestants === null) return null
+                    return joursRestants < 0 ? (
+                      <p className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">⚠ Séjour terminé depuis {Math.abs(joursRestants)} jour(s)</p>
+                    ) : joursRestants <= 7 ? (
+                      <p className="rounded-lg bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-700">⏰ Fin du séjour dans {joursRestants} jour(s)</p>
+                    ) : null
+                  })()}
                   <div><span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}</div>
                 </div>
               </Card>

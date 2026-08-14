@@ -274,31 +274,46 @@ function OngletTaches() {
         footer={<><Button variant="outline" onClick={() => setModal(null)}>Annuler</Button>
           <Button style={{ backgroundColor: COULEUR_MODULE.garderie }} onClick={handleSave} loading={saving}>Enregistrer</Button></>}>
         {modal && (
-          <div className="space-y-3">
-            <FormGroup label="Titre de la tâche" required>
-              <Input value={modal.data.titre} onChange={(e) => set('titre', e.target.value)} placeholder="ex: Désinfecter les jouets de la petite section" />
-            </FormGroup>
-            <FormGroup label="Description">
-              <textarea className="w-full rounded-lg border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2"
-                style={{ '--tw-ring-color': COULEUR_MODULE.garderie + '66' }}
-                rows={2} value={modal.data.description} onChange={(e) => set('description', e.target.value)}
-                placeholder="Détails, consignes particulières…" />
-            </FormGroup>
-            <div className="grid grid-cols-2 gap-3">
-              <FormGroup label="Assignée à" required
-                hint={tatas.length ? 'Seules les tatas peuvent recevoir une tâche' : undefined}>
-                <Select value={modal.data.assigneUid}
-                  onChange={(e) => {
-                    const t = tatas.find((x) => x.uid === e.target.value)
-                    setModal((m) => ({ ...m, data: { ...m.data, assigneUid: e.target.value, assigneNom: t?.nom || '' } }))
-                  }}>
-                  <option value="">— Choisir une tata —</option>
-                  {tatas.map((t) => <option key={t.uid} value={t.uid}>{t.nom}</option>)}
-                </Select>
+          <div className="space-y-4">
+            {/* Bandeau héro — la tata assignée, ou une invite à en choisir une */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: `linear-gradient(135deg, ${COULEUR_MODULE.garderie}d9 0%, #7c1d0dd9 100%)` }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: COULEUR_MODULE.garderie, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <ListChecks size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{modal.data.assigneNom || 'Nouvelle tâche'}</p>
+                <p className="text-sm text-white/80">{modal.data.titre || 'Programmée pour une tata'}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]" style={{ borderColor: COULEUR_MODULE.garderie + '55', background: COULEUR_MODULE.garderie + '0d' }}>
+              <FormGroup label="Titre de la tâche" required>
+                <Input value={modal.data.titre} onChange={(e) => set('titre', e.target.value)} placeholder="ex: Désinfecter les jouets de la petite section" />
               </FormGroup>
-              <FormGroup label="Échéance (optionnel)">
-                <Input type="date" value={modal.data.dateEcheance} onChange={(e) => set('dateEcheance', e.target.value)} min={todayStr()} />
+              <FormGroup label="Description">
+                <textarea className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': COULEUR_MODULE.garderie + '66' }}
+                  rows={2} value={modal.data.description} onChange={(e) => set('description', e.target.value)}
+                  placeholder="Détails, consignes particulières…" />
               </FormGroup>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Assignée à" required
+                  hint={tatas.length ? 'Seules les tatas peuvent recevoir une tâche' : undefined}>
+                  <Select value={modal.data.assigneUid}
+                    onChange={(e) => {
+                      const t = tatas.find((x) => x.uid === e.target.value)
+                      setModal((m) => ({ ...m, data: { ...m.data, assigneUid: e.target.value, assigneNom: t?.nom || '' } }))
+                    }}>
+                    <option value="">— Choisir une tata —</option>
+                    {tatas.map((t) => <option key={t.uid} value={t.uid}>{t.nom}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Échéance (optionnel)">
+                  <Input type="date" value={modal.data.dateEcheance} onChange={(e) => set('dateEcheance', e.target.value)} min={todayStr()} />
+                </FormGroup>
+              </div>
             </div>
             {/* Sans compte de rôle « tata », l'assignation est impossible : on le dit
                 explicitement plutôt que de laisser une liste vide inexpliquée. */}
@@ -314,9 +329,24 @@ function OngletTaches() {
 
       {/* Confirmation suppression */}
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer cette tâche ?"
-        {...glassModalProps(COULEUR_MODULE.garderie)}
+        {...glassModalProps('#dc2626')}
         footer={<><Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button><Button variant="danger" onClick={handleDelete} loading={deleting}>Supprimer</Button></>}>
-        {toDelete && <p className="text-sm text-gray-600">Voulez-vous vraiment supprimer la tâche « {toDelete.titre} » ?</p>}
+        {toDelete && (
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.88) 0%, rgba(127,29,29,0.88) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Trash2 size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{toDelete.titre}</p>
+                <p className="text-sm text-white/80">{toDelete.assigneNom || 'Tâche programmée'}</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">Voulez-vous vraiment supprimer cette tâche ?</p>
+          </div>
+        )}
       </Modal>
     </div>
   )
@@ -470,6 +500,20 @@ export default function Taches() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <ListChecks size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Tâches</h2>
+          <p className="text-sm text-white/80">Checklist de la direction — suivi et statistiques</p>
+        </div>
+      </div>
+
       {/* Les deux onglets sont accessibles à TOUS les rôles du module, tatas
           comprises : chacune consulte ses tâches et se situe dans les stats. */}
       <div className="flex gap-1 rounded-xl bg-gray-100 p-1">

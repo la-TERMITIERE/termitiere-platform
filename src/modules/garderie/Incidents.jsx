@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Plus, AlertTriangle, CheckCircle2, Bell, BellOff, BellRing, ShieldAlert, Lock, Thermometer, Pill, Syringe, Search, X, FileDown } from 'lucide-react'
+import { Plus, AlertTriangle, CheckCircle2, Bell, BellOff, BellRing, ShieldAlert, Lock, Thermometer, Pill, Syringe, Search, X, FileDown, Stethoscope } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
-import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { glassModalProps, COULEUR_MODULE, teinterHex, shadeHex } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -19,6 +19,9 @@ import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { TYPES_INCIDENT, GRAVITES_INCIDENT, TYPES_SOIN, VACCINS_STANDARD } from './data'
 import { useGarderieStore } from './store/garderieStore'
 import { genererRapportPDF } from '../../utils/exportPDF'
+
+// Couleur de la fenêtre « Signaler un incident » — adaptée à la gravité choisie.
+const GRAVITE_COULEUR = { faible: '#16a34a', moyen: '#f59e0b', grave: '#dc2626' }
 
 // Niveaux d'alarme : 0=aucune 1=surveillance 2=alerte 3=urgence
 const NIVEAUX_ALARME = {
@@ -377,6 +380,20 @@ export default function Incidents() {
 
   return (
     <div className="space-y-5">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Stethoscope size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Santé & Infirmerie</h2>
+          <p className="text-sm text-white/80">Incidents, soins courants et carnet de vaccination</p>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
         <p className="font-semibold mb-0.5">⚕️ Santé & Infirmerie</p>
         <p>Incidents graves avec alarme, soins courants (température, bobos, médicaments) et carnet de vaccination — tout le suivi santé des enfants regroupé ici.</p>
@@ -697,34 +714,53 @@ export default function Incidents() {
 
       {/* ── Modal : Incident ── */}
       <Modal open={!!modalIncident} onClose={() => setModalIncident(null)} size="lg"
+        {...glassModalProps(GRAVITE_COULEUR[modalIncident?.data?.gravite] || '#f59e0b')}
         title={modalIncident?.isNew ? 'Signaler un incident' : 'Modifier l\'incident'}
         footer={<><Button variant="outline" onClick={() => setModalIncident(null)}>Annuler</Button><Button onClick={handleSaveIncident}>Enregistrer</Button></>}>
-        {modalIncident && (
-          <div className="space-y-3">
-            <FormGroup label="Enfant concerné *">
-              <Select value={modalIncident.data.enfantId} onChange={(e) => onEnfantChangeIncident(e.target.value)}>
-                <option value="">— Choisir —</option>
-                {tousEnfantsSelectables.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
-              </Select>
-            </FormGroup>
-            <div className="grid grid-cols-2 gap-3">
-              <FormGroup label="Type d'incident">
-                <Select value={modalIncident.data.type} onChange={(e) => setIncident('type', e.target.value)}>
-                  {TYPES_INCIDENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Gravité">
-                <Select value={modalIncident.data.gravite} onChange={(e) => setIncident('gravite', e.target.value)}>
-                  {Object.entries(GRAVITES_INCIDENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Date">
-                <Input type="date" value={modalIncident.data.date} onChange={(e) => setIncident('date', e.target.value)} />
-              </FormGroup>
-              <FormGroup label="Heure">
-                <Input type="time" value={modalIncident.data.heure} onChange={(e) => setIncident('heure', e.target.value)} />
-              </FormGroup>
+        {modalIncident && (() => {
+          const couleur = GRAVITE_COULEUR[modalIncident.data.gravite] || '#f59e0b'
+          return (
+          <div className="space-y-4">
+            {/* Bandeau héro — couleur adaptée à la gravité choisie */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: `linear-gradient(135deg, ${teinterHex(couleur, 0.88)} 0%, ${teinterHex(shadeHex(couleur, -30), 0.88)} 100%)` }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: couleur, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <AlertTriangle size={24} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{modalIncident.data.enfantNom || 'Enfant concerné'}</p>
+                <p className="text-sm text-white/80">Gravité : {GRAVITES_INCIDENT[modalIncident.data.gravite]?.label || '—'}</p>
+              </div>
             </div>
+
+            <div className="rounded-2xl border border-gray-200 border-l-4 bg-gray-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]" style={{ borderLeftColor: couleur }}>
+              <FormGroup label="Enfant concerné *">
+                <Select value={modalIncident.data.enfantId} onChange={(e) => onEnfantChangeIncident(e.target.value)}>
+                  <option value="">— Choisir —</option>
+                  {tousEnfantsSelectables.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                </Select>
+              </FormGroup>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <FormGroup label="Type d'incident">
+                  <Select value={modalIncident.data.type} onChange={(e) => setIncident('type', e.target.value)}>
+                    {TYPES_INCIDENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Gravité">
+                  <Select value={modalIncident.data.gravite} onChange={(e) => setIncident('gravite', e.target.value)}>
+                    {Object.entries(GRAVITES_INCIDENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Date">
+                  <Input type="date" value={modalIncident.data.date} onChange={(e) => setIncident('date', e.target.value)} />
+                </FormGroup>
+                <FormGroup label="Heure">
+                  <Input type="time" value={modalIncident.data.heure} onChange={(e) => setIncident('heure', e.target.value)} />
+                </FormGroup>
+              </div>
+            </div>
+
             <FormGroup label="Description *">
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 rows={3} value={modalIncident.data.description} onChange={(e) => setIncident('description', e.target.value)}
@@ -743,22 +779,38 @@ export default function Incidents() {
               </label>
             </div>
           </div>
-        )}
+          )
+        })()}
       </Modal>
 
       {/* ── Modal : Soin ── */}
       <Modal open={!!modalSoin} onClose={() => setModalSoin(null)} size="lg"
-        title={modalSoin?.isNew ? '🩺 Enregistrer un soin' : 'Modifier le soin'}
+        {...glassModalProps('#e11d48')}
+        title={modalSoin?.isNew ? 'Enregistrer un soin' : 'Modifier le soin'}
         footer={<><Button variant="outline" onClick={() => setModalSoin(null)}>Annuler</Button><Button onClick={handleSaveSoin}>Enregistrer</Button></>}>
         {modalSoin && (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* Bandeau héro — thème santé (rose), enfant concerné */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(225,29,72,0.88) 0%, rgba(159,18,57,0.88) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#e11d48', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Stethoscope size={24} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{modalSoin.data.enfantNom || 'Enfant concerné'}</p>
+                <p className="text-sm text-white/80">{TYPES_SOIN.find((t) => t.id === modalSoin.data.type)?.label || 'Soin'}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-rose-200 border-l-4 border-l-rose-400 bg-rose-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
             <FormGroup label="Enfant concerné *">
               <Select value={modalSoin.data.enfantId} onChange={(e) => onEnfantChangeSoin(e.target.value)}>
                 <option value="">— Choisir —</option>
                 {tousEnfantsSelectables.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
               </Select>
             </FormGroup>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-3">
               <FormGroup label="Type de soin">
                 <Select value={modalSoin.data.type} onChange={(e) => setSoin('type', e.target.value)}>
                   {TYPES_SOIN.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -802,6 +854,7 @@ export default function Incidents() {
                 </>
               )}
             </div>
+            </div>
             <FormGroup label="Description *">
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 rows={3} value={modalSoin.data.description} onChange={(e) => setSoin('description', e.target.value)}
@@ -837,7 +890,7 @@ export default function Incidents() {
 
       {/* ── Modal : Carnet de vaccination (checklist) ── */}
       <Modal open={!!carnetModal} onClose={() => setCarnetModal(null)} size="lg" {...glassModalProps(COULEUR_MODULE.garderie)}
-        title={carnetModal ? `💉 Carnet de vaccination — ${carnetModal.enfantNom}` : ''}
+        title="Carnet de vaccination"
         footer={
           <>
             <Button variant="outline" onClick={() => exporterCarnetPDF(carnetModal)}>
@@ -848,7 +901,19 @@ export default function Incidents() {
           </>
         }>
         {carnetModal && (
-          <div className="space-y-2">
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Syringe size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{carnetModal.enfantNom}</p>
+                <p className="text-sm text-white/80">{VACCINS_STANDARD.filter((v) => carnetModal.vaccins[v.id]?.recu).length} / {VACCINS_STANDARD.length} vaccins reçus</p>
+              </div>
+            </div>
+            <div className="space-y-2">
             {VACCINS_STANDARD.map((v) => {
               const etat = carnetModal.vaccins[v.id] || { recu: false, date: '', notes: '' }
               return (
@@ -902,6 +967,7 @@ export default function Incidents() {
                 ))}
               </div>
             </div>
+          </div>
           </div>
         )}
       </Modal>

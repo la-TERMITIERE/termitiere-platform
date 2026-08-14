@@ -59,6 +59,57 @@ function ProjetsNavMenu({ item, secteursMenu, badgeCount, isActive, onNavigate }
   )
 }
 
+// Menu « Enfants inscrits » imbriqué — regroupe garderie, maternelle et
+// journaliers dans un seul menu déroulant plutôt que 3 liens séparés. Chaque
+// entrée navigue vers /garderie/enfants avec un paramètre d'URL que
+// Enfants.jsx lit pour préfiltrer sa liste.
+const ENFANTS_CATEGORIES = [
+  { key: 'tous',        label: 'Tous les enfants inscrits', emoji: '👶', query: '' },
+  { key: 'garderie',    label: 'Garderie',                  emoji: '🍼', query: '?programme=garderie' },
+  { key: 'maternelle',  label: 'Maternelle',                emoji: '🎓', query: '?programme=maternelle' },
+  { key: 'journaliers', label: 'Enfants journaliers',       emoji: '🚪', query: '?vue=journaliers' }
+]
+
+function EnfantsNavMenu({ item, isActive, currentSearch, onNavigate }) {
+  const [ouvert, setOuvert] = useState(isActive)
+
+  const itemClass = `flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+    isActive ? 'bg-white/20 text-white shadow-[0_16px_32px_-12px_rgba(0,0,0,0.45),0_4px_10px_-4px_rgba(0,0,0,0.3)]'
+      : 'text-white/80 hover:bg-white/10 hover:text-white'
+  }`
+
+  const activeKey = (() => {
+    const p = new URLSearchParams(currentSearch)
+    if (p.get('vue') === 'journaliers') return 'journaliers'
+    if (p.get('programme') === 'garderie') return 'garderie'
+    if (p.get('programme') === 'maternelle') return 'maternelle'
+    return 'tous'
+  })()
+
+  return (
+    <div>
+      <button type="button" onClick={() => setOuvert((o) => !o)} className={itemClass}>
+        <item.icon size={18} /> {item.label}
+        <span className="ml-auto">{ouvert ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
+      </button>
+
+      {ouvert && (
+        <div className="ml-3 mt-1 space-y-0.5 border-l border-white/15 pl-2">
+          {ENFANTS_CATEGORIES.map((c) => (
+            <Link key={c.key} to={`/garderie/enfants${c.query}`} onClick={onNavigate}
+              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold transition-all ${
+                isActive && activeKey === c.key ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}>
+              <span>{c.emoji}</span>
+              <span className="flex-1 truncate">{c.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
   const { user, role, hasModule, isAdmin, logout } = useAuth()
@@ -264,6 +315,11 @@ export default function Sidebar({ open, onClose }) {
                   <ProjetsNavMenu key={item.to} item={item} secteursMenu={secteursMenu}
                     badgeCount={item.badgeKey && badges[item.badgeKey] > 0 ? badges[item.badgeKey] : 0}
                     isActive={location.pathname.startsWith('/projet/projets') && !location.pathname.startsWith('/projet/projets/liste')}
+                    onNavigate={onClose} />
+                ) : item.to === '/garderie/enfants' ? (
+                  <EnfantsNavMenu key={item.to} item={item}
+                    isActive={location.pathname.startsWith('/garderie/enfants')}
+                    currentSearch={location.search}
                     onNavigate={onClose} />
                 ) : (
                   <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Plus, FileSpreadsheet, Printer, CheckCircle2 } from 'lucide-react'
+import { Plus, FileSpreadsheet, Printer, CheckCircle2, CreditCard, AlertTriangle, Wallet, UserPlus, User } from 'lucide-react'
 import { genererRecuPaiement } from './recuPDF'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
@@ -17,14 +18,15 @@ import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { formatMoney } from '../../utils/formatters'
-import { TYPES_PAIEMENT, MODES_PAIEMENT, STATUTS_PAIEMENT, MOIS } from './data'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { TYPES_PAIEMENT, MODES_PAIEMENT, STATUTS_PAIEMENT, MOIS, programmeDuGroupe } from './data'
 import { tarifSuggere } from './logic'
 import { useGarderieStore } from './store/garderieStore'
 import { exportRapportExcel } from '../../utils/excelReport'
 
 const now = new Date()
 // Types de paiement pour lesquels les frais de cuisine (payés à part par les parents) s'appliquent.
-const TYPES_AVEC_CUISINE = ['inscription', 'mensuel']
+const TYPES_AVEC_CUISINE = ['inscription', 'mensuel', 'court_sejour']
 const empty = () => ({
   enfantId: '', enfantNom: '',
   type: 'mensuel', mois: now.getMonth() + 1, annee: now.getFullYear(),
@@ -95,6 +97,36 @@ export default function Paiements() {
     const r = (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)
     return s + (r > 0 ? r : 0)
   }, 0), [liste])
+
+  // Programme (garderie / maternelle) de l'enfant d'un paiement — pour le détail
+  // par catégorie ouvert depuis les KPI (cf. `detailKpi`).
+  function programmeDePaiement(p) {
+    const e = enfants.find((x) => x.id === p.enfantId)
+    return e ? (e.programme || programmeDuGroupe(e.groupe)) : null
+  }
+
+  // KPI cliqué → détail des paiements de la période/filtres en cours, regroupés
+  // par catégorie (Garderie / Maternelle), comme sur le Dashboard.
+  const [detailKpi, setDetailKpi] = useState(null) // 'paye' | 'du' | 'reste' | null
+  const detailParCategorie = useMemo(() => {
+    const rows = detailKpi === 'reste'
+      ? liste.filter((p) => (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0) > 0)
+      : liste
+    const groupes = { garderie: [], maternelle: [], autre: [] }
+    rows.forEach((p) => {
+      const prog = programmeDePaiement(p)
+      ;(groupes[prog] || groupes.autre).push(p)
+    })
+    return groupes
+  }, [liste, detailKpi, enfants])
+
+  function montantKpi(rows) {
+    if (detailKpi === 'paye')  return rows.reduce((s, p) => s + (Number(p.montantPaye) || 0), 0)
+    if (detailKpi === 'du')    return rows.reduce((s, p) => s + (Number(p.montantDu) || 0), 0)
+    return rows.reduce((s, p) => s + Math.max(0, (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)), 0)
+  }
+
+  const DETAIL_KPI_TITRE = { paye: '💰 Détail des montants payés', du: '📋 Détail des montants attendus', reste: '⚠️ Détail des restes à payer' }
 
   function openCreate() {
     setModal({ data: { ...empty(), montantDu: params.tarifMensuel, montantCuisine: params.fraisCuisine || '' }, isNew: true })
@@ -267,6 +299,20 @@ export default function Paiements() {
   return (
     <div className="space-y-5">
 
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <CreditCard size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Paiements</h2>
+          <p className="text-sm text-white/80">Suivi des paiements mensuels, annuels et journaliers</p>
+        </div>
+      </div>
+
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">
         {[
@@ -365,6 +411,17 @@ export default function Paiements() {
 
       {/* ══ ONGLET INSCRITS ══ */}
       {onglet === 'inscrits' && <>
+
+      {/* KPI cliquables — détail par catégorie (Garderie / Maternelle) */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <StatCard title="Payé" value={formatMoney(totalPaye)} icon={CheckCircle2} accent="#16a34a"
+          onClick={() => setDetailKpi('paye')} />
+        <StatCard title="Attendu" value={formatMoney(totalDu)} icon={Wallet} accent="#f59e0b"
+          onClick={() => setDetailKpi('du')} />
+        <StatCard title="Restant" value={formatMoney(totalReste)} icon={AlertTriangle} accent="#dc2626"
+          onClick={() => setDetailKpi('reste')} />
+      </div>
+
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
@@ -391,13 +448,6 @@ export default function Paiements() {
           </Select>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <div className="text-right text-sm space-y-0.5">
-            <p className="font-semibold text-green-600">{formatMoney(totalPaye)} payés</p>
-            <p className="text-xs text-gray-400">{formatMoney(totalDu)} attendus</p>
-            {totalReste > 0 && (
-              <p className="font-semibold text-red-600">{formatMoney(totalReste)} restants</p>
-            )}
-          </div>
           <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export</Button>
           <Button onClick={openCreate}><Plus size={16} /> Nouveau paiement</Button>
         </div>
@@ -494,12 +544,61 @@ export default function Paiements() {
       </Card>
       </> }
 
+      {/* ── Modal : Détail d'un KPI, par catégorie (Garderie / Maternelle) ── */}
+      <Modal open={!!detailKpi} onClose={() => setDetailKpi(null)} size="lg"
+        title={detailKpi ? DETAIL_KPI_TITRE[detailKpi] : ''}
+        panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        {detailKpi && (() => {
+          const sections = [
+            { key: 'garderie',   label: '🍼 Garderie',   bg: 'bg-blue-50',   border: 'border-blue-100',   text: 'text-blue-800' },
+            { key: 'maternelle', label: '🎓 Maternelle', bg: 'bg-green-50',  border: 'border-green-100',  text: 'text-green-800' },
+            { key: 'autre',      label: '❔ Non classé',  bg: 'bg-gray-50',   border: 'border-gray-100',   text: 'text-gray-700' }
+          ].filter((s) => detailParCategorie[s.key].length > 0)
+
+          if (sections.length === 0) {
+            return <p className="py-6 text-center text-sm text-gray-400">Aucun paiement sur la période.</p>
+          }
+
+          return (
+            <div className="space-y-4">
+              {sections.map((s) => {
+                const rows = detailParCategorie[s.key]
+                return (
+                  <div key={s.key}>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase text-gray-500">{s.label} — {rows.length} enfant(s)</p>
+                      <p className="text-xs font-extrabold text-gray-700">{formatMoney(montantKpi(rows))}</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      {rows.map((p) => {
+                        const reste = (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)
+                        const montant = detailKpi === 'paye' ? p.montantPaye : detailKpi === 'du' ? p.montantDu : Math.max(0, reste)
+                        return (
+                          <div key={p.id} className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${s.bg} ${s.border}`}>
+                            <div>
+                              <span className={`font-semibold ${s.text}`}>{p.enfantNom || '—'}</span>
+                              <span className="ml-2 text-xs text-gray-400">{MOIS[(p.mois || 1) - 1]} {p.annee}</span>
+                            </div>
+                            <span className="font-bold text-gray-700">{formatMoney(montant)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
+      </Modal>
+
       {/* ── Modal : Ajouter un paiement journalier ── */}
       <Modal
         open={!!joPayModal}
         onClose={() => setJoPayModal(null)}
         size="md"
-        title="🚪 Paiement — Enfant journalier"
+        {...glassModalProps('#E8390E')}
+        title="Paiement — Enfant journalier"
         footer={
           <>
             <Button variant="outline" onClick={() => setJoPayModal(null)} disabled={joPaySaving}>Annuler</Button>
@@ -508,7 +607,20 @@ export default function Paiements() {
         }
       >
         {joPayModal && (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* Bandeau héro — journalier sélectionné (ou invite à en choisir un) */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <UserPlus size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{joPayModal.enfantNom || 'Choisir un journalier'}</p>
+                <p className="text-sm text-white/80">{joPayModal.parentNom ? `Parent : ${joPayModal.parentNom}` : 'Paiement journalier'}</p>
+              </div>
+            </div>
+
             {/* Sélecteur journalier */}
             <FormGroup label="Enfant journalier *">
               <Select
@@ -582,7 +694,8 @@ export default function Paiements() {
         open={!!soldeModal}
         onClose={() => setSoldeModal(null)}
         size="sm"
-        title={soldeModal ? `💰 Solder — ${soldeModal.paiement.enfantNom}` : ''}
+        {...glassModalProps('#16a34a')}
+        title="Solder un paiement"
         footer={
           <>
             <Button variant="outline" onClick={() => setSoldeModal(null)} disabled={soldeSaving}>Annuler</Button>
@@ -595,7 +708,20 @@ export default function Paiements() {
         {soldeModal && (() => {
           const reste = (Number(soldeModal.paiement.montantDu) || 0) - (Number(soldeModal.paiement.montantPaye) || 0)
           return (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Bandeau héro */}
+              <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+                style={{ background: 'linear-gradient(135deg, rgba(22,163,74,0.88) 0%, rgba(21,94,45,0.88) 100%)' }}>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                  style={{ background: '#16a34a', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                  <Wallet size={22} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-extrabold leading-tight">{soldeModal.paiement.enfantNom}</p>
+                  <p className="text-sm text-white/80">Reste à payer : {formatMoney(reste)}</p>
+                </div>
+              </div>
+
               {/* Récapitulatif */}
               <div className="rounded-xl bg-gray-50 p-3 text-sm space-y-1">
                 <div className="flex justify-between">
@@ -637,10 +763,27 @@ export default function Paiements() {
       </Modal>
 
       <Modal open={!!modal} onClose={() => setModal(null)} size="md"
+        {...glassModalProps(COULEUR_MODULE.garderie)}
         title={modal?.isNew ? 'Enregistrer un paiement' : 'Modifier le paiement'}
         footer={<><Button variant="outline" onClick={() => setModal(null)}>Annuler</Button><Button onClick={handleSave}>Enregistrer</Button></>}>
-        {modal && (
-          <div className="space-y-3">
+        {modal && (() => {
+          const enfantSel = modal.data.enfantId ? enfantsActifs.find((x) => x.id === modal.data.enfantId) : null
+          return (
+          <div className="space-y-4">
+            {/* Bandeau héro — enfant sélectionné */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <User size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{enfantSel ? `${enfantSel.prenom} ${enfantSel.nom}` : 'Choisir un enfant'}</p>
+                <p className="text-sm text-white/80">{MOIS[(modal.data.mois || 1) - 1]} {modal.data.annee}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
             <FormGroup label="Enfant *">
               <Select value={modal.data.enfantId} onChange={(e) => onEnfantChange(e.target.value)}>
                 <option value="">— Choisir un enfant sans paiement ce mois —</option>
@@ -653,29 +796,23 @@ export default function Paiements() {
                 )}
               </Select>
               {enfantsSansPaiement.length === 0 && (
-                <p className="mt-1 rounded-lg bg-green-50 px-2 py-1 text-xs text-green-700 font-semibold">
+                <p className="mt-1 rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700 font-semibold">
                   ✅ Tous les enfants ont déjà payé pour {MOIS[(modal.data.mois || 1) - 1]} {modal.data.annee}
                 </p>
               )}
               {modal.data.enfantId && (() => {
-                const e = enfantsActifs.find((x) => x.id === modal.data.enfantId)
-                const t = e?.dateNaissance ? tarifSuggere(e.dateNaissance, GRILLE_TARIFAIRE) : null
+                const t = enfantSel?.dateNaissance ? tarifSuggere(enfantSel.dateNaissance, GRILLE_TARIFAIRE) : null
                 return t ? (
-                  <p className="mt-1 rounded-lg bg-green-50 px-2 py-1 text-xs text-green-700 font-semibold">
+                  <p className="mt-1 rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700 font-semibold">
                     💰 Tarif suggéré ({t.label}) : {t.tarif.toLocaleString('fr-FR')} FCFA / mois
                   </p>
                 ) : null
               })()}
             </FormGroup>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-3">
               <FormGroup label="Type de paiement">
                 <Select value={modal.data.type} onChange={(e) => onTypeChange(e.target.value)}>
                   {TYPES_PAIEMENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Mode de paiement">
-                <Select value={modal.data.modePaiement} onChange={(e) => set('modePaiement', e.target.value)}>
-                  {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                 </Select>
               </FormGroup>
               <FormGroup label="Mois concerné *">
@@ -688,40 +825,54 @@ export default function Paiements() {
                 </Select>
                 {modal.data.mois !== now.getMonth() + 1 && (
                   <p className="mt-1 text-xs text-orange-600 font-semibold">
-                    ⚠️ Ce paiement n'est pas pour le mois en cours ({MOIS[now.getMonth()]})
+                    ⚠️ Pas le mois en cours ({MOIS[now.getMonth()]})
                   </p>
                 )}
               </FormGroup>
               <FormGroup label="Année">
                 <Input type="number" value={modal.data.annee} onChange={(e) => set('annee', Number(e.target.value))} />
               </FormGroup>
-              <FormGroup label="Montant dû (FCFA) *">
-                <Input type="number" value={modal.data.montantDu} onChange={(e) => set('montantDu', e.target.value)} />
-              </FormGroup>
-              {TYPES_AVEC_CUISINE.includes(modal.data.type) && (
-                <FormGroup label="Frais de cuisine (FCFA)">
-                  <Input type="number" min="0" value={modal.data.montantCuisine} onChange={(e) => set('montantCuisine', e.target.value)} placeholder="0" />
-                  <p className="mt-1 text-xs text-gray-400">Payés à part par les parents — ajoutés au montant dû</p>
-                </FormGroup>
-              )}
-              <FormGroup label="Montant payé (FCFA) *">
-                <Input type="number" value={modal.data.montantPaye} onChange={(e) => set('montantPaye', e.target.value)} />
-              </FormGroup>
-              <FormGroup label="Date de paiement">
-                <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
-              </FormGroup>
             </div>
-            {TYPES_AVEC_CUISINE.includes(modal.data.type) && Number(modal.data.montantCuisine) > 0 && (
-              <p className="rounded-lg bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
-                💰 Total dû (dont {formatMoney(Number(modal.data.montantCuisine))} de cuisine) : {formatMoney(Number(modal.data.montantDu || 0) + Number(modal.data.montantCuisine || 0))}
-              </p>
-            )}
+            </div>
+
+            <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-green-700">💰 Montants & mode</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Montant dû (FCFA) *">
+                  <Input type="number" value={modal.data.montantDu} onChange={(e) => set('montantDu', e.target.value)} />
+                </FormGroup>
+                <FormGroup label="Montant payé (FCFA) *">
+                  <Input type="number" value={modal.data.montantPaye} onChange={(e) => set('montantPaye', e.target.value)} />
+                </FormGroup>
+                {TYPES_AVEC_CUISINE.includes(modal.data.type) && (
+                  <FormGroup label="Frais de cuisine (FCFA)">
+                    <Input type="number" min="0" value={modal.data.montantCuisine} onChange={(e) => set('montantCuisine', e.target.value)} placeholder="0" />
+                    <p className="mt-1 text-xs text-gray-500">Payés à part par les parents — ajoutés au montant dû</p>
+                  </FormGroup>
+                )}
+                <FormGroup label="Mode de paiement">
+                  <Select value={modal.data.modePaiement} onChange={(e) => set('modePaiement', e.target.value)}>
+                    {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Date de paiement">
+                  <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
+                </FormGroup>
+              </div>
+              {TYPES_AVEC_CUISINE.includes(modal.data.type) && Number(modal.data.montantCuisine) > 0 && (
+                <p className="mt-2 rounded-lg bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">
+                  💰 Total dû (dont {formatMoney(Number(modal.data.montantCuisine))} de cuisine) : {formatMoney(Number(modal.data.montantDu || 0) + Number(modal.data.montantCuisine || 0))}
+                </p>
+              )}
+            </div>
+
             <FormGroup label="Notes">
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 rows={2} value={modal.data.notes} onChange={(e) => set('notes', e.target.value)} />
             </FormGroup>
           </div>
-        )}
+          )
+        })()}
       </Modal>
     </div>
   )

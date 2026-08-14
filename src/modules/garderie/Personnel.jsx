@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from 'react'
-import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle, Eye, Camera, X, Loader2, UserCheck, UserX, CalendarDays } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle, Eye, Camera, X, Loader2, UserCheck, UserX, CalendarDays, Users } from 'lucide-react'
 import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -16,6 +16,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { POSTES_PERSONNEL } from './data'
 import { exportRapportExcel } from '../../utils/excelReport'
 
@@ -317,6 +318,20 @@ export default function Personnel() {
   return (
     <div className="space-y-5">
 
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Users size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Personnel & Tatas</h2>
+          <p className="text-sm text-white/80">Équipe encadrante — fiches, horaires, historique</p>
+        </div>
+      </div>
+
       {/* Onglets */}
       <div className="flex gap-2 border-b border-gray-200">
         {[{ id: 'pointage', label: '📋 Pointage journalier' }, { id: 'fiches', label: '👩 Gérer les tatas' }].map((t) => (
@@ -602,7 +617,8 @@ export default function Personnel() {
         open={!!absenceModal}
         onClose={() => setAbsenceModal(null)}
         size="sm"
-        title={absenceModal ? `🔴 Absence — ${absenceModal.p.prenom} ${absenceModal.p.nom}` : ''}
+        {...glassModalProps('#dc2626')}
+        title="Signaler une absence"
         footer={
           <>
             <Button variant="outline" onClick={() => setAbsenceModal(null)}>Annuler</Button>
@@ -611,9 +627,17 @@ export default function Personnel() {
         }
       >
         {absenceModal && (
-          <div className="space-y-3">
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              📅 {formatDateShort(dateFiltre)} · {absenceModal.p.prenom} {absenceModal.p.nom} sera marquée <strong>absente</strong>.
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.88) 0%, rgba(127,29,29,0.88) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <AlertCircle size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{absenceModal.p.prenom} {absenceModal.p.nom}</p>
+                <p className="text-sm text-white/80">{formatDateShort(dateFiltre)} — sera marquée absente</p>
+              </div>
             </div>
             <FormGroup label="Motif / Justification (optionnel)">
               <textarea
@@ -631,18 +655,33 @@ export default function Personnel() {
 
       {/* Modal pointage manuel */}
       <Modal open={!!pointageModal} onClose={() => setPointageModal(null)} size="sm"
-        title={pointageModal?.type === 'arrivee'
-          ? `🟢 Arrivée — ${pointageModal?.p?.prenom} ${pointageModal?.p?.nom}`
-          : `🔴 Départ — ${pointageModal?.p?.prenom} ${pointageModal?.p?.nom}`}
+        {...glassModalProps(pointageModal?.type === 'arrivee' ? '#16a34a' : '#dc2626')}
+        title={pointageModal?.type === 'arrivee' ? 'Arrivée' : 'Départ'}
         footer={<><Button variant="outline" onClick={() => setPointageModal(null)}>Annuler</Button><Button onClick={confirmerPointageManuel}>Enregistrer</Button></>}>
-        {pointageModal && (
-          <div className="space-y-3">
-            <div className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700">
-              <CalendarClock size={14} className="inline mr-1" />
-              {formatDateShort(dateFiltre)}
-              {pointageModal.pt?.heureArrivee && ` · Arrivée : ${pointageModal.pt.heureArrivee}`}
-              {pointageModal.pt?.heureDepart && ` · Départ : ${pointageModal.pt.heureDepart}`}
+        {pointageModal && (() => {
+          const couleur = pointageModal.type === 'arrivee' ? '#16a34a' : '#dc2626'
+          const Icone = pointageModal.type === 'arrivee' ? CheckCircle2 : LogOut
+          return (
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: `linear-gradient(135deg, ${couleur}e0 0%, ${couleur}b0 100%)` }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: couleur, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Icone size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{pointageModal.p?.prenom} {pointageModal.p?.nom}</p>
+                <p className="text-sm text-white/80">{formatDateShort(dateFiltre)}</p>
+              </div>
             </div>
+            {(pointageModal.pt?.heureArrivee || pointageModal.pt?.heureDepart) && (
+              <div className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700">
+                <CalendarClock size={14} className="inline mr-1" />
+                {pointageModal.pt?.heureArrivee && `Arrivée : ${pointageModal.pt.heureArrivee}`}
+                {pointageModal.pt?.heureArrivee && pointageModal.pt?.heureDepart && ' · '}
+                {pointageModal.pt?.heureDepart && `Départ : ${pointageModal.pt.heureDepart}`}
+              </div>
+            )}
             <FormGroup label={pointageModal.type === 'arrivee' ? "Heure d'arrivée" : "Heure de départ"}>
               <Input type="time" value={heureManuelle} onChange={(e) => setHeureManuelle(e.target.value)} autoFocus />
             </FormGroup>
@@ -650,7 +689,8 @@ export default function Personnel() {
               {pointageModal.pt ? 'Cette valeur remplacera le pointage existant.' : 'Un nouveau pointage sera créé.'}
             </p>
           </div>
-        )}
+          )
+        })()}
       </Modal>
 
       {/* Modal confirmation suppression */}
@@ -659,6 +699,7 @@ export default function Personnel() {
         onClose={() => setToDelete(null)}
         title="Supprimer ce membre du personnel ?"
         size="sm"
+        {...glassModalProps('#dc2626')}
         footer={
           <>
             <Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button>
@@ -667,65 +708,103 @@ export default function Personnel() {
         }
       >
         {toDelete && (
-          <p className="text-sm text-gray-600">
-            Vous allez supprimer <span className="font-bold text-gray-900">{toDelete.prenom} {toDelete.nom}</span> ({POSTES_PERSONNEL.find((x) => x.id === toDelete.poste)?.label || toDelete.poste}) de la base de données.
-            Cette action est <span className="font-semibold text-red-600">irréversible</span>.
-          </p>
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.88) 0%, rgba(127,29,29,0.88) 100%)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Trash2 size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{toDelete.prenom} {toDelete.nom}</p>
+                <p className="text-sm text-white/80">{POSTES_PERSONNEL.find((x) => x.id === toDelete.poste)?.label || toDelete.poste}</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Vous allez supprimer ce membre du personnel de la base de données. Cette action est <span className="font-semibold text-red-600">irréversible</span>.
+            </p>
+          </div>
         )}
       </Modal>
 
       {/* Modal fiche personnel */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="md"
-        panelClassName="bg-white/90 backdrop-blur-xl backdrop-saturate-150"
+        {...glassModalProps(COULEUR_MODULE.garderie)}
         title={modal?.isNew ? 'Ajouter un membre' : 'Modifier la fiche'}
         footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Ajouter' : 'Mettre à jour'}</Button></>}>
         {modal && (
-          <div className="space-y-3">
-            {/* Photo de profil */}
-            <div className="flex items-center gap-4 rounded-2xl border border-orange-100/70 bg-orange-50/60 p-3.5 shadow-sm backdrop-blur-sm">
-              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-100 shadow">
+          <div className="space-y-4">
+            {/* Bandeau héro — même dégradé/badge lumineux que les en-têtes du module,
+                avec la photo de profil intégrée (identique au formulaire Enfants) */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+              <div className="relative h-20 w-20 shrink-0">
                 {modal.data.photo ? (
-                  <img src={modal.data.photo} alt="Photo de profil" className="h-full w-full object-cover" />
+                  <img src={modal.data.photo} alt="Photo de profil" className="h-20 w-20 rounded-full border-2 border-white/80 object-cover shadow-lg" />
                 ) : (
-                  <Camera size={24} className="text-orange-300" />
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/80 bg-white/20 text-2xl font-bold text-white shadow-lg backdrop-blur-sm">
+                    {modal.data.prenom ? modal.data.prenom[0].toUpperCase() : <Camera size={22} />}
+                  </div>
                 )}
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  title={modal.data.photo ? 'Changer la photo' : 'Ajouter une photo'}
+                  className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-orange-600 text-white shadow hover:bg-orange-700 disabled:opacity-60"
+                >
+                  {photoUploading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+                </button>
                 {modal.data.photo && (
                   <button
                     type="button"
                     onClick={() => set('photo', '')}
                     title="Retirer la photo"
-                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                    className="absolute -top-1 -left-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-red-500 shadow hover:bg-red-50"
                   >
                     <X size={12} />
                   </button>
                 )}
               </div>
-              <div>
-                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                <Button type="button" variant="outline" onClick={() => photoInputRef.current?.click()} loading={photoUploading}>
-                  <Camera size={16} /> {modal.data.photo ? 'Changer la photo' : 'Ajouter une photo'}
-                </Button>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">
+                  {modal.data.prenom || modal.data.nom ? `${modal.data.prenom} ${modal.data.nom}`.trim() : (modal.isNew ? 'Nouveau membre' : 'Fiche personnel')}
+                </p>
+                <p className="text-sm text-white/80">Photo JPG ou PNG — recadrée automatiquement en carré</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormGroup label="Prénom *"><Input value={modal.data.prenom} onChange={(e) => set('prenom', e.target.value)} /></FormGroup>
-              <FormGroup label="Nom *"><Input value={modal.data.nom} onChange={(e) => set('nom', e.target.value)} /></FormGroup>
-              <FormGroup label="Poste *">
-                <Select value={modal.data.poste} onChange={(e) => set('poste', e.target.value)}>
-                  {POSTES_PERSONNEL.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                </Select>
-              </FormGroup>
-              <FormGroup label="Téléphone"><Input value={modal.data.telephone} onChange={(e) => set('telephone', e.target.value)} /></FormGroup>
-              <FormGroup label="Date d'embauche"><Input type="date" value={modal.data.dateEmbauche} onChange={(e) => set('dateEmbauche', e.target.value)} /></FormGroup>
-              <FormGroup label="Horaire habituel"><Input value={modal.data.horaire} onChange={(e) => set('horaire', e.target.value)} placeholder="ex: 07:00 – 17:00" /></FormGroup>
-              <FormGroup label="Statut">
-                <Select value={modal.data.statut} onChange={(e) => set('statut', e.target.value)}>
-                  <option value="actif">Actif</option>
-                  <option value="inactif">Inactif</option>
-                </Select>
-              </FormGroup>
+            {/* 📋 Identité */}
+            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-700">📋 Identité</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Prénom *"><Input value={modal.data.prenom} onChange={(e) => set('prenom', e.target.value)} /></FormGroup>
+                <FormGroup label="Nom *"><Input value={modal.data.nom} onChange={(e) => set('nom', e.target.value)} /></FormGroup>
+                <FormGroup label="Téléphone"><Input value={modal.data.telephone} onChange={(e) => set('telephone', e.target.value)} /></FormGroup>
+              </div>
             </div>
+
+            {/* 🕐 Poste & Horaires */}
+            <div className="rounded-2xl border border-sky-200 border-l-4 border-l-sky-400 bg-sky-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">🕐 Poste & Horaires</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Poste *">
+                  <Select value={modal.data.poste} onChange={(e) => set('poste', e.target.value)}>
+                    {POSTES_PERSONNEL.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Statut">
+                  <Select value={modal.data.statut} onChange={(e) => set('statut', e.target.value)}>
+                    <option value="actif">Actif</option>
+                    <option value="inactif">Inactif</option>
+                  </Select>
+                </FormGroup>
+                <FormGroup label="Date d'embauche"><Input type="date" value={modal.data.dateEmbauche} onChange={(e) => set('dateEmbauche', e.target.value)} /></FormGroup>
+                <FormGroup label="Horaire habituel"><Input value={modal.data.horaire} onChange={(e) => set('horaire', e.target.value)} placeholder="ex: 07:00 – 17:00" /></FormGroup>
+              </div>
+            </div>
+
             <FormGroup label="Notes">
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 rows={2} value={modal.data.notes} onChange={(e) => set('notes', e.target.value)} />

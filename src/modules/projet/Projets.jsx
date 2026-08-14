@@ -396,11 +396,11 @@ export default function Projets() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <h3 className="truncate text-[15px] font-bold text-gray-800">{p.nom}</h3>
+                          <h3 className="truncate text-lg font-bold text-gray-800">{p.nom}</h3>
                           <Badge tone={STATUTS_PROJET[p.statut]?.tone}>{STATUTS_PROJET[p.statut]?.label}</Badge>
                           <Badge tone={PRIORITES[p.priorite]?.tone}>{PRIORITES[p.priorite]?.label}</Badge>
                         </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
                           <span className="font-mono">{p.num}</span>
                           <span>· {TYPES_PROJET.find((t) => t.id === p.type)?.label || p.type}</span>
                           {secteurEffectif(p) && (
@@ -410,12 +410,12 @@ export default function Projets() {
                             </span>
                           )}
                         </div>
-                        {p.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{p.description}</p>}
+                        {p.description && <p className="mt-1 line-clamp-2 text-sm text-gray-500">{p.description}</p>}
                       </div>
                     </div>
 
                     {/* Méta : responsable, dates, superficie */}
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                       {p.pourClient !== false
                         ? (p.clientNom
                             ? <span className="rounded-full bg-violet-50 px-2 py-0.5 font-medium text-violet-700">🧑‍💼 Client : {p.clientNom}</span>
@@ -432,7 +432,7 @@ export default function Projets() {
                     {/* Suivi budgétaire — le reste diminue à chaque dépense */}
                     {budget > 0 && (
                       <div className="mt-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2.5">
-                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
                           <span className="text-gray-500">Budget <b className="text-gray-700">{formatMoney(budget)}</b></span>
                           <span className="text-gray-500">Dépensé <b className="text-amber-600">{formatMoney(depense)}</b></span>
                           <span className="text-gray-500">Reste <b className={reste < 0 ? 'text-red-600' : 'text-green-600'}>{formatMoney(reste)}</b></span>
@@ -442,10 +442,10 @@ export default function Projets() {
                             style={{ width: `${Math.min(100, pctBudget)}%` }} />
                         </div>
                         {reste < 0 && (
-                          <p className="mt-1 text-[10px] font-bold text-red-600">⚠ Budget dépassé de {formatMoney(-reste)}</p>
+                          <p className="mt-1 text-xs font-bold text-red-600">⚠ Budget dépassé de {formatMoney(-reste)}</p>
                         )}
                         {coutParUnite !== null && (
-                          <p className="mt-1 text-[10px] font-semibold text-green-700">Coût par {uniteSuperficie(p.superficieUnite)} : {formatMoney(coutParUnite)}</p>
+                          <p className="mt-1 text-xs font-semibold text-green-700">Coût par {uniteSuperficie(p.superficieUnite)} : {formatMoney(coutParUnite)}</p>
                         )}
                       </div>
                     )}
@@ -456,7 +456,7 @@ export default function Projets() {
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
                           <div className="h-2 rounded-full bg-gradient-to-r from-teal-400 to-teal-600 transition-all" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="whitespace-nowrap text-[10px] font-bold text-gray-500">
+                        <span className="whitespace-nowrap text-xs font-bold text-gray-500">
                           {pct}% · {tachesTerminees}/{tachesDuProjet.length} tâches
                         </span>
                       </div>
@@ -473,13 +473,13 @@ export default function Projets() {
                     {!sansActionsDecision && p.statut === 'planification' && (
                       <button onClick={() => demarrer(p)}
                         title="Démarrer maintenant, avant la date de début prévue (sinon le projet démarre automatiquement à cette date)"
-                        className="mt-1 flex items-center gap-1 rounded-full bg-teal-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-teal-600 transition-colors">
+                        className="mt-1 flex items-center gap-1 rounded-full bg-teal-500 px-3 py-1 text-xs font-bold text-white hover:bg-teal-600 transition-colors">
                         <Play size={11} />Démarrer maintenant
                       </button>
                     )}
                     {!sansActionsDecision && p.statut === 'en_cours' && (
                       <button onClick={() => terminer(p)}
-                        className="mt-1 flex items-center gap-1 rounded-full bg-green-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-green-600 transition-colors">
+                        className="mt-1 flex items-center gap-1 rounded-full bg-green-500 px-3 py-1 text-xs font-bold text-white hover:bg-green-600 transition-colors">
                         <CheckCircle2 size={11} />Terminer
                       </button>
                     )}

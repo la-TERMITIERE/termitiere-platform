@@ -22,6 +22,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { canManagePartenaires } from '../../core/roles'
+import { COULEUR_MODULE, teinterHex, shadeHex } from '../../utils/color'
 
 const empty = () => ({ nom: '', contact: '', type: '' })
 
@@ -41,6 +42,7 @@ export default function Partenaires({ module, suggestions }) {
   const peutGerer = canManagePartenaires(role, user)
   const listeSuggestions = suggestions || SUGGESTIONS[module] || []
   const col = `${module}_partenaires`
+  const couleur = COULEUR_MODULE[module] || '#0d9488'
   const { data: partenaires } = useCollection(col)
   const [modal, setModal] = useState(null) // { data, id }
 
@@ -69,18 +71,25 @@ export default function Partenaires({ module, suggestions }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Handshake size={20} />
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: `linear-gradient(135deg, ${teinterHex(couleur, 0.85)} 0%, ${teinterHex(shadeHex(couleur, -35), 0.85)} 100%)` }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: couleur, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Handshake size={28} color="white" />
         </div>
         <div className="flex-1">
-          <h1 className="text-lg font-extrabold text-gray-900">Partenaires</h1>
-          <p className="text-sm text-gray-500">Contacts externes du secteur — ce ne sont pas des employés.</p>
+          <h2 className="text-lg font-extrabold">Partenaires</h2>
+          <p className="text-sm text-white/80">Contacts externes du secteur — ce ne sont pas des employés</p>
         </div>
-        {peutGerer && (
-          <Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Nouveau partenaire</Button>
-        )}
       </div>
+
+      {peutGerer && (
+        <div className="flex justify-end">
+          <Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Nouveau partenaire</Button>
+        </div>
+      )}
 
       {!peutGerer && (
         <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">

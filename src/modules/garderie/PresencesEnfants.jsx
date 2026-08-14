@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CheckCircle2, XCircle, Clock, FileSpreadsheet, ChevronLeft, ChevronRight, LogOut, User, Search, ExternalLink } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, FileSpreadsheet, ChevronLeft, ChevronRight, LogOut, User, Search, ExternalLink, CalendarCheck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -16,6 +16,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { GROUPES_AGE, STATUTS_PRESENCE } from './data'
 import { useGarderieStore } from './store/garderieStore'
 import { journaliersActifsSurDate, enfantsSansRenouvellement } from './logic'
@@ -279,6 +280,20 @@ export default function PresencesEnfants() {
   return (
     <div className="space-y-5">
 
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <CalendarCheck size={28} color="white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold">Présences</h2>
+          <p className="text-sm text-white/80">Suivi quotidien des présences et absences des enfants</p>
+        </div>
+      </div>
+
       {/* Sélecteur de date + navigation */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
@@ -370,6 +385,8 @@ export default function PresencesEnfants() {
                       <p className="font-semibold">{e.prenom} {e.nom}</p>
                       {e.typeAbonnement === 'annuel' ? (
                         <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">Annuel</span>
+                      ) : e.typeAbonnement === 'court_sejour' ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Court séjour</span>
                       ) : journaliersNoms.has(`${e.prenom} ${e.nom}`.toLowerCase()) ? (
                         <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">Journalier</span>
                       ) : (
@@ -593,17 +610,32 @@ export default function PresencesEnfants() {
         open={!!pointageModal}
         onClose={() => setPointageModal(null)}
         size="sm"
+        {...glassModalProps(
+          pointageModal?.type === 'arrivee' ? '#16a34a' : pointageModal?.type === 'depart' ? '#dc2626' : '#3b82f6'
+        )}
         title={
-          pointageModal?.type === 'arrivee' ? `🟢 Arrivée — ${pointageModal?.enfant?.prenom} ${pointageModal?.enfant?.nom}`
-          : pointageModal?.type === 'depart' ? `🔴 Départ — ${pointageModal?.enfant?.prenom} ${pointageModal?.enfant?.nom}`
-          : `👤 Récupéré par — ${pointageModal?.enfant?.prenom} ${pointageModal?.enfant?.nom}`
+          pointageModal?.type === 'arrivee' ? 'Arrivée' : pointageModal?.type === 'depart' ? 'Départ' : 'Récupéré par'
         }
         footer={
           <><Button variant="outline" onClick={() => setPointageModal(null)}>Annuler</Button>
           <Button onClick={confirmerModal}>Enregistrer</Button></>
         }>
-        {pointageModal && (
-          <div className="space-y-3">
+        {pointageModal && (() => {
+          const couleur = pointageModal.type === 'arrivee' ? '#16a34a' : pointageModal.type === 'depart' ? '#dc2626' : '#3b82f6'
+          const Icone = pointageModal.type === 'arrivee' ? CheckCircle2 : pointageModal.type === 'depart' ? LogOut : User
+          return (
+          <div className="space-y-4">
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+              style={{ background: `linear-gradient(135deg, ${couleur}e0 0%, ${couleur}b0 100%)` }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: couleur, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                <Icone size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-extrabold leading-tight">{pointageModal.enfant?.prenom} {pointageModal.enfant?.nom}</p>
+                <p className="text-sm text-white/80">{formatDateShort(dateFiltre)}</p>
+              </div>
+            </div>
             <div className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700">
               📅 {formatDateShort(dateFiltre)}
               {pointageModal.presence?.heureArrivee && ` · Arrivée : ${pointageModal.presence.heureArrivee}`}
@@ -676,7 +708,8 @@ export default function PresencesEnfants() {
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
       </Modal>
     </div>
   )
