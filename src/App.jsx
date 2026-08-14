@@ -3,7 +3,6 @@ import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import AppShell from './shared/Layout/AppShell'
-import LoadingSpinner from './shared/ui/LoadingSpinner'
 import ModuleLoadingSpinner from './shared/ui/ModuleLoadingSpinner'
 import ToastContainer from './shared/ui/Toast'
 import UpdateManager from './shared/UpdateManager'
@@ -27,7 +26,7 @@ const DepenseModule  = lazy(() => import('./modules/depense/index.jsx'))
 function Protected({ children }) {
   const { user, ready } = useAuth()
   const location = useLocation()
-  if (!ready) return <LoadingSpinner label="Initialisation…" className="h-screen" />
+  if (!ready) return <ModuleLoadingSpinner label="Initialisation…" fullScreen />
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />
   return children
 }
