@@ -25,11 +25,20 @@ body {
   background: #faf6f5; /* blanc cassé chaud (teinte rouge très légère) */
   color: #1e293b;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Mode sombre — fond de page + texte de base. Les bandeaux/dégradés propres à
+   chaque module restent inchangés (déjà en texte blanc sur couleur saturée). */
+html.dark body {
+  background: #15191c;
+  color: #e2e5e9;
 }
 
 /* Scrollbar discrète */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; }
+html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
 
 @layer base {
   /* Effet de survol/focus doux sur tous les champs et menus déroulants de
@@ -49,22 +58,42 @@ body {
   .card {
     @apply rounded-3xl border border-gray-100 bg-white/90 backdrop-blur-xl backdrop-saturate-150
            shadow-[0_24px_48px_-16px_rgba(26,26,26,0.22),0_8px_20px_-6px_rgba(26,26,26,0.12),inset_0_1px_0_0_rgba(255,255,255,0.7)]
-           transition-shadow duration-200;
+           transition-shadow duration-200
+           dark:border-white/10 dark:bg-[#1d2226]/90 dark:shadow-[0_24px_48px_-16px_rgba(0,0,0,0.5),0_8px_20px_-6px_rgba(0,0,0,0.35),inset_0_1px_0_0_rgba(255,255,255,0.06)];
   }
   /* Variante pour les cartes cliquables (ouvrent un détail, une fiche…) —
      ajoute un léger soulèvement au survol, en plus de l'ombre du verre dépoli. */
   .card-hover {
     @apply cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:border-teal-100
-           hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.32),0_12px_24px_-6px_rgba(26,26,26,0.16),inset_0_1px_0_0_rgba(255,255,255,0.7)];
+           hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.32),0_12px_24px_-6px_rgba(26,26,26,0.16),inset_0_1px_0_0_rgba(255,255,255,0.7)]
+           dark:hover:border-teal-800;
   }
   .input-base {
     @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
            focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-           disabled:bg-gray-100 disabled:text-gray-500;
+           disabled:bg-gray-100 disabled:text-gray-500
+           dark:border-white/15 dark:bg-[#22272c] dark:text-gray-100 dark:disabled:bg-white/5 dark:disabled:text-gray-500;
   }
   .num-readonly {
-    @apply bg-gray-100 text-gray-600 font-semibold;
+    @apply bg-gray-100 text-gray-600 font-semibold dark:bg-white/10 dark:text-gray-300;
   }
+}
+
+/* Mode sombre — recouvre les champs "bruts" (input/select/textarea stylés en
+   ligne dans chaque module, pas seulement .input-base) sans devoir modifier
+   chaque fichier individuellement. Hors @layer : passe systématiquement devant
+   les classes utilitaires Tailwind (ex. bg-white) posées sur ces éléments. */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #1d2226;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #e5e7eb;
+}
+html.dark input::placeholder, html.dark textarea::placeholder { color: #6b7280; }
+html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #6b7280;
 }
 
 /* Animation d'apparition des toasts */

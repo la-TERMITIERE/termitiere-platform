@@ -4,7 +4,7 @@ export default function Card({ children, className = '', title, action, ...props
     <div className={`card p-4 md:p-5 ${className}`} {...props}>
       {(title || action) && (
         <div className="mb-3 flex items-center justify-between">
-          {title && <h3 className="text-base font-bold text-gray-800">{title}</h3>}
+          {title && <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{title}</h3>}
           {action}
         </div>
       )}

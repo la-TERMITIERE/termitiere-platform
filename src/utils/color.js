@@ -16,6 +16,29 @@ export function shadeHex(hex, percent) {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
 }
 
+// Palette d'avatars — dégradés harmonieux (marque + couleurs des modules), attribués
+// de façon stable à partir du nom/identifiant : la même personne garde toujours la
+// même couleur partout dans l'appli, tout en distinguant visuellement chaque ligne
+// d'une liste (au lieu d'un unique rouge répété qui rend tout le monde identique).
+const PALETTE_AVATAR = [
+  ['#D9594B', '#8F2A20'], // rouge marque
+  ['#4ADE80', '#15803D'], // vert
+  ['#38BDF8', '#0369A1'], // bleu
+  ['#C084FC', '#7C3AED'], // violet
+  ['#FB923C', '#C2410C'], // orange
+  ['#F472B6', '#BE185D'], // rose
+  ['#2DD4BF', '#0D9488'], // teal
+  ['#FBBF24', '#B45309']  // ambre
+]
+
+export function avatarGradient(seed) {
+  const s = String(seed || '?')
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  const [from, to] = PALETTE_AVATAR[h % PALETTE_AVATAR.length]
+  return `linear-gradient(135deg, ${from}, ${to})`
+}
+
 // Couleur de marque de chaque module (cf. MODULES dans shared/modules.js) — pour
 // teinter les petites fenêtres de détail (factures, dossiers, fiches…) à la couleur
 // du module plutôt qu'en gris/blanc générique.

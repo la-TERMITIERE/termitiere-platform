@@ -1,20 +1,20 @@
 // Mon compte — accessible à tous les utilisateurs connectés (agent, contrôleur, admin).
 // Permet de modifier ses informations personnelles et son mot de passe.
 import { useEffect, useState } from 'react'
-import { UserCircle, KeyRound, Save } from 'lucide-react'
+import { KeyRound, Save } from 'lucide-react'
 import Card from '../shared/ui/Card'
 import Button from '../shared/ui/Button'
 import FormGroup from '../shared/forms/FormGroup'
 import Input from '../shared/forms/Input'
-import Badge from '../shared/ui/Badge'
 import { useAuth } from '../hooks/useAuth'
 import { useUsersStore } from '../core/users'
 import { updatePassword } from 'firebase/auth'
 import { hashPassword, legacyHashPassword } from '../core/auth'
 import { getOne } from '../core/db'
-import { roleLabel, roleTone } from '../core/roles'
+import { roleLabel } from '../core/roles'
 import { isFirebaseConfigured, auth } from '../core/firebase'
 import { toast } from '../core/notifications'
+import { avatarGradient } from '../utils/color'
 
 export default function MonCompte() {
   const { user, role, updateSession } = useAuth()
@@ -93,22 +93,35 @@ export default function MonCompte() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <UserCircle size={28} />
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-[2rem] p-4 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35),0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4)] backdrop-blur-2xl backdrop-saturate-200 sm:p-6"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(90,20,16,0.92) 100%)' }}>
+        <div className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full opacity-[0.15]" style={{ background: '#ffffff' }} />
+        <div className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full opacity-[0.08]" style={{ background: '#ffffff' }} />
+        <div
+          className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-extrabold shadow-md ring-2 ring-white/60"
+          style={{ background: avatarGradient(user?.login || profile?.nom) }}
+        >
+          {(profile?.nom || user?.nom || '?').charAt(0).toUpperCase()}
         </div>
-        <div>
-          <h1 className="text-xl font-extrabold text-gray-900">Mon compte</h1>
-          <p className="text-sm text-gray-500">Gérez vos informations personnelles</p>
+        <div className="relative min-w-0 flex-1">
+          <h1 className="truncate text-lg font-extrabold sm:text-xl">{profile?.nom || user?.nom || 'Mon compte'}</h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">
+              {roleLabel(role)}
+            </span>
+            {profile?.secteur && (
+              <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm">
+                {profile.secteur}
+              </span>
+            )}
+            <span className="rounded-full border border-white/20 bg-black/10 px-2.5 py-1 font-mono text-[11px] text-white/70">
+              {user?.login}
+            </span>
+          </div>
         </div>
       </div>
 
       <Card>
-        <div className="mb-4 flex items-center gap-2">
-          <Badge tone={roleTone(role)}>{roleLabel(role)}</Badge>
-          <span className="font-mono text-xs text-gray-400">{user?.login}</span>
-        </div>
-
         <FormGroup label="Nom complet" required>
           <Input value={nom} onChange={(e) => setNom(e.target.value)} />
         </FormGroup>
@@ -116,12 +129,12 @@ export default function MonCompte() {
           <Input value={telephone} onChange={(e) => setTelephone(e.target.value)} placeholder="+225 …" />
         </FormGroup>
         <FormGroup label="Secteur">
-          <Input value={profile?.secteur || ''} readOnly className="bg-gray-50" />
+          <Input value={profile?.secteur || ''} readOnly className="bg-gray-50 dark:bg-white/5 dark:text-gray-400" />
         </FormGroup>
       </Card>
 
       <Card title="Changer le mot de passe">
-        <div className="mb-3 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mb-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <KeyRound size={16} /> Laissez vide si vous ne souhaitez pas le modifier
         </div>
         <FormGroup label="Mot de passe actuel">

@@ -9,7 +9,7 @@ const SIZES = {
   xl: 'max-w-4xl'
 }
 
-export default function Modal({ open, onClose, title, children, footer, size = 'md', panelClassName = 'bg-white', overlayClassName = 'bg-black/50', panelStyle, overlayStyle }) {
+export default function Modal({ open, onClose, title, children, footer, size = 'md', panelClassName = 'bg-white dark:bg-[#1d2226]', overlayClassName = 'bg-black/50', panelStyle, overlayStyle }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => e.key === 'Escape' && onClose?.()
@@ -36,19 +36,19 @@ export default function Modal({ open, onClose, title, children, footer, size = '
           max-h-[92vh] flex flex-col`}
         style={panelStyle}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-          <h3 className="text-base font-bold text-gray-800">{title}</h3>
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-white/10">
+          <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{title}</h3>
           <button
             onClick={onClose}
             aria-label="Fermer"
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-gray-200"
           >
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-4 text-gray-800 dark:text-gray-100">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">{footer}</div>
+          <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3 dark:border-white/10">{footer}</div>
         )}
       </div>
     </div>

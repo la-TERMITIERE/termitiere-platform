@@ -11,6 +11,7 @@ import PortalHome from './portal/PortalHome'
 import GlobalDashboard from './portal/GlobalDashboard'
 import Utilisateurs from './portal/Utilisateurs'
 import MonCompte from './portal/MonCompte'
+import Parametres from './portal/Parametres'
 
 // Chargement paresseux des modules (code-splitting)
 const AgroModule = lazy(() => import('./modules/agro/index.jsx'))
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="dashboard" element={<GlobalDashboard />} />
           <Route path="utilisateurs" element={<AdminGuard><Utilisateurs /></AdminGuard>} />
           <Route path="mon-compte" element={<MonCompte />} />
+          <Route path="parametres" element={<Parametres />} />
 
           <Route
             path="agro/*"

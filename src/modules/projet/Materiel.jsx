@@ -6,7 +6,7 @@
 // (livraison) augmente le stock, chaque sortie (utilisation) le diminue. Le
 // stock actuel = somme des entrées − somme des sorties (jamais négatif).
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban, Warehouse, ChevronRight, ArrowLeft } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -45,9 +45,15 @@ const STATUTS_MATERIEL = {
 }
 
 const VIDE = {
-  projetId: '', nom: '', categorie: 'consommable', unite: '',
+  projetId: '', magasinId: '', nom: '', categorie: 'consommable', unite: '',
   quantiteInitiale: '', etat: 'bon_etat', dateEntree: '', note: ''
 }
+
+const VIDE_MAGASIN = { projetId: '', nom: '', description: '' }
+
+// Pseudo-magasin — regroupe le matériel hérité d'avant l'introduction des
+// magasins (jamais classé) afin qu'il reste visible plutôt que de disparaître.
+const SANS_MAGASIN = '__sans_magasin__'
 
 // Stock = somme des entrées − somme des sorties, recalculé à partir de
 // l'historique des mouvements (source unique de vérité — jamais négatif).
@@ -69,6 +75,7 @@ function calculerEntrees(mouvements = []) {
 export default function Materiel() {
   const { data: projetsTous }   = useCollection('projets')
   const { data: materielsTous } = useCollection('projet_materiels')
+  const { data: magasinsTous }  = useCollection('projet_magasins')
   const { user, role } = useAuth()
   // Le superviseur crée/modifie/suit le matériel, mais ne supprime rien.
   // Accès complet pour la secrétaire/l'agent, sauf la suppression (réservée).
@@ -78,8 +85,35 @@ export default function Materiel() {
   // Cloisonnement : un chef de projet ne voit que le matériel de ses projets.
   const projets   = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
   const materiels = useMemo(() => scopeParProjets(materielsTous, projets), [materielsTous, projets])
+  // Magasins : chaque matériel doit désormais appartenir à un magasin, lui-même
+  // rattaché à un seul projet — on crée le magasin AVANT de pouvoir saisir le matériel.
+  const magasins  = useMemo(() => scopeParProjets(magasinsTous, projets), [magasinsTous, projets])
+  const magasinsDuProjet = (projetId) => magasins.filter((mg) => mg.projetId === projetId)
+  const nomMagasin = (id) => magasins.find((mg) => mg.id === id)?.nom || null
+  const projetDeMagasin = (mg) => projets.find((p) => p.id === mg?.projetId) || null
+
+  // Petit récapitulatif (nb de matériels, catégories dominantes, alertes d'état)
+  // affiché sur chaque vignette de magasin, avant même d'y entrer.
+  const statsMagasin = (magasinId) => {
+    const items = magasinId === SANS_MAGASIN
+      ? materiels.filter((m) => !m.magasinId || !magasins.find((mg) => mg.id === m.magasinId))
+      : materiels.filter((m) => m.magasinId === magasinId)
+    const parCategorie = {}
+    items.forEach((m) => { parCategorie[m.categorie] = (parCategorie[m.categorie] || 0) + 1 })
+    const topCategories = Object.entries(parCategorie).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    const alertes = items.filter((m) => m.etat === 'a_reparer' || m.etat === 'hors_service').length
+    return { total: items.length, topCategories, alertes }
+  }
 
   const [filtreProjet, setFiltreProjet]   = useState('')
+  // Magasin actuellement ouvert — tant qu'aucun n'est choisi, on affiche la
+  // liste des magasins (avec récap) plutôt que le matériel directement.
+  const [magasinActif, setMagasinActif]   = useState(null)
+  const magasinCourant = magasins.find((mg) => mg.id === magasinActif) || null
+  // Si le magasin ouvert vient d'être supprimé, on revient à la liste des magasins.
+  useEffect(() => {
+    if (magasinActif && magasinActif !== SANS_MAGASIN && !magasins.find((mg) => mg.id === magasinActif)) setMagasinActif(null)
+  }, [magasinActif, magasins])
   const [filtreCategorie, setFiltreCateg] = useState('')
   const [filtreStatut, setFiltreStatut]   = useState('sur_site')
   const [modal, setModal]     = useState(false)
@@ -91,30 +125,111 @@ export default function Materiel() {
   const [mvtNote, setMvtNote]       = useState('')
   const [detail, setDetail] = useState(null)
 
+  // ── Magasins (gestion complète — création/renommage/suppression) ──
+  const [modalMagasins, setModalMagasins]     = useState(false)
+  const [magasinProjetId, setMagasinProjetId] = useState('')
+  const [formMagasin, setFormMagasin]         = useState(VIDE_MAGASIN)
+  const [editingMagasin, setEditingMagasin]   = useState(null)
+  const [savingMagasin, setSavingMagasin]     = useState(false)
+  // Création rapide d'un magasin depuis le formulaire Matériel, quand le projet
+  // choisi n'en a encore aucun — évite d'aller-retour vers la gestion complète.
+  const [nouveauMagasinNom, setNouveauMagasinNom] = useState('')
+  const [creationMagasinRapide, setCreationMagasinRapide] = useState(false)
+
+  const ouvrirGestionMagasins = () => {
+    setMagasinProjetId(filtreProjet || projets[0]?.id || '')
+    setFormMagasin(VIDE_MAGASIN); setEditingMagasin(null)
+    setModalMagasins(true)
+  }
+  const openEditMagasin = (mg) => { setFormMagasin({ projetId: mg.projetId, nom: mg.nom, description: mg.description || '' }); setEditingMagasin(mg) }
+  const annulerEditionMagasin = () => { setFormMagasin({ ...VIDE_MAGASIN, projetId: magasinProjetId }); setEditingMagasin(null) }
+
+  const handleSaveMagasin = async () => {
+    if (!formMagasin.nom.trim() || !formMagasin.projetId) return
+    setSavingMagasin(true)
+    try {
+      if (editingMagasin) {
+        await setItem('projet_magasins', editingMagasin.id, { ...editingMagasin, ...formMagasin, nom: formMagasin.nom.trim() })
+        await audit('projet', 'magasin_modifie', formMagasin.nom)
+      } else {
+        await addItem('projet_magasins', {
+          ...formMagasin, nom: formMagasin.nom.trim(), createdAt: Date.now(),
+          creePar: user?.nom || user?.login || null
+        })
+        await audit('projet', 'magasin_ajoute', formMagasin.nom)
+      }
+      setFormMagasin({ ...VIDE_MAGASIN, projetId: magasinProjetId })
+      setEditingMagasin(null)
+    } finally { setSavingMagasin(false) }
+  }
+
+  const handleDeleteMagasin = async (mg) => {
+    if (!peutSupprimer) return
+    const materielsDedans = materiels.filter((m) => m.magasinId === mg.id)
+    if (materielsDedans.length > 0) {
+      toast.error(`Impossible : ${materielsDedans.length} matériel(s) sont encore dans "${mg.nom}".`)
+      return
+    }
+    if (!window.confirm(`Supprimer le magasin "${mg.nom}" ?`)) return
+    await removeItem('projet_magasins', mg.id)
+    await audit('projet', 'magasin_supprime', mg.nom)
+  }
+
+  // Créé le magasin ET le sélectionne immédiatement dans le formulaire Matériel —
+  // c'est le chemin "avant de saisir un matériel, on crée d'abord son magasin".
+  const creerMagasinRapide = async () => {
+    if (!nouveauMagasinNom.trim() || !form.projetId) return
+    setCreationMagasinRapide(true)
+    try {
+      const id = `mag_${Date.now()}`
+      await setItem('projet_magasins', id, {
+        id, projetId: form.projetId, nom: nouveauMagasinNom.trim(), description: '',
+        createdAt: Date.now(), creePar: user?.nom || user?.login || null
+      })
+      await audit('projet', 'magasin_ajoute', nouveauMagasinNom.trim())
+      setForm((f) => ({ ...f, magasinId: id }))
+      setNouveauMagasinNom('')
+    } finally { setCreationMagasinRapide(false) }
+  }
+
+  // Matériel du magasin actuellement ouvert (ou du panier "sans magasin").
+  const materielsDuMagasinActif = useMemo(() => {
+    if (magasinActif === SANS_MAGASIN) return materiels.filter((m) => !m.magasinId || !magasins.find((mg) => mg.id === m.magasinId))
+    return materiels.filter((m) => m.magasinId === magasinActif)
+  }, [materiels, magasins, magasinActif])
+
   const liste = useMemo(() =>
-    materiels
-      .filter((m) => !filtreProjet    || m.projetId  === filtreProjet)
+    materielsDuMagasinActif
       .filter((m) => !filtreCategorie || m.categorie === filtreCategorie)
       .filter((m) => !filtreStatut    || m.statut    === filtreStatut)
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-  [materiels, filtreProjet, filtreCategorie, filtreStatut])
+  [materielsDuMagasinActif, filtreCategorie, filtreStatut])
 
-  const compteur = (statut) => materiels.filter((m) => m.statut === statut).length
+  // Scopé au magasin ouvert (pastilles de statut dans la vue détail).
+  const compteur = (statut) => materielsDuMagasinActif.filter((m) => m.statut === statut).length
+  // Global, tous magasins confondus (bandeau d'en-tête).
+  const compteurGlobal = (statut) => materiels.filter((m) => m.statut === statut).length
   const catLabel = (id) => CATEGORIES_MATERIEL.find((c) => c.id === id)?.label || id
 
-  const openCreate = () => { setForm({ ...VIDE, projetId: filtreProjet }); setEditing(null); setModal(true) }
+  const openCreate = () => {
+    const projetId = magasinCourant?.projetId || filtreProjet || ''
+    const magasinId = magasinActif && magasinActif !== SANS_MAGASIN ? magasinActif : ''
+    setForm({ ...VIDE, projetId, magasinId })
+    setNouveauMagasinNom(''); setEditing(null); setModal(true)
+  }
   const openEdit   = (m) => {
     setForm({
-      projetId: m.projetId || '', nom: m.nom || '', categorie: m.categorie || 'consommable',
+      projetId: m.projetId || '', magasinId: m.magasinId || '', nom: m.nom || '', categorie: m.categorie || 'consommable',
       unite: m.unite || '', quantiteInitiale: '', etat: m.etat || 'bon_etat',
       dateEntree: m.dateEntree ? new Date(m.dateEntree).toISOString().slice(0, 10) : '',
       note: m.note || ''
     })
+    setNouveauMagasinNom('')
     setEditing(m); setModal(true)
   }
 
   const handleSave = async () => {
-    if (!form.nom.trim() || !form.projetId) return
+    if (!form.nom.trim() || !form.projetId || !form.magasinId) return
     if (!editing && form.quantiteInitiale === '') return
     setSaving(true)
     try {
@@ -225,97 +340,228 @@ export default function Materiel() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Matériel & Matériaux</h2>
-          <p className="text-sm text-white/80">{compteur('sur_site')} matériel(s) sur site — Consommables (stock), outillage, véhicules, gros équipement</p>
+          <p className="text-sm text-white/80">{magasins.length} magasin(s) — {compteurGlobal('sur_site')} matériel(s) sur site — Consommables (stock), outillage, véhicules, gros équipement</p>
         </div>
       </div>
 
-      {/* Filtres */}
-      <div className="flex flex-wrap items-center gap-2">
-        <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
-          value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
-          <option value="">Tous les projets</option>
-          {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
-        </select>
-        <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
-          value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
-          <option value="">Toutes catégories</option>
-          {CATEGORIES_MATERIEL.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </select>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
-          {[['', `Tous (${materiels.length})`], ...Object.entries(STATUTS_MATERIEL).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
-            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-white'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <Button onClick={openCreate} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter du matériel</Button>
-      </div>
-
-      {/* Liste */}
-      {!liste.length ? (
-        <Card>
-          <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
-            <Wrench size={32} className="opacity-30" />
-            <p className="text-sm">Aucun matériel{filtreProjet ? ' pour ce projet' : ''}.</p>
+      {!magasinActif ? (
+        <>
+          {/* Filtre projet pour restreindre les magasins affichés */}
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+              value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
+              <option value="">Tous les projets</option>
+              {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+            </select>
+            <Button onClick={ouvrirGestionMagasins} size="sm" variant="outline" className="ml-auto"><Warehouse size={14} className="mr-1" />Gérer les magasins</Button>
           </div>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {liste.map((m) => {
-            const projet = projets.find((p) => p.id === m.projetId)
-            const st = STATUTS_MATERIEL[m.statut] || STATUTS_MATERIEL.sur_site
-            const et = ETATS_MATERIEL[m.etat] || ETATS_MATERIEL.bon_etat
-            const stock = calculerStock(m.mouvements || [])
+
+          {/* Choix du magasin — il faut d'abord entrer dans un magasin pour voir son matériel */}
+          {(() => {
+            const magasinsAffiches = [...(filtreProjet ? magasinsDuProjet(filtreProjet) : magasins)].sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
+            const orphelins = statsMagasin(SANS_MAGASIN)
+            if (!magasinsAffiches.length) {
+              return (
+                <Card>
+                  <div className="flex flex-col items-center gap-3 py-10 text-gray-400">
+                    <Warehouse size={32} className="opacity-30" />
+                    <p className="text-sm">Aucun magasin{filtreProjet ? ' pour ce projet' : ''} pour l'instant.</p>
+                    <Button size="sm" onClick={ouvrirGestionMagasins}><Plus size={14} className="mr-1" />Créer un magasin</Button>
+                  </div>
+                </Card>
+              )
+            }
             return (
-              <Card key={m.id} className="card-hover !p-0" onClick={() => setDetail(m)}>
-                <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  {/* Nom + badges */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-bold text-gray-800">{m.nom}</p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      {projet && <Badge tone="primary">{projet.nom}</Badge>}
-                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700">{catLabel(m.categorie)}</span>
-                      <Badge tone={st.tone}>{st.label}</Badge>
-                      <Badge tone={et.tone}>{et.label}</Badge>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {magasinsAffiches.map((mg) => {
+                  const stats = statsMagasin(mg.id)
+                  const projet = projetDeMagasin(mg)
+                  return (
+                    <button key={mg.id} onClick={() => setMagasinActif(mg.id)}
+                      className="group flex flex-col gap-3 rounded-2xl border border-cyan-100 bg-white p-4 text-left shadow-[0_10px_24px_-14px_rgba(14,116,144,0.35)] transition-all hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[0_16px_32px_-14px_rgba(14,116,144,0.45)]">
+                      <div className="flex items-center gap-3">
+                        <div style={{ width: 46, height: 46, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0e7490', flexShrink: 0 }}>
+                          <Warehouse size={20} color="white" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-bold text-gray-800">{mg.nom}</p>
+                          {projet && <Badge tone="primary">{projet.nom}</Badge>}
+                        </div>
+                        <ChevronRight size={18} className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-400" />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
+                        <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">{stats.total} matériel(s)</span>
+                        {stats.topCategories.map(([cat, n]) => (
+                          <span key={cat} className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700">{catLabel(cat)} · {n}</span>
+                        ))}
+                        {stats.alertes > 0 && (
+                          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                            <AlertTriangle size={10} /> {stats.alertes}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+                {orphelins.total > 0 && (
+                  <button onClick={() => setMagasinActif(SANS_MAGASIN)}
+                    className="group flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-300">
+                    <div className="flex items-center gap-3">
+                      <div style={{ width: 46, height: 46, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d97706', flexShrink: 0 }}>
+                        <AlertTriangle size={20} color="white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-amber-800">Sans magasin</p>
+                        <p className="text-xs text-amber-600">Matériel non classé</p>
+                      </div>
+                      <ChevronRight size={18} className="shrink-0 text-amber-300 transition-transform group-hover:translate-x-0.5" />
                     </div>
-                  </div>
-
-                  {/* Stock */}
-                  <div className="shrink-0 text-right">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">En stock</p>
-                    <p className="text-lg font-extrabold text-teal-700 leading-tight">
-                      {stock} <span className="text-xs font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
-                    </p>
-                  </div>
-
-                  {/* Actions de stock — toujours visibles */}
-                  <div className="flex shrink-0 gap-1.5" onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" variant="success" onClick={() => ouvrirMouvement(m, 'entree')}>
-                      <PlusCircle size={14} /> Entrée
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => ouvrirMouvement(m, 'sortie')}>
-                      <MinusCircle size={14} /> Sortie
-                    </Button>
-                    {stock > 0 && (
-                      <Button size="sm" variant="outline" onClick={() => marquerEpuise(m)} title="À utiliser quand la quantité restante ne peut pas être estimée (sable, gravier…)">
-                        <Ban size={14} /> Épuisé
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Modifier / Supprimer */}
-                  <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => openEdit(m)} className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
-                    {peutSupprimer && (
-                      <button onClick={() => handleDelete(m)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
-                    )}
-                  </div>
-                </div>
-              </Card>
+                    <span className="w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{orphelins.total} matériel(s) à ranger</span>
+                  </button>
+                )}
+              </div>
             )
-          })}
-        </div>
+          })()}
+        </>
+      ) : (
+        <>
+          {/* En-tête du magasin ouvert */}
+          <div>
+            <button onClick={() => setMagasinActif(null)} className="mb-2 flex items-center gap-1 text-sm font-semibold text-cyan-700 transition-colors hover:text-cyan-800">
+              <ArrowLeft size={15} /> Tous les magasins
+            </button>
+            {magasinActif === SANS_MAGASIN ? (
+              <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(217,119,6,0.88) 0%, rgba(146,64,14,0.85) 100%)' }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d97706', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0 }}>
+                  <AlertTriangle size={22} color="white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold">Matériel non classé</h3>
+                  <p className="text-sm text-white/85">{materielsDuMagasinActif.length} élément(s) — modifiez chacun pour lui choisir un magasin</p>
+                </div>
+              </div>
+            ) : magasinCourant && (
+              <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_20px_40px_-16px_rgba(14,116,144,0.4),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(14,116,144,0.88) 0%, rgba(22,78,99,0.85) 100%)' }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0e7490', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0 }}>
+                  <Warehouse size={22} color="white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-base font-extrabold">{magasinCourant.nom}</h3>
+                  <p className="text-sm text-white/85">{projetDeMagasin(magasinCourant)?.nom || '—'} · {materielsDuMagasinActif.length} matériel(s)</p>
+                </div>
+                <button onClick={() => { setMagasinProjetId(magasinCourant.projetId); openEditMagasin(magasinCourant); setModalMagasins(true) }}
+                  className="shrink-0 rounded-full border border-white/40 bg-white/15 p-2 text-white backdrop-blur-sm transition-colors hover:bg-white/25" title="Modifier ce magasin">
+                  <Pencil size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Filtres au sein du magasin */}
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+              value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
+              <option value="">Toutes catégories</option>
+              {CATEGORIES_MATERIEL.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
+              {[['', `Tous (${materielsDuMagasinActif.length})`], ...Object.entries(STATUTS_MATERIEL).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
+                <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-white'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {magasinActif !== SANS_MAGASIN && (
+              <Button onClick={openCreate} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter du matériel</Button>
+            )}
+          </div>
+
+          {/* Liste */}
+          {!liste.length ? (
+            <Card>
+              <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
+                <Wrench size={32} className="opacity-30" />
+                <p className="text-sm">Aucun matériel {magasinActif === SANS_MAGASIN ? 'non classé' : 'dans ce magasin'}.</p>
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {liste.map((m) => {
+                const projet = projets.find((p) => p.id === m.projetId)
+                const st = STATUTS_MATERIEL[m.statut] || STATUTS_MATERIEL.sur_site
+                const et = ETATS_MATERIEL[m.etat] || ETATS_MATERIEL.bon_etat
+                const stock = calculerStock(m.mouvements || [])
+                const entre = calculerEntrees(m.mouvements || [])
+                const sorti = calculerSorties(m.mouvements || [])
+                return (
+                  <Card key={m.id} className="card-hover !p-0" onClick={() => setDetail(m)}>
+                    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3">
+                      {/* Nom + badges */}
+                      <div className="min-w-0 sm:flex-1">
+                        <p className="truncate font-bold text-gray-800">{m.nom}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                          {projet && <Badge tone="primary">{projet.nom}</Badge>}
+                          {magasinActif === SANS_MAGASIN && (
+                            <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                              <Warehouse size={10} /> Sans magasin
+                            </span>
+                          )}
+                          <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700">{catLabel(m.categorie)}</span>
+                          <Badge tone={st.tone}>{st.label}</Badge>
+                          <Badge tone={et.tone}>{et.label}</Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 sm:contents">
+                        {/* Stock — avec le détail entrées/sorties */}
+                        <div className="shrink-0 sm:text-right">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">En stock</p>
+                          <p className="text-lg font-extrabold text-teal-700 leading-tight">
+                            {stock} <span className="text-xs font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
+                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 sm:justify-end">
+                            <span className="flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700" title="Total reçu">
+                              <PlusCircle size={11} /> {entre}
+                            </span>
+                            <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700" title="Total sorti">
+                              <MinusCircle size={11} /> {sorti}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actions de stock — toujours visibles */}
+                        <div className="flex shrink-0 gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <Button size="sm" variant="success" onClick={() => ouvrirMouvement(m, 'entree')}>
+                            <PlusCircle size={14} /> Entrée
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => ouvrirMouvement(m, 'sortie')}>
+                            <MinusCircle size={14} /> Sortie
+                          </Button>
+                          {stock > 0 && (
+                            <Button size="sm" variant="outline" onClick={() => marquerEpuise(m)} title="À utiliser quand la quantité restante ne peut pas être estimée (sable, gravier…)">
+                              <Ban size={14} /> Épuisé
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Modifier / Supprimer */}
+                      <div className="flex shrink-0 justify-end gap-1 sm:justify-start" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => openEdit(m)} className="rounded-lg border border-teal-200 bg-teal-50 p-1.5 text-teal-600 transition-colors hover:border-teal-300 hover:bg-teal-100"><Pencil size={14} /></button>
+                        {peutSupprimer && (
+                          <button onClick={() => handleDelete(m)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Détail matériel/matériau */}
@@ -351,6 +597,7 @@ export default function Materiel() {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="col-span-2"><span className="text-gray-500">Projet : </span><span className="font-semibold">{projet?.nom || '—'}</span></div>
+                <div className="col-span-2"><span className="text-gray-500">Magasin : </span><span className="font-semibold">{nomMagasin(d.magasinId) || '—'}</span></div>
                 <div><span className="text-gray-500">Unité : </span><span className="font-semibold">{d.unite || 'unité(s)'}</span></div>
                 <div><span className="text-gray-500">Arrivé le : </span><span className="font-semibold">{d.dateEntree ? formatDateShort(d.dateEntree) : '—'}</span></div>
                 <div className="col-span-2"><span className="text-gray-500">Suivi par : </span><span className="font-semibold">{d.responsable || '—'}{d.createdAt ? ` · ${formatDateTime(d.createdAt)}` : ''}</span></div>
@@ -448,10 +695,33 @@ export default function Materiel() {
             <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📋 Informations</p>
             <FormGroup label="Projet" required>
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
+                value={form.projetId} onChange={(e) => { setForm((f) => ({ ...f, projetId: e.target.value, magasinId: '' })); setNouveauMagasinNom('') }}>
                 <option value="">— Sélectionner —</option>
                 {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </select>
+            </FormGroup>
+            <FormGroup label="Magasin" required hint="Le matériel doit être rangé dans un magasin du projet">
+              {!form.projetId ? (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-400">Choisissez d'abord un projet.</p>
+              ) : magasinsDuProjet(form.projetId).length > 0 ? (
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  value={form.magasinId} onChange={(e) => setForm((f) => ({ ...f, magasinId: e.target.value }))}>
+                  <option value="">— Sélectionner —</option>
+                  {magasinsDuProjet(form.projetId).map((mg) => <option key={mg.id} value={mg.id}>{mg.nom}</option>)}
+                </select>
+              ) : (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                  <p className="text-xs font-semibold text-amber-700">Aucun magasin pour ce projet — créez-en un d'abord.</p>
+                  <div className="flex gap-2">
+                    <input className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      placeholder="ex : Dépôt chantier, Container A…"
+                      value={nouveauMagasinNom} onChange={(e) => setNouveauMagasinNom(e.target.value)} />
+                    <Button size="sm" onClick={creerMagasinRapide} disabled={!nouveauMagasinNom.trim() || creationMagasinRapide}>
+                      {creationMagasinRapide ? '…' : 'Créer'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </FormGroup>
             <FormGroup label="Matériel" required>
               <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
@@ -509,7 +779,7 @@ export default function Materiel() {
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.nom.trim() || !form.projetId || (!editing && form.quantiteInitiale === '')}>
+            <Button onClick={handleSave} disabled={saving || !form.nom.trim() || !form.projetId || !form.magasinId || (!editing && form.quantiteInitiale === '')}>
               {saving ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
           </div>
@@ -547,6 +817,71 @@ export default function Materiel() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Gestion des magasins — création/renommage/suppression, par projet */}
+      <Modal open={modalMagasins} onClose={() => setModalMagasins(false)} title="Magasins"
+        panelClassName="bg-gradient-to-br from-cyan-200/85 via-cyan-100/75 to-teal-200/75 backdrop-blur-2xl backdrop-saturate-200">
+        <div className="space-y-4">
+          <FormGroup label="Projet" required>
+            <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              value={magasinProjetId}
+              onChange={(e) => { setMagasinProjetId(e.target.value); setFormMagasin({ ...VIDE_MAGASIN, projetId: e.target.value }); setEditingMagasin(null) }}>
+              <option value="">— Sélectionner —</option>
+              {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+            </select>
+          </FormGroup>
+
+          {magasinProjetId && (
+            <>
+              <div className="space-y-1.5">
+                {magasinsDuProjet(magasinProjetId).length === 0 ? (
+                  <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-400">Aucun magasin pour ce projet pour l'instant.</p>
+                ) : (
+                  magasinsDuProjet(magasinProjetId).map((mg) => {
+                    const nb = materiels.filter((m) => m.magasinId === mg.id).length
+                    return (
+                      <div key={mg.id} className="flex items-center justify-between gap-2 rounded-xl border border-cyan-100 bg-cyan-50/60 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-800">{mg.nom}</p>
+                          <p className="text-xs text-gray-500">{nb} matériel(s){mg.description ? ` · ${mg.description}` : ''}</p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button onClick={() => openEditMagasin(mg)} className="rounded-lg border border-cyan-200 bg-white p-1.5 text-cyan-700 hover:bg-cyan-100"><Pencil size={13} /></button>
+                          {peutSupprimer && (
+                            <button onClick={() => handleDeleteMagasin(mg)} className="rounded-lg border border-red-200 bg-white p-1.5 text-red-600 hover:bg-red-50"><Trash2 size={13} /></button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(14,116,144,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-cyan-800">
+                  {editingMagasin ? '✏️ Modifier le magasin' : '➕ Nouveau magasin'}
+                </p>
+                <FormGroup label="Nom" required>
+                  <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    placeholder="ex : Dépôt chantier, Container A…"
+                    value={formMagasin.nom} onChange={(e) => setFormMagasin((f) => ({ ...f, nom: e.target.value }))} />
+                </FormGroup>
+                <FormGroup label="Description" hint="Optionnel">
+                  <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    placeholder="ex : Local gardienné, à l'entrée du chantier…"
+                    value={formMagasin.description} onChange={(e) => setFormMagasin((f) => ({ ...f, description: e.target.value }))} />
+                </FormGroup>
+                <div className="flex justify-end gap-2">
+                  {editingMagasin && <Button variant="ghost" size="sm" onClick={annulerEditionMagasin}>Annuler</Button>}
+                  <Button size="sm" onClick={handleSaveMagasin} disabled={savingMagasin || !formMagasin.nom.trim()}>
+                    {savingMagasin ? 'Enregistrement…' : editingMagasin ? 'Enregistrer' : 'Créer le magasin'}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
     </div>
   )
