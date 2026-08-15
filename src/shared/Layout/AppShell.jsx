@@ -21,7 +21,7 @@ export default function AppShell() {
   const { user, hasModule } = useAuth()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#faf6f5] dark:bg-[#15191c]">
+    <div className="flex h-dvh overflow-hidden bg-[#faf6f5] dark:bg-[#15191c]">
       {/* Alertes façon WhatsApp (bandeau + son) et demande d'autorisation système */}
       <AlertesHeadsUp />
       <ActiverAlertes />
