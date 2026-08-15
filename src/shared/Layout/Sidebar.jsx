@@ -2,7 +2,7 @@
 // Mobile : panneau coulissant avec overlay. Desktop : fixe 260px.
 import { useMemo, useState } from 'react'
 import { NavLink, Link, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, LogOut, Users, UserCircle, X, ChevronRight, ChevronDown } from 'lucide-react'
+import { Home, LayoutDashboard, LogOut, Users, UserCircle, Settings, X, ChevronRight, ChevronDown } from 'lucide-react'
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
@@ -282,6 +282,11 @@ export default function Sidebar({ open, onClose }) {
           {!activeModule && (
             <NavLink to="/mon-compte" className={navClass} onClick={onClose}>
               <UserCircle size={18} /> Mon compte
+            </NavLink>
+          )}
+          {!activeModule && (
+            <NavLink to="/parametres" className={navClass} onClick={onClose}>
+              <Settings size={18} /> Paramètres
             </NavLink>
           )}
 

@@ -1,7 +1,8 @@
 // Gestion des utilisateurs de la plateforme (portail, admin uniquement).
 // Permet d'attribuer à chaque utilisateur ses droits d'accès aux modules.
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Pencil, ShieldCheck, Eye } from 'lucide-react'
+import { Plus, Trash2, Pencil, ShieldCheck, Eye, UserPlus } from 'lucide-react'
+import { glassModalProps, avatarGradient } from '../utils/color'
 import Card from '../shared/ui/Card'
 import Button from '../shared/ui/Button'
 import Modal from '../shared/ui/Modal'
@@ -121,19 +122,27 @@ export default function Utilisateurs() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <ShieldCheck size={24} />
+      <div className="relative flex flex-col gap-3 overflow-hidden rounded-[2rem] p-4 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35),0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4)] backdrop-blur-2xl backdrop-saturate-200 sm:flex-row sm:items-center sm:gap-4 sm:p-6"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(90,20,16,0.92) 100%)' }}>
+        <div className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full opacity-[0.15]" style={{ background: '#ffffff' }} />
+        <div className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full opacity-[0.08]" style={{ background: '#ffffff' }} />
+        <div className="relative flex items-center gap-4">
+          <div
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+            style={{ background: '#BC3C31', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}
+          >
+            <ShieldCheck size={26} color="white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-extrabold sm:text-xl">Gestion des utilisateurs</h1>
+            <p className="truncate text-sm text-white/80">{users.length} compte{users.length > 1 ? 's' : ''} — rôles et accès aux modules</p>
+          </div>
         </div>
-        <div className="flex-1">
-          <h1 className="text-xl font-extrabold text-gray-900">Gestion des utilisateurs</h1>
-          <p className="text-sm text-gray-500">Attribuez les rôles et les accès aux modules.</p>
-        </div>
-        <Button onClick={openNew}><Plus size={16} /> Nouvel utilisateur</Button>
+        <Button onClick={openNew} variant="ghost" className="relative w-full hover:opacity-90 sm:ml-auto sm:w-auto" style={{ background: '#ffffff', color: '#BC3C31' }}><Plus size={16} /> Nouvel utilisateur</Button>
       </div>
 
       {isFirebaseConfigured && (
-        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
           🟢 Synchronisation cloud active : les comptes et les droits sont partagés
           en temps réel entre tous les appareils.
         </div>
@@ -142,9 +151,19 @@ export default function Utilisateurs() {
       <Card className="p-0">
         <Table
           columns={[
-            { key: 'nom', label: 'Nom' },
-            { key: 'poste', label: 'Poste', render: (r) => r.poste || <span className="text-xs text-gray-400">—</span> },
-            { key: 'login', label: 'Identifiant', render: (r) => <span className="font-mono text-xs">{r.login}</span> },
+            { key: 'nom', label: 'Utilisateur', render: (r) => (
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white shadow-sm ring-2 ring-white dark:ring-white/10"
+                  style={{ background: avatarGradient(r.login || r.nom) }}>
+                  {(r.nom || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-gray-800 dark:text-gray-100">{r.nom}</p>
+                  <p className="truncate text-xs text-gray-400 dark:text-gray-500">{r.poste || '—'}</p>
+                </div>
+              </div>
+            ) },
+            { key: 'login', label: 'Identifiant', render: (r) => <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600 dark:bg-white/10 dark:text-gray-300">{r.login}</span> },
             { key: 'role', label: 'Rôle', render: (r) => <Badge tone={roleTone(r.role)}>{roleLabel(r.role)}</Badge> },
             { key: 'modules', label: 'Accès modules', render: (r) => (
               <div className="flex flex-wrap gap-1">
@@ -153,17 +172,17 @@ export default function Utilisateurs() {
                   : (r.modules || []).length
                     ? (r.modules || []).map((id) => {
                         const m = MODULES.find((x) => x.id === id)
-                        return <span key={id} className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: m?.color || '#888' }}>{m?.nom || id}</span>
+                        return <span key={id} className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ background: m?.color || '#888' }}>{m?.nom || id}</span>
                       })
-                    : <span className="text-xs text-gray-400">Aucun</span>}
+                    : <span className="text-xs text-gray-400 dark:text-gray-500">Aucun</span>}
               </div>
             ) },
             { key: 'actif', label: 'Statut', align: 'center', render: (r) => r.actif === false ? <Badge tone="danger">Inactif</Badge> : <Badge tone="success">Actif</Badge> },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setDetailUser(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" title="Voir les détails d'accès"><Eye size={16} /></button>
-                <button onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
-                <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                <button onClick={() => setDetailUser(r)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200" title="Voir les détails d'accès"><Eye size={16} /></button>
+                <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200"><Pencil size={16} /></button>
+                <button onClick={() => supprimer(r)} className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 size={16} /></button>
               </div>
             ) }
           ]}
@@ -179,9 +198,22 @@ export default function Utilisateurs() {
         onClose={() => setModal(null)}
         title={modal?.isNew ? 'Nouvel utilisateur' : 'Modifier l\'utilisateur'}
         footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={submit}>Enregistrer</Button></>}
+        {...glassModalProps('#BC3C31')}
       >
         {modal && (
           <>
+            {/* En-tête — aperçu du nom en direct */}
+            <div className="relative mb-4 flex items-center gap-3 overflow-hidden rounded-2xl p-3.5 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+              style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(90,20,16,0.9) 100%)' }}>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: '#BC3C31', boxShadow: '0 0 0 3px #ffffff, 0 0 10px 3px #ffffff55' }}>
+                {modal.isNew ? <UserPlus size={20} color="white" /> : <Pencil size={18} color="white" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-extrabold leading-snug">{modal.data.nom || (modal.isNew ? 'Nouvel utilisateur' : 'Modifier l\'utilisateur')}</p>
+                <p className="text-xs text-white/80">{roleLabel(modal.data.role)}{modal.data.poste ? ` · ${modal.data.poste}` : ''}</p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Nom complet" required><Input value={modal.data.nom} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, nom: e.target.value } }))} /></FormGroup>
               <FormGroup label="Identifiant" required>
@@ -327,7 +359,7 @@ export default function Utilisateurs() {
             >
               <div
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white shadow-md ring-2 ring-white/60"
-                style={{ background: 'linear-gradient(135deg, #D9594B, #8F2A20)' }}
+                style={{ background: avatarGradient(detailUser.login || detailUser.nom) }}
               >
                 {(detailUser.nom || '?').charAt(0).toUpperCase()}
               </div>

@@ -85,7 +85,7 @@ export default function PortalHome() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="relative mb-6 overflow-hidden rounded-3xl p-4 text-white shadow-[0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150 sm:p-6 lg:p-8"
+      <div className="relative mb-6 overflow-hidden rounded-[2rem] p-4 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35),0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4)] backdrop-blur-2xl backdrop-saturate-200 sm:p-6 lg:p-8"
         style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(90,20,16,0.92) 100%)' }}>
         {/* Halos décoratifs — même motif que les cartes de module juste en dessous */}
         <div className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full opacity-[0.15]" style={{ background: '#ffffff' }} />
@@ -123,12 +123,12 @@ export default function PortalHome() {
 
       {paiementsAConfirmer.length > 0 && (
         <div className="mb-6 space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">💸 Paiements à confirmer</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">💸 Paiements à confirmer</p>
           {paiementsAConfirmer.map((d) => (
-            <div key={d.id} className="flex flex-wrap items-center gap-3 rounded-3xl border border-indigo-200/60 bg-indigo-50/60 p-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+            <div key={d.id} className="flex flex-wrap items-center gap-3 rounded-3xl border border-indigo-200/60 bg-indigo-50/60 p-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 dark:border-indigo-400/20 dark:bg-indigo-500/10">
               <div className="min-w-0 flex-1">
-                <p className="font-bold text-indigo-900">{Number(d.montant).toLocaleString('fr-FR')} FCFA</p>
-                <p className="text-xs text-indigo-600">{d.description || 'Paiement décaissé'}</p>
+                <p className="font-bold text-indigo-900 dark:text-indigo-300">{Number(d.montant).toLocaleString('fr-FR')} FCFA</p>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400">{d.description || 'Paiement décaissé'}</p>
               </div>
               <Button onClick={() => confirmerReception(d)} loading={confirmingId === d.id}>
                 <CheckCircle2 size={16} /> J'ai bien reçu
@@ -147,20 +147,27 @@ export default function PortalHome() {
               key={m.id}
               disabled={!clickable}
               onClick={() => clickable && navigate(m.path)}
-              className={`group relative overflow-hidden rounded-3xl border p-5 text-left backdrop-blur-xl backdrop-saturate-150 transition-all
+              className={`group relative overflow-hidden rounded-3xl border p-5 text-left backdrop-blur-2xl backdrop-saturate-200 transition-all
                 ${clickable
-                  ? 'cursor-pointer bg-white/40 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]'
-                  : 'cursor-not-allowed bg-white/20 opacity-70 shadow-[0_12px_24px_-12px_rgba(26,26,26,0.1)]'}`}
+                  ? 'cursor-pointer bg-white/40 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5),inset_0_1px_0_0_rgba(255,255,255,0.7),inset_0_-14px_20px_-16px_rgba(26,26,26,0.12),0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] hover:-translate-y-1 hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6),inset_0_1px_0_0_rgba(255,255,255,0.7),inset_0_-14px_20px_-16px_rgba(26,26,26,0.14),0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1)] dark:bg-white/[0.05] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.15),0_24px_48px_-16px_rgba(0,0,0,0.5)] dark:hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1),inset_0_1px_0_0_rgba(255,255,255,0.15),0_32px_60px_-16px_rgba(0,0,0,0.6)]'
+                  : 'cursor-not-allowed bg-white/20 opacity-70 shadow-[0_12px_24px_-12px_rgba(26,26,26,0.1)] dark:bg-white/[0.02]'}`}
               style={{ borderColor: clickable ? m.color + '40' : undefined }}
             >
+              {/* Teinte douce sur tout le fond — le verre porte la couleur du module, pas juste le coin */}
+              {clickable && (
+                <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ background: `radial-gradient(circle at 15% 100%, ${m.color}, transparent 70%)` }} />
+              )}
+              {/* Reflet diagonal — lumière qui balaie la carte, comme un vrai verre incliné */}
+              <div className="pointer-events-none absolute -inset-x-6 -top-10 h-20 rotate-[-8deg] bg-gradient-to-b from-white/40 via-white/10 to-transparent dark:from-white/10" />
+              {/* Halo teinté de la couleur du module — adouci pour se fondre dans le verre */}
               <div
-                className="absolute right-0 top-0 h-24 w-24 rounded-bl-full opacity-10"
+                className="absolute -right-4 -top-4 h-28 w-28 rounded-full opacity-20 blur-2xl"
                 style={{ background: m.color }}
               />
               <div className="flex items-start gap-4">
                 <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl overflow-hidden"
-                  style={{ background: m.color + '1a', color: m.color }}
+                  className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),0_2px_6px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-white/10"
+                  style={{ background: `linear-gradient(160deg, ${m.color}33, ${m.color}14)`, color: m.color }}
                 >
                   {/* Ces logos ont beaucoup de marge transparente autour du symbole utile
                       (texte ou icône) — les agrandir et les recadrer au centre (au lieu de
@@ -172,18 +179,18 @@ export default function PortalHome() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-extrabold text-gray-900">{m.nom}</h3>
+                    <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100">{m.nom}</h3>
                     {bientot ? (
-                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-500 dark:bg-white/10 dark:text-gray-400">
                         Bientôt
                       </span>
                     ) : (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-500/15 dark:text-green-400">
                         Actif
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500">{m.description}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{m.description}</p>
                   <p className="mt-2 text-sm font-semibold" style={{ color: m.color }}>
                     {kpi[m.id]}
                   </p>
@@ -197,19 +204,29 @@ export default function PortalHome() {
       {/* Administration : gestion des utilisateurs (admin uniquement) */}
       {isAdmin() && (
         <div className="mt-6">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Administration</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Administration</p>
           <button
             onClick={() => navigate('/utilisateurs')}
-            className="flex w-full items-center gap-4 rounded-3xl border border-primary/30 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]"
+            className="group relative flex w-full items-center gap-4 overflow-hidden rounded-3xl border bg-white/40 p-4 text-left backdrop-blur-2xl backdrop-saturate-200 transition-all
+              shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5),inset_0_1px_0_0_rgba(255,255,255,0.7),0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)]
+              hover:-translate-y-1 hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6),inset_0_1px_0_0_rgba(255,255,255,0.7),0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1)]
+              dark:bg-white/[0.05] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.15),0_24px_48px_-16px_rgba(0,0,0,0.5)]"
+            style={{ borderColor: '#BC3C3140' }}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {/* Teinte douce sur tout le fond, cohérente avec les cartes de modules */}
+            <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ background: 'radial-gradient(circle at 15% 100%, #BC3C31, transparent 70%)' }} />
+            {/* Halo adouci dans le coin */}
+            <div className="pointer-events-none absolute -right-4 -top-4 h-28 w-28 rounded-full bg-primary opacity-20 blur-2xl" />
+            {/* Reflet diagonal — cohérent avec les cartes de modules */}
+            <div className="pointer-events-none absolute -inset-x-6 -top-8 h-16 rotate-[-8deg] bg-gradient-to-b from-white/40 via-white/10 to-transparent dark:from-white/10" />
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/50 bg-primary/10 text-primary shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)] backdrop-blur-sm dark:border-white/10 dark:bg-primary/20">
               <ShieldCheck size={26} />
             </div>
-            <div className="flex-1">
-              <h3 className="font-extrabold text-gray-900">Gestion des utilisateurs</h3>
-              <p className="text-sm text-gray-500">Rôles et droits d'accès aux modules</p>
+            <div className="relative flex-1">
+              <h3 className="font-extrabold text-gray-900 dark:text-gray-100">Gestion des utilisateurs</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Rôles et droits d'accès aux modules</p>
             </div>
-            <ChevronRight className="text-gray-400" />
+            <ChevronRight className="relative text-gray-400" />
           </button>
         </div>
       )}

@@ -37,6 +37,8 @@ export default function Topbar({ onMenuToggle, user }) {
     subLabel = 'Gestion des utilisateurs'
   } else if (location.pathname === '/mon-compte') {
     subLabel = 'Mon compte'
+  } else if (location.pathname === '/parametres') {
+    subLabel = 'Paramètres'
   }
 
   return (
@@ -109,7 +111,7 @@ export default function Topbar({ onMenuToggle, user }) {
       {/* Cloche + utilisateur */}
       <NotificationBell />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} className="hidden sm:flex">
-        <span style={{ fontSize: 14, fontWeight: 500, color: '#4b5563' }}>{user?.nom}</span>
+        <span className="text-gray-600 dark:text-gray-300" style={{ fontSize: 14, fontWeight: 500 }}>{user?.nom}</span>
         <span style={{ background: color + '18', color, borderRadius: 9999, padding: '2px 8px', fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>
           {user?.role}
         </span>

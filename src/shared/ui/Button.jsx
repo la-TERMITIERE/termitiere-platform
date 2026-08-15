@@ -7,8 +7,8 @@ const VARIANTS = {
   success: 'bg-green-600 hover:bg-green-700 text-white',
   danger: 'bg-red-600 hover:bg-red-700 text-white',
   warning: 'bg-amber-600 hover:bg-amber-700 text-white',
-  ghost: 'bg-transparent hover:bg-gray-100 text-gray-700',
-  outline: 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
+  ghost: 'bg-transparent hover:bg-gray-100 text-gray-700 dark:hover:bg-white/10 dark:text-gray-300',
+  outline: 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 dark:bg-[#1d2226] dark:border-white/15 dark:hover:bg-white/10 dark:text-gray-300'
 }
 
 const SIZES = {

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import MobileBottomNav from './MobileBottomNav'
 import OfflineBanner from './OfflineBanner'
 import AlertesHeadsUp from './AlertesHeadsUp'
 import ActiverAlertes from './ActiverAlertes'
@@ -20,7 +21,7 @@ export default function AppShell() {
   const { user, hasModule } = useAuth()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#faf6f5]">
+    <div className="flex h-screen overflow-hidden bg-[#faf6f5] dark:bg-[#15191c]">
       {/* Alertes façon WhatsApp (bandeau + son) et demande d'autorisation système */}
       <AlertesHeadsUp />
       <ActiverAlertes />
@@ -36,12 +37,13 @@ export default function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <OfflineBanner />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-6">
           <div className="relative -mt-2 md:-mt-3">
             <Outlet />
           </div>
         </main>
       </div>
+      <MobileBottomNav onOpenMenu={() => setSidebarOpen(true)} />
     </div>
   )
 }
