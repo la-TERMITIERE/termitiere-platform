@@ -17,6 +17,8 @@ services:
       DOMAIN_APP: "${DOMAIN_APP}"
       DOMAIN_API: "${DOMAIN_API}"
       DOMAIN_SITE: "${DOMAIN_SITE}"
+      DOMAIN_CONTACT: "${DOMAIN_CONTACT}"
+      DOMAIN_OAUTH: "${DOMAIN_OAUTH}"
 
     extra_hosts:
       - "host.docker.internal:host-gateway"

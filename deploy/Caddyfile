@@ -38,3 +38,22 @@
         Referrer-Policy "strict-origin-when-cross-origin"
     }
 }
+
+# --- Contact proxy ---
+
+{$DOMAIN_CONTACT} {
+    encode gzip
+
+    reverse_proxy termitiere-contact-proxy:8081
+
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# --- OAuth proxy ---
+
+{$DOMAIN_OAUTH} {
+    reverse_proxy termitiere-oauth-proxy:8080
+}
