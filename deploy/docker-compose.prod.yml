@@ -19,6 +19,7 @@ services:
       DOMAIN_SITE: "${DOMAIN_SITE}"
       DOMAIN_CONTACT: "${DOMAIN_CONTACT}"
       DOMAIN_OAUTH: "${DOMAIN_OAUTH}"
+      DOMAIN_PUBLISH: "${DOMAIN_PUBLISH}"
 
     extra_hosts:
       - "host.docker.internal:host-gateway"

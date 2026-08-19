@@ -101,6 +101,7 @@ jobs:
               echo "DOMAIN_SITE=latermitiere.com"
               echo "DOMAIN_CONTACT=contact.latermitiere.com"
               echo "DOMAIN_OAUTH=oauth.latermitiere.com"
+              echo "DOMAIN_PUBLISH=publier.latermitiere.com"
             } > deploy/.env.deploy
 
             echo "Restart containers..."
@@ -136,6 +137,7 @@ jobs:
                   echo "DOMAIN_SITE=latermitiere.com"
                   echo "DOMAIN_CONTACT=contact.latermitiere.com"
                   echo "DOMAIN_OAUTH=oauth.latermitiere.com"
+                  echo "DOMAIN_PUBLISH=publier.latermitiere.com"
                 } > deploy/.env.deploy
             
                 docker compose \

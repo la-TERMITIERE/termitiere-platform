@@ -57,3 +57,9 @@
 {$DOMAIN_OAUTH} {
     reverse_proxy termitiere-oauth-proxy:8080
 }
+
+# --- Publish proxy ---
+
+{$DOMAIN_PUBLISH} {
+    reverse_proxy termitiere-publish-proxy:8082
+}
