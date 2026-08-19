@@ -1,6 +1,29 @@
 // Logique métier MAXI-AGRO — calcul des inventaires et des sorties.
 // Repris fidèlement de l'application d'origine (index.html).
 import { estCertifie } from '../../shared/workflow'
+import { factureStatut } from './data'
+
+// Ventes réalisées par ESPÈCE sur une période, à partir des factures CERTIFIÉES :
+// pour chaque bête vendue → quantité et montant facturé. Sert au Dashboard et au
+// Pilotage pour montrer clairement « quelle bête vendue, pour combien ».
+export function ventesFactureesParEspece(factures, especes, start, end) {
+  const byId = new Map((especes || []).map((e) => [e.id, e]))
+  const byName = {}
+  ;(especes || []).forEach((e) => { byName[(e.nom || '').trim().toLowerCase()] = e })
+  const map = {}
+  ;(factures || [])
+    .filter((f) => factureStatut(f) === 'certifiee' && (f.date || '') >= start && (f.date || '') <= end)
+    .forEach((f) => {
+      ;(f.lignes || []).forEach((l) => {
+        const e = (l.articleId && byId.get(l.articleId)) || byName[(l.article || '').trim().toLowerCase()]
+        if (!e) return // ligne aliment / divers : pas une bête
+        if (!map[e.id]) map[e.id] = { id: e.id, nom: e.nom, cat: e.cat, qte: 0, montant: 0 }
+        map[e.id].qte += parseInt(l.qte) || 0
+        map[e.id].montant += l.total || 0
+      })
+    })
+  return Object.values(map).sort((a, b) => b.montant - a.montant)
+}
 
 // Renvoie la date d'inventaire la plus récente STRICTEMENT antérieure à `date`.
 export function previousInventoryDate(inventaires, date) {

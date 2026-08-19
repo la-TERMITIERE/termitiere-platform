@@ -142,6 +142,14 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
       })
     }
 
+    // Notification immédiate à la GE et au PAU (tout enregistrement doit les alerter).
+    await notify({
+      type: 'info',
+      title: `Intervention sanitaire — ${user.nom}`,
+      body: `${labelOf(form.type)} · ${esp?.nom || ''} (${produitNom}) — ${fiche.nombreAnimaux} animal(aux)`,
+      module: 'agro', forRoles: ['ge', 'pau'], excludeUid: user.uid, link: '/agro/sante'
+    })
+
     toast.success('Intervention enregistrée ✓')
     setOpen(false)
   }
