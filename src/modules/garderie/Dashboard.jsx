@@ -92,6 +92,13 @@ export default function Dashboard() {
     [enfantsVisibles, paiements, presences]
   )
 
+  // Alarmes « fin de court séjour » — persistantes (cf. SurveillanceFinSejour),
+  // restent affichées ici jusqu'à ce qu'un responsable les clôture (Enfants.jsx).
+  const finsSejourAlarme = useMemo(
+    () => enfantsVisibles.filter((e) => e.finSejourAlarme),
+    [enfantsVisibles]
+  )
+
   // ── Rappels nourrissons ──
   const rappelsNourrissons = useMemo(() => {
     const [hA, mA] = heureNow.split(':').map(Number)
@@ -431,6 +438,35 @@ export default function Dashboard() {
               </div>
             </div>
             <BellRing size={16} className="shrink-0" style={{ color: incidentsAccent + 'aa' }} />
+          </div>
+        </button>
+      )}
+
+      {/* ── Bandeau alarmes fin de court séjour ── persistant jusqu'à clôture manuelle */}
+      {finsSejourAlarme.length > 0 && (
+        <button
+          onClick={() => { setModal(null); navigate('/garderie/enfants') }}
+          className="w-full rounded-2xl border-2 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-colors"
+          style={{ borderColor: '#4f46e5' + '80', background: '#4f46e5' + '14' }}>
+          <div className="flex items-start gap-3">
+            <Clock size={20} className="shrink-0 mt-0.5" style={{ color: '#4f46e5' }} />
+            <div className="flex-1">
+              <p className="font-bold text-sm" style={{ color: '#4f46e5' }}>
+                ⏰ {finsSejourAlarme.length} séjour(s) court(s) terminé(s)
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#4f46e5cc' }}>
+                Ces alarmes disparaîtront uniquement quand elles seront clôturées · Cliquez pour gérer
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {finsSejourAlarme.map((e) => (
+                  <span key={e.id} className="rounded-full border px-2 py-0.5 text-xs font-semibold"
+                    style={{ background: '#4f46e5' + '1a', borderColor: '#4f46e5' + '55', color: '#4f46e5' }}>
+                    ⏰ {e.prenom} {e.nom}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <BellRing size={16} className="shrink-0" style={{ color: '#4f46e5' + 'aa' }} />
           </div>
         </button>
       )}
