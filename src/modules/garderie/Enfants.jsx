@@ -15,7 +15,6 @@ import { setItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
-import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { GROUPES_AGE, STATUTS_ENFANT, PROGRAMMES_ENFANT, GROUPES_PAR_PROGRAMME, programmeDuGroupe, MODES_PAIEMENT, TYPES_ABONNEMENT } from './data'
@@ -95,6 +94,17 @@ export default function Enfants() {
     }
   }
 
+  // Clôture l'alarme « séjour terminé » (court séjour arrivé à échéance, déclenchée
+  // par SurveillanceFinSejour) — n'efface pas l'enfant ni son abonnement, seulement
+  // l'alerte persistante affichée sur le Dashboard. Le statut se change séparément
+  // (fiche « Modifier ») si l'enfant a effectivement quitté la garderie.
+  async function resoudreFinSejour(e) {
+    await updateItem('garderie_enfants', e.id, { finSejourAlarme: false })
+    audit('garderie', 'FIN_SEJOUR_RESOLU', `${e.prenom} ${e.nom}`)
+    toast.success(`Alerte de fin de séjour de ${e.prenom} ${e.nom} clôturée ✓`)
+    setDetail((d) => (d && d.id === e.id ? { ...d, finSejourAlarme: false } : d))
+  }
+
   const liste = useMemo(() => {
     // `deletedEnfantIds` est un masquage local temporaire (perdu au rechargement) —
     // on exclut AUSSI sur le statut persisté en base, seule source fiable après reload.
@@ -154,7 +164,7 @@ export default function Enfants() {
         const id = genId()
         await setItem('garderie_enfants', id, { ...d, id })
         audit('garderie', 'ENFANT_CREATE', `${d.prenom} ${d.nom}`, { groupe: d.groupe })
-        notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/enfants' })
+        notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/enfants' })
         toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓`)
       } else {
         await setItem('garderie_enfants', modal.id, { ...d, id: modal.id })
@@ -278,7 +288,7 @@ export default function Enfants() {
             notes: ''
           })
           audit('garderie', 'JOURNALIER_PAIEMENT', `${d.prenom} ${d.nom}`, { montant })
-          notify({ type: 'info', title: `💰 Paiement journalier — ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: [...FULL_ACCESS_ROLES,'gerant'], excludeUid: user.uid, link: '/garderie/paiements' })
+          notify({ type: 'info', title: `💰 Paiement journalier — ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
           toast.success(`${d.prenom} ${d.nom} enregistré(e) — paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
         } else {
           toast.success(`${d.prenom} ${d.nom} enregistré(e) ✓`)
@@ -1057,7 +1067,15 @@ export default function Enfants() {
                     const joursRestants = joursAvantFinCourtSejour(detail.dateInscription, detail.dureeSemaines)
                     if (joursRestants === null) return null
                     return joursRestants < 0 ? (
-                      <p className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">⚠ Séjour terminé depuis {Math.abs(joursRestants)} jour(s)</p>
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50 px-2 py-1.5">
+                        <p className="text-xs font-semibold text-red-700">⚠ Séjour terminé depuis {Math.abs(joursRestants)} jour(s)</p>
+                        {detail.finSejourAlarme && !lectureSeule && (
+                          <button onClick={() => resoudreFinSejour(detail)}
+                            className="ml-auto rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-red-700">
+                            Clôturer l'alerte
+                          </button>
+                        )}
+                      </div>
                     ) : joursRestants <= 7 ? (
                       <p className="rounded-lg bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-700">⏰ Fin du séjour dans {joursRestants} jour(s)</p>
                     ) : null
