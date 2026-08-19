@@ -65,6 +65,8 @@ export default function Factures() {
   const [filtreMois, setFiltreMois]   = useState('')
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin]     = useState('')
+  const [filtreStatut, setFiltreStatut] = useState('')
+  const [filtreClient, setFiltreClient] = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const liste = useMemo(() => {
     let rows = [...factures]
@@ -75,21 +77,23 @@ export default function Factures() {
     } else if (modePeriode === 'jour' && filtreJour) {
       rows = rows.filter((f) => f.date === filtreJour)
     }
+    if (filtreStatut) rows = rows.filter((f) => f.statut === filtreStatut)
+    if (filtreClient.trim()) {
+      const q = filtreClient.trim().toLowerCase()
+      rows = rows.filter((f) => (f.clientNom || '').toLowerCase().includes(q))
+    }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, modePeriode, filtreJour, filtreMois, filtreDebut, filtreFin])
+  }, [factures, modePeriode, filtreJour, filtreMois, filtreDebut, filtreFin, filtreStatut, filtreClient])
 
-  // Cumul de facturation — UNIQUEMENT les factures APPROUVÉES de la liste filtrée
-  // (respecte donc le filtre de période ci-dessus) : c'est le chiffre d'affaires
-  // réellement reconnu, pas le total facturé en brouillon (qui peut encore changer
-  // ou être annulé). Scopé au SITE courant (Lomé ou Kara, cf. `factures`) — c'est
-  // pourquoi ce cumul ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES,
-  // qui additionne les deux sites : ce n'est pas une incohérence, mais deux
-  // périmètres différents.
-  const facturesApprouveesPeriode = useMemo(() => liste.filter((f) => f.statut === 'approuvee'), [liste])
-  const cumulFacturation = useMemo(
-    () => facturesApprouveesPeriode.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0),
-    [facturesApprouveesPeriode]
-  )
+  // Cumul de facturation — somme de la liste actuellement filtrée (période, statut,
+  // client ci-dessus) : par défaut (aucun filtre de statut) il mélange brouillon +
+  // approuvée, comme le total facturé sur la période ; pour voir uniquement le CA
+  // réellement reconnu (ou uniquement l'en-cours), on filtre par statut avec les
+  // pastilles ci-dessous — le KPI se recalcule alors sur ce sous-ensemble.
+  // Scopé au SITE courant (Lomé ou Kara, cf. `factures`) — c'est pourquoi ce cumul
+  // ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES, qui additionne les
+  // deux sites : ce n'est pas une incohérence, mais deux périmètres différents.
+  const cumulFacturation = useMemo(() => liste.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0), [liste])
 
   async function emettre() {
     const p = prestations.find((x) => x.id === prestId)
@@ -101,7 +105,7 @@ export default function Factures() {
       clientNom: p.clientNom, evenement: p.evenement || '',
       dateDebut: p.dateDebut || '', dateFin: p.dateFin || '',
       lignes: p.lignes, frais: p.frais || [], totalHT: p.total, totalTTC: p.total,
-      statut: 'brouillon', agentNom: user.nom
+      statut: 'brouillon', agentNom: user.nom, agentId: user.uid
     })
     await updateItem('logistique_prestations', p.id, { statut: 'facturee', factureId, factureNum: num })
     await audit('logistique', 'FACTURE', `${siteLabel(site)} — ${num} — ${formatMoney(p.total)} (brouillon)`)
@@ -141,13 +145,16 @@ export default function Factures() {
           </Button>
         </div>
       )}
-      {/* Cumul de facturation — réservé à l'administration, recalculé selon le filtre
-          de période ci-dessous. Scopé au site courant : voir la note dans le code
-          (`cumulFacturation`) pour la différence avec le total combiné d'E-DÉPENSES. */}
+      {/* Cumul de facturation — réservé à l'administration, recalculé selon les filtres
+          ci-dessous (période, statut, client). Scopé au site courant : voir la note
+          dans le code (`cumulFacturation`) pour la différence avec le total combiné
+          d'E-DÉPENSES. */}
       {estAdministration && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard title="Cumul facturation (approuvée)" value={formatMoney(cumulFacturation)}
-            sub={`${facturesApprouveesPeriode.length} facture${facturesApprouveesPeriode.length > 1 ? 's' : ''} approuvée${facturesApprouveesPeriode.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
+          <StatCard
+            title={`Cumul facturation${filtreStatut ? ` (${F_STATUTS[filtreStatut]?.label.toLowerCase()})` : ''}`}
+            value={formatMoney(cumulFacturation)}
+            sub={`${liste.length} facture${liste.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}${filtreClient.trim() ? ' · client filtré' : ''}`}
             icon={Wallet} accent={COULEUR_MODULE.logistique} />
         </div>
       )}
@@ -157,6 +164,19 @@ export default function Factures() {
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
+          <input value={filtreClient} onChange={(e) => setFiltreClient(e.target.value)} placeholder="Rechercher un client…"
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+        <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
+          {[['', 'Tous'], ...Object.entries(F_STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
+            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
       <Card className="p-0">
         <Table
