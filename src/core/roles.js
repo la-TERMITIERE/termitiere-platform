@@ -41,7 +41,11 @@ export const CERTIFIER_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur',
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
 // Le PARTENAIRE (externe, lecture seule) voit aussi le pilotage — mais uniquement
 // sur les modules qui lui sont attribués (sectorisation par `modules`).
-export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire']
+// La SECRÉTAIRE y a explicitement accès (décision plateforme) : elle voit les
+// montants et les KPI partout où ils interviennent, mais ne valide jamais seule au
+// niveau final (cf. CERTIFIER_ROLES, dont elle reste exclue) et ne voit jamais
+// l'identité de qui a validé (cf. `logistiqueVoitValidateur`, réutilisé hors logistique).
+export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
 
 // Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
 //   - superviseur : interne, voit TOUS les modules ;
@@ -69,14 +73,20 @@ export const ADMIN_VOLETS_ROLES = FULL_ACCESS_ROLES
 export const LOGISTIQUE_SANS_MONTANT_ROLES = []
 export const logistiqueVoitMontants = (r) => !LOGISTIQUE_SANS_MONTANT_ROLES.includes(r)
 
-// MAXI LOGISTIQUE : la secrétaire voit les montants mais pas QUI a approuvé une
-// facture/prestation (juste le fait que c'est approuvé) — l'identité du validateur
-// reste réservée aux gérants/direction.
+// Réutilisé pour TOUTES les demandes de sortie de la plateforme (Maxi-Agro, Maxi
+// Logistique, E-Briqueterie — nom conservé pour compatibilité) : la secrétaire voit
+// les montants mais pas QUI a approuvé/certifié une demande, une facture ou une
+// prestation (juste le fait que c'est approuvé) — l'identité du validateur reste
+// réservée aux gérants/direction.
 export const logistiqueVoitValidateur = (r) => r !== 'secretaire'
 
-// MAXI LOGISTIQUE : la secrétaire approuve au 1er niveau (comme un `gerant`), mais
-// ne certifie jamais — la certification approuve la facture (impact CA) et reste
-// donc à la direction (CERTIFIER_ROLES).
+// Réutilisé pour TOUTES les demandes de sortie de la plateforme (nom conservé pour
+// compatibilité) : la secrétaire approuve au 1er niveau (comme un `gerant`), mais
+// ne certifie jamais — la certification a un impact définitif (CA, décompte stock)
+// et reste donc à la direction (CERTIFIER_ROLES). Ne pas l'ajouter à APPROVER_ROLES
+// directement : cela lui donnerait aussi les pouvoirs de gestion complète attachés
+// à `canManage()` (retours, écarts, correctifs…), au-delà de la simple validation
+// d'une demande en attente.
 export const logistiquePeutApprouver = (r) => isApproverRole(r) || r === 'secretaire'
 
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les

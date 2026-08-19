@@ -333,7 +333,7 @@ export default function Materiel() {
       await notify({
         type: 'demande', title: 'Location matériel — autorisation requise',
         body: `${materiel.nom} — ${nombreJours} jour(s) — ${formatMoney(Number(prixTotal))} — locataire ${locataireNom.trim()} — par ${user?.nom || user?.login}`,
-        module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user?.uid, link: '/evenementiel/demandes'
+        module: 'evenementiel', forRoles: [...APPROVER_ROLES, 'secretaire'], excludeUid: user?.uid, link: '/evenementiel/demandes'
       })
       await audit('evenementiel', 'LOCATION_DEMANDE', `${num} — ${materiel.nom}`)
       toast.success('Demande de location soumise — approbation puis certification requises ✓')

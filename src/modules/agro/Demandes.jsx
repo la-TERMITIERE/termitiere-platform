@@ -22,6 +22,7 @@ import {
   CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts, changementsArticle
 } from '../../shared/demandes/correctif'
 import { useAgroStore } from './store/agroStore'
+import { logistiquePeutApprouver, logistiqueVoitValidateur } from '../../core/roles'
 import {
   factureTotaux, lignesEffectives,
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
@@ -39,6 +40,10 @@ export default function Demandes() {
   const { user, role, canManage } = useAuth()
   const isAgent = role === 'agent'
   const peutApprouver = canManage()
+  // La secrétaire valide au 1er niveau (approuver/refuser) UNIQUEMENT tant que la
+  // demande est encore « sortie_demandee » — écarts, correctifs et suppression
+  // après ce point restent réservés à la hiérarchie (cf. logistique, même règle).
+  const peutGererSortie = (f) => peutApprouver || (logistiquePeutApprouver(role) && factureStatut(f) === 'sortie_demandee')
   const { data: factures } = useCollection('agro_factures')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
@@ -122,7 +127,7 @@ export default function Demandes() {
       if (peutApprouver) a.push({ id: 'corr', label: 'Trancher le correctif', icon: RotateCcw, tone: 'warning', on: () => setCorrectif(f) })
       return a
     }
-    if (st === 'sortie_demandee' && peutApprouver) {
+    if (st === 'sortie_demandee' && peutGererSortie(f)) {
       a.push({ id: 'app', label: 'Approuver', icon: Check, tone: 'success', on: () => approuver(f) })
       a.push({ id: 'ref', label: 'Refuser', icon: X, tone: 'danger', on: () => refuser(f) })
     } else if (st === 'sortie_approuvee' && isAgent) {
@@ -131,7 +136,7 @@ export default function Demandes() {
     } else if (st === 'modif_demandee' && peutApprouver) {
       a.push({ id: 'adj', label: 'Ajuster les quantités', icon: AlertTriangle, tone: 'primary', on: () => setEcart(f) })
     }
-    if (SUPPRIMABLES.includes(st) && (estAuteur(f) || peutApprouver)) {
+    if (SUPPRIMABLES.includes(st) && (estAuteur(f) || peutGererSortie(f))) {
       a.push({ id: 'del', label: 'Supprimer', icon: Trash2, tone: 'danger', on: () => supprimer(f) })
     }
     if (peutRelancer(f, { estCertifiee: st === 'certifiee', isAuteur: estAuteur(f), canManage: peutApprouver })) {
@@ -226,7 +231,7 @@ export default function Demandes() {
                   {f.ecartAjuste && <span className="text-[11px] text-amber-600">quantités ajustées</span>}
                 </div>
                 {st === 'sortie_demandee' && <p className="text-[11px] text-gray-400">Demandée par {f.sortieDemandeePar} · le {f.sortieDemandeeLe}</p>}
-                {st === 'sortie_approuvee' && <p className="text-[11px] text-gray-400">Approuvée par {f.sortieApprouveePar}</p>}
+                {st === 'sortie_approuvee' && logistiqueVoitValidateur(role) && <p className="text-[11px] text-gray-400">Approuvée par {f.sortieApprouveePar}</p>}
                 {st === 'modif_demandee' && f.ecartMotif && <p className="rounded bg-amber-50 p-2 text-[11px] italic text-amber-700">« {f.ecartMotif} »</p>}
                 {correctifEnCours(f) && <p className="rounded bg-amber-50 p-2 text-[11px] italic text-amber-700">Correctif demandé par {f.correctif.parNom} : « {f.correctif.motif} »</p>}
                 {st === 'refusee' && f.refusMotif && <p className="text-[11px] text-red-500">Refus : {f.refusMotif}</p>}

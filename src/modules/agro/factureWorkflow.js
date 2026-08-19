@@ -26,7 +26,7 @@ export const factureTotaux = (f) => calcTotaux(lignesEffectives(f), f.remise, f.
 export async function demanderSortie(f, user) {
   await updateItem('agro_factures', f.id, { statut: 'sortie_demandee', sortieDemandeeLe: horo(), sortieDemandeePar: user.nom })
   await audit('agro', 'FACTURE_SORTIE_DEMANDE', `${f.numero} — ${formatMoney(f.totalTTC || 0)}`)
-  await notify({ type: 'demande', title: 'Sortie de stock à approuver 📦', body: `Facture ${f.numero} — ${f.client?.nom || ''} (${formatMoney(f.totalTTC || 0)})`, module: 'agro', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/agro/demandes' })
+  await notify({ type: 'demande', title: 'Sortie de stock à approuver 📦', body: `Facture ${f.numero} — ${f.client?.nom || ''} (${formatMoney(f.totalTTC || 0)})`, module: 'agro', forRoles: [...APPROVER_ROLES, 'secretaire'], excludeUid: user.uid, link: '/agro/demandes' })
 }
 
 // ② Hiérarchie : approuve la sortie → décompte du stock (demandes liées certifiées).
