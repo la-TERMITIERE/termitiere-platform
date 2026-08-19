@@ -10,6 +10,7 @@ import ActiverAlertes from './ActiverAlertes'
 import AutoApproveDemandes from '../AutoApproveDemandes'
 import AutoApproveSortiesFacture from '../AutoApproveSortiesFacture'
 import AutoApproveWorkflow from '../AutoApproveWorkflow'
+import RelanceFacturesBrouillon from '../../modules/logistique/RelanceFacturesBrouillon'
 import ProjetAlerteWatcher from '../ProjetAlerteWatcher'
 import ProjetPurgeWatcher from '../ProjetPurgeWatcher'
 import DepensePurgeWatcher from '../DepensePurgeWatcher'
@@ -28,6 +29,7 @@ export default function AppShell() {
       {hasModule('agro') && <AutoApproveDemandes />}
       {hasModule('agro') && <AutoApproveSortiesFacture />}
       {hasModule('logistique') && <AutoApproveWorkflow collection="logistique_demandes" module="logistique" />}
+      {hasModule('logistique') && <RelanceFacturesBrouillon />}
       {hasModule('evenementiel') && <AutoApproveWorkflow collection="evenementiel_demandes" module="evenementiel" />}
       {hasModule('projet') && <ProjetAlerteWatcher />}
       {hasModule('projet') && <ProjetPurgeWatcher />}
