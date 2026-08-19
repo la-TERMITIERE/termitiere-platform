@@ -14,7 +14,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { logistiqueVoitMontants, logistiqueVoitValidateur, isFullAccessRole } from '../../core/roles'
+import { logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -36,10 +36,9 @@ export default function Factures() {
   // accordé) mais pas qui a approuvé la facture (cf. `voitValidateur`).
   const voitMontants = logistiqueVoitMontants(role)
   const voitValidateur = logistiqueVoitValidateur(role)
-  // Le cumul de facturation (KPI) est réservé à l'administration — plus restreint
-  // que `voitMontants` (qui inclut désormais la secrétaire) : c'est un chiffre
-  // agrégé de pilotage, pas un simple montant de facture individuelle.
-  const estAdministration = isFullAccessRole(role)
+  // Le cumul de facturation (KPI) suit le même groupe que les autres KPI/Pilotage
+  // de la plateforme (FINANCE_VIEW_ROLES, qui inclut désormais la secrétaire).
+  const estAdministration = canViewFinance(role)
   const { data: allFactures } = useCollection('logistique_factures')
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: allDemandes } = useCollection('logistique_demandes')
@@ -58,30 +57,39 @@ export default function Factures() {
   // L'agent garde la main : il facture une prestation dès qu'elle est en brouillon
   // (pas besoin d'approbation préalable). L'approbation viendra via l'autorisation de sortie.
   const aFacturer = prestations.filter((p) => p.statut === 'brouillon')
-  // Filtre de période fusionné (Jour / Mois) — même composant et même comportement
-  // que Sources de revenus (E-DÉPENSES), pour que les deux écrans soient directement
-  // comparables sur exactement la même période.
+  // Filtre de période fusionné (Jour / Mois / Plage personnalisée) — même composant
+  // et même comportement que Sources de revenus (E-DÉPENSES), pour que les deux
+  // écrans soient directement comparables sur exactement la même période.
   const [modePeriode, setModePeriode] = useState('jour')
   const [filtreJour, setFiltreJour]   = useState('')
   const [filtreMois, setFiltreMois]   = useState('')
-  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : filtreJour
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin]     = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const liste = useMemo(() => {
     let rows = [...factures]
-    if (filtrePeriodeActif) {
-      rows = modePeriode === 'mois'
-        ? rows.filter((f) => (f.date || '').startsWith(filtreMois))
-        : rows.filter((f) => f.date === filtreJour)
+    if (modePeriode === 'mois' && filtreMois) {
+      rows = rows.filter((f) => (f.date || '').startsWith(filtreMois))
+    } else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      rows = rows.filter((f) => (!filtreDebut || f.date >= filtreDebut) && (!filtreFin || f.date <= filtreFin))
+    } else if (modePeriode === 'jour' && filtreJour) {
+      rows = rows.filter((f) => f.date === filtreJour)
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, modePeriode, filtreJour, filtreMois, filtrePeriodeActif])
+  }, [factures, modePeriode, filtreJour, filtreMois, filtreDebut, filtreFin])
 
-  // Cumul de facturation — somme de la liste actuellement filtrée (respecte donc
-  // le filtre de période ci-dessus), toutes factures confondues (brouillon +
-  // approuvée) : c'est le total facturé sur la période, pas seulement le CA reconnu.
-  // Scopé au SITE courant (Lomé ou Kara, cf. `factures`) — c'est pourquoi ce cumul
-  // ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES, qui additionne les
-  // deux sites : ce n'est pas une incohérence, mais deux périmètres différents.
-  const cumulFacturation = useMemo(() => liste.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0), [liste])
+  // Cumul de facturation — UNIQUEMENT les factures APPROUVÉES de la liste filtrée
+  // (respecte donc le filtre de période ci-dessus) : c'est le chiffre d'affaires
+  // réellement reconnu, pas le total facturé en brouillon (qui peut encore changer
+  // ou être annulé). Scopé au SITE courant (Lomé ou Kara, cf. `factures`) — c'est
+  // pourquoi ce cumul ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES,
+  // qui additionne les deux sites : ce n'est pas une incohérence, mais deux
+  // périmètres différents.
+  const facturesApprouveesPeriode = useMemo(() => liste.filter((f) => f.statut === 'approuvee'), [liste])
+  const cumulFacturation = useMemo(
+    () => facturesApprouveesPeriode.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0),
+    [facturesApprouveesPeriode]
+  )
 
   async function emettre() {
     const p = prestations.find((x) => x.id === prestId)
@@ -138,15 +146,17 @@ export default function Factures() {
           (`cumulFacturation`) pour la différence avec le total combiné d'E-DÉPENSES. */}
       {estAdministration && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard title="Cumul facturation" value={formatMoney(cumulFacturation)}
-            sub={`${liste.length} facture${liste.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
+          <StatCard title="Cumul facturation (approuvée)" value={formatMoney(cumulFacturation)}
+            sub={`${facturesApprouveesPeriode.length} facture${facturesApprouveesPeriode.length > 1 ? 's' : ''} approuvée${facturesApprouveesPeriode.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
             icon={Wallet} accent={COULEUR_MODULE.logistique} />
         </div>
       )}
       <div className="flex flex-wrap items-end gap-2">
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
-          valeurMois={filtreMois} onMoisChange={setFiltreMois} />
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
       <Card className="p-0">
         <Table

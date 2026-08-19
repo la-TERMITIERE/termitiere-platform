@@ -8,6 +8,7 @@
 // alertes ». Voir src/core/push.js.
 import { addItem, getAll } from './db'
 import { pushToUsers } from './push'
+import { isViewAllRole } from './roles'
 
 // Types « importants » : notification système persistante + vibration marquée
 // (demandes d'autorisation, refus, alertes). Doit rester aligné avec
@@ -42,7 +43,14 @@ export async function notify({
     let cibles = [...forUsers]
     if (forRoles.length) {
       const users = await getAll('users')
-      cibles.push(...users.filter((u) => forRoles.includes(u.role)).map((u) => u.uid))
+      // Un rôle correspondant ne suffit pas : il faut aussi posséder LE MODULE
+      // concerné (même règle que la cloche in-app, cf. useNotifications.js →
+      // hasModule) — sinon un gérant/contrôleur d'un autre module recevrait une
+      // vraie notification système sur une affaire qui ne le concerne pas.
+      cibles.push(...users
+        .filter((u) => forRoles.includes(u.role))
+        .filter((u) => !module || isViewAllRole(u.role) || (u.modules || []).includes(module))
+        .map((u) => u.uid))
     }
     cibles = [...new Set(cibles)].filter((c) => c && c !== excludeUid)
     // `tag` = identifiant de la notification : la notification système affichée
