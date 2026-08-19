@@ -22,7 +22,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
 import { dernierStockBriques, retirerVenteDuStock, appliquerDeltasStockBriques } from './logic'
-import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole } from '../../core/roles'
+import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole, logistiquePeutApprouver, logistiqueVoitValidateur } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande, estAuteurDemande, estActif } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
@@ -47,6 +47,10 @@ export default function Demandes() {
   const isManager = canManage()
   const isCertifier = canCertify()
   const lectureSeule = isReadOnlyRole(role)
+  // La secrétaire gère une demande (approuver/refuser/supprimer) au 1er niveau
+  // UNIQUEMENT tant qu'elle est encore « en_attente » — au-delà (correctifs,
+  // certification), c'est réservé à la hiérarchie (même règle qu'en Logistique).
+  const peutGererDemande = (d) => isManager || (logistiquePeutApprouver(role) && normaliserStatut(d.statut) === 'en_attente')
 
   // Onglet 'sortie' (briques) ou 'location' (matériel) — même workflow, données
   // affichées différentes. La création d'une location se fait depuis Materiel.jsx,
@@ -121,7 +125,7 @@ export default function Demandes() {
       title: 'Autorisation sortie briques',
       body: `${totalQte} brique(s) — ${resume} — vente ${vte.num} — par ${user.nom}`,
       module: 'evenementiel',
-      forRoles: APPROVER_ROLES,
+      forRoles: [...APPROVER_ROLES, 'secretaire'],
       excludeUid: user.uid,
       link: '/evenementiel/demandes'
     })
@@ -430,12 +434,13 @@ export default function Demandes() {
             {filtrees.map((d) => {
               const sn = normaliserStatut(d.statut)
               const estLocation = typeDe(d) === 'location'
+              const gereCetteDemande = peutGererDemande(d)
               const acts = actionsDemande(d.statut, {
-                canManage: isManager, canCertify: isCertifier,
+                canManage: gereCetteDemande, canCertify: isCertifier,
                 estAuteur: estAuteurDemande(d, user), dejaApprouvePar: d.approuveN1Par, moiNom: user?.nom
               })
               const enCorrectif = !estLocation && correctifEnCours(d)
-              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: isManager })
+              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande })
               const relancable = !estLocation && !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
               return (
               <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
@@ -455,8 +460,12 @@ export default function Demandes() {
                   </>
                 )}
                 <td className="px-3 py-2 text-xs text-gray-500">
-                  {d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : '—'}
-                  {d.certifiePar && <span className="block">Certifié : {d.certifiePar}</span>}
+                  {logistiqueVoitValidateur(role) ? (
+                    <>
+                      {d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : '—'}
+                      {d.certifiePar && <span className="block">Certifié : {d.certifiePar}</span>}
+                    </>
+                  ) : (d.approuveN1Par ? <span className="block">Approuvée</span> : '—')}
                 </td>
                 <td className="px-3 py-2">
                   <Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>
@@ -471,7 +480,7 @@ export default function Demandes() {
                     {/* Consultation ouverte à tous : la même fiche, sans les actions. */}
                     <button onClick={() => setDecision({ demande: d, lecture: true })} title="Voir le détail"
                       className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-                    {(acts.length > 0 || enCorrectif) && isManager && (
+                    {(acts.length > 0 || enCorrectif) && gereCetteDemande && (
                       <button onClick={() => setDecision({ demande: d })} className="rounded bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/20">
                         {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
                       </button>
@@ -549,7 +558,7 @@ export default function Demandes() {
           ? <Button variant="ghost" onClick={() => setDecision(null)}>Fermer</Button>
           : <>
             <Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-            {decision && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: isManager }) && !lectureSeule && (
+            {decision && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) }) && !lectureSeule && (
               <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
             )}
             {decision && correctifEnCours(decision.demande) ? (
@@ -558,7 +567,7 @@ export default function Demandes() {
                 <Button variant="success" loading={busy} onClick={() => trancherCorrectif(true)}>Appliquer le correctif</Button>
               </>
             ) : decision && actionsDemande(decision.demande.statut, {
-              canManage: isManager, canCertify: isCertifier,
+              canManage: peutGererDemande(decision.demande), canCertify: isCertifier,
               estAuteur: estAuteurDemande(decision.demande, user),
               dejaApprouvePar: decision.demande.approuveN1Par, moiNom: user?.nom
             }).map((a) => (
@@ -605,10 +614,10 @@ export default function Demandes() {
                 items={items}
                 montant={montant}
                 statutNode={<Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>}
-                trail={[
+                trail={logistiqueVoitValidateur(role) ? [
                   { label: 'Approuvé (N1)', value: d.approuveN1Par ? `${d.approuveN1Par}${d.approuveN1Le ? ' · ' + d.approuveN1Le : ''}` : '' },
                   { label: 'Certifié', value: d.certifiePar ? `${d.certifiePar}${d.certifieLe ? ' · ' + d.certifieLe : ''}` : '' }
-                ]}
+                ] : []}
               />
               {decision.lecture ? (
                 <>

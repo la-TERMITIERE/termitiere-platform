@@ -162,7 +162,7 @@ export default function Demandes() {
       title: 'Autorisation de sortie matériel',
       body: `${siteLabel(site)} — ${totalQte} pièce(s) · prestation ${p.num} — facture ${fac.num} — par ${user.nom}`,
       module: 'logistique',
-      forRoles: APPROVER_ROLES,
+      forRoles: [...APPROVER_ROLES, 'secretaire'],
       excludeUid: user.uid,
       link: `/logistique/${site}/demandes`
     })
