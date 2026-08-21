@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
@@ -92,6 +92,19 @@ export const MODULES = [
     color: '#B45309',
     path: '/depense',
     statut: 'actif'
+  },
+  {
+    id: 'gym',
+    nom: 'MAXI-GYM',
+    description: 'Salle de sport — séances et abonnements clients',
+    icon: Dumbbell,
+    emoji: '🏋️',
+    // Couleurs reprises directement du logo (orange du ruban + rouge de l'icône) —
+    // pas de couleur inventée, cf. moduleTheme.js pour le dégradé complet.
+    color: '#E8850F',
+    path: '/gym',
+    statut: 'en_developpement',
+    logo: '/Maxi_Gym.png'
   }
 ]
 
@@ -164,6 +177,11 @@ export const MODULE_NAV = {
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
+  ],
+  gym: [
+    { label: 'Tableau de bord', to: '/gym', icon: LayoutDashboard, end: true },
+    { label: 'Séances', to: '/gym/seances', icon: Ticket },
+    { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard }
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },

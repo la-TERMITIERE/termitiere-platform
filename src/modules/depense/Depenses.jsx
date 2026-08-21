@@ -20,7 +20,7 @@ import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, remboursementsPauVersDepenses, libelleSecteurSite, siteLogistiqueDe } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -33,9 +33,10 @@ const SECTEURS_SANS_BTP = SECTEURS.filter((s) => s.id !== SECTEUR_BTP_EXCLU)
 
 // Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
 const SOURCE_INFO = {
-  projet:       { label: 'E-G.Pro · Versement', tone: 'info' },
-  besoin:       { label: 'E-G.Pro · Besoin validé', tone: 'info' },
-  briqueterie:  { label: 'Briqueterie', tone: 'neutral' }
+  projet:            { label: 'E-G.Pro · Versement', tone: 'info' },
+  besoin:            { label: 'E-G.Pro · Besoin validé', tone: 'info' },
+  briqueterie:       { label: 'Briqueterie', tone: 'neutral' },
+  remboursement_pau: { label: 'Remboursement PAU', tone: 'warning' }
 }
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
@@ -129,13 +130,18 @@ export default function Depenses() {
   const { data: projetsTous }    = useCollection('projets')
   const { data: tachesTous }     = useCollection('projet_taches')
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
+  // Remboursements au PAU — une vraie sortie d'argent de l'entreprise, contrairement à
+  // l'apport initial du PAU (revenu compensatoire, cf. le filtre par défaut de `liste`
+  // ci-dessous) : ils doivent donc apparaître ici comme une dépense.
+  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const depenses = useMemo(
     () => [
       ...depensesReelles,
       ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
-      ...coutsMatieresBriqueterie(inventairesBriq)
+      ...coutsMatieresBriqueterie(inventairesBriq),
+      ...remboursementsPauVersDepenses(remboursementsPau)
     ].filter((d) => d.secteurId !== SECTEUR_BTP_EXCLU),
-    [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq]
+    [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq, remboursementsPau]
   )
   useEffect(() => { marquerVoletVu(user?.uid, 'depenseDepenses') }, [user?.uid])
 
@@ -191,7 +197,16 @@ export default function Depenses() {
     if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => siteLogistiqueDe(d) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
-    if (filtreSource)    rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === filtreSource)
+    if (filtreSource) {
+      rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === filtreSource)
+    } else {
+      // Par défaut (aucun filtre « Financement » choisi), les apports du PAU restent
+      // hors de cette liste : ce n'est pas une charge de l'entreprise mais un revenu
+      // compensatoire du secteur (cf. Sources de revenus) — tant qu'il n'est pas
+      // remboursé, il n'a pas sa place parmi les dépenses réelles. Reste consultable
+      // via le filtre « Apport du PAU » explicite, ou le lien « Dette envers le PAU ».
+      rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) !== 'pau')
+    }
     if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()

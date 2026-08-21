@@ -1,15 +1,17 @@
 # Notifications WhatsApp (app fermée)
 
-L'app envoie une alerte WhatsApp aux responsables quand une **demande de sortie**
-est créée, et au demandeur quand sa demande est **approuvée/refusée** — même
+L'app envoie une alerte WhatsApp pour toute notification « importante » (demande
+d'autorisation, refus, alerte budget/stock…) — les mêmes types déjà classés
+prioritaires pour le push (cf. `TYPES_URGENTS` dans `src/core/notify.js`) — même
 application fermée. Cela passe par l'**API WhatsApp Business Cloud (Meta)** via une
-fonction serveur Netlify (`netlify/functions/whatsapp-notify.js`).
+fonction serveur Netlify (`netlify/functions/whatsapp-notify.js`), appelée
+automatiquement par `notify()` (aucun branchement à faire module par module).
 
 > ⚠️ La plomberie est **déjà en place** (fonction serveur + champ « Téléphone
-> WhatsApp » sur les comptes + déclenchement automatique). Il reste à **brancher
-> un compte Meta WhatsApp Business** et à renseigner 2 variables. Tant que ce n'est
-> pas fait, l'app continue normalement (les autres notifications fonctionnent),
-> seul l'envoi WhatsApp est ignoré.
+> WhatsApp » sur les comptes + déclenchement automatique depuis `notify()`). Il
+> reste à **brancher un compte Meta WhatsApp Business** et à renseigner 2
+> variables. Tant que ce n'est pas fait, l'app continue normalement (les autres
+> notifications fonctionnent), seul l'envoi WhatsApp est ignoré.
 
 ## Étape 1 — Créer l'accès WhatsApp Business Cloud (Meta)
 1. https://developers.facebook.com → **Mes apps** → **Créer une app** → type
@@ -39,9 +41,10 @@ remplir **Téléphone WhatsApp** au **format international sans `+` ni espaces**
 (ex. Togo : `22890000000`).
 
 ## Test
-Crée une demande de sortie : les responsables avec un numéro reçoivent un WhatsApp.
-La fonction renvoie un statut détaillé ; en cas d'absence de configuration elle
-répond `{ ok:false, skipped:'WhatsApp non configuré' }` (aucune erreur côté app).
+Crée une demande d'autorisation (sortie de stock, décaissement…) ou provoque un
+refus : les destinataires avec un numéro reçoivent un WhatsApp. La fonction renvoie
+un statut détaillé ; en cas d'absence de configuration elle répond
+`{ ok:false, skipped:'WhatsApp non configuré' }` (aucune erreur côté app).
 
 ## Notes importantes
 - **Messages business-initiés** : en dehors d'une fenêtre de 24 h après un message

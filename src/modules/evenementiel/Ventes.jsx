@@ -19,7 +19,7 @@ import { addItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-import { isReadOnlyRole } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 import { dernierStockBriques } from './logic'
 
 const STATUTS = {
@@ -33,6 +33,8 @@ const STATUTS = {
 export default function Ventes() {
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
+  // Les agents modifient/créent partout mais ne suppriment jamais (décision explicite).
+  const peutSupprimer = isFullAccessRole(role)
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
@@ -133,7 +135,7 @@ export default function Ventes() {
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-                {!lectureSeule && r.statut === 'brouillon' && (
+                {peutSupprimer && r.statut === 'brouillon' && (
                   <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                 )}
               </div>

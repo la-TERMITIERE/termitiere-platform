@@ -1,6 +1,6 @@
 // Production briques — cycle 24h ou 48h, consommation matières auto, ajout stock appatam.
 import { useMemo, useState } from 'react'
-import { Factory, Plus, Eye } from 'lucide-react'
+import { Factory, Plus, Eye, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -11,9 +11,9 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
-import { addItem, updateAtomic, ts } from '../../core/db'
+import { addItem, removeItem, updateAtomic, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatNumber } from '../../utils/formatters'
@@ -22,6 +22,10 @@ import { DUREE_PRODUCTION_OPTIONS } from './data'
 export default function Production() {
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
+  // Les agents saisissent/modifient mais ne suppriment jamais (décision explicite) —
+  // réservé à l'accès total, car supprimer une production doit aussi retirer les
+  // briques correspondantes du stock (cf. `supprimer` ci-dessous).
+  const peutSupprimer = isFullAccessRole(role)
   const { data: productions } = useCollection('evenementiel_productions')
   const briques = useBriqueterieStore((s) => s.briques.filter((b) => b.id !== 'caillasses'))
 
@@ -90,6 +94,51 @@ export default function Production() {
     setOpen(false)
   }
 
+  // Supprime une production ET retire du stock appatam du jour exactement ce
+  // qu'elle y avait ajouté (même écriture ATOMIQUE que `enregistrer`, pour ne
+  // jamais écraser une saisie concurrente sur le même document). Bloquée si le
+  // stock disponible ne suffit plus — signe qu'une partie de ces briques a déjà
+  // été déplacée vers le séchage/prêtes dans le Stock briques : supprimer
+  // rendrait alors le stock incohérent (négatif).
+  async function supprimer(p) {
+    if (!confirm(`Supprimer la production ${p.num} du ${p.date} ?\nLes ${formatNumber(p.totalBriques)} briques${p.caillasses ? ` (+ ${p.caillasses} caillasses)` : ''} seront retirées du stock appatam de ce jour.`)) return
+    let echec = null
+    await updateAtomic('evenementiel_inventaires', p.date, (cur) => {
+      echec = null
+      if (!cur) { echec = 'Stock introuvable pour cette date — rien à retirer.'; return undefined }
+      const briquesStock = { ...(cur.briques || {}) }
+      const caillassesQte = parseInt(p.caillasses) || 0
+      for (const l of (p.lignes || [])) {
+        const dispo = briquesStock[l.briqueId]?.appatam || 0
+        if (dispo < l.qte) {
+          echec = `Impossible : « ${l.briqueNom} » n'a plus que ${dispo} en appatam (${l.qte} à retirer) — une partie a déjà été déplacée vers le séchage.`
+          return undefined
+        }
+      }
+      if (caillassesQte > 0) {
+        const dispo = briquesStock.caillasses?.caillasses || 0
+        if (dispo < caillassesQte) {
+          echec = `Impossible : il ne reste que ${dispo} caillasses en stock (${caillassesQte} à retirer).`
+          return undefined
+        }
+      }
+      for (const l of (p.lignes || [])) {
+        const c = briquesStock[l.briqueId]
+        briquesStock[l.briqueId] = { ...c, appatam: (c.appatam || 0) - l.qte }
+      }
+      if (caillassesQte > 0) {
+        const c = briquesStock.caillasses
+        briquesStock.caillasses = { ...c, caillasses: (c.caillasses || 0) - caillassesQte }
+      }
+      return { ...cur, briques: briquesStock }
+    })
+    if (echec) { toast.error(echec); return }
+    await removeItem('evenementiel_productions', p.id)
+    await audit('evenementiel', 'PRODUCTION_DELETE', `${p.num} — ${formatNumber(p.totalBriques)} briques retirées du stock`)
+    toast.success('Production supprimée — stock corrigé ✓')
+    if (detail?.id === p.id) setDetail(null)
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
@@ -127,7 +176,12 @@ export default function Production() {
             { key: 'caillasses', label: 'Caillasses', align: 'right' },
             { key: 'agentNom', label: 'Agent' },
             { key: 'actions', label: '', align: 'right', render: (r) => (
-              <button onClick={() => setDetail(r)} title="Voir le détail par catégorie" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+              <div className="flex justify-end gap-1">
+                <button onClick={() => setDetail(r)} title="Voir le détail par catégorie" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                {peutSupprimer && (
+                  <button onClick={() => supprimer(r)} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                )}
+              </div>
             ) }
           ]}
           rows={liste}
@@ -137,7 +191,10 @@ export default function Production() {
 
       {/* Détail d'une production : quantités produites PAR CATÉGORIE (pas juste le total). */}
       <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? `Production ${detail.num}` : ''}
-        footer={<Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>}
+        footer={<>
+          <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>
+          {peutSupprimer && detail && <Button variant="danger" onClick={() => supprimer(detail)}><Trash2 size={15} /> Supprimer</Button>}
+        </>}
         panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (
           <div className="space-y-3 text-sm">

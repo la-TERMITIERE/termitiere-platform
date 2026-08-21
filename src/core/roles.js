@@ -14,6 +14,7 @@
 export const ROLES = [
   { value: 'super_admin',      label: 'Super-admin',       desc: 'Concepteur — contrôle total + technique' },
   { value: 'info',             label: 'Info',              desc: 'Informatique — accès total, comme un administrateur' },
+  { value: 'assistant_pau',    label: 'Assistant PAU',     desc: 'Assiste le PAU — accès total, comme Info' },
   { value: 'pau',              label: 'PAU',               desc: 'Direction — contrôle total sur les applications' },
   { value: 'ge',               label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
   { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction — accès total à tous les modules' },
@@ -28,14 +29,15 @@ export const ROLES = [
 ]
 
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
-// `info` (informatique) a les mêmes droits qu'un administrateur.
-export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'admin']
+// `info` (informatique) a les mêmes droits qu'un administrateur. `assistant_pau`
+// a exactement les mêmes droits qu'`info` (décision explicite : assiste le PAU).
+export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
 // Voit TOUS les modules (full access + superviseur en lecture seule).
-export const VIEW_ALL_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'admin', 'superviseur']
+export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur']
 // 1er niveau d'approbation d'une demande de sortie (le superviseur n'approuve pas).
-export const APPROVER_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'gerant', 'admin', 'controleur']
+export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'gerant', 'admin', 'controleur']
 // 2e niveau : certification définitive (déclenche l'effet métier).
-export const CERTIFIER_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'admin']
+export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
 
 // Rôles autorisés à voir les données FINANCIÈRES (chiffre d'affaires, montants)
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
@@ -45,7 +47,7 @@ export const CERTIFIER_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur',
 // montants et les KPI partout où ils interviennent, mais ne valide jamais seule au
 // niveau final (cf. CERTIFIER_ROLES, dont elle reste exclue) et ne voit jamais
 // l'identité de qui a validé (cf. `logistiqueVoitValidateur`, réutilisé hors logistique).
-export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
+export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
 
 // Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
 //   - superviseur : interne, voit TOUS les modules ;
@@ -107,10 +109,11 @@ export const canManagePartenaires = (role, user) =>
 
 // E-DÉPENSES : par décision explicite, super_admin/admin/directeur sont ramenés au
 // niveau d'un AGENT dans ce module précis (visibilité financière, fenêtre de saisie
-// à 2 mois, Journal/Paramètres, approbation des décaissements…) — seuls pau, ge et
-// info y gardent l'accès complet. `depenseRoleEffectif` substitue le rôle réel par
-// 'agent' pour ces trois-là ; tout le reste du code d'E-DÉPENSES continue de lire un
-// simple `role` et se comporte donc correctement sans modification supplémentaire.
+// à 2 mois, Journal/Paramètres, approbation des décaissements…) — seuls pau, ge,
+// info et assistant_pau y gardent l'accès complet. `depenseRoleEffectif` substitue
+// le rôle réel par 'agent' pour ces trois-là ; tout le reste du code d'E-DÉPENSES
+// continue de lire un simple `role` et se comporte donc correctement sans
+// modification supplémentaire.
 export const DEPENSE_ROLES_LIMITES = ['super_admin', 'admin', 'directeur']
 export const depenseRoleEffectif = (r) => (DEPENSE_ROLES_LIMITES.includes(r) ? 'agent' : r)
 

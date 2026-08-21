@@ -45,7 +45,7 @@ export function avatarGradient(seed) {
 export const COULEUR_MODULE = {
   agro: '#2EAA3F', logistique: '#BC3C31', evenementiel: '#7c3aed',
   foncier: '#059669', garderie: '#E8390E', rh: '#ea580c',
-  projet: '#0d9488', depense: '#B45309'
+  projet: '#0d9488', depense: '#B45309', gym: '#E8850F'
 }
 
 // Props prêtes à étaler sur <Modal> pour un rendu glassmorphism teinté d'une couleur

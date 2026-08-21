@@ -9,7 +9,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 
@@ -22,6 +22,8 @@ export default function Clients() {
   const { data: clients } = useCollection('evenementiel_clients')
   const role = useAuth((s) => s.role)
   const lectureSeule = isReadOnlyRole(role)
+  // Les agents modifient partout mais ne suppriment jamais (décision explicite).
+  const peutSupprimer = isFullAccessRole(role)
   const [modal, setModal] = useState(null)
 
   async function save() {
@@ -60,7 +62,9 @@ export default function Clients() {
             { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 hover:bg-gray-100">✏️</button>
-                <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeItem('evenementiel_clients', r.id) }} className="text-red-500"><Trash2 size={16} /></button>
+                {peutSupprimer && (
+                  <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeItem('evenementiel_clients', r.id) }} className="text-red-500"><Trash2 size={16} /></button>
+                )}
               </div>
             ) }
           ]}

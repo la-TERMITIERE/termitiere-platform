@@ -94,7 +94,7 @@ const BUCKET_DEVIS = (categorie) => (categorie === 'main_oeuvre' ? 'Main d\'œuv
 const VIDE = {
   projetId: '', tacheId: '', section: '', titre: '', categorie: 'materiaux',
   unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: '',
-  fournisseur: '', fournisseurTelephone: '',
+  fournisseur: '', fournisseurTelephone: '', dejaPaye: false,
   piecesEnAttente: []
 }
 const ligneVide = () => ({ categorie: 'materiaux', titre: '', unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: '' })
@@ -183,7 +183,8 @@ export default function Besoins() {
       projetId: b.projetId || '', tacheId: b.tacheId || '', section: b.section || '', titre: b.titre || '', categorie: b.categorie || 'materiaux',
       unite: b.unite || '', quantite: b.quantite ?? '', prixUnitaire: b.prixUnitaire ?? '', priorite: b.priorite || 'normale',
       dateSouhaitee: b.dateSouhaitee ? new Date(b.dateSouhaitee).toISOString().slice(0, 10) : '',
-      note: b.note || '', fournisseur: b.fournisseur || '', fournisseurTelephone: b.fournisseurTelephone || ''
+      note: b.note || '', fournisseur: b.fournisseur || '', fournisseurTelephone: b.fournisseurTelephone || '',
+      dejaPaye: !!b.dejaPaye
     })
     setEditing(b); setModal(true)
   }
@@ -372,7 +373,16 @@ export default function Besoins() {
       noteOrigine: b.note || '',
       natureFlux: natureFluxProjet(projet),
       sourceFinancement: 'entreprise',
-      statut: 'en_attente',
+      // Valider le besoin EST la décision d'approbation (1er niveau) — la hiérarchie
+      // vient de trancher en cliquant « Valider ». Pas de circuit `en_attente` : la
+      // demande arrive directement en « À décaisser » dans E-DÉPENSES, il ne reste
+      // que la certification finale (2e niveau, un décideur différent) à faire pour
+      // que l'argent sorte réellement. Un besoin déjà payé par l'agent (achat urgent
+      // avant validation) saute même cette étape : décaissé immédiatement, l'argent
+      // étant déjà sorti (cf. case "J'ai déjà payé" du formulaire).
+      statut: b.dejaPaye ? 'decaissee' : 'approuvee',
+      approuveePar: user?.nom || user?.login || '—', approuveeLe: Date.now(),
+      ...(b.dejaPaye ? { certifieePar: user?.nom || user?.login || '—', certifieeLe: Date.now() } : {}),
       source: 'besoin', besoinId: b.id,
       projetId: b.projetId, projetNom: projet?.nom || '',
       tacheId: b.tacheId || '', tacheTitre: tache?.titre || '',
@@ -406,14 +416,18 @@ export default function Besoins() {
     await updateItem('projet_besoins', b.id, {
       validation: 'valide', valideParText: user?.nom || user?.login || '—', valideLe: Date.now(), depenseId
     })
-    await audit('projet', 'besoin_valide', `${b.titre} — demande de décaissement créée (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
+    await audit('projet', 'besoin_valide', `${b.titre} — ${b.dejaPaye ? 'dépense déjà payée, décaissée directement' : 'approuvée, envoyée à décaisser'} (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
     const destinataires = destinatairesDecision(b)
     if (destinataires.length) {
-      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} — envoyé en autorisation de décaissement`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
+      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} — ${b.dejaPaye ? 'dépense déjà payée, enregistrée dans E-DÉPENSES' : 'approuvée, en attente de décaissement'}`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
     }
-    await notify({
-      type: 'demande', title: '💰 Décaissement à traiter',
-      body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA (besoin validé par ${user?.nom || '—'})`,
+    await notify(b.dejaPaye ? {
+      type: 'info', title: '💸 Dépense déjà réglée — enregistrée',
+      body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA déjà payés par ${b.demandePar || '—'}, décaissée directement (besoin validé par ${user?.nom || '—'})`,
+      module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/liste'
+    } : {
+      type: 'demande', title: '💰 Décaissement à certifier',
+      body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA, déjà approuvé (besoin validé par ${user?.nom || '—'}) — reste à certifier pour décaisser`,
       module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
     }).catch(() => {})
   }
@@ -629,6 +643,7 @@ export default function Besoins() {
                         <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{catLabel(b.categorie)}</span>
                         {b.section && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">📐 {b.section}</span>}
                         {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
+                        {b.dejaPaye && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">💸 Déjà payé</span>}
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${PRIORITES[b.priorite]?.tone === 'danger' ? 'bg-red-50 text-red-700' : PRIORITES[b.priorite]?.tone === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'}`}>
                           {PRIORITES[b.priorite]?.label || b.priorite}
                         </span>
@@ -785,6 +800,18 @@ export default function Besoins() {
                   value={form.fournisseurTelephone} onChange={(e) => setForm((f) => ({ ...f, fournisseurTelephone: e.target.value }))} />
               </FormGroup>
             </div>
+            <button type="button" onClick={() => setForm((f) => ({ ...f, dejaPaye: !f.dejaPaye }))}
+              className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${form.dejaPaye ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+              <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${form.dejaPaye ? 'border-amber-500 bg-amber-500 text-white' : 'border-gray-300 bg-white'}`}>
+                {form.dejaPaye && '✓'}
+              </span>
+              <span>
+                <span className={`block text-xs font-semibold ${form.dejaPaye ? 'text-amber-800' : 'text-gray-700'}`}>💸 J'ai déjà payé cette dépense</span>
+                <span className="block text-[11px] text-gray-500">
+                  Achat urgent déjà réglé par le demandeur — une fois ce besoin validé, la dépense sera décaissée directement dans E-DÉPENSES, sans passer par le circuit d'autorisation.
+                </span>
+              </span>
+            </button>
           </div>
 
           <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
