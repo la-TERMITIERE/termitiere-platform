@@ -204,7 +204,7 @@ function GanttView({ projets, taches }) {
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold leading-snug text-gray-800" title={p.nom}>{p.nom}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{STATUTS_PROJET[p.statut]?.label}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{STATUTS_PROJET[p.statut]?.label}{p.lieu ? ` · ${p.lieu}` : ''}</p>
                     </div>
                   </div>
                   {/* Zone graphique */}

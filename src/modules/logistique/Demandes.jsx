@@ -77,6 +77,12 @@ export default function Demandes() {
   const [form, setForm] = useState({ factureId: '', dateSortie: todayStr(), message: '' })
   const lectureSeule = isReadOnlyRole(role)
   const estAuteur = (d) => d.demandeur === user.login
+  // N'importe quel agent (pas seulement l'auteur) peut annuler une autorisation de
+  // sortie TANT QU'ELLE N'EST PAS CERTIFIÉE (ex. reprendre le dossier d'un collègue
+  // absent) — ne lui donne PAS pour autant le pouvoir d'approuver/certifier/refuser,
+  // qui reste réservé à logistiquePeutApprouver/CERTIFIER_ROLES (cf. peutSupprimerDemande,
+  // qui ferme de toute façon la suppression dès que le statut passe à `certifie`).
+  const peutAnnulerAgent = role === 'agent'
 
   // Factures en brouillon dont l'autorisation de sortie reste à émettre.
   const facturesAvecDemande = useMemo(() => new Set(liste.map((d) => d.factureId).filter(Boolean)), [liste])
@@ -387,7 +393,7 @@ export default function Demandes() {
               })
               const totalQte = (d.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0) || d.qte || 0
               const enCorrectif = correctifEnCours(d)
-              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande })
+              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande || peutAnnulerAgent })
               const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: gereCetteDemande })
               return (
               <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
@@ -491,7 +497,7 @@ export default function Demandes() {
         footer={decision?.lecture
           ? <Button variant="ghost" onClick={() => setDecision(null)}>Fermer</Button>
           : <><Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-            {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) }) && (
+            {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) || peutAnnulerAgent }) && (
               <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
             )}
             {decision && correctifEnCours(decision.demande) ? (

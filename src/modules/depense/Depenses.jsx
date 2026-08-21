@@ -20,7 +20,7 @@ import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -310,6 +310,8 @@ export default function Depenses() {
     if (!d.categorie) return toast.error('Catégorie requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     if (!d.date) return toast.error('Date requise')
+    if (!d.description || !d.description.trim()) return toast.error('Description requise — précisez le motif de la dépense')
+    if (!d.beneficiaireNom || !d.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
 
     setSaving(true)
     try {
@@ -359,7 +361,7 @@ export default function Depenses() {
     if (!annee || !mois) return
     const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
     if (alloue <= 0) return
-    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
+    const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct)
     if (statut.key === 'ok') return
@@ -647,11 +649,11 @@ export default function Depenses() {
                   <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
                 </FormGroup>
               </div>
-              <FormGroup label="Description" className="mt-1">
+              <FormGroup label="Description" required className="mt-1">
                 <textarea
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
                   rows={2} value={modal.data.description} onChange={(e) => set('description', e.target.value)}
-                  placeholder="ex: Achat de fournitures de bureau"
+                  placeholder="Décrivez précisément la dépense : quoi, pourquoi, pour qui, dans quel contexte…"
                 />
               </FormGroup>
             </div>
@@ -712,7 +714,7 @@ export default function Depenses() {
 
             {/* Bénéficiaire */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="font-medium normal-case text-amber-500">(optionnel — qui reçoit l'argent)</span></p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="text-red-500">*</span> <span className="font-medium normal-case text-amber-500">— qui reçoit l'argent</span></p>
               <div className="mb-2 flex gap-2">
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
@@ -728,7 +730,7 @@ export default function Depenses() {
 
               {modal.data.beneficiaireType === 'externe' ? (
                 <div className="grid grid-cols-3 gap-3">
-                  <FormGroup label="Nom de la personne">
+                  <FormGroup label="Nom de la personne" required>
                     <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
                   </FormGroup>
                   <FormGroup label="Profession / fonction">
@@ -740,7 +742,7 @@ export default function Depenses() {
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
-                  <FormGroup label="Nom du bénéficiaire">
+                  <FormGroup label="Nom du bénéficiaire" required>
                     <ChampBeneficiaire
                       value={modal.data.beneficiaireNom}
                       onChange={(v) => { set('beneficiaireNom', v); set('beneficiaireUid', '') }}

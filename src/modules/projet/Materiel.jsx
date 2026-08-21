@@ -20,7 +20,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets } from './logic'
+import { projetsVisibles, scopeParProjetsOuGlobal } from './logic'
 
 const CATEGORIES_MATERIEL = [
   { id: 'consommable',     label: 'Consommable (ciment, sable…)' },
@@ -55,6 +55,11 @@ const VIDE_MAGASIN = { projetId: '', nom: '', description: '' }
 // magasins (jamais classé) afin qu'il reste visible plutôt que de disparaître.
 const SANS_MAGASIN = '__sans_magasin__'
 
+// Sentinelle des sélecteurs « Projet » : un magasin (et son matériel) peut rester
+// général, sans chantier précis — ex. un dépôt central de l'entreprise. Uniquement une
+// valeur d'UI ; converti en `projetId: ''` avant tout enregistrement (jamais persistée).
+const SANS_PROJET = '__sans_projet__'
+
 // Stock = somme des entrées − somme des sorties, recalculé à partir de
 // l'historique des mouvements (source unique de vérité — jamais négatif).
 function calculerStock(mouvements = []) {
@@ -82,13 +87,15 @@ export default function Materiel() {
   const peutSupprimer = !['superviseur', 'partenaire', 'secretaire', 'agent'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetMateriel') }, [user?.uid])
 
-  // Cloisonnement : un chef de projet ne voit que le matériel de ses projets.
+  // Cloisonnement : un chef de projet ne voit que le matériel de ses projets — plus les
+  // magasins/matériel « généraux », sans projet (cf. scopeParProjetsOuGlobal).
   const projets   = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
-  const materiels = useMemo(() => scopeParProjets(materielsTous, projets), [materielsTous, projets])
-  // Magasins : chaque matériel doit désormais appartenir à un magasin, lui-même
-  // rattaché à un seul projet — on crée le magasin AVANT de pouvoir saisir le matériel.
-  const magasins  = useMemo(() => scopeParProjets(magasinsTous, projets), [magasinsTous, projets])
-  const magasinsDuProjet = (projetId) => magasins.filter((mg) => mg.projetId === projetId)
+  const materiels = useMemo(() => scopeParProjetsOuGlobal(materielsTous, projets), [materielsTous, projets])
+  // Magasins : chaque matériel doit désormais appartenir à un magasin — celui-ci peut
+  // être rattaché à un projet, ou rester « général » (SANS_PROJET, sans projetId) pour
+  // un dépôt/entrepôt de l'entreprise non lié à un chantier précis.
+  const magasins  = useMemo(() => scopeParProjetsOuGlobal(magasinsTous, projets), [magasinsTous, projets])
+  const magasinsDuProjet = (projetId) => magasins.filter((mg) => projetId === SANS_PROJET ? !mg.projetId : mg.projetId === projetId)
   const nomMagasin = (id) => magasins.find((mg) => mg.id === id)?.nom || null
   const projetDeMagasin = (mg) => projets.find((p) => p.id === mg?.projetId) || null
 
@@ -141,19 +148,22 @@ export default function Materiel() {
     setFormMagasin(VIDE_MAGASIN); setEditingMagasin(null)
     setModalMagasins(true)
   }
-  const openEditMagasin = (mg) => { setFormMagasin({ projetId: mg.projetId, nom: mg.nom, description: mg.description || '' }); setEditingMagasin(mg) }
+  const openEditMagasin = (mg) => { setFormMagasin({ projetId: mg.projetId || SANS_PROJET, nom: mg.nom, description: mg.description || '' }); setEditingMagasin(mg) }
   const annulerEditionMagasin = () => { setFormMagasin({ ...VIDE_MAGASIN, projetId: magasinProjetId }); setEditingMagasin(null) }
 
   const handleSaveMagasin = async () => {
-    if (!formMagasin.nom.trim() || !formMagasin.projetId) return
+    if (!formMagasin.nom.trim()) return
     setSavingMagasin(true)
     try {
+      // SANS_PROJET n'est qu'une valeur d'UI (sélecteur) — jamais persistée telle quelle :
+      // un magasin général s'enregistre avec `projetId: ''`.
+      const projetId = formMagasin.projetId === SANS_PROJET ? '' : formMagasin.projetId
       if (editingMagasin) {
-        await setItem('projet_magasins', editingMagasin.id, { ...editingMagasin, ...formMagasin, nom: formMagasin.nom.trim() })
+        await setItem('projet_magasins', editingMagasin.id, { ...editingMagasin, ...formMagasin, projetId, nom: formMagasin.nom.trim() })
         await audit('projet', 'magasin_modifie', formMagasin.nom)
       } else {
         await addItem('projet_magasins', {
-          ...formMagasin, nom: formMagasin.nom.trim(), createdAt: Date.now(),
+          ...formMagasin, projetId, nom: formMagasin.nom.trim(), createdAt: Date.now(),
           creePar: user?.nom || user?.login || null
         })
         await audit('projet', 'magasin_ajoute', formMagasin.nom)
@@ -183,7 +193,7 @@ export default function Materiel() {
     try {
       const id = `mag_${Date.now()}`
       await setItem('projet_magasins', id, {
-        id, projetId: form.projetId, nom: nouveauMagasinNom.trim(), description: '',
+        id, projetId: form.projetId === SANS_PROJET ? '' : form.projetId, nom: nouveauMagasinNom.trim(), description: '',
         createdAt: Date.now(), creePar: user?.nom || user?.login || null
       })
       await audit('projet', 'magasin_ajoute', nouveauMagasinNom.trim())
@@ -212,14 +222,16 @@ export default function Materiel() {
   const catLabel = (id) => CATEGORIES_MATERIEL.find((c) => c.id === id)?.label || id
 
   const openCreate = () => {
-    const projetId = magasinCourant?.projetId || filtreProjet || ''
+    // Ouvert depuis un magasin précis : reprend son projet (ou SANS_PROJET s'il est
+    // général) — sinon retombe sur le filtre de la liste, ou rien.
+    const projetId = magasinCourant ? (magasinCourant.projetId || SANS_PROJET) : (filtreProjet || '')
     const magasinId = magasinActif && magasinActif !== SANS_MAGASIN ? magasinActif : ''
     setForm({ ...VIDE, projetId, magasinId })
     setNouveauMagasinNom(''); setEditing(null); setModal(true)
   }
   const openEdit   = (m) => {
     setForm({
-      projetId: m.projetId || '', magasinId: m.magasinId || '', nom: m.nom || '', categorie: m.categorie || 'consommable',
+      projetId: m.projetId || SANS_PROJET, magasinId: m.magasinId || '', nom: m.nom || '', categorie: m.categorie || 'consommable',
       unite: m.unite || '', quantiteInitiale: '', etat: m.etat || 'bon_etat',
       dateEntree: m.dateEntree ? new Date(m.dateEntree).toISOString().slice(0, 10) : '',
       note: m.note || ''
@@ -236,7 +248,8 @@ export default function Materiel() {
       const now = Date.now()
       const { quantiteInitiale, ...rest } = form
       const payload = {
-        ...rest, nom: form.nom.trim(), unite: form.unite.trim(),
+        ...rest, projetId: rest.projetId === SANS_PROJET ? '' : rest.projetId,
+        nom: form.nom.trim(), unite: form.unite.trim(),
         dateEntree: form.dateEntree ? new Date(form.dateEntree).getTime() : now,
         updatedAt: now
       }
@@ -351,6 +364,7 @@ export default function Materiel() {
             <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
               value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
               <option value="">Tous les projets</option>
+              <option value={SANS_PROJET}>Sans projet (dépôts généraux)</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
             <Button onClick={ouvrirGestionMagasins} size="sm" variant="outline" className="ml-auto"><Warehouse size={14} className="mr-1" />Gérer les magasins</Button>
@@ -385,7 +399,7 @@ export default function Materiel() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-bold text-gray-800">{mg.nom}</p>
-                          {projet && <Badge tone="primary">{projet.nom}</Badge>}
+                          {projet ? <Badge tone="primary">{projet.nom}</Badge> : <Badge tone="neutral">Sans projet</Badge>}
                         </div>
                         <ChevronRight size={18} className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-400" />
                       </div>
@@ -449,9 +463,9 @@ export default function Materiel() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-base font-extrabold">{magasinCourant.nom}</h3>
-                  <p className="text-sm text-white/85">{projetDeMagasin(magasinCourant)?.nom || '—'} · {materielsDuMagasinActif.length} matériel(s)</p>
+                  <p className="text-sm text-white/85">{projetDeMagasin(magasinCourant)?.nom || 'Sans projet — dépôt général'} · {materielsDuMagasinActif.length} matériel(s)</p>
                 </div>
-                <button onClick={() => { setMagasinProjetId(magasinCourant.projetId); openEditMagasin(magasinCourant); setModalMagasins(true) }}
+                <button onClick={() => { setMagasinProjetId(magasinCourant.projetId || SANS_PROJET); openEditMagasin(magasinCourant); setModalMagasins(true) }}
                   className="shrink-0 rounded-full border border-white/40 bg-white/15 p-2 text-white backdrop-blur-sm transition-colors hover:bg-white/25" title="Modifier ce magasin">
                   <Pencil size={14} />
                 </button>
@@ -693,14 +707,15 @@ export default function Materiel() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
             <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📋 Informations</p>
-            <FormGroup label="Projet" required>
+            <FormGroup label="Projet" required hint="Ou « Aucun projet » pour du matériel d'un dépôt général de l'entreprise.">
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                 value={form.projetId} onChange={(e) => { setForm((f) => ({ ...f, projetId: e.target.value, magasinId: '' })); setNouveauMagasinNom('') }}>
                 <option value="">— Sélectionner —</option>
+                <option value={SANS_PROJET}>— Aucun projet (dépôt général) —</option>
                 {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </select>
             </FormGroup>
-            <FormGroup label="Magasin" required hint="Le matériel doit être rangé dans un magasin du projet">
+            <FormGroup label="Magasin" required hint="Le matériel doit être rangé dans un magasin">
               {!form.projetId ? (
                 <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-400">Choisissez d'abord un projet.</p>
               ) : magasinsDuProjet(form.projetId).length > 0 ? (
@@ -823,11 +838,12 @@ export default function Materiel() {
       <Modal open={modalMagasins} onClose={() => setModalMagasins(false)} title="Magasins"
         panelClassName="bg-gradient-to-br from-cyan-200/85 via-cyan-100/75 to-teal-200/75 backdrop-blur-2xl backdrop-saturate-200">
         <div className="space-y-4">
-          <FormGroup label="Projet" required>
+          <FormGroup label="Projet" required hint="Ou « Aucun projet » pour un dépôt général de l'entreprise, non rattaché à un chantier précis.">
             <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
               value={magasinProjetId}
               onChange={(e) => { setMagasinProjetId(e.target.value); setFormMagasin({ ...VIDE_MAGASIN, projetId: e.target.value }); setEditingMagasin(null) }}>
               <option value="">— Sélectionner —</option>
+              <option value={SANS_PROJET}>— Aucun projet (dépôt général) —</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </FormGroup>

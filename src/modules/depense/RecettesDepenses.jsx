@@ -22,7 +22,7 @@ import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/fo
 import { ouvrirPiece } from '../../utils/fichiers'
 import { teinterHex, shadeHex } from '../../utils/color'
 import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, budgetDocSecteur, depensesSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
+import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { soumettreNouvelleDepense } from './depenseActions'
 
@@ -161,12 +161,21 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     const revenusManuelsDuMois = revenusManuelsTous
       .filter((r) => r.secteurId === s.secteurId && (r.date || '').startsWith(`${annee}-${String(mois).padStart(2, '0')}`))
       .sort((a, b) => (b.date || 0) - (a.date || 0))
-    const lignes = depensesSecteurMois(depenses, s.secteurId, annee, mois, s.site).sort((a, b) => (a.date < b.date ? 1 : -1))
+    // « Dépenses »/« Solde » de ce secteur : hors dépenses de PROJET (E-G.Pro) — elles
+    // ne sont pas la charge de ce secteur (cf. depensesHorsProjetSecteurMois), restent
+    // visibles classées par projet dans la liste générale E-DÉPENSES et dans l'onglet
+    // Dépenses du projet. L'apport du PAU, lui, reste compté ici (neutralisé par le
+    // revenu PAU équivalent inclus dans `recette`).
+    const lignes = depensesHorsProjetSecteurMois(depenses, s.secteurId, annee, mois, s.site).sort((a, b) => (a.date < b.date ? 1 : -1))
     const depense = totalDepenses(lignes)
-    const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
+    // Le % consommé / reste du BUDGET ALLOUÉ (section « Budget » ci-dessous) exclut en
+    // plus l'apport du PAU — ni l'un ni l'autre ne sont financés par la caisse courante
+    // du secteur (cf. depensesEntrepriseSecteurMois).
+    const depenseBudget = totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site))
+    const pct = alloue > 0 ? Math.round((depenseBudget / alloue) * 100) : (depenseBudget > 0 ? 100 : 0)
     return {
       ...s, recette, apportPau, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, solde: recette - depense,
-      budgetId, alloue, reste: alloue - depense, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
+      budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
       // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
       proposeParText: budgetDoc?.proposeParText || null, motifPropose: budgetDoc?.motifPropose || null
@@ -358,6 +367,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
   const ouvrirNouvelleDepense = () => setNouvelleDepense({
     categorie: '', montant: '', date: todayStr(), description: '',
+    beneficiaireNom: '', beneficiaireTelephone: '',
     natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false
   })
 
@@ -366,6 +376,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     if (!nouvelleDepense.categorie) return toast.error('Catégorie requise')
     if (!nouvelleDepense.montant || Number(nouvelleDepense.montant) <= 0) return toast.error('Montant requis')
     if (!nouvelleDepense.date) return toast.error('Date requise')
+    if (!nouvelleDepense.description || !nouvelleDepense.description.trim()) return toast.error('Description requise — précisez le motif de la dépense')
+    if (!nouvelleDepense.beneficiaireNom || !nouvelleDepense.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
     setDepenseSaving(true)
     try {
       const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: secteurId === 'logistique' ? (site || 'lome') : undefined }, { user, budgets, depenses })
@@ -893,11 +905,27 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
               </div>
               <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Description <span className="font-normal text-gray-400">(optionnel)</span></label>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Description <span className="text-red-500">*</span></label>
                 <input value={nouvelleDepense.description}
                   onChange={(e) => setNouvelleDepense((d) => ({ ...d, description: e.target.value }))}
-                  placeholder="ex : Achat de fournitures, réparation véhicule…"
+                  placeholder="Décrivez précisément la dépense : quoi, pourquoi, pour qui…"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Bénéficiaire <span className="text-red-500">*</span></label>
+                  <input value={nouvelleDepense.beneficiaireNom}
+                    onChange={(e) => setNouvelleDepense((d) => ({ ...d, beneficiaireNom: e.target.value }))}
+                    placeholder="Qui reçoit l'argent…"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Téléphone <span className="font-normal text-gray-400">(optionnel)</span></label>
+                  <input value={nouvelleDepense.beneficiaireTelephone}
+                    onChange={(e) => setNouvelleDepense((d) => ({ ...d, beneficiaireTelephone: e.target.value }))}
+                    placeholder="ex : 90 00 00 00"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Source de financement</label>

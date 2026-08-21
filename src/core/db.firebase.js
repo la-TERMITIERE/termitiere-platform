@@ -158,6 +158,41 @@ export async function claimOnce(name, id, data = {}) {
   return committed
 }
 
+// Lecture-modification-écriture ATOMIQUE (transaction RTDB) sur un document —
+// à utiliser quand PLUSIEURS écritures concurrentes doivent s'ACCUMULER sur le
+// MÊME document (ex. plusieurs productions du même jour qui alimentent chacune
+// le stock « appatam ») sans jamais s'écraser entre elles.
+//
+// Contrairement à setItem/updateItem — qui écrivent la valeur calculée par le
+// CLIENT à partir de son instantané local (`useCollection`), potentiellement pas
+// encore à jour si une autre écriture vient d'avoir lieu quelques centaines de ms
+// plus tôt — `updateAtomic` relit la valeur RÉELLEMENT en base au moment de
+// l'écriture (et réessaie automatiquement en cas de conflit détecté par le
+// serveur). C'est la cause racine du bug « une production écrase la précédente
+// au lieu de s'additionner » (cf. Production.jsx en Briqueterie).
+//
+// `updater(currentDataOuNull)` doit renvoyer le NOUVEAU contenu complet du
+// document (comme pour setItem), ou `undefined` pour annuler l'écriture.
+export async function updateAtomic(name, id, updater) {
+  checkRate(name, 'write')
+  if (!isFirebaseConfigured) {
+    const arr = demoRead(name)
+    const idx = arr.findIndex((x) => x.id === id)
+    const current = idx >= 0 ? arr[idx] : null
+    const next = updater(current)
+    if (next === undefined) return
+    const payload = sanitizeData(next)
+    if (idx >= 0) arr[idx] = { ...payload, id }
+    else arr.push({ ...payload, id })
+    demoWrite(name, arr)
+    return
+  }
+  await runTransaction(docRef(name, id), (current) => {
+    const next = updater(current)
+    return next === undefined ? undefined : sanitizeData(next)
+  })
+}
+
 // Répare les documents créés par erreur avec un `addItem(..., { id: <valeur imposée>, ... })` :
 // `addItem` génère TOUJOURS sa propre clé RTDB (push key) — un champ `id` fourni dans les
 // données est simplement ignoré pour l'écriture, mais `snapToRows` (ci-dessus) le fait

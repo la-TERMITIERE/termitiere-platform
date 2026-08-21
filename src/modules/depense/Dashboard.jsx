@@ -15,7 +15,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie, secteursEtSites } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie, secteursEtSites } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -109,7 +109,7 @@ export default function Dashboard() {
   // vit exclusivement dans le volet BTP d'E-G.Pro.
   const parSecteur = useMemo(() => secteursEtSites(true).map((s) => {
     const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
-    const depense = totalDepenses(depensesSecteurMois(depenses, s.secteurId, annee, mois, s.site))
+    const depense = totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site))
     const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
     return { ...s, alloue, depense, reste: alloue - depense, pct, statut: statutBudget(pct) }
   }), [budgets, depenses, annee, mois])

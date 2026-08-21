@@ -67,6 +67,7 @@ export default function DetailProjetModal({ projet, depensesProjetTous, depenseD
             <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold text-white align-middle" style={{ background: c }}>
               {secteur?.label}
             </span>
+            {projet.lieu && <span className="ml-2 align-middle text-xs font-normal text-gray-500">📍 {projet.lieu}</span>}
           </span>
         </span>
       }>

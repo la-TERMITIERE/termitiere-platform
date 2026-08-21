@@ -28,6 +28,15 @@ export function scopeParProjets(items = [], projetsAutorises = []) {
   return items.filter((it) => ids.has(it.projetId))
 }
 
+// Comme scopeParProjets, mais garde aussi les éléments SANS projet (`projetId` vide) —
+// pour les magasins/matériel « généraux », rattachés à l'entreprise plutôt qu'à un
+// chantier précis (cf. Materiel.jsx, sentinelle SANS_PROJET). Un rôle cloisonné (chef
+// de projet) voit donc les éléments globaux en plus de ceux de ses propres projets.
+export function scopeParProjetsOuGlobal(items = [], projetsAutorises = []) {
+  const ids = new Set(projetsAutorises.map((p) => p.id))
+  return items.filter((it) => !it.projetId || ids.has(it.projetId))
+}
+
 export function avancementProjet(taches = [], projet = null) {
   // Projet AVEC tâches : avancement = tâches terminées / total des tâches.
   if (taches.length) {

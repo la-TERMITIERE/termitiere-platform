@@ -215,6 +215,40 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois, site = nul
   })
 }
 
+// Dépenses décaissées d'un secteur/mois financées par L'ENTREPRISE uniquement, hors
+// budget d'un projet — exclut : (1) celles payées par l'apport personnel du PAU
+// (sourceFinancement === 'pau'), (2) celles routées depuis E-G.Pro (source === 'projet',
+// cf. depensesProjetVersSecteurs). Ni l'une ni l'autre ne sont l'argent du budget ALLOUÉ
+// du secteur (la « caisse courante ») : un apport PAU compte comme un revenu compensatoire
+// du secteur (cf. revenuPauSecteurMois) ; une dépense de projet est financée par les sommes
+// propres, déjà arrêtées, du projet lui-même (versements client, apport PAU dédié…), pas
+// par le budget mensuel du secteur. Ni l'une ni l'autre ne doivent donc consommer ce budget
+// ni déclencher une alerte/autorisation de dépassement. À utiliser partout où l'on calcule
+// « combien reste du budget ALLOUÉ » — pas pour un total « toutes dépenses » (rapports,
+// rentabilité…) où projets et apports PAU doivent rester comptés (ils y sont déjà
+// neutralisés par le revenu compensatoire — versement client ou apport PAU — équivalent).
+export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, site = null) {
+  return depensesSecteurMois(depenses, secteurId, annee, mois, site)
+    .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau')
+    .filter((d) => d.source !== 'projet')
+}
+
+// Dépenses décaissées d'un secteur/mois, hors dépenses de PROJET uniquement (PAU inclus,
+// contrairement à depensesEntrepriseSecteurMois ci-dessus) — pour le bilan « Dépenses »/
+// « Solde » propre au secteur (écran Recettes & Dépenses) : un apport PAU dépensé reste
+// une charge réelle du secteur, neutralisée par le revenu PAU équivalent dans le même
+// bilan (cf. revenuPauSecteurMois) — la garder ici préserve ce netting. Une dépense de
+// PROJET, elle, n'a pas cette garantie de netting dans le mois courant (le versement
+// client peut arriver un autre mois, ou ne pas exister si le projet n'a pas de client) :
+// l'afficher fausserait le solde mensuel du secteur pour un montant qui ne lui appartient
+// pas. Elle reste visible, classée par projet, dans la liste générale E-DÉPENSES et
+// dans l'onglet Dépenses du projet lui-même (badge secteur) — jamais perdue, juste pas
+// comptée ici.
+export function depensesHorsProjetSecteurMois(depenses, secteurId, annee, mois, site = null) {
+  return depensesSecteurMois(depenses, secteurId, annee, mois, site)
+    .filter((d) => d.source !== 'projet')
+}
+
 // Reste du budget alloué à un secteur (+site pour Logistique) pour le mois d'une date
 // (format YYYY-MM-DD) — null si aucun budget n'est défini pour ce secteur/mois (pas de
 // comparaison possible, donc pas de déclenchement d'autorisation sur ce seul critère).
@@ -223,7 +257,7 @@ export function budgetRestantSecteur(budgets, depenses, secteurId, dateStr, site
   if (!annee || !mois || !secteurId) return null
   const alloue = budgetSecteur(budgets, secteurId, annee, mois, site)
   if (alloue <= 0) return null
-  return alloue - totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois, site))
+  return alloue - totalDepenses(depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, site))
 }
 
 // Apport du PAU compté comme un revenu du secteur/mois concerné : l'argent injecté par
@@ -257,7 +291,7 @@ export function secteursEnAlerte(budgets, depenses, annee, mois) {
   return secteursEtSites(true)
     .map((s) => {
       const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
-      const depense = totalDepenses(depensesSecteurMois(depenses, s.secteurId, annee, mois, s.site))
+      const depense = totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site))
       const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
       return { ...s, alloue, depense, pct, statut: statutBudget(pct) }
     })

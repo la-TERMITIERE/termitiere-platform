@@ -17,7 +17,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { formatDateShort } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { notifierBeneficiaire } from './notifications'
 
 const ACTION_INFO = {
@@ -167,7 +167,7 @@ export default function Autorisations() {
     if (!annee || !mois) return
     const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
     if (alloue <= 0) return
-    const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], d.secteurId, annee, mois, d.site))
+    const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], d.secteurId, annee, mois, d.site))
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct)
     if (statut.key === 'ok') return

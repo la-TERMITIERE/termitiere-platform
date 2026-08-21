@@ -186,7 +186,7 @@ function ChampResponsable({ value, onChange, users }) {
   )
 }
 
-const VIDE = { nom: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha', pourClient: true, clientNom: '', clientTelephone: '', montantContrat: '', usageInterne: '', versementMontant: '', versementDate: '' }
+const VIDE = { nom: '', lieu: '', type: 'autre', secteurId: '', statut: 'planification', priorite: 'normale', responsable: '', responsableUid: '', collaborateurs: [], dateDebut: '', dateFin: '', dureeIndeterminee: false, budget: '', description: '', superficie: '', superficieUnite: 'ha', pourClient: true, clientNom: '', clientTelephone: '', montantContrat: '', usageInterne: '', versementMontant: '', versementDate: '' }
 
 // Style des boutons de choix (priorité…) selon le ton associé — cohérent avec Badge.
 const TONE_BOUTON = {
@@ -211,7 +211,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
     if (editingProjet) {
       const p = editingProjet
       setForm({
-        nom: p.nom || '', type: p.type || 'autre', secteurId: p.secteurId || '', statut: p.statut || 'planification',
+        nom: p.nom || '', lieu: p.lieu || '', type: p.type || 'autre', secteurId: p.secteurId || '', statut: p.statut || 'planification',
         priorite: p.priorite || 'normale', responsable: p.responsable || '', responsableUid: p.responsableUid || '',
         collaborateurs: p.collaborateurs || [],
         dateDebut: p.dateDebut ? new Date(p.dateDebut).toISOString().slice(0, 10) : '',
@@ -318,6 +318,13 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
             <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               placeholder="ex : Poulailler Kara — extension"
               value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Lieu / chantier</label>
+            <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              placeholder="ex : Kara, Agbalépédogan, route Tsévié…"
+              value={form.lieu} onChange={(e) => setForm((f) => ({ ...f, lieu: e.target.value }))} />
+            <p className="mt-1 text-[11px] text-gray-400">Affiché à côté du nom du projet partout où ses tâches apparaissent, pour situer l'activité.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

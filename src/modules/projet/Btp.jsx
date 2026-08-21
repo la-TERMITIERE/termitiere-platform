@@ -56,6 +56,12 @@ function ProjetsAmbigus({ projets }) {
         const secteur = secteurEffectif(p)
         if (!p.secteurId) return { p, secteur, raison: 'secteur_absent' }
         if (secteur?.id === SECTEUR_BTP && !TYPES_BTP.includes(p.type)) return { p, secteur, raison: 'type_incoherent' }
+        // Cas symétrique du précédent : un TYPE clairement BTP (construction/aménagement)
+        // mais un secteur qui pointe explicitement ailleurs — un chantier saisi avec le
+        // mauvais secteur choisi à la main disparaît sinon complètement de ce volet BTP,
+        // sans qu'aucun des deux cas ci-dessus ne le détecte (secteurId EST renseigné, et
+        // il n'est PAS classé BAT).
+        if (TYPES_BTP.includes(p.type) && secteur?.id !== SECTEUR_BTP) return { p, secteur, raison: 'type_btp_secteur_autre' }
         return null
       })
       .filter(Boolean)
@@ -101,10 +107,12 @@ function ProjetsAmbigus({ projets }) {
         <h3 className="text-base font-bold text-amber-900">Projets à reclasser ({ambigus.length})</h3>
       </div>
       <p className="mb-3 text-xs text-amber-700">
-        Deux cas signalés ici : un secteur jamais fixé explicitement (déduit automatiquement du type,
-        potentiellement faux), ou un projet classé BTP dont le TYPE n'a rien de BTP (ex. agricole/élevage) —
-        ce second cas révèle aussi un secteur mal renseigné À LA MAIN, comme les dépenses MAXI-AGRO qui
-        remontaient à tort dans les dépenses BTP. Choisis le bon secteur pour chacun.
+        Trois cas signalés ici : un secteur jamais fixé explicitement (déduit automatiquement du type,
+        potentiellement faux), un projet classé BTP dont le TYPE n'a rien de BTP (ex. agricole/élevage) —
+        qui révèle un secteur mal renseigné À LA MAIN, comme les dépenses MAXI-AGRO qui remontaient à tort
+        dans les dépenses BTP — ou l'inverse : un TYPE clairement BTP (construction/aménagement) classé
+        dans un autre secteur, qui le rend invisible du volet Chantiers ci-dessous. Choisis le bon secteur
+        pour chacun.
       </p>
       <div className="space-y-2">
         {ambigus.map(({ p, secteur, raison }) => {
@@ -117,7 +125,9 @@ function ProjetsAmbigus({ projets }) {
                   Type : {type?.label || p.type || '—'} · actuellement classé dans <strong>{secteur?.label}</strong>
                   {raison === 'type_incoherent'
                     ? <span className="ml-1 font-semibold text-red-500">— incohérent avec ce type</span>
-                    : <span className="ml-1">(déduit par défaut, jamais fixé)</span>}
+                    : raison === 'type_btp_secteur_autre'
+                      ? <span className="ml-1 font-semibold text-red-500">— type BTP mais absent du volet Chantiers</span>
+                      : <span className="ml-1">(déduit par défaut, jamais fixé)</span>}
                 </p>
               </div>
               <select

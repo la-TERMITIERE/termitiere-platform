@@ -307,7 +307,7 @@ export default function ProjetsExplorer() {
               return (
                 <CarteChoix key={p.id} to={`/projet/projets/${secteurId}/${p.id}`}
                   color={secteurActuel?.color || '#0d9488'} icon={FolderKanban}
-                  titre={p.nom} sousTitre={`${p.nbTaches} tâche${p.nbTaches > 1 ? 's' : ''}`}
+                  titre={p.nom} sousTitre={`${p.lieu ? `📍 ${p.lieu} · ` : ''}${p.nbTaches} tâche${p.nbTaches > 1 ? 's' : ''}`}
                   badge={<Badge tone={statut.tone}>{statut.label}</Badge>}
                   actions={(
                     <>

@@ -419,7 +419,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                   {/* Titre + projet / phase */}
                   <p className="mt-2 font-bold leading-snug text-gray-800">{t.titre}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {projet && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">📋 {projet.nom}</span>}
+                    {projet && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">📋 {projet.nom}{projet.lieu ? ` — ${projet.lieu}` : ''}</span>}
                     {t.phase && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{t.phase}</span>}
                   </div>
 
@@ -612,7 +612,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
           </div>
 
           <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
-            <p className="text-xs font-bold uppercase text-teal-700">Coordonnées du prestataire</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">🔧 Coordonnées du prestataire</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire</label>
@@ -762,7 +762,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {projet && <div><span className="text-gray-500">Projet : </span><span className="font-semibold text-teal-700">{projet.nom}</span></div>}
+                {projet && <div><span className="text-gray-500">Projet : </span><span className="font-semibold text-teal-700">{projet.nom}{projet.lieu ? ` — ${projet.lieu}` : ''}</span></div>}
                 {detail.phase && <div><span className="text-gray-500">{libelleEtape(projet?.type)} : </span><span className="font-semibold">{detail.phase}</span></div>}
                 <div><span className="text-gray-500">Assigné à : </span><span className="font-semibold">{detail.assignee || '—'}</span></div>
                 <div><span className="text-gray-500">Date de début : </span><span className="font-semibold">{detail.dateDebut ? formatDateShort(detail.dateDebut) : '—'}</span></div>
