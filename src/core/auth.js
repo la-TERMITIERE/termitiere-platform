@@ -20,12 +20,14 @@ import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCou
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 import { oublierAbonnementPush } from './push'
+import { MODULES } from '../shared/modules'
 
 // Cible auto-hébergée : authentification via Supabase Auth (identités réelles + RLS).
 const USE_SUPABASE_AUTH = import.meta.env.VITE_USE_SUPABASE === 'true'
 
-// Liste de référence de tous les modules de la plateforme.
-const ALL_MODULES = ['agro', 'logistique', 'evenementiel', 'foncier', 'rh']
+// Liste de référence de tous les modules de la plateforme — dérivée de la source
+// unique (shared/modules.js) pour ne jamais rester en retard sur un nouveau module.
+const ALL_MODULES = MODULES.map((m) => m.id)
 
 // Recherche un profil par son identifiant de connexion (champ `login`).
 // Robuste aux identifiants contenant des caractères interdits comme clé RTDB.

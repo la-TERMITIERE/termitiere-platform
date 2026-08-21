@@ -175,6 +175,31 @@ export function coutsMatieresBriqueterie(inventaires = []) {
     }))
 }
 
+// ── Passerelle en lecture seule avec les remboursements au PAU ──────────────
+// Un remboursement (`depense_pau_remboursements`, saisi depuis le Dashboard) est une
+// vraie sortie d'argent de l'entreprise — il doit apparaître dans la liste des
+// Dépenses (contrairement à l'apport initial du PAU, revenu compensatoire, qui lui
+// reste hors de cette liste — cf. le filtre par défaut de Depenses.jsx). Converti au
+// format attendu, secteur d'origine conservé (déjà saisi sur le remboursement) pour
+// l'affichage, mais exclu de depensesEntrepriseSecteurMois : ce n'est pas une charge
+// du BUDGET ALLOUÉ de ce secteur (cf. Rentabilité, qui la traite en dépense GLOBALE).
+export function remboursementsPauVersDepenses(remboursements = []) {
+  return (remboursements || []).map((r) => ({
+    id: `remb_${r.id}`,
+    secteurId: r.secteurId,
+    categorie: 'remboursement_pau',
+    montant: Number(r.montant) || 0,
+    date: r.date ? String(r.date).slice(0, 10) : '',
+    description: `Remboursement au PAU${r.motif ? ' — ' + r.motif : ''}`,
+    natureFlux: natureFluxDefaut,
+    sourceFinancement: 'entreprise',
+    statut: 'decaissee',
+    source: 'remboursement_pau',
+    enregistrePar: r.enregistrePar || '—',
+    createdAt: r.createdAt || r.date || Date.now()
+  }))
+}
+
 // Document de budget effectif pour secteur+mois (+site pour Logistique). Résout le
 // fallback historique de Kara vers l'ancien document non tagué (cf. siteLogistiqueDe) —
 // Lomé, elle, n'a aucun historique et démarre donc toujours à « non défini ».
@@ -231,6 +256,9 @@ export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, 
   return depensesSecteurMois(depenses, secteurId, annee, mois, site)
     .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau')
     .filter((d) => d.source !== 'projet')
+    // Un remboursement au PAU (cf. remboursementsPauVersDepenses) est une dépense
+    // GLOBALE, pas la charge du budget mensuel d'un secteur (même logique que ci-dessus).
+    .filter((d) => d.source !== 'remboursement_pau')
 }
 
 // Dépenses décaissées d'un secteur/mois, hors dépenses de PROJET uniquement (PAU inclus,

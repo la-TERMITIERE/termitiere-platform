@@ -140,8 +140,11 @@ export default function PortalHome() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {MODULES.filter((m) => hasModule(m.id)).map((m) => {
-          const bientot = m.statut === 'bientot'
-          const clickable = !bientot
+          const enPreparation = m.statut === 'bientot' || m.statut === 'en_developpement'
+          // Le développeur (rôle `info`) peut entrer dans un module pas encore ouvert
+          // pour continuer à le construire — tout le monde d'autre le voit non
+          // cliquable, comme aujourd'hui pour Comptabilité.
+          const clickable = !enPreparation || role === 'info'
           return (
             <button
               key={m.id}
@@ -180,7 +183,11 @@ export default function PortalHome() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100">{m.nom}</h3>
-                    {bientot ? (
+                    {m.statut === 'en_developpement' ? (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
+                        En développement
+                      </span>
+                    ) : m.statut === 'bientot' ? (
                       <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-500 dark:bg-white/10 dark:text-gray-400">
                         Bientôt
                       </span>

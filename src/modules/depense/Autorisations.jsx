@@ -223,6 +223,10 @@ export default function Autorisations() {
                   </div>
                   <p className="mt-0.5 text-xs text-gray-500">{d.categorie || '—'} · {formatDateShort(d.date)}</p>
                   {d.description && <p className="mt-1 truncate text-sm text-gray-600">{d.description}</p>}
+                  <p className="mt-1 truncate text-[11px] text-gray-400">
+                    ✍️ Demandé par <b className="text-gray-600">{d.enregistrePar || '—'}</b>
+                    {d.approuveePar && <> · ✓ Approuvé par <b className="text-gray-600">{d.approuveePar}</b></>}
+                  </p>
                 </div>
                 <p className="shrink-0 text-lg font-extrabold text-gray-900">{Number(d.montant).toLocaleString('fr-FR')}<span className="ml-0.5 text-xs font-bold text-gray-400">FCFA</span></p>
               </button>

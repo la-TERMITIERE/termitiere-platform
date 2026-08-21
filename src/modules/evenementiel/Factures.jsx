@@ -15,6 +15,7 @@ import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { isFullAccessRole } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -32,8 +33,11 @@ const emptyFacture = () => ({
 
 export default function Factures() {
   const { role } = useAuth()
-  // Seuls les agents créent/modifient/suppriment des factures ; les autres consultent.
+  // Seuls les agents créent/modifient des factures ; les autres consultent. La
+  // suppression, elle, reste réservée à l'accès total — les agents modifient
+  // partout mais ne suppriment jamais (décision explicite).
   const peutFacturer = () => role === 'agent'
+  const peutSupprimer = isFullAccessRole(role)
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: ventes } = useCollection('evenementiel_ventes')
@@ -177,7 +181,7 @@ export default function Factures() {
           <button title="Voir le détail" onClick={() => setDetail(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
           <button title="PDF" onClick={() => generateFacturePDF(r)} className="rounded p-1.5 text-secondary hover:bg-sky-50"><FileDown size={16} /></button>
           {peutFacturer() && <button title="Modifier" onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
-          {peutFacturer() && <button title="Supprimer" onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
+          {peutSupprimer && <button title="Supprimer" onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
         </div>
       )
     }
