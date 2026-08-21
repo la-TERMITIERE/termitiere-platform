@@ -148,7 +148,9 @@ export const MODULE_NAV = {
     { label: 'Besoins', to: '/evenementiel/besoins', icon: PackagePlus, badgeKey: 'evenementielBesoins' },
     { label: 'Matériel & Matériaux', to: '/evenementiel/materiel', icon: Wrench, badgeKey: 'evenementielMateriel' },
     { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
-    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: ADMIN_VOLETS_ROLES },
+    // Paramètres ouverts aux agents (ajuster prix/tarifs/rendement) ; la réinitialisation
+    // des données reste réservée à l'administration (garde interne à l'écran).
+    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: [...ADMIN_VOLETS_ROLES, 'secretaire', 'agent'] },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle },
     { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires' }
   ],
