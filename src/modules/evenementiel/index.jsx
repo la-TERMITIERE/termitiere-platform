@@ -12,6 +12,7 @@ import SectorBesoins from '../../shared/besoins/SectorBesoins'
 import Materiel from './Materiel'
 import Pilotage from './Pilotage'
 import Marge from './Marge'
+import Transport from './Transport'
 import Params from './Params'
 import Clients from './Clients'
 import Journal from './Journal'
@@ -52,6 +53,7 @@ export default function EvenementielModule() {
       <Route path="production" element={<Production />} />
       <Route path="stock" element={<StockBriques />} />
       <Route path="ventes" element={<Ventes />} />
+      <Route path="transport" element={<Transport />} />
       <Route path="factures" element={<Factures />} />
       <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
       {/* Marge & Bénéfice : hiérarchie + secrétaire + AGENTS (visible par tous les agents). */}

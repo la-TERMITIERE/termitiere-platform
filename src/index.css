@@ -20,11 +20,20 @@ html, body, #root {
   margin: 0;
 }
 
+/* Lisibilité globale : base de police AGRANDIE. Les tailles Tailwind (text-sm,
+   text-xs, text-base…) sont en `rem`, donc toute l'écriture de la plateforme
+   grossit proportionnellement. Léger repli sur très petits écrans pour éviter
+   les débordements dans les tableaux denses. */
+html { font-size: 17px; }
+@media (max-width: 380px) { html { font-size: 16px; } }
+
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background: #faf6f5; /* blanc cassé chaud (teinte rouge très légère) */
   color: #1e293b;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 

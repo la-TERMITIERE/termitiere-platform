@@ -15,7 +15,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { canViewFinance } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor, serieColor, factureStatut } from './data'
-import { agregerAchatsVentes, previsionSerie } from './logic'
+import { agregerAchatsVentes, previsionSerie, ventesFactureesParEspece } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
 
 const PRESETS = [
@@ -311,6 +311,13 @@ export default function Dashboard() {
 
   const scopeLabel = scope === TOUTES ? 'Toutes les catégories' : scope
 
+  // Ventes réalisées par bête (factures certifiées) : bête, quantité, montant. 0 si rien.
+  const ventesBetes = useMemo(() => {
+    const rows = ventesFactureesParEspece(factures, especes, start, end)
+    return scope === TOUTES ? rows : rows.filter((r) => r.cat === scope)
+  }, [factures, especes, start, end, scope])
+  const totVentesBetes = ventesBetes.reduce((a, r) => ({ qte: a.qte + r.qte, montant: a.montant + r.montant }), { qte: 0, montant: 0 })
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -447,6 +454,45 @@ export default function Dashboard() {
                 scales: { y: { beginAtZero: true, ticks: { precision: 0, callback: (v) => formatNumber(v) } } }
               }} />
             : <p className="py-16 text-center text-sm text-gray-400">Pas assez de saisies sur la période pour tracer une courbe de croissance.</p>}
+        </div>
+      </Card>
+
+      {/* Ventes — bête vendue & montant (mouvements/flux des animaux). 0 si aucune vente. */}
+      <Card title={`Ventes — bête vendue & montant — ${scopeLabel}`}>
+        <p className="mb-2 text-[11px] text-gray-400">Ventes certifiées de la période : quelle bête, quelle quantité{showFinance ? ' et pour quel montant' : ''}.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Bête vendue</th>
+                {scope === TOUTES && <th className="px-2 py-2 text-left">Catégorie</th>}
+                <th className="px-2 py-2 text-center">Quantité vendue</th>
+                {showFinance && <th className="px-3 py-2 text-right">Montant</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {ventesBetes.map((v) => (
+                <tr key={v.id}>
+                  <td className="px-3 py-1.5 font-semibold">{v.nom}</td>
+                  {scope === TOUTES && <td className="px-2 py-1.5 font-semibold" style={{ color: catColor(v.cat) }}>{v.cat}</td>}
+                  <td className="px-2 py-1.5 text-center font-bold text-green-600">{formatNumber(v.qte)}</td>
+                  {showFinance && <td className="px-3 py-1.5 text-right font-bold">{formatMoney(v.montant)}</td>}
+                </tr>
+              ))}
+              {!ventesBetes.length && (
+                <tr><td colSpan={2 + (scope === TOUTES ? 1 : 0) + (showFinance ? 1 : 0)} className="px-3 py-6 text-center text-gray-400">Aucune vente sur la période — <strong className="text-gray-600">0</strong></td></tr>
+              )}
+            </tbody>
+            {ventesBetes.length > 0 && (
+              <tfoot className="bg-gray-50 font-bold">
+                <tr>
+                  <td className="px-3 py-2" colSpan={scope === TOUTES ? 2 : 1}>Total</td>
+                  <td className="px-2 py-2 text-center text-green-700">{formatNumber(totVentesBetes.qte)}</td>
+                  {showFinance && <td className="px-3 py-2 text-right">{formatMoney(totVentesBetes.montant)}</td>}
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
       </Card>
 
