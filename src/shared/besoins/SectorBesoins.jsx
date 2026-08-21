@@ -149,11 +149,14 @@ export default function SectorBesoins({ secteurId }) {
   const editingLive = editing ? besoins.find((b) => b.id === editing.id) || editing : null
 
   // Tout nouveau besoin remonte à PAU/GE/directeur/info/superviseur (cf. BESOINS_NOTIF_ROLES).
+  // `type: 'demande'` (comme une demande d'autorisation) → notification URGENTE :
+  // vrai push + notification système persistante immédiate (cf. TYPES_URGENTS de notify.js),
+  // pour que chaque besoin exprimé soit signalé aussitôt, exactement comme une autorisation.
   async function notifierAdmin(titre) {
     const demandeurTel = user?.telephone ? ` · ☎ ${user.telephone}` : ''
     await notify({
-      type: 'info',
-      title: `📦 Nouveau besoin — ${secteur.label}`,
+      type: 'demande',
+      title: `📦 Nouveau besoin à valider — ${secteur.label}`,
       body: `${titre} — en attente de validation · ✍️ ${user?.nom || user?.login || '—'}${demandeurTel}`,
       module: secteurId, forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: `/${secteurId}/besoins`
     }).catch(() => {})
