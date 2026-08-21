@@ -394,7 +394,10 @@ export default function Demandes() {
               const totalQte = (d.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0) || d.qte || 0
               const enCorrectif = correctifEnCours(d)
               const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande || peutAnnulerAgent })
-              const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: gereCetteDemande })
+              // Correctif ouvert à TOUT agent (pas seulement l'auteur) — comme l'annulation :
+              // n'importe quel agent peut demander une correction d'une autorisation certifiée
+              // (ex. reprendre le dossier d'un collègue). La hiérarchie tranche de toute façon.
+              const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: gereCetteDemande || peutAnnulerAgent })
               return (
               <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
                 <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white'} group-hover:bg-gray-50`}>{d.num}</td>
