@@ -94,6 +94,7 @@ const BUCKET_DEVIS = (categorie) => (categorie === 'main_oeuvre' ? 'Main d\'œuv
 const VIDE = {
   projetId: '', tacheId: '', section: '', titre: '', categorie: 'materiaux',
   unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: '',
+  fournisseur: '', fournisseurTelephone: '',
   piecesEnAttente: []
 }
 const ligneVide = () => ({ categorie: 'materiaux', titre: '', unite: '', quantite: '', prixUnitaire: '', priorite: 'normale', dateSouhaitee: '', note: '' })
@@ -182,7 +183,7 @@ export default function Besoins() {
       projetId: b.projetId || '', tacheId: b.tacheId || '', section: b.section || '', titre: b.titre || '', categorie: b.categorie || 'materiaux',
       unite: b.unite || '', quantite: b.quantite ?? '', prixUnitaire: b.prixUnitaire ?? '', priorite: b.priorite || 'normale',
       dateSouhaitee: b.dateSouhaitee ? new Date(b.dateSouhaitee).toISOString().slice(0, 10) : '',
-      note: b.note || ''
+      note: b.note || '', fournisseur: b.fournisseur || '', fournisseurTelephone: b.fournisseurTelephone || ''
     })
     setEditing(b); setModal(true)
   }
@@ -220,7 +221,7 @@ export default function Besoins() {
     }).catch(() => {})
   }
 
-  const formValide = form.titre.trim() !== '' && !!form.projetId && form.quantite !== '' && Number(form.quantite) > 0
+  const formValide = form.titre.trim() !== '' && !!form.projetId && form.quantite !== '' && Number(form.quantite) > 0 && form.fournisseur.trim() !== ''
 
   const handleSave = async () => {
     if (!formValide) return
@@ -382,6 +383,11 @@ export default function Besoins() {
       // sur le besoin (`valideParText`/`valideLe`, cf. `validerBesoin` ci-dessous).
       enregistrePar: b.demandePar || user?.nom || user?.login || '—',
       enregistreParUid: b.demandeParUid || user?.uid || null,
+      // Bénéficiaire = qui reçoit réellement l'argent une fois décaissé — distinct du
+      // demandeur (enregistrePar, ci-dessus). Champ optionnel du besoin (cf. formulaire) ;
+      // rejoint le même schéma « beneficiaire* » que E-DÉPENSES pour bénéficier de son
+      // affichage/notification/confirmation de réception sans rien dupliquer.
+      beneficiaireNom: b.fournisseur || '', beneficiaireTelephone: b.fournisseurTelephone || '',
       createdAt: Date.now()
     })
     return id
@@ -612,7 +618,7 @@ export default function Besoins() {
                     <td className={`${cell} rounded-l-2xl border-l-[3px] px-4`} style={{ borderColor: accent }}>
                       <p className="whitespace-nowrap text-xs font-semibold text-gray-700">{b.createdAt ? formatDateShort(b.createdAt) : '—'}</p>
                       {projet && (
-                        <span className="mt-1 inline-block max-w-[140px] truncate whitespace-nowrap rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700" title={projet.nom}>
+                        <span className="mt-1 inline-block max-w-[140px] truncate whitespace-nowrap rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700" title={projet.lieu ? `${projet.nom} — ${projet.lieu}` : projet.nom}>
                           {projet.nom}
                         </span>
                       )}
@@ -634,6 +640,7 @@ export default function Besoins() {
                     </td>
                     <td className={`${cell} px-4`}>
                       <p className="text-[11px] text-gray-400">✍️ <span className="font-semibold text-gray-600">{b.demandePar || '—'}</span></p>
+                      {b.fournisseur && <p className="mt-0.5 text-[11px] text-gray-400">👤 <span className="font-semibold text-gray-600">{b.fournisseur}</span></p>}
                       {telephoneDe(b.demandeParUid) && <p className="text-[10px] text-gray-400">☎ {telephoneDe(b.demandeParUid)}</p>}
                       {b.createdAt && <p className="text-[10px] text-gray-400">{formatDateTime(b.createdAt)}</p>}
                     </td>
@@ -761,6 +768,22 @@ export default function Besoins() {
                   {((Number(form.quantite) || 0) * (Number(form.prixUnitaire) || 0)).toLocaleString('fr-FR')} FCFA
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">👤 Bénéficiaire — qui reçoit les fonds</p>
+            <div className="grid grid-cols-2 gap-3">
+              <FormGroup label="Fournisseur / prestataire" required hint="À qui l'argent sera remis une fois décaissé">
+                <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="ex : Quincaillerie du Marché, Kofi Adjovi…"
+                  value={form.fournisseur} onChange={(e) => setForm((f) => ({ ...f, fournisseur: e.target.value }))} />
+              </FormGroup>
+              <FormGroup label="Téléphone" hint="Optionnel">
+                <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  placeholder="ex : 90 00 00 00"
+                  value={form.fournisseurTelephone} onChange={(e) => setForm((f) => ({ ...f, fournisseurTelephone: e.target.value }))} />
+              </FormGroup>
             </div>
           </div>
 
@@ -1077,6 +1100,11 @@ export default function Besoins() {
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 font-semibold text-teal-800">
                     ✍️ Demandé par {b.demandePar || '—'}{telephoneDe(b.demandeParUid) ? ` · ☎ ${telephoneDe(b.demandeParUid)}` : ''}{b.createdAt ? ` · ${formatDateTime(b.createdAt)}` : ''}
                   </span>
+                  {b.fournisseur && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 font-semibold text-violet-800">
+                      👤 Bénéficiaire : {b.fournisseur}{b.fournisseurTelephone ? ` · ☎ ${b.fournisseurTelephone}` : ''}
+                    </span>
+                  )}
                   {b.valideParText && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 font-semibold text-green-800">
                       ✅ Validé par {b.valideParText}{b.valideLe ? ` · ${formatDateTime(b.valideLe)}` : ''}

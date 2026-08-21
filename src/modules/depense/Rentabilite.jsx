@@ -28,6 +28,7 @@ export default function Rentabilite() {
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
+  const { data: remboursementsPau }   = useCollection('depense_pau_remboursements')
 
   // Comme Dashboard/Analyses/Flux : on inclut les dépenses de chantier E-G.Pro et le coût
   // des matières Briqueterie pour que la marge par secteur reflète toutes les dépenses réelles.
@@ -66,8 +67,17 @@ export default function Rentabilite() {
     .sort((a, b) => b.marge - a.marge),
   [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
 
+  // Remboursements au PAU du mois sélectionné : l'apport initial compte déjà comme
+  // un revenu du secteur/mois où il a été reçu (cf. revenuSecteur → revenuPauSecteurMois).
+  // Le restituer est une sortie d'argent réelle pour l'entreprise — une DÉPENSE (pas une
+  // réduction du revenu, qui reste ce que l'exploitation a rapporté) — mais ce n'est pas
+  // la charge d'un secteur précis (le PAU avait financé le secteur, pas l'inverse) : elle
+  // s'ajoute donc à la dépense GLOBALE (tous secteurs confondus), jamais à un secteur.
+  const prefixeMois = `${annee}-${String(mois).padStart(2, '0')}`
+  const rembourseMois = totalDepenses(remboursementsPau.filter((r) => (r.date || '').startsWith(prefixeMois)))
+
   const totalRevenu  = secteurs.reduce((s, x) => s + x.revenu, 0)
-  const totalDepense = secteurs.reduce((s, x) => s + x.depense, 0)
+  const totalDepense = secteurs.reduce((s, x) => s + x.depense, 0) + rembourseMois
   const margeGlobale = totalRevenu - totalDepense
 
   const barData = {
@@ -121,8 +131,11 @@ export default function Rentabilite() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard title="Revenu total réalisé" value={`${fmt(totalRevenu)} FCFA`} icon={TrendingUp} accent="#059669" />
-        <StatCard title="Dépense totale décaissée" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent="#dc2626" />
+        <StatCard title="Revenu total réalisé" value={`${fmt(totalRevenu)} FCFA`}
+          icon={TrendingUp} accent="#059669" />
+        <StatCard title="Dépense totale décaissée" value={`${fmt(totalDepense)} FCFA`}
+          sub={rembourseMois > 0 ? `dont ${fmt(rembourseMois)} FCFA remboursés au PAU ce mois` : undefined}
+          icon={TrendingDown} accent="#dc2626" />
         <StatCard
           title="Marge globale"
           value={`${fmt(margeGlobale)} FCFA`}

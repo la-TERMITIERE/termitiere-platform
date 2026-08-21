@@ -22,6 +22,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
+import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
@@ -139,6 +140,14 @@ export default function Factures() {
         payload.statut = 'brouillon'   // ← toute nouvelle facture démarre en brouillon
         await addItem('agro_factures', payload)
         await audit('agro', 'FACTURE', `${payload.numero} (brouillon) — ${formatMoney(totalTTC)}`)
+        // Notification immédiate à la GE et au PAU (tout enregistrement doit les alerter).
+        const especesFacture = [...new Set(lignes.map((l) => l.article).filter(Boolean))].join(', ')
+        await notify({
+          type: 'info',
+          title: `Nouvelle facture — ${user.nom}`,
+          body: `${payload.numero} · ${payload.client?.nom || ''}${especesFacture ? ` — ${especesFacture}` : ''} · ${formatMoney(totalTTC)}`,
+          module: 'agro', forRoles: ['ge', 'pau'], excludeUid: user.uid || user.login, link: '/agro/factures'
+        })
         toast.success('Brouillon créé ✓')
       }
       setModal(null)
@@ -269,6 +278,7 @@ export default function Factures() {
                 <th className="sticky left-0 z-30 bg-gray-50 px-3 py-2 text-left">N°</th>
                 <th className="px-3 py-2 text-left">Date</th>
                 <th className="px-3 py-2 text-left">Client</th>
+                <th className="px-3 py-2 text-left">Espèce(s) / Article(s)</th>
                 <th className="px-3 py-2 text-right">Total TTC</th>
                 <th className="px-3 py-2 text-center">Statut</th>
                 <th className="px-3 py-2 text-right">Actions</th>
@@ -284,6 +294,22 @@ export default function Factures() {
                     <td className="sticky left-0 z-10 bg-white px-3 py-2 font-mono text-xs group-hover:bg-gray-50">{f.numero}</td>
                     <td className="px-3 py-2">{formatDateShort(f.date)}</td>
                     <td className="px-3 py-2">{f.client?.nom || '—'}</td>
+                    <td className="px-3 py-2">
+                      {(() => {
+                        const arts = lignesEffectives(f).filter((l) => (l.article || '').trim())
+                        if (!arts.length) return <span className="text-gray-400">—</span>
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {arts.map((l, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs">
+                                <span className="font-semibold text-gray-700">{l.article}</span>
+                                <span className="text-gray-400">×{formatNumber(l.qte)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-3 py-2 text-right font-bold">{formatMoney(tot.totalTTC)}</td>
                     <td className="px-3 py-2 text-center">
                       <Badge tone={sd.tone}>{sd.label}</Badge>
@@ -309,7 +335,7 @@ export default function Factures() {
                   </tr>
                 )
               })}
-              {!liste.length && <tr><td colSpan={6} className="py-10 text-center text-gray-400">Aucune facture.</td></tr>}
+              {!liste.length && <tr><td colSpan={7} className="py-10 text-center text-gray-400">Aucune facture.</td></tr>}
             </tbody>
           </table>
         </div>

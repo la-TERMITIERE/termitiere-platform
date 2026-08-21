@@ -36,7 +36,7 @@ if (useSupabase) console.info('[db] Backend de données : PostgreSQL / Supabase 
 let _lireRole = () => null
 export function _brancherRoleCourant(fn) { _lireRole = fn }
 
-const ECRITURES = ['addItem', 'setItem', 'updateItem', 'removeItem', 'claimOnce']
+const ECRITURES = ['addItem', 'setItem', 'updateItem', 'removeItem', 'claimOnce', 'updateAtomic']
 
 function protegerEcriture(nom, fn) {
   return (...args) => {
@@ -61,6 +61,7 @@ export const setItem = protegerEcriture('setItem', impl.setItem)
 export const updateItem = protegerEcriture('updateItem', impl.updateItem)
 export const removeItem = protegerEcriture('removeItem', impl.removeItem)
 export const claimOnce = protegerEcriture('claimOnce', impl.claimOnce)
+export const updateAtomic = protegerEcriture('updateAtomic', impl.updateAtomic)
 
 // Garde-fou de développement : si une nouvelle fonction d'écriture est ajoutée à
 // l'implémentation sans être protégée ici, on le signale au lieu de le découvrir

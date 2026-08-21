@@ -80,6 +80,26 @@ export async function claimOnce(name, id, data = {}) {
   return true
 }
 
+// Équivalent de db.firebase.js → updateAtomic : relit TOUJOURS la ligne depuis le
+// serveur (jamais l'instantané local du polling, potentiellement pas à jour) juste
+// avant d'écrire, pour que plusieurs écritures rapprochées sur le même document
+// s'accumulent au lieu de s'écraser. `updater(currentDataOuNull)` renvoie le
+// nouveau contenu complet, ou `undefined` pour annuler.
+export async function updateAtomic(name, id, updater) {
+  checkRate(name, 'write')
+  const { data: existing } = await supabase.from(table(name)).select('data').eq('id', id).maybeSingle()
+  const next = updater(existing ? existing.data : null)
+  if (next === undefined) return
+  const payload = sanitizeData(next)
+  if (existing) {
+    const { error } = await supabase.from(table(name)).update({ data: payload }).eq('id', id)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await supabase.from(table(name)).insert({ id, data: payload, created_at: new Date().toISOString() })
+    if (error) throw new Error(error.message)
+  }
+}
+
 // « Temps réel » par interrogation périodique. Renvoie une fonction de désinscription.
 export function subscribeCollection(name, callback) {
   let stopped = false

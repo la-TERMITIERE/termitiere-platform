@@ -16,6 +16,7 @@ import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../util
 import { ouvrirPiece } from '../../utils/fichiers'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
+import { toast } from '../../core/notifications'
 import { STATUTS_PROJET, CATEGORIES_DEPENSE_PROJET as CATEGORIES } from './data'
 import { STATUTS_DECAISSEMENT } from '../depense/data'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
@@ -323,6 +324,8 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
 
   const handleSave = async () => {
     if (!form.montant || !form.projetId) return
+    if (!form.description || !form.description.trim()) return toast.error('Description requise — précisez le motif de la dépense')
+    if (!form.fournisseur || !form.fournisseur.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
     setSaving(true)
     try {
       const now = Date.now()
@@ -549,6 +552,12 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="whitespace-nowrap text-xs font-semibold text-gray-500">{formatDateShort(d.date)}</span>
                         {projet && <Badge tone={STATUTS_PROJET[projet.statut]?.tone}>{projet.nom}</Badge>}
+                        {projet && secteurEffectif(projet) && (
+                          <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: secteurEffectif(projet).color + '1a', color: secteurEffectif(projet).color }}>
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: secteurEffectif(projet).color }} />
+                            {secteurEffectif(projet).label}
+                          </span>
+                        )}
                         {/* Tâche qui justifie la dépense — affichée explicitement, pas seulement
                             déduite de l'en-tête de groupe (qui peut être hors écran). */}
                         {tache && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">🔧 {tache.titre}</span>}
@@ -568,7 +577,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                       {d.description && <p className="mt-1 line-clamp-2 font-medium text-gray-700">{d.description}</p>}
                       {(d.fournisseur || d.prestataireMetier || d.prestataireTelephone) && (
                         <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
-                          {d.fournisseur && <span>👤 <span className="font-semibold text-gray-600">{d.fournisseur}</span></span>}
+                          {d.fournisseur && <span>👤 Prestataire : <span className="font-semibold text-gray-600">{d.fournisseur}</span></span>}
                           {d.prestataireMetier && <span>· {METIERS_PRESTATAIRE.find((m) => m.id === d.prestataireMetier)?.label || d.prestataireMetier}</span>}
                           {d.prestataireTelephone && <span>· ☎ {d.prestataireTelephone}</span>}
                         </p>
@@ -867,8 +876,9 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Description <span className="text-red-500">*</span></label>
             <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+              placeholder="Décrivez précisément la dépense : quoi, pourquoi, pour qui, dans quel contexte…"
               value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           </div>
 
@@ -903,7 +913,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
             <p className="text-xs font-bold uppercase text-teal-700">Coordonnées du prestataire</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire</label>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Nom du prestataire <span className="text-red-500">*</span></label>
                 <ChampAutocomplete
                   value={form.fournisseur}
                   suggestions={prestatairesConnus}
@@ -942,7 +952,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setModal(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={saving || !form.montant || !form.projetId}>
+            <Button onClick={handleSave} disabled={saving || !form.montant || !form.projetId || !form.description?.trim() || !form.fournisseur?.trim()}>
               {saving ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
           </div>

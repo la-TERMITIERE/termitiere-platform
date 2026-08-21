@@ -137,6 +137,7 @@ export const MODULE_NAV = {
     { label: 'Production', to: '/evenementiel/production', icon: Factory },
     { label: 'Stock briques', to: '/evenementiel/stock', icon: Package },
     { label: 'Ventes', to: '/evenementiel/ventes', icon: FileText },
+    { label: 'Transport', to: '/evenementiel/transport', icon: Truck },
     { label: 'Facturation', to: '/evenementiel/factures', icon: FileText },
     { label: 'Pilotage & Analyses', to: '/evenementiel/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Marge & Bénéfice', to: '/evenementiel/marge', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire', 'agent'] },

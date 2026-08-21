@@ -46,7 +46,7 @@ export default function ChargeTravail() {
       const cle = (t.assignee || '').trim() || NON_ASSIGNE
       if (!groupes.has(cle)) groupes.set(cle, { nom: cle === NON_ASSIGNE ? 'Non assigné' : cle, taches: [], secteurs: new Set() })
       const g = groupes.get(cle)
-      g.taches.push({ ...t, projetNom: projet?.nom || '—', secteur })
+      g.taches.push({ ...t, projetNom: projet?.nom || '—', projetLieu: projet?.lieu || '', secteur })
       if (secteur) g.secteurs.add(secteur.id)
     })
     return [...groupes.values()].map((g) => ({
@@ -155,7 +155,7 @@ export default function ChargeTravail() {
                     <Badge tone={statut.tone}>{statut.label}</Badge>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
-                    <span className="flex items-center gap-1"><FolderKanban size={11} /> {t.projetNom}</span>
+                    <span className="flex items-center gap-1"><FolderKanban size={11} /> {t.projetNom}{t.projetLieu ? ` — ${t.projetLieu}` : ''}</span>
                     {t.secteur && (
                       <span className="rounded-full px-1.5 py-0.5 font-bold" style={{ background: t.secteur.color + '1a', color: t.secteur.color }}>
                         {t.secteur.label}

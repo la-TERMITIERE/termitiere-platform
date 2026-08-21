@@ -12,7 +12,7 @@ import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
-import { setItem, ts, addItem } from '../../core/db'
+import { updateAtomic, ts, addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateShort, formatNumber, genId } from '../../utils/formatters'
@@ -159,26 +159,25 @@ export default function StockBriques() {
     if (!user) return
     setSaving(true)
     try {
-      const inv = getInventaire(inventaires, date) || {}
       // Fusion anti-écrasement : on applique l'ÉCART saisi par l'agent SUR l'état
-      // le plus frais en base. Ainsi une vente certifiée (qui décrémente `pret`)
-      // pendant que la page est ouverte n'est JAMAIS annulée par un enregistrement
-      // de stock — la cause première du « ça ne diminue pas » signalé par l'agent.
+      // le plus frais en base. Ainsi une vente certifiée (qui décrémente `pret`),
+      // ou une PRODUCTION enregistrée pendant que cette page est ouverte, n'est
+      // jamais annulée par cet enregistrement de stock.
+      //
+      // ÉCRITURE ATOMIQUE (updateAtomic, pas setItem) : le calcul de l'écart utilise
+      // l'instantané local (`stock`/`loadedRef`), mais son APPLICATION se fait dans
+      // le callback de la transaction, qui reçoit la valeur RÉELLEMENT en base au
+      // moment de l'écriture — jamais un instantané local potentiellement pas encore
+      // à jour (cause du bug « une saisie en écrase une autre »).
       const ETATS = ['appatam', 'sechage', 'pret', 'caillasses']
       const baseline = loadedRef.current || {}
-      const briquesData = {}
+      const deltasBriques = {}
       briques.forEach((b) => {
         const local = stock[b.id] || {}
         const base = baseline[b.id] || {}
-        const dbCur = inv.briques?.[b.id] || {}
-        const merged = {}
-        ETATS.forEach((e) => {
-          const localV = parseInt(local[e]) || 0
-          const baseV = parseInt(base[e]) || 0
-          const dbV = dbCur[e] != null ? (parseInt(dbCur[e]) || 0) : baseV
-          merged[e] = Math.max(0, dbV + (localV - baseV))
-        })
-        briquesData[b.id] = merged
+        const d = {}
+        ETATS.forEach((e) => { d[e] = (parseInt(local[e]) || 0) - (parseInt(base[e]) || 0) })
+        deltasBriques[b.id] = d
       })
       // Recompose le stock matières (init + arrivages − consommations production).
       const matieresData = {}
@@ -195,9 +194,23 @@ export default function StockBriques() {
           coutEntrees: (cur.entrees || []).reduce((s, l) => s + (parseFloat(l.qte) || 0) * (parseFloat(l.cout) || 0), 0)
         }
       })
-      await setItem('evenementiel_inventaires', date, {
-        ...inv, date, briques: briquesData, savedAt: ts(), agentId: user.uid, agentNom: user.nom,
-        matieres: matieresData
+      await updateAtomic('evenementiel_inventaires', date, (inv) => {
+        inv = inv || {}
+        const briquesData = { ...(inv.briques || {}) }
+        briques.forEach((b) => {
+          const dbCur = briquesData[b.id] || {}
+          const base = baseline[b.id] || {}
+          const merged = {}
+          ETATS.forEach((e) => {
+            const dbV = dbCur[e] != null ? (parseInt(dbCur[e]) || 0) : (parseInt(base[e]) || 0)
+            merged[e] = Math.max(0, dbV + deltasBriques[b.id][e])
+          })
+          briquesData[b.id] = merged
+        })
+        return {
+          ...inv, date, briques: briquesData, savedAt: ts(), agentId: user.uid, agentNom: user.nom,
+          matieres: matieresData
+        }
       })
       await audit('evenementiel', 'STOCK_BRIQUES', `Stock briques du ${date}`)
       toast.success('Stock enregistré ✓')

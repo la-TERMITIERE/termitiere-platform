@@ -403,6 +403,7 @@ export default function Projets() {
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
                           <span className="font-mono">{p.num}</span>
                           <span>· {TYPES_PROJET.find((t) => t.id === p.type)?.label || p.type}</span>
+                          {p.lieu && <span>· 📍 {p.lieu}</span>}
                           {secteurEffectif(p) && (
                             <span className="flex items-center gap-1">
                               · <span className="h-2 w-2 rounded-full" style={{ background: secteurEffectif(p).color }} />
@@ -578,7 +579,7 @@ export default function Projets() {
 
               {d.description && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Description</p>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Description</p>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.description}</p>
                 </div>
               )}
@@ -587,7 +588,7 @@ export default function Projets() {
               {d.pourClient !== false && (contrat > 0 || versements.length > 0) && (
                 <div className="rounded-2xl border border-violet-100/70 bg-violet-50/60 p-3.5 shadow-sm backdrop-blur-sm">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-bold uppercase text-violet-700">💰 Suivi du client</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">💰 Suivi du client</p>
                     {!lectureSeule && (
                       <button onClick={() => ouvrirVersementClient(d)}
                         className="rounded-lg border border-violet-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-violet-700 shadow-sm transition-all duration-200 hover:bg-violet-50 hover:shadow-[0_0_14px_2px_rgba(124,58,237,0.45)]">
@@ -636,7 +637,7 @@ export default function Projets() {
               {budget > 0 && (
                 <div className="rounded-2xl border border-teal-100/70 bg-teal-50/60 p-3.5 shadow-sm backdrop-blur-sm">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-bold uppercase text-teal-700">Suivi budgétaire</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">📊 Suivi budgétaire</p>
                     <button onClick={() => ouvrirRevision(d)}
                       className="rounded-lg border border-teal-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 shadow-sm transition-all duration-200 hover:bg-teal-50 hover:shadow-[0_0_14px_2px_rgba(13,148,136,0.55)]">
                       Réviser le budget
@@ -678,7 +679,7 @@ export default function Projets() {
               {/* Avancement des tâches */}
               {tachesDuProjet.length > 0 && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Avancement des tâches</p>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Avancement des tâches</p>
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 flex-1 rounded-full bg-gray-100">
                       <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
@@ -705,7 +706,7 @@ export default function Projets() {
 
               {/* Commentaires du projet — adressés au responsable */}
               <div className="border-t border-gray-100 pt-4">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Commentaires</p>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Commentaires</p>
                 {(() => {
                   const commsProjet = commentaires
                     .filter((c) => c.projetId === d.id)

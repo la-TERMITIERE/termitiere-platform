@@ -13,18 +13,16 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { isReadOnlyRole } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
-import { addItem, setItem, ts } from '../../core/db'
+import { addItem, updateAtomic, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatNumber } from '../../utils/formatters'
 import { DUREE_PRODUCTION_OPTIONS } from './data'
-import { getInventaire } from './logic'
 
 export default function Production() {
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
   const { data: productions } = useCollection('evenementiel_productions')
-  const { data: inventaires } = useCollection('evenementiel_inventaires')
   const briques = useBriqueterieStore((s) => s.briques.filter((b) => b.id !== 'caillasses'))
 
   const [open, setOpen] = useState(false)
@@ -62,21 +60,29 @@ export default function Production() {
     // Mise à jour inventaire du jour : stock appatam (les briques produites).
     // La consommation des matières premières est saisie MANUELLEMENT dans l'onglet
     // Stock briques (pas de déduction automatique par recette) → on préserve `matieres`.
-    const inv = getInventaire(inventaires, form.date) || { date: form.date, matieres: {}, briques: {} }
-    const briquesStock = { ...(inv.briques || {}) }
-    lignes.forEach((l) => {
-      const cur = briquesStock[l.briqueId] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
-      briquesStock[l.briqueId] = { ...cur, appatam: (cur.appatam || 0) + l.qte }
-    })
-    if (form.caillasses > 0) {
-      const cur = briquesStock.caillasses || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
-      briquesStock.caillasses = { ...cur, caillasses: (cur.caillasses || 0) + parseInt(form.caillasses) }
-    }
-
-    await setItem('evenementiel_inventaires', form.date, {
-      ...inv, date: form.date, savedAt: ts(),
-      matieres: inv.matieres || {}, briques: briquesStock,
-      agentId: user.uid, agentNom: user.nom
+    //
+    // ÉCRITURE ATOMIQUE (updateAtomic, pas setItem) : plusieurs productions du même
+    // jour (ex. Machine 1, 2, 3 saisies à la suite) écrivent sur le MÊME document.
+    // Un simple read-then-write basé sur l'instantané local (`inventaires`) risquait
+    // de faire écraser une production par la suivante si le listener temps réel
+    // n'avait pas encore rattrapé l'écriture précédente — updateAtomic relit
+    // toujours la valeur réelle en base au moment de l'écriture.
+    await updateAtomic('evenementiel_inventaires', form.date, (cur) => {
+      cur = cur || { date: form.date, matieres: {}, briques: {} }
+      const briquesStock = { ...(cur.briques || {}) }
+      lignes.forEach((l) => {
+        const c = briquesStock[l.briqueId] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+        briquesStock[l.briqueId] = { ...c, appatam: (c.appatam || 0) + l.qte }
+      })
+      if (form.caillasses > 0) {
+        const c = briquesStock.caillasses || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+        briquesStock.caillasses = { ...c, caillasses: (c.caillasses || 0) + parseInt(form.caillasses) }
+      }
+      return {
+        ...cur, date: form.date, savedAt: ts(),
+        matieres: cur.matieres || {}, briques: briquesStock,
+        agentId: user.uid, agentNom: user.nom
+      }
     })
 
     await audit('evenementiel', 'PRODUCTION', `${num} — ${formatNumber(totalBriques)} briques`)

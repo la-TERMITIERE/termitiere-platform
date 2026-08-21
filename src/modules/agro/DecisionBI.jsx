@@ -9,7 +9,7 @@ import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor } from './data'
-import { agregerAchatsVentes, mouvementsCategorie } from './logic'
+import { agregerAchatsVentes, mouvementsCategorie, ventesFactureesParEspece } from './logic'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 
 const TOUTES = '__TOUTES__'
@@ -305,6 +305,14 @@ export default function DecisionBI({
     return Object.entries(map).map(([nom, v]) => ({ nom, ...v })).sort((a, b) => b.ca - a.ca)
   }, [facturesPeriode, scope, catById])
 
+  // Ventes réalisées par bête (factures certifiées) : quelle bête, quelle quantité,
+  // quel montant — respecte le filtre de catégorie du haut. 0 si aucune vente.
+  const ventesBetes = useMemo(() => {
+    const rows = ventesFactureesParEspece(factures, especes, start, end)
+    return scope === TOUTES ? rows : rows.filter((r) => r.cat === scope)
+  }, [factures, especes, start, end, scope])
+  const totVentesBetes = ventesBetes.reduce((a, r) => ({ qte: a.qte + r.qte, montant: a.montant + r.montant }), { qte: 0, montant: 0 })
+
   const kpis = [
     { id: 'effectif', title: 'Effectif total', value: formatNumber(effectifTotal), sub: veille ? `${effectifTotal - effectifVeille >= 0 ? '+' : ''}${effectifTotal - effectifVeille} vs veille` : '', icon: Layers, color: '#BC3C31' },
     { id: 'ca', title: 'CA facturé', value: formatMoney(caTotal), sub: `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#16a34a' },
@@ -382,6 +390,44 @@ export default function DecisionBI({
           </div>
         </Card>
       </div>
+
+      {/* Ventes — bête vendue & montant (mouvements/flux des animaux). 0 si aucune vente. */}
+      <Card title="Ventes — bête vendue & montant (factures certifiées)">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Bête vendue</th>
+                <th className="px-3 py-2 text-left">Catégorie</th>
+                <th className="px-2 py-2 text-center">Quantité vendue</th>
+                <th className="px-3 py-2 text-right">Montant</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {ventesBetes.map((v) => (
+                <tr key={v.id} className="hover:bg-gray-50">
+                  <td className="px-3 py-1.5 font-semibold">{v.nom}</td>
+                  <td className="px-3 py-1.5 font-semibold" style={{ color: catColor(v.cat) }}>{v.cat}</td>
+                  <td className="px-2 py-1.5 text-center font-bold text-green-600">{formatNumber(v.qte)}</td>
+                  <td className="px-3 py-1.5 text-right font-bold">{formatMoney(v.montant)}</td>
+                </tr>
+              ))}
+              {!ventesBetes.length && (
+                <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400">Aucune vente sur la période — <strong className="text-gray-600">0</strong></td></tr>
+              )}
+            </tbody>
+            {ventesBetes.length > 0 && (
+              <tfoot className="bg-gray-50 font-bold">
+                <tr>
+                  <td className="px-3 py-2" colSpan={2}>Total ventes</td>
+                  <td className="px-2 py-2 text-center text-green-700">{formatNumber(totVentesBetes.qte)}</td>
+                  <td className="px-3 py-2 text-right">{formatMoney(totVentesBetes.montant)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </Card>
 
       {/* Évolution détaillée : un graphe par catégorie, une courbe par espèce.
           Métrique au choix : effectif, ventes, décès, chiffre d'affaires. */}

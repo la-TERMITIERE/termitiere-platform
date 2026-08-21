@@ -507,7 +507,7 @@ export default function Rapports() {
             <Bar data={budgetData} options={barOpts()} />
           </div>
           <p className="mt-2 text-center text-[10px] text-gray-400">
-            Renseignez le champ "Dépenses réelles" dans chaque projet pour activer le suivi.
+            Renseignez le budget prévu de chaque projet pour l'inclure ici — les dépenses réelles se calculent automatiquement à partir des décaissements enregistrés dans l'onglet Dépenses.
           </p>
         </Card>
       )}

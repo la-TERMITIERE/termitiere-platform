@@ -8,7 +8,7 @@ import { notify } from '../../core/notify'
 import { notifierBeneficiaire } from './notifications'
 import { genId } from '../../utils/formatters'
 import { SECTEURS, SEUIL_APPROBATION_PAU, sourceFinancementDefaut } from './data'
-import { budgetRestantSecteur, budgetSecteur, depensesSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
+import { budgetRestantSecteur, budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
 // Raison pour laquelle une dépense devient une demande d'autorisation, ou null si aucune.
@@ -27,7 +27,7 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses }) {
   if (!annee || !mois) return
   const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
   if (alloue <= 0) return
-  const depenseTotal = totalDepenses(depensesSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
+  const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
   const pct = Math.round((depenseTotal / alloue) * 100)
   const statut = statutBudget(pct)
   if (statut.key === 'ok') return
