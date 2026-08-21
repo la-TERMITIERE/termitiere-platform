@@ -13,7 +13,7 @@
 // partiel (cela casserait le report des autres articles) : la sortie sera prise en
 // compte naturellement lorsque la saisie de ce jour sera enregistrée (la colonne
 // Sorties lit déjà les demandes approuvées en direct).
-import { getAll, setItem } from '../../core/db'
+import { getAll, updateAtomic } from '../../core/db'
 import { getInventaire, previousInventoryDate, autoSorties } from './logic'
 import { estCertifie } from '../../shared/workflow'
 
@@ -35,33 +35,36 @@ export async function appliquerDemandeAuStock(demande) {
     // Total AUTORITAIRE des demandes approuvées pour cet article/cette date.
     const totalAuto = autoSorties(demandes, articleId, dateSortie, typeArticle)
 
-    const existing = inv[kind]?.[articleId]
-    // EF Initial : valeur enregistrée, sinon report de l'EF Final de la veille.
-    let init = existing?.init
-    if (init === undefined) {
+    // EF Initial de repli (report de l'EF Final de la veille) si le nœud n'a pas
+    // encore d'init — valeur HISTORIQUE stable, calculée hors transaction.
+    let initFallback = inv[kind]?.[articleId]?.init
+    if (initFallback === undefined) {
       const prevDate = previousInventoryDate(inventaires, dateSortie)
       const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
-      init = prevInv?.[kind]?.[articleId]?.fin ?? 0
+      initFallback = prevInv?.[kind]?.[articleId]?.fin ?? 0
     }
 
-    const base = existing || {
-      init, naiss: 0, ent: 0, sor: 0, dec: 0, fin: init, entrees: [], sorties: [], autoSor: 0
-    }
-    const prevAuto = base.autoSor || 0
-    const delta = totalAuto - prevAuto
-    if (delta === 0) return // déjà à jour (idempotent)
-
-    const node = {
-      ...base,
-      sor: (base.sor || 0) + delta,
-      fin: Math.max(0, (base.fin ?? init) - delta),
-      autoSor: totalAuto
-    }
-
-    const collMap = { ...(inv[kind] || {}), [articleId]: node }
-    // setItem fusionne au niveau du document : remplace le nœud `kind` (tous les
-    // articles préservés), laisse intacts l'autre type, savedAt, agentNom, etc.
-    await setItem('agro_inventaires', dateSortie, { [kind]: collMap })
+    // ÉCRITURE ATOMIQUE (transaction) : le delta s'applique sur l'état RÉELLEMENT en
+    // base au moment de l'écriture (pas sur l'instantané `getAll` potentiellement
+    // périmé). Sans cela, deux décomptes concurrents — ou une saisie enregistrée
+    // entre le getAll et l'écriture — s'écrasaient (« je saisis et ça ne vient pas »).
+    await updateAtomic('agro_inventaires', dateSortie, (cur) => {
+      if (!cur) return undefined // le doc a disparu entre-temps → ne rien recréer
+      const base = cur[kind]?.[articleId] || {
+        init: initFallback, naiss: 0, ent: 0, sor: 0, dec: 0, fin: initFallback, entrees: [], sorties: [], autoSor: 0
+      }
+      const init = base.init !== undefined ? base.init : initFallback
+      const prevAuto = base.autoSor || 0
+      const delta = totalAuto - prevAuto
+      if (delta === 0) return undefined // déjà à jour (idempotent) → n'écrit pas
+      const node = {
+        ...base,
+        sor: (base.sor || 0) + delta,
+        fin: Math.max(0, (base.fin ?? init) - delta),
+        autoSor: totalAuto
+      }
+      return { ...cur, [kind]: { ...(cur[kind] || {}), [articleId]: node } }
+    })
   } catch (e) {
     // best effort : ne jamais bloquer l'approbation à cause du décompte stock.
     console.warn('[applyDemande] échec application au stock :', e)

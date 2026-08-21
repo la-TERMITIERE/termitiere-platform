@@ -15,9 +15,9 @@ import { useBriqueterieStore } from './store/referentielStore'
 import { updateAtomic, ts, addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, formatDateShort, formatNumber, genId } from '../../utils/formatters'
+import { todayStr, formatDateShort, formatNumber, formatMoney, genId } from '../../utils/formatters'
 import { ETATS_BRIQUE, DUREE_SECHAGE_JOURS } from './data'
-import { getInventaire, previousInventoryDate, joursDepuis } from './logic'
+import { getInventaire, previousInventoryDate, joursDepuis, coutMatiereBrique } from './logic'
 
 const sumQte = (arr) => (arr || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0)
 
@@ -40,6 +40,7 @@ export default function StockBriques() {
   const briques = useBriqueterieStore((s) => s.briques)
   const matieres = useBriqueterieStore((s) => s.matieres)
   const saveBrique = useBriqueterieStore((s) => s.saveBrique)
+  const prixSacCiment = useBriqueterieStore((s) => s.prixSacCiment)
 
   const [date, setDate] = useState(todayStr())
   const [stock, setStock] = useState({})
@@ -262,6 +263,22 @@ export default function StockBriques() {
     setTransferModal(null)
   }
 
+  // Évaluation du stock par catégorie : quantité en stock (briques intactes =
+  // appatam + séchage + prêtes ; caillasses pour la ligne caillasses) × prix unitaire
+  // (tarif de vente) = valeur du stock ; × coût matériel unitaire (prix du sac ÷
+  // rendement) = coût brut de production. Totaux affichés en pied de tableau.
+  const qteEvaluable = (b, d) => b.id === 'caillasses'
+    ? (d?.caillasses || 0)
+    : ((d?.appatam || 0) + (d?.sechage || 0) + (d?.pret || 0))
+  const evaluations = briques.map((b) => {
+    const d = stock[b.id] || {}
+    const qte = qteEvaluable(b, d)
+    return { id: b.id, qte, cout: qte * coutMatiereBrique(b, prixSacCiment), valeur: qte * (parseFloat(b.tarifVente) || 0) }
+  })
+  const evalOf = Object.fromEntries(evaluations.map((e) => [e.id, e]))
+  const totalCout = evaluations.reduce((s, e) => s + e.cout, 0)
+  const totalValeur = evaluations.reduce((s, e) => s + e.valeur, 0)
+
   return (
     <div className="space-y-4">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
@@ -303,6 +320,8 @@ export default function StockBriques() {
                 {ETATS_BRIQUE.map((e) => (
                   <th key={e.id} className="px-2 py-2 text-center" style={{ color: e.color }}>{e.label.split(' ')[0]}</th>
                 ))}
+                <th className="px-2 py-2 text-right text-amber-700">Coût brut prod.</th>
+                <th className="px-2 py-2 text-right text-violet-700">Valeur stock</th>
                 <th className="px-2 py-2">Actions</th>
               </tr>
             </thead>
@@ -318,6 +337,8 @@ export default function StockBriques() {
                     {/* Caillasses : compteur par type en lecture seule (alimenté par la
                         casse) ; la ligne « caillasses » reste éditable (stock vendable). */}
                     <EtatCell value={d.caillasses} editable={peutSaisir && b.id === 'caillasses'} disabled={false} color="#4b5563" onChange={(v) => setEtat(b.id, 'caillasses', v)} />
+                    <td className="px-2 py-2 text-right font-semibold text-amber-700">{formatMoney(evalOf[b.id]?.cout || 0)}</td>
+                    <td className="px-2 py-2 text-right font-bold text-violet-700">{formatMoney(evalOf[b.id]?.valeur || 0)}</td>
                     <td className="px-2 py-2">
                       {b.id !== 'caillasses' && peutSaisir && TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
                         <button key={t.to} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: t.to, qte: 1, dateSechage: '' })}
@@ -336,8 +357,20 @@ export default function StockBriques() {
                 )
               })}
             </tbody>
+            <tfoot className="bg-gray-50 font-bold">
+              <tr>
+                <td className="px-3 py-2" colSpan={1 + ETATS_BRIQUE.length}>TOTAL</td>
+                <td className="px-2 py-2 text-right text-amber-700">{formatMoney(totalCout)}</td>
+                <td className="px-2 py-2 text-right text-violet-700">{formatMoney(totalValeur)}</td>
+                <td className="px-2 py-2" />
+              </tr>
+            </tfoot>
           </table>
         </div>
+        <p className="px-4 py-2 text-[11px] text-gray-400">
+          <strong>Valeur du stock</strong> = quantité en stock × prix unitaire (tarif de vente, réglé dans Paramètres).
+          <strong> Coût brut de production</strong> = quantité × (prix du sac de ciment ÷ rendement du type).
+        </p>
       </Card>
 
       {/* ── Stock des matières premières (ciment, gravier, sable) ── */}

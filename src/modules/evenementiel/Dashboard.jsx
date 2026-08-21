@@ -11,11 +11,12 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useBriqueterieStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
-import { stockBriqueTotal } from './logic'
+import { stockBriqueTotal, coutMatiereBrique } from './logic'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
 
 export default function Dashboard() {
   const briques = useBriqueterieStore((s) => s.briques)
+  const prixSacCiment = useBriqueterieStore((s) => s.prixSacCiment)
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const { data: productions } = useCollection('evenementiel_productions')
   const { data: factures } = useCollection('evenementiel_factures')
@@ -91,6 +92,51 @@ export default function Dashboard() {
     })).filter((p) => p.stock > 0)
   }, [dernier, briques])
 
+  // Évaluation du stock actuel par catégorie : quantité en stock (intactes =
+  // appatam + séchage + prêtes ; caillasses pour la ligne caillasses) × prix unitaire
+  // = valeur ; × coût matériel unitaire (prix du sac ÷ rendement) = coût brut de production.
+  const parTypeEval = useMemo(() => {
+    const br = dernier?.briques || {}
+    return briques.map((b) => {
+      const d = br[b.id] || {}
+      const qte = b.id === 'caillasses' ? (d.caillasses || 0) : ((d.appatam || 0) + (d.sechage || 0) + (d.pret || 0))
+      return { id: b.id, nom: b.nom, qte, cout: qte * coutMatiereBrique(b, prixSacCiment), valeur: qte * (parseFloat(b.tarifVente) || 0) }
+    }).filter((p) => p.qte > 0)
+  }, [dernier, briques, prixSacCiment])
+  const valeurStock = parTypeEval.reduce((s, p) => s + p.valeur, 0)
+  const coutBrutStock = parTypeEval.reduce((s, p) => s + p.cout, 0)
+
+  // Tableau de détail « valeur & coût du stock » (réutilisé par les deux cartes).
+  const tableEvalStock = (
+    <div className="overflow-hidden rounded-2xl border border-gray-100">
+      <table className="w-full text-sm">
+        <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+          <tr><th className="px-4 py-3 text-left">Type</th><th className="px-4 py-3 text-right">Qté en stock</th><th className="px-4 py-3 text-right">Coût brut prod.</th><th className="px-4 py-3 text-right">Valeur stock</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {parTypeEval.map((p, i) => (
+            <tr key={p.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+              <td className="px-4 py-2.5 font-semibold text-gray-800">{p.nom}</td>
+              <td className="px-4 py-2.5 text-right font-bold text-gray-700">{formatNumber(p.qte)}</td>
+              <td className="px-4 py-2.5 text-right font-semibold text-amber-700">{formatMoney(Math.round(p.cout))}</td>
+              <td className="px-4 py-2.5 text-right font-extrabold text-violet-700">{formatMoney(Math.round(p.valeur))}</td>
+            </tr>
+          ))}
+          {!parTypeEval.length && <tr><td colSpan={4} className="bg-white py-8 text-center text-sm text-gray-400">Aucun stock.</td></tr>}
+        </tbody>
+        {parTypeEval.length > 0 && (
+          <tfoot>
+            <tr className="border-t border-gray-200 bg-violet-50/60">
+              <td className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500" colSpan={2}>Total</td>
+              <td className="px-4 py-3 text-right font-extrabold text-amber-700">{formatMoney(Math.round(coutBrutStock))}</td>
+              <td className="px-4 py-3 text-right font-extrabold text-violet-700">{formatMoney(Math.round(valeurStock))}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  )
+
   // Couleurs cardinales bien distinctes (rouge, orange, vert, bleu, jaune…) —
   // remplacent l'ancienne palette « tout en violet » où les parts se confondaient.
   const CARDINALES = ['#dc2626', '#ea580c', '#16a34a', '#0284c7', '#ca8a04', '#7c3aed', '#0d9488', '#db2777', '#4f46e5', '#65a30d']
@@ -145,7 +191,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         <StatCard title="Production période" value={formatNumber(prodMois)} icon={Factory} accent="#7c3aed"
           variation={comparable ? prodMois - prodMoisPrec : undefined} variationLabel={`période préc. : ${formatNumber(prodMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Production de la période', render: (
@@ -269,6 +315,12 @@ export default function Dashboard() {
               </table>
             </div>
           ) })} />
+        <StatCard title="Valeur du stock" value={formatMoney(valeurStock)} icon={Package} accent="#7c3aed"
+          sub="quantité en stock × prix unitaire · cliquer"
+          onClick={() => setDetail({ titre: 'Valeur & coût du stock par catégorie', render: tableEvalStock })} />
+        <StatCard title="Coût brut de production" value={formatMoney(coutBrutStock)} icon={Factory} accent="#b45309"
+          sub="quantité × (prix du sac ÷ rendement) · cliquer"
+          onClick={() => setDetail({ titre: 'Valeur & coût du stock par catégorie', render: tableEvalStock })} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
