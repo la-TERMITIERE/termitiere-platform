@@ -25,7 +25,7 @@ import { setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
-import { todayStr, formatDateTime, genId } from '../../utils/formatters'
+import { todayStr, formatDateTime, formatDateShort, genId } from '../../utils/formatters'
 import { CAT_ANIMAUX, CAT_ALIMENTS, catColor } from './data'
 import {
   previousInventoryDate, getInventaire, autoSorties,
@@ -357,18 +357,33 @@ export default function Saisie() {
         })
       }
 
-      // « Message si enregistré » — confirmation aux responsables que la saisie est enregistrée.
+      // « Message si enregistré » — confirmation IMMÉDIATE à la GE et au PAU (tout
+      // enregistrement Maxi-Agro doit les alerter) + aux autres responsables.
       await notify({
         type: 'info',
         title: `Saisie enregistrée — ${user.nom}`,
-        body: `Saisie du ${date} enregistrée · ${totalTetes} têtes au total`,
+        body: `Saisie du ${formatDateShort(date)} enregistrée · ${totalTetes} têtes au total`,
         module: 'agro',
-        forRoles: APPROVER_ROLES,
+        forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])],
         excludeUid: user.uid,
         link: '/agro/saisie'
       })
 
-      toast.success('Saisie enregistrée ✓ — responsables notifiés')
+      // Modification d'un jour PASSÉ (« le chiffre de la veille » retouché après coup)
+      // → alerte URGENTE à la GE et au PAU (type 'demande' = push + notif persistante).
+      if (date < todayStr() && existing?.savedAt) {
+        await notify({
+          type: 'demande',
+          title: `⚠️ Chiffre d'un jour passé modifié — ${user.nom}`,
+          body: `La saisie du ${formatDateShort(date)} a été modifiée après coup · ${totalTetes} têtes au total`,
+          module: 'agro',
+          forRoles: ['ge', 'pau'],
+          excludeUid: user.uid,
+          link: '/agro/saisie'
+        })
+      }
+
+      toast.success('Saisie enregistrée ✓ — GE & PAU notifiés')
     } catch (e) {
       toast.error('Erreur : ' + e.message)
     } finally {

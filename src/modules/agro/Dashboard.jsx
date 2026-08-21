@@ -6,7 +6,7 @@
 // - Le CA n'est compté que sur les factures CERTIFIÉES.
 import { useMemo, useState } from 'react'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack } from 'lucide-react'
+import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
@@ -16,7 +16,7 @@ import { canViewFinance } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor, serieColor, factureStatut } from './data'
 import { agregerAchatsVentes, previsionSerie, ventesFactureesParEspece } from './logic'
-import { formatNumber, formatMoney, todayStr, addDays, formatDateShort } from '../../utils/formatters'
+import { formatNumber, formatMoney, todayStr, addDays, formatDateShort, formatDateTime } from '../../utils/formatters'
 
 const PRESETS = [
   { v: 'mois', label: 'Mois en cours' },
@@ -57,6 +57,14 @@ export default function Dashboard() {
   const tri = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1)), [inventaires])
   const dernier = tri[0]
   const invPeriode = useMemo(() => tri.filter((i) => i.date >= start && i.date <= end), [tri, start, end])
+
+  // Saisie du jour RÉELLEMENT enregistrée (savedAt) — distincte d'un report auto
+  // (qui n'a pas de savedAt). Permet à la GE/au PAU de voir en un coup d'œil si
+  // l'enregistrement du jour a été fait ou non.
+  const saisieDuJour = useMemo(
+    () => inventaires.find((i) => i.date === todayStr() && i.savedAt),
+    [inventaires]
+  )
 
   // Catégories présentes (base + personnalisées).
   const cats = useMemo(() => {
@@ -338,6 +346,19 @@ export default function Dashboard() {
           <p className="text-sm text-green-50/90">Élevage · Stock · Facturation · Analyses</p>
         </div>
       </div>
+
+      {/* Statut de la saisie du jour — visible d'un coup d'œil (GE / PAU : « est-ce fait ? ») */}
+      {saisieDuJour ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <CheckCircle2 size={18} className="shrink-0 text-green-600" />
+          <span><strong>Saisie du jour enregistrée</strong> — par {saisieDuJour.agentNom || '—'}{saisieDuJour.savedAt ? ` · ${formatDateTime(saisieDuJour.savedAt)}` : ''}</span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+          <span>Saisie du jour <strong>pas encore enregistrée</strong> aujourd'hui ({formatDateShort(todayStr())}).</span>
+        </div>
+      )}
 
       {/* Période */}
       <div className="flex flex-wrap items-end gap-3">
