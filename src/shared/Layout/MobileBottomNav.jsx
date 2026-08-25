@@ -15,6 +15,9 @@ import { canManagePartenaires, depenseRoleEffectif } from '../../core/roles'
 import { teinterHex } from '../../utils/color'
 
 const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
+// Modules multi-sites (Maxi Logistique, MAXI-GYM) : sous-application (site)
+// déduite du 2e segment de l'URL.
+const MULTISITE_MODULES = { logistique: LOG_SITES, gym: LOG_SITES }
 
 // Volets jugés essentiels au suivi/gestion quotidien de chaque module — en plus
 // du Dashboard (toujours inclus). Limité à 2 par module pour garder la barre lisible.
@@ -26,7 +29,8 @@ const ESSENTIELS = {
   rh: [],
   projet: ['/projet/projets', '/projet/taches'],
   garderie: ['/garderie/enfants', '/garderie/presences'],
-  depense: ['/depense/liste', '/depense/autorisations']
+  depense: ['/depense/liste', '/depense/autorisations'],
+  gym: ['/gym/seances', '/gym/abonnements']
 }
 
 export default function MobileBottomNav({ onOpenMenu }) {
@@ -38,7 +42,8 @@ export default function MobileBottomNav({ onOpenMenu }) {
   const parts = location.pathname.split('/')
   const seg = parts[1]
   const activeModule = getModule(seg)
-  const logSite = activeModule?.id === 'logistique' && LOG_SITES[parts[2]] ? parts[2] : null
+  const siteNames = MULTISITE_MODULES[activeModule?.id]
+  const logSite = siteNames && siteNames[parts[2]] ? parts[2] : null
 
   const navRole = activeModule?.id === 'depense' ? depenseRoleEffectif(role) : role
   const canSee = (item) => {
@@ -59,9 +64,10 @@ export default function MobileBottomNav({ onOpenMenu }) {
     ]
   } else {
     let nav = (MODULE_NAV[activeModule.id] || []).filter(canSee)
-    if (activeModule.id === 'logistique') {
+    if (siteNames) {
+      const base = `/${activeModule.id}`
       nav = logSite
-        ? nav.map((it) => ({ ...it, to: it.to === '/logistique' ? `/logistique/${logSite}` : it.to.replace('/logistique/', `/logistique/${logSite}/`) }))
+        ? nav.map((it) => ({ ...it, to: it.to === base ? `${base}/${logSite}` : it.to.replace(`${base}/`, `${base}/${logSite}/`) }))
         : []
     }
     const dashboard = nav.find((it) => it.end) || nav[0]

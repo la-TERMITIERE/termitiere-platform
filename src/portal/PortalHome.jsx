@@ -60,6 +60,8 @@ export default function PortalHome() {
   const { data: demandesBriq }  = useCollection(hasModule('evenementiel')? 'evenementiel_demandes'   : null)
   const { data: dossiersFoncier}= useCollection(hasModule('foncier')     ? 'foncier_dossiers'        : null)
   const { data: garderieEnfants}= useCollection(hasModule('garderie')    ? 'garderie_enfants'        : null)
+  const { data: seancesGym }    = useCollection(hasModule('gym')         ? 'gym_seances'             : null)
+  const { data: abonnementsGym }= useCollection(hasModule('gym')         ? 'gym_abonnements'         : null)
 
   const dernier = [...(inventaires||[])].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
   const totalAnimaux = dernier ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0) : 0
@@ -69,6 +71,9 @@ export default function PortalHome() {
   const autorisationsBriq = (demandesBriq||[]).filter((d) => estActif(d.statut)).length
   const dossiersActifs = (dossiersFoncier||[]).filter((d) => !['cloture', 'suspendu'].includes(d.statut)).length
   const enfantsActifs = (garderieEnfants||[]).filter((e) => e.statut === 'actif').length
+  const moisEnCours = todayStr().slice(0, 7)
+  const seancesGymMois = (seancesGym||[]).filter((s) => (s.date || '').startsWith(moisEnCours)).length
+  const abonnementsGymMois = (abonnementsGym||[]).filter((a) => (a.date || '').startsWith(moisEnCours)).length
 
   const kpi = {
     agro: `${totalAnimaux} têtes`,
@@ -76,7 +81,8 @@ export default function PortalHome() {
     evenementiel: autorisationsBriq ? `${autorisationsBriq} autorisation(s) en attente` : `${prodMois} briques produites ce mois`,
     foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
     rh: 'En développement',
-    garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit'
+    garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit',
+    gym: (seancesGymMois || abonnementsGymMois) ? `${seancesGymMois} séance(s) · ${abonnementsGymMois} abonnement(s) ce mois` : 'Aucune activité ce mois'
   }
 
   const heure = new Date().getHours()

@@ -32,6 +32,7 @@ export const VOLETS_SUIVIS = {
   evenementielBesoins: { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'evenementiel' },
   garderieBesoins:     { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'garderie' },
   foncierBesoins:      { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'foncier' },
+  gymBesoins:          { collection: 'sector_besoins', champDate: 'createdAt', champCreateur: 'demandeParUid', filtre: (b) => b.secteurId === 'gym' },
   // Briqueterie
   evenementielMateriel: { collection: 'evenementiel_materiels', champDate: 'createdAt', champCreateur: 'ajouteParUid' }
 }

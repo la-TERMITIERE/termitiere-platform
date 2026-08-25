@@ -55,6 +55,9 @@
           "logistiqueSites": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
           },
+          "gymSites": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
           "login": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
           }
@@ -76,6 +79,24 @@
         "$entryId": {
           ".write": "auth != null && !data.exists() && newData.exists()"
         }
+      },
+
+      // Index pour les requêtes du carnet de présence MAXI-GYM (cf. étage 1
+      // pour le détail) — les fonctions serveur ignorent ces règles de toute façon.
+      "gym_clients": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".indexOn": ["qrToken"]
+      },
+      "gym_presences": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".indexOn": ["clientNom"]
+      },
+      "gym_abonnements": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".indexOn": ["clientNom"]
       },
 
       "$other": {

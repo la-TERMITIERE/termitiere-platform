@@ -1,0 +1,15 @@
+{
+  "name": "MAXI GYM Carnet-présence",
+  "short_name": "Carnet MAXI-GYM",
+  "description": "Carnet de présence MAXI-GYM — calendrier des séances du mois",
+  "start_url": "/gym/carnet",
+  "scope": "/gym/carnet",
+  "display": "standalone",
+  "background_color": "#faf6f5",
+  "theme_color": "#E8850F",
+  "orientation": "portrait-primary",
+  "lang": "fr",
+  "icons": [
+    { "src": "/Maxi_Gym.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
