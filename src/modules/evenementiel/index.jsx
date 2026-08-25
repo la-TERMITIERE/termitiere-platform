@@ -64,7 +64,10 @@ export default function EvenementielModule() {
       <Route path="demandes" element={<Demandes />} />
       <Route path="besoins" element={<SectorBesoins secteurId="evenementiel" />} />
       <Route path="materiel" element={<Materiel />} />
-      <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
+      {/* Paramètres ouverts aussi aux AGENTS (et secrétaire) : ils ajustent les prix
+          unitaires, tarifs, rendement… La réinitialisation des données reste réservée
+          à l'administration (garde `isAdmin` à l'intérieur de l'écran). */}
+      <Route path="params" element={isFullAccessRole(role) || role === 'secretaire' || role === 'agent' ? <Params /> : <AccesRefuseAdmin />} />
       <Route path="clients" element={<Clients />} />
       <Route path="partenaires" element={<Partenaires module="evenementiel" />} />
       <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />

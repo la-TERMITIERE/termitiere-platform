@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
@@ -105,6 +105,16 @@ export const MODULES = [
     path: '/gym',
     statut: 'actif',
     logo: '/Maxi_Gym.png'
+  },
+  {
+    id: 'voyage',
+    nom: 'E-VOYAGE',
+    description: 'Voyages d\'achat à l\'étranger, fournisseurs & conversion FCFA',
+    icon: Plane,
+    emoji: '✈️',
+    color: '#4f46e5',
+    path: '/voyage',
+    statut: 'actif'
   }
 ]
 
@@ -161,7 +171,9 @@ export const MODULE_NAV = {
     { label: 'Besoins', to: '/evenementiel/besoins', icon: PackagePlus, badgeKey: 'evenementielBesoins' },
     { label: 'Matériel & Matériaux', to: '/evenementiel/materiel', icon: Wrench, badgeKey: 'evenementielMateriel' },
     { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
-    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: ADMIN_VOLETS_ROLES },
+    // Paramètres ouverts aux agents (ajuster prix/tarifs/rendement) ; la réinitialisation
+    // des données reste réservée à l'administration (garde interne à l'écran).
+    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: [...ADMIN_VOLETS_ROLES, 'secretaire', 'agent'] },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle },
     { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires' }
   ],
@@ -189,6 +201,11 @@ export const MODULE_NAV = {
     { label: 'Partenaires', to: '/gym/partenaires', icon: Handshake, perm: 'partenaires' },
     { label: 'Journal et Historique', to: '/gym/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/gym/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
+  ],
+  voyage: [
+    { label: 'Dashboard', to: '/voyage', icon: LayoutDashboard, end: true },
+    { label: 'Voyages', to: '/voyage/voyages', icon: Plane },
+    { label: 'Devises & taux', to: '/voyage/devises', icon: Coins }
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },

@@ -44,7 +44,7 @@ export default function StatCard({
             reste TOUJOURS entièrement lisible (demande direction — plus de « 7 M… »). */}
         <p className="break-words text-lg font-extrabold leading-tight sm:text-xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
         {(variationLabel || sub) && (
-          <p className="mt-0.5 truncate text-[11px] text-gray-400" title={variationLabel || sub}>{variationLabel || sub}</p>
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-400" title={variationLabel || sub}>{variationLabel || sub}</p>
         )}
       </div>
       {onClick && (
