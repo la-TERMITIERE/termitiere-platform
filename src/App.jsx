@@ -23,6 +23,7 @@ const GarderieModule = lazy(() => import('./modules/garderie/index.jsx'))
 const ProjetModule   = lazy(() => import('./modules/projet/index.jsx'))
 const DepenseModule  = lazy(() => import('./modules/depense/index.jsx'))
 const GymModule      = lazy(() => import('./modules/gym/index.jsx'))
+const VoyageModule   = lazy(() => import('./modules/voyage/index.jsx'))
 
 // Route protégée : exige une session active.
 function Protected({ children }) {
@@ -164,6 +165,16 @@ export default function App() {
               <ModuleGuard moduleId="depense">
                 <Suspense fallback={<ModuleLoadingSpinner moduleId="depense" />}>
                   <DepenseModule />
+                </Suspense>
+              </ModuleGuard>
+            }
+          />
+          <Route
+            path="voyage/*"
+            element={
+              <ModuleGuard moduleId="voyage">
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="voyage" />}>
+                  <VoyageModule />
                 </Suspense>
               </ModuleGuard>
             }

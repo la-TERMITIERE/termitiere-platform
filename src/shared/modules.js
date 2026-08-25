@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Plane
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
@@ -105,6 +105,16 @@ export const MODULES = [
     path: '/gym',
     statut: 'en_developpement',
     logo: '/Maxi_Gym.png'
+  },
+  {
+    id: 'voyage',
+    nom: 'E-VOYAGE',
+    description: 'Voyages d\'achat à l\'étranger, fournisseurs & conversion FCFA',
+    icon: Plane,
+    emoji: '✈️',
+    color: '#4f46e5',
+    path: '/voyage',
+    statut: 'actif'
   }
 ]
 
@@ -182,6 +192,11 @@ export const MODULE_NAV = {
     { label: 'Tableau de bord', to: '/gym', icon: LayoutDashboard, end: true },
     { label: 'Séances', to: '/gym/seances', icon: Ticket },
     { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard }
+  ],
+  voyage: [
+    { label: 'Dashboard', to: '/voyage', icon: LayoutDashboard, end: true },
+    { label: 'Voyages', to: '/voyage/voyages', icon: Plane },
+    { label: 'Devises & taux', to: '/voyage/devises', icon: Coins }
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
