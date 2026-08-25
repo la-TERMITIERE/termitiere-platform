@@ -6,6 +6,9 @@
 // `avecPlage` (opt-in, false par défaut) ajoute le mode « Plage personnalisée »
 // (du/au) — les écrans qui ne fournissent pas `valeurDebut/valeurFin` n'affichent
 // pas cette option et ne sont donc pas affectés.
+// `avecAnnee` (opt-in) ajoute le mode « Année » — toute une année sans choisir de
+// mois précis ; les écrans qui ne fournissent pas `valeurAnnee/onAnneeChange`
+// n'affichent pas cette option et ne sont donc pas affectés.
 import Select from '../forms/Select'
 
 export default function FiltrePeriode({
@@ -13,13 +16,16 @@ export default function FiltrePeriode({
   mode, onModeChange,
   valeurJour, onJourChange,
   valeurMois, onMoisChange,
+  avecAnnee = false,
+  valeurAnnee, onAnneeChange,
   avecPlage = false,
   valeurDebut, onDebutChange,
   valeurFin, onFinChange
 }) {
-  const valeurActive = mode === 'mois' ? valeurMois : mode === 'plage' ? (valeurDebut || valeurFin) : valeurJour
+  const valeurActive = mode === 'mois' ? valeurMois : mode === 'annee' ? valeurAnnee : mode === 'plage' ? (valeurDebut || valeurFin) : valeurJour
   const effacer = () => {
     if (mode === 'mois') onMoisChange('')
+    else if (mode === 'annee') onAnneeChange('')
     else if (mode === 'plage') { onDebutChange?.(''); onFinChange?.('') }
     else onJourChange('')
   }
@@ -30,11 +36,16 @@ export default function FiltrePeriode({
         <Select className="w-[88px]" value={mode} onChange={(e) => onModeChange(e.target.value)}>
           <option value="jour">Jour</option>
           <option value="mois">Mois</option>
+          {avecAnnee && <option value="annee">Année</option>}
           {avecPlage && <option value="plage">Plage…</option>}
         </Select>
         {mode === 'mois' ? (
           <input type="month" value={valeurMois} onChange={(e) => onMoisChange(e.target.value)}
             className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        ) : mode === 'annee' ? (
+          <input type="number" min="2000" max="2100" placeholder="Année" value={valeurAnnee}
+            onChange={(e) => onAnneeChange(e.target.value)}
+            className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
         ) : mode === 'plage' ? (
           <>
             <input type="date" value={valeurDebut || ''} max={valeurFin || undefined} onChange={(e) => onDebutChange(e.target.value)}

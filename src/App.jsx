@@ -12,6 +12,7 @@ import GlobalDashboard from './portal/GlobalDashboard'
 import Utilisateurs from './portal/Utilisateurs'
 import MonCompte from './portal/MonCompte'
 import Parametres from './portal/Parametres'
+import { getModule } from './shared/modules'
 
 // Chargement paresseux des modules (code-splitting)
 const AgroModule = lazy(() => import('./modules/agro/index.jsx'))
@@ -23,6 +24,7 @@ const GarderieModule = lazy(() => import('./modules/garderie/index.jsx'))
 const ProjetModule   = lazy(() => import('./modules/projet/index.jsx'))
 const DepenseModule  = lazy(() => import('./modules/depense/index.jsx'))
 const GymModule      = lazy(() => import('./modules/gym/index.jsx'))
+const CarnetPresence = lazy(() => import('./modules/gym/carnet/CarnetPresence.jsx'))
 
 // Route protégée : exige une session active.
 function Protected({ children }) {
@@ -34,9 +36,22 @@ function Protected({ children }) {
 }
 
 // Garde d'accès module : redirige vers le portail si non autorisé.
+//
+// Un module « bientot »/« en_developpement » (ex. MAXI-GYM en ce moment) n'est
+// PAS ouvert à tout le monde qui « voit tout » (super_admin, pau, ge, directeur,
+// admin, superviseur) : seul le rôle `info` (qui construit le module) peut y
+// entrer, même en tapant l'URL directement — sans ce garde-fou, la carte non
+// cliquable du portail (cf. PortalHome.jsx) ne serait qu'une façade, hasModule()
+// laissant en fait passer toute la hiérarchie via isViewAllRole().
 function ModuleGuard({ moduleId, children }) {
-  const { hasModule } = useAuth()
-  if (!hasModule(moduleId)) return <Navigate to="/" replace />
+  const { hasModule, role } = useAuth()
+  const mod = getModule(moduleId)
+  const enPreparation = mod && mod.statut !== 'actif'
+  if (enPreparation) {
+    if (role !== 'info') return <Navigate to="/" replace />
+  } else if (!hasModule(moduleId)) {
+    return <Navigate to="/" replace />
+  }
   return children
 }
 
@@ -63,6 +78,17 @@ export default function App() {
       <Routes>
         {/* Connexion : si déjà connecté, on renvoie au portail */}
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+
+        {/* Carnet de présence MAXI-GYM — page PUBLIQUE, sans connexion (accès via
+            QR personnel du client, cf. modules/gym/QrCarnetModal.jsx). */}
+        <Route
+          path="/gym/carnet/:token?"
+          element={
+            <Suspense fallback={<ModuleLoadingSpinner label="Chargement…" fullScreen />}>
+              <CarnetPresence />
+            </Suspense>
+          }
+        />
 
         {/* Espace authentifié */}
         <Route

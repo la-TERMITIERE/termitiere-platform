@@ -19,11 +19,12 @@ import { MODULES, MODULE_NAV } from '../shared/modules'
 import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
 import { SITES } from '../modules/logistique/site/useSite'
+import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
 
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
-// De même, un compte Maxi Logistique accède par défaut aux deux sites (Lomé & Kara).
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gerePartenaires: false, secteur: '', poste: '', telephone: '', actif: true })
+// De même, un compte Maxi Logistique / MAXI-GYM accède par défaut aux deux sites (Lomé & Kara).
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, secteur: '', poste: '', telephone: '', actif: true })
 
 // Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
 // Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
@@ -87,6 +88,15 @@ export default function Utilisateurs() {
       const cur = m.data.logistiqueSites || []
       const has = cur.includes(id)
       return { ...m, data: { ...m.data, logistiqueSites: has ? cur.filter((x) => x !== id) : [...cur, id] } }
+    })
+  }
+
+  // Sites MAXI-GYM autorisés (Lomé / Kara).
+  function toggleGymSite(id) {
+    setModal((m) => {
+      const cur = m.data.gymSites || []
+      const has = cur.includes(id)
+      return { ...m, data: { ...m.data, gymSites: has ? cur.filter((x) => x !== id) : [...cur, id] } }
     })
   }
 
@@ -317,6 +327,27 @@ export default function Utilisateurs() {
               </FormGroup>
             )}
 
+            {/* Salles MAXI-GYM (Lomé / Kara) — rôles non « voit tout » ayant le module */}
+            {!isViewAllRole(modal.data.role) && modal.data.modules.includes('gym') && (
+              <FormGroup label="Salles MAXI-GYM autorisées"
+                hint="Choisissez la ou les salles auxquelles ce compte a accès. Aucune cochée = accès à aucune salle.">
+                <div className="flex flex-wrap gap-2">
+                  {GYM_SITES.map((s) => {
+                    const active = (modal.data.gymSites || []).includes(s.id)
+                    return (
+                      <button key={s.id} type="button" onClick={() => toggleGymSite(s.id)}
+                        className="rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors"
+                        style={active
+                          ? { background: s.accent, borderColor: s.accent, color: '#fff' }
+                          : { borderColor: '#e5e7eb', color: '#475569' }}>
+                        {active ? '✓ ' : ''}{s.emoji} {s.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </FormGroup>
+            )}
+
             {/* Droit de gérer l'onglet « Partenaires » (contacts externes) — hors rôles « voit tout » qui l'ont déjà */}
             {!isViewAllRole(modal.data.role) && (
               <FormGroup label="Gestion des partenaires"
@@ -392,6 +423,11 @@ export default function Utilisateurs() {
                     {m.id === 'logistique' && (
                       <span className="text-xs font-medium text-gray-500">
                         {(detailUser.logistiqueSites || []).length ? detailUser.logistiqueSites.join(' · ') : 'aucun site'}
+                      </span>
+                    )}
+                    {m.id === 'gym' && (
+                      <span className="text-xs font-medium text-gray-500">
+                        {(detailUser.gymSites || []).length ? detailUser.gymSites.join(' · ') : 'aucune salle'}
                       </span>
                     )}
                     <span className="ml-auto shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold shadow-sm" style={{ color: m.color }}>

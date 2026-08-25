@@ -2,7 +2,7 @@
 // Mobile : panneau coulissant avec overlay. Desktop : fixe 260px.
 import { useMemo, useState } from 'react'
 import { NavLink, Link, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, LogOut, Users, UserCircle, Settings, X, ChevronRight, ChevronDown } from 'lucide-react'
+import { Home, LayoutDashboard, LogOut, Users, UserCircle, Settings, X, ChevronRight, ChevronDown, ArrowLeft } from 'lucide-react'
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
@@ -118,9 +118,12 @@ export default function Sidebar({ open, onClose }) {
   const parts = location.pathname.split('/')
   const seg = parts[1]
   const activeModule = getModule(seg)
-  // Maxi Logistique : sous-application (site) déduite du 2e segment.
+  // Modules multi-sites (Maxi Logistique, MAXI-GYM) : sous-application (site)
+  // déduite du 2e segment de l'URL.
   const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
-  const logSite = activeModule?.id === 'logistique' && LOG_SITES[parts[2]] ? parts[2] : null
+  const MULTISITE_MODULES = { logistique: LOG_SITES, gym: LOG_SITES }
+  const siteNames = MULTISITE_MODULES[activeModule?.id]
+  const logSite = siteNames && siteNames[parts[2]] ? parts[2] : null
 
   // Badge demandes AGRO : factures en attente d'approbation ou d'ajustement d'écart.
   const { data: facturesAgro } = useCollection('agro_factures')
@@ -194,18 +197,19 @@ export default function Sidebar({ open, onClose }) {
   }
   let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
 
-  // Maxi Logistique : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
-  // On préfixe alors chaque destination par /logistique/<site>/…
-  if (activeModule?.id === 'logistique') {
+  // Modules multi-sites : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
+  // On préfixe alors chaque destination par /<module>/<site>/…
+  if (siteNames) {
+    const base = `/${activeModule.id}`
     moduleNav = logSite
       ? moduleNav.map((item) => ({
           ...item,
-          to: item.to === '/logistique' ? `/logistique/${logSite}` : item.to.replace('/logistique/', `/logistique/${logSite}/`)
+          to: item.to === base ? `${base}/${logSite}` : item.to.replace(`${base}/`, `${base}/${logSite}/`)
         }))
       : []
   }
 
-  const moduleTitle = activeModule ? (logSite ? `${activeModule.nom} · ${LOG_SITES[logSite]}` : activeModule.nom) : "Toujours dans l'action"
+  const moduleTitle = activeModule ? (logSite ? `${activeModule.nom} · ${siteNames[logSite]}` : activeModule.nom) : "Toujours dans l'action"
 
   return (
     <>
@@ -315,6 +319,12 @@ export default function Sidebar({ open, onClose }) {
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">
                 {moduleTitle}
               </p>
+              {logSite && (
+                <Link to={`/${activeModule.id}`} onClick={onClose}
+                  className="mb-1 flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold text-white/65 transition-all hover:bg-white/10 hover:text-white">
+                  <ArrowLeft size={14} /> Changer de {activeModule.id === 'gym' ? 'salle' : 'site'}
+                </Link>
+              )}
               {moduleNav.map((item) => (
                 item.to === '/projet/projets' ? (
                   <ProjetsNavMenu key={item.to} item={item} secteursMenu={secteursMenu}

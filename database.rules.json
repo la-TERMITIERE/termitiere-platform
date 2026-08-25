@@ -67,6 +67,9 @@
           "logistiqueSites": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
           },
+          "gymSites": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
           // Un login modifiable permettait de détourner l'identité d'un autre
           // compte (doublon exploité par orderByChild('login') côté serveur).
           "login": {
@@ -90,6 +93,26 @@
         "$entryId": {
           ".write": "auth != null && !data.exists() && newData.exists()"
         }
+      },
+
+      // Index pour les requêtes du carnet de présence MAXI-GYM (recherche du
+      // client par jeton QR public, présences/abonnements par nom de client) —
+      // cf. netlify/functions/gym-carnet*.js, qui utilisent le SDK Admin et
+      // ignorent ces règles de toute façon (jeton = clé d'accès, pas ces règles).
+      "gym_clients": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".indexOn": ["qrToken"]
+      },
+      "gym_presences": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".indexOn": ["clientNom"]
+      },
+      "gym_abonnements": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".indexOn": ["clientNom"]
       },
 
       // Collections métier : authentification exigée.

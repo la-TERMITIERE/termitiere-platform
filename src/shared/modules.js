@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
 
@@ -103,7 +103,7 @@ export const MODULES = [
     // pas de couleur inventée, cf. moduleTheme.js pour le dégradé complet.
     color: '#E8850F',
     path: '/gym',
-    statut: 'en_developpement',
+    statut: 'actif',
     logo: '/Maxi_Gym.png'
   }
 ]
@@ -177,9 +177,18 @@ export const MODULE_NAV = {
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
   ],
   gym: [
-    { label: 'Tableau de bord', to: '/gym', icon: LayoutDashboard, end: true },
+    { label: 'Dashboard', to: '/gym', icon: LayoutDashboard, end: true },
+    { label: 'Nos forfaits', to: '/gym/forfaits', icon: Tag },
     { label: 'Séances', to: '/gym/seances', icon: Ticket },
-    { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard }
+    { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard },
+    { label: 'Facturation', to: '/gym/facturation', icon: Receipt },
+    { label: 'Clients', to: '/gym/clients', icon: UserCircle },
+    { label: 'Pilotage & Analyses', to: '/gym/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépense', to: '/gym/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Besoins', to: '/gym/besoins', icon: PackagePlus, badgeKey: 'gymBesoins' },
+    { label: 'Partenaires', to: '/gym/partenaires', icon: Handshake, perm: 'partenaires' },
+    { label: 'Journal et Historique', to: '/gym/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
+    { label: 'Paramètres', to: '/gym/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },
