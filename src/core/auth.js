@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant } from './db'
-import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole } from './roles'
+import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole, moduleRoleOk } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 import { oublierAbonnementPush } from './push'
 import { MODULES } from '../shared/modules'
@@ -459,6 +459,9 @@ export const useAuthStore = create((set, get) => ({
   // Helpers de contrôle d'accès
   hasModule: (mod) => {
     const { role, modules } = get()
+    // Restriction dure par rôle (ex. E-VOYAGE réservé admins / PAU / GE) : prime sur
+    // l'attribution individuelle ET sur l'accès « voit tout ».
+    if (!moduleRoleOk(mod, role)) return false
     if (isViewAllRole(role)) return true
     return (modules || []).includes(mod)
   },

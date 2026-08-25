@@ -34,6 +34,14 @@ export const ROLES = [
 export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
 // Voit TOUS les modules (full access + superviseur en lecture seule).
 export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur']
+
+// Modules à visibilité RESTREINTE par rôle : même attribué à un utilisateur, un
+// module listé ici n'est accessible qu'aux rôles indiqués (contrôle appliqué dans
+// hasModule → couvre le portail, la barre latérale ET la garde de route).
+export const MODULE_ROLES = {
+  voyage: FULL_ACCESS_ROLES // E-VOYAGE : réservé aux admins, au PAU et à la GE
+}
+export const moduleRoleOk = (mod, role) => !MODULE_ROLES[mod] || MODULE_ROLES[mod].includes(role)
 // 1er niveau d'approbation d'une demande de sortie (le superviseur n'approuve pas).
 export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'gerant', 'admin', 'controleur']
 // 2e niveau : certification définitive (déclenche l'effet métier).
