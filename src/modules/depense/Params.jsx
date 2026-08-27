@@ -9,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { usePDF } from '../../hooks/usePDF'
 import { isFullAccessRole } from '../../core/roles'
 import { removeItem, setItem } from '../../core/db'
+import { reinitialiserApplication, COLLECTIONS_A_REINITIALISER } from '../../core/resetApplication'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -93,8 +94,10 @@ function ligneDe(d) {
   ]
 }
 
+const PHRASE_CONFIRMATION_APP = 'SUPPRIMER TOUT'
+
 export default function Params() {
-  const { role } = useAuth()
+  const { role, user, login, logout } = useAuth()
   const { data: depenses } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { generateRapportPDF } = usePDF('depense')
@@ -105,7 +108,62 @@ export default function Params() {
   const [resetOpen, setResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
 
+  // Réinitialisation TOTALE de l'application (tous modules, tous secteurs) —
+  // strictement réservée au super-administrateur, contrairement au reset
+  // ci-dessus (dépenses/budgets E-DÉPENSES uniquement) ouvert à isAdmin au sens
+  // large. Double confirmation volontaire (phrase à recopier + mot de passe
+  // re-saisi) : action IRRÉVERSIBLE.
+  const [resetAppOpen, setResetAppOpen] = useState(false)
+  const [etapeResetApp, setEtapeResetApp] = useState('phrase') // 'phrase' | 'motdepasse' | 'suppression' | 'termine'
+  const [phraseResetApp, setPhraseResetApp] = useState('')
+  const [motDePasseResetApp, setMotDePasseResetApp] = useState('')
+  const [erreurResetApp, setErreurResetApp] = useState('')
+  const [verificationResetApp, setVerificationResetApp] = useState(false)
+  const [progressionResetApp, setProgressionResetApp] = useState(null)
+
   const isAdmin = isFullAccessRole(role)
+  // 'admin' est l'ancien identifiant du rôle « accès total » (concepteur) —
+  // toujours en usage sur ce déploiement (cf. core/roles.js) — donc traité
+  // ici au même titre que 'super_admin' pour cette action technique sensible.
+  const estSuperAdmin = role === 'super_admin' || role === 'admin'
+
+  function fermerResetApp() {
+    if (etapeResetApp === 'suppression') return // pas d'annulation en cours de suppression
+    setResetAppOpen(false)
+    setEtapeResetApp('phrase')
+    setPhraseResetApp('')
+    setMotDePasseResetApp('')
+    setErreurResetApp('')
+    setProgressionResetApp(null)
+  }
+
+  async function confirmerResetApp() {
+    setErreurResetApp('')
+    if (!motDePasseResetApp) { setErreurResetApp('Saisissez votre mot de passe.'); return }
+    setVerificationResetApp(true)
+    try {
+      const ok = await login(user.login, motDePasseResetApp)
+      if (!ok) { setErreurResetApp('Mot de passe incorrect.'); return }
+      setEtapeResetApp('suppression')
+      const resultats = await reinitialiserApplication({
+        keepUserId: user.uid,
+        onProgress: (info) => setProgressionResetApp(info)
+      })
+      const totalSupprime = resultats.reduce((s, r) => s + r.removed, 0)
+      await audit('portail', 'RESET_APPLICATION', `Réinitialisation complète de l'application (${totalSupprime} enregistrements supprimés sur ${resultats.length} collections)`)
+      setEtapeResetApp('termine')
+    } catch (e) {
+      setErreurResetApp(e?.message || 'Une erreur est survenue pendant la réinitialisation.')
+      setEtapeResetApp('motdepasse')
+    } finally {
+      setVerificationResetApp(false)
+    }
+  }
+
+  async function terminerEtRechargerResetApp() {
+    await logout()
+    window.location.reload()
+  }
 
   async function exportXLSX() {
     setExportingXLSX(true)
@@ -250,6 +308,113 @@ export default function Params() {
         footer={<><Button variant="ghost" onClick={() => setResetOpen(false)}>Annuler</Button><Button variant="danger" onClick={resetDonnees} loading={resetting}>Confirmer</Button></>}>
         <p className="text-sm text-red-700 font-semibold">Toutes les {depenses.length} dépenses et {budgets.length} budgets seront supprimés définitivement.</p>
         <p className="mt-2 text-sm text-gray-500">Cette action est irréversible.</p>
+      </Modal>
+
+      {estSuperAdmin && (
+        <Card title="⚠️ Zone de danger — application entière" className="border-red-200">
+          <div className="flex items-start gap-3 rounded-2xl border border-red-200/60 bg-red-50/60 p-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+            <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
+            <div>
+              <p className="font-semibold text-red-900">Réinitialiser toute l'application</p>
+              <p className="mt-1 text-sm text-red-700">
+                Supprime définitivement les données de <strong>tous les secteurs et modules</strong> ({COLLECTIONS_A_REINITIALISER.length} collections :
+                dépenses, recettes, stocks, comptes utilisateurs, journal d'audit…) — pas seulement E-DÉPENSES. Seul votre propre compte est conservé.
+                Cette action est irréversible.
+              </p>
+              <Button variant="danger" size="sm" className="mt-3" onClick={() => setResetAppOpen(true)}>
+                <Trash2 size={15} /> Réinitialiser l'application
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <Modal
+        open={resetAppOpen}
+        onClose={fermerResetApp}
+        title="Réinitialisation complète de l'application"
+        footer={
+          etapeResetApp === 'phrase' ? (
+            <>
+              <Button variant="ghost" onClick={fermerResetApp}>Annuler</Button>
+              <Button variant="danger" disabled={phraseResetApp !== PHRASE_CONFIRMATION_APP} onClick={() => setEtapeResetApp('motdepasse')}>
+                Continuer
+              </Button>
+            </>
+          ) : etapeResetApp === 'motdepasse' ? (
+            <>
+              <Button variant="ghost" onClick={fermerResetApp}>Annuler</Button>
+              <Button variant="danger" loading={verificationResetApp} onClick={confirmerResetApp}>
+                Confirmer la réinitialisation
+              </Button>
+            </>
+          ) : etapeResetApp === 'termine' ? (
+            <Button variant="danger" onClick={terminerEtRechargerResetApp}>Fermer et recharger l'application</Button>
+          ) : null
+        }
+      >
+        {etapeResetApp === 'phrase' && (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-red-700">
+              Cette action supprime définitivement toutes les données de tous les secteurs et modules (sauf votre compte). Irréversible.
+            </p>
+            <p className="text-sm text-gray-600">Pour continuer, recopiez exactement la phrase suivante :</p>
+            <p className="rounded-lg bg-gray-100 px-3 py-2 text-center font-mono text-sm font-bold tracking-wide text-gray-800">
+              {PHRASE_CONFIRMATION_APP}
+            </p>
+            <input
+              type="text"
+              value={phraseResetApp}
+              onChange={(e) => setPhraseResetApp(e.target.value)}
+              placeholder="Recopiez la phrase ci-dessus"
+              autoFocus
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            {erreurResetApp && <p className="text-sm font-semibold text-red-600">{erreurResetApp}</p>}
+          </div>
+        )}
+
+        {etapeResetApp === 'motdepasse' && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">Dernière étape : ressaisissez votre mot de passe pour confirmer.</p>
+            <input
+              type="password"
+              value={motDePasseResetApp}
+              onChange={(e) => setMotDePasseResetApp(e.target.value)}
+              placeholder="Votre mot de passe"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && confirmerResetApp()}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            {erreurResetApp && <p className="text-sm font-semibold text-red-600">{erreurResetApp}</p>}
+          </div>
+        )}
+
+        {etapeResetApp === 'suppression' && (
+          <div className="space-y-3 py-4 text-center">
+            <p className="text-sm font-semibold text-gray-700">Réinitialisation en cours — ne fermez pas cette fenêtre…</p>
+            {progressionResetApp && (
+              <>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full bg-red-600 transition-all"
+                    style={{ width: `${Math.round((progressionResetApp.index / progressionResetApp.total) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  {progressionResetApp.index} / {progressionResetApp.total} collections traitées — {progressionResetApp.collection}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {etapeResetApp === 'termine' && (
+          <div className="space-y-2 py-2 text-center">
+            <p className="text-sm font-semibold text-green-700">Réinitialisation terminée ✓</p>
+            <p className="text-sm text-gray-600">L'application va se déconnecter et recharger sur un état vierge.</p>
+          </div>
+        )}
       </Modal>
     </div>
   )
