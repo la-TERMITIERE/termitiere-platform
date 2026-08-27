@@ -9,6 +9,7 @@ import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
@@ -55,6 +56,13 @@ export default function StockBriques() {
   const [arrivage, setArrivage] = useState(null)   // { matiereId, qte, cout, label }
   const [consoModal, setConsoModal] = useState(null) // { matiereId, qte, label } — consommation saisie à la main
   const [matDetail, setMatDetail] = useState(null) // matière sélectionnée pour l'historique
+
+  // Filtre de période — Jour / Mois / Plage personnalisée — sur l'historique des casses.
+  const [modePeriodeCasses, setModePeriodeCasses] = useState('mois')
+  const [filtreJourCasses, setFiltreJourCasses] = useState('')
+  const [filtreMoisCasses, setFiltreMoisCasses] = useState('')
+  const [filtreDebutCasses, setFiltreDebutCasses] = useState('')
+  const [filtreFinCasses, setFiltreFinCasses] = useState('')
 
   const peutSaisir = role === 'agent'
 
@@ -285,9 +293,17 @@ export default function StockBriques() {
   // Historique des casses — chaque transfert vers « caillasses » porte déjà le
   // type d'origine (briqueNom) et le motif saisi ; on l'affiche pour garder une
   // trace lisible de ce qui s'est cassé, en combien et pourquoi.
-  const casses = [...transferts]
+  const toutesCasses = [...transferts]
     .filter((t) => t.to === 'caillasses')
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+  const casses = toutesCasses.filter((c) => {
+    if (modePeriodeCasses === 'mois' && filtreMoisCasses) return (c.date || '').startsWith(filtreMoisCasses)
+    if (modePeriodeCasses === 'jour' && filtreJourCasses) return c.date === filtreJourCasses
+    if (modePeriodeCasses === 'plage' && (filtreDebutCasses || filtreFinCasses)) {
+      return (!filtreDebutCasses || c.date >= filtreDebutCasses) && (!filtreFinCasses || c.date <= filtreFinCasses)
+    }
+    return true
+  })
   const totalCasses = casses.reduce((s, c) => s + (parseInt(c.qte) || 0), 0)
 
   return (
@@ -386,13 +402,22 @@ export default function StockBriques() {
 
       {/* ── Historique des casses : d'où viennent les caillasses et pourquoi ── */}
       <Card className="overflow-hidden p-0">
-        <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3">
           <History size={16} className="text-gray-400" />
           <h3 className="font-bold text-gray-800">Historique des casses</h3>
-          <span className="ml-auto text-xs text-gray-400">{casses.length} casse(s) enregistrée(s)</span>
+          <span className="text-xs text-gray-400">{casses.length} casse(s)</span>
+          <div className="ml-auto">
+            <FiltrePeriode mode={modePeriodeCasses} onModeChange={setModePeriodeCasses}
+              valeurJour={filtreJourCasses} onJourChange={setFiltreJourCasses}
+              valeurMois={filtreMoisCasses} onMoisChange={setFiltreMoisCasses}
+              avecPlage valeurDebut={filtreDebutCasses} onDebutChange={setFiltreDebutCasses}
+              valeurFin={filtreFinCasses} onFinChange={setFiltreFinCasses} />
+          </div>
         </div>
-        {casses.length === 0 ? (
+        {toutesCasses.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune casse enregistrée pour l'instant.</p>
+        ) : casses.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune casse sur cette période.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
