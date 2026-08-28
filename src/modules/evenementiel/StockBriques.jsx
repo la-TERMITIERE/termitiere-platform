@@ -1,7 +1,7 @@
 // Stock briques — appatam → séchage → prêtes · caillasses.
 // + Stock des matières premières (ciment, gravier, sable) : arrivages & consommation.
 import { useEffect, useRef, useState } from 'react'
-import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus, Boxes } from 'lucide-react'
+import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus, Boxes, History } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -9,6 +9,7 @@ import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
@@ -37,6 +38,7 @@ const CASSE_TRANSITIONS = [
 export default function StockBriques() {
   const { user, role } = useAuth()
   const { data: inventaires } = useCollection('evenementiel_inventaires')
+  const { data: transferts } = useCollection('evenementiel_transferts')
   const briques = useBriqueterieStore((s) => s.briques)
   const matieres = useBriqueterieStore((s) => s.matieres)
   const saveBrique = useBriqueterieStore((s) => s.saveBrique)
@@ -54,6 +56,13 @@ export default function StockBriques() {
   const [arrivage, setArrivage] = useState(null)   // { matiereId, qte, cout, label }
   const [consoModal, setConsoModal] = useState(null) // { matiereId, qte, label } — consommation saisie à la main
   const [matDetail, setMatDetail] = useState(null) // matière sélectionnée pour l'historique
+
+  // Filtre de période — Jour / Mois / Plage personnalisée — sur l'historique des casses.
+  const [modePeriodeCasses, setModePeriodeCasses] = useState('mois')
+  const [filtreJourCasses, setFiltreJourCasses] = useState('')
+  const [filtreMoisCasses, setFiltreMoisCasses] = useState('')
+  const [filtreDebutCasses, setFiltreDebutCasses] = useState('')
+  const [filtreFinCasses, setFiltreFinCasses] = useState('')
 
   const peutSaisir = role === 'agent'
 
@@ -223,9 +232,10 @@ export default function StockBriques() {
   }
 
   async function executerTransfert() {
-    const { briqueId, from, to, qte, dateSechage } = transferModal
+    const { briqueId, from, to, qte, dateSechage, motif } = transferModal
     const q = parseInt(qte) || 0
     if (!q) return toast.error('Quantité requise')
+    if (to === 'caillasses' && !(motif || '').trim()) return toast.error('Motif de la casse requis')
     const cur = stock[briqueId] || {}
     if ((cur[from] || 0) < q) return toast.error(`Stock ${from} insuffisant`)
 
@@ -256,6 +266,7 @@ export default function StockBriques() {
       date: todayStr(), briqueId,
       briqueNom: briques.find((b) => b.id === briqueId)?.nom,
       from, to, qte: q, dateSechage: dateSechage || '',
+      motif: to === 'caillasses' ? (motif || '').trim() : '',
       agentNom: user.nom
     })
 
@@ -278,6 +289,22 @@ export default function StockBriques() {
   const evalOf = Object.fromEntries(evaluations.map((e) => [e.id, e]))
   const totalCout = evaluations.reduce((s, e) => s + e.cout, 0)
   const totalValeur = evaluations.reduce((s, e) => s + e.valeur, 0)
+
+  // Historique des casses — chaque transfert vers « caillasses » porte déjà le
+  // type d'origine (briqueNom) et le motif saisi ; on l'affiche pour garder une
+  // trace lisible de ce qui s'est cassé, en combien et pourquoi.
+  const toutesCasses = [...transferts]
+    .filter((t) => t.to === 'caillasses')
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+  const casses = toutesCasses.filter((c) => {
+    if (modePeriodeCasses === 'mois' && filtreMoisCasses) return (c.date || '').startsWith(filtreMoisCasses)
+    if (modePeriodeCasses === 'jour' && filtreJourCasses) return c.date === filtreJourCasses
+    if (modePeriodeCasses === 'plage' && (filtreDebutCasses || filtreFinCasses)) {
+      return (!filtreDebutCasses || c.date >= filtreDebutCasses) && (!filtreFinCasses || c.date <= filtreFinCasses)
+    }
+    return true
+  })
+  const totalCasses = casses.reduce((s, c) => s + (parseInt(c.qte) || 0), 0)
 
   return (
     <div className="space-y-4">
@@ -347,7 +374,7 @@ export default function StockBriques() {
                         </button>
                       ))}
                       {b.id !== 'caillasses' && peutSaisir && CASSE_TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
-                        <button key={'casse-' + t.from} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: 'caillasses', qte: 1, dateSechage: '' })}
+                        <button key={'casse-' + t.from} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: 'caillasses', qte: 1, dateSechage: '', motif: '' })}
                           className="mr-1 mb-1 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-amber-100">
                           {t.from}→caillasses
                         </button>
@@ -371,6 +398,61 @@ export default function StockBriques() {
           <strong>Valeur du stock</strong> = quantité en stock × prix unitaire (tarif de vente, réglé dans Paramètres).
           <strong> Coût brut de production</strong> = quantité × (prix du sac de ciment ÷ rendement du type).
         </p>
+      </Card>
+
+      {/* ── Historique des casses : d'où viennent les caillasses et pourquoi ── */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3">
+          <History size={16} className="text-gray-400" />
+          <h3 className="font-bold text-gray-800">Historique des casses</h3>
+          <span className="text-xs text-gray-400">{casses.length} casse(s)</span>
+          <div className="ml-auto">
+            <FiltrePeriode mode={modePeriodeCasses} onModeChange={setModePeriodeCasses}
+              valeurJour={filtreJourCasses} onJourChange={setFiltreJourCasses}
+              valeurMois={filtreMoisCasses} onMoisChange={setFiltreMoisCasses}
+              avecPlage valeurDebut={filtreDebutCasses} onDebutChange={setFiltreDebutCasses}
+              valeurFin={filtreFinCasses} onFinChange={setFiltreFinCasses} />
+          </div>
+        </div>
+        {toutesCasses.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune casse enregistrée pour l'instant.</p>
+        ) : casses.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune casse sur cette période.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Date</th>
+                  <th className="px-3 py-2 text-left">Brique d'origine</th>
+                  <th className="px-2 py-2 text-center">État au moment de la casse</th>
+                  <th className="px-2 py-2 text-right">Quantité</th>
+                  <th className="px-3 py-2 text-left">Motif</th>
+                  <th className="px-3 py-2 text-left">Agent</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {casses.map((c, i) => (
+                  <tr key={c.id || i}>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(c.date)}</td>
+                    <td className="px-3 py-2 font-semibold">{c.briqueNom || '—'}</td>
+                    <td className="px-2 py-2 text-center text-gray-500">{c.from}</td>
+                    <td className="px-2 py-2 text-right font-semibold text-red-700">{formatNumber(c.qte)}</td>
+                    <td className="px-3 py-2 text-gray-600">{c.motif || '—'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-500">{c.agentNom || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 font-bold">
+                <tr>
+                  <td className="px-3 py-2" colSpan={3}>TOTAL</td>
+                  <td className="px-2 py-2 text-right text-red-700">{formatNumber(totalCasses)}</td>
+                  <td className="px-3 py-2" colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </Card>
 
       {/* ── Stock des matières premières (ciment, gravier, sable) ── */}
@@ -441,6 +523,12 @@ export default function StockBriques() {
             <p className="text-sm">{transferModal.from} → <strong>{transferModal.to}</strong></p>
             <FormGroup label="Quantité"><Input type="number" min="1" max={stock[transferModal.briqueId]?.[transferModal.from] || 0}
               value={transferModal.qte} onChange={(e) => setTransferModal((m) => ({ ...m, qte: e.target.value }))} /></FormGroup>
+            {transferModal.to === 'caillasses' && (
+              <FormGroup label="Motif de la casse" required hint="Comment ça s'est cassé (manutention, transport, chargement…)">
+                <Input value={transferModal.motif} onChange={(e) => setTransferModal((m) => ({ ...m, motif: e.target.value }))}
+                  placeholder="ex : chute pendant le chargement du camion" autoFocus />
+              </FormGroup>
+            )}
             {transferModal.from === 'sechage' && transferModal.to === 'pret' && (
               <>
                 <FormGroup label="Date mise en séchage">
