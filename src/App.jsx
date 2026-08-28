@@ -20,6 +20,7 @@ const LogistiqueModule = lazy(() => import('./modules/logistique/index.jsx'))
 const EvenementielModule = lazy(() => import('./modules/evenementiel/index.jsx'))
 const FoncierModule = lazy(() => import('./modules/foncier/index.jsx'))
 const RhModule       = lazy(() => import('./modules/rh/index.jsx'))
+const ComptabiliteModule = lazy(() => import('./modules/comptabilite/index.jsx'))
 const GarderieModule = lazy(() => import('./modules/garderie/index.jsx'))
 const ProjetModule   = lazy(() => import('./modules/projet/index.jsx'))
 const DepenseModule  = lazy(() => import('./modules/depense/index.jsx'))
@@ -151,6 +152,16 @@ export default function App() {
               <ModuleGuard moduleId="rh">
                 <Suspense fallback={<ModuleLoadingSpinner moduleId="rh" />}>
                   <RhModule />
+                </Suspense>
+              </ModuleGuard>
+            }
+          />
+          <Route
+            path="comptabilite/*"
+            element={
+              <ModuleGuard moduleId="comptabilite">
+                <Suspense fallback={<ModuleLoadingSpinner moduleId="comptabilite" />}>
+                  <ComptabiliteModule />
                 </Suspense>
               </ModuleGuard>
             }
