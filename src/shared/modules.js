@@ -64,12 +64,22 @@ export const MODULES = [
     logo: '/garderie-logo.png'
   },
   {
-    id: 'rh',
+    id: 'comptabilite',
     nom: 'COMPTABILITÉ',
-    description: 'Finances & suivi comptable',
+    description: 'Comptabilité générale — écritures, balance, grand livre, TVA, immobilisations',
     icon: Calculator,
     emoji: '📊',
     color: '#ea580c',
+    path: '/comptabilite',
+    statut: 'actif'
+  },
+  {
+    id: 'rh',
+    nom: 'RESSOURCES HUMAINES',
+    description: 'Employés, contrats, paie & pointages',
+    icon: Users,
+    emoji: '🧑‍💼',
+    color: '#0284c7',
     path: '/rh',
     statut: 'bientot'
   },
@@ -187,6 +197,23 @@ export const MODULE_NAV = {
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true }
+  ],
+  comptabilite: [
+    { label: 'Tableau de bord',        to: '/comptabilite',                 icon: LayoutDashboard, end: true },
+    { label: 'Saisie d\'Écritures',    to: '/comptabilite/ecritures',       icon: ClipboardList },
+    { label: 'Faits comptables',       to: '/comptabilite/faits',           icon: Repeat },
+    { label: 'Automatisation d\'écriture', to: '/comptabilite/automatisation', icon: Wrench },
+    { label: 'Supervision du moteur',  to: '/comptabilite/supervision',     icon: Gauge },
+    { label: 'Tiers',                  to: '/comptabilite/tiers',           icon: Users },
+    { label: 'Balance & Grand Livre',  to: '/comptabilite/grand-livre',     icon: Scale },
+    { label: 'Comptabilité Analytique', to: '/comptabilite/analytique',     icon: PieChart },
+    { label: 'États Financiers',       to: '/comptabilite/etats',           icon: BarChart2 },
+    { label: 'Fiscalité & TVA',        to: '/comptabilite/tva',             icon: Receipt },
+    { label: 'Immobilisations',        to: '/comptabilite/immobilisations', icon: Boxes },
+    { label: 'Immobilier / Patrimoine', to: '/comptabilite/patrimoine',     icon: Landmark },
+    { label: 'Plan Comptable',         to: '/comptabilite/plan',            icon: BookOpen },
+    { label: 'Modèles de Plans',       to: '/comptabilite/modeles-plans',   icon: FileText },
+    { label: 'Paramètres',             to: '/comptabilite/params',          icon: Settings }
   ],
   gym: [
     { label: 'Dashboard', to: '/gym', icon: LayoutDashboard, end: true },
