@@ -25,7 +25,7 @@ export default function Topbar({ onMenuToggle, user }) {
   // Rubrique active
   let subLabel = 'Accueil'
   if (mod) {
-    const nav = MODULE_NAV[mod.id] || []
+    const nav = (MODULE_NAV[mod.id] || []).filter((n) => n.to)
     const match = [...nav].sort((a, b) => b.to.length - a.to.length)
       .find((n) => location.pathname === n.to || (!n.end && location.pathname.startsWith(n.to)))
     const label = match?.label || ''
