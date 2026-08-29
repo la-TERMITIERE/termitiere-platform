@@ -1,12 +1,12 @@
 // RH — Paie & Bulletins (Temps & Paie). Génère les bulletins mensuels (CNSS/ITS Togo).
 import { useMemo, useState } from 'react'
-import { Receipt, Zap, Trash2, Landmark } from 'lucide-react'
+import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
-import { setItem, removeItem } from '../../core/db'
+import { setItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { calculerBulletin, STATUTS_BULLETIN, PAIE_CONFIG_DEFAUT, COMPTA_PAIE, MOIS_LABELS, COL } from './store/rhStore'
@@ -28,18 +28,33 @@ export default function Paie() {
 
   async function genererPaie() {
     if (actifs.length === 0) return toast.error('Aucun employé actif.')
-    let n = 0
+    // Ne pas écraser un bulletin déjà validé/payé du même mois.
+    const verrouilles = new Set(bulletinsMois.filter((b) => b.statut !== 'brouillon').map((b) => b.employeId))
+    let n = 0, saut = 0
     for (const e of actifs) {
+      if (verrouilles.has(e.id)) { saut++; continue }
       const calc = calculerBulletin(e.salaire, e.primes || 0, paieConfig)
       await setItem(COL.bulletins, `${mois}_${e.id}`, {
         mois, employeId: e.id, employeNom: e.nom, poste: e.poste || '', departement: e.departement || '',
-        salaireBase: Number(e.salaire) || 0, primes: Number(e.primes) || 0, statut: 'valide', ...calc
+        salaireBase: Number(e.salaire) || 0, primes: Number(e.primes) || 0, statut: 'brouillon', ...calc
       })
       n++
     }
-    toast.success(`${n} bulletin(s) généré(s) pour ${moisLabel(mois)} ✓`)
+    toast.success(`${n} bulletin(s) en brouillon pour ${moisLabel(mois)}${saut ? ` · ${saut} déjà validé(s) conservé(s)` : ''}`)
   }
-  async function supprimer(b) { if (confirm(`Supprimer le bulletin de ${b.employeNom} ?`)) await removeItem(COL.bulletins, b.id) }
+  async function valider(b) { await updateItem(COL.bulletins, b.id, { statut: 'valide' }); toast.success('Bulletin validé — comptabilisé ✓') }
+  async function marquerPaye(b) { await updateItem(COL.bulletins, b.id, { statut: 'paye' }); toast.success('Marqué payé') }
+  async function validerMois() {
+    const brouillons = bulletinsMois.filter((b) => b.statut === 'brouillon')
+    if (brouillons.length === 0) return toast.error('Aucun brouillon à valider.')
+    if (!confirm(`Valider ${brouillons.length} bulletin(s) ? Ils seront comptabilisés (journal PA).`)) return
+    for (const b of brouillons) await updateItem(COL.bulletins, b.id, { statut: 'valide' })
+    toast.success(`${brouillons.length} bulletin(s) validé(s) et comptabilisé(s) ✓`)
+  }
+  async function supprimer(b) {
+    if (b.statut !== 'brouillon') return toast.error('Un bulletin validé ne peut pas être supprimé.')
+    if (confirm(`Supprimer le bulletin de ${b.employeNom} ?`)) await removeItem(COL.bulletins, b.id)
+  }
 
   return (
     <div className="space-y-5">
@@ -53,7 +68,8 @@ export default function Paie() {
         </div>
         <div className="flex items-end gap-2">
           <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className="input-base !w-auto" />
-          <Button style={{ background: '#0284c7' }} onClick={genererPaie}><Zap size={16} /> Générer la paie</Button>
+          <Button variant="outline" onClick={genererPaie}><Zap size={16} /> Générer (brouillon)</Button>
+          <Button style={{ background: '#0284c7' }} onClick={validerMois}><BadgeCheck size={16} /> Valider le mois</Button>
         </div>
       </header>
 
@@ -95,7 +111,11 @@ export default function Paie() {
                   <td className="px-3 py-2 text-right text-gray-500">{formatMoney(b.its)}</td>
                   <td className="px-3 py-2 text-right font-bold text-green-700 dark:text-green-400">{formatMoney(b.net)}</td>
                   <td className="px-3 py-2"><Badge tone={STATUTS_BULLETIN[b.statut]?.tone}>{STATUTS_BULLETIN[b.statut]?.label}</Badge></td>
-                  <td className="px-2 py-2"><button onClick={() => supprimer(b)} className="rounded p-1.5 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button></td>
+                  <td className="px-2 py-2"><div className="flex justify-end gap-1">
+                    {b.statut === 'brouillon' && <button onClick={() => valider(b)} title="Valider (comptabiliser)" className="rounded p-1.5 text-green-600 hover:bg-green-50"><CheckCircle2 size={15} /></button>}
+                    {b.statut === 'valide' && <button onClick={() => marquerPaye(b)} title="Marquer payé" className="rounded p-1.5 text-sky-600 hover:bg-sky-50"><BadgeCheck size={15} /></button>}
+                    {b.statut === 'brouillon' && <button onClick={() => supprimer(b)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
+                  </div></td>
                 </tr>
               ))}
             </tbody>
