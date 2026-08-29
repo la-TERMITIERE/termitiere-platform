@@ -326,7 +326,11 @@ export default function Sidebar({ open, onClose }) {
                 </Link>
               )}
               {moduleNav.map((item) => (
-                item.to === '/projet/projets' ? (
+                item.heading ? (
+                  <p key={`h-${item.heading}`} className="px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-wider text-white/45">
+                    {item.heading}
+                  </p>
+                ) : item.to === '/projet/projets' ? (
                   <ProjetsNavMenu key={item.to} item={item} secteursMenu={secteursMenu}
                     badgeCount={item.badgeKey && badges[item.badgeKey] > 0 ? badges[item.badgeKey] : 0}
                     isActive={location.pathname.startsWith('/projet/projets') && !location.pathname.startsWith('/projet/projets/liste')}
