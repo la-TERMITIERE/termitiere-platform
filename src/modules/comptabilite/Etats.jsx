@@ -1,11 +1,13 @@
 // COMPTABILITÉ — États Financiers (aligné FEZIRE /accounting/financial-reports).
 // Onglets : Bilan · Résultat · Flux Trésorerie · Ratios & Analyses.
 import { useMemo, useState } from 'react'
-import { BarChart2, CheckCircle2 } from 'lucide-react'
+import { BarChart2, CheckCircle2, FileDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
+import Button from '../../shared/ui/Button'
 import { formatMoney } from '../../utils/formatters'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { useCompta } from './useCompta'
 import { balance, compteDeResultat, soldePrefixe } from './logic'
 
@@ -36,6 +38,25 @@ export default function Etats() {
     return { actif, passif, totalActif, totalPassif: totalPassifHorsResultat + resultatNet, resultatNet }
   }, [bal, plan, res])
 
+  const exporter = () => {
+    const colPoste = [
+      { key: 'compte', label: 'N° Compte', width: 12 },
+      { key: 'libelle', label: 'Rubrique / Poste', width: 40 },
+      { key: 'net', label: 'Net (XOF)', type: 'money', width: 18 }
+    ]
+    exportRapportExcel({
+      filename: `etats-financiers-${exercice}.xlsx`,
+      sections: [
+        { name: 'Bilan Actif', title: `Bilan — ACTIF · Exercice ${exercice}`, subtitle: 'SYSCOHADA · devise XOF', columns: colPoste, rows: bilan.actif, totals: { __label: "TOTAL DE L'ACTIF", net: bilan.totalActif } },
+        { name: 'Bilan Passif', title: `Bilan — PASSIF & CAPITAUX · Exercice ${exercice}`, subtitle: 'SYSCOHADA · devise XOF', columns: colPoste, rows: [...bilan.passif, { compte: '120/129', libelle: "Résultat Net de l'exercice", net: bilan.resultatNet }], totals: { __label: 'TOTAL DU PASSIF & CAPITAUX', net: bilan.totalPassif } },
+        { name: 'Compte de résultat', title: `Compte de résultat · Exercice ${exercice}`, subtitle: 'SYSCOHADA · devise XOF',
+          columns: [{ key: 'poste', label: 'Poste', width: 40 }, { key: 'montant', label: 'Montant (XOF)', type: 'money', width: 20 }],
+          rows: [{ poste: "Produits d'exploitation (classe 7)", montant: res.produits }, { poste: "Charges d'exploitation (classe 6)", montant: -res.charges }],
+          totals: { __label: res.benefice ? 'RÉSULTAT NET (Bénéfice)' : 'RÉSULTAT NET (Perte)', montant: res.resultat } }
+      ]
+    })
+  }
+
   if (loading) return <div className="py-16 text-center text-gray-400">Chargement…</div>
 
   return (
@@ -47,8 +68,11 @@ export default function Etats() {
           </h1>
           <p className="text-sm text-gray-500">Consultez les états financiers réglementaires, les flux de trésorerie et les indicateurs analytiques de l'organisation.</p>
         </div>
-        <input type="number" value={exercice} onChange={(e) => setExercice(Number(e.target.value))}
-          className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5" />
+        <div className="flex items-center gap-2">
+          <input type="number" value={exercice} onChange={(e) => setExercice(Number(e.target.value))}
+            className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5" />
+          <Button variant="outline" onClick={exporter}><FileDown size={15} /> Exporter (Excel)</Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-1.5">

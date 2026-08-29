@@ -1,6 +1,6 @@
 // RH — Paie & Bulletins (Temps & Paie). Génère les bulletins mensuels (CNSS/ITS Togo).
 import { useMemo, useState } from 'react'
-import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck } from 'lucide-react'
+import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck, FileDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -8,6 +8,7 @@ import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
+import { genererRapportPDF } from '../../utils/exportPDF'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { calculerBulletin, STATUTS_BULLETIN, PAIE_CONFIG_DEFAUT, COMPTA_PAIE, MOIS_LABELS, COL } from './store/rhStore'
 
@@ -54,6 +55,28 @@ export default function Paie() {
   async function supprimer(b) {
     if (b.statut !== 'brouillon') return toast.error('Un bulletin validé ne peut pas être supprimé.')
     if (confirm(`Supprimer le bulletin de ${b.employeNom} ?`)) await removeItem(COL.bulletins, b.id)
+  }
+  async function bulletinPDF(b) {
+    const f = (v) => `${Math.round(Number(v) || 0).toLocaleString('fr-FR')} FCFA`
+    await genererRapportPDF({
+      titre: `Bulletin de paie — ${b.employeNom} — ${moisLabel(b.mois)}`,
+      colonnes: ['Rubrique', 'Montant'],
+      lignes: [
+        ['Poste', b.poste || '—'],
+        ['Département', b.departement || '—'],
+        ['Salaire de base', f(b.salaireBase)],
+        ['Primes', f(b.primes)],
+        ['Salaire brut', f(b.brutTotal)],
+        ['CNSS salarié (retenue)', '- ' + f(b.cnssSalarie)],
+        ['ITS (impôt retenu)', '- ' + f(b.its)],
+        ['NET À PAYER', f(b.net)],
+        ['—', '—'],
+        ['CNSS employeur (charge patronale)', f(b.cnssEmployeur)],
+        ['Coût total employeur', f(b.coutEmployeur)]
+      ],
+      fichier: `bulletin-${b.mois}-${(b.employeNom || '').replace(/\s+/g, '_')}.pdf`,
+      module: 'default'
+    })
   }
 
   return (
@@ -112,6 +135,7 @@ export default function Paie() {
                   <td className="px-3 py-2 text-right font-bold text-green-700 dark:text-green-400">{formatMoney(b.net)}</td>
                   <td className="px-3 py-2"><Badge tone={STATUTS_BULLETIN[b.statut]?.tone}>{STATUTS_BULLETIN[b.statut]?.label}</Badge></td>
                   <td className="px-2 py-2"><div className="flex justify-end gap-1">
+                    <button onClick={() => bulletinPDF(b)} title="Bulletin PDF" className="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"><FileDown size={15} /></button>
                     {b.statut === 'brouillon' && <button onClick={() => valider(b)} title="Valider (comptabiliser)" className="rounded p-1.5 text-green-600 hover:bg-green-50"><CheckCircle2 size={15} /></button>}
                     {b.statut === 'valide' && <button onClick={() => marquerPaye(b)} title="Marquer payé" className="rounded p-1.5 text-sky-600 hover:bg-sky-50"><BadgeCheck size={15} /></button>}
                     {b.statut === 'brouillon' && <button onClick={() => supprimer(b)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}

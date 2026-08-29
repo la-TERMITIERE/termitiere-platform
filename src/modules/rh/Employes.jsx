@@ -12,12 +12,14 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
-import { DEPARTEMENTS } from './store/rhStore'
+import { useDepartements } from './useDepartements'
 
-const empty = () => ({ nom: '', poste: '', departement: DEPARTEMENTS[0], dateEmbauche: todayStr(), salaire: 0, contact: '' })
+const empty = () => ({ nom: '', poste: '', departement: '', dateEmbauche: todayStr(), salaire: 0, contact: '' })
 
 export default function Employes() {
   const { data: employes } = useCollection('rh_employes')
+  const { data: postes } = useCollection('rh_postes')
+  const { noms: departements } = useDepartements()
   const [modal, setModal] = useState(null)
 
   async function save() {
@@ -58,8 +60,11 @@ export default function Employes() {
         {modal && (
           <div className="grid grid-cols-2 gap-3">
             <FormGroup label="Nom" required className="col-span-2"><Input value={modal.data.nom} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, nom: e.target.value } }))} /></FormGroup>
-            <FormGroup label="Poste"><Input value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} /></FormGroup>
-            <FormGroup label="Département"><Select value={modal.data.departement} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, departement: e.target.value } }))} options={DEPARTEMENTS.map((d) => ({ value: d, label: d }))} /></FormGroup>
+            <FormGroup label="Poste">
+              <Input list="rh-postes-liste" value={modal.data.poste} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, poste: e.target.value } }))} />
+              <datalist id="rh-postes-liste">{postes.map((p) => <option key={p.id} value={p.intitule} />)}</datalist>
+            </FormGroup>
+            <FormGroup label="Département"><Select value={modal.data.departement} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, departement: e.target.value } }))} options={[{ value: '', label: '— Non affecté —' }, ...departements.map((d) => ({ value: d, label: d }))]} /></FormGroup>
             <FormGroup label="Date d'embauche"><Input type="date" value={modal.data.dateEmbauche} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, dateEmbauche: e.target.value } }))} /></FormGroup>
             <FormGroup label="Salaire (FCFA)"><Input type="number" min="0" value={modal.data.salaire} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, salaire: parseInt(e.target.value) || 0 } }))} /></FormGroup>
             <FormGroup label="Contact" className="col-span-2"><Input value={modal.data.contact} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, contact: e.target.value } }))} /></FormGroup>

@@ -3,21 +3,23 @@ import { useMemo } from 'react'
 import { Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
-import { DEPARTEMENTS, COL } from './store/rhStore'
+import { COL } from './store/rhStore'
+import { useDepartements } from './useDepartements'
 import { PageHeader } from './rhui'
 
 export default function Organigramme() {
   const { data: employes } = useCollection(COL.employes)
-  const { data: departements } = useCollection(COL.departements)
+  const { records: departements, noms: nomsDepts } = useDepartements()
 
   const depts = useMemo(() => {
-    const noms = [...new Set([...DEPARTEMENTS, ...departements.map((d) => d.nom), ...employes.map((e) => e.departement).filter(Boolean)])]
+    // Départements déclarés + tout département encore référencé par un employé.
+    const noms = [...new Set([...nomsDepts, ...employes.map((e) => e.departement).filter(Boolean)])]
     return noms.map((nom) => ({
       nom,
       responsable: departements.find((d) => d.nom === nom)?.responsable,
       membres: employes.filter((e) => e.departement === nom)
     })).filter((d) => d.membres.length > 0 || d.responsable)
-  }, [employes, departements])
+  }, [employes, departements, nomsDepts])
 
   return (
     <div className="space-y-5">

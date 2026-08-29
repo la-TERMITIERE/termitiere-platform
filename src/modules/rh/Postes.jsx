@@ -9,14 +9,16 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
-import { DEPARTEMENTS, COL } from './store/rhStore'
+import { COL } from './store/rhStore'
+import { useDepartements } from './useDepartements'
 
 const CLASSIFICATIONS = ['Ouvrier', 'Employé', 'Agent de maîtrise', 'Cadre', 'Direction']
-const vide = () => ({ intitule: '', departement: DEPARTEMENTS[0], classification: 'Employé', salaireBase: 0, missions: '' })
+const vide = () => ({ intitule: '', departement: '', classification: 'Employé', salaireBase: 0, missions: '' })
 
 export default function Postes() {
   const { data: postes } = useCollection(COL.postes)
   const { data: employes } = useCollection(COL.employes)
+  const { noms: departements } = useDepartements()
   const [modal, setModal] = useState(null)
 
   const effectif = (intitule) => employes.filter((e) => e.poste === intitule).length
@@ -80,7 +82,7 @@ export default function Postes() {
           <div className="space-y-3">
             <Champ label="Intitulé du poste"><input value={modal.intitule} onChange={(e) => setModal({ ...modal, intitule: e.target.value })} className="input-base" /></Champ>
             <div className="grid grid-cols-2 gap-3">
-              <Champ label="Département"><select value={modal.departement} onChange={(e) => setModal({ ...modal, departement: e.target.value })} className="input-base">{DEPARTEMENTS.map((d) => <option key={d}>{d}</option>)}</select></Champ>
+              <Champ label="Département"><select value={modal.departement} onChange={(e) => setModal({ ...modal, departement: e.target.value })} className="input-base"><option value="">— Non affecté —</option>{departements.map((d) => <option key={d}>{d}</option>)}</select></Champ>
               <Champ label="Classification"><select value={modal.classification} onChange={(e) => setModal({ ...modal, classification: e.target.value })} className="input-base">{CLASSIFICATIONS.map((c) => <option key={c}>{c}</option>)}</select></Champ>
             </div>
             <Champ label="Salaire de base (XOF)"><input type="number" value={modal.salaireBase} onChange={(e) => setModal({ ...modal, salaireBase: e.target.value })} className="input-base" /></Champ>

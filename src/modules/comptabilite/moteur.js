@@ -22,5 +22,6 @@ export const MODELES_ACTIFS = [
   { code: 'MOD_DEPENSE', fait: 'DEPENSE_DECAISSEE', label: 'Imputation dépense décaissée', journal: 'AC', debit: 'Compte de charge (selon catégorie)', credit: '530000 Caisse', statut: 'actif' },
   { code: 'MOD_DEPENSE_PAU', fait: 'DEPENSE_PAU', label: 'Imputation dépense PAU', journal: 'AC', debit: 'Compte de charge', credit: '104000 Compte de l\'exploitant', statut: 'actif' },
   { code: 'MOD_REVENU', fait: 'REVENU_MANUEL', label: 'Imputation revenu manuel', journal: 'VE', debit: '530000 Caisse', credit: '708000 Produits annexes', statut: 'actif' },
-  { code: 'MOD_PAIE', fait: 'PAIE_BULLETIN', label: 'Imputation paie (bulletins RH)', journal: 'PA', debit: '641000 Rémunérations (+ 664000 charges patronales)', credit: '421000 Personnel dû, 431000 CNSS, 447000 ITS', statut: 'actif' }
+  { code: 'MOD_PAIE', fait: 'PAIE_BULLETIN', label: 'Imputation paie (bulletins RH)', journal: 'PA', debit: '641000 Rémunérations (+ 664000 charges patronales)', credit: '421000 Personnel dû, 431000 CNSS, 447000 ITS', statut: 'actif' },
+  { code: 'MOD_VENTE', fait: 'FACTURE_VENTE', label: 'Imputation ventes (factures des modules)', journal: 'VE', debit: '530000 Caisse', credit: '701000 / 706000 Produits (selon secteur)', statut: 'actif' }
 ]

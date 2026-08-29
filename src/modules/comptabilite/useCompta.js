@@ -23,12 +23,20 @@ export function useCompta() {
   const { data: depenses, loading: ld } = useCollection('depense_depenses')
   const { data: revenusManuels, loading: lr } = useCollection('depense_revenus_manuels')
   const { data: bulletins } = useCollection('rh_bulletins')
+  // Factures de vente des modules → produits (classe 7).
+  const { data: facturesAgro } = useCollection('agro_factures')
+  const { data: facturesLogistique } = useCollection('logistique_factures')
+  const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
+  const { data: paiementsGarderie } = useCollection('garderie_paiements')
 
   const plan = useMemo(() => planEffectif(comptesPerso), [comptesPerso])
 
   const ecrituresAutomatiques = useMemo(
-    () => ecrituresAuto({ depenses, revenusManuels, bulletins }),
-    [depenses, revenusManuels, bulletins]
+    () => ecrituresAuto({
+      depenses, revenusManuels, bulletins,
+      ventes: { facturesAgro, facturesLogistique, facturesEvenementiel, paiementsGarderie }
+    }),
+    [depenses, revenusManuels, bulletins, facturesAgro, facturesLogistique, facturesEvenementiel, paiementsGarderie]
   )
 
   // Toutes les écritures : saisies manuellement + générées automatiquement.

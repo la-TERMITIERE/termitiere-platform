@@ -144,11 +144,48 @@ export function ecrituresDepuisBulletins(bulletins = []) {
     })
 }
 
+// ── Factures de vente des modules → écritures de vente (journal VE) ───────────
+// Mêmes critères que src/modules/depense/revenus.js (chiffre d'affaires réalisé) :
+//   agro → factures « certifiée » ; logistique → « approuvée » ; briqueterie →
+//   toutes ; garderie → paiements encaissés. Débit 530000 Caisse, crédit compte
+//   de produit selon le secteur. Montant = totalTTC (ou montantPaye pour garderie).
+const COMPTE_PRODUIT = { agro: '701000', evenementiel: '701000', logistique: '706000', garderie: '706000' }
+
+function ecritureVente({ id, prefixe, module, date, montant, libelle }) {
+  const cp = COMPTE_PRODUIT[module] || '707000'
+  return {
+    id: `auto_vte_${prefixe}_${id}`,
+    date: date ? String(date).slice(0, 10) : '',
+    journal: 'VE', libelle, piece: `AUTO-VE-${prefixe.toUpperCase()}-${id}`,
+    statut: 'validee', source: 'auto', module, secteur: module,
+    lignes: [
+      { compte: '530000', libelle, debit: montant, credit: 0 },
+      { compte: cp, libelle, debit: 0, credit: montant }
+    ]
+  }
+}
+
+export function ecrituresDepuisVentes({ facturesAgro = [], facturesLogistique = [], facturesEvenementiel = [], paiementsGarderie = [] } = {}) {
+  const out = []
+  facturesAgro.filter((f) => f.statut === 'certifiee' && (Number(f.totalTTC) || 0) > 0).forEach((f) =>
+    out.push(ecritureVente({ id: f.id, prefixe: 'agro', module: 'agro', date: f.date, montant: Number(f.totalTTC) || 0, libelle: `Vente MAXI-AGRO ${f.numero || f.client || ''}`.trim() })))
+  facturesLogistique.filter((f) => f.statut === 'approuvee' && (Number(f.totalTTC) || 0) > 0).forEach((f) =>
+    out.push(ecritureVente({ id: f.id, prefixe: 'log', module: 'logistique', date: f.date, montant: Number(f.totalTTC) || 0, libelle: `Vente MAXI LOGISTIQUE ${f.numero || f.client || ''}`.trim() })))
+  facturesEvenementiel.filter((f) => (Number(f.totalTTC) || 0) > 0).forEach((f) =>
+    out.push(ecritureVente({ id: f.id, prefixe: 'briq', module: 'evenementiel', date: f.date, montant: Number(f.totalTTC) || 0, libelle: `Vente E-BRIQUETERIE ${f.numero || f.client || ''}`.trim() })))
+  paiementsGarderie.filter((p) => (Number(p.montantPaye) || 0) > 0).forEach((p) => {
+    const date = p.type === 'journalier' ? p.date : `${p.annee}-${String(p.mois).padStart(2, '0')}-28`
+    out.push(ecritureVente({ id: p.id, prefixe: 'gard', module: 'garderie', date, montant: Number(p.montantPaye) || 0, libelle: `Encaissement E-GARDERIE ${p.enfantNom || ''}`.trim() }))
+  })
+  return out
+}
+
 // ── Agrégat : toutes les écritures automatiques ───────────────────────────────
-export function ecrituresAuto({ depenses = [], revenusManuels = [], bulletins = [] } = {}) {
+export function ecrituresAuto({ depenses = [], revenusManuels = [], bulletins = [], ventes = {} } = {}) {
   return [
     ...ecrituresDepuisDepenses(depenses),
     ...ecrituresDepuisRevenusManuels(revenusManuels),
-    ...ecrituresDepuisBulletins(bulletins)
+    ...ecrituresDepuisBulletins(bulletins),
+    ...ecrituresDepuisVentes(ventes)
   ]
 }
