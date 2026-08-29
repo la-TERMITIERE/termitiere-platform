@@ -1,9 +1,11 @@
 // COMPTABILITÉ — Grand Livre & Balance (3 onglets, aligné FEZIRE /accounting/ledger-balance).
 import { useMemo, useState } from 'react'
-import { Scale, Search, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Scale, Search, CheckCircle2, AlertTriangle, FileDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
+import Button from '../../shared/ui/Button'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { useCompta } from './useCompta'
 import { balance, grandLivreCompte } from './logic'
 import { getJournal, classeDe } from './data'
@@ -19,15 +21,38 @@ export default function GrandLivre() {
 
   const bal = useMemo(() => balance(mvtsValides, plan, bornes), [mvtsValides, plan, du, au])
 
+  const exporter = () => {
+    const periode = du || au ? `Période ${du || '…'} → ${au || '…'}` : 'Depuis l\'origine'
+    exportRapportExcel({
+      filename: `balance-${(du || 'origine')}_${(au || 'a-ce-jour')}.xlsx`,
+      sections: [{
+        name: 'Balance', title: 'Balance générale des comptes', subtitle: `${periode} · devise XOF`,
+        columns: [
+          { key: 'compte', label: 'Code', width: 12 },
+          { key: 'libelle', label: 'Intitulé du compte', width: 40 },
+          { key: 'debit', label: 'Mvt Débit', type: 'money', width: 16 },
+          { key: 'credit', label: 'Mvt Crédit', type: 'money', width: 16 },
+          { key: 'soldeDebiteur', label: 'Solde Débiteur', type: 'money', width: 16 },
+          { key: 'soldeCrediteur', label: 'Solde Créditeur', type: 'money', width: 16 }
+        ],
+        rows: bal.postes,
+        totals: { __label: 'TOTAL GÉNÉRAL', debit: bal.totaux.debit, credit: bal.totaux.credit, soldeDebiteur: bal.totaux.soldeDebiteur, soldeCrediteur: bal.totaux.soldeCrediteur }
+      }]
+    })
+  }
+
   if (loading) return <div className="py-16 text-center text-gray-400">Chargement…</div>
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-          <Scale className="text-orange-600" /> Grand Livre &amp; Balance
-        </h1>
-        <p className="text-sm text-gray-500">Consultez les balances périodiques de comptes et le grand livre analytique de vos transactions.</p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
+            <Scale className="text-orange-600" /> Grand Livre &amp; Balance
+          </h1>
+          <p className="text-sm text-gray-500">Consultez les balances périodiques de comptes et le grand livre analytique de vos transactions.</p>
+        </div>
+        <Button variant="outline" onClick={exporter}><FileDown size={15} /> Exporter (Excel)</Button>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">

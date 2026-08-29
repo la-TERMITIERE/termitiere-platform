@@ -1,10 +1,12 @@
 // RH — État des salaires (Temps & Paie). Synthèse de la paie par mois et département.
 import { useMemo, useState } from 'react'
-import { BarChart2 } from 'lucide-react'
+import { BarChart2, FileDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
+import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, todayStr } from '../../utils/formatters'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, COL } from './store/rhStore'
 
 export default function EtatSalaires() {
@@ -30,6 +32,39 @@ export default function EtatSalaires() {
 
   const moisLabel = (() => { const [a, m] = mois.split('-'); return m ? `${MOIS_LABELS[Number(m) - 1]} ${a}` : mois })()
 
+  const exporter = () => {
+    exportRapportExcel({
+      filename: `etat-salaires-${mois}.xlsx`,
+      sections: [
+        {
+          name: 'Bulletins', title: `Bulletins de paie — ${moisLabel}`, subtitle: 'Détail par employé · devise XOF',
+          columns: [
+            { key: 'employeNom', label: 'Employé', width: 24 },
+            { key: 'poste', label: 'Poste', width: 20 },
+            { key: 'departement', label: 'Département', width: 18 },
+            { key: 'brutTotal', label: 'Brut', type: 'money', width: 15 },
+            { key: 'cnssSalarie', label: 'CNSS sal.', type: 'money', width: 14 },
+            { key: 'its', label: 'ITS', type: 'money', width: 14 },
+            { key: 'net', label: 'Net à payer', type: 'money', width: 15 }
+          ],
+          rows: b,
+          totals: { __label: 'TOTAL', brutTotal: totaux.brut, net: totaux.net }
+        },
+        {
+          name: 'Par département', title: `Masse salariale par département — ${moisLabel}`, subtitle: 'Synthèse',
+          columns: [
+            { key: 'dept', label: 'Département', width: 24 },
+            { key: 'effectif', label: 'Effectif', type: 'number', width: 12 },
+            { key: 'brut', label: 'Masse brute', type: 'money', width: 18 },
+            { key: 'net', label: 'Net payé', type: 'money', width: 18 }
+          ],
+          rows: parDept,
+          totals: { __label: 'TOTAL', brut: totaux.brut, net: totaux.net }
+        }
+      ]
+    })
+  }
+
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -40,7 +75,10 @@ export default function EtatSalaires() {
           </h1>
           <p className="text-sm text-gray-500">Synthèse de la masse salariale par période et par département.</p>
         </div>
-        <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className="input-base !w-auto" />
+        <div className="flex items-center gap-2">
+          <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className="input-base !w-auto" />
+          <Button variant="outline" onClick={exporter} disabled={b.length === 0}><FileDown size={15} /> Exporter (Excel)</Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

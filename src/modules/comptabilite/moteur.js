@@ -13,12 +13,14 @@ export const CATALOGUE_FAITS = [
   { code: 'ACHAT_MATIERES', label: 'Achat de matières (Briqueterie)', source: 'E-BRIQUETERIE', desc: 'Coût des matières premières entrées.' },
   { code: 'FACTURE_VENTE', label: 'Facture de vente émise', source: 'Multi-modules', desc: 'Une facture client émise (agro, logistique, briqueterie…).' },
   { code: 'IMMO_ACQUISE', label: 'Immobilisation acquise', source: 'COMPTABILITÉ', desc: 'Un actif durable entré au registre.' },
-  { code: 'IMMO_DOTATION', label: 'Dotation aux amortissements', source: 'COMPTABILITÉ', desc: 'Amortissement annuel d\'une immobilisation.' }
+  { code: 'IMMO_DOTATION', label: 'Dotation aux amortissements', source: 'COMPTABILITÉ', desc: 'Amortissement annuel d\'une immobilisation.' },
+  { code: 'PAIE_BULLETIN', label: 'Bulletin de paie validé', source: 'RH', desc: 'Un bulletin de salaire validé dans le module RH.' }
 ]
 
 // Modèles d'imputation actifs (règles fait → écriture) appliqués par passerelles.js.
 export const MODELES_ACTIFS = [
   { code: 'MOD_DEPENSE', fait: 'DEPENSE_DECAISSEE', label: 'Imputation dépense décaissée', journal: 'AC', debit: 'Compte de charge (selon catégorie)', credit: '530000 Caisse', statut: 'actif' },
   { code: 'MOD_DEPENSE_PAU', fait: 'DEPENSE_PAU', label: 'Imputation dépense PAU', journal: 'AC', debit: 'Compte de charge', credit: '104000 Compte de l\'exploitant', statut: 'actif' },
-  { code: 'MOD_REVENU', fait: 'REVENU_MANUEL', label: 'Imputation revenu manuel', journal: 'VE', debit: '530000 Caisse', credit: '708000 Produits annexes', statut: 'actif' }
+  { code: 'MOD_REVENU', fait: 'REVENU_MANUEL', label: 'Imputation revenu manuel', journal: 'VE', debit: '530000 Caisse', credit: '708000 Produits annexes', statut: 'actif' },
+  { code: 'MOD_PAIE', fait: 'PAIE_BULLETIN', label: 'Imputation paie (bulletins RH)', journal: 'PA', debit: '641000 Rémunérations (+ 664000 charges patronales)', credit: '421000 Personnel dû, 431000 CNSS, 447000 ITS', statut: 'actif' }
 ]

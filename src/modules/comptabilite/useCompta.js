@@ -22,12 +22,13 @@ export function useCompta() {
   // Sources externes converties automatiquement en écritures (passerelles).
   const { data: depenses, loading: ld } = useCollection('depense_depenses')
   const { data: revenusManuels, loading: lr } = useCollection('depense_revenus_manuels')
+  const { data: bulletins } = useCollection('rh_bulletins')
 
   const plan = useMemo(() => planEffectif(comptesPerso), [comptesPerso])
 
   const ecrituresAutomatiques = useMemo(
-    () => ecrituresAuto({ depenses, revenusManuels }),
-    [depenses, revenusManuels]
+    () => ecrituresAuto({ depenses, revenusManuels, bulletins }),
+    [depenses, revenusManuels, bulletins]
   )
 
   // Toutes les écritures : saisies manuellement + générées automatiquement.

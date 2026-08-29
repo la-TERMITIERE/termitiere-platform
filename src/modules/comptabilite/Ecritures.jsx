@@ -14,10 +14,10 @@ import { useAuth } from '../../hooks/useAuth'
 import { JOURNAUX, getJournal, journalDefaut, STATUTS_ECRITURE, COL } from './data'
 import { validerEcriture, totalDebit, totalCredit, ecritureEquilibree, prochainNumeroPiece } from './logic'
 
-const ligneVide = () => ({ compte: '', libelle: '', debit: '', credit: '' })
+const ligneVide = () => ({ compte: '', libelle: '', debit: '', credit: '', axe: '' })
 
 export default function Ecritures() {
-  const { plan, ecritures, loading } = useCompta()
+  const { plan, ecritures, centres, exercices, loading } = useCompta()
   const { user } = useAuth()
   const [modal, setModal] = useState(null)
   const [filtreJournal, setFiltreJournal] = useState('')
@@ -34,6 +34,7 @@ export default function Ecritures() {
     setErreurs([])
     setModal({
       date: todayStr(), journal: journalDefaut, libelle: '', piece: '',
+      exercice: todayStr().slice(0, 4),
       statut: 'brouillon', lignes: [ligneVide(), ligneVide()]
     })
   }
@@ -62,11 +63,12 @@ export default function Ecritures() {
     // Nettoyage des lignes (montants → nombres, on retire les lignes vides).
     const lignes = (modal.lignes || [])
       .filter((l) => l.compte && ((Number(l.debit) || 0) > 0 || (Number(l.credit) || 0) > 0))
-      .map((l) => ({ compte: String(l.compte), libelle: l.libelle || '', debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 }))
+      .map((l) => ({ compte: String(l.compte), libelle: l.libelle || '', debit: Number(l.debit) || 0, credit: Number(l.credit) || 0, axe: l.axe || '' }))
     const annee = (modal.date || todayStr()).slice(0, 4)
     const piece = modal.piece || prochainNumeroPiece(ecritures, modal.journal, annee)
     const payload = {
       date: modal.date, journal: modal.journal, libelle: modal.libelle || '',
+      exercice: modal.exercice || annee,
       piece, statut: statutCible, lignes,
       ...(modal.id ? {} : { creePar: user?.email || user?.nom || '—' })
     }
@@ -89,6 +91,12 @@ export default function Ecritures() {
   const c = modal ? totalCredit(modal.lignes) : 0
   const equilibre = modal ? ecritureEquilibree(modal.lignes) : false
   const ecart = d - c
+
+  // Options d'exercice : exercices déclarés, sinon année de la pièce ± 1.
+  const anneePiece = (modal?.date || todayStr()).slice(0, 4)
+  const optionsExercice = (exercices && exercices.length)
+    ? exercices.map((x) => x.nom || String(x.annee || anneePiece))
+    : [String(Number(anneePiece) - 1), anneePiece, String(Number(anneePiece) + 1)]
 
   if (loading) return <div className="py-16 text-center text-gray-400">Chargement…</div>
 
@@ -192,10 +200,16 @@ export default function Ecritures() {
                 {erreurs.map((e, i) => <p key={i}>• {e}</p>)}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Champ label="Date">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Champ label="Date comptable">
                 <input type="date" value={modal.date} onChange={(e) => setModal({ ...modal, date: e.target.value })}
                   className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
+              </Champ>
+              <Champ label="Exercice fiscal">
+                <select value={modal.exercice || (modal.date || todayStr()).slice(0, 4)} onChange={(e) => setModal({ ...modal, exercice: e.target.value })}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm dark:border-white/10 dark:bg-white/5">
+                  {optionsExercice.map((ex) => <option key={ex} value={ex}>Exercice {ex}</option>)}
+                </select>
               </Champ>
               <Champ label="Journal">
                 <select value={modal.journal} onChange={(e) => setModal({ ...modal, journal: e.target.value })}
@@ -203,7 +217,7 @@ export default function Ecritures() {
                   {JOURNAUX.map((j) => <option key={j.code} value={j.code}>{j.code} — {j.label}</option>)}
                 </select>
               </Champ>
-              <Champ label="Libellé de la pièce" className="col-span-2">
+              <Champ label="Libellé de la pièce" className="col-span-2 sm:col-span-3">
                 <input value={modal.libelle} onChange={(e) => setModal({ ...modal, libelle: e.target.value })}
                   placeholder="ex. Achat carburant motos — MAXI LOGISTIQUE"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
@@ -221,6 +235,7 @@ export default function Ecritures() {
                   <tr className="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-white/5">
                     <th className="px-2 py-2">Compte</th>
                     <th className="px-2 py-2">Libellé ligne</th>
+                    <th className="px-2 py-2">Axe analytique</th>
                     <th className="px-2 py-2 text-right">Débit</th>
                     <th className="px-2 py-2 text-right">Crédit</th>
                     <th className="w-8"></th>
@@ -239,6 +254,13 @@ export default function Ecritures() {
                           className="w-full min-w-[140px] rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5" />
                       </td>
                       <td className="px-2 py-1.5">
+                        <select value={l.axe || ''} onChange={(e) => setLigne(i, 'axe', e.target.value)}
+                          className="w-32 rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5">
+                          <option value="">— Axe…</option>
+                          {(centres || []).map((ce) => <option key={ce.id} value={ce.code || ce.libelle}>{ce.libelle}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-1.5">
                         <input inputMode="numeric" value={l.debit} onChange={(e) => setLigne(i, 'debit', e.target.value.replace(/[^0-9]/g, ''))}
                           className="w-28 rounded border border-gray-200 px-2 py-1.5 text-right text-sm dark:border-white/10 dark:bg-white/5" />
                       </td>
@@ -254,7 +276,7 @@ export default function Ecritures() {
                     </tr>
                   ))}
                   <tr className="border-t border-gray-100 bg-gray-50/60 font-bold dark:border-white/10 dark:bg-white/5">
-                    <td className="px-2 py-2" colSpan={2}>
+                    <td className="px-2 py-2" colSpan={3}>
                       <button onClick={ajouterLigne} className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 hover:underline"><Plus size={13} /> Ajouter une ligne</button>
                     </td>
                     <td className="px-2 py-2 text-right">{formatMoney(d)}</td>
