@@ -444,7 +444,7 @@ export default function DecisionBI({
       <Card title="Évolution du chiffre d'affaires (global)">
         <div className="h-56">
           {evolutionCA.labels.length
-            ? <Line data={evolutionCA} options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }} />
+            ? <Line data={evolutionCA} options={{ maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }} />
             : <p className="py-16 text-center text-sm text-gray-400">Aucune facture sur la période</p>}
         </div>
       </Card>
@@ -723,7 +723,7 @@ function EvolutionCategorieCard({ cat, especes, evolutionDetail }) {
 
   const options = {
     maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: {
       legend: { display: false },
       tooltip: { callbacks: { label: (ctx) => (isMoney ? formatMoney(ctx.parsed.y) : formatNumber(ctx.parsed.y)) } }
