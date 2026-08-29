@@ -99,10 +99,56 @@ export function ecrituresDepuisRevenusManuels(revenus = []) {
     })
 }
 
+// ── Bulletins de paie (module RH) → écritures de paie (journal PA) ────────────
+// `bulletins` = collection `rh_bulletins`. Seuls les bulletins validés/payés sont
+// comptabilisés. Écriture SYSCOHADA (équilibrée : brut + CNSS employeur de part
+// et d'autre) :
+//   D 641000 Rémunérations (brut)        C 421000 Personnel dû (net)
+//   D 664000 Charges sociales (CNSS emp) C 431000 Sécurité sociale (CNSS sal. + emp.)
+//                                        C 447000 État, ITS retenu (impôt)
+const estComptabilisable = (b) => b.statut === 'valide' || b.statut === 'paye'
+
+export function ecrituresDepuisBulletins(bulletins = []) {
+  return bulletins
+    .filter((b) => estComptabilisable(b) && (Number(b.brutTotal) || 0) > 0)
+    .map((b) => {
+      const brut = Number(b.brutTotal) || 0
+      const net = Number(b.net) || 0
+      const cnssSal = Number(b.cnssSalarie) || 0
+      const cnssEmp = Number(b.cnssEmployeur) || 0
+      const its = Number(b.its) || 0
+      const libelle = `Paie ${b.mois || ''} — ${b.employeNom || ''}`.trim()
+      const lignes = [
+        { compte: '641000', libelle, debit: brut, credit: 0 },
+        { compte: '421000', libelle, debit: 0, credit: net },
+        { compte: '431000', libelle, debit: 0, credit: cnssSal },
+        { compte: '447000', libelle, debit: 0, credit: its }
+      ]
+      // Part patronale CNSS (charge de l'employeur) — n'impacte pas le net.
+      if (cnssEmp > 0) {
+        lignes.push({ compte: '664000', libelle, debit: cnssEmp, credit: 0 })
+        lignes.push({ compte: '431000', libelle, debit: 0, credit: cnssEmp })
+      }
+      return {
+        id: `auto_paie_${b.id}`,
+        date: b.mois ? `${b.mois}-28` : '',
+        journal: 'PA',
+        libelle,
+        piece: `AUTO-PAIE-${b.id}`,
+        statut: 'validee',
+        source: 'auto',
+        module: 'rh',
+        secteur: b.departement || '',
+        lignes
+      }
+    })
+}
+
 // ── Agrégat : toutes les écritures automatiques ───────────────────────────────
-export function ecrituresAuto({ depenses = [], revenusManuels = [] } = {}) {
+export function ecrituresAuto({ depenses = [], revenusManuels = [], bulletins = [] } = {}) {
   return [
     ...ecrituresDepuisDepenses(depenses),
-    ...ecrituresDepuisRevenusManuels(revenusManuels)
+    ...ecrituresDepuisRevenusManuels(revenusManuels),
+    ...ecrituresDepuisBulletins(bulletins)
   ]
 }
