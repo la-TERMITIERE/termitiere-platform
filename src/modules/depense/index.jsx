@@ -7,7 +7,6 @@ import RecettesDepenses from './RecettesDepenses'
 import SourcesRevenus from './SourcesRevenus'
 import Autorisations from './Autorisations'
 import Analyses from './Analyses'
-import Rentabilite from './Rentabilite'
 import Flux from './Flux'
 import Banque from './Banque'
 import Journal from './Journal'
@@ -53,7 +52,8 @@ export default function DepenseModule() {
       <Route path="budgets" element={<Navigate to="/depense/recettes-depenses" replace />} />
       <Route path="autorisations" element={<Autorisations />} />
       <Route path="analyses" element={<Analyses />} />
-      <Route path="rentabilite" element={canViewFinance(role) ? <Rentabilite /> : <AccesRefuse />} />
+      {/* Ancien écran « Rentabilité » fusionné dans « Analyses » — redirige les liens existants. */}
+      <Route path="rentabilite" element={<Navigate to="/depense/analyses" replace />} />
       <Route path="flux" element={canViewFinance(role) ? <Flux /> : <AccesRefuse />} />
       <Route path="banque" element={canViewFinance(role) ? <Banque /> : <AccesRefuse />} />
       <Route path="partenaires" element={<Partenaires module="depense" />} />

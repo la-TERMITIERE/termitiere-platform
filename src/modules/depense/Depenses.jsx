@@ -12,15 +12,15 @@ import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { setItem, removeItem, updateItem } from '../../core/db'
+import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, remboursementsPauVersDepenses, libelleSecteurSite, siteLogistiqueDe } from './logic'
+import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SEUIL_APPROBATION_PAU } from './data'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -33,17 +33,15 @@ const SECTEURS_SANS_BTP = SECTEURS.filter((s) => s.id !== SECTEUR_BTP_EXCLU)
 
 // Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
 const SOURCE_INFO = {
-  projet:            { label: 'E-G.Pro · Versement', tone: 'info' },
-  besoin:            { label: 'E-G.Pro · Besoin validé', tone: 'info' },
-  briqueterie:       { label: 'Briqueterie', tone: 'neutral' },
-  remboursement_pau: { label: 'Remboursement PAU', tone: 'warning' }
+  besoin:      { label: 'Besoin validé', tone: 'info' },
+  briqueterie: { label: 'Briqueterie', tone: 'neutral' }
 }
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
 const empty = () => ({
   secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
-  natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut,
+  natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise',
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
@@ -121,27 +119,18 @@ export default function Depenses() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
 
-  // Dépenses de E-G.Pro (secteurs autres que MAXI BAT) incluses en lecture seule
-  // dans la liste, avec tous les détails (projet, tâche, prestataire) — pas de
-  // double saisie ici, elles restent gérées depuis E-G.Pro. Les dépenses de
-  // chantier (secteur BAT) sont exclues : elles vivent désormais uniquement dans
-  // le volet BTP d'E-G.Pro (onglet Dépenses), pas ici.
-  const { data: depensesProjet } = useCollection('projet_depenses')
-  const { data: projetsTous }    = useCollection('projets')
-  const { data: tachesTous }     = useCollection('projet_taches')
+  // Tout ce qui vient d'E-G.Pro (versements, besoins de projet validés — repérables à
+  // leur `projetId`, cf. projet/Besoins.jsx) n'apparaît plus ici : ça ne se consulte
+  // que depuis E-G.Pro lui-même (onglet Dépenses), lui compris le suivi de l'apport/
+  // dette PAU et son bouton « Rembourser ». Seul reste inclus en lecture seule le coût
+  // matières Briqueterie. Les dépenses de chantier (secteur BAT) restent exclues.
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
-  // Remboursements au PAU — une vraie sortie d'argent de l'entreprise, contrairement à
-  // l'apport initial du PAU (revenu compensatoire, cf. le filtre par défaut de `liste`
-  // ci-dessous) : ils doivent donc apparaître ici comme une dépense.
-  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const depenses = useMemo(
     () => [
-      ...depensesReelles,
-      ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
-      ...coutsMatieresBriqueterie(inventairesBriq),
-      ...remboursementsPauVersDepenses(remboursementsPau)
+      ...depensesReelles.filter((d) => !d.projetId),
+      ...coutsMatieresBriqueterie(inventairesBriq)
     ].filter((d) => d.secteurId !== SECTEUR_BTP_EXCLU),
-    [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq, remboursementsPau]
+    [depensesReelles, inventairesBriq]
   )
   useEffect(() => { marquerVoletVu(user?.uid, 'depenseDepenses') }, [user?.uid])
 
@@ -152,7 +141,6 @@ export default function Depenses() {
   const [filtreSite, setFiltreSite] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('')
   const [filtreNature, setFiltreNature] = useState('')
-  const [filtreSource, setFiltreSource] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
   const [lot, setLot] = useState(null)            // ajout multiple : tableau de lignes, ou null si fermé
@@ -168,26 +156,20 @@ export default function Depenses() {
   // se met à jour tout seul (la liste `depenses` est en temps réel).
   const detail = detailId ? depenses.find((d) => d.id === detailId) || null : null
 
-  // Ouverture directe du détail d'une dépense depuis une notification (ex. apport du
-  // PAU) — évite de devoir la rechercher dans la liste. `filtreMois` seul (sans
-  // openDepenseId) sert quand plusieurs dépenses sont concernées à la fois (ex.
-  // dépenses récurrentes reconduites) : la liste s'ouvre déjà filtrée sur le bon mois.
+  // Ouverture directe du détail d'une dépense depuis une notification — évite de
+  // devoir la rechercher dans la liste. `filtreMois` seul (sans openDepenseId) sert
+  // quand plusieurs dépenses sont concernées à la fois (ex. dépenses récurrentes
+  // reconduites) : la liste s'ouvre déjà filtrée sur le bon mois.
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    const { openDepenseId, filtreMois: moisVoulu, openCreateSecteurId, filtreSource: sourceVoulue } = location.state || {}
-    if (!openDepenseId && !moisVoulu && !openCreateSecteurId && !sourceVoulue) return
+    const { openDepenseId, filtreMois: moisVoulu, openCreateSecteurId } = location.state || {}
+    if (!openDepenseId && !moisVoulu && !openCreateSecteurId) return
     if (openDepenseId) setDetailId(openDepenseId)
     if (moisVoulu) setFiltreMois(moisVoulu)
     // Bouton « Ajouter une dépense » depuis le volet Dépense d'un secteur (agro,
     // logistique…) — ouvre directement le formulaire, secteur déjà pré-rempli.
     if (openCreateSecteurId) setModal({ data: { ...empty(), secteurId: openCreateSecteurId }, isNew: true })
-    // Clic sur « Dette envers le PAU » (Dashboard/Analyses) — arrive ici déjà filtré
-    // sur les seules dépenses financées par le PAU, pour voir où l'argent est passé.
-    // La dette est un CUMUL depuis le début (pas juste le mois en cours) : on efface
-    // aussi le filtre de mois (par défaut sur le mois courant), sans quoi un apport
-    // d'un mois précédent restait invisible — « Aucune dépense trouvée » à tort.
-    if (sourceVoulue) { setFiltreSource(sourceVoulue); setFiltreMois('') }
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state])
 
@@ -197,16 +179,6 @@ export default function Depenses() {
     if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => siteLogistiqueDe(d) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
-    if (filtreSource) {
-      rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === filtreSource)
-    } else {
-      // Par défaut (aucun filtre « Financement » choisi), les apports du PAU restent
-      // hors de cette liste : ce n'est pas une charge de l'entreprise mais un revenu
-      // compensatoire du secteur (cf. Sources de revenus) — tant qu'il n'est pas
-      // remboursé, il n'a pas sa place parmi les dépenses réelles. Reste consultable
-      // via le filtre « Apport du PAU » explicite, ou le lien « Dette envers le PAU ».
-      rows = rows.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) !== 'pau')
-    }
     if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
@@ -219,14 +191,7 @@ export default function Depenses() {
       })
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreSource, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
-
-  // Total financé par le PAU (apport personnel) sur la liste affichée — traçabilité.
-  const totalApportPau = useMemo(
-    () => liste.filter((d) => (d.sourceFinancement || sourceFinancementDefaut) === 'pau')
-      .reduce((s, d) => s + (Number(d.montant) || 0), 0),
-    [liste]
-  )
+  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
@@ -248,7 +213,6 @@ export default function Depenses() {
         libelle: d.description || CATEGORIES_DEPENSE.find((c) => c.id === d.categorie)?.label || d.categorie || '—',
         montant: Number(d.montant) || 0,
         agreeur: agreeur || '—',
-        source: SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]?.label || '—',
         secteur: libelleSecteurSite(secteur, d)
       }
     })
@@ -262,7 +226,6 @@ export default function Depenses() {
           { key: 'libelle', label: 'Libellé', width: 30 },
           { key: 'montant', label: 'Montant', width: 16, type: 'money' },
           { key: 'agreeur', label: "Nom de l'agréeur", width: 26 },
-          { key: 'source', label: 'Source', width: 20 },
           { key: 'secteur', label: 'Secteur', width: 20 }
         ],
         rows,
@@ -286,7 +249,7 @@ export default function Depenses() {
   function openEdit(d)  { setModal({ data: { ...empty(), ...d }, isNew: false, id: d.id }) }
 
   // ── Ajout multiple (lot) ──
-  const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false })
+  const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', imprevue: false })
   function openLot() { setLot([ligneVide(), ligneVide(), ligneVide()]) }
   const setLigne = (i, k, v) => setLot((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
   const ajouterLigne = () => setLot((rows) => [...rows, ligneVide()])
@@ -399,21 +362,11 @@ export default function Depenses() {
     setToDelete(null)
     try {
       const secteur = SECTEURS.find((s) => s.id === target.secteurId)
-      if (target.source === 'projet') {
-        // Dépense récupérée d'E-G.Pro : l'enregistrement réel vit dans `projet_depenses`.
-        // La supprimer ici la retire aussi d'E-G.Pro — on recalcule alors le total du projet
-        // pour garder les deux modules cohérents (même logique que la suppression côté E-G.Pro).
-        const realId = String(target.id).replace(/^projet_/, '')
-        await removeItem('projet_depenses', realId)
-        const totalProjet = depensesProjet
-          .filter((dep) => dep.id !== realId && dep.projetId === target.projetId)
-          .reduce((s, dep) => s + (Number(dep.montant) || 0), 0)
-        await updateItem('projets', target.projetId, { depenses: totalProjet, updatedAt: Date.now() })
-        await audit('depense', 'DEPENSE_PROJET_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA (dépense E-G.Pro : ${target.projetNom || target.projetId})`)
-      } else {
-        await removeItem('depense_depenses', target.id)
-        await audit('depense', 'DEPENSE_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA`)
-      }
+      // Les dépenses de projet (E-G.Pro) n'apparaissent plus dans cette liste (cf.
+      // `depenses` ci-dessus) — plus besoin de gérer leur suppression croisée ici,
+      // elle se fait uniquement depuis E-G.Pro.
+      await removeItem('depense_depenses', target.id)
+      await audit('depense', 'DEPENSE_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA`)
       toast.success('Dépense supprimée ✓')
     } finally {
       setDeleting(false)
@@ -473,13 +426,6 @@ export default function Depenses() {
             {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </Select>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Source de financement</label>
-          <Select value={filtreSource} onChange={(e) => setFiltreSource(e.target.value)}>
-            <option value="">Toutes</option>
-            {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </Select>
-        </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
           <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
@@ -487,14 +433,6 @@ export default function Depenses() {
           {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
         </div>
       </div>
-
-      {totalApportPau > 0 && (
-        <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm text-violet-800">
-          <span className="font-semibold">💜 Apport du PAU (sélection en cours) :</span>
-          <span className="font-bold">{totalApportPau.toLocaleString('fr-FR')} FCFA</span>
-          <span className="text-xs text-violet-500">— financé personnellement par le promoteur</span>
-        </div>
-      )}
 
       {liste.length === 0 ? (
         <Card>
@@ -522,12 +460,9 @@ export default function Depenses() {
                 const secteurColor = secteur?.color || '#64748b'
                 const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
                 const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
-                const source = SOURCES_FINANCEMENT[d.sourceFinancement || sourceFinancementDefaut]
-                const depuisProjet = d.source === 'projet'
-                const avecOrigine = d.source === 'projet' || d.source === 'besoin' // motif/tâche à afficher
+                const avecOrigine = d.source === 'besoin' // motif à afficher
                 const origine = infoSource(d)
-                const importe = !!d.source // dépense reprise d'un autre module (E-G.Pro, Briqueterie) : non modifiable ici
-                const estPau = (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
+                const importe = !!d.source // dépense reprise d'un autre module (besoin, Briqueterie) : non modifiable ici
                 const modifiable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
                 const cell = 'bg-white py-3 align-middle transition-colors group-hover:bg-amber-50/40'
                 return (
@@ -581,7 +516,6 @@ export default function Depenses() {
                     <td className={`${cell} whitespace-nowrap px-4 text-right`}>
                       <span className="text-base font-extrabold text-gray-900">{Number(d.montant).toLocaleString('fr-FR')}</span>
                       <span className="ml-0.5 text-[10px] font-semibold text-gray-400">FCFA</span>
-                      {estPau && <span className="mt-1 block"><Badge tone={source.tone}>💜 {source.label}</Badge></span>}
                     </td>
 
                     {/* Statut + justificatif */}
@@ -608,11 +542,6 @@ export default function Depenses() {
                             <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
                           </>
                         )}
-                        {/* Les dépenses récupérées d'E-G.Pro ne sont pas modifiables ici, mais un
-                            admin peut les supprimer (la suppression se répercute sur E-G.Pro). */}
-                        {depuisProjet && isAdmin && (
-                          <button onClick={() => setToDelete(d)} title="Supprimer (retire aussi d'E-G.Pro)" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -634,7 +563,7 @@ export default function Depenses() {
             <div className="rounded-xl border border-amber-100 bg-white p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Secteur *" hint="Chantiers BTP : à saisir depuis le volet BTP d'E-G.Pro, pas ici.">
+                <FormGroup label="Secteur *" hint="Chantiers BTP : à saisir depuis le volet BTP d'E-G.Pro, pas ici. CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — dépenses/apports communs à tous.">
                   <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
                     <option value="">— Choisir —</option>
                     {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -683,17 +612,6 @@ export default function Depenses() {
                       className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
                       title={v.desc}>
                       {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
-                    </button>
-                  ))}
-                </div>
-              </FormGroup>
-              <FormGroup label="Source de financement" hint="Qui a payé : la trésorerie de l'entreprise ou l'apport personnel du PAU. Un apport du PAU compte comme un revenu du secteur (Bilan/Rentabilité), en plus de rester une dette à lui rembourser.">
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => (
-                    <button key={k} type="button" onClick={() => set('sourceFinancement', k)}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
-                      title={v.desc}>
-                      {(modal.data.sourceFinancement || sourceFinancementDefaut) === k ? '✓ ' : ''}{k === 'pau' ? '💜 ' : ''}{v.label}
                     </button>
                   ))}
                 </div>
@@ -893,21 +811,16 @@ export default function Depenses() {
               Vous allez supprimer la dépense de <span className="font-bold text-gray-900">{Number(toDelete.montant).toLocaleString('fr-FR')} FCFA</span> du {formatDateShort(toDelete.date)}.
               Cette action est <span className="font-semibold text-red-600">irréversible</span>.
             </p>
-            {toDelete.source === 'projet' && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                ⚠️ Cette dépense vient d'<strong>E-G.Pro</strong>{toDelete.projetNom ? ` (${toDelete.projetNom})` : ''}. La supprimer la retirera <strong>aussi d'E-G.Pro</strong> et réduira le total dépensé du projet.
-              </p>
-            )}
           </div>
         )}
       </Modal>
 
-      {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'E-G.Pro */}
+      {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'un besoin validé */}
       <Modal open={!!detail} onClose={() => setDetailId(null)} size="md" title="Détail de la dépense"
         panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
-            {detail && detail.source !== 'briqueterie' && (detail.source === 'projet' ? isAdmin : (isAdmin || detail.statut === 'en_attente' || !detail.statut)) ? (
+            {detail && detail.source !== 'briqueterie' && (isAdmin || detail.statut === 'en_attente' || !detail.statut) ? (
               <Button variant="danger" onClick={() => { const d = detail; setDetailId(null); setToDelete(d) }}>
                 <Trash2 size={14} /> Supprimer
               </Button>
@@ -916,20 +829,17 @@ export default function Depenses() {
           </div>
         }>
         {detail && (() => {
-          const depuisProjet = detail.source === 'projet'
-          const avecOrigine = detail.source === 'projet' || detail.source === 'besoin'
+          const avecOrigine = detail.source === 'besoin'
           const origine = infoSource(detail)
           const secteur = SECTEURS.find((s) => s.id === detail.secteurId)
           const statut = STATUTS_DECAISSEMENT[detail.statut] || STATUTS_DECAISSEMENT.decaissee
           const nature = NATURES_FLUX[detail.natureFlux || natureFluxDefaut]
-          const src = SOURCES_FINANCEMENT[detail.sourceFinancement || sourceFinancementDefaut]
           const chips = [
             { label: 'Date', value: formatDateShort(detail.date) },
             { label: 'Secteur', value: libelleSecteurSite(secteur, detail) },
             { label: 'Catégorie', value: detail.categorie || '—' },
             { label: 'Nature de flux', value: nature.label },
-            { label: 'Origine', value: origine.label },
-            ...(!depuisProjet ? [{ label: 'Financement', value: src.label }] : [])
+            { label: 'Origine', value: origine.label }
           ]
           return (
             <div className="space-y-3 text-sm">
@@ -943,7 +853,6 @@ export default function Depenses() {
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <Badge tone={nature.tone}>{nature.label}</Badge>
-                      {(detail.sourceFinancement || sourceFinancementDefaut) === 'pau' && <Badge tone={src.tone}>💜 {src.label}</Badge>}
                     </div>
                   </div>
                   <Badge tone={statut.tone}>{statut.label}</Badge>
@@ -960,7 +869,7 @@ export default function Depenses() {
                 ))}
               </div>
 
-              {/* Projet / tâche / motif (dépenses récupérées d'E-G.Pro, versement ou besoin validé) */}
+              {/* Motif (dépenses issues d'un besoin de secteur validé) */}
               {avecOrigine && (detail.projetNom || detail.tacheTitre) && (
                 <div className="rounded-2xl border-l-4 border-teal-400 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 {origine.label}</p>

@@ -1,21 +1,19 @@
 // Dashboard Dépenses — budget alloué vs dépensé, par secteur, pour le mois en cours.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, HeartHandshake, HandCoins, History, BellRing, X, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle, Repeat, Stamp, BellRing, X } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
-import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
-import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, depensesProjetVersSecteurs, coutsMatieresBriqueterie, secteursEtSites } from './logic'
+import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT } from './data'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, coutsMatieresBriqueterie, secteursEtSites } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -45,44 +43,28 @@ const TYPE_ALERTE = {
 export default function Dashboard() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: depensesReelles } = useCollection('depense_depenses')
-  const { data: depensesProjet }  = useCollection('projet_depenses')
-  const { data: projetsTous }     = useCollection('projets')
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
-  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const { data: fermeesDashboard } = useCollection('depense_alertes_dashboard_fermees')
-  // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
-  // MAXI BAT (chantiers) est exclu : ces dépenses — et les apports du PAU qui les financent —
-  // sont réunies exclusivement dans le volet BTP d'E-G.Pro, jamais ici (cf. Depenses.jsx/SourcesRevenus.jsx).
+  // Coût matières Briqueterie, inclus en lecture seule — pas de double saisie. Les
+  // dépenses de projet (E-G.Pro) n'apparaissent plus ici : elles ne se consultent
+  // que depuis E-G.Pro lui-même (cf. Depenses.jsx/SourcesRevenus.jsx pour le détail).
   const depenses = useMemo(() => [
-    ...depensesReelles,
-    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, inventairesBriq])
   const { user, role: roleReel } = useAuth()
   // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
   // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
   const role = depenseRoleEffectif(roleReel)
   const navigate = useNavigate()
-  const location = useLocation()
-  // L'agent n'a pas accès aux KPI financiers globaux (budget alloué, dette PAU, secteurs
-  // en dépassement) ni au détail des revenus/financement — seulement au total dépensé et
-  // au reste, dont il a besoin pour suivre sa propre saisie.
+  // L'agent n'a pas accès aux KPI financiers globaux (budget alloué, secteurs en
+  // dépassement) ni au détail des revenus/financement — seulement au total dépensé
+  // et au reste, dont il a besoin pour suivre sa propre saisie.
   const restreintAgent = role === 'agent'
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
   const [reconduisant, setReconduisant] = useState(false)
-  const [remboursement, setRemboursement] = useState(null) // { montant, date, motif } quand le modal est ouvert
-  const [rembSaving, setRembSaving] = useState(false)
-  const [histoRembOuvert, setHistoRembOuvert] = useState(false)
-
-  // Ouvre directement l'historique des remboursements PAU depuis la notification
-  // « Remboursement au PAU » — évite d'avoir à cliquer sur « Historique » soi-même.
-  useEffect(() => {
-    if (!location.state?.openHistoriqueRemb) return
-    setHistoRembOuvert(true)
-    navigate(location.pathname, { replace: true, state: {} })
-  }, [location.state])
 
   // Revérifie périodiquement si une alerte fermée doit réapparaître (délai de 2 min écoulé).
   const [, relancerVerif] = useState(0)
@@ -126,54 +108,6 @@ export default function Dashboard() {
 
   const alertes = useMemo(() => secteursEnAlerte(budgets, depenses, annee, mois), [budgets, depenses, annee, mois])
   const enAttenteCount = useMemo(() => depensesEnCircuit(depenses).length, [depenses])
-
-  // Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) MOINS ce qu'elle
-  // lui a déjà restitué (remboursements) = ce qu'elle lui doit encore. Lecture seule côté
-  // dépenses ; les remboursements, eux, sont une vraie écriture (collection dédiée).
-  const financement = useMemo(() => {
-    const estPau = (d) => (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
-    const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
-    const cumulPau = totalDepenses(depenses.filter(estPau))
-    const cumulEntreprise = totalDepenses(depenses.filter((d) => !estPau(d)))
-    const cumulRembourse = totalDepenses(remboursementsPau)
-    const detteNette = cumulPau - cumulRembourse
-    const moisPau = totalDepenses(depenses.filter((d) => estPau(d) && (d.date || '').startsWith(prefixe)))
-    const moisRembourse = totalDepenses(remboursementsPau.filter((r) => (r.date || '').startsWith(prefixe)))
-    const total = cumulPau + cumulEntreprise
-    return { cumulPau, cumulEntreprise, cumulRembourse, detteNette, moisPau, moisRembourse, pct: total > 0 ? Math.round((cumulPau / total) * 100) : 0 }
-  }, [depenses, remboursementsPau, annee, mois])
-
-  const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '', secteurId: '' })
-
-  async function confirmerRemboursement() {
-    if (!remboursement) return
-    const montant = Number(remboursement.montant)
-    if (!remboursement.montant || montant <= 0) return toast.error('Montant requis')
-    if (montant > financement.detteNette) return toast.error(`Le montant dépasse la dette restante (${financement.detteNette.toLocaleString('fr-FR')} FCFA)`)
-    if (!remboursement.date) return toast.error('Date requise')
-    if (!remboursement.secteurId) return toast.error('Secteur requis — le PAU avait financé une dépense d\'un secteur précis')
-    setRembSaving(true)
-    try {
-      const id = genId()
-      const secteurLabel = SECTEURS.find((s) => s.id === remboursement.secteurId)?.label || remboursement.secteurId
-      await setItem('depense_pau_remboursements', id, {
-        id, montant, date: remboursement.date, motif: remboursement.motif.trim(), secteurId: remboursement.secteurId,
-        enregistrePar: user?.nom || user?.login || '—', createdAt: Date.now()
-      })
-      await audit('depense', 'PAU_REMBOURSEMENT', `${montant.toLocaleString('fr-FR')} FCFA remboursés au PAU — ${secteurLabel}${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`, { montant, date: remboursement.date, secteurId: remboursement.secteurId })
-      // Réservé à l'administration : mouvement de restitution d'une dette envers le PAU.
-      await notify({
-        type: 'info', title: `💜 Remboursement au PAU — ${secteurLabel}`,
-        body: `${montant.toLocaleString('fr-FR')} FCFA restitués${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}.`,
-        module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
-        link: '/depense', state: { openHistoriqueRemb: true }
-      }).catch(() => {})
-      toast.success('Remboursement enregistré ✓ — budget crédité pour ' + secteurLabel)
-      setRemboursement(null)
-    } finally {
-      setRembSaving(false)
-    }
-  }
 
   // Reconduction des dépenses récurrentes du mois précédent → uniquement visible sur le mois réel en cours.
   const estMoisCourant = annee === REAL_ANNEE && mois === REAL_MOIS
@@ -338,143 +272,6 @@ export default function Dashboard() {
             sub={secteursDepasses > 0 ? 'à surveiller' : 'tout va bien'} />
         )}
       </div>
-
-      {/* Dette envers le PAU : ce que l'entreprise a reçu de sa poche (apport) et lui doit
-          encore restituer. Le remboursement réduit la dette nette — traçabilité complète. */}
-      {!restreintAgent && financement.cumulPau > 0 && (() => {
-        const pctRestitue = financement.cumulPau > 0 ? Math.min(100, Math.round((financement.cumulRembourse / financement.cumulPau) * 100)) : 0
-        return (
-        <div className="rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 via-purple-50/60 to-violet-50/40 px-4 py-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 shadow-[0_4px_10px_-2px_rgba(124,58,237,0.5)]">
-              <HeartHandshake size={16} className="text-white" />
-            </div>
-            <p className="font-bold text-violet-900">Dette envers le PAU</p>
-            <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-violet-700 shadow-sm">{financement.pct}% du financement total</span>
-            <div className="ml-auto flex items-center gap-2">
-              <button onClick={() => navigate('/depense/liste', { state: { filtreSource: 'pau' } })}
-                title="Voir sur quoi le PAU a mis son argent"
-                className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-600 shadow-sm hover:bg-violet-50">
-                <Eye size={12} /> Voir le détail
-              </button>
-              {financement.cumulRembourse > 0 && (
-                <button onClick={() => setHistoRembOuvert((o) => !o)}
-                  className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-600 shadow-sm hover:bg-violet-50">
-                  <History size={12} /> Historique
-                </button>
-              )}
-              {financement.detteNette > 0 && (
-                <button onClick={ouvrirRemboursement}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(124,58,237,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-violet-700 hover:shadow-[0_7px_18px_-4px_rgba(124,58,237,0.7)]">
-                  <HandCoins size={14} /> Rembourser
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Dette nette — l'info la plus importante, mise en avant, avec la barre
-              de restitution intégrée juste en dessous pour lire les deux d'un coup. */}
-          <div onClick={() => navigate('/depense/liste', { state: { filtreSource: 'pau' } })}
-            title="Voir sur quoi le PAU a mis son argent"
-            className="mt-3 cursor-pointer rounded-xl bg-white/80 px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Dette restante (à restituer)</p>
-                <p className={`text-lg font-extrabold leading-snug ${financement.detteNette > 0 ? 'text-violet-800' : 'text-green-700'}`}>
-                  {financement.detteNette.toLocaleString('fr-FR')} <span className="text-xs font-semibold text-violet-400">FCFA</span>
-                  {financement.detteNette === 0 && <span className="ml-2 text-xs font-bold text-green-600">✓ Soldée</span>}
-                </p>
-              </div>
-              <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold text-green-700">{pctRestitue}% restitué</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-violet-100">
-              <div className="h-1.5 rounded-full bg-gradient-to-r from-green-400 to-green-600 transition-all" style={{ width: `${pctRestitue}%` }} />
-            </div>
-            <p className="mt-1.5 text-[10px] text-gray-400">
-              Basé sur la « Source de financement » de chaque dépense + les remboursements enregistrés.
-            </p>
-          </div>
-
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
-            <div className="rounded-xl bg-white/70 p-3">
-              <div className="flex items-center gap-1.5 text-violet-500">
-                <HandCoins size={13} />
-                <p className="text-[10px] font-semibold uppercase tracking-wide">Apporté (cumulé)</p>
-              </div>
-              <p className="mt-1 text-base font-bold text-violet-800">{financement.cumulPau.toLocaleString('fr-FR')} FCFA</p>
-            </div>
-            <div className="rounded-xl bg-white/70 p-3">
-              <div className="flex items-center gap-1.5 text-green-600">
-                <History size={13} />
-                <p className="text-[10px] font-semibold uppercase tracking-wide">Déjà remboursé (cumulé)</p>
-              </div>
-              <p className="mt-1 text-base font-bold text-green-700">{financement.cumulRembourse.toLocaleString('fr-FR')} FCFA</p>
-            </div>
-            <div className="rounded-xl bg-white/70 p-3">
-              <div className="flex items-center gap-1.5 text-gray-500">
-                <Wallet size={13} />
-                <p className="text-[10px] font-semibold uppercase tracking-wide">Fonds propres (cumulé)</p>
-              </div>
-              <p className="mt-1 text-base font-bold text-gray-700">{financement.cumulEntreprise.toLocaleString('fr-FR')} FCFA</p>
-            </div>
-          </div>
-
-          {histoRembOuvert && remboursementsPau.length > 0 && (
-            <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto rounded-xl bg-white/70 p-2">
-              {[...remboursementsPau].sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => (
-                <div key={r.id} className="flex items-center justify-between rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
-                  <div className="min-w-0">
-                    <span className="font-bold text-gray-800">{Number(r.montant).toLocaleString('fr-FR')} FCFA</span>
-                    {r.secteurId && <span className="ml-2 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">{SECTEURS.find((s) => s.id === r.secteurId)?.label || r.secteurId}</span>}
-                    {r.motif && <span className="ml-2 truncate text-gray-500">{r.motif}</span>}
-                  </div>
-                  <span className="shrink-0 text-[10px] text-gray-400">{formatDateShort(r.date)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        )
-      })()}
-
-      {/* Modal enregistrement d'un remboursement au PAU */}
-      <Modal open={!!remboursement} onClose={() => setRemboursement(null)} size="sm" title="Rembourser le PAU"
-        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200"
-        footer={<><Button variant="outline" onClick={() => setRemboursement(null)} disabled={rembSaving}>Annuler</Button><Button onClick={confirmerRemboursement} loading={rembSaving}>Enregistrer</Button></>}>
-        {remboursement && (
-          <div className="space-y-3">
-            <p className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700">
-              Dette restante : <strong>{financement.detteNette.toLocaleString('fr-FR')} FCFA</strong>
-            </p>
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-gray-700">Montant remboursé (FCFA) <span className="text-red-500">*</span></label>
-              <input type="number" min="0" max={financement.detteNette}
-                value={remboursement.montant} onChange={(e) => setRemboursement((r) => ({ ...r, montant: e.target.value }))}
-                placeholder="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-gray-700">Date <span className="text-red-500">*</span></label>
-              <input type="date" value={remboursement.date} onChange={(e) => setRemboursement((r) => ({ ...r, date: e.target.value }))}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-gray-700">Secteur concerné <span className="text-red-500">*</span></label>
-              <select value={remboursement.secteurId} onChange={(e) => setRemboursement((r) => ({ ...r, secteurId: e.target.value }))}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300">
-                <option value="">— Choisir le secteur dont l'apport du PAU est remboursé —</option>
-                {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-              <p className="mt-1 text-[11px] text-gray-400">Le montant remboursé crédite le budget consommé de ce secteur (il ne compte plus contre son budget alloué).</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-gray-700">Motif / précision</label>
-              <input value={remboursement.motif} onChange={(e) => setRemboursement((r) => ({ ...r, motif: e.target.value }))}
-                placeholder="ex : Remboursement partiel sur trésorerie du mois"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Card title="Répartition par secteur">
         <div className="space-y-2.5">

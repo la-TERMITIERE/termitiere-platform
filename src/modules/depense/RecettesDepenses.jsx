@@ -11,6 +11,7 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { isReadOnlyRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
@@ -21,8 +22,8 @@ import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { teinterHex, shadeHex } from '../../utils/color'
-import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, SOURCES_FINANCEMENT, sourceFinancementDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, depensesProjetVersSecteurs, coutsMatieresBriqueterie, revenuPauSecteurMois, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
+import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
+import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { soumettreNouvelleDepense } from './depenseActions'
 
@@ -46,7 +47,7 @@ const barColor = (statut) => statut.key === 'depasse' ? 'bg-red-500'
   : statut.key === 'attention' ? 'bg-amber-500' : 'bg-teal-500'
 
 // Secteurs avec une équipe identifiable (via `user.modules`) capable de confirmer la
-// réception d'un budget — les autres (MAXI BAT, Hors secteur) gardent l'allocation
+// réception d'un budget — les autres (MAXI BAT, Caisse commune) gardent l'allocation
 // instantanée d'avant, faute de destinataire clair pour la validation.
 const SECTEURS_AVEC_VALIDATION = ['agro', 'logistique', 'evenementiel', 'garderie']
 const ROUTE_FINANCES_PAR_SECTEUR = {
@@ -64,7 +65,6 @@ const ROUTE_FINANCES_PAR_SECTEUR = {
 export default function RecettesDepenses({ secteurId = null, site = null, masquerRevenu = false }) {
   const { data: budgets }             = useCollection('depense_budgets')
   const { data: depensesReelles }     = useCollection('depense_depenses')
-  const { data: depensesProjet }      = useCollection('projet_depenses')
   const { data: projetsTous }         = useCollection('projets')
   const { data: versementsClientTous }= useCollection('projet_versements_client')
   const { data: revenusManuelsTous }  = useCollection('depense_revenus_manuels')
@@ -84,12 +84,12 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
-  // Dépenses = saisies directes + E-G.Pro + Briqueterie (comme le reste du module).
+  // Dépenses = saisies directes + Briqueterie. Tout ce qui vient d'E-G.Pro (repérable à
+  // son `projetId`) n'apparaît plus ici — ça ne se consulte que depuis E-G.Pro lui-même.
   const depenses = useMemo(() => [
-    ...depensesReelles,
-    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ], [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ], [depensesReelles, inventairesBriq])
 
   // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu.
   const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
@@ -116,7 +116,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // En-tête : couleur du secteur embarqué, ou ambre par défaut pour la vue
   // standalone d'E-DÉPENSES (tous secteurs confondus, pas de couleur unique).
   const headerColor = secteurId ? (SECTEURS.find((s) => s.id === secteurId)?.color || '#B45309') : '#B45309'
-  const headerTitre = secteurId ? (masquerRevenu ? 'Dépenses' : 'Recettes & Dépenses') : 'Revenus & Budget'
+  const headerTitre = secteurId ? (masquerRevenu ? 'Dépenses' : 'Recettes & Dépenses') : 'Budget'
   const headerSousTitre = secteurId
     ? `${secteursAffiches[0]?.label || ''} — bilan financier mensuel`
     : 'Bilan financier consolidé — tous les secteurs'
@@ -125,13 +125,16 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const [mois, setMois]   = useState(now.getMonth() + 1)
   const [detail, setDetail] = useState(null) // dépense sélectionnée (détail lecture seule)
   const [secteurDetail, setSecteurDetail] = useState(null) // secteur sélectionné (détail financier)
-  // Révision du budget alloué d'un secteur — garde une trace (ancien/nouveau/motif).
+  // Révision du budget alloué d'un secteur — garde une trace (ancien/nouveau/motif/date).
+  // `revDate` : jour réel de l'apport (modifiable — permet de dater rétroactivement un
+  // apport saisi après coup), plutôt que de toujours estampiller l'instant de la saisie.
   const [revision, setRevision]     = useState(null)
   const [revMontant, setRevMontant] = useState('')
   const [revMotif, setRevMotif]     = useState('')
+  const [revDate, setRevDate]       = useState(todayStr())
   const [revSaving, setRevSaving]   = useState(false)
   // Ajout manuel d'un revenu — pour les secteurs sans facturation automatique
-  // (Hors secteur, MAXI BAT) : { secteurId, montant, date, description }.
+  // (Caisse commune, MAXI BAT) : { secteurId, montant, date, description }.
   const [ajoutRevenu, setAjoutRevenu] = useState(null)
   const [revenuSaving, setRevenuSaving] = useState(false)
   // Ajout d'une dépense depuis le volet Dépense d'un secteur métier (agro,
@@ -139,6 +142,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // le module (cf. bouton « Ajouter une dépense » dans la nav mois ci-dessous).
   const [nouvelleDepense, setNouvelleDepense] = useState(null)
   const [depenseSaving, setDepenseSaving] = useState(false)
+  // Onglet de la vue standalone (« Budget », sans secteurId) : bilan par secteur, ou
+  // journal consolidé de tous les apports/ajouts de budget (tous secteurs confondus).
+  const [ongletBudget, setOngletBudget] = useState('secteurs')
+  const [secteurAjoutChoisi, setSecteurAjoutChoisi] = useState('')
+  const [triApportsDesc, setTriApportsDesc] = useState(true) // tri par date de l'onglet « Apports & ajouts » : true = plus récent d'abord
 
   const changerMois = (delta) => {
     let m = mois + delta, a = annee
@@ -154,33 +162,42 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     // est généré pour la toute première allocation.
     const budgetId = budgetDoc?.id || (s.site ? `${s.secteurId}_${s.site}_${annee}-${String(mois).padStart(2, '0')}` : `${s.secteurId}_${annee}-${String(mois).padStart(2, '0')}`)
     const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
-    const recette = revenuSecteur(collections, s.secteurId, annee, mois, depenses, versementsClientRoutes, revenusManuelsTous, s.site)
-    const apportPau = revenuPauSecteurMois(depenses, s.secteurId, annee, mois, s.site)
+    const recette = revenuSecteur(collections, s.secteurId, annee, mois, versementsClientRoutes, revenusManuelsTous, s.site)
     const versementsClient = revenuClientSecteurMois(versementsClientRoutes, s.secteurId, annee, mois, s.site)
     const revenuManuel = revenuManuelSecteurMois(revenusManuelsTous, s.secteurId, annee, mois, s.site)
     const revenusManuelsDuMois = revenusManuelsTous
       .filter((r) => r.secteurId === s.secteurId && (r.date || '').startsWith(`${annee}-${String(mois).padStart(2, '0')}`))
       .sort((a, b) => (b.date || 0) - (a.date || 0))
-    // « Dépenses »/« Solde » de ce secteur : hors dépenses de PROJET (E-G.Pro) — elles
-    // ne sont pas la charge de ce secteur (cf. depensesHorsProjetSecteurMois), restent
-    // visibles classées par projet dans la liste générale E-DÉPENSES et dans l'onglet
-    // Dépenses du projet. L'apport du PAU, lui, reste compté ici (neutralisé par le
-    // revenu PAU équivalent inclus dans `recette`).
+    // « Dépenses »/« Solde » de ce secteur : les dépenses de projet (E-G.Pro) n'arrivent
+    // déjà plus jusqu'ici (filtrées en amont sur `projetId`, cf. `depenses` ci-dessus) —
+    // depensesHorsProjetSecteurMois reste un garde-fou pour d'éventuelles anciennes
+    // entrées `source: 'projet'` historiques.
     const lignes = depensesHorsProjetSecteurMois(depenses, s.secteurId, annee, mois, s.site).sort((a, b) => (a.date < b.date ? 1 : -1))
     const depense = totalDepenses(lignes)
-    // Le % consommé / reste du BUDGET ALLOUÉ (section « Budget » ci-dessous) exclut en
-    // plus l'apport du PAU — ni l'un ni l'autre ne sont financés par la caisse courante
-    // du secteur (cf. depensesEntrepriseSecteurMois).
     const depenseBudget = totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site))
     const pct = alloue > 0 ? Math.round((depenseBudget / alloue) * 100) : (depenseBudget > 0 ? 100 : 0)
     return {
-      ...s, recette, apportPau, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, solde: recette - depense,
+      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, solde: recette - depense,
       budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
       // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
       proposeParText: budgetDoc?.proposeParText || null, motifPropose: budgetDoc?.motifPropose || null
     }
   }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+
+  // Journal consolidé de tous les apports/ajouts de budget du mois, tous secteurs (+
+  // sites) confondus — onglet « Apports & ajouts » de la vue standalone. Chaque révision
+  // porte déjà `ancien`/`nouveau`/`motif`/`auteur`/`date` (cf. confirmerRevision) ; on y
+  // rattache juste le secteur d'origine pour l'affichage.
+  const apportsTous = useMemo(() => {
+    const out = []
+    parSecteur.forEach((s) => {
+      (s.revisionsBudget || []).forEach((r) => {
+        out.push({ ...r, secteurId: s.secteurId, secteurLabel: s.label, secteurColor: s.color })
+      })
+    })
+    return out.sort((a, b) => triApportsDesc ? (b.date || 0) - (a.date || 0) : (a.date || 0) - (b.date || 0))
+  }, [parSecteur, triApportsDesc])
 
   // Ouverture directe du détail d'un secteur depuis l'alerte du Dashboard (clic sur une
   // carte secteur « à surveiller ») — évite de devoir le rechercher dans la liste.
@@ -207,10 +224,14 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const totalAlloue  = parSecteur.reduce((s, x) => s + x.alloue, 0)
   const totalReste   = totalAlloue - totalDepense
 
+  // CAISSE COMMUNE (secteur `divers`) : pas de « révision » (on ne redéfinit pas le
+  // total) mais un « ajout » cumulatif — chaque apport de la direction s'additionne au
+  // montant déjà présent, plutôt que d'exiger de recalculer et ressaisir le nouveau total.
   const ouvrirRevision = (s) => {
     setRevision({ id: s.budgetId, secteurId: s.secteurId, site: s.site, secteurLabel: s.label, montantActuel: s.alloue, revisions: s.revisionsBudget })
-    setRevMontant(String(s.alloue || ''))
+    setRevMontant(s.secteurId === 'divers' ? '' : String(s.alloue || ''))
     setRevMotif('')
+    setRevDate(todayStr())
   }
 
   // Uids des membres du secteur (via `user.modules`) — destinataires de la demande de
@@ -219,20 +240,29 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
   const confirmerRevision = async () => {
     if (!revision) return
-    const nouveau = Number(revMontant)
-    if (revMontant === '' || nouveau < 0) return toast.error('Montant requis')
-    // Première allocation (aucun budget encore) → pas de motif exigé. Révision d'un
-    // budget existant → motif obligatoire (traçabilité du changement).
+    const estCaisseCommune = revision.secteurId === 'divers'
+    if (revMontant === '' || Number(revMontant) < 0) return toast.error('Montant requis')
+    if (!revDate) return toast.error('Date requise')
+    // CAISSE COMMUNE : le montant saisi s'AJOUTE au total déjà présent (pas de
+    // remplacement) — aucun motif exigé, chaque apport de la direction est cumulatif.
+    // Autres secteurs : première allocation (aucun budget encore) → pas de motif exigé ;
+    // révision d'un budget existant → motif obligatoire (traçabilité du changement).
+    const nouveau = estCaisseCommune ? revision.montantActuel + Number(revMontant) : Number(revMontant)
     const estAllocation = revision.montantActuel === 0
-    if (!estAllocation && !revMotif.trim()) return toast.error('Motif de révision requis')
-    const motif = revMotif.trim() || 'Allocation initiale'
+    if (!estCaisseCommune && !estAllocation && !revMotif.trim()) return toast.error('Motif de révision requis')
+    const motif = revMotif.trim() || (estCaisseCommune ? 'Apport à la caisse commune' : 'Allocation initiale')
+    // Jour réel de l'apport (modifiable, cf. revDate) — heure fixée à l'instant présent
+    // pour départager plusieurs apports le même jour dans l'historique (tri chronologique).
+    const dateEntry = new Date(`${revDate}T00:00:00`)
+    dateEntry.setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds())
+    const dateMs = dateEntry.getTime()
     setRevSaving(true)
     try {
       const ancien = revision.montantActuel
 
       // Secteurs avec équipe identifiable : le montant n'est pas appliqué tout de suite —
       // il reste « proposé » jusqu'à ce que le secteur confirme l'avoir reçu (cf.
-      // validerReceptionBudget). Les autres (MAXI BAT, Hors secteur) gardent l'ancien
+      // validerReceptionBudget). Les autres (MAXI BAT, Caisse commune) gardent l'ancien
       // comportement instantané, faute de destinataire clair pour valider.
       if (SECTEURS_AVEC_VALIDATION.includes(revision.secteurId)) {
         await setItem('depense_budgets', revision.id, {
@@ -261,25 +291,29 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         return
       }
 
-      const entry = { id: genId(), ancien, nouveau, motif, date: Date.now(), auteur: user?.nom || user?.login || '—' }
+      const entry = { id: genId(), ancien, nouveau, motif, date: dateMs, auteur: user?.nom || user?.login || '—' }
       const revisions = [...revision.revisions, entry]
       await setItem('depense_budgets', revision.id, {
         id: revision.id, secteurId: revision.secteurId, site: revision.site || null, annee, mois, montant: nouveau, revisions, updatedAt: Date.now()
       })
-      await audit('depense', estAllocation ? 'BUDGET_ALLOUE' : 'BUDGET_REVISE',
-        estAllocation
+      const actionAudit = estCaisseCommune ? 'BUDGET_AJOUTE' : (estAllocation ? 'BUDGET_ALLOUE' : 'BUDGET_REVISE')
+      const libelleAudit = estCaisseCommune
+        ? `${revision.secteurLabel} — +${fmt(nouveau - ancien)} FCFA ajoutés (total ${fmt(nouveau)} FCFA)${motif ? ' — ' + motif : ''}`
+        : estAllocation
           ? `${revision.secteurLabel} — budget alloué ${fmt(nouveau)} FCFA`
-          : `${revision.secteurLabel} — ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${motif})`,
-        { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
-      // Réservé à l'administration : montant alloué/révisé pour un secteur.
+          : `${revision.secteurLabel} — ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${motif})`
+      await audit('depense', actionAudit, libelleAudit, { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
+      // Réservé à l'administration : montant alloué/révisé/ajouté pour un secteur.
       await notify({
         type: 'info',
-        title: estAllocation ? `💰 Budget alloué — ${revision.secteurLabel}` : `🔄 Budget révisé — ${revision.secteurLabel}`,
-        body: estAllocation ? `${fmt(nouveau)} FCFA alloués pour ${MOIS_LABELS[mois - 1]} ${annee}.` : `${fmt(ancien)} → ${fmt(nouveau)} FCFA — ${motif}`,
+        title: estCaisseCommune ? `➕ Caisse commune — ${revision.secteurLabel}` : (estAllocation ? `💰 Budget alloué — ${revision.secteurLabel}` : `🔄 Budget révisé — ${revision.secteurLabel}`),
+        body: estCaisseCommune
+          ? `+${fmt(nouveau - ancien)} FCFA ajoutés — nouveau total ${fmt(nouveau)} FCFA.`
+          : estAllocation ? `${fmt(nouveau)} FCFA alloués pour ${MOIS_LABELS[mois - 1]} ${annee}.` : `${fmt(ancien)} → ${fmt(nouveau)} FCFA — ${motif}`,
         module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
         link: '/depense/recettes-depenses', state: { openSecteurId: revision.secteurId, annee, mois }
       }).catch(() => {})
-      toast.success(estAllocation ? 'Budget alloué ✓' : 'Budget révisé ✓')
+      toast.success(estCaisseCommune ? 'Ajouté à la caisse commune ✓' : (estAllocation ? 'Budget alloué ✓' : 'Budget révisé ✓'))
       setRevision(null)
     } finally {
       setRevSaving(false)
@@ -333,7 +367,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   }
 
   // Ajout manuel d'un revenu — réservé aux secteurs sans facturation automatique
-  // (Hors secteur, MAXI BAT) ; le secteur se choisit dans le formulaire. Restreint au
+  // (Caisse commune, MAXI BAT) ; le secteur se choisit dans le formulaire. Restreint au
   // seul `secteurId` si fourni (vue intégrée) ; sinon aligné sur `secteursAffiches` —
   // MAXI BAT exclu de la vue standalone d'E-DÉPENSES (cf. secteursAffiches ci-dessus).
   const secteursSansRevenuAuto = useMemo(
@@ -368,7 +402,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const ouvrirNouvelleDepense = () => setNouvelleDepense({
     categorie: '', montant: '', date: todayStr(), description: '',
     beneficiaireNom: '', beneficiaireTelephone: '',
-    natureFlux: natureFluxDefaut, sourceFinancement: sourceFinancementDefaut, imprevue: false
+    natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', imprevue: false
   })
 
   const confirmerNouvelleDepense = async () => {
@@ -410,6 +444,21 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         </div>
       </div>
 
+      {/* Onglets — uniquement sur la vue standalone (pas quand embarqué dans un module
+          métier via secteurId, qui n'a pas de vue consolidée tous-secteurs). */}
+      {!secteurId && (
+        <div className="flex gap-2 border-b border-gray-200">
+          <button onClick={() => setOngletBudget('secteurs')}
+            className={`border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${ongletBudget === 'secteurs' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+            Par secteur
+          </button>
+          <button onClick={() => setOngletBudget('apports')}
+            className={`border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${ongletBudget === 'apports' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+            Apports & ajouts{apportsTous.length > 0 ? ` (${apportsTous.length})` : ''}
+          </button>
+        </div>
+      )}
+
       {/* Navigation mois */}
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
@@ -422,15 +471,61 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         {masquerRevenu && secteurId && !lectureSeule && (
           <Button onClick={ouvrirNouvelleDepense} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter une dépense</Button>
         )}
-        {!masquerRevenu && !lectureSeule && (
+        {!masquerRevenu && !lectureSeule && ongletBudget === 'secteurs' && (
           <Button onClick={ouvrirAjoutRevenu} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter un revenu</Button>
         )}
       </div>
 
+      {ongletBudget !== 'secteurs' ? (
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+          Tous les apports/ajouts de budget du mois, tous secteurs confondus — historique consolidé. Choisis un secteur ci-dessous pour ajouter une somme directement, sans passer par sa carte.
+        </div>
+        {!lectureSeule && (
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/80 p-3 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150">
+            <span className="text-xs font-semibold text-gray-500">Ajouter une somme à :</span>
+            <Select className="w-auto" value={secteurAjoutChoisi} onChange={(e) => {
+              const id = e.target.value
+              setSecteurAjoutChoisi(id)
+              const s = parSecteur.find((x) => x.id === id)
+              if (s) ouvrirRevision(s)
+              setSecteurAjoutChoisi('')
+            }}>
+              <option value="">— Choisir un secteur —</option>
+              {parSecteur.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </Select>
+          </div>
+        )}
+        {apportsTous.length > 0 && (
+          <button onClick={() => setTriApportsDesc((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-amber-700">
+            <History size={12} /> Trié par date {triApportsDesc ? '(plus récent d\'abord)' : '(plus ancien d\'abord)'} — inverser
+          </button>
+        )}
+        {apportsTous.length === 0 ? (
+          <div className="rounded-2xl bg-white/80 py-10 text-center text-sm text-gray-400 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100">
+            Aucun apport ni ajout de budget ce mois-ci.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {apportsTous.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-l-4 bg-white/80 px-4 py-2.5 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150" style={{ borderLeftColor: r.secteurColor }}>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: r.secteurColor + '1a', color: r.secteurColor }}>{r.secteurLabel}</span>
+                <span className="font-bold text-gray-800">
+                  {r.secteurId === 'divers' ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
+                </span>
+                {r.motif && <span className="text-xs text-gray-500">{r.motif}</span>}
+                <span className="ml-auto text-[11px] text-gray-400">{r.auteur || '—'} · {formatDateTime(r.date)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      ) : (<>
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         {masquerRevenu
           ? <>Suivi des <strong>dépenses</strong> de ce secteur face au <strong>budget alloué</strong> depuis E-DÉPENSES (reste & % consommé). L'allocation du budget se fait uniquement dans E-DÉPENSES ; la <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>
-          : <>Bilan financier par secteur : les <strong>revenus</strong> (factures des modules + apports du PAU comptés en revenu) croisés aux <strong>dépenses</strong> donnent le <strong>solde</strong>, comparé au <strong>budget alloué</strong> (reste & % consommé). La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>}
+          : <>Bilan financier par secteur : les <strong>revenus</strong> (factures des modules) croisés aux <strong>dépenses</strong> donnent le <strong>solde</strong>, comparé au <strong>budget alloué</strong> (reste & % consommé). La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>}
       </div>
 
       {/* KPI globaux */}
@@ -483,7 +578,12 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   {s.alloue > 0 ? `${fmt(s.alloue)} FCFA` : <span className="font-normal text-gray-300">Non défini</span>}
                 </span>
                 {!lectureSeule && !masquerRevenu && (
-                  s.alloue > 0 ? (
+                  s.secteurId === 'divers' ? (
+                    <button onClick={() => ouvrirRevision(s)} title="Ajouter une somme à la caisse commune (s'additionne au total déjà présent)"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(180,83,9,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-[0_7px_18px_-4px_rgba(180,83,9,0.7)]">
+                      <span className="text-sm leading-none">＋</span> Ajouter un apport
+                    </button>
+                  ) : s.alloue > 0 ? (
                     <button onClick={() => ouvrirRevision(s)} title="Réviser ce budget (revoir ou ajouter une somme)"
                       className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm transition-all duration-200 hover:bg-amber-50 hover:shadow-[0_0_10px_1px_rgba(180,83,9,0.45)]">
                       🔄 Réviser
@@ -545,6 +645,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           </div>
         ))}
       </div>
+      </>)}
 
       {/* Détail d'une dépense — lecture seule */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="md" title="Détail de la dépense"
@@ -554,7 +655,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           const sect = SECTEURS.find((s) => s.id === detail.secteurId)
           const statut = STATUTS_DECAISSEMENT[detail.statut] || STATUTS_DECAISSEMENT.decaissee
           const nature = NATURES_FLUX[detail.natureFlux || natureFluxDefaut]
-          const depuisProjet = detail.source === 'projet'
           const depuisBriqueterie = detail.source === 'briqueterie'
           return (
             <div className="space-y-3 text-sm">
@@ -566,7 +666,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <Badge tone={nature.tone}>{nature.label}</Badge>
-                      {depuisProjet && <Badge tone="info">🔗 Depuis E-G.Pro</Badge>}
                       {depuisBriqueterie && <Badge tone="info">🔗 Coût matières Briqueterie</Badge>}
                     </div>
                   </div>
@@ -593,26 +692,15 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 <div className="rounded-xl bg-white p-3 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Origine</p>
                   <p className="mt-0.5 font-bold text-gray-800">
-                    {depuisProjet ? 'E-G.Pro' : depuisBriqueterie ? 'Briqueterie' : 'Saisie directe'}
+                    {depuisBriqueterie ? 'Briqueterie' : 'Saisie directe'}
                   </p>
                 </div>
               </div>
 
-              {depuisProjet && (detail.projetNom || detail.tacheTitre) && (
-                <div className="rounded-2xl border-l-4 border-teal-400 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 Projet concerné</p>
-                  <p className="mt-1 font-bold text-gray-800">{detail.projetNom || '—'}</p>
-                  {detail.tacheTitre && <p className="mt-1 text-gray-600">🔧 <span className="font-medium">{detail.tacheTitre}</span></p>}
-                  {detail.noteOrigine && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs italic text-gray-600">« {detail.noteOrigine} »</p>}
-                </div>
-              )}
-
-              {!depuisProjet && (
-                <div className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
-                  <p className="mt-1 font-medium text-gray-700">{detail.description || '—'}</p>
-                </div>
-              )}
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
+                <p className="mt-1 font-medium text-gray-700">{detail.description || '—'}</p>
+              </div>
 
               <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Traçabilité</p>
@@ -678,9 +766,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 <div className="rounded-xl bg-white p-3 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Revenus</p>
                   <p className="mt-0.5 font-bold text-green-700">{fmt(secteurDetail.recette)} FCFA</p>
-                  {secteurDetail.apportPau > 0 && (
-                    <p className="mt-0.5 text-[10px] text-violet-600">💜 dont {fmt(secteurDetail.apportPau)} FCFA d'apport du PAU</p>
-                  )}
                   {secteurDetail.versementsClient > 0 && (
                     <p className="mt-0.5 text-[10px] text-teal-600">🧑‍💼 dont {fmt(secteurDetail.versementsClient)} FCFA reçus de clients (projets)</p>
                   )}
@@ -759,12 +844,13 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         )}
       </Modal>
 
-      {/* Allocation (1ère fois) ou Révision (budget existant) du budget d'un secteur */}
+      {/* Allocation (1ère fois) / Révision (budget existant) / Ajout cumulatif (Caisse commune) */}
       <Modal open={!!revision} onClose={() => setRevision(null)} size="sm"
-        title={revision ? `${revision.montantActuel > 0 ? 'Réviser' : 'Allouer'} le budget — ${revision.secteurLabel}` : 'Budget'}
+        title={revision ? (revision.secteurId === 'divers' ? `Ajouter un apport — ${revision.secteurLabel}` : `${revision.montantActuel > 0 ? 'Réviser' : 'Allouer'} le budget — ${revision.secteurLabel}`) : 'Budget'}
         panelClassName={theme.gradient}>
         {revision && (() => {
           const estAllocation = revision.montantActuel === 0
+          const estCaisseCommune = revision.secteurId === 'divers'
           const requiertValidation = SECTEURS_AVEC_VALIDATION.includes(revision.secteurId)
           return (
           <div className="space-y-4">
@@ -775,16 +861,52 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               </div>
             )}
             <div className="rounded-xl bg-white p-3 shadow-sm">
-              {estAllocation ? (
+              {estCaisseCommune ? (
                 <div>
-                  <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant à allouer (FCFA)</label>
-                  <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)} autoFocus
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                  <p className="text-[10px] font-semibold uppercase text-gray-400">Montant déjà présent</p>
+                  <p className="mb-2 text-sm font-bold text-gray-700">{fmt(revision.montantActuel)} FCFA</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant à ajouter (FCFA)</label>
+                      <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)} autoFocus
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+                      <input type="date" value={revDate} onChange={(e) => setRevDate(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    S'ADDITIONNE au montant déjà présent — pas de remplacement.
+                    {Number(revMontant) > 0 ? ` Nouveau total : ${fmt(revision.montantActuel + Number(revMontant))} FCFA.` : ''}
+                  </p>
+                  <div className="mt-2">
+                    <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Motif <span className="font-normal normal-case text-gray-400">(optionnel)</span></label>
+                    <input value={revMotif} onChange={(e) => setRevMotif(e.target.value)}
+                      placeholder="ex : apport de la direction, virement reçu…"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  </div>
+                </div>
+              ) : estAllocation ? (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant à allouer (FCFA)</label>
+                      <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)} autoFocus
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+                      <input type="date" value={revDate} onChange={(e) => setRevDate(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+                  </div>
                   <p className="mt-1 text-[11px] text-gray-400">Première allocation du mois — aucun motif requis.</p>
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <p className="text-[10px] font-semibold uppercase text-gray-400">Budget actuel</p>
                       <p className="text-sm font-bold text-gray-700">{fmt(revision.montantActuel)} FCFA</p>
@@ -793,6 +915,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                       <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Nouveau montant (FCFA)</label>
                       <input type="number" min="0" value={revMontant} onChange={(e) => setRevMontant(e.target.value)}
                         className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+                      <input type="date" value={revDate} onChange={(e) => setRevDate(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
                     </div>
                   </div>
                   <div className="mt-3">
@@ -808,18 +935,20 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   ? <Button size="sm" variant="danger" onClick={supprimerBudget} loading={revSaving}>🗑️ Supprimer le budget</Button>
                   : <span />}
                 <Button size="sm" onClick={confirmerRevision} loading={revSaving}>
-                  {requiertValidation ? 'Envoyer au secteur' : (estAllocation ? 'Allouer' : 'Confirmer la révision')}
+                  {requiertValidation ? 'Envoyer au secteur' : (estCaisseCommune ? 'Ajouter un apport' : (estAllocation ? 'Allouer' : 'Confirmer la révision'))}
                 </Button>
               </div>
             </div>
 
             {revision.revisions.length > 0 && (
               <div className="rounded-xl bg-white p-3 shadow-sm">
-                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-gray-400"><History size={12} /> Historique des allocations & révisions</p>
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-gray-400"><History size={12} /> {estCaisseCommune ? 'Historique des ajouts' : 'Historique des allocations & révisions'}</p>
                 <div className="max-h-52 space-y-2 overflow-y-auto">
                   {[...revision.revisions].reverse().map((r) => (
                     <div key={r.id} className="rounded-lg bg-gray-50 px-3 py-2 text-xs">
-                      <p className="font-semibold text-gray-700">{fmt(r.ancien)} → {fmt(r.nouveau)} FCFA</p>
+                      <p className="font-semibold text-gray-700">
+                        {estCaisseCommune ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
+                      </p>
                       <p className="mt-0.5 text-gray-600">{r.motif}</p>
                       <p className="mt-0.5 text-[10px] text-gray-400">par {r.auteur || '—'} · {formatDateTime(r.date)}</p>
                     </div>
@@ -845,7 +974,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-300">
                   {secteursSansRevenuAuto.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
-                <p className="mt-1 text-[11px] text-gray-400">Réservé aux secteurs sans facturation automatique — les autres ont déjà leur revenu calculé depuis leurs factures.</p>
+                <p className="mt-1 text-[11px] text-gray-400">Réservé aux secteurs sans facturation automatique — les autres ont déjà leur revenu calculé depuis leurs factures. CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — apports communs à tous.</p>
               </div>
               <div>
                 <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant (FCFA)</label>
@@ -926,13 +1055,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                     placeholder="ex : 90 00 00 00"
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
                 </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Source de financement</label>
-                <select value={nouvelleDepense.sourceFinancement} onChange={(e) => setNouvelleDepense((d) => ({ ...d, sourceFinancement: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300">
-                  {Object.entries(SOURCES_FINANCEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
               </div>
               <label className="flex items-center gap-2 text-xs text-gray-600">
                 <input type="checkbox" checked={nouvelleDepense.imprevue}

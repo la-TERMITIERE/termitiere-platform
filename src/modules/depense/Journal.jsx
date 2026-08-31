@@ -15,6 +15,7 @@ import Historique from './Historique'
 
 const EVENTS = {
   BUDGET_SET:            { label: 'Budgets définis',              emoji: '💰' },
+  BUDGET_AJOUTE:         { label: 'Ajout à la caisse commune',    emoji: '➕' },
   DEPENSE_CREATE:        { label: 'Demande de décaissement créée', emoji: '➕' },
   DEPENSE_EDIT:          { label: 'Dépense modifiée',              emoji: '✏️' },
   DEPENSE_DELETE:        { label: 'Dépense supprimée',             emoji: '🗑️' },

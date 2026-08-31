@@ -11,7 +11,7 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, NATURES_FLUX } from './data'
-import { soldesFluxMois, croissance, derniersMois, moisPrecedent, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { soldesFluxMois, croissance, derniersMois, moisPrecedent, coutsMatieresBriqueterie } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
@@ -19,21 +19,19 @@ const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
 
 export default function Flux() {
   const { data: depensesReelles }      = useCollection('depense_depenses')
-  const { data: depensesProjet }       = useCollection('projet_depenses')
-  const { data: projetsTous }          = useCollection('projets')
   const { data: inventairesBriq }      = useCollection('evenementiel_inventaires')
   const { data: paiementsGarderie }    = useCollection('garderie_paiements')
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
 
-  // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
-  // MAXI BAT (chantiers) est exclu : son flux de trésorerie vit exclusivement dans le volet BTP d'E-G.Pro.
+  // Coût matières Briqueterie, inclus en lecture seule — pas de double saisie. Les
+  // dépenses de projet (E-G.Pro) n'apparaissent plus ici — elles ne se consultent
+  // que depuis E-G.Pro lui-même. MAXI BAT reste exclu (volet BTP d'E-G.Pro).
   const depenses = useMemo(() => [
-    ...depensesReelles,
-    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, inventairesBriq])
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 

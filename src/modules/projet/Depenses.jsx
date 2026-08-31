@@ -215,14 +215,50 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
     return { totalBudget, totalDepenses, ecart: totalBudget - totalDepenses }
   }, [projets, depenses])
 
-  // Apports du PAU (BTP uniquement) : dépenses de chantier dont la « Source de
-  // financement » est l'apport du PAU — recap KPI + détail au clic, cf. `pauListe`.
+  // Apports du PAU : dépenses de projet dont la « Source de financement » est
+  // l'apport du PAU — recap KPI + détail au clic, cf. `pauListe`. Visible sur
+  // tout E-G.Pro (pas seulement le BTP) — le suivi de l'apport/dette du PAU vit
+  // désormais ici, plus dans E-DÉPENSES.
   const depensesPau = useMemo(
     () => depenses.filter((d) => d.sourceFinancement === 'pau').sort((a, b) => (b.date || 0) - (a.date || 0)),
     [depenses]
   )
   const totalPau = useMemo(() => depensesPau.reduce((s, d) => s + (Number(d.montant) || 0), 0), [depensesPau])
   const [pauListe, setPauListe] = useState(false)
+
+  // Dette envers le PAU : ce que les projets ont reçu de sa poche (apport) MOINS
+  // ce qui lui a déjà été restitué (remboursements) = ce qu'on lui doit encore.
+  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
+  const cumulRembourse = useMemo(() => remboursementsPau.reduce((s, r) => s + (Number(r.montant) || 0), 0), [remboursementsPau])
+  const detteNette = totalPau - cumulRembourse
+  const pctRestitue = totalPau > 0 ? Math.min(100, Math.round((cumulRembourse / totalPau) * 100)) : 0
+
+  const [remboursement, setRemboursement] = useState(null) // { montant, date, motif, projetId } quand le modal est ouvert
+  const [rembSaving, setRembSaving] = useState(false)
+  const ouvrirRemboursement = () => setRemboursement({ montant: '', date: todayStr(), motif: '', projetId: '' })
+
+  async function confirmerRemboursement() {
+    if (!remboursement) return
+    const montant = Number(remboursement.montant)
+    if (!remboursement.montant || montant <= 0) return toast.error('Montant requis')
+    if (montant > detteNette) return toast.error(`Le montant dépasse la dette restante (${formatMoney(detteNette)})`)
+    if (!remboursement.date) return toast.error('Date requise')
+    setRembSaving(true)
+    try {
+      const id = `remb_${Date.now()}`
+      const projetLabel = projets.find((p) => p.id === remboursement.projetId)?.nom || ''
+      await setItem('depense_pau_remboursements', id, {
+        id, montant, date: remboursement.date, motif: remboursement.motif.trim(),
+        secteurId: 'projet', projetId: remboursement.projetId || null, projetNom: projetLabel,
+        enregistrePar: user?.nom || user?.login || '—', createdAt: Date.now()
+      })
+      await audit('projet', 'PAU_REMBOURSEMENT', `${formatMoney(montant)} remboursés au PAU${projetLabel ? ' — ' + projetLabel : ''}${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`)
+      toast.success('Remboursement enregistré ✓')
+      setRemboursement(null)
+    } finally {
+      setRembSaving(false)
+    }
+  }
 
   // Par catégorie
   const parCategorie = useMemo(() => {
@@ -432,17 +468,15 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
     <div className="space-y-4">
       {/* KPIs — réservés à la hiérarchie, pas à l'agent */}
       {!restreintMoisCourant && (
-        <div className={`grid grid-cols-2 gap-3 ${secteurSeul === 'bat' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard title={<span className="flex items-center gap-1">Budget total <InfoBulle texte="Somme des budgets prévus de tous les projets." /></span>}
             value={formatMoney(kpi.totalBudget)} icon={Wallet} accent="#0d9488" />
           <StatCard title={<span className="flex items-center gap-1">Dépenses totales <InfoBulle texte="Somme de toutes les dépenses enregistrées dans le module." /></span>}
             value={formatMoney(kpi.totalDepenses)} icon={TrendingDown} accent="#f59e0b" />
           <StatCard title={<span className="flex items-center gap-1">Solde restant <InfoBulle texte="Budget total − Dépenses totales. Vert = sous contrôle, Rouge = budget dépassé." /></span>}
             value={formatMoney(kpi.ecart)} icon={Wallet} accent={kpi.ecart >= 0 ? '#16a34a' : '#ef4444'} />
-          {secteurSeul === 'bat' && (
-            <StatCard title={<span className="flex items-center gap-1">Apports du PAU <InfoBulle texte="Somme des dépenses de chantier financées par un apport du PAU. Cliquez pour voir le détail." /></span>}
-              value={formatMoney(totalPau)} icon={HandCoins} accent="#7c3aed" onClick={() => setPauListe(true)} />
-          )}
+          <StatCard title={<span className="flex items-center gap-1">Apports du PAU <InfoBulle texte="Somme des dépenses financées par un apport du PAU. Cliquez pour voir le détail et rembourser." /></span>}
+            value={formatMoney(totalPau)} icon={HandCoins} accent="#7c3aed" onClick={() => setPauListe(true)} />
         </div>
       )}
 
@@ -702,14 +736,51 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
         })()}
       </Modal>
 
-      {/* Détail des apports du PAU (BTP) — liste des dépenses financées par le PAU, clic → détail complet */}
-      <Modal open={pauListe} onClose={() => setPauListe(false)} title="Apports du PAU — détail"
+      {/* Détail des apports du PAU — liste des dépenses financées par le PAU + dette
+          nette (apporté − remboursé) + bouton Rembourser, clic sur une ligne → détail complet */}
+      <Modal open={pauListe} onClose={() => setPauListe(false)} title="Apports du PAU — dette & détail"
         panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <div className="space-y-3">
-          <div className="rounded-xl bg-white/70 px-3 py-2 text-sm font-bold text-violet-800">
-            Total : {formatMoney(totalPau)} · {depensesPau.length} dépense{depensesPau.length > 1 ? 's' : ''}
+          <div className="rounded-xl bg-white/80 px-3.5 py-3 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Dette restante (à restituer)</p>
+                <p className={`text-lg font-extrabold leading-snug ${detteNette > 0 ? 'text-violet-800' : 'text-green-700'}`}>
+                  {formatMoney(detteNette)}
+                  {detteNette === 0 && totalPau > 0 && <span className="ml-2 text-xs font-bold text-green-600">✓ Soldée</span>}
+                </p>
+              </div>
+              {detteNette > 0 && (
+                <button onClick={ouvrirRemboursement}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(124,58,237,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-violet-700">
+                  <HandCoins size={14} /> Rembourser
+                </button>
+              )}
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-violet-100">
+              <div className="h-1.5 rounded-full bg-gradient-to-r from-green-400 to-green-600 transition-all" style={{ width: `${pctRestitue}%` }} />
+            </div>
+            <p className="mt-1.5 text-[10px] text-gray-400">
+              Apporté {formatMoney(totalPau)} · Déjà remboursé {formatMoney(cumulRembourse)} ({pctRestitue}% restitué)
+            </p>
           </div>
-          <div className="max-h-[60vh] space-y-1.5 overflow-y-auto">
+
+          {remboursementsPau.length > 0 && (
+            <div className="max-h-32 space-y-1 overflow-y-auto rounded-xl bg-white/70 p-2">
+              {[...remboursementsPau].sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => (
+                <div key={r.id} className="flex items-center justify-between rounded-lg bg-white px-2.5 py-1.5 text-xs shadow-sm">
+                  <div className="min-w-0">
+                    <span className="font-bold text-gray-800">{formatMoney(r.montant)}</span>
+                    {r.projetNom && <span className="ml-2 truncate text-gray-500">{r.projetNom}</span>}
+                    {r.motif && <span className="ml-2 truncate text-gray-400">· {r.motif}</span>}
+                  </div>
+                  <span className="shrink-0 text-[10px] text-gray-400">{formatDateShort(r.date)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="max-h-[45vh] space-y-1.5 overflow-y-auto">
             {depensesPau.length === 0 && (
               <p className="py-6 text-center text-sm text-gray-500">Aucune dépense financée par le PAU pour l'instant.</p>
             )}
@@ -728,6 +799,44 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
             })}
           </div>
         </div>
+      </Modal>
+
+      {/* Modal enregistrement d'un remboursement au PAU */}
+      <Modal open={!!remboursement} onClose={() => setRemboursement(null)} title="Rembourser le PAU"
+        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200"
+        footer={<><Button variant="ghost" onClick={() => setRemboursement(null)} disabled={rembSaving}>Annuler</Button><Button onClick={confirmerRemboursement} loading={rembSaving}>Enregistrer</Button></>}>
+        {remboursement && (
+          <div className="space-y-3">
+            <p className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700">
+              Dette restante : <strong>{formatMoney(detteNette)}</strong>
+            </p>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Montant remboursé (FCFA) <span className="text-red-500">*</span></label>
+              <input type="number" min="0" max={detteNette}
+                value={remboursement.montant} onChange={(e) => setRemboursement((r) => ({ ...r, montant: e.target.value }))}
+                placeholder="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Date <span className="text-red-500">*</span></label>
+              <input type="date" value={remboursement.date} onChange={(e) => setRemboursement((r) => ({ ...r, date: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Projet concerné <span className="text-gray-400">(optionnel)</span></label>
+              <select value={remboursement.projetId} onChange={(e) => setRemboursement((r) => ({ ...r, projetId: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300">
+                <option value="">— Non précisé —</option>
+                {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">Motif / précision</label>
+              <input value={remboursement.motif} onChange={(e) => setRemboursement((r) => ({ ...r, motif: e.target.value }))}
+                placeholder="ex : Remboursement partiel sur trésorerie du mois"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Fenêtre commentaires dépense */}
@@ -905,7 +1014,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
               </div>
             )}
             <p className="mt-1 text-[11px] text-gray-400">
-              « Apport du PAU » remonte automatiquement dans E-DÉPENSES (suivi de l'apport du promoteur).
+              « Apport du PAU » alimente le suivi de dette ci-dessus (KPI « Apports du PAU »).
             </p>
           </div>
 

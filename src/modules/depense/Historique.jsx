@@ -13,23 +13,20 @@ import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
-import { depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { coutsMatieresBriqueterie } from './logic'
 
 export default function Historique() {
   const { data: depensesReelles } = useCollection('depense_depenses')
-  // Dépenses reprises en lecture seule : E-G.Pro (par secteur du projet) + coût matières Briqueterie.
-  const { data: depensesProjet } = useCollection('projet_depenses')
-  const { data: projetsTous }    = useCollection('projets')
-  const { data: tachesTous }     = useCollection('projet_taches')
+  // Coût matières Briqueterie, repris en lecture seule. Tout ce qui vient d'E-G.Pro
+  // (repérable à son `projetId`) n'apparaît plus ici — ça ne se consulte que depuis
+  // E-G.Pro lui-même.
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
-  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const depenses = useMemo(
     () => [
-      ...depensesReelles,
-      ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
+      ...depensesReelles.filter((d) => !d.projetId),
       ...coutsMatieresBriqueterie(inventairesBriq)
     ],
-    [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq]
+    [depensesReelles, inventairesBriq]
   )
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
@@ -55,15 +52,6 @@ export default function Historique() {
       })
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
   }, [depenses, start, end, filtreSecteur, filtreStatut, filtreType, recherche])
-
-  // Remboursements versés au PAU sur la période — mouvement inverse (restitution), pas
-  // une dépense : affiché à part pour ne pas fausser les totaux dépensés ci-dessus.
-  const remboursements = useMemo(() =>
-    remboursementsPau
-      .filter((r) => (r.date || '') >= start && (r.date || '') <= end)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)),
-  [remboursementsPau, start, end])
-  const totalRembourse = useMemo(() => remboursements.reduce((s, r) => s + (Number(r.montant) || 0), 0), [remboursements])
 
   const stats = useMemo(() => {
     const decaissees = lignes.filter((d) => (d.statut || 'decaissee') === 'decaissee')
@@ -97,11 +85,6 @@ export default function Historique() {
         'Réception confirmée': !d.beneficiaireNom ? '—' : (!d.beneficiaireUid ? 'Externe (N/A)' : (d.recuConfirme ? 'Oui' : 'Non'))
       }
     })
-    const rowsRemb = remboursements.map((r) => ({
-      Date: formatDateShort(r.date),
-      'Montant (FCFA)': Number(r.montant) || 0,
-      Motif: r.motif || '—'
-    }))
     exportRapportExcel({
       filename: `historique-depenses-${start}_${end}.xlsx`,
       sections: [
@@ -125,17 +108,6 @@ export default function Historique() {
             { key: 'Réception confirmée', label: 'Réception confirmée', width: 16 }
           ],
           rows
-        },
-        {
-          id: 'remboursements', name: 'Remboursements PAU',
-          title: 'Remboursements au PAU',
-          subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${remboursements.length} remboursement(s)`,
-          columns: [
-            { key: 'Date', label: 'Date', width: 14 },
-            { key: 'Montant (FCFA)', label: 'Montant (FCFA)', width: 16 },
-            { key: 'Motif', label: 'Motif', width: 40 }
-          ],
-          rows: rowsRemb
         }
       ]
     })
@@ -224,10 +196,9 @@ export default function Historique() {
               const secteur = SECTEURS.find((s) => s.id === d.secteurId)
               const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
               const isOpen = openRow === d.id
-              const depuisProjet = d.source === 'projet'
               return (
                 <Fragment key={d.id}>
-                  <tr className={`cursor-pointer hover:bg-gray-50 ${depuisProjet ? 'bg-teal-50/30' : ''}`} onClick={() => setOpenRow(isOpen ? null : d.id)}>
+                  <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setOpenRow(isOpen ? null : d.id)}>
                     <td className="px-2 py-2 text-center text-gray-400">
                       {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </td>
@@ -263,30 +234,6 @@ export default function Historique() {
           </tbody>
         </table>
       </Card>
-
-      {/* Remboursements au PAU — mouvement de restitution, distinct des dépenses ci-dessus */}
-      {remboursements.length > 0 && (
-        <Card title={
-          <span className="flex items-center gap-2">
-            💜 Remboursements au PAU
-            <span className="ml-auto text-[11px] font-normal text-gray-400">
-              {remboursements.length} remboursement{remboursements.length > 1 ? 's' : ''} · {totalRembourse.toLocaleString('fr-FR')} FCFA
-            </span>
-          </span>
-        }>
-          <div className="divide-y divide-gray-100">
-            {remboursements.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <span className="font-bold text-violet-700">{Number(r.montant).toLocaleString('fr-FR')} FCFA</span>
-                  {r.motif && <span className="ml-2 truncate text-gray-500">{r.motif}</span>}
-                </div>
-                <span className="shrink-0 text-xs text-gray-400">{formatDateShort(r.date)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   )
 }

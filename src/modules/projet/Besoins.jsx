@@ -748,7 +748,14 @@ export default function Besoins() {
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Catégorie">
                 <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  value={form.categorie} onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}>
+                  value={form.categorie} onChange={(e) => {
+                    const categorie = e.target.value
+                    // « Financier » : le montant se saisit directement (pas de quantité ×
+                    // prix unitaire) — quantité forcée à 1 pour garder le même calcul partout.
+                    setForm((f) => categorie === 'financier'
+                      ? { ...f, categorie, quantite: '1', unite: '' }
+                      : { ...f, categorie, quantite: f.categorie === 'financier' ? '' : f.quantite })
+                  }}>
                   {CATEGORIES_BESOIN.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </FormGroup>
@@ -758,31 +765,43 @@ export default function Besoins() {
                   {Object.entries(PRIORITES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </FormGroup>
-              <FormGroup label="Quantité" required>
-                <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder={QUANTITE_META[form.categorie]?.placeholder || 'ex : 1'}
-                  value={form.quantite} onChange={(e) => setForm((f) => ({ ...f, quantite: e.target.value }))} />
-              </FormGroup>
-              <FormGroup label="Unité" hint="Optionnel">
-                <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="ex : sac, m³, unité"
-                  value={form.unite} onChange={(e) => setForm((f) => ({ ...f, unite: e.target.value }))} />
-              </FormGroup>
-              <FormGroup label="Prix unitaire (FCFA)">
-                <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="ex : 2 500"
-                  value={form.prixUnitaire} onChange={(e) => setForm((f) => ({ ...f, prixUnitaire: e.target.value }))} />
-              </FormGroup>
+              {form.categorie === 'financier' ? (
+                <FormGroup label="Montant demandé (FCFA)" required hint="Somme d'argent nécessaire — pas d'achat de matériel précis">
+                  <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    placeholder="ex : 50 000"
+                    value={form.prixUnitaire} onChange={(e) => setForm((f) => ({ ...f, prixUnitaire: e.target.value, quantite: '1' }))} />
+                </FormGroup>
+              ) : (
+                <>
+                  <FormGroup label="Quantité" required>
+                    <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      placeholder={QUANTITE_META[form.categorie]?.placeholder || 'ex : 1'}
+                      value={form.quantite} onChange={(e) => setForm((f) => ({ ...f, quantite: e.target.value }))} />
+                  </FormGroup>
+                  <FormGroup label="Unité" hint="Optionnel">
+                    <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      placeholder="ex : sac, m³, unité"
+                      value={form.unite} onChange={(e) => setForm((f) => ({ ...f, unite: e.target.value }))} />
+                  </FormGroup>
+                  <FormGroup label="Prix unitaire (FCFA)">
+                    <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      placeholder="ex : 2 500"
+                      value={form.prixUnitaire} onChange={(e) => setForm((f) => ({ ...f, prixUnitaire: e.target.value }))} />
+                  </FormGroup>
+                </>
+              )}
               <FormGroup label="Souhaité pour le" hint="Optionnel">
                 <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   value={form.dateSouhaitee} onChange={(e) => setForm((f) => ({ ...f, dateSouhaitee: e.target.value }))} />
               </FormGroup>
-              <div className="flex flex-col justify-end">
-                <p className="mb-1 text-xs font-medium text-gray-600">Montant estimé</p>
-                <p className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-black text-white">
-                  {((Number(form.quantite) || 0) * (Number(form.prixUnitaire) || 0)).toLocaleString('fr-FR')} FCFA
-                </p>
-              </div>
+              {form.categorie !== 'financier' && (
+                <div className="flex flex-col justify-end">
+                  <p className="mb-1 text-xs font-medium text-gray-600">Montant estimé</p>
+                  <p className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-black text-white">
+                    {((Number(form.quantite) || 0) * (Number(form.prixUnitaire) || 0)).toLocaleString('fr-FR')} FCFA
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

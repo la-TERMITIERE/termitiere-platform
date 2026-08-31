@@ -1,50 +1,59 @@
-// Analyses Dépenses — budget vs dépensé par secteur, répartition par catégorie.
+// Analyses Dépenses — budget vs dépensé par secteur, répartition par catégorie, et
+// rentabilité (revenu réalisé vs dépense décaissée, marge par secteur — fusionné
+// depuis l'ancien écran « Rentabilité », réservé comme lui à l'administration).
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
-import { ChevronLeft, ChevronRight, Wallet, HeartHandshake } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
+import Badge from '../../shared/ui/Badge'
+import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { SECTEURS, MOIS_LABELS, sourceFinancementDefaut } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesNatureMois, natureFlux, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { exportRapportExcel } from '../../utils/excelReport'
+import { SECTEURS, MOIS_LABELS } from './data'
+import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesNatureMois, natureFlux, coutsMatieresBriqueterie, versementsClientVersSecteurs } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { depenseRoleEffectif } from '../../core/roles'
 
 const now = new Date()
 const PALETTE = ['#B45309', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#E8390E', '#0d9488', '#BC3C31']
+const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
 
 export default function Analyses() {
-  const navigate = useNavigate()
   const { role: roleReel } = useAuth()
   // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
   // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.
   const role = depenseRoleEffectif(roleReel)
   // L'agent voit l'onglet (suivi de ses propres dépenses) mais pas les figures
-  // financières réservées à l'administration : revenus, dette/apports du PAU,
-  // budget alloué par secteur — même restriction que le Dashboard.
+  // financières réservées à l'administration : revenus, budget alloué par secteur,
+  // rentabilité/marge — même restriction que le Dashboard (et que l'ancien écran
+  // « Rentabilité », qui n'était pas accessible du tout à l'agent).
   const restreintAgent = role === 'agent'
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: depensesReelles } = useCollection('depense_depenses')
-  const { data: depensesProjet }  = useCollection('projet_depenses')
-  const { data: projetsTous }     = useCollection('projets')
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
-  const { data: remboursementsPau } = useCollection('depense_pau_remboursements')
   const { data: paiementsGarderie }    = useCollection('garderie_paiements')
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
-  // Dépenses de E-G.Pro (par secteur) + coût matières Briqueterie, inclus en lecture seule — pas de double saisie.
-  // MAXI BAT (chantiers) est exclu : ces dépenses — et les apports du PAU qui les financent —
-  // sont réunies exclusivement dans le volet BTP d'E-G.Pro, jamais ici.
+  const { data: projetsTous }          = useCollection('projets')
+  const { data: versementsClientTous } = useCollection('projet_versements_client')
+  const { data: revenusManuelsTous }   = useCollection('depense_revenus_manuels')
+  // Coût matières Briqueterie, inclus en lecture seule — pas de double saisie. Tout ce
+  // qui vient d'E-G.Pro (repérable à son `projetId`) n'apparaît plus ici — ça ne se
+  // consulte que depuis E-G.Pro lui-même (dette/apports du PAU y compris).
   const depenses = useMemo(() => [
-    ...depensesReelles,
-    ...depensesProjetVersSecteurs(depensesProjet, projetsTous),
+    ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, depensesProjet, projetsTous, inventairesBriq])
+  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, inventairesBriq])
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
+
+  // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu
+  // (utilisé par la section Rentabilité ci-dessous).
+  const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
+    [versementsClientTous, projetsTous])
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -87,6 +96,57 @@ export default function Analyses() {
       .filter((c) => c.total > 0)
       .sort((a, b) => b.total - a.total)
   }, [depensesDuMois])
+
+  // ── Rentabilité : revenu réellement réalisé vs dépense décaissée, marge par secteur
+  // (fusionné depuis l'ancien écran « Rentabilité »). Réservé à l'administration.
+  const secteursRentabilite = useMemo(() => SECTEURS
+    .filter((s) => s.id !== 'bat')
+    .map((s) => {
+      const revenu = revenuSecteur(collections, s.id, annee, mois, versementsClientRoutes, revenusManuelsTous)
+      const depense = totalDepenses(depensesSecteurMois(depenses, s.id, annee, mois))
+      const marge = revenu - depense
+      const margePct = revenu > 0 ? Math.round((marge / revenu) * 100) : null
+      return { ...s, revenu, depense, marge, margePct }
+    })
+    .sort((a, b) => b.marge - a.marge),
+  [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+
+  const totalRevenuRentab  = secteursRentabilite.reduce((s, x) => s + x.revenu, 0)
+  const totalDepenseRentab = secteursRentabilite.reduce((s, x) => s + x.depense, 0)
+  const margeGlobale       = totalRevenuRentab - totalDepenseRentab
+
+  const barDataRentab = {
+    labels: secteursRentabilite.map((s) => s.label),
+    datasets: [
+      { label: 'Revenu réalisé',     data: secteursRentabilite.map((s) => s.revenu),  backgroundColor: '#05966933', borderColor: '#059669', borderWidth: 1, borderRadius: 6 },
+      { label: 'Dépense décaissée',  data: secteursRentabilite.map((s) => s.depense), backgroundColor: '#dc262699', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6 }
+    ]
+  }
+
+  function exportRentabiliteXLSX() {
+    const rows = secteursRentabilite.map((s) => ({
+      Secteur: s.label,
+      'Revenu réalisé (FCFA)': s.revenu,
+      'Dépense décaissée (FCFA)': s.depense,
+      'Marge (FCFA)': s.marge,
+      'Marge (%)': s.margePct === null ? '—' : `${s.margePct}%`
+    }))
+    exportRapportExcel({
+      filename: `rentabilite-${annee}-${String(mois).padStart(2, '0')}.xlsx`,
+      sections: [{
+        id: 'rentabilite', name: 'Rentabilité', title: 'Revenus vs Dépenses par secteur',
+        subtitle: `${MOIS_LABELS[mois - 1]} ${annee}`,
+        columns: [
+          { key: 'Secteur', label: 'Secteur', width: 22 },
+          { key: 'Revenu réalisé (FCFA)', label: 'Revenu réalisé (FCFA)', width: 20 },
+          { key: 'Dépense décaissée (FCFA)', label: 'Dépense décaissée (FCFA)', width: 22 },
+          { key: 'Marge (FCFA)', label: 'Marge (FCFA)', width: 18 },
+          { key: 'Marge (%)', label: 'Marge (%)', width: 12 }
+        ],
+        rows
+      }]
+    })
+  }
 
   // Par secteur : 3 barres côte à côte — Budget alloué (cible) · Dépenses courantes ·
   // Investissements — pour comparer directement les trois montants d'un même secteur.
@@ -157,43 +217,6 @@ export default function Analyses() {
     scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') } }, x: { grid: { display: false } } }
   }
 
-  // ── Dette envers le PAU : ce que le promoteur a injecté de sa poche (apport), diminué de
-  // ce qui lui a déjà été restitué (remboursements) = dette nette encore due. Cumul réel
-  // depuis le début, à chaque mois. Basé sur la « Source de financement » de chaque dépense
-  // + la collection dédiée des remboursements (lecture seule, n'affecte aucun budget).
-  const estPau = (d) => (d.sourceFinancement || sourceFinancementDefaut) === 'pau'
-  const financementPau = useMemo(() => {
-    const cumulPau = totalDepenses(depenses.filter(estPau))
-    const cumulEntreprise = totalDepenses(depenses.filter((d) => !estPau(d)))
-    const cumulRembourse = totalDepenses(remboursementsPau)
-    const detteNette = cumulPau - cumulRembourse
-    const total = cumulPau + cumulEntreprise
-    return { cumulPau, cumulEntreprise, cumulRembourse, detteNette, pct: total > 0 ? Math.round((cumulPau / total) * 100) : 0 }
-  }, [depenses, remboursementsPau])
-
-  const tendancePau = useMemo(() => derniersMois(6, MOIS_LABELS).map(({ annee: a, mois: m, label }) => {
-    const fin = `${a}-${String(m).padStart(2, '0')}`
-    const cumulPau = totalDepenses(depenses.filter((d) => estPau(d) && (d.date || '').slice(0, 7) <= fin))
-    const cumulRembourse = totalDepenses(remboursementsPau.filter((r) => (r.date || '').slice(0, 7) <= fin))
-    return { label, cumulPau, cumulRembourse, detteNette: cumulPau - cumulRembourse }
-  }), [depenses, remboursementsPau])
-
-  const pauChartData = {
-    labels: tendancePau.map((t) => t.label),
-    datasets: [
-      { label: 'Apporté (cumulé)', data: tendancePau.map((t) => t.cumulPau), borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.06)', tension: 0.3, borderWidth: 2, borderDash: [6, 4], pointRadius: 3, pointBackgroundColor: '#7c3aed' },
-      { label: 'Remboursé (cumulé)', data: tendancePau.map((t) => t.cumulRembourse), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.06)', tension: 0.3, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#059669' },
-      { label: 'Dette nette restante', data: tendancePau.map((t) => t.detteNette), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.12)', tension: 0.3, fill: true, borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#dc2626', pointBorderColor: '#fff', pointBorderWidth: 2 }
-    ]
-  }
-
-  const pauChartOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
-    scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') } }, x: { grid: { display: false } } }
-  }
-
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -202,11 +225,12 @@ export default function Analyses() {
           sub="Approuvé / en attente, non décaissé"
           icon={Wallet} accent="#d97706" />
         {!restreintAgent && (
-          <StatCard title="Dette envers le PAU"
-            value={`${financementPau.detteNette.toLocaleString('fr-FR')} FCFA`}
-            sub={financementPau.cumulPau === 0 ? 'Aucun apport enregistré' : financementPau.detteNette === 0 ? '✓ Soldée' : `${financementPau.cumulRembourse.toLocaleString('fr-FR')} FCFA déjà restitués`}
-            icon={HeartHandshake} accent={financementPau.detteNette > 0 ? '#7c3aed' : '#059669'}
-            onClick={financementPau.cumulPau === 0 ? undefined : () => navigate('/depense/liste', { state: { filtreSource: 'pau' } })} />
+          <>
+            <StatCard title="Revenu réalisé (mois)" value={`${fmt(totalRevenuRentab)} FCFA`} icon={TrendingUp} accent="#059669" />
+            <StatCard title="Dépense décaissée (mois)" value={`${fmt(totalDepenseRentab)} FCFA`} icon={TrendingDown} accent="#dc2626" />
+            <StatCard title="Marge globale (mois)" value={`${fmt(margeGlobale)} FCFA`}
+              icon={margeGlobale >= 0 ? TrendingUp : TrendingDown} accent={margeGlobale >= 0 ? '#059669' : '#dc2626'} />
+          </>
         )}
       </div>
 
@@ -218,6 +242,9 @@ export default function Analyses() {
         <button onClick={() => changerMois(1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50">
           <ChevronRight size={16} />
         </button>
+        {!restreintAgent && (
+          <Button variant="outline" className="ml-auto" onClick={exportRentabiliteXLSX}><FileSpreadsheet size={16} /> Export Excel rentabilité</Button>
+        )}
       </div>
 
       <Card title={restreintAgent ? 'Tendance sur 6 mois — dépenses (tous secteurs)' : 'Tendance sur 6 mois — revenus vs dépenses (tous secteurs)'}>
@@ -234,27 +261,17 @@ export default function Analyses() {
       </Card>
 
       {!restreintAgent && (
-        <Card title="Dette envers le PAU — évolution sur 6 mois">
-          {financementPau.cumulPau === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">
-              Aucun apport du PAU enregistré. Marquez une dépense « Apport du PAU » à la saisie pour le suivre ici.
-            </p>
-          ) : (
-            <>
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200/60 bg-violet-50/50 px-3 py-2 text-xs">
-                <span className="font-bold text-violet-900">Dette restante : {financementPau.detteNette.toLocaleString('fr-FR')} FCFA</span>
-                <span className="text-gray-500">— Apporté {financementPau.cumulPau.toLocaleString('fr-FR')} · Remboursé {financementPau.cumulRembourse.toLocaleString('fr-FR')}</span>
-                <span className="ml-auto rounded-full bg-white px-2.5 py-0.5 font-bold text-violet-700 shadow-sm">{financementPau.pct}% du financement total</span>
-              </div>
-              <div style={{ height: 280 }}>
-                <Line data={pauChartData} options={pauChartOptions} />
-              </div>
-              <p className="mt-2 text-[11px] text-gray-400">
-                Cumul depuis le début, tous secteurs confondus. La dette diminue à mesure des remboursements enregistrés (Dashboard) — traçabilité pure, n'affecte pas les budgets.
-              </p>
-            </>
-          )}
-        </Card>
+        <>
+          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
+            Rentabilité : compare le revenu de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Les secteurs sans facturation propre ce mois-là affichent un revenu à 0.
+          </div>
+
+          <Card title={`Revenu vs dépense par secteur — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+            <div style={{ height: 320 }}>
+              <Bar data={barDataRentab} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+            </div>
+          </Card>
+        </>
       )}
 
       <Card title={restreintAgent ? `Dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}` : `Budget vs dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}`}>
@@ -300,6 +317,48 @@ export default function Analyses() {
           </div>
         )}
       </Card>
+
+      {!restreintAgent && (
+        <Card title="Détail de la rentabilité par secteur" className="overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Secteur</th>
+                <th className="px-3 py-2 text-right">Revenu réalisé</th>
+                <th className="px-3 py-2 text-right">Dépense décaissée</th>
+                <th className="px-3 py-2 text-right">Marge</th>
+                <th className="px-3 py-2 text-center">Statut</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {secteursRentabilite.map((s) => (
+                <tr key={s.id}>
+                  <td className="px-3 py-2 font-semibold text-gray-800">
+                    <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
+                    {s.label}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-green-700">{fmt(s.revenu)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-red-700">{fmt(s.depense)}</td>
+                  <td className={`px-3 py-2 text-right font-mono font-bold ${s.marge >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    {s.marge >= 0 ? '+' : ''}{fmt(s.marge)}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {s.margePct === null
+                      ? <Badge tone="neutral">Pas de revenu</Badge>
+                      : <Badge tone={s.marge >= 0 ? 'success' : 'danger'}>{s.margePct >= 0 ? '+' : ''}{s.margePct}%</Badge>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {!restreintAgent && (
+        <p className="text-center text-xs text-gray-400">
+          Pour la tendance de la marge sur 6 mois, voir <strong>Flux de trésorerie</strong> — le solde d'exploitation et le solde global y équivalent exactement à la marge courante et à la marge totale ci-dessus.
+        </p>
+      )}
     </div>
   )
 }

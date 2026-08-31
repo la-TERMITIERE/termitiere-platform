@@ -1,6 +1,6 @@
 // Agrège les revenus RÉELLEMENT réalisés dans les autres modules, par secteur et par mois.
 // Lecture seule : aucune écriture croisée, on ne fait que sommer des collections existantes.
-import { revenuPauSecteurMois, revenuClientSecteurMois, revenuManuelSecteurMois } from './logic'
+import { revenuClientSecteurMois, revenuManuelSecteurMois } from './logic'
 import { matchSite } from '../logistique/site/useSite'
 
 // Garderie : paiements mensuels (mois/annee) + paiements journaliers (date), montant réellement encaissé.
@@ -42,13 +42,13 @@ export function revenuLogistique(factures, annee, mois, site = null) {
 // Secteurs pour lesquels un revenu réel est disponible ailleurs dans l'application.
 export const SECTEURS_AVEC_REVENU = ['garderie', 'agro', 'logistique', 'evenementiel']
 
-// `depenses` (optionnel) : liste complète des dépenses du module — sert à retrouver l'apport
-// du PAU du secteur/mois (cf. revenuPauSecteurMois). `versementsClientRoutes` (optionnel) :
-// versements clients des projets E-G.Pro déjà routés par secteur (cf. versementsClientVersSecteurs)
-// — sert à compter les paiements reçus des clients comme un revenu. `revenusManuels` (optionnel) :
-// revenus saisis à la main (cf. revenuManuelSecteurMois), pour les secteurs sans facturation
-// automatique. Sans eux, seul le revenu factures est retourné.
-export function revenuSecteur(collections, secteurId, annee, mois, depenses = [], versementsClientRoutes = [], revenusManuels = [], site = null) {
+// `versementsClientRoutes` (optionnel) : versements clients des projets E-G.Pro déjà
+// routés par secteur (cf. versementsClientVersSecteurs) — sert à compter les paiements
+// reçus des clients comme un revenu. `revenusManuels` (optionnel) : revenus saisis à la
+// main (cf. revenuManuelSecteurMois), pour les secteurs sans facturation automatique.
+// L'apport du PAU (financement personnel du promoteur) ne compte plus ici — son suivi
+// (apport, dette, remboursement) vit désormais exclusivement dans E-G.Pro.
+export function revenuSecteur(collections, secteurId, annee, mois, versementsClientRoutes = [], revenusManuels = [], site = null) {
   const { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel } = collections
   let revenu = 0
   if (secteurId === 'garderie') revenu = revenuGarderie(paiementsGarderie, annee, mois)
@@ -56,7 +56,6 @@ export function revenuSecteur(collections, secteurId, annee, mois, depenses = []
   else if (secteurId === 'logistique') revenu = revenuLogistique(facturesLogistique, annee, mois, site)
   else if (secteurId === 'evenementiel') revenu = revenuFactures(facturesEvenementiel, annee, mois)
   return revenu
-    + revenuPauSecteurMois(depenses, secteurId, annee, mois, site)
     + revenuClientSecteurMois(versementsClientRoutes, secteurId, annee, mois, site)
     + revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, site)
 }

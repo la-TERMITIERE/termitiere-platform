@@ -7,7 +7,7 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { notifierBeneficiaire } from './notifications'
 import { genId } from '../../utils/formatters'
-import { SECTEURS, SEUIL_APPROBATION_PAU, sourceFinancementDefaut } from './data'
+import { SECTEURS, SEUIL_APPROBATION_PAU } from './data'
 import { budgetRestantSecteur, budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
@@ -52,7 +52,7 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses }) {
   const statutInitial = raison ? 'en_attente' : 'decaissee'
   const depenseFinale = { ...d, id, montant, statut: statutInitial, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
   await setItem('depense_depenses', id, depenseFinale)
-  await audit('depense', 'DEPENSE_CREATE', `${libelle} — ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}${(d.sourceFinancement || sourceFinancementDefaut) === 'pau' ? ' (apport PAU)' : ''}`, { secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison, sourceFinancement: d.sourceFinancement || sourceFinancementDefaut })
+  await audit('depense', 'DEPENSE_CREATE', `${libelle} — ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}`, { secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison })
   if (statutInitial === 'en_attente') {
     // Demande d'autorisation → alerte le PAU (et le super admin) dans sa cloche + push.
     await notify({
@@ -79,17 +79,6 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses }) {
       type: 'info',
       title: `💸 Dépense effectuée — ${libelle}`,
       body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · par ${user?.nom || user?.login || '—'}.`,
-      module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
-      link: '/depense/liste', state: { openDepenseId: id }
-    }).catch(() => {})
-  }
-  // Apport personnel du PAU : information réservée à l'administration (compte
-  // comme un revenu du secteur et reste une dette à lui restituer, cf. Dashboard).
-  if ((d.sourceFinancement || sourceFinancementDefaut) === 'pau') {
-    await notify({
-      type: 'info',
-      title: `💜 Apport du PAU — ${libelle}`,
-      body: `${montant.toLocaleString('fr-FR')} FCFA financés personnellement par le PAU${d.description ? ` — ${d.description}` : ''}.`,
       module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
       link: '/depense/liste', state: { openDepenseId: id }
     }).catch(() => {})
