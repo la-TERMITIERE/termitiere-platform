@@ -563,10 +563,10 @@ export default function Depenses() {
             <div className="rounded-xl border border-amber-100 bg-white p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Secteur *" hint="Chantiers BTP : à saisir depuis le volet BTP d'E-G.Pro, pas ici. CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — dépenses/apports communs à tous.">
+                <FormGroup label="Secteur *" hint="CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — dépenses/apports communs à tous.">
                   <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
                     <option value="">— Choisir —</option>
-                    {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </Select>
                 </FormGroup>
                 {modal.data.secteurId === 'logistique' && (
