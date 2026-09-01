@@ -10,6 +10,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
+import { normaliserTexte } from '../../utils/formatters'
 import { useGymParams, saveGymParams } from './useGymParams'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
@@ -54,7 +55,7 @@ export default function Params() {
   const [resetting, setResetting] = useState(false)
 
   async function reinitialiserTout() {
-    if (confirmTexte !== TEXTE_CONFIRMATION) return
+    if (normaliserTexte(confirmTexte) !== normaliserTexte(TEXTE_CONFIRMATION)) return
     setResetting(true)
     try {
       let compte = 0
@@ -176,11 +177,11 @@ export default function Params() {
         <p className="mb-3 text-xs text-red-600">
           Total : <strong>{totalEnregistrements} enregistrement(s)</strong>. Les tarifs et réglages ci-dessus ne sont pas touchés.
         </p>
-        <FormGroup label={`Pour confirmer, tape exactement « ${TEXTE_CONFIRMATION} »`}>
+        <FormGroup label={`Pour confirmer, tape « ${TEXTE_CONFIRMATION} »`} hint="Accents et majuscules non requis (ex. réinitialiser fonctionne aussi).">
           <Input value={confirmTexte} onChange={(e) => setConfirmTexte(e.target.value)} placeholder={TEXTE_CONFIRMATION}
             className="border-red-300 focus:border-red-500 focus:ring-red-400/40" />
         </FormGroup>
-        <Button variant="danger" disabled={confirmTexte !== TEXTE_CONFIRMATION || totalEnregistrements === 0}
+        <Button variant="danger" disabled={normaliserTexte(confirmTexte) !== normaliserTexte(TEXTE_CONFIRMATION) || totalEnregistrements === 0}
           loading={resetting} onClick={reinitialiserTout}>
           <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM
         </Button>

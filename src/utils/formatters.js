@@ -1,5 +1,13 @@
 // Fonctions utilitaires de formatage — monnaie FCFA, dates FR, identifiants.
 
+// Normalise un texte pour une comparaison insensible aux accents/à la casse — utile
+// pour une phrase de confirmation (ex. « RÉINITIALISER ») : certains claviers n'ont
+// pas facilement accès aux lettres accentuées (é, è…), sans quoi l'action reste bloquée
+// pour rien. Compare toujours l'INTENTION (le mot), jamais l'orthographe exacte.
+const DIACRITIQUES = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g')
+export const normaliserTexte = (s) =>
+  (s || '').trim().toUpperCase().normalize('NFD').replace(DIACRITIQUES, '')
+
 // L'espace insécable fine (U+202F) utilisée par défaut comme séparateur de milliers en
 // locale fr-FR n'est pas supportée par les polices standard de jsPDF (Helvetica…) — elle
 // s'affiche alors bien trop large dans les PDF générés. On la remplace par une espace normale.
