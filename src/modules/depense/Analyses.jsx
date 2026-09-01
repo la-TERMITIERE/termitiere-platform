@@ -166,7 +166,7 @@ export default function Analyses() {
 
   const barOptions = {
     responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
     scales: {
       x: { grid: { display: false } },
@@ -215,7 +215,7 @@ export default function Analyses() {
 
   const lineOptions = {
     responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
     scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') } }, x: { grid: { display: false } } }
   }

@@ -76,7 +76,7 @@ export default function Flux() {
 
   const chartOptions = {
     responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
     scales: {
       y: { beginAtZero: false, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') }, grid: { color: (c) => (c.tick.value === 0 ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.05)') } },

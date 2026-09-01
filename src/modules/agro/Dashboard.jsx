@@ -419,7 +419,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-2 h-52">
             {morbiditeSerie.labels.length
-              ? <Line data={morbiditeChart} options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + ' %' } } } }} />
+              ? <Line data={morbiditeChart} options={{ maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + ' %' } } } }} />
               : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
           </div>
         </button>
@@ -445,7 +445,7 @@ export default function Dashboard() {
           {!ndvChart.vide
             ? <Bar data={ndvChart.data} options={{
                 maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
+                interaction: { mode: 'nearest', intersect: false },
                 plugins: {
                   legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
                   tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatNumber(c.parsed.y)}` } }
@@ -470,7 +470,7 @@ export default function Dashboard() {
           {!croissanceChart.vide
             ? <Line data={croissanceChart} options={{
                 maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
+                interaction: { mode: 'nearest', intersect: false },
                 plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label} : ${formatNumber(c.parsed.y)} têtes` } } },
                 scales: { y: { beginAtZero: true, ticks: { precision: 0, callback: (v) => formatNumber(v) } } }
               }} />

@@ -63,7 +63,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
       { label: 'Paramètres', to: '/parametres', icon: Settings }
     ]
   } else {
-    let nav = (MODULE_NAV[activeModule.id] || []).filter(canSee)
+    let nav = (MODULE_NAV[activeModule.id] || []).filter((it) => it.to).filter(canSee)
     if (siteNames) {
       const base = `/${activeModule.id}`
       nav = logSite
