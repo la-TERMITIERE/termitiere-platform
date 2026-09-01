@@ -307,7 +307,7 @@ export default function VoyageDetail() {
                   {peutSaisir && (
                     <label className="flex h-14 w-14 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-indigo-300 text-indigo-500 hover:bg-indigo-50" title="Ajouter une photo / un PDF">
                       <ImagePlus size={18} />
-                      <input type="file" accept="image/*,application/pdf" className="hidden" disabled={uploading}
+                      <input type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" disabled={uploading}
                         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; ajouterPhotoArticle(a, f) }} />
                     </label>
                   )}
@@ -510,7 +510,7 @@ export default function VoyageDetail() {
             {parseFloat(depModal.montant) > 0 && depModal.devise !== 'XOF' && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">≈ <strong>{formatMoney(Math.round(enFCFA(depModal.montant, tauxDe(depModal.devise))))}</strong> (au taux courant)</p>
             )}
-            <FormGroup label="Reçu / justificatif (photo ou PDF, optionnel)">
+            <FormGroup label="Reçu / justificatif (photo, PDF, Excel…, optionnel)">
               {depModal.piece ? (
                 <div className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm">
                   <span className="flex items-center gap-2 text-gray-700"><Paperclip size={14} /> {depModal.piece.nom}</span>
@@ -519,7 +519,7 @@ export default function VoyageDetail() {
               ) : (
                 <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 px-3 py-3 text-sm text-indigo-500 hover:bg-indigo-50">
                   <Receipt size={16} /> {uploading ? 'Chargement…' : 'Joindre un reçu'}
-                  <input type="file" accept="image/*,application/pdf" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; chargerRecuDepense(f) }} />
+                  <input type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; chargerRecuDepense(f) }} />
                 </label>
               )}
             </FormGroup>

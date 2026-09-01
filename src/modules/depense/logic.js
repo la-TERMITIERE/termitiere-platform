@@ -12,6 +12,17 @@ import { METIERS_PRESTATAIRE } from '../projet/prestataire'
 // conventions coexistent volontairement : elles couvrent des historiques différents.
 export const siteLogistiqueDe = (row) => row?.site || 'kara'
 
+// MAXI BAT est un cas particulier : ses dépenses de chantier (tâches, prestataires…)
+// sont gérées depuis E-G.Pro (`projet_depenses`, volet BTP) et n'apparaissent jamais
+// dans E-DÉPENSES. Mais MAXI BAT reste un secteur sélectionnable dans les formulaires
+// E-DÉPENSES eux-mêmes (Ajouter une dépense…) — une dépense BAT saisie DIRECTEMENT là
+// doit, elle, y rester visible. `origineSaisie: 'e_depenses'` (posé par
+// soumettreNouvelleDepense, seul circuit de création E-DÉPENSES) distingue les deux :
+// à utiliser partout où l'on filtre la liste des dépenses pour un écran E-DÉPENSES.
+export function visibleDansEDepenses(d) {
+  return d.secteurId !== 'bat' || d.origineSaisie === 'e_depenses'
+}
+
 // Libellé d'affichage d'un secteur, avec le site en suffixe pour Logistique
 // (ex. « MAXI LOGISTIQUE — Kara ») — résout aussi le site des documents hérités sans
 // `site` (cf. siteLogistiqueDe), pour que l'affichage reste cohérent avec le filtrage.
@@ -135,7 +146,7 @@ export function revenuClientSecteurMois(versementsRoutes, secteurId, annee, mois
 }
 
 // Revenu saisi manuellement (collection `depense_revenus_manuels`) — pour les secteurs
-// sans source de facturation automatique (ex. Hors secteur, MAXI BAT) : une rentrée
+// sans source de facturation automatique (ex. Caisse commune, MAXI BAT) : une rentrée
 // d'argent ponctuelle qui ne vient ni d'une facture de module, ni d'un apport du PAU,
 // ni d'un versement client E-G.Pro (ex. subvention, vente ponctuelle, remboursement reçu).
 export function revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, site = null) {
@@ -177,29 +188,6 @@ export function coutsMatieresBriqueterie(inventaires = []) {
 
 // ── Passerelle en lecture seule avec les remboursements au PAU ──────────────
 // Un remboursement (`depense_pau_remboursements`, saisi depuis le Dashboard) est une
-// vraie sortie d'argent de l'entreprise — il doit apparaître dans la liste des
-// Dépenses (contrairement à l'apport initial du PAU, revenu compensatoire, qui lui
-// reste hors de cette liste — cf. le filtre par défaut de Depenses.jsx). Converti au
-// format attendu, secteur d'origine conservé (déjà saisi sur le remboursement) pour
-// l'affichage, mais exclu de depensesEntrepriseSecteurMois : ce n'est pas une charge
-// du BUDGET ALLOUÉ de ce secteur (cf. Rentabilité, qui la traite en dépense GLOBALE).
-export function remboursementsPauVersDepenses(remboursements = []) {
-  return (remboursements || []).map((r) => ({
-    id: `remb_${r.id}`,
-    secteurId: r.secteurId,
-    categorie: 'remboursement_pau',
-    montant: Number(r.montant) || 0,
-    date: r.date ? String(r.date).slice(0, 10) : '',
-    description: `Remboursement au PAU${r.motif ? ' — ' + r.motif : ''}`,
-    natureFlux: natureFluxDefaut,
-    sourceFinancement: 'entreprise',
-    statut: 'decaissee',
-    source: 'remboursement_pau',
-    enregistrePar: r.enregistrePar || '—',
-    createdAt: r.createdAt || r.date || Date.now()
-  }))
-}
-
 // Document de budget effectif pour secteur+mois (+site pour Logistique). Résout le
 // fallback historique de Kara vers l'ancien document non tagué (cf. siteLogistiqueDe) —
 // Lomé, elle, n'a aucun historique et démarre donc toujours à « non défini ».
@@ -240,38 +228,40 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois, site = nul
   })
 }
 
-// Dépenses décaissées d'un secteur/mois financées par L'ENTREPRISE uniquement, hors
-// budget d'un projet — exclut : (1) celles payées par l'apport personnel du PAU
-// (sourceFinancement === 'pau'), (2) celles routées depuis E-G.Pro (source === 'projet',
-// cf. depensesProjetVersSecteurs). Ni l'une ni l'autre ne sont l'argent du budget ALLOUÉ
-// du secteur (la « caisse courante ») : un apport PAU compte comme un revenu compensatoire
-// du secteur (cf. revenuPauSecteurMois) ; une dépense de projet est financée par les sommes
-// propres, déjà arrêtées, du projet lui-même (versements client, apport PAU dédié…), pas
-// par le budget mensuel du secteur. Ni l'une ni l'autre ne doivent donc consommer ce budget
-// ni déclencher une alerte/autorisation de dépassement. À utiliser partout où l'on calcule
-// « combien reste du budget ALLOUÉ » — pas pour un total « toutes dépenses » (rapports,
-// rentabilité…) où projets et apports PAU doivent rester comptés (ils y sont déjà
-// neutralisés par le revenu compensatoire — versement client ou apport PAU — équivalent).
+// Dépenses décaissées d'un secteur/mois financées par L'ENTREPRISE uniquement — les
+// dépenses de projet E-G.Pro (repérables à leur `projetId`) ne remontent déjà plus
+// jusqu'ici (filtrées en amont, dans chaque écran E-DÉPENSES). Les filtres ci-dessous
+// restent un garde-fou pour d'éventuelles anciennes entrées historiques (apport PAU,
+// remboursement PAU, ou `source: 'projet'`) qui ne doivent pas consommer le budget
+// ALLOUÉ du secteur. À utiliser partout où l'on calcule « combien reste du budget
+// ALLOUÉ » — pas pour un total « toutes dépenses » (rapports, rentabilité…).
+//
+// CAISSE COMMUNE (secteurId `divers`) — cas particulier : une dépense d'un AUTRE
+// secteur peut être marquée `financePar: 'caisse_commune'` (cf. Depenses.jsx) — elle
+// reste affichée sous son secteur d'origine (traçabilité, cf. depensesSecteurMois),
+// mais ne consomme PLUS le budget de ce secteur (exclue ci-dessous) : c'est le budget
+// de la Caisse commune qui est consommé à la place, comme si elle avait payé directement.
 export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, site = null) {
+  if (secteurId === 'divers') {
+    const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+    return depenses.filter((d) => {
+      if (!(d.date || '').startsWith(prefixe)) return false
+      if (!estDecaissee(d)) return false
+      if (d.secteurId === 'divers') return (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'projet' && d.source !== 'remboursement_pau'
+      return d.financePar === 'caisse_commune'
+    })
+  }
   return depensesSecteurMois(depenses, secteurId, annee, mois, site)
     .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau')
     .filter((d) => d.source !== 'projet')
-    // Un remboursement au PAU (cf. remboursementsPauVersDepenses) est une dépense
-    // GLOBALE, pas la charge du budget mensuel d'un secteur (même logique que ci-dessus).
     .filter((d) => d.source !== 'remboursement_pau')
+    .filter((d) => d.financePar !== 'caisse_commune')
 }
 
-// Dépenses décaissées d'un secteur/mois, hors dépenses de PROJET uniquement (PAU inclus,
-// contrairement à depensesEntrepriseSecteurMois ci-dessus) — pour le bilan « Dépenses »/
-// « Solde » propre au secteur (écran Recettes & Dépenses) : un apport PAU dépensé reste
-// une charge réelle du secteur, neutralisée par le revenu PAU équivalent dans le même
-// bilan (cf. revenuPauSecteurMois) — la garder ici préserve ce netting. Une dépense de
-// PROJET, elle, n'a pas cette garantie de netting dans le mois courant (le versement
-// client peut arriver un autre mois, ou ne pas exister si le projet n'a pas de client) :
-// l'afficher fausserait le solde mensuel du secteur pour un montant qui ne lui appartient
-// pas. Elle reste visible, classée par projet, dans la liste générale E-DÉPENSES et
-// dans l'onglet Dépenses du projet lui-même (badge secteur) — jamais perdue, juste pas
-// comptée ici.
+// Dépenses décaissées d'un secteur/mois, hors dépenses de PROJET — pour le bilan
+// « Dépenses »/« Solde » propre au secteur (écran Recettes & Dépenses). Garde-fou pour
+// d'éventuelles anciennes entrées `source: 'projet'` historiques (les dépenses de
+// projet E-G.Pro courantes ne remontent déjà plus jusqu'ici, cf. ci-dessus).
 export function depensesHorsProjetSecteurMois(depenses, secteurId, annee, mois, site = null) {
   return depensesSecteurMois(depenses, secteurId, annee, mois, site)
     .filter((d) => d.source !== 'projet')
@@ -286,13 +276,6 @@ export function budgetRestantSecteur(budgets, depenses, secteurId, dateStr, site
   const alloue = budgetSecteur(budgets, secteurId, annee, mois, site)
   if (alloue <= 0) return null
   return alloue - totalDepenses(depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, site))
-}
-
-// Apport du PAU compté comme un revenu du secteur/mois concerné : l'argent injecté par
-// le PAU (financement personnel) est une entrée pour l'entreprise, même si elle doit le
-// lui restituer — cette dette est suivie séparément (Dashboard, indépendamment du mois).
-export function revenuPauSecteurMois(depenses, secteurId, annee, mois, site = null) {
-  return totalDepenses(depensesSecteurMois(depenses, secteurId, annee, mois, site).filter((d) => d.sourceFinancement === 'pau'))
 }
 
 // Dépenses en attente d'approbation ou approuvées (à décaisser).

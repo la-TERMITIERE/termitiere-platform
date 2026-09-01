@@ -1,4 +1,4 @@
-// Gestionnaire de pièces jointes (PDF / images) réutilisable.
+// Gestionnaire de pièces jointes (PDF, images, Excel…) réutilisable.
 // Découplé du stockage : le parent fournit `pieces` et les callbacks onAdd/onRemove.
 // Les fichiers images sont compressés ; tout est encodé en data URL (cf. utils/fichiers).
 import { useRef, useState } from 'react'
@@ -70,7 +70,7 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
               placeholder="Légende / commentaire (optionnel)"
               className="min-w-[200px] flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400" />
           )}
-          <input ref={inputRef} type="file" accept="image/*,application/pdf" multiple className="hidden"
+          <input ref={inputRef} type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" multiple className="hidden"
             onChange={(e) => handleFiles(e.target.files)} />
           <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
             className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-50">

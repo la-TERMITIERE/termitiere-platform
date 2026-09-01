@@ -161,17 +161,22 @@ export default function Autorisations() {
     setDetail(null)
   }
 
-  // Notifie la direction si le secteur atteint 80%+ de son budget une fois la dépense décaissée.
+  // Notifie la direction si le secteur — ou la Caisse commune si la dépense est marquée
+  // `financePar: 'caisse_commune'` (cf. même logique dans depenseActions.js) — atteint
+  // 80%+ de son budget une fois la dépense décaissée.
   async function alerterSiDepassement(d, secteur) {
     const [annee, mois] = (d.date || '').split('-').map(Number)
     if (!annee || !mois) return
-    const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
+    const estCaisseCommune = d.financePar === 'caisse_commune'
+    const secteurIdAlerte = estCaisseCommune ? 'divers' : d.secteurId
+    const siteAlerte = estCaisseCommune ? null : d.site
+    const alloue = budgetSecteur(budgets, secteurIdAlerte, annee, mois, siteAlerte)
     if (alloue <= 0) return
-    const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], d.secteurId, annee, mois, d.site))
+    const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], secteurIdAlerte, annee, mois, siteAlerte))
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct)
     if (statut.key === 'ok') return
-    const libelle = libelleSecteurSite(secteur, d)
+    const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
     await notify({
       type: statut.key === 'depasse' ? 'danger' : 'warning',
       title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
@@ -220,6 +225,7 @@ export default function Autorisations() {
                   <div className="flex items-center gap-2">
                     <p className="truncate font-bold text-gray-800">{libelleSecteurSite(secteur, d)}</p>
                     <Badge tone={st.tone}>{st.label}</Badge>
+                    {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
                   </div>
                   <p className="mt-0.5 text-xs text-gray-500">{d.categorie || '—'} · {formatDateShort(d.date)}</p>
                   {d.description && <p className="mt-1 truncate text-sm text-gray-600">{d.description}</p>}
@@ -252,6 +258,7 @@ export default function Autorisations() {
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{st.label}</span>
                   {d.categorie && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{d.categorie}</span>}
+                  {d.financePar === 'caisse_commune' && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">💰 Caisse commune</span>}
                 </div>
               </div>
 

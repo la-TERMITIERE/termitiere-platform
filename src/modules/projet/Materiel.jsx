@@ -123,6 +123,7 @@ export default function Materiel() {
   }, [magasinActif, magasins])
   const [filtreCategorie, setFiltreCateg] = useState('')
   const [filtreStatut, setFiltreStatut]   = useState('sur_site')
+  const [triMateriel, setTriMateriel]     = useState('date') // 'date' (plus récent d'abord) | 'nom' (A→Z)
   const [modal, setModal]     = useState(false)
   const [form, setForm]       = useState(VIDE)
   const [editing, setEditing] = useState(null)
@@ -212,8 +213,10 @@ export default function Materiel() {
     materielsDuMagasinActif
       .filter((m) => !filtreCategorie || m.categorie === filtreCategorie)
       .filter((m) => !filtreStatut    || m.statut    === filtreStatut)
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-  [materielsDuMagasinActif, filtreCategorie, filtreStatut])
+      .sort((a, b) => triMateriel === 'nom'
+        ? (a.nom || '').localeCompare(b.nom || '')
+        : (b.createdAt || 0) - (a.createdAt || 0)),
+  [materielsDuMagasinActif, filtreCategorie, filtreStatut, triMateriel])
 
   // Scopé au magasin ouvert (pastilles de statut dans la vue détail).
   const compteur = (statut) => materielsDuMagasinActif.filter((m) => m.statut === statut).length
@@ -479,6 +482,11 @@ export default function Materiel() {
               value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
               <option value="">Toutes catégories</option>
               {CATEGORIES_MATERIEL.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+              value={triMateriel} onChange={(e) => setTriMateriel(e.target.value)} title="Trier la liste">
+              <option value="date">Trier : plus récent d'abord</option>
+              <option value="nom">Trier : nom (A→Z)</option>
             </select>
             <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
               {[['', `Tous (${materielsDuMagasinActif.length})`], ...Object.entries(STATUTS_MATERIEL).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (

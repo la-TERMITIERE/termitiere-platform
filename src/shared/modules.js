@@ -309,11 +309,10 @@ export const MODULE_NAV = {
   depense: [
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet, badgeKey: 'depenseDepenses' },
-    { label: 'Revenus & Budget',            to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Budget',                       to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: [...ADMIN_VOLETS_ROLES, 'secretaire'] },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: [...FINANCE_VIEW_ROLES, 'agent'] },
-    { label: 'Rentabilité',                  to: '/depense/rentabilite',  icon: TrendingUp,      roles: FINANCE_VIEW_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
     { label: 'Compte bancaire',              to: '/depense/banque',      icon: Landmark,        roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },

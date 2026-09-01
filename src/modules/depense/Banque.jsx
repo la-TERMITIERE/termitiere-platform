@@ -2,7 +2,7 @@
 // bancaire), avec solde courant calculé automatiquement. Permet de suivre les
 // mouvements de la banque du côté de l'entreprise, indépendamment de la caisse.
 import { useMemo, useState } from 'react'
-import { Plus, FilePen, Trash2, Landmark, ArrowDownCircle, ArrowUpCircle, Pencil, FileSpreadsheet } from 'lucide-react'
+import { Plus, FilePen, Trash2, Landmark, ArrowDownCircle, ArrowUpCircle, Pencil, FileSpreadsheet, Paperclip } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -16,6 +16,7 @@ import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
+import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import * as XLSXns from 'xlsx-js-style'
 import { SECTEURS, TYPES_MOUVEMENT_BANQUE, MOIS_LABELS } from './data'
 import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
@@ -23,7 +24,7 @@ import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 // xlsx-js-style est un module CJS : selon l'interop, l'API est sur le namespace ou `.default`.
 const XLSX = XLSXns.default || XLSXns
 
-const empty = () => ({ date: todayStr(), type: 'depot', libelle: '', origine: '', personne: '', montant: '' })
+const empty = () => ({ date: todayStr(), type: 'depot', libelle: '', origine: '', personne: '', montant: '', piece: null })
 
 // Suggestions de libellé/origine — celles du relevé (dépôt de recette, retrait chèque…)
 // + secteurs de l'entreprise, pour retrouver vite les motifs récurrents.
@@ -45,6 +46,7 @@ export default function Banque() {
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   // Solde courant : trié chronologiquement (date, puis heure de saisie en cas d'égalité)
   // en partant du solde d'ouverture, puis on ajoute/retranche chaque mouvement.
@@ -105,6 +107,21 @@ export default function Banque() {
   function openCreate() { setModal({ data: empty(), isNew: true }) }
   function openEdit(m) { setModal({ data: { ...empty(), ...m }, isNew: false, id: m.id }) }
   const set = (k, v) => setModal((s) => ({ ...s, data: { ...s.data, [k]: v } }))
+
+  async function handlePieceChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      const piece = await lireFichier(file)
+      set('piece', piece)
+    } catch (err) {
+      toast.error(err.message || 'Fichier illisible')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function handleSave() {
     if (saving) return
@@ -306,7 +323,13 @@ export default function Banque() {
             <p className="font-extrabold uppercase tracking-wide text-gray-500">{m.libelle}</p>
           ) : (
             <div>
-              <p className="font-semibold text-gray-800">{m.libelle || '—'}</p>
+              <p className="flex items-center gap-1.5 font-semibold text-gray-800">
+                {m.libelle || '—'}
+                {m.piece && (
+                  <button onClick={(e) => { e.stopPropagation(); ouvrirPiece(m.piece) }} title="Voir le justificatif"
+                    className="rounded-md bg-primary/10 p-0.5 text-primary hover:bg-primary/20"><Paperclip size={11} /></button>
+                )}
+              </p>
               {m.origine && <p className="text-xs text-gray-400">{m.origine}</p>}
             </div>
           ) },
@@ -380,6 +403,22 @@ export default function Banque() {
               <FormGroup label="Personne en charge" className="mt-1">
                 <ChampAutocomplete value={modal.data.personne} onChange={(v) => set('personne', v)} suggestions={personneSuggestions} placeholder="ex: DONGNIMA BAWI" accent="amber" />
               </FormGroup>
+            </div>
+
+            {/* Justificatif */}
+            <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📎 Justificatif <span className="font-medium normal-case text-amber-500">(photo, PDF, Excel…, optionnel)</span></p>
+              {modal.data.piece ? (
+                <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 text-gray-700"><Paperclip size={14} /> {modal.data.piece.nom} <span className="text-xs text-gray-400">({formatTaille(modal.data.piece.taille)})</span></span>
+                  <button onClick={() => set('piece', null)} className="text-xs text-red-500 hover:underline">Retirer</button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-3 text-sm text-gray-500 hover:bg-amber-50">
+                  <Paperclip size={16} /> {uploading ? 'Chargement…' : 'Ajouter un justificatif'}
+                  <input type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={handlePieceChange} disabled={uploading} />
+                </label>
+              )}
             </div>
           </div>
         )}

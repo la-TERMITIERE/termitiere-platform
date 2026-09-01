@@ -1,8 +1,8 @@
 // Sources de revenus — liste à plat de CHAQUE entrée d'argent réelle (factures
-// certifiées/approuvées des modules, apports du PAU, versements clients E-G.Pro,
-// revenus saisis manuellement), tous secteurs confondus (hors GARDERIE, dont les
-// données actuelles ne sont que des essais), filtrable par secteur — même présentation
-// que l'écran « Dépenses » (tableau, filtres, clic sur une ligne pour le détail).
+// certifiées/approuvées des modules, versements clients E-G.Pro, revenus saisis
+// manuellement), tous secteurs confondus (hors GARDERIE, dont les données actuelles
+// ne sont que des essais), filtrable par secteur — même présentation que l'écran
+// « Dépenses » (tableau, filtres, clic sur une ligne pour le détail).
 import { useMemo, useState, useEffect } from 'react'
 import { TrendingUp, Search, Eye, Building2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -21,9 +21,9 @@ import { SECTEURS, MOIS_LABELS } from './data'
 
 // Logo/icône de chaque secteur — reprend celui de son module métier (agro, logistique…)
 // pour que la carte KPI soit reconnaissable au premier coup d'œil, pas un pictogramme
-// générique. « Hors secteur » (divers) et « MAXI BAT » n'ont pas de module dédié.
+// générique. « Caisse commune » (divers) et « MAXI BAT » n'ont pas de module dédié.
 const iconeSecteur = (id) => getModule(id)?.icon || Building2
-import { versementsClientVersSecteurs, depensesProjetVersSecteurs, coutsMatieresBriqueterie } from './logic'
+import { versementsClientVersSecteurs } from './logic'
 import { marquerVoletVu } from '../../shared/nouveautes'
 
 // MAXI BAT n'a pas de revenu suivi ici — géré depuis le volet BTP d'E-G.Pro (même
@@ -34,7 +34,6 @@ const SECTEURS_AFFICHES = SECTEURS.filter((s) => s.id !== 'bat' && s.id !== 'gar
 
 const SOURCES = {
   facture:  { label: 'Facture',           tone: 'success' },
-  pau:      { label: 'Apport du PAU',     tone: 'purple'  },
   client:   { label: 'Versement client',  tone: 'info'    },
   manuel:   { label: 'Saisie manuelle',   tone: 'neutral' }
 }
@@ -43,21 +42,11 @@ export default function SourcesRevenus() {
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
-  const { data: depensesReelles }     = useCollection('depense_depenses')
-  const { data: depensesProjet }      = useCollection('projet_depenses')
   const { data: projetsTous }         = useCollection('projets')
-  const { data: tachesTous }          = useCollection('projet_taches')
-  const { data: inventairesBriq }     = useCollection('evenementiel_inventaires')
   const { data: versementsClientTous }= useCollection('projet_versements_client')
   const { data: revenusManuelsTous }  = useCollection('depense_revenus_manuels')
   const { user } = useAuth()
   useEffect(() => { marquerVoletVu(user?.uid, 'depenseRevenus') }, [user?.uid])
-
-  const depenses = useMemo(() => [
-    ...depensesReelles,
-    ...depensesProjetVersSecteurs(depensesProjet, projetsTous, tachesTous),
-    ...coutsMatieresBriqueterie(inventairesBriq)
-  ], [depensesReelles, depensesProjet, projetsTous, tachesTous, inventairesBriq])
 
   const versementsClientRoutes = useMemo(
     () => versementsClientVersSecteurs(versementsClientTous, projetsTous),
@@ -80,13 +69,6 @@ export default function SourcesRevenus() {
       type: 'facture', libelle: `Facture ${f.numero || ''}`, tiers: f.client?.nom || '', raw: f
     }))
     // GARDERIE volontairement exclue (données de test, cf. SECTEURS_AFFICHES ci-dessus).
-    depenses.filter((d) => d.sourceFinancement === 'pau').forEach((d) => {
-      const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-      out.push({
-        id: `pau_${d.id}`, secteurId: d.secteurId, date: d.date, montant: Number(d.montant) || 0,
-        type: 'pau', libelle: d.description || `Apport du PAU — ${secteur?.label || d.secteurId}`, tiers: 'PAU', raw: d
-      })
-    })
     versementsClientRoutes.forEach((v) => {
       const projet = projetsTous.find((p) => p.id === v.projetId)
       out.push({
@@ -99,7 +81,7 @@ export default function SourcesRevenus() {
       type: 'manuel', libelle: r.description || 'Revenu saisi manuellement', tiers: r.enregistrePar || '', raw: r
     }))
     return out.filter((l) => l.secteurId !== 'bat' && l.secteurId !== 'garderie').sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-  }, [facturesAgro, facturesLogistique, facturesEvenementiel, depenses, versementsClientRoutes, projetsTous, revenusManuelsTous])
+  }, [facturesAgro, facturesLogistique, facturesEvenementiel, versementsClientRoutes, projetsTous, revenusManuelsTous])
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
   const [filtreType, setFiltreType]       = useState('')
@@ -175,7 +157,7 @@ export default function SourcesRevenus() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Sources de revenus</h2>
-          <p className="text-sm text-white/80">Toutes les entrées d'argent réelles — factures, apports du PAU, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
+          <p className="text-sm text-white/80">Toutes les entrées d'argent réelles — factures, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
         </div>
       </div>
 
