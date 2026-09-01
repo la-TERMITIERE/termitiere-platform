@@ -137,6 +137,7 @@ export default function Depenses() {
   const [filtreSite, setFiltreSite] = useState('')
   const [filtreCategorie, setFiltreCategorie] = useState('')
   const [filtreNature, setFiltreNature] = useState('')
+  const [filtreFinancement, setFiltreFinancement] = useState('') // '' | 'caisse_commune'
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [modal, setModal] = useState(null)
   const [lot, setLot] = useState(null)            // ajout multiple : tableau de lignes, ou null si fermé
@@ -175,6 +176,7 @@ export default function Depenses() {
     if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => siteLogistiqueDe(d) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
+    if (filtreFinancement === 'caisse_commune') rows = rows.filter((d) => d.financePar === 'caisse_commune')
     if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
@@ -187,7 +189,7 @@ export default function Depenses() {
       })
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
+  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreFinancement, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
@@ -240,7 +242,8 @@ export default function Depenses() {
         libelle: d.description || CATEGORIES_DEPENSE.find((c) => c.id === d.categorie)?.label || d.categorie || '—',
         montant: Number(d.montant) || 0,
         agreeur: agreeur || '—',
-        secteur: libelleSecteurSite(secteur, d)
+        secteur: libelleSecteurSite(secteur, d),
+        financement: d.financePar === 'caisse_commune' ? 'Caisse commune' : 'Secteur'
       }
     })
     exportRapportExcel({
@@ -253,7 +256,8 @@ export default function Depenses() {
           { key: 'libelle', label: 'Libellé', width: 30 },
           { key: 'montant', label: 'Montant', width: 16, type: 'money' },
           { key: 'agreeur', label: "Nom de l'agréeur", width: 26 },
-          { key: 'secteur', label: 'Secteur', width: 20 }
+          { key: 'secteur', label: 'Secteur', width: 20 },
+          { key: 'financement', label: 'Financement', width: 16 }
         ],
         rows,
         totals: { __label: 'TOTAL', montant: rows.reduce((s, r) => s + r.montant, 0) }
@@ -464,6 +468,13 @@ export default function Depenses() {
           <Select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)}>
             <option value="">Toutes</option>
             {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </Select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Financement</label>
+          <Select value={filtreFinancement} onChange={(e) => setFiltreFinancement(e.target.value)}>
+            <option value="">Tous</option>
+            <option value="caisse_commune">💰 Caisse commune uniquement</option>
           </Select>
         </div>
         <div className="ml-auto flex items-center gap-3">
@@ -754,7 +765,7 @@ export default function Depenses() {
 
             {/* Justificatif */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📎 Justificatif <span className="font-medium normal-case text-amber-500">(photo ou PDF, optionnel)</span></p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📎 Justificatif <span className="font-medium normal-case text-amber-500">(photo, PDF, Excel…, optionnel)</span></p>
               {modal.data.piece ? (
                 <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
                   <span className="flex items-center gap-2 text-gray-700"><Paperclip size={14} /> {modal.data.piece.nom} <span className="text-xs text-gray-400">({formatTaille(modal.data.piece.taille)})</span></span>
@@ -763,7 +774,7 @@ export default function Depenses() {
               ) : (
                 <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-3 text-sm text-gray-500 hover:bg-amber-50">
                   <Paperclip size={16} /> {uploading ? 'Chargement…' : 'Ajouter un justificatif'}
-                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handlePieceChange} disabled={uploading} />
+                  <input type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={handlePieceChange} disabled={uploading} />
                 </label>
               )}
             </div>

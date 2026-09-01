@@ -204,7 +204,12 @@ export default function Historique() {
                       {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-500">{formatDateShort(d.date)}</td>
-                    <td className="px-3 py-2"><Badge tone="neutral">{secteur?.label || d.secteurId}</Badge></td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
+                        {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-gray-600">
                       {d.description || d.categorie || '—'}
                       {/* Traçabilité visible directement : qui a effectué la dépense → qui la reçoit */}

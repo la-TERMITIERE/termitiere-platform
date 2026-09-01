@@ -3,7 +3,7 @@
 // (avec garde-fou de taille). Conçu pour fonctionner sans infrastructure de
 // stockage : les fichiers sont conservés en base (data URL).
 
-const MAX_PDF_BYTES = 4 * 1024 * 1024   // 4 Mo max pour un PDF
+const MAX_FICHIER_BYTES = 4 * 1024 * 1024   // 4 Mo max pour un fichier non-image (PDF, Excel, Word…)
 const IMG_MAX_DIM = 1600                  // côté max d'une image après compression
 const IMG_QUALITY = 0.72                  // qualité JPEG
 
@@ -89,26 +89,25 @@ export const compresserPhotoProfil = (file) =>
   })
 
 // Lit un fichier en pièce jointe : { nom, type, taille, dataURL }.
-// Images → compressées. PDF/autres → lus tels quels (garde-fou de taille).
+// Images → compressées. Tout le reste (PDF, Excel, Word, CSV…) → lu tel quel,
+// avec un garde-fou de taille (pas de restriction de format : le justificatif
+// d'une dépense/d'un mouvement bancaire peut être un tableau Excel autant qu'un
+// scan ou un PDF).
 export async function lireFichier(file) {
   if (!file) throw new Error('Aucun fichier')
   const estImage = file.type.startsWith('image/')
-  const estPdf = file.type === 'application/pdf'
-  if (!estImage && !estPdf) {
-    throw new Error('Format non supporté (PDF ou image uniquement)')
-  }
   let dataURL
   if (estImage) {
     dataURL = await compresserImage(file)
   } else {
-    if (file.size > MAX_PDF_BYTES) {
-      throw new Error(`PDF trop volumineux (${formatTaille(file.size)}). Limite : 4 Mo.`)
+    if (file.size > MAX_FICHIER_BYTES) {
+      throw new Error(`Fichier trop volumineux (${formatTaille(file.size)}). Limite : 4 Mo.`)
     }
     dataURL = await lireDataURL(file)
   }
   return {
     nom: file.name,
-    type: estImage ? 'image/jpeg' : file.type,
+    type: estImage ? 'image/jpeg' : (file.type || 'application/octet-stream'),
     taille: tailleDataURL(dataURL),
     dataURL
   }
@@ -151,13 +150,13 @@ export function ouvrirPiece(piece) {
       a.rel      = 'noopener noreferrer'
       // Essaie d'abord d'ouvrir dans un onglet ; si bloqué → téléchargement
       const w = window.open(url, '_blank')
-      if (!w) { a.download = piece.nom || 'document.pdf'; a.click() }
+      if (!w) { a.download = piece.nom || 'document'; a.click() }
       setTimeout(() => URL.revokeObjectURL(url), 10000)
     } catch {
       // Fallback : téléchargement direct
       const a = document.createElement('a')
       a.href = piece.dataURL
-      a.download = piece.nom || 'document.pdf'
+      a.download = piece.nom || 'document'
       a.click()
     }
   }
