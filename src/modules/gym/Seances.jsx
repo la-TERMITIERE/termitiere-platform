@@ -18,7 +18,7 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { isFullAccessRole } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_SEANCE, categorieLabel, categorieTone, categorieDesc, finValiditeSeance, seanceValide, genQrToken } from './data'
+import { CATEGORIES_SEANCE, categorieLabel, categorieTone, categorieDesc, finValiditeSeance, seanceValide, genQrToken, QR_CARNET_ACTIF } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import { imprimerTicketSeance } from './printTicket'
@@ -47,7 +47,7 @@ export default function Seances() {
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const presences = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
   const peutSupprimer = isFullAccessRole(role)
-  const params = useGymParams()
+  const params = useGymParams(site)
   const tarifs = { simple: params.tarifSeanceSimple, vip: params.tarifSeanceVip }
 
   const [modal, setModal] = useState(null)
@@ -62,7 +62,7 @@ export default function Seances() {
   const [filtreMois, setFiltreMois] = useState('')
   const [filtreAnnee, setFiltreAnnee] = useState('')
 
-  const vide = () => ({ id: null, date: todayStr(), clientNom: '', telephone: '', categorie: CATEGORIES_SEANCE[0].id, montant: String(tarifs[CATEGORIES_SEANCE[0].id] || ''), notes: '' })
+  const vide = () => ({ id: null, date: todayStr(), clientNom: '', telephone: '', categorie: CATEGORIES_SEANCE[0].id, montant: String(tarifs[CATEGORIES_SEANCE[0].id] || ''), notes: '', imprimer: true })
   const remplir = (s) => ({ id: s.id, date: s.date, clientNom: s.clientNom, telephone: '', categorie: s.categorie, montant: String(s.montant), notes: s.notes || '' })
 
   const toutes = useMemo(() => [...seances].sort((a, b) => (a.date < b.date ? 1 : -1)), [seances])
@@ -121,19 +121,20 @@ export default function Seances() {
         })
       }
       // Une facture est TOUJOURS générée (visible dans le volet Facturation, avec
-      // son propre bouton de réimpression) — plus besoin de case à cocher. Le ticket
-      // est imprimé immédiatement (imprimante thermique installée sur l'appareil).
+      // son propre bouton d'impression). Le ticket, lui, ne s'imprime que si la
+      // case « Imprimer le reçu » est cochée — `imprime` sur la facture reflète
+      // fidèlement ce choix (jamais marqué imprimé si ça ne l'a pas été).
       const facture = await genererFactureGym({
         factures, sourceType: 'seance', sourceId: id, clientNom, clientTelephone: telephone,
         categorie: d.categorie, description: `Séance ${categorieLabel(d.categorie)}`, montant: d.montant,
-        user, site
+        user, site, imprime: d.imprimer
       })
-      imprimerTicketSeance(facture)
-      toast.success('Séance enregistrée ✓')
+      if (d.imprimer) imprimerTicketSeance(facture)
+      toast.success(d.imprimer ? 'Séance enregistrée — reçu imprimé ✓' : 'Séance enregistrée ✓')
       setModal(null)
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
-      // est encore devant la réception.
-      if (nouveauClient) setQrNouveauClient(nouveauClient)
+      // est encore devant la réception — masqué tant que QR_CARNET_ACTIF est faux.
+      if (nouveauClient && QR_CARNET_ACTIF) setQrNouveauClient(nouveauClient)
     } finally { setSaving(false) }
   }
 
@@ -203,8 +204,9 @@ export default function Seances() {
               return (
                 <div className="flex justify-end gap-1">
                   {facture ? (
-                    <button onClick={(e) => { e.stopPropagation(); imprimerTicketSeance(facture) }} title="Imprimer le ticket"
-                      className="rounded p-1.5 text-orange-600 hover:bg-orange-50"><Printer size={16} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); imprimerTicketSeance(facture) }}
+                      title={facture.imprime === false ? 'Pas encore imprimé — cliquer pour imprimer' : 'Réimprimer le ticket'}
+                      className={`rounded p-1.5 hover:bg-orange-50 ${facture.imprime === false ? 'text-amber-500' : 'text-orange-600'}`}><Printer size={16} /></button>
                   ) : (
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
                       className="rounded p-1.5 text-amber-600 hover:bg-amber-50"><Receipt size={16} /></button>
@@ -321,7 +323,21 @@ export default function Seances() {
               <span className="shrink-0 text-base font-extrabold" style={{ color: COULEUR2 }}>{formatMoney(Number(modal.montant) || 0)}</span>
             </div>
             {!modal.id && (
-              <p className="text-[11px] text-gray-400">🧾 Une facture sera générée automatiquement, et le ticket de caisse s'imprimera aussitôt.</p>
+              <div className="rounded-xl border px-3.5 py-2.5 shadow-sm" style={{ background: '#ffffff', borderColor: `${COULEUR}40` }}>
+                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                  <input type="checkbox" checked={modal.imprimer} onChange={(e) => setModal((f) => ({ ...f, imprimer: e.target.checked }))}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300" style={{ accentColor: COULEUR }} />
+                  <span className="font-semibold text-gray-700">
+                    <Printer size={13} className="mr-1 inline -mt-0.5" />
+                    Imprimer le reçu maintenant
+                  </span>
+                </label>
+                <p className="ml-6 mt-0.5 text-[11px] text-gray-400">
+                  {modal.imprimer
+                    ? '🧾 Une facture sera générée et le ticket de caisse s\'imprimera aussitôt.'
+                    : 'Une facture sera quand même générée (visible dans Facturation) — mais sans impression immédiate. Réimprimable à tout moment depuis la liste.'}
+                </p>
+              </div>
             )}
           </div>
         )}

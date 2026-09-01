@@ -33,7 +33,7 @@ const COLLECTIONS_A_VIDER = [
 export default function Params() {
   const { user } = useAuth()
   const site = useSite()
-  const params = useGymParams()
+  const params = useGymParams(site)
   const [form, setForm] = useState(params)
   const [saving, setSaving] = useState(false)
 
@@ -74,15 +74,18 @@ export default function Params() {
 
   // Les valeurs chargées depuis Firebase arrivent après le premier rendu — on
   // resynchronise le formulaire dès qu'elles sont disponibles (une seule fois,
-  // pour ne pas écraser une saisie en cours si le doc change entre-temps ailleurs).
-  useEffect(() => { setForm(params) }, [params.tarifSeanceSimple, params.tarifSeanceVip, params.tarifAbonnementSimple, params.tarifAbonnementVip, params.dureeClassiqueMinJours, params.validiteSeanceHeures])
+  // pour ne pas écraser une saisie en cours si le doc change entre-temps ailleurs),
+  // et aussi si on change de salle (chaque salle a ses propres réglages).
+  useEffect(() => { setForm(params) }, [site, params.tarifSeanceSimple, params.tarifSeanceVip, params.tarifAbonnementSimple, params.tarifAbonnementVip, params.tarifAbonnementClassique, params.dureeClassiqueMinJours, params.validiteSeanceHeures])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: Number(e.target.value) || 0 }))
+  // Champ nullable : vide = comportement libre historique (Classique), un nombre = prix fixe.
+  const setNullable = (k) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [k]: v === '' ? null : (Number(v) || 0) })) }
 
   async function enregistrer() {
     setSaving(true)
     try {
-      await saveGymParams(form, user)
+      await saveGymParams(form, user, site)
       toast.success('Réglages enregistrés ✓')
     } finally { setSaving(false) }
   }
@@ -99,8 +102,12 @@ export default function Params() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Paramètres</h2>
-          <p className="text-sm text-white/80">Tarifs, durées et validité — MAXI-GYM</p>
+          <p className="text-sm text-white/80">Tarifs, durées et validité — MAXI-GYM {siteLabel(site)}</p>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
+        Ces réglages sont propres à <strong>{siteLabel(site)}</strong> — l'autre salle a les siens, indépendants.
       </div>
 
       <Card title="🎫 Tarifs des séances (FCFA)">
@@ -124,7 +131,14 @@ export default function Params() {
             <Input type="number" min="0" value={form.tarifAbonnementVip} onChange={set('tarifAbonnementVip')} />
           </FormGroup>
         </div>
-        <p className="mt-1 text-[11px] text-gray-400">Simple et VIP sont toujours valables 1 mois calendaire. Le Classique n'a pas de tarif fixe.</p>
+        <FormGroup label="Classique" className="mt-3" hint="Laisser vide = prix ET durée libres à la saisie (comportement historique). Un montant = prix fixe, durée fixe 1 mois (comme Simple/VIP).">
+          <Input type="number" min="0" value={form.tarifAbonnementClassique ?? ''} onChange={setNullable('tarifAbonnementClassique')} placeholder="Vide = prix libre" />
+        </FormGroup>
+        <p className="mt-1 text-[11px] text-gray-400">
+          {form.tarifAbonnementClassique != null
+            ? 'Classique à prix fixe : durée fixe 1 mois calendaire, comme Simple/VIP.'
+            : 'Simple et VIP sont toujours valables 1 mois calendaire. Le Classique n\'a pas de tarif fixe.'}
+        </p>
       </Card>
 
       <Card title="⏱️ Durées et validité">
@@ -132,8 +146,9 @@ export default function Params() {
           <FormGroup label="Validité d'une séance (heures)">
             <Input type="number" min="1" value={form.validiteSeanceHeures} onChange={set('validiteSeanceHeures')} />
           </FormGroup>
-          <FormGroup label="Durée minimale — Abonnement Classique (jours)">
-            <Input type="number" min="1" value={form.dureeClassiqueMinJours} onChange={set('dureeClassiqueMinJours')} />
+          <FormGroup label="Durée minimale — Abonnement Classique (jours)"
+            hint={form.tarifAbonnementClassique != null ? 'Sans effet ici : Classique est à prix/durée fixe pour cette salle.' : undefined}>
+            <Input type="number" min="1" value={form.dureeClassiqueMinJours} onChange={set('dureeClassiqueMinJours')} disabled={form.tarifAbonnementClassique != null} />
           </FormGroup>
         </div>
       </Card>

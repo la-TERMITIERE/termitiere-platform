@@ -20,7 +20,9 @@ const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
 const MULTISITE_MODULES = { logistique: LOG_SITES, gym: LOG_SITES }
 
 // Volets jugés essentiels au suivi/gestion quotidien de chaque module — en plus
-// du Dashboard (toujours inclus). Limité à 2 par module pour garder la barre lisible.
+// du Dashboard (toujours inclus). Limité à 3 par module pour garder la barre lisible
+// (la plupart en ont 2 ; MAXI-GYM en a 3 — usage quotidien intensif : séances,
+// abonnements ET facturation/reçus).
 const ESSENTIELS = {
   agro: ['/agro/saisie', '/agro/factures'],
   logistique: ['/logistique/saisie', '/logistique/prestations'],
@@ -30,7 +32,7 @@ const ESSENTIELS = {
   projet: ['/projet/projets', '/projet/taches'],
   garderie: ['/garderie/enfants', '/garderie/presences'],
   depense: ['/depense/liste', '/depense/autorisations'],
-  gym: ['/gym/seances', '/gym/abonnements']
+  gym: ['/gym/seances', '/gym/abonnements', '/gym/facturation']
 }
 
 export default function MobileBottomNav({ onOpenMenu }) {
@@ -72,10 +74,16 @@ export default function MobileBottomNav({ onOpenMenu }) {
     }
     const dashboard = nav.find((it) => it.end) || nav[0]
     const essentielsPaths = ESSENTIELS[activeModule.id] || []
+    // Comparaison sur le DERNIER segment du chemin (ex. "seances"), pas le chemin
+    // complet : pour un module multi-site (gym, logistique), `nav` est déjà remappé
+    // avec le site inséré (`/gym/lome/seances`), qui ne se termine plus par le chemin
+    // configuré ici (`/gym/seances`) — un simple `endsWith` sur le chemin complet ne
+    // matchait donc plus jamais rien une fois un site choisi (barre réduite à Accueil/
+    // Dashboard/Plus, sans aucun essentiel).
     const essentiels = essentielsPaths
-      .map((p) => nav.find((it) => it.to.endsWith(p)))
+      .map((p) => nav.find((it) => it.to.endsWith(`/${p.split('/').pop()}`)))
       .filter(Boolean)
-      .slice(0, 2)
+      .slice(0, 3)
     const accueil = { label: 'Accueil', to: '/', icon: Home, end: true }
     items = [accueil, dashboard, ...essentiels].filter(Boolean)
     items = items.filter((it, i) => items.findIndex((x) => x.to === it.to) === i)

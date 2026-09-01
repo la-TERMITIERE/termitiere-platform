@@ -20,6 +20,7 @@ import { isFullAccessRole } from '../../core/roles'
 import { formatMoney } from '../../utils/formatters'
 import { CATEGORIES_GYM } from './data'
 import { useGymParams, saveGymParams } from './useGymParams'
+import { useSite } from './site/useSite'
 
 const COULEUR = '#E8850F'
 const COULEUR2 = '#A6342A'
@@ -27,8 +28,11 @@ const BORDURE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
 
 export default function Forfaits() {
   const { user, role } = useAuth()
+  const site = useSite()
   const peutGerer = isFullAccessRole(role)
-  const params = useGymParams()
+  const params = useGymParams(site)
+  // Classique à prix FIXE (Kara par défaut) : cf. Abonnements.jsx / Params.jsx.
+  const classiqueFixe = params.tarifAbonnementClassique != null
   const { data: forfaitsPerso } = useCollection('gym_forfaits')
 
   const [editCat, setEditCat] = useState(null) // null | 'simple' | 'classique' | 'vip'
@@ -44,7 +48,11 @@ export default function Forfaits() {
       abonnement: formatMoney(params.tarifAbonnementSimple) + ' / mois',
       avantages: ['Accès salle de musculation', 'Sans tapis roulant ni escalator']
     },
-    classique: {
+    classique: classiqueFixe ? {
+      seance: 'Non proposée (abonnement uniquement)',
+      abonnement: formatMoney(params.tarifAbonnementClassique) + ' / mois',
+      avantages: ['Réservé aux abonnements — pas de séance ponctuelle', 'Durée fixe — 1 mois calendaire', 'Tarif fixe']
+    } : {
       seance: 'Non proposée (abonnement uniquement)',
       abonnement: `Tarif et durée libres (min. ${params.dureeClassiqueMinJours} jours)`,
       avantages: ['Réservé aux abonnements — pas de séance ponctuelle', 'Durée définie à la demande', `Minimum ${params.dureeClassiqueMinJours} jours (deux semaines)`, 'Tarif négocié à la souscription']
@@ -52,14 +60,22 @@ export default function Forfaits() {
     vip: {
       seance: formatMoney(params.tarifSeanceVip),
       abonnement: formatMoney(params.tarifAbonnementVip) + ' / mois',
-      avantages: ['Accès complet à la salle', 'Tapis roulant et escalator inclus']
+      // Kara uniquement : la carte VIP peut être partagée entre 2 personnes
+      // (contrairement aux autres paliers) — politique propre à cette salle,
+      // purement informative ici (aucun suivi/contrôle logiciel du partage).
+      avantages: [
+        'Accès complet à la salle', 'Tapis roulant et escalator inclus',
+        ...(site === 'kara' ? ['🎫 Carte utilisable par 2 personnes — ce qui n\'est pas le cas pour les autres paliers'] : [])
+      ]
     }
   }
 
   function ouvrirEdit(catId) {
     setEditCat(catId)
     if (catId === 'classique') {
-      setEditForm({ dureeClassiqueMinJours: String(params.dureeClassiqueMinJours) })
+      setEditForm(classiqueFixe
+        ? { tarifAbonnement: String(params.tarifAbonnementClassique) }
+        : { dureeClassiqueMinJours: String(params.dureeClassiqueMinJours) })
     } else {
       setEditForm({
         tarifSeance: String(catId === 'simple' ? params.tarifSeanceSimple : params.tarifSeanceVip),
@@ -73,7 +89,8 @@ export default function Forfaits() {
     try {
       const maj = { ...params }
       if (editCat === 'classique') {
-        maj.dureeClassiqueMinJours = Number(editForm.dureeClassiqueMinJours) || params.dureeClassiqueMinJours
+        if (classiqueFixe) maj.tarifAbonnementClassique = Number(editForm.tarifAbonnement) || 0
+        else maj.dureeClassiqueMinJours = Number(editForm.dureeClassiqueMinJours) || params.dureeClassiqueMinJours
       } else if (editCat === 'simple') {
         maj.tarifSeanceSimple = Number(editForm.tarifSeance) || 0
         maj.tarifAbonnementSimple = Number(editForm.tarifAbonnement) || 0
@@ -81,7 +98,7 @@ export default function Forfaits() {
         maj.tarifSeanceVip = Number(editForm.tarifSeance) || 0
         maj.tarifAbonnementVip = Number(editForm.tarifAbonnement) || 0
       }
-      await saveGymParams(maj, user)
+      await saveGymParams(maj, user, site)
       toast.success('Forfait mis à jour ✓')
       setEditCat(null)
     } finally { setSaving(false) }
@@ -218,10 +235,17 @@ export default function Forfaits() {
         {editForm && (
           <div className="space-y-3">
             {editCat === 'classique' ? (
-              <FormGroup label="Durée minimum (jours)" required hint="Deux semaines minimum — pas d'offre d'une semaine.">
-                <Input type="number" min="1" value={editForm.dureeClassiqueMinJours}
-                  onChange={(e) => setEditForm((f) => ({ ...f, dureeClassiqueMinJours: e.target.value }))} />
-              </FormGroup>
+              classiqueFixe ? (
+                <FormGroup label="Tarif abonnement (FCFA / mois)" required hint="Durée fixe 1 mois calendaire, comme Simple/VIP.">
+                  <Input type="number" min="0" value={editForm.tarifAbonnement}
+                    onChange={(e) => setEditForm((f) => ({ ...f, tarifAbonnement: e.target.value }))} />
+                </FormGroup>
+              ) : (
+                <FormGroup label="Durée minimum (jours)" required hint="Deux semaines minimum — pas d'offre d'une semaine.">
+                  <Input type="number" min="1" value={editForm.dureeClassiqueMinJours}
+                    onChange={(e) => setEditForm((f) => ({ ...f, dureeClassiqueMinJours: e.target.value }))} />
+                </FormGroup>
+              )
             ) : (
               <>
                 <FormGroup label="Tarif séance (FCFA)" required>

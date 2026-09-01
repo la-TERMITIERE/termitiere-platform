@@ -48,7 +48,7 @@ export default function ChampAutocomplete({
       <div className="flex gap-1">
         <input
           autoFocus={autoFocus}
-          className={className || `w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${a.ring}`}
+          className={className || `min-w-0 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${a.ring}`}
           placeholder={placeholder}
           value={value || ''}
           onChange={(e) => { onChange(e.target.value); setOpen(true) }}
