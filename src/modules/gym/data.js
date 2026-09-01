@@ -17,11 +17,17 @@ export const categorieDesc  = (id) => CATEGORIES_GYM.find((c) => c.id === id)?.d
 
 // Valeurs PAR DÉFAUT — utilisées tant qu'aucun réglage n'a été enregistré depuis le
 // volet Paramètres (cf. useGymParams.js, qui les surcharge avec la config réelle en
-// base). Gardées ici pour ne jamais laisser l'app sans valeur de repli.
+// base, PAR SALLE). Gardées ici pour ne jamais laisser l'app sans valeur de repli.
 export const DUREE_CLASSIQUE_MIN_JOURS_DEFAUT = 14
 export const TARIFS_SEANCE_DEFAUT     = { simple: 1000,  vip: 1500 }
 export const TARIFS_ABONNEMENT_DEFAUT = { simple: 10000, vip: 15000 }
 export const VALIDITE_SEANCE_HEURES_DEFAUT = 5
+
+// Tarifs Kara (distincts de Lomé ci-dessus, décision explicite du 01/09/2026) —
+// abonnement Classique à prix FIXE (10 000f, durée fixe 1 mois comme Simple/VIP),
+// contrairement à Lomé où Classique reste prix/durée libres (cf. dateFinAbonnement).
+export const TARIFS_SEANCE_DEFAUT_KARA     = { simple: 1000, vip: 1500 }
+export const TARIFS_ABONNEMENT_DEFAUT_KARA = { simple: 7000, classique: 10000, vip: 15000 }
 
 export function finValiditeSeance(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_DEFAUT) {
   return new Date((createdAt || Date.now()) + validiteHeures * 60 * 60 * 1000)
@@ -35,9 +41,11 @@ export function seanceValide(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_
 //  - Simple / VIP : durée FIXE, 1 mois calendaire depuis la date de souscription.
 //  - Classique : durée LIBRE, définie par l'utilisateur en jours — minimum réglable
 //    depuis Paramètres (14 jours/2 semaines par défaut) ; pas d'offre « 1 semaine ».
-export function dateFinAbonnement(dateDebut, categorie, dureeJours) {
+//    SAUF si `classiqueFixe` (Kara, cf. tarifAbonnementClassique dans useGymParams) :
+//    Classique se comporte alors comme Simple/VIP — durée fixe 1 mois.
+export function dateFinAbonnement(dateDebut, categorie, dureeJours, classiqueFixe = false) {
   const d = new Date(dateDebut || Date.now())
-  if (categorie === 'classique') {
+  if (categorie === 'classique' && !classiqueFixe) {
     d.setDate(d.getDate() + (parseInt(dureeJours) || 0))
   } else {
     d.setMonth(d.getMonth() + 1)
@@ -85,6 +93,14 @@ export function croissanceGym(actuel, precedent) {
   if (!precedent) return null
   return Math.round(((actuel - precedent) / Math.abs(precedent)) * 100)
 }
+
+// Masque temporairement les points d'entrée du QR carnet dans l'UI (bouton « QR
+// carnet », fenêtre proposée à la création d'un nouveau client) — la page publique
+// et le jeton continuent d'être créés normalement en base, seule l'INTERFACE est
+// cachée. En attendant que `FIREBASE_SERVICE_ACCOUNT` soit configuré côté Netlify
+// (cf. netlify/functions/gym-carnet*.js, qui répond `not_configured` sans ça — la
+// page publique ne fonctionne pas). Remettre à `true` une fois la variable en place.
+export const QR_CARNET_ACTIF = false
 
 // Jeton public du carnet de présence (QR code) — suffisamment long pour être
 // impossible à deviner ; sert de clé d'accès à la page /gym/carnet/<jeton>,

@@ -116,7 +116,9 @@ export default function Facturation() {
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 {r.sourceType === 'seance' ? (
-                  <button onClick={() => imprimerTicketSeance(r)} title="Imprimer le ticket" className="rounded p-1.5 text-orange-600 hover:bg-orange-50"><Printer size={16} /></button>
+                  <button onClick={() => imprimerTicketSeance(r)}
+                    title={r.imprime === false ? 'Pas encore imprimé — cliquer pour imprimer' : 'Réimprimer le ticket'}
+                    className={`rounded p-1.5 hover:bg-orange-50 ${r.imprime === false ? 'text-amber-500' : 'text-orange-600'}`}><Printer size={16} /></button>
                 ) : (
                   <button onClick={() => reimprimer(r)} title="Télécharger le PDF" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><FileDown size={16} /></button>
                 )}

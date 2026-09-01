@@ -19,7 +19,7 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { isFullAccessRole } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, abonnementActif, joursDepuis, genQrToken } from './data'
+import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, abonnementActif, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import ClientDetailModal from './ClientDetailModal'
@@ -33,9 +33,9 @@ const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d977
 
 // Recalcule `dateFin` à partir de date/catégorie/durée — sauf si l'utilisateur l'a
 // déjà corrigée manuellement (`dateFinManuelle`), auquel cas on la laisse intacte.
-function recalculerDateFin(next) {
+function recalculerDateFin(next, classiqueFixe) {
   if (next.dateFinManuelle) return next
-  return { ...next, dateFin: dateFinAbonnement(next.date, next.categorie, next.dureeJours) }
+  return { ...next, dateFin: dateFinAbonnement(next.date, next.categorie, next.dureeJours, classiqueFixe) }
 }
 
 export default function Abonnements() {
@@ -54,9 +54,13 @@ export default function Abonnements() {
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const presences = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
   const peutSupprimer = isFullAccessRole(role)
-  const params = useGymParams()
+  const params = useGymParams(site)
   const dureeMin = params.dureeClassiqueMinJours
-  const tarifs = { simple: params.tarifAbonnementSimple, vip: params.tarifAbonnementVip }
+  // Classique à prix FIXE (Kara) : `tarifAbonnementClassique` non nul — se comporte
+  // alors comme Simple/VIP (durée fixe 1 mois, prix pré-rempli). `null` (Lomé, par
+  // défaut) : Classique garde son prix ET sa durée libres à la saisie.
+  const classiqueFixe = params.tarifAbonnementClassique != null
+  const tarifs = { simple: params.tarifAbonnementSimple, classique: params.tarifAbonnementClassique, vip: params.tarifAbonnementVip }
 
   const [modal, setModal] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -76,7 +80,7 @@ export default function Abonnements() {
     const date = todayStr(), categorie = CATEGORIES_GYM[0].id, dureeJours = String(dureeMin)
     return {
       id: null, date, clientNom: '', telephone: '', categorie, dureeJours,
-      dateFin: dateFinAbonnement(date, categorie, dureeJours), dateFinManuelle: false,
+      dateFin: dateFinAbonnement(date, categorie, dureeJours, classiqueFixe), dateFinManuelle: false,
       montant: String(tarifs[categorie] || ''), notes: ''
     }
   }
@@ -111,7 +115,7 @@ export default function Abonnements() {
     const d = modal
     if (!d.clientNom.trim()) return toast.error('Nom du client requis')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
-    if (d.categorie === 'classique' && (!d.dureeJours || Number(d.dureeJours) < dureeMin)) return toast.error(`Durée requise (minimum ${dureeMin} jours) pour un abonnement Classique`)
+    if (d.categorie === 'classique' && !classiqueFixe && (!d.dureeJours || Number(d.dureeJours) < dureeMin)) return toast.error(`Durée requise (minimum ${dureeMin} jours) pour un abonnement Classique`)
     if (!d.dateFin) return toast.error('Date de fin requise')
     setSaving(true)
     try {
@@ -123,7 +127,7 @@ export default function Abonnements() {
       if (d.id) {
         await updateItem('gym_abonnements', d.id, {
           date: d.date, dateFin, clientNom, categorie: d.categorie,
-          dureeJours: d.categorie === 'classique' ? Number(d.dureeJours) : null,
+          dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
           montant: Number(d.montant), notes: d.notes.trim()
         })
         await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
@@ -134,7 +138,7 @@ export default function Abonnements() {
 
       const id = await addItem('gym_abonnements', {
         date: d.date, dateFin, clientNom, categorie: d.categorie,
-        dureeJours: d.categorie === 'classique' ? Number(d.dureeJours) : null,
+        dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
         montant: Number(d.montant), notes: d.notes.trim(), site,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
@@ -170,8 +174,8 @@ export default function Abonnements() {
       toast.success('Abonnement enregistré ✓')
       setModal(null)
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
-      // est encore devant la réception.
-      if (nouveauClient) setQrNouveauClient(nouveauClient)
+      // est encore devant la réception — masqué tant que QR_CARNET_ACTIF est faux.
+      if (nouveauClient && QR_CARNET_ACTIF) setQrNouveauClient(nouveauClient)
     } finally { setSaving(false) }
   }
 
@@ -307,7 +311,7 @@ export default function Abonnements() {
               <div className="min-w-0">
                 <p className="truncate text-lg font-extrabold leading-tight">{modal.clientNom || (modal.id ? 'Modifier l\'abonnement' : 'Nouvel abonnement')}</p>
                 <p className="text-sm text-white/80">
-                  {modal.categorie === 'classique' ? 'Durée libre — définie à la saisie' : 'Durée fixe — 1 mois calendaire'}
+                  {modal.categorie === 'classique' && !classiqueFixe ? 'Durée libre — définie à la saisie' : 'Durée fixe — 1 mois calendaire'}
                 </p>
               </div>
             </div>
@@ -357,7 +361,7 @@ export default function Abonnements() {
                     return (
                       <button key={c.id} type="button" onClick={() => {
                         const tarif = tarifs[c.id]
-                        setModal((f) => recalculerDateFin({ ...f, categorie: c.id, montant: tarif != null ? String(tarif) : f.montant }))
+                        setModal((f) => recalculerDateFin({ ...f, categorie: c.id, montant: tarif != null ? String(tarif) : f.montant }, classiqueFixe))
                       }}
                         className={`rounded-xl border px-2 py-2 text-xs font-bold transition-all ${actif ? 'text-white shadow-[0_6px_14px_-4px_rgba(0,0,0,0.35)]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
                         style={actif ? { background: coul, borderColor: coul } : undefined}>
@@ -368,12 +372,12 @@ export default function Abonnements() {
                 </div>
               </FormGroup>
               <FormGroup label="📅 Date de souscription">
-                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, date: e.target.value }))} />
+                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, date: e.target.value }, classiqueFixe))} />
               </FormGroup>
 
-              {modal.categorie === 'classique' && (
+              {modal.categorie === 'classique' && !classiqueFixe && (
                 <FormGroup label="⏳ Durée (jours)" required hint={`Minimum ${dureeMin} jours (deux semaines) — pas d'offre d'une semaine. Ex : ${dureeMin} = deux semaines, 30 = un mois…`}>
-                  <Input type="number" min={dureeMin} value={modal.dureeJours} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }))} placeholder={`ex : ${dureeMin}`} />
+                  <Input type="number" min={dureeMin} value={modal.dureeJours} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }, classiqueFixe))} placeholder={`ex : ${dureeMin}`} />
                 </FormGroup>
               )}
 
@@ -383,7 +387,7 @@ export default function Abonnements() {
                   <Input type="date" value={modal.dateFin}
                     onChange={(e) => setModal((f) => ({ ...f, dateFin: e.target.value, dateFinManuelle: true }))} />
                   {modal.dateFinManuelle && (
-                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateFinManuelle: false }))}
+                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateFinManuelle: false }, classiqueFixe))}
                       className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50">
                       🔄 Recalculer
                     </button>
@@ -395,7 +399,9 @@ export default function Abonnements() {
                 <Input type="number" min="0" value={modal.montant} onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} placeholder="ex : 15000" />
               </FormGroup>
               <p className="-mt-1.5 mb-3 text-[11px] text-gray-500">
-                Pré-rempli pour Simple/VIP ({formatMoney(tarifs.simple)}/{formatMoney(tarifs.vip)}) — modifiable. Libre pour Classique.
+                {classiqueFixe
+                  ? <>Pré-rempli pour Simple/Classique/VIP ({formatMoney(tarifs.simple)}/{formatMoney(tarifs.classique)}/{formatMoney(tarifs.vip)}) — modifiable.</>
+                  : <>Pré-rempli pour Simple/VIP ({formatMoney(tarifs.simple)}/{formatMoney(tarifs.vip)}) — modifiable. Libre pour Classique.</>}
               </p>
               <FormGroup label="📝 Notes" hint="Optionnel">
                 <Input value={modal.notes} onChange={(e) => setModal((f) => ({ ...f, notes: e.target.value }))} />

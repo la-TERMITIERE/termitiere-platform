@@ -6,13 +6,16 @@ import { genNumero, todayStr } from '../../utils/formatters'
 
 // `factures` = liste actuelle (pour numéroter) ; `generatePDF` = generateFacturePDF
 // de usePDF('gym') — déclenche le téléchargement du PDF si fourni. `site` = salle
-// d'origine (lomé/kara) — cf. site/useSite.jsx.
-export async function genererFactureGym({ factures, sourceType, sourceId, clientNom, clientTelephone, categorie, description, montant, user, site, generatePDF }) {
+// d'origine (lomé/kara) — cf. site/useSite.jsx. `imprime` (optionnel, `true` par
+// défaut) : trace si le reçu a RÉELLEMENT été imprimé à la création — l'appelant
+// décide s'il imprime (cf. Seances.jsx, case à cocher) ; ce champ ne fait que
+// refléter fidèlement ce choix, jamais un « imprimé » supposé.
+export async function genererFactureGym({ factures, sourceType, sourceId, clientNom, clientTelephone, categorie, description, montant, user, site, generatePDF, imprime = true }) {
   const numero = genNumero('FACT-GYM', factures.length)
   const payload = {
     numero, date: todayStr(), sourceType, sourceId: sourceId || null, site: site || 'lome',
     clientNom, clientTelephone: clientTelephone || '', categorie: categorie || '', description,
-    montant: Number(montant) || 0,
+    montant: Number(montant) || 0, imprime: !!imprime,
     enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
   }
   await addItem('gym_factures', payload)

@@ -13,7 +13,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { isFullAccessRole, isReadOnlyRole } from '../../core/roles'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
-import { categorieLabel, categorieTone } from './data'
+import { categorieLabel, categorieTone, QR_CARNET_ACTIF } from './data'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import CalendrierPresences from './CalendrierPresences'
 import QrCarnetModal from './QrCarnetModal'
@@ -80,7 +80,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
       {...glassModalProps(COULEUR_MODULE.gym)}
       footer={<>
         <Button variant="outline" onClick={fermer}>Fermer</Button>
-        {client && !edit && (
+        {QR_CARNET_ACTIF && client && !edit && (
           <Button variant="outline" onClick={() => setQrOuvert(true)}>
             <ScanLine size={14} /> QR carnet
           </Button>

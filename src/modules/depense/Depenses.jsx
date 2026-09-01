@@ -63,7 +63,7 @@ function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
     <div ref={ref} className="relative">
       <div className="flex gap-1">
         <input
-          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="Nom du bénéficiaire…"
           value={open ? filtre : value}
           onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value); setOpen(true) }}
