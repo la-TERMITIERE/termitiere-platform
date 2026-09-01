@@ -13,7 +13,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, coutsMatieresBriqueterie, secteursEtSites } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, secteursEnAlerte, moisPrecedent, depensesEnCircuit, coutsMatieresBriqueterie, secteursEtSites, visibleDansEDepenses } from './logic'
 import { formatDateShort, genId, todayStr } from '../../utils/formatters'
 
 const now = new Date()
@@ -51,7 +51,7 @@ export default function Dashboard() {
   const depenses = useMemo(() => [
     ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, inventairesBriq])
+  ].filter(visibleDansEDepenses), [depensesReelles, inventairesBriq])
   const { user, role: roleReel } = useAuth()
   // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
   // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici.

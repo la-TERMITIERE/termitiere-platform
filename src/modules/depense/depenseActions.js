@@ -12,26 +12,36 @@ import { budgetRestantSecteur, budgetSecteur, depensesEntrepriseSecteurMois, tot
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
 // Raison pour laquelle une dépense devient une demande d'autorisation, ou null si aucune.
+// Une dépense « payée depuis la Caisse commune » (cf. financePar) consomme le budget de
+// la Caisse commune, pas celui de son secteur d'origine (cf. depensesEntrepriseSecteurMois,
+// qui l'exclut du secteur et l'attribue à `divers`) — c'est donc SON budget restant qu'il
+// faut vérifier ici, pas celui du secteur affiché sur la dépense.
 export function raisonAutorisation(d, { budgets, depenses }) {
   const montant = Number(d.montant) || 0
   if (d.imprevue) return 'dépense imprévue'
   if (montant > SEUIL_APPROBATION_PAU) return `dépasse ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA`
-  const restant = budgetRestantSecteur(budgets, depenses, d.secteurId, d.date, d.site)
-  if (restant !== null && montant > restant) return `dépasse le budget restant du secteur (${restant.toLocaleString('fr-FR')} FCFA)`
+  const estCaisseCommune = d.financePar === 'caisse_commune'
+  const restant = budgetRestantSecteur(budgets, depenses, estCaisseCommune ? 'divers' : d.secteurId, d.date, estCaisseCommune ? null : d.site)
+  if (restant !== null && montant > restant) return `dépasse le budget restant ${estCaisseCommune ? 'de la Caisse commune' : 'du secteur'} (${restant.toLocaleString('fr-FR')} FCFA)`
   return null
 }
 
-// Notifie les rôles financiers si le secteur atteint 80%+ de son budget mensuel.
+// Notifie les rôles financiers si le secteur — ou la Caisse commune si la dépense est
+// marquée `financePar: 'caisse_commune'` (cf. raisonAutorisation ci-dessus, même logique)
+// — atteint 80%+ de son budget mensuel.
 async function alerterSiDepassement(d, secteur, { user, budgets, depenses }) {
   const [annee, mois] = (d.date || '').split('-').map(Number)
   if (!annee || !mois) return
-  const alloue = budgetSecteur(budgets, d.secteurId, annee, mois, d.site)
+  const estCaisseCommune = d.financePar === 'caisse_commune'
+  const secteurIdAlerte = estCaisseCommune ? 'divers' : d.secteurId
+  const siteAlerte = estCaisseCommune ? null : d.site
+  const alloue = budgetSecteur(budgets, secteurIdAlerte, annee, mois, siteAlerte)
   if (alloue <= 0) return
-  const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
+  const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), d], secteurIdAlerte, annee, mois, siteAlerte))
   const pct = Math.round((depenseTotal / alloue) * 100)
   const statut = statutBudget(pct)
   if (statut.key === 'ok') return
-  const libelle = libelleSecteurSite(secteur, d)
+  const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
   await notify({
     type: statut.key === 'depasse' ? 'danger' : 'warning',
     title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
@@ -50,7 +60,13 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses }) {
   const montant = Number(d.montant) || 0
   const raison = raisonAutorisation(d, { budgets, depenses })
   const statutInitial = raison ? 'en_attente' : 'decaissee'
-  const depenseFinale = { ...d, id, montant, statut: statutInitial, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
+  // `origineSaisie` : marque toute dépense créée via ce circuit partagé comme
+  // « effectuée dans E-DÉPENSES » — sert uniquement au secteur MAXI BAT, dont les
+  // dépenses ne doivent apparaître dans E-DÉPENSES QUE si elles y ont été saisies
+  // (celles gérées depuis E-G.Pro/volet BTP, via `projet_depenses`, ne passent jamais
+  // par ce circuit et n'ont donc jamais ce marqueur — cf. le filtre `depenses` de
+  // chaque écran E-DÉPENSES).
+  const depenseFinale = { ...d, id, montant, statut: statutInitial, origineSaisie: 'e_depenses', enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
   await setItem('depense_depenses', id, depenseFinale)
   await audit('depense', 'DEPENSE_CREATE', `${libelle} — ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}`, { secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison })
   if (statutInitial === 'en_attente') {

@@ -1,8 +1,9 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
@@ -20,16 +21,10 @@ import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SEUIL_APPROBATION_PAU } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
-
-// Les dépenses des chantiers (secteur MAXI BAT) sont désormais réunies dans le
-// volet BTP d'E-G.Pro — exclues d'ici pour ne plus les afficher deux fois, et
-// retirées des secteurs proposables pour éviter d'en saisir de nouvelles ici.
-const SECTEUR_BTP_EXCLU = 'bat'
-const SECTEURS_SANS_BTP = SECTEURS.filter((s) => s.id !== SECTEUR_BTP_EXCLU)
 
 // Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
 const SOURCE_INFO = {
@@ -41,7 +36,7 @@ const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES'
 const empty = () => ({
   secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, recurrente: false, imprevue: false,
-  natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise',
+  natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
@@ -123,13 +118,14 @@ export default function Depenses() {
   // leur `projetId`, cf. projet/Besoins.jsx) n'apparaît plus ici : ça ne se consulte
   // que depuis E-G.Pro lui-même (onglet Dépenses), lui compris le suivi de l'apport/
   // dette PAU et son bouton « Rembourser ». Seul reste inclus en lecture seule le coût
-  // matières Briqueterie. Les dépenses de chantier (secteur BAT) restent exclues.
+  // matières Briqueterie. Les dépenses de chantier (secteur BAT) gérées depuis E-G.Pro
+  // restent exclues — sauf celles saisies directement ici (cf. visibleDansEDepenses).
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
   const depenses = useMemo(
     () => [
       ...depensesReelles.filter((d) => !d.projetId),
       ...coutsMatieresBriqueterie(inventairesBriq)
-    ].filter((d) => d.secteurId !== SECTEUR_BTP_EXCLU),
+    ].filter(visibleDansEDepenses),
     [depensesReelles, inventairesBriq]
   )
   useEffect(() => { marquerVoletVu(user?.uid, 'depenseDepenses') }, [user?.uid])
@@ -195,6 +191,37 @@ export default function Depenses() {
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
+  // KPI budget alloué — mois de référence : celui du filtre « Mois » s'il est posé,
+  // sinon le mois courant (le filtre peut être vidé pour voir « Toutes périodes »,
+  // mais un budget alloué n'a de sens que rapporté à UN mois précis).
+  const [anneeKpi, moisKpi] = useMemo(() => {
+    const m = filtreMois || todayStr().slice(0, 7)
+    const [a, mo] = m.split('-').map(Number)
+    return [a, mo]
+  }, [filtreMois])
+
+  // Budget alloué total, tous secteurs métier confondus (hors Caisse commune, comptée
+  // séparément ci-dessous) — Logistique compte ses deux sites (Lomé + Kara).
+  const budgetAutresSecteurs = useMemo(
+    () => secteursEtSites(false)
+      .filter((s) => s.secteurId !== 'divers')
+      .reduce((sum, s) => sum + budgetSecteur(budgets, s.secteurId, anneeKpi, moisKpi, s.site), 0),
+    [budgets, anneeKpi, moisKpi]
+  )
+  const depenseAutresSecteurs = useMemo(
+    () => secteursEtSites(false)
+      .filter((s) => s.secteurId !== 'divers')
+      .reduce((sum, s) => sum + totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, anneeKpi, moisKpi, s.site)), 0),
+    [depenses, anneeKpi, moisKpi]
+  )
+  const budgetCaisseCommune = useMemo(() => budgetSecteur(budgets, 'divers', anneeKpi, moisKpi), [budgets, anneeKpi, moisKpi])
+  const depenseCaisseCommune = useMemo(
+    () => totalDepenses(depensesEntrepriseSecteurMois(depenses, 'divers', anneeKpi, moisKpi)),
+    [depenses, anneeKpi, moisKpi]
+  )
+  const resteAutresSecteurs = budgetAutresSecteurs - depenseAutresSecteurs
+  const resteCaisseCommune  = budgetCaisseCommune - depenseCaisseCommune
+
   // Export Excel — reprend le format du carnet papier : Date, Libellé, Montant,
   // Nom de l'agréeur (bénéficiaire — celui à qui la somme est destinée, avec son
   // numéro s'il est connu via son compte utilisateur), Source (de financement).
@@ -249,7 +276,7 @@ export default function Depenses() {
   function openEdit(d)  { setModal({ data: { ...empty(), ...d }, isNew: false, id: d.id }) }
 
   // ── Ajout multiple (lot) ──
-  const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', imprevue: false })
+  const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '', imprevue: false })
   function openLot() { setLot([ligneVide(), ligneVide(), ligneVide()]) }
   const setLigne = (i, k, v) => setLot((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
   const ajouterLigne = () => setLot((rows) => [...rows, ligneVide()])
@@ -375,6 +402,19 @@ export default function Depenses() {
 
   return (
     <div className="space-y-5">
+      {/* KPI — récap de la liste affichée + budget alloué (mois du filtre, ou mois
+          courant si aucun filtre de mois n'est posé), autres secteurs vs Caisse commune. */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard title="Total dépenses (liste affichée)" value={`${totalListe.toLocaleString('fr-FR')} FCFA`}
+          sub={`${liste.length} dépense(s)`} icon={Receipt} accent="#B45309" />
+        <StatCard title="Budget alloué — autres secteurs" value={`${budgetAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
+          sub={`Dépensé ${depenseAutresSecteurs.toLocaleString('fr-FR')} FCFA · Reste ${resteAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
+          icon={Building2} accent={resteAutresSecteurs < 0 ? '#dc2626' : '#0d9488'} valueColor={resteAutresSecteurs < 0 ? '#dc2626' : undefined} />
+        <StatCard title="Budget alloué — Caisse commune" value={`${budgetCaisseCommune.toLocaleString('fr-FR')} FCFA`}
+          sub={`Dépensé ${depenseCaisseCommune.toLocaleString('fr-FR')} FCFA · Reste ${resteCaisseCommune.toLocaleString('fr-FR')} FCFA`}
+          icon={PiggyBank} accent={resteCaisseCommune < 0 ? '#dc2626' : '#7c3aed'} valueColor={resteCaisseCommune < 0 ? '#dc2626' : undefined} />
+      </div>
+
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Elle devient quand même une <strong>demande envoyée au PAU</strong> si elle est <strong>imprévue</strong> (hors budget), si son montant dépasse <strong>{SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong>, ou si elle dépasse le <strong>budget restant du secteur</strong> ce mois-ci — et passe alors par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget.
       </div>
@@ -400,7 +440,7 @@ export default function Depenses() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
           <Select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }}>
             <option value="">Tous les secteurs</option>
-            {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </Select>
         </div>
         {filtreSecteur === 'logistique' && (
@@ -490,6 +530,7 @@ export default function Depenses() {
                         <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{d.categorie || '—'}</span>
                         <Badge tone={nature.tone}>{nature.label}</Badge>
                         <Badge tone={origine.tone}>{origine.label}</Badge>
+                        {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
                       </div>
                     </td>
 
@@ -600,6 +641,17 @@ export default function Depenses() {
                   placeholder="Décrivez précisément la dépense : quoi, pourquoi, pour qui, dans quel contexte…"
                 />
               </FormGroup>
+              {modal.data.secteurId && modal.data.secteurId !== 'divers' && (
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-sm text-gray-700">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400/30"
+                    checked={modal.data.financePar === 'caisse_commune'}
+                    onChange={(e) => set('financePar', e.target.checked ? 'caisse_commune' : '')} />
+                  <span>
+                    💰 Payée depuis la <strong>Caisse commune</strong>
+                    <span className="block text-xs text-gray-500">Reste affichée sous ce secteur, mais ne consomme pas son budget — c'est le budget de la Caisse commune qui est réduit à la place.</span>
+                  </span>
+                </label>
+              )}
             </div>
 
             {/* Classification comptable */}
@@ -741,12 +793,13 @@ export default function Depenses() {
             </p>
 
             <div className="hidden gap-2 px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 sm:grid sm:grid-cols-12">
-              <span className="sm:col-span-3">Secteur</span>
+              <span className="sm:col-span-2">Secteur</span>
               <span className="sm:col-span-2">Catégorie</span>
               <span className="sm:col-span-2">Montant</span>
               <span className="sm:col-span-2">Date</span>
               <span className="sm:col-span-1">Description</span>
               <span className="sm:col-span-1">Imprévue</span>
+              <span className="sm:col-span-1">Caisse</span>
               <span className="sm:col-span-1" />
             </div>
 
@@ -755,10 +808,10 @@ export default function Depenses() {
                 const raison = raisonAutorisation(r)
                 return (
                   <div key={i} className="grid grid-cols-2 items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 sm:grid-cols-12">
-                    <div className="space-y-1 sm:col-span-3">
+                    <div className="space-y-1 sm:col-span-2">
                       <Select value={r.secteurId} onChange={(e) => setLigne(i, 'secteurId', e.target.value)}>
                         <option value="">— Secteur —</option>
-                        {SECTEURS_SANS_BTP.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </Select>
                       {r.secteurId === 'logistique' && (
                         <Select value={r.site} onChange={(e) => setLigne(i, 'site', e.target.value)}>
@@ -785,6 +838,13 @@ export default function Depenses() {
                     </div>
                     <div className="flex items-center justify-center sm:col-span-1" title="Dépense imprévue → demande envoyée au PAU">
                       <input type="checkbox" checked={!!r.imprevue} onChange={(e) => setLigne(i, 'imprevue', e.target.checked)} />
+                    </div>
+                    <div className="flex items-center justify-center sm:col-span-1">
+                      {r.secteurId && r.secteurId !== 'divers' && (
+                        <input type="checkbox" title="💰 Payée depuis la Caisse commune — ne consomme pas le budget de ce secteur"
+                          checked={r.financePar === 'caisse_commune'}
+                          onChange={(e) => setLigne(i, 'financePar', e.target.checked ? 'caisse_commune' : '')} />
+                      )}
                     </div>
                     <div className="col-span-2 flex justify-end sm:col-span-1 sm:justify-center">
                       <button type="button" onClick={() => retirerLigne(i)} disabled={lot.length <= 1}
@@ -853,6 +913,7 @@ export default function Depenses() {
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <Badge tone={nature.tone}>{nature.label}</Badge>
+                      {detail.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
                     </div>
                   </div>
                   <Badge tone={statut.tone}>{statut.label}</Badge>

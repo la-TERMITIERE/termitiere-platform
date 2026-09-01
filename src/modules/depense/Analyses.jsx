@@ -13,7 +13,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, MOIS_LABELS } from './data'
-import { budgetSecteur, depensesSecteurMois, totalDepenses, derniersMois, depensesNatureMois, natureFlux, coutsMatieresBriqueterie, versementsClientVersSecteurs } from './logic'
+import { budgetSecteur, depensesSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, derniersMois, depensesNatureMois, natureFlux, coutsMatieresBriqueterie, versementsClientVersSecteurs, visibleDansEDepenses } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { depenseRoleEffectif } from '../../core/roles'
 
@@ -47,7 +47,7 @@ export default function Analyses() {
   const depenses = useMemo(() => [
     ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, inventairesBriq])
+  ].filter(visibleDansEDepenses), [depensesReelles, inventairesBriq])
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
   // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu
@@ -73,8 +73,11 @@ export default function Analyses() {
   )
 
   // MAXI BAT est écarté ici aussi — son suivi budgétaire vit dans le volet BTP d'E-G.Pro.
+  // depensesEntrepriseSecteurMois (pas depensesSecteurMois) pour que la comparaison
+  // avec le « Budget alloué » reste cohérente : une dépense payée depuis la Caisse
+  // commune (cf. Depenses.jsx) ne doit pas faire paraître ce secteur en dépassement.
   const parSecteur = useMemo(() => SECTEURS.filter((s) => s.id !== 'bat').map((s) => {
-    const listeMois = depensesSecteurMois(depenses, s.id, annee, mois)
+    const listeMois = depensesEntrepriseSecteurMois(depenses, s.id, annee, mois)
     return {
       ...s,
       alloue:  budgetSecteur(budgets, s.id, annee, mois),

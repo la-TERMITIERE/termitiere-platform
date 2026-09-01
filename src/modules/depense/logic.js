@@ -12,6 +12,17 @@ import { METIERS_PRESTATAIRE } from '../projet/prestataire'
 // conventions coexistent volontairement : elles couvrent des historiques différents.
 export const siteLogistiqueDe = (row) => row?.site || 'kara'
 
+// MAXI BAT est un cas particulier : ses dépenses de chantier (tâches, prestataires…)
+// sont gérées depuis E-G.Pro (`projet_depenses`, volet BTP) et n'apparaissent jamais
+// dans E-DÉPENSES. Mais MAXI BAT reste un secteur sélectionnable dans les formulaires
+// E-DÉPENSES eux-mêmes (Ajouter une dépense…) — une dépense BAT saisie DIRECTEMENT là
+// doit, elle, y rester visible. `origineSaisie: 'e_depenses'` (posé par
+// soumettreNouvelleDepense, seul circuit de création E-DÉPENSES) distingue les deux :
+// à utiliser partout où l'on filtre la liste des dépenses pour un écran E-DÉPENSES.
+export function visibleDansEDepenses(d) {
+  return d.secteurId !== 'bat' || d.origineSaisie === 'e_depenses'
+}
+
 // Libellé d'affichage d'un secteur, avec le site en suffixe pour Logistique
 // (ex. « MAXI LOGISTIQUE — Kara ») — résout aussi le site des documents hérités sans
 // `site` (cf. siteLogistiqueDe), pour que l'affichage reste cohérent avec le filtrage.
@@ -224,11 +235,27 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois, site = nul
 // remboursement PAU, ou `source: 'projet'`) qui ne doivent pas consommer le budget
 // ALLOUÉ du secteur. À utiliser partout où l'on calcule « combien reste du budget
 // ALLOUÉ » — pas pour un total « toutes dépenses » (rapports, rentabilité…).
+//
+// CAISSE COMMUNE (secteurId `divers`) — cas particulier : une dépense d'un AUTRE
+// secteur peut être marquée `financePar: 'caisse_commune'` (cf. Depenses.jsx) — elle
+// reste affichée sous son secteur d'origine (traçabilité, cf. depensesSecteurMois),
+// mais ne consomme PLUS le budget de ce secteur (exclue ci-dessous) : c'est le budget
+// de la Caisse commune qui est consommé à la place, comme si elle avait payé directement.
 export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, site = null) {
+  if (secteurId === 'divers') {
+    const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+    return depenses.filter((d) => {
+      if (!(d.date || '').startsWith(prefixe)) return false
+      if (!estDecaissee(d)) return false
+      if (d.secteurId === 'divers') return (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'projet' && d.source !== 'remboursement_pau'
+      return d.financePar === 'caisse_commune'
+    })
+  }
   return depensesSecteurMois(depenses, secteurId, annee, mois, site)
     .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau')
     .filter((d) => d.source !== 'projet')
     .filter((d) => d.source !== 'remboursement_pau')
+    .filter((d) => d.financePar !== 'caisse_commune')
 }
 
 // Dépenses décaissées d'un secteur/mois, hors dépenses de PROJET — pour le bilan

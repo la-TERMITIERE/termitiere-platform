@@ -13,19 +13,20 @@ import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
-import { coutsMatieresBriqueterie } from './logic'
+import { coutsMatieresBriqueterie, visibleDansEDepenses } from './logic'
 
 export default function Historique() {
   const { data: depensesReelles } = useCollection('depense_depenses')
   // Coût matières Briqueterie, repris en lecture seule. Tout ce qui vient d'E-G.Pro
   // (repérable à son `projetId`) n'apparaît plus ici — ça ne se consulte que depuis
-  // E-G.Pro lui-même.
+  // E-G.Pro lui-même. MAXI BAT géré depuis E-G.Pro reste exclu, sauf les dépenses
+  // saisies directement dans E-DÉPENSES (cf. visibleDansEDepenses).
   const { data: inventairesBriq } = useCollection('evenementiel_inventaires')
   const depenses = useMemo(
     () => [
       ...depensesReelles.filter((d) => !d.projetId),
       ...coutsMatieresBriqueterie(inventairesBriq)
-    ],
+    ].filter(visibleDansEDepenses),
     [depensesReelles, inventairesBriq]
   )
 

@@ -174,10 +174,18 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     // entrées `source: 'projet'` historiques.
     const lignes = depensesHorsProjetSecteurMois(depenses, s.secteurId, annee, mois, s.site).sort((a, b) => (a.date < b.date ? 1 : -1))
     const depense = totalDepenses(lignes)
-    const depenseBudget = totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site))
+    // Pour la CAISSE COMMUNE (secteurId `divers`) uniquement : cette liste inclut, en
+    // plus de ses propres dépenses, celles d'AUTRES secteurs marquées « payée depuis la
+    // caisse commune » (cf. Depenses.jsx → financePar, et depensesEntrepriseSecteurMois)
+    // — isolées ci-dessous pour les afficher dans son détail (cf. secteurDetail).
+    const consommationBudget = depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site)
+    const depenseBudget = totalDepenses(consommationBudget)
+    const financeesAilleurs = s.secteurId === 'divers'
+      ? consommationBudget.filter((d) => d.secteurId !== 'divers').sort((a, b) => (a.date < b.date ? 1 : -1))
+      : []
     const pct = alloue > 0 ? Math.round((depenseBudget / alloue) * 100) : (depenseBudget > 0 ? 100 : 0)
     return {
-      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, solde: recette - depense,
+      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, financeesAilleurs, solde: recette - depense,
       budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
       // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
@@ -402,7 +410,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const ouvrirNouvelleDepense = () => setNouvelleDepense({
     categorie: '', montant: '', date: todayStr(), description: '',
     beneficiaireNom: '', beneficiaireTelephone: '',
-    natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', imprevue: false
+    natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '', imprevue: false
   })
 
   const confirmerNouvelleDepense = async () => {
@@ -840,6 +848,34 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 </div>
               )}
             </div>
+
+            {/* CAISSE COMMUNE uniquement : dépenses d'AUTRES secteurs marquées « payée
+                depuis la caisse commune » — consomment son budget mais restent listées
+                sous leur secteur d'origine ci-dessus (cf. Depenses.jsx → financePar). */}
+            {secteurDetail.secteurId === 'divers' && secteurDetail.financeesAilleurs.length > 0 && (
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+                  💰 Financées depuis ici, pour d'autres secteurs ({secteurDetail.financeesAilleurs.length})
+                </p>
+                <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {secteurDetail.financeesAilleurs.map((d) => {
+                    const secteurOrigine = SECTEURS.find((s) => s.id === d.secteurId)
+                    return (
+                      <div key={d.id} onClick={() => { setSecteurDetail(null); setDetail(d) }}
+                        className="group flex cursor-pointer items-center gap-2 rounded-lg bg-violet-50/50 px-2.5 py-1.5 text-xs transition-colors hover:bg-violet-100/60">
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: (secteurOrigine?.color || '#64748b') + '1a', color: secteurOrigine?.color || '#64748b' }}>
+                          {secteurOrigine?.label || d.secteurId}
+                        </span>
+                        <span className="whitespace-nowrap text-gray-500">{formatDateShort(d.date)}</span>
+                        <span className="min-w-0 flex-1 truncate text-gray-700">{d.description || '—'}</span>
+                        <span className="whitespace-nowrap font-bold text-gray-900">{fmt(d.montant)}</span>
+                        <Eye size={12} className="shrink-0 text-gray-300 transition-colors group-hover:text-gray-500" />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Modal>
@@ -1060,6 +1096,14 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 <input type="checkbox" checked={nouvelleDepense.imprevue}
                   onChange={(e) => setNouvelleDepense((d) => ({ ...d, imprevue: e.target.checked }))} />
                 Dépense imprévue (hors budget)
+              </label>
+              <label className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-2 text-xs text-gray-700">
+                <input type="checkbox" className="mt-0.5" checked={nouvelleDepense.financePar === 'caisse_commune'}
+                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, financePar: e.target.checked ? 'caisse_commune' : '' }))} />
+                <span>
+                  💰 Payée depuis la <strong>Caisse commune</strong>
+                  <span className="block text-[11px] text-gray-500">Ne consomme pas le budget de ce secteur — réduit celui de la Caisse commune à la place.</span>
+                </span>
               </label>
               <p className="text-[11px] text-gray-400">
                 Devient une <strong>demande envoyée au PAU</strong> si imprévue, si le montant dépasse le seuil, ou si elle

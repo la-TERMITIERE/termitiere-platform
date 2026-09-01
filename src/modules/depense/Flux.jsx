@@ -11,7 +11,7 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, NATURES_FLUX } from './data'
-import { soldesFluxMois, croissance, derniersMois, moisPrecedent, coutsMatieresBriqueterie } from './logic'
+import { soldesFluxMois, croissance, derniersMois, moisPrecedent, coutsMatieresBriqueterie, visibleDansEDepenses } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 
 const now = new Date()
@@ -27,11 +27,12 @@ export default function Flux() {
 
   // Coût matières Briqueterie, inclus en lecture seule — pas de double saisie. Les
   // dépenses de projet (E-G.Pro) n'apparaissent plus ici — elles ne se consultent
-  // que depuis E-G.Pro lui-même. MAXI BAT reste exclu (volet BTP d'E-G.Pro).
+  // que depuis E-G.Pro lui-même. MAXI BAT reste exclu (volet BTP d'E-G.Pro), sauf les
+  // dépenses saisies directement dans E-DÉPENSES (cf. visibleDansEDepenses).
   const depenses = useMemo(() => [
     ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
-  ].filter((d) => d.secteurId !== 'bat'), [depensesReelles, inventairesBriq])
+  ].filter(visibleDansEDepenses), [depensesReelles, inventairesBriq])
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
