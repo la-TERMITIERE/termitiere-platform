@@ -32,7 +32,12 @@ const ESSENTIELS = {
   projet: ['/projet/projets', '/projet/taches'],
   garderie: ['/garderie/enfants', '/garderie/presences'],
   depense: ['/depense/liste', '/depense/autorisations'],
-  gym: ['/gym/seances', '/gym/abonnements', '/gym/facturation']
+  gym: ['/gym/seances', '/gym/abonnements', '/gym/facturation'],
+  // Un seul essentiel ici : avec un libellé aussi long que « Devises & taux »
+  // en plus de « Voyages », la barre débordait sur les écrans étroits (5 onglets
+  // + Plus ne tenaient plus). Les devises restent accessibles via Plus ou le
+  // bouton dédié du Dashboard/détail voyage — moins consulté au quotidien.
+  voyage: ['/voyage/voyages']
 }
 
 export default function MobileBottomNav({ onOpenMenu }) {
