@@ -65,9 +65,22 @@ export default function Params() {
           compte += 1
         }
       }
-      await audit('gym', 'RESET_TOTAL', `Réinitialisation de MAXI-GYM ${siteLabel(site)} par ${user?.nom || user?.login || '—'} — ${compte} enregistrement(s) supprimé(s)`)
-      toast.success(`MAXI-GYM ${siteLabel(site)} réinitialisé ✓`)
+      // L'audit est fait en best-effort : s'il échoue (ex. droit refusé sur le
+      // journal), on ne veut pas faire croire à l'utilisateur que la suppression
+      // elle-même a échoué alors que les données sont bel et bien parties.
+      try {
+        await audit('gym', 'RESET_TOTAL', `Réinitialisation de MAXI-GYM ${siteLabel(site)} par ${user?.nom || user?.login || '—'} — ${compte} enregistrement(s) supprimé(s)`)
+      } catch (e) {
+        console.warn('[gym] audit RESET_TOTAL non enregistré :', e)
+      }
+      toast.success(`MAXI-GYM ${siteLabel(site)} réinitialisé ✓ (${compte} enregistrement${compte > 1 ? 's' : ''} supprimé${compte > 1 ? 's' : ''})`)
       setConfirmTexte('')
+    } catch (e) {
+      // Auparavant silencieux : une erreur ici (ex. droit refusé par les règles
+      // Firebase) arrêtait la boucle sans aucun message — impression que « rien
+      // ne se passe » alors qu'une suppression a en réalité échoué en coulisse.
+      console.error('[gym] réinitialisation MAXI-GYM échouée :', e)
+      toast.error(e?.message || 'La réinitialisation a échoué — voir la console pour le détail.')
     } finally {
       setResetting(false)
     }

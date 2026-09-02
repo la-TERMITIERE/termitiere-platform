@@ -19,24 +19,25 @@ const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
 // déduite du 2e segment de l'URL.
 const MULTISITE_MODULES = { logistique: LOG_SITES, gym: LOG_SITES }
 
-// Volets jugés essentiels au suivi/gestion quotidien de chaque module — en plus
-// du Dashboard (toujours inclus). Limité à 3 par module pour garder la barre lisible
-// (la plupart en ont 2 ; MAXI-GYM en a 3 — usage quotidien intensif : séances,
-// abonnements ET facturation/reçus).
+// Volet jugé le plus essentiel au suivi/gestion quotidien de chaque module — en
+// plus du Dashboard (toujours inclus). LIMITÉ À 1 PAR MODULE (5 onglets max avec
+// Accueil/Dashboard/Plus) : au-delà, la barre déborde et se coupe sur les écrans
+// étroits sans que le défilement horizontal soit visible/évident pour l'usager
+// (constaté avec 2 essentiels sur E-VOYAGE, puis avec 3 sur MAXI-GYM — Dashboard
+// et/ou Plus disparaissaient purement et simplement de l'écran). Les volets non
+// listés ici restent bien sûr accessibles via « Plus ».
 const ESSENTIELS = {
-  agro: ['/agro/saisie', '/agro/factures'],
-  logistique: ['/logistique/saisie', '/logistique/prestations'],
-  evenementiel: ['/evenementiel/production', '/evenementiel/ventes'],
-  foncier: ['/foncier/dossiers', '/foncier/besoins'],
+  agro: ['/agro/saisie'],
+  logistique: ['/logistique/saisie'],
+  evenementiel: ['/evenementiel/production'],
+  foncier: ['/foncier/dossiers'],
   rh: [],
-  projet: ['/projet/projets', '/projet/taches'],
-  garderie: ['/garderie/enfants', '/garderie/presences'],
-  depense: ['/depense/liste', '/depense/autorisations'],
-  gym: ['/gym/seances', '/gym/abonnements', '/gym/facturation'],
-  // Un seul essentiel ici : avec un libellé aussi long que « Devises & taux »
-  // en plus de « Voyages », la barre débordait sur les écrans étroits (5 onglets
-  // + Plus ne tenaient plus). Les devises restent accessibles via Plus ou le
-  // bouton dédié du Dashboard/détail voyage — moins consulté au quotidien.
+  projet: ['/projet/projets'],
+  garderie: ['/garderie/presences'],
+  depense: ['/depense/liste'],
+  // Le check-in des séances est l'action la plus répétée dans une journée de
+  // salle — abonnements et facturation restent accessibles via Plus.
+  gym: ['/gym/seances'],
   voyage: ['/voyage/voyages']
 }
 
@@ -88,7 +89,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
     const essentiels = essentielsPaths
       .map((p) => nav.find((it) => it.to.endsWith(`/${p.split('/').pop()}`)))
       .filter(Boolean)
-      .slice(0, 3)
+      .slice(0, 1)
     const accueil = { label: 'Accueil', to: '/', icon: Home, end: true }
     items = [accueil, dashboard, ...essentiels].filter(Boolean)
     items = items.filter((it, i) => items.findIndex((x) => x.to === it.to) === i)
