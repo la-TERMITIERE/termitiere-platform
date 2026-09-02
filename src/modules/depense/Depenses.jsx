@@ -514,7 +514,12 @@ export default function Depenses() {
                 const avecOrigine = d.source === 'besoin' // motif à afficher
                 const origine = infoSource(d)
                 const importe = !!d.source // dépense reprise d'un autre module (besoin, Briqueterie) : non modifiable ici
-                const modifiable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
+                // Modifier une dépense déjà décaissée (ex. corriger la case « Payée depuis
+                // la Caisse commune » après coup) : admin, mais aussi secrétaire — pour
+                // qu'elle puisse réparer une erreur de saisie sans attendre un admin. La
+                // SUPPRESSION, elle, reste réservée à l'admin (action plus irréversible).
+                const modifiable = !importe && (isAdmin || role === 'secretaire' || d.statut === 'en_attente' || !d.statut)
+                const supprimable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
                 const cell = 'bg-white py-3 align-middle transition-colors group-hover:bg-amber-50/40'
                 return (
                   <tr key={d.id} onClick={() => setDetailId(d.id)}
@@ -589,10 +594,10 @@ export default function Depenses() {
                       <div className="flex items-center justify-end gap-0.5">
                         <button onClick={() => setDetailId(d.id)} title="Voir les détails" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Eye size={15} /></button>
                         {modifiable && (
-                          <>
-                            <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><FilePen size={15} /></button>
-                            <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
-                          </>
+                          <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><FilePen size={15} /></button>
+                        )}
+                        {supprimable && (
+                          <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
                         )}
                       </div>
                     </td>
