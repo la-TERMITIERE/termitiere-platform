@@ -7,28 +7,59 @@ import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useVoyageStore } from './store/voyageStore'
-import { economieArticle } from './logic'
+import { economieArticle, meilleurFournisseur, enFCFA } from './logic'
 import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { STATUTS_VOYAGE } from './data'
+
+const fmtDevise = (v, sym) => `${formatNumber(Math.round((parseFloat(v) || 0) * 100) / 100)} ${sym || ''}`.trim()
 
 export default function Dashboard() {
   const { data: voyages } = useCollection('voyage_voyages')
   const { data: articles } = useCollection('voyage_articles')
   const devises = useVoyageStore((s) => s.devises)
   const tauxDe = (code) => { const d = devises.find((x) => x.code === code); return d ? (parseFloat(d.tauxFCFA) || 0) : 0 }
+  const symDe = (code) => devises.find((x) => x.code === code)?.symbole || code
 
   const stats = useMemo(() => {
     const enCours = voyages.filter((v) => (v.statut || 'en_cours') === 'en_cours').length
     let achatTotal = 0, nbAchats = 0, economie = 0
+    // Équivalent en devise d'origine des articles choisis (prix unitaire × quantite,
+    // AVANT conversion FCFA) — regroupé par devise, puisque chaque article peut avoir été
+    // choisi dans une devise différente (fournisseur chinois en CNY, qatari en QAR…).
+    const parDevise = {}
     articles.forEach((a) => {
-      if (a.achat) { achatTotal += a.achat.total || 0; nbAchats++ }
+      if (a.achat) {
+        // Achat déjà validé : prix figé (celui du jour de l'achat).
+        achatTotal += a.achat.total || 0
+        nbAchats++
+        const totalDevise = (parseFloat(a.achat.prixUnitaire) || 0) * (parseInt(a.achat.quantite) || 0)
+        parDevise[a.achat.devise] = (parDevise[a.achat.devise] || 0) + totalDevise
+      } else {
+        // Pas encore acheté : on compte quand même l'article comme « choisi » dès
+        // qu'un fournisseur a été comparé, avec le prix du MEILLEUR fournisseur
+        // (converti au taux courant) — une estimation vivante, pas encore figée.
+        const best = meilleurFournisseur(a.fournisseurs, tauxDe)
+        if (best) {
+          const qte = parseInt(a.quantite) || 1
+          achatTotal += Math.round(enFCFA(best.fournisseur.prixUnitaire, tauxDe(best.fournisseur.devise)) * qte)
+          const totalDevise = (parseFloat(best.fournisseur.prixUnitaire) || 0) * qte
+          parDevise[best.fournisseur.devise] = (parDevise[best.fournisseur.devise] || 0) + totalDevise
+        }
+      }
       economie += economieArticle(a, tauxDe)
     })
     const parGamme = {}
     articles.filter((a) => a.achat).forEach((a) => { const g = a.gamme || 'Divers'; parGamme[g] = (parGamme[g] || 0) + (a.achat.total || 0) })
     const gammes = Object.entries(parGamme).map(([nom, total]) => ({ nom, total })).sort((a, b) => b.total - a.total)
-    return { enCours, achatTotal, nbAchats, economie, gammes }
+    return { enCours, achatTotal, nbAchats, economie, gammes, parDevise }
   }, [voyages, articles, devises])
+
+  // Ligne "≈ 12 000 ¥ · 450 $" — l'équivalent, dans chaque devise réellement utilisée au
+  // moment du choix du fournisseur, du total acheté ci-dessus (déjà en FCFA).
+  const equivalenceDevises = Object.entries(stats.parDevise)
+    .filter(([, total]) => total > 0)
+    .map(([code, total]) => fmtDevise(total, symDe(code)))
+    .join(' · ')
 
   const recents = useMemo(() => [...voyages].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 6), [voyages])
   const nbArticles = (vId) => articles.filter((a) => a.voyageId === vId).length
@@ -36,7 +67,7 @@ export default function Dashboard() {
   const kpis = [
     { title: 'Voyages en cours', value: formatNumber(stats.enCours), icon: Plane, color: '#4f46e5' },
     { title: 'Achats réalisés', value: formatNumber(stats.nbAchats), icon: ShoppingCart, color: '#16a34a' },
-    { title: 'Total acheté', value: formatMoney(stats.achatTotal), icon: Globe, color: '#0891b2' },
+    { title: 'Total des articles choisis', value: formatMoney(stats.achatTotal), sub: equivalenceDevises ? `≈ ${equivalenceDevises}` : undefined, icon: Globe, color: '#0891b2' },
     { title: 'Économie (meilleur choix)', value: formatMoney(stats.economie), icon: PiggyBank, color: '#d97706' }
   ]
 
@@ -60,6 +91,7 @@ export default function Dashboard() {
             <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
             <p className="truncate text-xl font-extrabold text-gray-900" title={String(k.value)}>{k.value}</p>
+            {k.sub && <p className="mt-0.5 truncate text-[11px] font-semibold text-gray-400" title={k.sub}>{k.sub}</p>}
           </div>
         ))}
       </div>
