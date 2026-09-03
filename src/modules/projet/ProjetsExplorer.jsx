@@ -14,7 +14,7 @@ import ProjetFormModal from './ProjetFormModal'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif, SECTEURS_PROJET } from './logic'
 import { SECTEURS } from '../depense/data'
 import { STATUTS_PROJET } from './data'
 import { OngletTaches } from './Taches'
@@ -121,8 +121,9 @@ export default function ProjetsExplorer() {
   // Cloisonnement (chef de projet) déjà géré ici — identique à Projets.jsx/Taches.jsx.
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
 
-  // Étape 1 : compteurs par secteur.
-  const secteursAvecCompte = useMemo(() => SECTEURS.map((s) => {
+  // Étape 1 : compteurs par secteur — Caisse Commune (divers) exclue, ce n'est pas
+  // un secteur de projet parcourable (cf. SECTEURS_PROJET).
+  const secteursAvecCompte = useMemo(() => SECTEURS_PROJET.map((s) => {
     const projetsSecteur = projets.filter((p) => secteurEffectif(p)?.id === s.id)
     const tachesSecteur = scopeParProjets(tachesTous, projetsSecteur)
     return { ...s, nbProjets: projetsSecteur.length, nbTaches: tachesSecteur.length }

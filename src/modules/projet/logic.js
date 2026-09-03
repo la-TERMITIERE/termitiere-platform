@@ -7,8 +7,16 @@ import { SECTEUR_PAR_TYPE_PROJET } from '../depense/logic'
 
 // Secteur E-DÉPENSES concerné par un projet — même priorité que la passerelle réelle
 // (depensesProjetVersSecteurs) : secteur explicite en premier, sinon déduit du type.
+// NB : le repli reste 'divers' (Caisse commune) — un projet SANS secteur reconnu est
+// financé par la Caisse commune par défaut ; ce n'est qu'un choix EXPLICITE (menu
+// déroulant) qui n'a pas de sens, cf. SECTEURS_PROJET ci-dessous.
 export const secteurEffectif = (p) =>
   SECTEURS_DEPENSE.find((s) => s.id === (p.secteurId || SECTEUR_PAR_TYPE_PROJET[p.type] || 'divers'))
+
+// Secteurs qu'un projet peut se voir attribuer EXPLICITEMENT (sélecteurs, filtres,
+// pages d'exploration) — Caisse Commune (divers) exclue : c'est le pot central de
+// financement par défaut, pas un secteur d'activité auquel un projet appartient.
+export const SECTEURS_PROJET = SECTEURS_DEPENSE.filter((s) => s.id !== 'divers')
 
 // Cloisonnement par projet : un rôle cloisonné (ex. chef de projet) ne voit que les
 // projets dont il est désigné « Responsable » (p.responsableUid) OU ajouté comme
