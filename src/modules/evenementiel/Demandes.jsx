@@ -66,7 +66,10 @@ export default function Demandes() {
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ venteId: '', dateSortie: todayStr(), message: '' })
 
+  // Triée du plus récemment créé au plus ancien — une vente qu'on vient de créer
+  // pour un nouveau client doit apparaître en haut du sélecteur, pas tout en bas.
   const ventesBrouillon = ventes.filter((v) => ['brouillon', 'en_attente'].includes(v.statut))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
   // Vente sélectionnée : ses informations (client, briques, quantités) remplissent la demande.
   const selectedVente = ventes.find((v) => v.id === form.venteId) || null
   const estAuteur = (d) => d.demandeur === user.login

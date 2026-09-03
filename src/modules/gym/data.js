@@ -18,7 +18,10 @@ export const categorieDesc  = (id) => CATEGORIES_GYM.find((c) => c.id === id)?.d
 // Valeurs PAR DÉFAUT — utilisées tant qu'aucun réglage n'a été enregistré depuis le
 // volet Paramètres (cf. useGymParams.js, qui les surcharge avec la config réelle en
 // base, PAR SALLE). Gardées ici pour ne jamais laisser l'app sans valeur de repli.
-export const DUREE_CLASSIQUE_MIN_JOURS_DEFAUT = 14
+// 7 jours (1 semaine) — il existe bien une offre Classique d'1 semaine, en plus de
+// celle de 2 semaines (14 jours) ; le champ reste un nombre de jours libre au-delà,
+// ce plancher n'empêche que de descendre sous une semaine.
+export const DUREE_CLASSIQUE_MIN_JOURS_DEFAUT = 7
 export const TARIFS_SEANCE_DEFAUT     = { simple: 1000,  vip: 1500 }
 export const TARIFS_ABONNEMENT_DEFAUT = { simple: 10000, vip: 15000 }
 export const VALIDITE_SEANCE_HEURES_DEFAUT = 5
@@ -108,4 +111,49 @@ export const QR_CARNET_ACTIF = false
 export function genQrToken() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+}
+
+// ── Coachs : planning hebdomadaire + pointage ──────────────────────────────
+// Un coach (`gym_coachs`) a un `horaires` = { [jourId]: { actif, heure } } —
+// programmé ou non chaque jour de la semaine, avec une heure d'arrivée prévue.
+// Le pointage réel (`gym_pointages_coach`) est un enregistrement séparé, un par
+// jour où le coach est effectivement venu (bouton « Pointer l'arrivée » côté
+// réception) — le planning reste la PRÉVISION, le pointage la RÉALITÉ.
+export const JOURS_SEMAINE = [
+  { id: 'lundi', label: 'Lundi' },
+  { id: 'mardi', label: 'Mardi' },
+  { id: 'mercredi', label: 'Mercredi' },
+  { id: 'jeudi', label: 'Jeudi' },
+  { id: 'vendredi', label: 'Vendredi' },
+  { id: 'samedi', label: 'Samedi' },
+  { id: 'dimanche', label: 'Dimanche' }
+]
+
+// Planning vide par défaut (aucun jour programmé) — utilisé à la création d'un coach.
+export function horairesVides() {
+  return Object.fromEntries(JOURS_SEMAINE.map((j) => [j.id, { actif: false, heure: '08:00' }]))
+}
+
+// Id du jour de semaine (cf. JOURS_SEMAINE) d'une date 'YYYY-MM-DD' (aujourd'hui par défaut).
+// getDay() renvoie 0=dimanche..6=samedi ; réindexé pour commencer à lundi.
+export function jourSemaineId(dateStr) {
+  const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date()
+  return JOURS_SEMAINE[(d.getDay() + 6) % 7].id
+}
+
+// Le coach est-il programmé à la date donnée ? Renvoie son créneau ({ actif, heure })
+// ou null si repos ce jour-là.
+export function creneauCoach(coach, dateStr) {
+  const c = coach?.horaires?.[jourSemaineId(dateStr)]
+  return c?.actif ? c : null
+}
+
+// À l'heure si arrivé au plus tard 10 min après l'heure programmée — tolérance
+// raisonnable pour ne pas marquer « retard » sur un simple décalage d'horloge.
+const TOLERANCE_RETARD_MIN = 10
+export function statutPointage(heureProgrammee, heureArrivee) {
+  if (!heureProgrammee || !heureArrivee) return 'a_lheure'
+  const [hp, mp] = heureProgrammee.split(':').map(Number)
+  const [ha, ma] = heureArrivee.split(':').map(Number)
+  return (ha * 60 + ma) - (hp * 60 + mp) > TOLERANCE_RETARD_MIN ? 'retard' : 'a_lheure'
 }

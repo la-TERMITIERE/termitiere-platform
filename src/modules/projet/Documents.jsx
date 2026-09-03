@@ -11,7 +11,7 @@ import { updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { useAuthStore } from '../../core/auth'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets } from './logic'
+import { projetsVisibles, scopeParProjets, parCreationDesc } from './logic'
 import { STATUTS_PROJET } from './data'
 
 const RUBRIQUES = [
@@ -33,7 +33,8 @@ export default function Documents() {
   useEffect(() => { marquerVoletVu(user?.uid, 'projetDocuments') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches.
-  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  // Le plus récemment créé en premier — visible en haut des sélecteurs sans scroller.
+  const projets = useMemo(() => [...projetsVisibles(projetsTous, user, role)].sort(parCreationDesc), [projetsTous, user, role])
   const taches  = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
 
   const [projetId, setProjetId]   = useState('')

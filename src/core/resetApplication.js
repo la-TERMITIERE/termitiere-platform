@@ -39,8 +39,8 @@ export const COLLECTIONS_A_REINITIALISER = [
   'projet_versements_client', 'projet_alertes_dashboard_fermees',
   'projet_alertes_notif', 'projet_purge_log',
   // ── MAXI-GYM ────────────────────────────────────────────────────────────
-  'gym_abonnements', 'gym_clients', 'gym_factures', 'gym_forfaits', 'gym_params',
-  'gym_presences', 'gym_seances',
+  'gym_abonnements', 'gym_clients', 'gym_coachs', 'gym_factures', 'gym_forfaits', 'gym_params',
+  'gym_pointages_coach', 'gym_presences', 'gym_seances',
   // ── Ressources humaines ─────────────────────────────────────────────────
   'rh_employes', 'rh_presences',
   // ── E-VOYAGE ────────────────────────────────────────────────────────────

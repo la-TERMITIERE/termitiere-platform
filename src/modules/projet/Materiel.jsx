@@ -20,7 +20,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { formatDateShort, formatDateTime } from '../../utils/formatters'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjetsOuGlobal } from './logic'
+import { projetsVisibles, scopeParProjetsOuGlobal, parCreationDesc } from './logic'
 
 const CATEGORIES_MATERIEL = [
   { id: 'consommable',     label: 'Consommable (ciment, sable…)' },
@@ -89,7 +89,8 @@ export default function Materiel() {
 
   // Cloisonnement : un chef de projet ne voit que le matériel de ses projets — plus les
   // magasins/matériel « généraux », sans projet (cf. scopeParProjetsOuGlobal).
-  const projets   = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  // Le plus récemment créé en premier — visible en haut des sélecteurs sans scroller.
+  const projets   = useMemo(() => [...projetsVisibles(projetsTous, user, role)].sort(parCreationDesc), [projetsTous, user, role])
   const materiels = useMemo(() => scopeParProjetsOuGlobal(materielsTous, projets), [materielsTous, projets])
   // Magasins : chaque matériel doit désormais appartenir à un magasin — celui-ci peut
   // être rattaché à un projet, ou rester « général » (SANS_PROJET, sans projetId) pour

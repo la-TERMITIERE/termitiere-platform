@@ -21,7 +21,7 @@ import { STATUTS_PROJET, CATEGORIES_DEPENSE_PROJET as CATEGORIES } from './data'
 import { STATUTS_DECAISSEMENT } from '../depense/data'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif, parCreationDesc } from './logic'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -82,7 +82,8 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
     let liste = projetsVisibles(projetsTous, user, role)
     if (secteurSeul)  liste = liste.filter((p) => secteurEffectif(p)?.id === secteurSeul)
     if (secteurExclu) liste = liste.filter((p) => secteurEffectif(p)?.id !== secteurExclu)
-    return liste
+    // Le plus récemment créé en premier — visible en haut des sélecteurs sans scroller.
+    return [...liste].sort(parCreationDesc)
   }, [projetsTous, user, role, secteurSeul, secteurExclu])
   const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
   const depenses = useMemo(() => {

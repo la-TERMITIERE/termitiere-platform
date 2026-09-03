@@ -84,9 +84,12 @@ export default function Demandes() {
   // qui ferme de toute façon la suppression dès que le statut passe à `certifie`).
   const peutAnnulerAgent = role === 'agent'
 
-  // Factures en brouillon dont l'autorisation de sortie reste à émettre.
+  // Factures en brouillon dont l'autorisation de sortie reste à émettre. Triée du
+  // plus récemment créé au plus ancien — une facture qu'on vient de créer pour un
+  // nouveau client doit apparaître en haut du sélecteur, pas tout en bas.
   const facturesAvecDemande = useMemo(() => new Set(liste.map((d) => d.factureId).filter(Boolean)), [liste])
   const facturesDispo = factures.filter((f) => f.statut === 'brouillon' && !facturesAvecDemande.has(f.id))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 
   // Lignes source (facture, sinon prestation) de l'autorisation relancée : c'est
   // sur elles que porte le correctif. La demande ne retient que le matériel du

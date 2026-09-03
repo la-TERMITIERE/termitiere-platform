@@ -34,7 +34,10 @@ export function useGymParams(site = 'lome') {
     // fixe 1 mois comme Simple/VIP — c'est le cas par défaut à Kara.
     tarifAbonnementClassique: doc.tarifAbonnementClassique ?? defautsAbonnement.classique ?? null,
     dureeClassiqueMinJours: doc.dureeClassiqueMinJours ?? DUREE_CLASSIQUE_MIN_JOURS_DEFAUT,
-    validiteSeanceHeures:   doc.validiteSeanceHeures   ?? VALIDITE_SEANCE_HEURES_DEFAUT
+    validiteSeanceHeures:   doc.validiteSeanceHeures   ?? VALIDITE_SEANCE_HEURES_DEFAUT,
+    // Objectif d'encaissement du mois (séances + abonnements) — `null`/absent =
+    // pas d'objectif défini pour cette salle, le KPI n'affiche alors pas de %.
+    objectifMensuel: doc.objectifMensuel ?? null
   }
 }
 

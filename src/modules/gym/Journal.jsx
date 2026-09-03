@@ -16,7 +16,11 @@ const EVENTS = {
   SEANCE_CREATE:      { label: 'Séance enregistrée', emoji: '🎫' },
   SEANCE_DELETE:      { label: 'Séance supprimée', emoji: '🗑️' },
   ABONNEMENT_CREATE:  { label: 'Abonnement enregistré', emoji: '💳' },
-  ABONNEMENT_DELETE:  { label: 'Abonnement supprimé', emoji: '🗑️' }
+  ABONNEMENT_DELETE:  { label: 'Abonnement supprimé', emoji: '🗑️' },
+  COACH_CREATE:       { label: 'Coach ajouté', emoji: '🧑‍🏫' },
+  COACH_MODIFIE:      { label: 'Planning coach modifié', emoji: '🧑‍🏫' },
+  COACH_DELETE:       { label: 'Coach retiré', emoji: '🗑️' },
+  COACH_POINTAGE:     { label: 'Arrivée coach pointée', emoji: '⏱️' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))

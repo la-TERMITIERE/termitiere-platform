@@ -22,7 +22,7 @@ import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { formatDateShort, formatDateTime, genId, todayStr } from '../../utils/formatters'
 import { PRIORITES } from './data'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets } from './logic'
+import { projetsVisibles, scopeParProjets, parCreationDesc } from './logic'
 import { SECTEUR_PAR_TYPE_PROJET, natureFluxProjet } from '../depense/logic'
 import { STATUTS_DECAISSEMENT } from '../depense/data'
 
@@ -119,7 +119,9 @@ export default function Besoins() {
   useEffect(() => { marquerVoletVu(user?.uid, 'projetBesoins') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que les besoins de ses projets.
-  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  // Trié du plus récemment créé au plus ancien : un projet qu'on vient de créer
+  // doit apparaître en haut des sélecteurs, pas tout en bas.
+  const projets = useMemo(() => [...projetsVisibles(projetsTous, user, role)].sort(parCreationDesc), [projetsTous, user, role])
   const besoins = useMemo(() => scopeParProjets(besoinsTous, projets), [besoinsTous, projets])
 
   const [filtreProjet, setFiltreProjet] = useState('')

@@ -2,14 +2,17 @@
 
 // Secteurs de l'entreprise — reprend les mêmes couleurs que les modules
 // correspondants pour une cohérence visuelle immédiate.
+// CAISSE COMMUNE en tête : c'est le secteur central (dépenses transverses, apports),
+// consulté en premier — les listes « Budget par secteur »/« Répartition » suivent
+// simplement cet ordre de déclaration, donc l'ordre ici pilote directement l'affichage.
 export const SECTEURS = [
+  { id: 'divers',       label: 'CAISSE COMMUNE', color: '#64748b' },
   { id: 'agro',         label: 'MAXI-AGRO',          color: '#2EAA3F' },
   { id: 'logistique',   label: 'MAXI LOGISTIQUE',    color: '#BC3C31' },
   { id: 'bat',          label: 'MAXI BAT',           color: '#0d9488' },
   { id: 'evenementiel', label: 'BRIQUETERIE',        color: '#7c3aed' },
   { id: 'garderie',     label: 'GARDERIE',           color: '#E8390E' },
-  { id: 'gym',          label: 'MAXI-GYM',           color: '#E8850F' },
-  { id: 'divers',       label: 'CAISSE COMMUNE', color: '#64748b' }
+  { id: 'gym',          label: 'MAXI-GYM',           color: '#E8850F' }
 ]
 
 // MAXI LOGISTIQUE a deux sites indépendants (Lomé/Kara, cf. src/modules/logistique/site/

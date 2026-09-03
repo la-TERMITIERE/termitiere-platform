@@ -21,6 +21,12 @@ export function projetsVisibles(projets = [], user, role) {
   return projets.filter((p) => p.responsableUid === uid || (p.collaborateurs || []).some((c) => c.uid === uid))
 }
 
+// Comparateur « le plus récemment créé d'abord » — pour les sélecteurs (nouveau
+// projet, nouveau client, nouvelle demande…) : un projet/élément qu'on vient tout
+// juste de créer doit apparaître EN HAUT de la liste, pas tout en bas après avoir
+// scrollé. À passer à .sort() sur une liste dont chaque élément a `createdAt`.
+export const parCreationDesc = (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+
 // Sous-ensemble d'une collection liée à des projets (tâches, dépenses, documents…)
 // via `projetId`, restreint à un ensemble de projets déjà filtré par projetsVisibles().
 export function scopeParProjets(items = [], projetsAutorises = []) {

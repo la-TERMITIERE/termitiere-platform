@@ -4,7 +4,7 @@ import '../../utils/chartSetup'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
-import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing } from 'lucide-react'
+import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -18,10 +18,11 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
 import { ROLES } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS } from './data'
+import { CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
 import ClientDetailModal from './ClientDetailModal'
-import { glassModalProps, COULEUR_MODULE, avatarGradient } from '../../utils/color'
+import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
+import { useGymParams } from './useGymParams'
 
 const COULEUR_BARRE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
 
@@ -78,16 +79,30 @@ export default function Dashboard() {
   }, [])
 
   const site = useSite()
+  const params = useGymParams(site)
   const { data: allSeances }     = useCollection('gym_seances')
   const { data: allAbonnements } = useCollection('gym_abonnements')
   const { data: allClients }     = useCollection('gym_clients')
   const { data: allPresences }   = useCollection('gym_presences')
+  const { data: allCoachs }        = useCollection('gym_coachs')
+  const { data: allPointagesCoach } = useCollection('gym_pointages_coach')
   // Tout est cloisonné par salle, y compris la clientèle : les clients de Lomé
   // ne sont pas ceux de Kara.
   const seances     = useMemo(() => allSeances.filter((s) => matchSite(s, site)), [allSeances, site])
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
   const clients     = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
   const presences   = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
+  const coachs         = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
+  const pointagesCoach = useMemo(() => allPointagesCoach.filter((p) => matchSite(p, site)), [allPointagesCoach, site])
+  // Coach(s) programmé(s) aujourd'hui, avec leur statut de pointage du jour — cf.
+  // le volet « Coachs » pour le planning complet et le pointage lui-même.
+  const coachsAujourdhui = useMemo(() => {
+    const auj = todayStr()
+    return coachs
+      .map((c) => ({ ...c, creneau: creneauCoach(c, auj) }))
+      .filter((c) => c.creneau)
+      .map((c) => ({ ...c, pointage: pointagesCoach.find((p) => p.coachId === c.id && p.date === auj) }))
+  }, [coachs, pointagesCoach])
   const [detailModal, setDetailModal] = useState(null) // null | 'seances' | 'abonnements' | 'total' | 'clients'
   const [clientDetail, setClientDetail] = useState(null) // nom du client dont on affiche la fiche complète
 
@@ -107,6 +122,11 @@ export default function Dashboard() {
     () => [...seancesMois, ...abonnementsMois].reduce((s, x) => s + (Number(x.montant) || 0), 0),
     [seancesMois, abonnementsMois]
   )
+  // Progression vs objectif du mois (Paramètres) — n'a de sens que sur « Mois en
+  // cours » : comparer un quota mensuel à une période perso ou « Tout » serait trompeur.
+  const objectif = params.objectifMensuel
+  const pctObjectif = objectif > 0 ? Math.round((totalEncaisseMois / objectif) * 100) : null
+  const afficherObjectif = preset === 'mois' && objectif > 0
 
   const seancesMoisPrecedent     = useMemo(() => seances.filter((s) => dansPeriodePrecedente(s.date)), [seances, prevStart, prevEnd, comparable])
   const abonnementsMoisPrecedent = useMemo(() => abonnements.filter((a) => dansPeriodePrecedente(a.date)), [abonnements, prevStart, prevEnd, comparable])
@@ -281,6 +301,32 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {coachsAujourdhui.length > 0 && (
+        <div className="relative flex flex-wrap items-center gap-3 overflow-hidden rounded-2xl border border-white/60 p-3 shadow-[0_16px_36px_-18px_rgba(26,26,26,0.22)] backdrop-blur-xl backdrop-saturate-150"
+          style={{ background: `linear-gradient(135deg, ${teinterHex('#ffffff', 0.55)}, ${teinterHex(COULEUR, 0.14)})` }}>
+          {/* Reflet — fine lueur en haut, même recette que la nav mobile en verre. */}
+          <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-2xl bg-gradient-to-b from-white/40 to-transparent" />
+          <span className="relative shrink-0 pl-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+            Coach{coachsAujourdhui.length > 1 ? 's' : ''} du jour
+          </span>
+          <div className="relative flex flex-1 flex-wrap gap-2">
+            {coachsAujourdhui.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-full border border-white/70 bg-white/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-sm">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
+                  <UserCog size={13} />
+                </span>
+                <span className="text-sm font-semibold text-gray-700">{c.nom}</span>
+                {c.pointage ? (
+                  <Badge tone={c.pointage.statut === 'retard' ? 'warning' : 'success'}>Arrivé {c.pointage.heureArrivee}</Badge>
+                ) : (
+                  <Badge tone="neutral">Prévu {c.creneau.heure}</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Séances" value={seancesMois.length} icon={Ticket} accent={COULEUR} onClick={() => setDetailModal('seances')}
           variation={comparable ? seancesMois.length - seancesMoisPrecedent.length : undefined} variationLabel="période préc. · cliquer" />
@@ -288,10 +334,13 @@ export default function Dashboard() {
           variation={comparable ? abonnementsMois.length - abonnementsMoisPrecedent.length : undefined} variationLabel="période préc. · cliquer" />
         <StatCard title="Total encaissé" value={formatMoney(totalEncaisseMois)} icon={Wallet} accent={COULEUR} onClick={() => setDetailModal('total')}
           variation={comparable ? totalEncaisseMois - totalEncaisseMoisPrecedent : undefined}
-          variationLabel={comparable ? `${formatMoney(totalEncaisseMoisPrecedent)} · période préc.` : undefined} />
+          variationLabel={afficherObjectif
+            ? <>🎯 {formatMoney(objectif)} · <strong style={{ color: pctObjectif >= 100 ? '#16a34a' : COULEUR }}>{pctObjectif}%</strong></>
+            : (comparable ? `${formatMoney(totalEncaisseMoisPrecedent)} · période préc.` : undefined)} />
         <StatCard title="Clients" value={clients.length} icon={Users} accent={COULEUR2} onClick={() => setDetailModal('clients')}
           sub={nouveauxClientsMois > 0 ? `+${nouveauxClientsMois} nouveau${nouveauxClientsMois > 1 ? 'x' : ''} sur la période` : undefined} />
       </div>
+
 
       {abonnementsExpirentBientot.length > 0 && (
         <Card title="⏰ Abonnements à renouveler bientôt">
