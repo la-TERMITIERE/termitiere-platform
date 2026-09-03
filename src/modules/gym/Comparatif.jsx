@@ -4,7 +4,7 @@
 // fait déjà GymSiteChooser pour ses 3 petits chiffres.
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Scale, Ticket, CreditCard, Wallet, Users, Target, Trophy } from 'lucide-react'
+import { ArrowLeft, Scale, Ticket, CreditCard, Wallet, Users, Target, Trophy, UserCog } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
@@ -20,6 +20,7 @@ export default function Comparatif() {
   const { data: allSeances } = useCollection('gym_seances')
   const { data: allAbonnements } = useCollection('gym_abonnements')
   const { data: allClients } = useCollection('gym_clients')
+  const { data: allPointagesCoach } = useCollection('gym_pointages_coach')
 
   const paramsLome = useGymParams('lome')
   const paramsKara = useGymParams('kara')
@@ -49,6 +50,31 @@ export default function Comparatif() {
     { cle: 'totalEncaisse', label: 'Total encaissé', icon: Wallet, valeur: (s) => stats[s].totalEncaisse, format: formatMoney },
     { cle: 'nouveauxClients', label: 'Nouveaux clients', icon: Users, valeur: (s) => stats[s].nouveauxClients, format: formatNumber }
   ]
+
+  // Classement de TOUS les coachs, Lomé et Kara mélangés — même principe que la
+  // « Performance » du volet Coachs (fréquentation les jours de présence pointée)
+  // mais à cheval sur les deux salles, sur la période choisie ci-dessus, pour
+  // répondre à « en présence de quel coach il y a plus de monde, à Lomé comme à
+  // Kara ? ». Le comptage des séances reste cloisonné par salle (chaque coach
+  // n'est comparé qu'à sa propre fréquentation, pas à celle de l'autre site).
+  const classementCoachs = useMemo(() => {
+    const joursParCoach = new Map()
+    allPointagesCoach.filter((p) => dansPeriode(p.date)).forEach((p) => {
+      if (!joursParCoach.has(p.coachId)) joursParCoach.set(p.coachId, { nom: p.coachNom, site: p.site, jours: new Set() })
+      joursParCoach.get(p.coachId).jours.add(p.date)
+    })
+    const seancesParJourSite = new Map()
+    allSeances.forEach((s) => {
+      const cle = `${s.site}|${s.date}`
+      seancesParJourSite.set(cle, (seancesParJourSite.get(cle) || 0) + 1)
+    })
+    return [...joursParCoach.entries()].map(([coachId, { nom, site, jours }]) => {
+      const totalClients = [...jours].reduce((sum, d) => sum + (seancesParJourSite.get(`${site}|${d}`) || 0), 0)
+      const nbJours = jours.size
+      return { coachId, nom, site, nbJours, totalClients, moyenne: nbJours ? Math.round((totalClients / nbJours) * 10) / 10 : 0 }
+    }).sort((a, b) => b.moyenne - a.moyenne)
+  }, [allPointagesCoach, allSeances, start, end])
+  const maxMoyenneCoach = Math.max(1, ...classementCoachs.map((c) => c.moyenne))
 
   return (
     <div className="space-y-4">
@@ -106,6 +132,35 @@ export default function Comparatif() {
               })}
             </tbody>
           </table>
+        </div>
+      </Card>
+
+      <Card title={titreSection(Trophy, 'Classement des coachs — Lomé & Kara')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+        <p className="mb-3 text-xs text-gray-500">
+          Fréquentation moyenne (nombre de séances par jour de présence pointée), tous coachs des deux salles mélangés, sur la période choisie.
+        </p>
+        <div className="space-y-2.5">
+          {classementCoachs.map((c, i) => {
+            const s = SITES.find((x) => x.id === c.site)
+            return (
+              <div key={c.coachId} className="flex items-center gap-2">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${
+                  i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-gray-100 text-gray-500' : i === 2 ? 'bg-orange-50 text-orange-500' : 'text-gray-300'
+                }`}>{i < 3 ? <Trophy size={12} /> : i + 1}</span>
+                <span className="w-28 shrink-0 truncate text-sm font-semibold text-gray-700">{c.nom}</span>
+                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: (s?.accent || '#999') + '1a', color: s?.accent }}>
+                  {s?.emoji} {s?.label}
+                </span>
+                <div className="h-3 flex-1 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-full rounded-full" style={{ width: `${(c.moyenne / maxMoyenneCoach) * 100}%`, background: `linear-gradient(90deg, ${COULEUR}, ${COULEUR2})` }} />
+                </div>
+                <span className="w-40 shrink-0 text-right text-xs text-gray-500">
+                  <strong className="text-gray-800">{c.moyenne}</strong> client(s)/jour · {c.nbJours} jour(s) · {c.totalClients} au total
+                </span>
+              </div>
+            )
+          })}
+          {!classementCoachs.length && <p className="py-6 text-center text-sm text-gray-400">Aucun pointage coach enregistré sur cette période.</p>}
         </div>
       </Card>
 

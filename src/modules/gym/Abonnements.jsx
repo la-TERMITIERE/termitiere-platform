@@ -68,7 +68,8 @@ export default function Abonnements() {
   const [suggClient, setSuggClient] = useState(false)
   const [clientDetail, setClientDetail] = useState(null)
   const [qrNouveauClient, setQrNouveauClient] = useState(null)
-  const [calendrierClient, setCalendrierClient] = useState(null)
+  const [calendrierClient, setCalendrierClient] = useState(null) // abonnement dont on regarde/corrige le calendrier
+  const [dateSelectionnee, setDateSelectionnee] = useState(null) // jour cliqué dans ce calendrier, à pointer
   const moisEnCours = todayStr().slice(0, 7)
 
   // Filtre de période — Jour / Mois / Année, sur la liste affichée ci-dessous.
@@ -201,24 +202,32 @@ export default function Abonnements() {
 
   // Pointage d'arrivée — un abonné vient d'arriver à la salle : on l'enregistre (sert
   // à calculer son inactivité pour l'alerte « à relancer » du Dashboard) et on lui
-  // souhaite une bonne séance par WhatsApp si son numéro est connu.
+  // souhaite une bonne séance par WhatsApp si son numéro est connu. `date` par défaut
+  // = aujourd'hui (bouton rapide de la liste), mais peut être une date passée — en
+  // cliquant sur un jour du calendrier rapide (cf. modale « Calendrier », plus bas) —
+  // pour corriger un oubli de pointage (ex. client venu hier).
   const [pointageBusy, setPointageBusy] = useState(null)
-  async function pointerArrivee(a) {
+  async function pointerArrivee(a, date = todayStr()) {
+    const dejaPointe = allPresences.some((p) =>
+      matchSite(p, site) && p.date === date && (p.clientNom || '').trim().toLowerCase() === (a.clientNom || '').trim().toLowerCase()
+    )
+    if (dejaPointe) { toast.error(`${a.clientNom} est déjà pointé(e) pour le ${formatDateShort(date)}`); return }
     setPointageBusy(a.id)
     try {
       await addItem('gym_presences', {
-        clientNom: a.clientNom, abonnementId: a.id, date: todayStr(), createdAt: Date.now(), site,
+        clientNom: a.clientNom, abonnementId: a.id, date, createdAt: Date.now(), site,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null
       })
-      await audit('gym', 'PRESENCE_POINTEE', `${a.clientNom} — arrivée pointée`)
+      await audit('gym', 'PRESENCE_POINTEE', `${a.clientNom} — arrivée pointée (${formatDateShort(date)})`)
       const client = clients.find((c) => (c.nom || '').trim().toLowerCase() === (a.clientNom || '').trim().toLowerCase())
-      if (client?.telephone) {
+      if (client?.telephone && date === todayStr()) {
         sendWhatsApp([client.telephone], {
           title: '🏋️ MAXI-GYM',
           body: `Bonjour ${a.clientNom}, bonne séance à MAXI-GYM aujourd'hui ! 💪`
         })
       }
-      toast.success('Arrivée pointée ✓')
+      toast.success(date === todayStr() ? 'Arrivée pointée ✓' : `Arrivée du ${formatDateShort(date)} pointée ✓`)
+      setDateSelectionnee(null)
     } finally {
       setPointageBusy(null)
     }
@@ -273,12 +282,12 @@ export default function Abonnements() {
               return (
                 <div className="flex justify-end gap-1">
                   {abonnementActif(r.dateFin) && (
-                    <button onClick={(e) => { e.stopPropagation(); pointerArrivee(r) }} disabled={pointageBusy === r.id} title="Pointer l'arrivée"
+                    <button onClick={(e) => { e.stopPropagation(); pointerArrivee(r) }} disabled={pointageBusy === r.id} title="Pointer l'arrivée (aujourd'hui)"
                       className="flex items-center gap-1 rounded-lg bg-green-500 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
                       <CheckCircle2 size={15} /> Pointer
                     </button>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); setCalendrierClient(r.clientNom) }} title="Voir le calendrier de présence"
+                  <button onClick={(e) => { e.stopPropagation(); setDateSelectionnee(null); setCalendrierClient(r) }} title="Voir le calendrier de présence — et corriger un pointage oublié"
                     className="rounded p-1.5 text-sky-600 hover:bg-sky-50"><CalendarDays size={16} /></button>
                   {!dejaFacturee && (
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
@@ -444,17 +453,41 @@ export default function Abonnements() {
         clients={clients} seances={seances} abonnements={abonnements} presences={presences} />
       <QrCarnetModal client={qrNouveauClient} onClose={() => setQrNouveauClient(null)} />
 
-      {/* Calendrier rapide — accessible sans ouvrir la fiche complète du client,
-          pour un coup d'œil pendant le pointage à l'accueil. */}
-      <Modal open={!!calendrierClient} onClose={() => setCalendrierClient(null)} title={calendrierClient ? `Calendrier — ${calendrierClient}` : ''}
+      {/* Calendrier rapide — accessible sans ouvrir la fiche complète du client, pour
+          un coup d'œil pendant le pointage à l'accueil. Interactif si l'abonnement est
+          actif : cliquer sur un jour passé (ou aujourd'hui) le sélectionne, puis
+          « Pointer » l'enregistre — sert à corriger un oubli de pointage. */}
+      <Modal open={!!calendrierClient} onClose={() => { setCalendrierClient(null); setDateSelectionnee(null) }}
+        title={calendrierClient ? `Calendrier — ${calendrierClient.clientNom}` : ''}
         {...glassModalProps(COULEUR_MODULE.gym)}
-        footer={<Button variant="outline" onClick={() => setCalendrierClient(null)}>Fermer</Button>}>
+        footer={<>
+          <Button variant="outline" onClick={() => { setCalendrierClient(null); setDateSelectionnee(null) }}>Fermer</Button>
+          {calendrierClient && abonnementActif(calendrierClient.dateFin) && (
+            <Button onClick={() => pointerArrivee(calendrierClient, dateSelectionnee)}
+              disabled={!dateSelectionnee} loading={pointageBusy === calendrierClient.id}>
+              <CheckCircle2 size={15} /> Pointer{dateSelectionnee && dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
+            </Button>
+          )}
+        </>}>
         {calendrierClient && (() => {
           const pointagesClient = presences.filter((p) =>
-            (p.clientNom || '').trim().toLowerCase() === calendrierClient.trim().toLowerCase() && (p.date || '').startsWith(moisEnCours))
+            (p.clientNom || '').trim().toLowerCase() === calendrierClient.clientNom.trim().toLowerCase() && (p.date || '').startsWith(moisEnCours))
           // Heure d'arrivée affichée directement sur le jour concerné du calendrier.
           const details = Object.fromEntries(pointagesClient.filter((p) => p.createdAt).map((p) => [p.date, heureCourte(new Date(p.createdAt))]))
-          return <CalendrierPresences mois={moisEnCours} joursPresents={pointagesClient.map((p) => p.date)} details={details} />
+          const interactif = abonnementActif(calendrierClient.dateFin)
+          return (
+            <>
+              <CalendrierPresences mois={moisEnCours} joursPresents={pointagesClient.map((p) => p.date)} details={details}
+                onDayClick={interactif ? setDateSelectionnee : undefined} selectedDate={dateSelectionnee} />
+              {interactif && (
+                <p className="mt-2 text-center text-[11px] text-gray-400">
+                  {dateSelectionnee
+                    ? `Jour sélectionné : ${formatDateShort(dateSelectionnee)} — clique sur « Pointer » pour enregistrer son arrivée.`
+                    : "Clique sur un jour (passé ou aujourd'hui) pour pointer une arrivée oubliée."}
+                </p>
+              )}
+            </>
+          )
         })()}
       </Modal>
     </div>
