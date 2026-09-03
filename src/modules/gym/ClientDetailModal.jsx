@@ -46,6 +46,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
     return presences.filter((p) => (p.clientNom || '').trim().toLowerCase() === cle)
       .sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))
   }, [presences, cle])
+  const pointagesDuMois = useMemo(() => pointages.filter((p) => (p.date || '').startsWith(moisEnCours)), [pointages, moisEnCours])
 
   function fermer() {
     setEdit(null)
@@ -111,10 +112,11 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
 
           {/* Calendrier du mois — exactement la même vue que le carnet public du
               client (cf. CalendrierPresences.jsx), pour que la réceptionniste voie
-              d'un coup d'œil les jours cochés sans quitter l'application. */}
-          <div className="rounded-xl bg-gray-50 p-3">
-            <CalendrierPresences mois={moisEnCours} joursPresents={pointages.filter((p) => (p.date || '').startsWith(moisEnCours)).map((p) => p.date)} />
-          </div>
+              d'un coup d'œil les jours cochés sans quitter l'application. Heure
+              d'arrivée affichée directement sur chaque jour coché. */}
+          <CalendrierPresences mois={moisEnCours}
+            joursPresents={pointagesDuMois.map((p) => p.date)}
+            details={Object.fromEntries(pointagesDuMois.filter((p) => p.createdAt).map((p) => [p.date, heureCourte(p.createdAt)]))} />
 
           {pointages.length > 0 && (
             <div>

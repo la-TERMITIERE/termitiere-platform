@@ -3,15 +3,18 @@
 // même workflow, cloisonné par site — seuls forfaits et paramètres sont partagés.
 import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { ChevronRight, Building2, Mountain, Ticket, CreditCard, Users } from 'lucide-react'
+import { ChevronRight, Building2, Mountain, Ticket, CreditCard, Users, Scale } from 'lucide-react'
 import { SITES, useAllowedSites, matchSite } from './useSite'
 import { useCollection } from '../../../hooks/useFirestore'
+import { useAuth } from '../../../hooks/useAuth'
+import { isFullAccessRole } from '../../../core/roles'
 import { todayStr } from '../../../utils/formatters'
 import { teinterHex, shadeHex } from '../../../utils/color'
 
 const ICONE_SITE = { lome: Building2, kara: Mountain }
 
 export default function GymSiteChooser() {
+  const role = useAuth((s) => s.role)
   const allowed = useAllowedSites()
   const sites = SITES.filter((s) => allowed.includes(s.id))
 
@@ -60,6 +63,19 @@ export default function GymSiteChooser() {
         <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Aucune salle MAXI-GYM ne vous est attribuée. Contactez un administrateur pour obtenir l'accès à Lomé et/ou Kara.
         </div>
+      )}
+
+      {/* Comparatif — réservé à l'administration et à l'info (cf. gym/index.jsx). */}
+      {isFullAccessRole(role) && (
+        <Link to="/gym/comparatif"
+          className="group flex items-center gap-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 transition-all duration-200 hover:-translate-y-0.5 hover:bg-indigo-100/60 hover:shadow-[0_12px_28px_-14px_rgba(79,70,229,0.4)]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-sm"><Scale size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-indigo-900">Comparer les deux salles</p>
+            <p className="text-xs text-indigo-600">Séances, abonnements, encaissement et objectifs — Lomé vs Kara, côte à côte</p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-indigo-400 transition-transform group-hover:translate-x-1" />
+        </Link>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

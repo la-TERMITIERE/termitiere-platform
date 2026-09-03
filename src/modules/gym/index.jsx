@@ -9,6 +9,8 @@ import Forfaits from './Forfaits'
 import Seances from './Seances'
 import Abonnements from './Abonnements'
 import Clients from './Clients'
+import Coachs from './Coachs'
+import Comparatif from './Comparatif'
 import Pilotage from './Pilotage'
 import Facturation from './Facturation'
 import Journal from './Journal'
@@ -41,6 +43,7 @@ function AccesRefuseAdmin() {
 }
 
 export default function GymModule() {
+  const role = useAuth((s) => s.role)
   return (
     <div className="relative">
       {/* Filigrane — logo MAXI-GYM en fond, très discret, sur toutes les pages du module. */}
@@ -48,6 +51,9 @@ export default function GymModule() {
         className="pointer-events-none fixed left-1/2 top-1/2 w-[70vw] max-w-[560px] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.05]" />
       <Routes>
         <Route index element={<GymSiteChooser />} />
+        {/* Hors contexte d'une salle (lit Lomé ET Kara) — la route DOIT être déclarée
+            avant `:site/*`, sinon React Router la confondrait avec un id de salle. */}
+        <Route path="comparatif" element={isFullAccessRole(role) ? <Comparatif /> : <AccesRefuseAdmin />} />
         <Route path=":site/*" element={<SiteApp />} />
         <Route path="*" element={<Navigate to="/gym" replace />} />
       </Routes>
@@ -75,6 +81,7 @@ function SiteApp() {
         <Route path="besoins" element={<SectorBesoins secteurId="gym" />} />
         <Route path="facturation" element={<Facturation />} />
         <Route path="clients" element={<Clients />} />
+        <Route path="coachs" element={<Coachs />} />
         <Route path="partenaires" element={<Partenaires module="gym" />} />
         <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
         <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />

@@ -1,6 +1,6 @@
 // MAXI-GYM — Paramètres : tarifs, durées et validité, réservé à l'administration.
 import { useEffect, useMemo, useState } from 'react'
-import { Settings, Save, AlertTriangle, Trash2 } from 'lucide-react'
+import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Target } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -13,6 +13,9 @@ import { toast } from '../../core/notifications'
 import { normaliserTexte } from '../../utils/formatters'
 import { useGymParams, saveGymParams } from './useGymParams'
 import { useSite, matchSite, siteLabel } from './site/useSite'
+import { JOURS_SEMAINE, horairesVides } from './data'
+import CoachFormModal from './CoachFormModal'
+import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, ChampUnite } from './uiHelpers'
 
 const COULEUR = '#E8850F'
 const TEXTE_CONFIRMATION = 'RÉINITIALISER'
@@ -28,7 +31,9 @@ const COLLECTIONS_A_VIDER = [
   { nom: 'gym_abonnements', label: 'Abonnements' },
   { nom: 'gym_clients', label: 'Clients' },
   { nom: 'gym_factures', label: 'Factures' },
-  { nom: 'gym_presences', label: 'Arrivées pointées' }
+  { nom: 'gym_presences', label: 'Arrivées pointées' },
+  { nom: 'gym_coachs', label: 'Coachs' },
+  { nom: 'gym_pointages_coach', label: 'Pointages coachs' }
 ]
 
 export default function Params() {
@@ -43,13 +48,34 @@ export default function Params() {
   const { data: allClients } = useCollection('gym_clients')
   const { data: allFactures } = useCollection('gym_factures')
   const { data: allPresences } = useCollection('gym_presences')
+  const { data: allCoachs } = useCollection('gym_coachs')
+  const { data: allPointagesCoach } = useCollection('gym_pointages_coach')
   const seances = useMemo(() => allSeances.filter((s) => matchSite(s, site)), [allSeances, site])
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
   const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const presences = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
-  const donnees = { gym_seances: seances, gym_abonnements: abonnements, gym_clients: clients, gym_factures: factures, gym_presences: presences }
+  const coachs = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
+  const pointagesCoach = useMemo(() => allPointagesCoach.filter((p) => matchSite(p, site)), [allPointagesCoach, site])
+  const donnees = {
+    gym_seances: seances, gym_abonnements: abonnements, gym_clients: clients, gym_factures: factures,
+    gym_presences: presences, gym_coachs: coachs, gym_pointages_coach: pointagesCoach
+  }
   const totalEnregistrements = COLLECTIONS_A_VIDER.reduce((s, c) => s + (donnees[c.nom]?.length || 0), 0)
+
+  // ── Coachs : planning hebdomadaire (programmation des jours/heures d'arrivée) ──
+  // L'ajout/la modification se font via CoachFormModal, partagée avec le volet
+  // Coachs (ouvert aux agents) — seule la suppression reste ici, réservée à
+  // l'administration (les agents n'ont pas accès à Paramètres).
+  const [coachModal, setCoachModal] = useState(null) // { id?, nom, horaires }
+
+  async function supprimerCoach(c) {
+    if (!window.confirm(`Retirer le coach « ${c.nom} » ? Son historique de pointage reste conservé.`)) return
+    await removeItem('gym_coachs', c.id)
+    await audit('gym', 'COACH_DELETE', `${c.nom} — ${siteLabel(site)}`)
+    toast.success('Coach retiré')
+  }
+  const nbJoursProgrammes = (c) => Object.values(c.horaires || {}).filter((h) => h?.actif).length
 
   const [confirmTexte, setConfirmTexte] = useState('')
   const [resetting, setResetting] = useState(false)
@@ -90,7 +116,7 @@ export default function Params() {
   // resynchronise le formulaire dès qu'elles sont disponibles (une seule fois,
   // pour ne pas écraser une saisie en cours si le doc change entre-temps ailleurs),
   // et aussi si on change de salle (chaque salle a ses propres réglages).
-  useEffect(() => { setForm(params) }, [site, params.tarifSeanceSimple, params.tarifSeanceVip, params.tarifAbonnementSimple, params.tarifAbonnementVip, params.tarifAbonnementClassique, params.dureeClassiqueMinJours, params.validiteSeanceHeures])
+  useEffect(() => { setForm(params) }, [site, params.tarifSeanceSimple, params.tarifSeanceVip, params.tarifAbonnementSimple, params.tarifAbonnementVip, params.tarifAbonnementClassique, params.dureeClassiqueMinJours, params.validiteSeanceHeures, params.objectifMensuel])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: Number(e.target.value) || 0 }))
   // Champ nullable : vide = comportement libre historique (Classique), un nombre = prix fixe.
@@ -124,29 +150,33 @@ export default function Params() {
         Ces réglages sont propres à <strong>{siteLabel(site)}</strong> — l'autre salle a les siens, indépendants.
       </div>
 
-      <Card title="🎫 Tarifs des séances (FCFA)">
+      <Card title={titreSection(Ticket, 'Tarifs des séances (FCFA)')}
+        className={CARD_ACCENT_CLASS}
+        style={cardAccentStyle(COULEUR)}>
         <div className="grid grid-cols-2 gap-3">
           <FormGroup label="Simple">
-            <Input type="number" min="0" value={form.tarifSeanceSimple} onChange={set('tarifSeanceSimple')} />
+            <ChampUnite unite="FCFA" min="0" value={form.tarifSeanceSimple} onChange={set('tarifSeanceSimple')} />
           </FormGroup>
           <FormGroup label="VIP">
-            <Input type="number" min="0" value={form.tarifSeanceVip} onChange={set('tarifSeanceVip')} />
+            <ChampUnite unite="FCFA" min="0" value={form.tarifSeanceVip} onChange={set('tarifSeanceVip')} />
           </FormGroup>
         </div>
         <p className="mt-1 text-[11px] text-gray-400">Le Classique n'a pas de tarif fixe — prix libre à la saisie.</p>
       </Card>
 
-      <Card title="💳 Tarifs des abonnements (FCFA)">
+      <Card title={titreSection(CreditCard, 'Tarifs des abonnements (FCFA)')}
+        className={CARD_ACCENT_CLASS}
+        style={cardAccentStyle(COULEUR)}>
         <div className="grid grid-cols-2 gap-3">
           <FormGroup label="Simple">
-            <Input type="number" min="0" value={form.tarifAbonnementSimple} onChange={set('tarifAbonnementSimple')} />
+            <ChampUnite unite="FCFA" min="0" value={form.tarifAbonnementSimple} onChange={set('tarifAbonnementSimple')} />
           </FormGroup>
           <FormGroup label="VIP">
-            <Input type="number" min="0" value={form.tarifAbonnementVip} onChange={set('tarifAbonnementVip')} />
+            <ChampUnite unite="FCFA" min="0" value={form.tarifAbonnementVip} onChange={set('tarifAbonnementVip')} />
           </FormGroup>
         </div>
         <FormGroup label="Classique" className="mt-3" hint="Laisser vide = prix ET durée libres à la saisie (comportement historique). Un montant = prix fixe, durée fixe 1 mois (comme Simple/VIP).">
-          <Input type="number" min="0" value={form.tarifAbonnementClassique ?? ''} onChange={setNullable('tarifAbonnementClassique')} placeholder="Vide = prix libre" />
+          <ChampUnite unite="FCFA" min="0" value={form.tarifAbonnementClassique ?? ''} onChange={setNullable('tarifAbonnementClassique')} placeholder="Vide = prix libre" />
         </FormGroup>
         <p className="mt-1 text-[11px] text-gray-400">
           {form.tarifAbonnementClassique != null
@@ -155,21 +185,66 @@ export default function Params() {
         </p>
       </Card>
 
-      <Card title="⏱️ Durées et validité">
+      <Card title={titreSection(Clock3, 'Durées et validité')}
+        className={CARD_ACCENT_CLASS}
+        style={cardAccentStyle(COULEUR)}>
         <div className="grid grid-cols-2 gap-3">
           <FormGroup label="Validité d'une séance (heures)">
-            <Input type="number" min="1" value={form.validiteSeanceHeures} onChange={set('validiteSeanceHeures')} />
+            <ChampUnite unite="heures" min="1" value={form.validiteSeanceHeures} onChange={set('validiteSeanceHeures')} />
           </FormGroup>
           <FormGroup label="Durée minimale — Abonnement Classique (jours)"
             hint={form.tarifAbonnementClassique != null ? 'Sans effet ici : Classique est à prix/durée fixe pour cette salle.' : undefined}>
-            <Input type="number" min="1" value={form.dureeClassiqueMinJours} onChange={set('dureeClassiqueMinJours')} disabled={form.tarifAbonnementClassique != null} />
+            <ChampUnite unite="jours" min="1" value={form.dureeClassiqueMinJours} onChange={set('dureeClassiqueMinJours')} disabled={form.tarifAbonnementClassique != null} />
           </FormGroup>
         </div>
+      </Card>
+
+      <Card title={titreSection(Target, 'Objectif du mois')}
+        className={CARD_ACCENT_CLASS}
+        style={cardAccentStyle(COULEUR)}>
+        <FormGroup label="Quota d'encaissement mensuel" hint="Laisser vide = pas d'objectif, le KPI du Dashboard n'affiche alors pas de %. Comparé au total séances + abonnements du mois en cours.">
+          <ChampUnite unite="FCFA" min="0" value={form.objectifMensuel ?? ''} onChange={setNullable('objectifMensuel')} placeholder="ex : 500000" />
+        </FormGroup>
       </Card>
 
       <div className="flex justify-end">
         <Button onClick={enregistrer} loading={saving}><Save size={16} /> Enregistrer les réglages</Button>
       </div>
+
+      <Card title={titreSection(UserCog, 'Coachs')}
+        className={CARD_ACCENT_CLASS}
+        style={cardAccentStyle(COULEUR)}>
+        <p className="mb-3 text-xs text-gray-500">
+          Planning hebdomadaire par coach — jours de présence et heure d'arrivée prévue. Le pointage réel se fait depuis le volet « Coachs ».
+        </p>
+        <div className="space-y-2">
+          {coachs.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-l-4 border-gray-200 bg-orange-50/40 px-3 py-2.5" style={{ borderLeftColor: COULEUR }}>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `linear-gradient(135deg, ${COULEUR}, #A6342A)` }}>
+                  <UserCog size={14} />
+                </span>
+                <div className="min-w-0">
+                <p className="font-semibold text-gray-800">{c.nom}</p>
+                <p className="text-xs text-gray-500">
+                  {nbJoursProgrammes(c) > 0
+                    ? JOURS_SEMAINE.filter((j) => c.horaires?.[j.id]?.actif).map((j) => `${j.label.slice(0, 3)} ${c.horaires[j.id].heure}`).join(' · ')
+                    : 'Aucun jour programmé'}
+                </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires } })} className="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
+                <button onClick={() => supprimerCoach(c)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50" title="Retirer"><Trash2 size={15} /></button>
+              </div>
+            </div>
+          ))}
+          {!coachs.length && <p className="py-4 text-center text-sm text-gray-400">Aucun coach enregistré pour {siteLabel(site)}.</p>}
+        </div>
+        <Button variant="outline" size="sm" className="mt-3" onClick={() => setCoachModal({ nom: '', horaires: horairesVides() })}>
+          <Plus size={14} /> Ajouter un coach
+        </Button>
+      </Card>
 
       <Card className="border-2 border-red-200 bg-red-50/60">
         <div className="mb-3 flex items-center gap-2">
@@ -199,6 +274,8 @@ export default function Params() {
           <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM
         </Button>
       </Card>
+
+      <CoachFormModal coachModal={coachModal} setCoachModal={setCoachModal} site={site} />
     </div>
   )
 }

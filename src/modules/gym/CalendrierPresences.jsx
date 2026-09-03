@@ -7,7 +7,9 @@ import { MOIS_LABELS_GYM } from './data'
 
 const JOURS_ENTETE = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
-export default function CalendrierPresences({ mois, joursPresents = [], accent = '#E8850F' }) {
+// `details` (optionnel) : { 'YYYY-MM-DD': "17:05" } — un renseignement (heure
+// d'arrivée…) affiché SOUS le numéro, pour les jours où le client est venu.
+export default function CalendrierPresences({ mois, joursPresents = [], details = {}, accent = '#E8850F' }) {
   const [annee, moisNum] = mois.split('-').map(Number)
   const premierJour = new Date(annee, moisNum - 1, 1)
   const nbJours = new Date(annee, moisNum, 0).getDate()
@@ -21,9 +23,13 @@ export default function CalendrierPresences({ mois, joursPresents = [], accent =
   for (let j = 1; j <= nbJours; j++) cellules.push(j)
 
   return (
-    <div>
-      <p className="mb-2 text-center text-sm font-bold text-gray-700">{MOIS_LABELS_GYM[moisNum - 1]} {annee}</p>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wide text-gray-400">
+    // Fond opaque propre au calendrier (pas seulement le halo translucide de la
+    // modale) : sur un panneau glassmorphism, le gris clair des jours vides
+    // devenait quasi illisible — ici le contraste est garanti quel que soit le
+    // fond derrière.
+    <div className="rounded-2xl bg-white p-3 shadow-[0_8px_20px_-10px_rgba(26,26,26,0.25)] dark:bg-[#20262b]">
+      <p className="mb-2 text-center text-sm font-bold text-gray-800 dark:text-gray-100">{MOIS_LABELS_GYM[moisNum - 1]} {annee}</p>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {JOURS_ENTETE.map((j, i) => <span key={i}>{j}</span>)}
       </div>
       <div className="mt-1 grid grid-cols-7 gap-1">
@@ -32,14 +38,17 @@ export default function CalendrierPresences({ mois, joursPresents = [], accent =
           const dateStr = `${annee}-${String(moisNum).padStart(2, '0')}-${String(jour).padStart(2, '0')}`
           const present = presentSet.has(dateStr)
           const estAujourdhui = dateStr === aujourdhui
+          const info = details[dateStr]
           return (
-            <div key={i}
-              className={`relative flex aspect-square items-center justify-center rounded-lg text-xs font-bold transition-colors ${
-                present ? 'text-white' : estAujourdhui ? 'text-gray-700 ring-1 ring-inset ring-gray-300' : 'text-gray-400'
+            <div key={i} title={info ? `Arrivé à ${info}` : undefined}
+              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs font-bold transition-colors ${
+                present ? 'text-white' : estAujourdhui ? 'text-gray-800 ring-1 ring-inset ring-gray-300 dark:text-gray-100' : 'text-gray-500 dark:text-gray-500'
               }`}
               style={present ? { background: accent } : undefined}>
-              {jour}
-              {present && <Check size={9} className="absolute bottom-0.5 right-0.5 opacity-80" strokeWidth={3} />}
+              <span className="leading-none">{jour}</span>
+              {present && (info
+                ? <span className="text-[8px] font-semibold leading-none opacity-90">{info}</span>
+                : <Check size={9} className="opacity-80" strokeWidth={3} />)}
             </div>
           )
         })}

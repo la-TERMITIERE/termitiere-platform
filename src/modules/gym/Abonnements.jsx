@@ -1,7 +1,7 @@
 // MAXI-GYM — Abonnements : liste complète + ajout d'un abonnement.
 // Simple / VIP : durée fixe 1 mois, tarif fixe. Classique : durée ET tarif libres.
 import { useMemo, useState } from 'react'
-import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays } from 'lucide-react'
+import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -30,6 +30,7 @@ import { useSite, matchSite } from './site/useSite'
 const COULEUR = '#A6342A'
 const COULEUR2 = '#E8850F'
 const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
+const heureCourte = (d) => d.toTimeString().slice(0, 5)
 
 // Recalcule `dateFin` à partir de date/catégorie/durée — sauf si l'utilisateur l'a
 // déjà corrigée manuellement (`dateFinManuelle`), auquel cas on la laisse intacte.
@@ -169,7 +170,7 @@ export default function Abonnements() {
       await genererFactureGym({
         factures, sourceType: 'abonnement', sourceId: id, clientNom, clientTelephone: telephone,
         categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} — jusqu'au ${dateFin}`, montant: d.montant,
-        user, site
+        user, site, date: d.date
       })
       toast.success('Abonnement enregistré ✓')
       setModal(null)
@@ -186,7 +187,7 @@ export default function Abonnements() {
     await genererFactureGym({
       factures, sourceType: 'abonnement', sourceId: a.id, clientNom: a.clientNom, clientTelephone: client?.telephone,
       categorie: a.categorie, description: `Abonnement ${categorieLabel(a.categorie)} — jusqu'au ${a.dateFin}`, montant: a.montant,
-      user, site
+      user, site, date: a.date
     })
     toast.success('Facture générée ✓')
   }
@@ -376,7 +377,7 @@ export default function Abonnements() {
               </FormGroup>
 
               {modal.categorie === 'classique' && !classiqueFixe && (
-                <FormGroup label="⏳ Durée (jours)" required hint={`Minimum ${dureeMin} jours (deux semaines) — pas d'offre d'une semaine. Ex : ${dureeMin} = deux semaines, 30 = un mois…`}>
+                <FormGroup label="⏳ Durée (jours)" required hint={`Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. Ex : 7 = une semaine, 14 = deux semaines, 30 = un mois…`}>
                   <Input type="number" min={dureeMin} value={modal.dureeJours} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }, classiqueFixe))} placeholder={`ex : ${dureeMin}`} />
                 </FormGroup>
               )}
@@ -395,14 +396,23 @@ export default function Abonnements() {
                 </div>
               </FormGroup>
 
-              <FormGroup label="💰 Montant (FCFA)" required>
-                <Input type="number" min="0" value={modal.montant} onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} placeholder="ex : 15000" />
-              </FormGroup>
-              <p className="-mt-1.5 mb-3 text-[11px] text-gray-500">
-                {classiqueFixe
-                  ? <>Pré-rempli pour Simple/Classique/VIP ({formatMoney(tarifs.simple)}/{formatMoney(tarifs.classique)}/{formatMoney(tarifs.vip)}) — modifiable.</>
-                  : <>Pré-rempli pour Simple/VIP ({formatMoney(tarifs.simple)}/{formatMoney(tarifs.vip)}) — modifiable. Libre pour Classique.</>}
-              </p>
+              {/* Verrouillé sur le tarif de Paramètres dès que la catégorie en a un fixe
+                  (Simple/VIP toujours, Classique seulement si `classiqueFixe`) — impossible
+                  de saisir un autre montant. Reste libre pour un Classique à prix libre,
+                  seul cas où aucun tarif de référence n'existe. */}
+              {(() => {
+                const montantVerrouille = modal.categorie !== 'classique' || classiqueFixe
+                return (
+                  <FormGroup label="💰 Montant (FCFA)" required>
+                    <div className="relative">
+                      <Input type="number" min="0" value={modal.montant} placeholder="ex : 15000" disabled={montantVerrouille}
+                        onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))}
+                        className={montantVerrouille ? 'bg-gray-50 pr-9 font-bold text-gray-700' : ''} />
+                      {montantVerrouille && <Lock size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />}
+                    </div>
+                  </FormGroup>
+                )
+              })()}
               <FormGroup label="📝 Notes" hint="Optionnel">
                 <Input value={modal.notes} onChange={(e) => setModal((f) => ({ ...f, notes: e.target.value }))} />
               </FormGroup>
@@ -439,12 +449,13 @@ export default function Abonnements() {
       <Modal open={!!calendrierClient} onClose={() => setCalendrierClient(null)} title={calendrierClient ? `Calendrier — ${calendrierClient}` : ''}
         {...glassModalProps(COULEUR_MODULE.gym)}
         footer={<Button variant="outline" onClick={() => setCalendrierClient(null)}>Fermer</Button>}>
-        {calendrierClient && (
-          <CalendrierPresences mois={moisEnCours}
-            joursPresents={presences
-              .filter((p) => (p.clientNom || '').trim().toLowerCase() === calendrierClient.trim().toLowerCase() && (p.date || '').startsWith(moisEnCours))
-              .map((p) => p.date)} />
-        )}
+        {calendrierClient && (() => {
+          const pointagesClient = presences.filter((p) =>
+            (p.clientNom || '').trim().toLowerCase() === calendrierClient.trim().toLowerCase() && (p.date || '').startsWith(moisEnCours))
+          // Heure d'arrivée affichée directement sur le jour concerné du calendrier.
+          const details = Object.fromEntries(pointagesClient.filter((p) => p.createdAt).map((p) => [p.date, heureCourte(new Date(p.createdAt))]))
+          return <CalendrierPresences mois={moisEnCours} joursPresents={pointagesClient.map((p) => p.date)} details={details} />
+        })()}
       </Modal>
     </div>
   )

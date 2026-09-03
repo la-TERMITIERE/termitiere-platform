@@ -1,6 +1,6 @@
 // MAXI-GYM — Séances : liste complète + ajout d'une séance ponctuelle.
 import { useMemo, useState } from 'react'
-import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer } from 'lucide-react'
+import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -127,7 +127,7 @@ export default function Seances() {
       const facture = await genererFactureGym({
         factures, sourceType: 'seance', sourceId: id, clientNom, clientTelephone: telephone,
         categorie: d.categorie, description: `Séance ${categorieLabel(d.categorie)}`, montant: d.montant,
-        user, site, imprime: d.imprimer
+        user, site, date: d.date, imprime: d.imprimer
       })
       if (d.imprimer) imprimerTicketSeance(facture)
       toast.success(d.imprimer ? 'Séance enregistrée — reçu imprimé ✓' : 'Séance enregistrée ✓')
@@ -145,7 +145,7 @@ export default function Seances() {
     const facture = await genererFactureGym({
       factures, sourceType: 'seance', sourceId: s.id, clientNom: s.clientNom, clientTelephone: client?.telephone,
       categorie: s.categorie, description: `Séance ${categorieLabel(s.categorie)}`, montant: s.montant,
-      user, site
+      user, site, date: s.date
     })
     imprimerTicketSeance(facture)
     toast.success('Facture générée ✓')
@@ -300,12 +300,17 @@ export default function Seances() {
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="📅 Date"><Input type="date" value={modal.date} onChange={(e) => setModal((f) => ({ ...f, date: e.target.value }))} /></FormGroup>
                 <FormGroup label="💰 Montant (FCFA)" required>
-                  <Input type="number" min="0" value={modal.montant} onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} placeholder="ex : 2000" />
+                  {/* Verrouillé sur le tarif configuré dans Paramètres — impossible de saisir
+                      un autre montant (ex. 500 pour une Simple à 1000) que ce soit à la
+                      création ou en modifiant une séance existante. Pour changer le prix,
+                      il faut changer le tarif dans Paramètres (s'applique aux prochaines
+                      séances). Simple/VIP uniquement ici — le Classique n'existe pas en séance. */}
+                  <div className="relative">
+                    <Input type="number" min="0" value={modal.montant} disabled className="bg-gray-50 pr-9 font-bold text-gray-700" />
+                    <Lock size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  </div>
                 </FormGroup>
               </div>
-              <p className="-mt-1.5 mb-3 text-[11px] text-gray-500">
-                Pré-rempli pour Simple/VIP ({formatMoney(tarifs.simple)}/{formatMoney(tarifs.vip)}) — modifiable. Libre pour Classique.
-              </p>
               <FormGroup label="📝 Notes" hint="Optionnel">
                 <Input value={modal.notes} onChange={(e) => setModal((f) => ({ ...f, notes: e.target.value }))} />
               </FormGroup>

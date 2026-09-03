@@ -1,0 +1,144 @@
+// MAXI-GYM — Comparatif Lomé / Kara : les deux salles côte à côte sur la même
+// période, réservé à l'administration et à l'info (cf. gym/index.jsx). Hors du
+// contexte d'une salle — lit les données des DEUX sites en même temps, comme le
+// fait déjà GymSiteChooser pour ses 3 petits chiffres.
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft, Scale, Ticket, CreditCard, Wallet, Users, Target, Trophy } from 'lucide-react'
+import Card from '../../shared/ui/Card'
+import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
+import { useCollection } from '../../hooks/useFirestore'
+import { useGymParams } from './useGymParams'
+import { matchSite, SITES } from './site/useSite'
+import { formatMoney, formatNumber } from '../../utils/formatters'
+import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle } from './uiHelpers'
+
+const COULEUR = '#E8850F'
+const COULEUR2 = '#A6342A'
+
+export default function Comparatif() {
+  const { data: allSeances } = useCollection('gym_seances')
+  const { data: allAbonnements } = useCollection('gym_abonnements')
+  const { data: allClients } = useCollection('gym_clients')
+
+  const paramsLome = useGymParams('lome')
+  const paramsKara = useGymParams('kara')
+  const paramsParSite = { lome: paramsLome, kara: paramsKara }
+
+  const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
+  const dansPeriode = (d) => (d || '') >= start && (d || '') <= end
+
+  const stats = useMemo(() => {
+    const out = {}
+    for (const s of SITES) {
+      const seances = allSeances.filter((x) => matchSite(x, s.id) && dansPeriode(x.date))
+      const abonnements = allAbonnements.filter((x) => matchSite(x, s.id) && dansPeriode(x.date))
+      const totalEncaisse = [...seances, ...abonnements].reduce((sum, x) => sum + (Number(x.montant) || 0), 0)
+      const nouveauxClients = allClients.filter((c) => matchSite(c, s.id) && c.createdAt && dansPeriode(new Date(c.createdAt).toISOString().slice(0, 10))).length
+      const objectif = paramsParSite[s.id]?.objectifMensuel
+      const pctObjectif = objectif > 0 ? Math.round((totalEncaisse / objectif) * 100) : null
+      out[s.id] = { seances: seances.length, abonnements: abonnements.length, totalEncaisse, nouveauxClients, objectif, pctObjectif }
+    }
+    return out
+  }, [allSeances, allAbonnements, allClients, start, end, paramsLome, paramsKara])
+
+  // Métriques comparées — { clé, label, icon, valeur(site) => number, format(v) => texte }.
+  const METRIQUES = [
+    { cle: 'seances', label: 'Séances', icon: Ticket, valeur: (s) => stats[s].seances, format: formatNumber },
+    { cle: 'abonnements', label: 'Abonnements', icon: CreditCard, valeur: (s) => stats[s].abonnements, format: formatNumber },
+    { cle: 'totalEncaisse', label: 'Total encaissé', icon: Wallet, valeur: (s) => stats[s].totalEncaisse, format: formatMoney },
+    { cle: 'nouveauxClients', label: 'Nouveaux clients', icon: Users, valeur: (s) => stats[s].nouveauxClients, format: formatNumber }
+  ]
+
+  return (
+    <div className="space-y-4">
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, ${COULEUR2}e6 100%)` }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Scale size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <Link to="/gym" className="mb-0.5 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white"><ArrowLeft size={13} /> Choix de la salle</Link>
+          <h2 className="text-lg font-extrabold">Comparatif Lomé / Kara</h2>
+          <p className="text-sm text-white/80">Les deux salles, côte à côte, sur la même période</p>
+        </div>
+        <div className="w-full sm:w-auto sm:ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:font-semibold [&_.input-base]:text-white [&_label]:font-bold [&_label]:text-white">
+          {periodNode}
+        </div>
+      </div>
+
+      <Card title={titreSection(Scale, 'Vue d\'ensemble')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                <th className="py-2 pr-3 font-semibold">Indicateur</th>
+                {SITES.map((s) => (
+                  <th key={s.id} className="px-3 py-2 text-right font-bold" style={{ color: s.accent }}>{s.emoji} {s.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {METRIQUES.map((m) => {
+                const valeurs = SITES.map((s) => m.valeur(s.id))
+                const max = Math.max(...valeurs)
+                return (
+                  <tr key={m.cle}>
+                    <td className="py-2.5 pr-3">
+                      <span className="flex items-center gap-1.5 font-semibold text-gray-600"><m.icon size={14} className="text-gray-400" /> {m.label}</span>
+                    </td>
+                    {SITES.map((s, i) => {
+                      const v = valeurs[i]
+                      const gagnant = v === max && v > 0 && valeurs.filter((x) => x === max).length === 1
+                      return (
+                        <td key={s.id} className="px-3 py-2.5 text-right">
+                          <span className={`inline-flex items-center gap-1 font-extrabold ${gagnant ? 'text-green-600' : 'text-gray-800'}`}>
+                            {gagnant && <Trophy size={12} />}{m.format(v)}
+                          </span>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Objectif du mois — n'a de sens que sur « Mois en cours » (cf. Dashboard). */}
+      {preset === 'mois' ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {SITES.map((s) => {
+            const d = stats[s.id]
+            return (
+              <Card key={s.id} title={titreSection(Target, `Objectif — ${s.label}`)} className={CARD_ACCENT_CLASS} style={cardAccentStyle(s.accent)}>
+                {d.objectif > 0 ? (
+                  <>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="text-gray-500">{formatMoney(d.totalEncaisse)} <span className="text-gray-400">/ {formatMoney(d.objectif)}</span></span>
+                      <strong style={{ color: d.pctObjectif >= 100 ? '#16a34a' : s.accent }}>{d.pctObjectif}%</strong>
+                    </div>
+                    <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, d.pctObjectif)}%`, background: d.pctObjectif >= 100 ? '#16a34a' : s.accent }} />
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-center text-sm text-gray-400">Pas d'objectif défini pour {s.label} — à paramétrer dans Paramètres.</p>
+                )}
+              </Card>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-center text-[11px] text-gray-400">
+          L'objectif du mois ne s'affiche qu'en sélectionnant « Mois en cours » ci-dessus.
+        </p>
+      )}
+    </div>
+  )
+}
