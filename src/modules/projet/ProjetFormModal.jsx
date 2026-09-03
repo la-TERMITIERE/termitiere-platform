@@ -9,8 +9,7 @@ import Modal from '../../shared/ui/Modal'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { setItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, UNITES_SUPERFICIE } from './data'
-import { SECTEURS as SECTEURS_DEPENSE } from '../depense/data'
-import { genererNumProjet } from './logic'
+import { genererNumProjet, SECTEURS_PROJET } from './logic'
 import { genId, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
@@ -339,7 +338,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                 value={form.secteurId} onChange={(e) => setForm((f) => ({ ...f, secteurId: e.target.value }))}>
                 <option value="">— Auto (selon le type) —</option>
-                {SECTEURS_DEPENSE.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
             <div>

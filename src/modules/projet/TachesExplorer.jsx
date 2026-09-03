@@ -10,7 +10,7 @@ import { ChevronRight, ChevronDown, ListChecks, LayoutList, Plus } from 'lucide-
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuthStore } from '../../core/auth'
 import Button from '../../shared/ui/Button'
-import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif, SECTEURS_PROJET } from './logic'
 import { SECTEURS } from '../depense/data'
 import { OngletTaches } from './Taches'
 import { iconeCategorie, emojiCategorie, NON_CLASSEES, PALETTE_CATEGORIES } from './categoriesTaches'
@@ -80,8 +80,9 @@ export default function TachesExplorer() {
 
   const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
 
-  // Étape 1 : compteurs par secteur.
-  const secteursAvecCompte = useMemo(() => SECTEURS.map((s) => {
+  // Étape 1 : compteurs par secteur — Caisse Commune (divers) exclue, ce n'est pas
+  // un secteur de projet parcourable (cf. SECTEURS_PROJET).
+  const secteursAvecCompte = useMemo(() => SECTEURS_PROJET.map((s) => {
     const projetsSecteur = projets.filter((p) => secteurEffectif(p)?.id === s.id)
     const tachesSecteur = scopeParProjets(tachesTous, projetsSecteur)
     return { ...s, nbProjets: projetsSecteur.length, nbTaches: tachesSecteur.length }

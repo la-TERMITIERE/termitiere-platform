@@ -12,7 +12,7 @@ import { formatDateShort } from '../../utils/formatters'
 import { glassModalProps } from '../../utils/color'
 import { SECTEURS } from '../depense/data'
 import { STATUTS_TACHE, PRIORITES } from './data'
-import { secteurEffectif, tachesEnRetard } from './logic'
+import { secteurEffectif, tachesEnRetard, SECTEURS_PROJET } from './logic'
 
 const COULEUR_EGPRO = '#0d9488'
 const NON_ASSIGNE = '__non_assigne__'
@@ -82,7 +82,7 @@ export default function ChargeTravail() {
           <select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}
             className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
             <option value="">Tous les secteurs</option>
-            {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
         <span className="ml-auto text-xs text-gray-400">

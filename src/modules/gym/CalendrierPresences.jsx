@@ -9,7 +9,12 @@ const JOURS_ENTETE = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
 // `details` (optionnel) : { 'YYYY-MM-DD': "17:05" } — un renseignement (heure
 // d'arrivée…) affiché SOUS le numéro, pour les jours où le client est venu.
-export default function CalendrierPresences({ mois, joursPresents = [], details = {}, accent = '#E8850F' }) {
+// `onDayClick` (optionnel) rend le calendrier interactif : les jours passés et
+// aujourd'hui deviennent cliquables (pas les jours futurs) — sert par exemple à
+// choisir la date d'un pointage à corriger. `selectedDate` met en évidence le
+// jour choisi. Sans `onDayClick`, le calendrier reste purement consultatif
+// (comportement d'origine, inchangé pour les autres usages).
+export default function CalendrierPresences({ mois, joursPresents = [], details = {}, accent = '#E8850F', onDayClick, selectedDate }) {
   const [annee, moisNum] = mois.split('-').map(Number)
   const premierJour = new Date(annee, moisNum - 1, 1)
   const nbJours = new Date(annee, moisNum, 0).getDate()
@@ -38,18 +43,28 @@ export default function CalendrierPresences({ mois, joursPresents = [], details 
           const dateStr = `${annee}-${String(moisNum).padStart(2, '0')}-${String(jour).padStart(2, '0')}`
           const present = presentSet.has(dateStr)
           const estAujourdhui = dateStr === aujourdhui
+          const estFutur = dateStr > aujourdhui
+          const estSelectionne = dateStr === selectedDate
           const info = details[dateStr]
+          const cliquable = !!onDayClick && !estFutur
+          const Cellule = cliquable ? 'button' : 'div'
           return (
-            <div key={i} title={info ? `Arrivé à ${info}` : undefined}
+            <Cellule key={i} type={cliquable ? 'button' : undefined}
+              onClick={cliquable ? () => onDayClick(dateStr) : undefined}
+              title={info ? `Arrivé à ${info}` : undefined}
               className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs font-bold transition-colors ${
                 present ? 'text-white' : estAujourdhui ? 'text-gray-800 ring-1 ring-inset ring-gray-300 dark:text-gray-100' : 'text-gray-500 dark:text-gray-500'
-              }`}
-              style={present ? { background: accent } : undefined}>
+              } ${cliquable ? 'cursor-pointer hover:ring-2 hover:ring-inset' : ''} ${estSelectionne ? 'ring-2 ring-offset-1' : ''}`}
+              style={{
+                ...(present ? { background: accent } : undefined),
+                ...(cliquable ? { '--tw-ring-color': accent } : undefined),
+                ...(estSelectionne ? { boxShadow: `0 0 0 2px white, 0 0 0 4px ${accent}` } : undefined)
+              }}>
               <span className="leading-none">{jour}</span>
               {present && (info
                 ? <span className="text-[8px] font-semibold leading-none opacity-90">{info}</span>
                 : <Check size={9} className="opacity-80" strokeWidth={3} />)}
-            </div>
+            </Cellule>
           )
         })}
       </div>

@@ -16,7 +16,7 @@ import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { SECTEURS } from '../depense/data'
-import { projetsVisibles, scopeParProjets, secteurEffectif, projetEnRetard } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif, projetEnRetard, SECTEURS_PROJET } from './logic'
 import { STATUTS_PROJET, TYPES_PROJET } from './data'
 
 const SECTEUR_BTP = 'bat'
@@ -137,7 +137,7 @@ function ProjetsAmbigus({ projets }) {
                 className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
               >
                 <option value="" disabled>— Choisir le vrai secteur —</option>
-                {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
           )

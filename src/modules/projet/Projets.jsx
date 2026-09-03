@@ -10,8 +10,7 @@ import ProjetFormModal from './ProjetFormModal'
 import { useCollection } from '../../hooks/useFirestore'
 import { setItem, removeItem, updateItem, addItem } from '../../core/db'
 import { STATUTS_PROJET, TYPES_PROJET, PRIORITES, uniteSuperficie } from './data'
-import { SECTEURS as SECTEURS_DEPENSE } from '../depense/data'
-import { avancementProjet, projetsVisibles, secteurEffectif } from './logic'
+import { avancementProjet, projetsVisibles, secteurEffectif, SECTEURS_PROJET } from './logic'
 import { formatDateShort, formatMoney, formatDateTime, genId, todayStr } from '../../utils/formatters'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
@@ -339,7 +338,7 @@ export default function Projets() {
           value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}
         >
           <option value="">Tous les secteurs</option>
-          {SECTEURS_DEPENSE.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
         {nomConnecte && (
           <button

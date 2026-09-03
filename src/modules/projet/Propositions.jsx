@@ -19,6 +19,7 @@ import { formatDateTime } from '../../utils/formatters'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 import { TYPES_PROJET } from './data'
 import { SECTEURS } from '../depense/data'
+import { SECTEURS_PROJET } from './logic'
 import { marquerVoletVu } from './vues'
 
 const STATUTS = {
@@ -213,7 +214,7 @@ export default function Propositions() {
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 value={form.secteurId} onChange={(e) => setForm((f) => ({ ...f, secteurId: e.target.value }))}>
                 <option value="">— Non précisé —</option>
-                {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </FormGroup>
             <FormGroup label="Type de projet" hint="Optionnel">
