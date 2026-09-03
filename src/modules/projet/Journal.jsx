@@ -13,6 +13,7 @@ import { Search, History } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatDateTime } from '../../utils/formatters'
+import { parCreationDesc } from './logic'
 
 const EVENTS = {
   projet_cree:        { label: 'Projet créé',        emoji: '📁' },
@@ -228,10 +229,12 @@ function OngletHistorique({ evenementsProjet, projets }) {
 
 export default function Journal() {
   const { data: events } = useCollection('audit_global')
-  const { data: projets } = useCollection('projets')
+  const { data: projetsTous } = useCollection('projets')
   const [onglet, setOnglet] = useState('journal')
 
   const evenementsProjet = useMemo(() => events.filter((e) => e.module === 'projet'), [events])
+  // Le plus récemment créé en premier — visible en haut du filtre sans scroller.
+  const projets = useMemo(() => [...projetsTous].sort(parCreationDesc), [projetsTous])
 
   return (
     <div className="space-y-4">

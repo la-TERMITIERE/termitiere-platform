@@ -13,7 +13,7 @@ import { ROLES } from '../../core/roles'
 import { useAuthStore } from '../../core/auth'
 import { METIERS_PRESTATAIRE, TYPES_PAIEMENT_PRESTA, ChampMetier, nomsPrestatairesConnus, coordonneesPrestataires } from './prestataire'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles, scopeParProjets, secteurEffectif } from './logic'
+import { projetsVisibles, scopeParProjets, secteurEffectif, parCreationDesc } from './logic'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 
 function ChampAssignee({ value, onChange, users }) {
@@ -910,7 +910,8 @@ export default function Taches() {
   useEffect(() => { marquerVoletVu(user?.uid, 'projetTaches') }, [user?.uid])
 
   // Cloisonnement : un chef de projet ne voit que ses projets et leurs tâches/dépenses.
-  const projets  = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  // Le plus récemment créé en premier — visible en haut des sélecteurs sans scroller.
+  const projets  = useMemo(() => [...projetsVisibles(projetsTous, user, role)].sort(parCreationDesc), [projetsTous, user, role])
   const taches   = useMemo(() => scopeParProjets(tachesTous, projets), [tachesTous, projets])
   const depenses = useMemo(() => scopeParProjets(depensesTous, projets), [depensesTous, projets])
 

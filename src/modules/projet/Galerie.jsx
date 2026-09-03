@@ -14,7 +14,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { useAuthStore } from '../../core/auth'
 import { marquerVoletVu } from './vues'
-import { projetsVisibles } from './logic'
+import { projetsVisibles, parCreationDesc } from './logic'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -36,7 +36,8 @@ export default function Galerie() {
   const peutSupprimer = !['superviseur', 'partenaire', 'secretaire', 'agent'].includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, 'projetGalerie') }, [user?.uid])
   // Cloisonnement : un chef de projet ne voit que la galerie de ses projets.
-  const projets = useMemo(() => projetsVisibles(projetsTous, user, role), [projetsTous, user, role])
+  // Le plus récemment créé en premier — visible en haut des sélecteurs sans scroller.
+  const projets = useMemo(() => [...projetsVisibles(projetsTous, user, role)].sort(parCreationDesc), [projetsTous, user, role])
   const [filtreProjet, setFiltreProjet] = useState('')
   const [legende, setLegende]           = useState('')
   const [uploading, setUploading]       = useState(false)
