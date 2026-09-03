@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Trash2, Send, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Trash2, Send, CheckCircle2 } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -95,10 +95,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const versementsClientRoutes = useMemo(() => versementsClientVersSecteurs(versementsClientTous, projetsTous),
     [versementsClientTous, projetsTous])
 
-  // MAXI BAT (chantiers) n'apparaît plus dans la vue standalone d'E-DÉPENSES : son
-  // bilan (recettes/dépenses/budget) est désormais géré exclusivement depuis le volet
-  // BTP d'E-G.Pro (réservé à l'administration), qui embarque ce même écran avec
-  // `secteurId="bat"` — cette exclusion ne s'applique donc qu'à la vue sans secteur.
+  // MAXI BAT (chantiers) apparaît aussi dans la vue standalone d'E-DÉPENSES — comme
+  // les autres secteurs, il reçoit un montant alloué en début de mois. Son bilan
+  // détaillé (recettes/dépenses/budget) reste par ailleurs consultable depuis le
+  // volet BTP d'E-G.Pro, qui embarque ce même écran avec `secteurId="bat"` : les deux
+  // vues partagent le même budget en base, ce n'est qu'un second point d'accès.
   const secteursAffiches = useMemo(() => {
     if (secteurId) {
       const s = SECTEURS.find((x) => x.id === secteurId)
@@ -110,7 +111,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       }
       return [{ ...s, secteurId, site: null }]
     }
-    return secteursEtSites(true)
+    return secteursEtSites(false)
   }, [secteurId, site])
   const theme = THEME_PAR_SECTEUR[secteurId] || THEME_PAR_SECTEUR.default
   // En-tête : couleur du secteur embarqué, ou ambre par défaut pour la vue
@@ -133,10 +134,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const [revMotif, setRevMotif]     = useState('')
   const [revDate, setRevDate]       = useState(todayStr())
   const [revSaving, setRevSaving]   = useState(false)
-  // Ajout manuel d'un revenu — pour les secteurs sans facturation automatique
-  // (Caisse commune, MAXI BAT) : { secteurId, montant, date, description }.
-  const [ajoutRevenu, setAjoutRevenu] = useState(null)
-  const [revenuSaving, setRevenuSaving] = useState(false)
   // Ajout d'une dépense depuis le volet Dépense d'un secteur métier (agro,
   // logistique…) — même circuit d'autorisation que l'écran E-DÉPENSES, sans quitter
   // le module (cf. bouton « Ajouter une dépense » dans la nav mois ci-dessous).
@@ -185,7 +182,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       : []
     const pct = alloue > 0 ? Math.round((depenseBudget / alloue) * 100) : (depenseBudget > 0 ? 100 : 0)
     return {
-      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, financeesAilleurs, solde: recette - depense,
+      // `solde` (recette - dépense) reste calculé pour la fiche détail du secteur ;
+      // `soldeAlloue` (alloué - dépense) est celui affiché en résumé sur la carte —
+      // ces secteurs reçoivent une enveloppe mensuelle plutôt que de facturer leurs
+      // propres clients, c'est donc l'ALLOUÉ, pas le revenu, la référence naturelle.
+      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, financeesAilleurs, solde: recette - depense, soldeAlloue: alloue - depense,
       budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
       // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
@@ -226,10 +227,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state, parSecteur, annee, mois])
 
-  const totalRecette = parSecteur.reduce((s, x) => s + x.recette, 0)
   const totalDepense = parSecteur.reduce((s, x) => s + x.depense, 0)
-  const soldeGlobal  = totalRecette - totalDepense
   const totalAlloue  = parSecteur.reduce((s, x) => s + x.alloue, 0)
+  // Solde global = alloué - dépenses : ces secteurs reçoivent une enveloppe mensuelle
+  // plutôt que de facturer leurs propres clients (cf. `soldeAlloue` par secteur ci-dessous).
   const totalReste   = totalAlloue - totalDepense
 
   // CAISSE COMMUNE (secteur `divers`) : pas de « révision » (on ne redéfinit pas le
@@ -374,39 +375,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     }
   }
 
-  // Ajout manuel d'un revenu — réservé aux secteurs sans facturation automatique
-  // (Caisse commune, MAXI BAT) ; le secteur se choisit dans le formulaire. Restreint au
-  // seul `secteurId` si fourni (vue intégrée) ; sinon aligné sur `secteursAffiches` —
-  // MAXI BAT exclu de la vue standalone d'E-DÉPENSES (cf. secteursAffiches ci-dessus).
-  const secteursSansRevenuAuto = useMemo(
-    () => secteursAffiches.filter((s) => !SECTEURS_AVEC_REVENU.includes(s.id)),
-    [secteursAffiches]
-  )
-  const ouvrirAjoutRevenu = () => setAjoutRevenu({ secteurId: secteursSansRevenuAuto[0]?.id || '', montant: '', date: todayStr(), description: '' })
-
-  const confirmerAjoutRevenu = async () => {
-    if (!ajoutRevenu) return
-    const montant = Number(ajoutRevenu.montant)
-    if (!ajoutRevenu.secteurId) return toast.error('Secteur requis')
-    if (!ajoutRevenu.montant || montant <= 0) return toast.error('Montant requis')
-    if (!ajoutRevenu.date) return toast.error('Date requise')
-    const secteurLabel = SECTEURS.find((s) => s.id === ajoutRevenu.secteurId)?.label || ajoutRevenu.secteurId
-    setRevenuSaving(true)
-    try {
-      const id = genId()
-      await setItem('depense_revenus_manuels', id, {
-        id, secteurId: ajoutRevenu.secteurId, montant,
-        date: ajoutRevenu.date, description: ajoutRevenu.description.trim(),
-        enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
-      })
-      await audit('depense', 'REVENU_MANUEL_AJOUTE', `${secteurLabel} — ${fmt(montant)} FCFA${ajoutRevenu.description ? ' — ' + ajoutRevenu.description.trim() : ''}`, { secteurId: ajoutRevenu.secteurId, montant })
-      toast.success('Revenu ajouté ✓')
-      setAjoutRevenu(null)
-    } finally {
-      setRevenuSaving(false)
-    }
-  }
-
   const ouvrirNouvelleDepense = () => setNouvelleDepense({
     categorie: '', montant: '', date: todayStr(), description: '',
     beneficiaireNom: '', beneficiaireTelephone: '',
@@ -479,9 +447,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         {masquerRevenu && secteurId && !lectureSeule && (
           <Button onClick={ouvrirNouvelleDepense} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter une dépense</Button>
         )}
-        {!masquerRevenu && !lectureSeule && ongletBudget === 'secteurs' && (
-          <Button onClick={ouvrirAjoutRevenu} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter un revenu</Button>
-        )}
       </div>
 
       {ongletBudget !== 'secteurs' ? (
@@ -533,16 +498,15 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
         {masquerRevenu
           ? <>Suivi des <strong>dépenses</strong> de ce secteur face au <strong>budget alloué</strong> depuis E-DÉPENSES (reste & % consommé). L'allocation du budget se fait uniquement dans E-DÉPENSES ; la <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>
-          : <>Bilan financier par secteur : les <strong>revenus</strong> (factures des modules) croisés aux <strong>dépenses</strong> donnent le <strong>solde</strong>, comparé au <strong>budget alloué</strong> (reste & % consommé). La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>}
+          : <>Bilan financier par secteur : chaque secteur reçoit un <strong>montant alloué</strong> en début de mois, comparé à ses <strong>dépenses</strong> pour donner le <strong>solde</strong> restant. La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>}
       </div>
 
       {/* KPI globaux */}
-      <div className={`grid gap-3 sm:grid-cols-2 ${masquerRevenu ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
-        {!masquerRevenu && <StatCard title="Revenus totaux" value={`${fmt(totalRecette)} FCFA`} icon={TrendingUp} accent="#059669" />}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard title="Dépenses totales" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent="#dc2626" />
         {!masquerRevenu && (
-          <StatCard title="Solde global" value={`${fmt(soldeGlobal)} FCFA`} sub={soldeGlobal >= 0 ? 'Excédent' : 'Déficit'}
-            icon={Scale} accent={soldeGlobal >= 0 ? '#059669' : '#dc2626'} valueColor={soldeGlobal >= 0 ? '#059669' : '#dc2626'} />
+          <StatCard title="Solde global" value={`${fmt(totalReste)} FCFA`} sub={totalReste >= 0 ? 'Excédent' : 'Déficit'}
+            icon={Scale} accent={totalReste >= 0 ? '#059669' : '#dc2626'} valueColor={totalReste >= 0 ? '#059669' : '#dc2626'} />
         )}
         <StatCard title="Budget alloué" value={`${fmt(totalAlloue)} FCFA`}
           sub={totalReste < 0 ? '⚠ Budget dépassé' : `Reste ${fmt(totalReste)} FCFA`}
@@ -567,13 +531,16 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               </div>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                {!masquerRevenu && <span className="text-gray-500">Revenus <b className="text-green-700">{fmt(s.recette)}</b></span>}
+                {/* Le pilotage se fait contre le MONTANT ALLOUÉ (somme donnée au secteur en
+                    début de mois), pas contre un « revenu » calculé — les secteurs ici ne
+                    facturent pas leurs propres clients, ils reçoivent une enveloppe à dépenser. */}
+                {!masquerRevenu && <span className="text-gray-500">Alloué <b className="text-green-700">{fmt(s.alloue)}</b></span>}
                 <span className="text-gray-500">Dépenses <b className="text-amber-600">{fmt(s.depense)}</b></span>
-                {!masquerRevenu && <span className="text-gray-500">Solde <b className={s.solde >= 0 ? 'text-green-700' : 'text-red-600'}>{s.solde >= 0 ? '+' : ''}{fmt(s.solde)}</b></span>}
+                {!masquerRevenu && <span className="text-gray-500">Solde <b className={s.soldeAlloue >= 0 ? 'text-green-700' : 'text-red-600'}>{s.soldeAlloue >= 0 ? '+' : ''}{fmt(s.soldeAlloue)}</b></span>}
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                {!masquerRevenu && <Badge tone={s.solde >= 0 ? 'success' : 'danger'}>{s.solde >= 0 ? 'Excédent' : 'Déficit'}</Badge>}
+                {!masquerRevenu && <Badge tone={s.soldeAlloue >= 0 ? 'success' : 'danger'}>{s.soldeAlloue >= 0 ? 'Excédent' : 'Déficit'}</Badge>}
                 <ChevronRight size={16} className="text-gray-300" />
               </div>
             </button>
@@ -997,49 +964,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         })()}
       </Modal>
 
-      {/* Ajout manuel d'un revenu */}
-      <Modal open={!!ajoutRevenu} onClose={() => setAjoutRevenu(null)} size="sm"
-        title="Ajouter un revenu"
-        panelClassName={theme.gradient}>
-        {ajoutRevenu && (
-          <div className="space-y-3">
-            <div className="rounded-xl bg-white p-3 shadow-sm space-y-3">
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Secteur</label>
-                <select value={ajoutRevenu.secteurId} onChange={(e) => setAjoutRevenu((r) => ({ ...r, secteurId: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-300">
-                  {secteursSansRevenuAuto.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
-                <p className="mt-1 text-[11px] text-gray-400">Réservé aux secteurs sans facturation automatique — les autres ont déjà leur revenu calculé depuis leurs factures. CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — apports communs à tous.</p>
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Montant (FCFA)</label>
-                <input type="number" min="0" autoFocus value={ajoutRevenu.montant}
-                  onChange={(e) => setAjoutRevenu((r) => ({ ...r, montant: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-300" placeholder="0" />
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
-                <input type="date" value={ajoutRevenu.date}
-                  onChange={(e) => setAjoutRevenu((r) => ({ ...r, date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Description <span className="font-normal text-gray-400">(optionnel)</span></label>
-                <input value={ajoutRevenu.description}
-                  onChange={(e) => setAjoutRevenu((r) => ({ ...r, description: e.target.value }))}
-                  placeholder="ex : Subvention reçue, vente ponctuelle, remboursement…"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAjoutRevenu(null)}>Annuler</Button>
-              <Button onClick={confirmerAjoutRevenu} loading={revenuSaving}>Ajouter</Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
       {/* Ajout d'une dépense depuis le volet Dépense d'un secteur métier — même circuit
           d'autorisation qu'E-DÉPENSES (imprévue / seuil / budget restant → demande PAU,
           sinon décaissée immédiatement), cf. confirmerNouvelleDepense. */}
@@ -1092,11 +1016,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-xs text-gray-600">
-                <input type="checkbox" checked={nouvelleDepense.imprevue}
-                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, imprevue: e.target.checked }))} />
-                Dépense imprévue (hors budget)
-              </label>
               <label className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-2 text-xs text-gray-700">
                 <input type="checkbox" className="mt-0.5" checked={nouvelleDepense.financePar === 'caisse_commune'}
                   onChange={(e) => setNouvelleDepense((d) => ({ ...d, financePar: e.target.checked ? 'caisse_commune' : '' }))} />
@@ -1106,7 +1025,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 </span>
               </label>
               <p className="text-[11px] text-gray-400">
-                Devient une <strong>demande envoyée au PAU</strong> si imprévue, si le montant dépasse le seuil, ou si elle
+                Devient une <strong>demande envoyée au PAU</strong> si le montant dépasse le seuil, ou si elle
                 dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
               </p>
             </div>

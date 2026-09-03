@@ -419,10 +419,6 @@ export default function Depenses() {
           icon={PiggyBank} accent={resteCaisseCommune < 0 ? '#dc2626' : '#7c3aed'} valueColor={resteCaisseCommune < 0 ? '#dc2626' : undefined} />
       </div>
 
-      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        <strong>Prévue vs imprévue :</strong> une dépense <strong>prévue</strong> (déjà budgétée) est comptée immédiatement. Elle devient quand même une <strong>demande envoyée au PAU</strong> si elle est <strong>imprévue</strong> (hors budget), si son montant dépasse <strong>{SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA</strong>, ou si elle dépasse le <strong>budget restant du secteur</strong> ce mois-ci — et passe alors par <strong>Autorisation de décaissement</strong> (en attente → approuvée → décaissée) avant de compter dans le budget.
-      </div>
-
       <div className="flex flex-wrap items-end gap-3">
         <div className="relative">
           <Search size={14} className="absolute left-2 top-2.5 text-gray-400" />
@@ -684,28 +680,14 @@ export default function Depenses() {
                   ))}
                 </div>
               </FormGroup>
-              {modal.isNew && (
-                <FormGroup label="Type de dépense">
-                  <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
-                    <label className="flex cursor-pointer items-start gap-2 text-sm">
-                      <input type="radio" name="type-depense" checked={!modal.data.imprevue} onChange={() => set('imprevue', false)} className="mt-0.5" />
-                      <span><strong>Prévue</strong> — déjà budgétée, comptée immédiatement (sauf montant trop élevé, voir ci-dessous)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-2 text-sm">
-                      <input type="radio" name="type-depense" checked={!!modal.data.imprevue} onChange={() => set('imprevue', true)} className="mt-0.5" />
-                      <span><strong>Imprévue</strong> — hors budget, passe par l'autorisation de décaissement</span>
-                    </label>
-                  </div>
-                  {(() => {
-                    const raison = raisonAutorisation(modal.data)
-                    return raison ? (
-                      <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">
-                        💰 Cette dépense sera envoyée en demande d'autorisation au PAU — {raison}.
-                      </p>
-                    ) : null
-                  })()}
-                </FormGroup>
-              )}
+              {modal.isNew && (() => {
+                const raison = raisonAutorisation(modal.data)
+                return raison ? (
+                  <p className="flex items-start gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">
+                    💰 Cette dépense sera envoyée en demande d'autorisation au PAU — {raison}.
+                  </p>
+                ) : null
+              })()}
               <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={!!modal.data.recurrente} onChange={(e) => set('recurrente', e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400/30" />
@@ -805,7 +787,7 @@ export default function Depenses() {
         {lot && (
           <div className="space-y-3">
             <p className="rounded-xl border border-amber-200/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
-              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Une ligne devient une <strong>demande envoyée au PAU</strong> si elle est cochée <strong>imprévue</strong>, si le montant dépasse {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA, ou si elle dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
+              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Une ligne devient une <strong>demande envoyée au PAU</strong> si le montant dépasse {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA, ou si elle dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
             </p>
 
             <div className="hidden gap-2 px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 sm:grid sm:grid-cols-12">
@@ -813,8 +795,7 @@ export default function Depenses() {
               <span className="sm:col-span-2">Catégorie</span>
               <span className="sm:col-span-2">Montant</span>
               <span className="sm:col-span-2">Date</span>
-              <span className="sm:col-span-1">Description</span>
-              <span className="sm:col-span-1">Imprévue</span>
+              <span className="sm:col-span-2">Description</span>
               <span className="sm:col-span-1">Caisse</span>
               <span className="sm:col-span-1" />
             </div>
@@ -849,11 +830,8 @@ export default function Depenses() {
                     <div className="sm:col-span-2">
                       <Input type="date" value={r.date} onChange={(e) => setLigne(i, 'date', e.target.value)} />
                     </div>
-                    <div className="col-span-2 sm:col-span-1">
+                    <div className="col-span-2 sm:col-span-2">
                       <Input value={r.description} onChange={(e) => setLigne(i, 'description', e.target.value)} placeholder="(optionnel)" />
-                    </div>
-                    <div className="flex items-center justify-center sm:col-span-1" title="Dépense imprévue → demande envoyée au PAU">
-                      <input type="checkbox" checked={!!r.imprevue} onChange={(e) => setLigne(i, 'imprevue', e.target.checked)} />
                     </div>
                     <div className="flex items-center justify-center sm:col-span-1">
                       {r.secteurId && r.secteurId !== 'divers' && (
