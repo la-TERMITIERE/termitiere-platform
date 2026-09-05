@@ -5,8 +5,9 @@
 //   Ventes (volume) et Chiffre d'affaires (réservé à la hiérarchie).
 // - Le CA n'est compté que sur les factures CERTIFIÉES.
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle, AlarmClock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
@@ -16,7 +17,7 @@ import { canViewFinance } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor, serieColor, factureStatut } from './data'
 import { agregerAchatsVentes, previsionSerie, ventesFactureesParEspece } from './logic'
-import { formatNumber, formatMoney, todayStr, addDays, formatDateShort, formatDateTime } from '../../utils/formatters'
+import { formatNumber, formatMoney, todayStr, addDays, formatDateShort, formatDateTime, nowHM } from '../../utils/formatters'
 
 const PRESETS = [
   { v: 'mois', label: 'Mois en cours' },
@@ -31,12 +32,32 @@ const PRESETS = [
 const TOUTES = '__TOUTES__'
 
 export default function Dashboard() {
-  const { role } = useAuth()
+  const { role, user } = useAuth()
   const showFinance = canViewFinance(role)
   const { data: inventaires, loading } = useCollection('agro_inventaires')
   const { data: factures } = useCollection('agro_factures')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
+
+  // Planning personnel (cf. TachesRoutinieres.jsx) — MES tâches assignées pour
+  // aujourd'hui, avec heure prévue, triées chronologiquement. Sert à la petite
+  // alarme ci-dessous : « c'est l'heure » dès que l'heure prévue est dépassée et
+  // que la tâche n'est pas encore cochée.
+  const { data: routineItems } = useCollection('agro_routine_items')
+  const { data: routineChecks } = useCollection('agro_routine_checks')
+  const mesTachesDuJour = useMemo(() => {
+    const today = todayStr()
+    const checksAujourdhui = {}
+    routineChecks.filter((c) => c.date === today).forEach((c) => { checksAujourdhui[c.itemId] = c })
+    const heureActuelle = nowHM()
+    return routineItems
+      .filter((it) => it.assigneUid === user?.uid)
+      .map((it) => {
+        const fait = !!checksAujourdhui[it.id]?.fait
+        return { ...it, fait, enRetard: !fait && !!it.heure && heureActuelle > it.heure }
+      })
+      .sort((a, b) => (a.heure || '99:99').localeCompare(b.heure || '99:99'))
+  }, [routineItems, routineChecks, user?.uid])
 
   const [preset, setPreset] = useState('mois')
   const [from, setFrom] = useState(todayStr().slice(0, 7) + '-01')
@@ -346,6 +367,29 @@ export default function Dashboard() {
           <p className="text-sm text-green-50/90">Élevage · Stock · Facturation · Analyses</p>
         </div>
       </div>
+
+      {/* Alarme personnelle — mes tâches du planning routinier assignées aujourd'hui,
+          cf. TachesRoutinieres.jsx. Rouge dès qu'une heure prévue est dépassée sans
+          être cochée ; un clic amène directement au planning pour la pointer. */}
+      {mesTachesDuJour.length > 0 && (
+        <Link to="/agro/routine"
+          className={`flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm transition-colors hover:-translate-y-0.5 ${
+            mesTachesDuJour.some((t) => t.enRetard) ? 'border-red-300 bg-red-50 text-red-800' : 'border-teal-200 bg-teal-50 text-teal-800'
+          }`}>
+          <AlarmClock size={18} className="shrink-0" />
+          <span className="font-bold">Mes tâches du jour :</span>
+          <span className="flex flex-wrap gap-1.5">
+            {mesTachesDuJour.map((t) => (
+              <span key={t.id} className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                t.fait ? 'bg-green-100 text-green-700 line-through' : t.enRetard ? 'bg-red-100 text-red-700' : 'bg-white text-teal-700'
+              }`}>
+                {t.heure ? `${t.heure} — ` : ''}{t.titre}
+              </span>
+            ))}
+          </span>
+          {mesTachesDuJour.some((t) => t.enRetard) && <strong className="ml-auto shrink-0">🔔 C'est l'heure !</strong>}
+        </Link>
+      )}
 
       {/* Statut de la saisie du jour — visible d'un coup d'œil (GE / PAU : « est-ce fait ? ») */}
       {saisieDuJour ? (
