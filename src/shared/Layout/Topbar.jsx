@@ -2,6 +2,20 @@
 import { Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { getModule, MODULE_NAV } from '../modules'
+
+// Modules cloisonnés par SITE (Lomé/Kara) : leurs vraies URLs insèrent le site
+// entre le module et la page — /logistique/kara/prestations, /gym/lome/abonnements
+// — alors que MODULE_NAV décrit des chemins SANS site (/logistique/prestations,
+// cf. shared/modules.js). Sans en tenir compte, aucune page de ces deux modules
+// ne matchait jamais un item de nav, et le sous-titre retombait systématiquement
+// sur le nom du module (visible : « Maxi Logistique » affiché deux fois, quel que
+// soit le volet réellement ouvert).
+// Le retrait ne doit viser QUE le segment SITE — les deux modules ont aussi des
+// pages hors contexte d'un site (ex. /gym/comparatif, /logistique/banque) : on ne
+// retire le 2e segment que s'il est VRAIMENT un site connu, sinon on le laisse
+// (sans ce garde-fou, /logistique/banque perdait son 2e segment tout court).
+const MODULES_CLOISONNES_PAR_SITE = ['gym', 'logistique']
+const SITES_CONNUS = ['lome', 'kara']
 import NotificationBell from './NotificationBell'
 import { MODULE_THEME } from './moduleTheme'
 import { useCollection } from '../../hooks/useFirestore'
@@ -26,8 +40,15 @@ export default function Topbar({ onMenuToggle, user }) {
   let subLabel = 'Accueil'
   if (mod) {
     const nav = (MODULE_NAV[mod.id] || []).filter((n) => n.to)
+    // Retire le segment SITE avant de comparer aux chemins de MODULE_NAV (cf. note
+    // sur MODULES_CLOISONNES_PAR_SITE ci-dessus) — uniquement s'il s'agit vraiment
+    // d'un site connu (lome/kara) ; sinon (page hors contexte de site), inchangé.
+    const segs = location.pathname.split('/').filter(Boolean)
+    const pathnamePourMatch = MODULES_CLOISONNES_PAR_SITE.includes(mod.id) && SITES_CONNUS.includes(segs[1])
+      ? '/' + [segs[0], ...segs.slice(2)].join('/')
+      : location.pathname
     const match = [...nav].sort((a, b) => b.to.length - a.to.length)
-      .find((n) => location.pathname === n.to || (!n.end && location.pathname.startsWith(n.to)))
+      .find((n) => pathnamePourMatch === n.to || (!n.end && pathnamePourMatch.startsWith(n.to)))
     const label = match?.label || ''
     subLabel = (!label || label === 'Dashboard' || label === 'Tableau de bord') ? nom : label
     if (projetCourant) subLabel = projetCourant.nom
