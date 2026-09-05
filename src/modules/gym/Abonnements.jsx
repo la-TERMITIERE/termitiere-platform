@@ -1,7 +1,7 @@
 // MAXI-GYM — Abonnements : liste complète + ajout d'un abonnement.
 // Simple / VIP : durée fixe 1 mois, tarif fixe. Classique : durée ET tarif libres.
 import { useMemo, useState } from 'react'
-import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, Lock } from 'lucide-react'
+import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -19,7 +19,7 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { isFullAccessRole } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, abonnementActif, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
+import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import ClientDetailModal from './ClientDetailModal'
@@ -32,11 +32,20 @@ const COULEUR2 = '#E8850F'
 const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
 const heureCourte = (d) => d.toTimeString().slice(0, 5)
 
-// Recalcule `dateFin` à partir de date/catégorie/durée — sauf si l'utilisateur l'a
-// déjà corrigée manuellement (`dateFinManuelle`), auquel cas on la laisse intacte.
-function recalculerDateFin(next, classiqueFixe) {
+// Recalcule `dateFin` à partir de date/durée — sauf si l'utilisateur l'a déjà
+// corrigée manuellement (`dateFinManuelle`), auquel cas on la laisse intacte.
+function recalculerDateFin(next) {
   if (next.dateFinManuelle) return next
-  return { ...next, dateFin: dateFinAbonnement(next.date, next.categorie, next.dureeJours, classiqueFixe) }
+  return { ...next, dateFin: dateFinAbonnement(next.date, next.dureeJours) }
+}
+
+// Durée (jours) à pré-remplir pour une catégorie donnée — Classique libre garde son
+// minimum réglable depuis Paramètres, toutes les autres (Simple/VIP/Classique fixe)
+// démarrent sur l'équivalent d'1 mois calendaire, mais restent modifiables ensuite
+// (abonnement plus court ou plus long qu'un mois).
+function dureeJoursInitiale(categorie, date, classiqueFixe, dureeMin) {
+  if (categorie === 'classique' && !classiqueFixe) return String(dureeMin)
+  return String(dureeJoursMoisDefaut(date))
 }
 
 export default function Abonnements() {
@@ -79,16 +88,20 @@ export default function Abonnements() {
   const [filtreAnnee, setFiltreAnnee] = useState('')
 
   const vide = () => {
-    const date = todayStr(), categorie = CATEGORIES_GYM[0].id, dureeJours = String(dureeMin)
+    const date = todayStr(), categorie = CATEGORIES_GYM[0].id
+    const dureeJours = dureeJoursInitiale(categorie, date, classiqueFixe, dureeMin)
     return {
       id: null, date, clientNom: '', telephone: '', categorie, dureeJours,
-      dateFin: dateFinAbonnement(date, categorie, dureeJours, classiqueFixe), dateFinManuelle: false,
+      dateFin: dateFinAbonnement(date, dureeJours), dateFinManuelle: false,
       montant: String(tarifs[categorie] || ''), notes: ''
     }
   }
+  // Durée d'origine d'un abonnement existant : si elle n'a pas été enregistrée (ancien
+  // abonnement Simple/VIP, avant cette fonctionnalité), on la reconstitue exactement à
+  // partir des dates déjà enregistrées plutôt que d'appliquer un défaut approximatif.
   const remplir = (a) => ({
     id: a.id, date: a.date, clientNom: a.clientNom, telephone: '', categorie: a.categorie,
-    dureeJours: a.dureeJours != null ? String(a.dureeJours) : String(dureeMin),
+    dureeJours: a.dureeJours != null ? String(a.dureeJours) : String(Math.max(1, Math.round((new Date(a.dateFin) - new Date(a.date)) / 86400000))),
     dateFin: a.dateFin, dateFinManuelle: true,
     montant: String(a.montant), notes: a.notes || ''
   })
@@ -117,6 +130,13 @@ export default function Abonnements() {
     const d = modal
     if (!d.clientNom.trim()) return toast.error('Nom du client requis')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
+    // Le prix reste modifiable (ex. tarif négocié, majoration) mais ne peut pas descendre
+    // sous le tarif de référence de Paramètres — plancher, pas prix imposé. Un Classique
+    // à prix libre (Lomé) n'a pas de tarif de référence : aucun plancher ne s'applique.
+    const tarifPlancher = (d.categorie === 'classique' && !classiqueFixe) ? null : tarifs[d.categorie]
+    if (tarifPlancher > 0 && Number(d.montant) < tarifPlancher) {
+      return toast.error(`Le montant ne peut pas être inférieur à ${formatMoney(tarifPlancher)} pour cette catégorie (tarif de Paramètres)`)
+    }
     if (d.categorie === 'classique' && !classiqueFixe && (!d.dureeJours || Number(d.dureeJours) < dureeMin)) return toast.error(`Durée requise (minimum ${dureeMin} jours) pour un abonnement Classique`)
     if (!d.dateFin) return toast.error('Date de fin requise')
     setSaving(true)
@@ -129,7 +149,7 @@ export default function Abonnements() {
       if (d.id) {
         await updateItem('gym_abonnements', d.id, {
           date: d.date, dateFin, clientNom, categorie: d.categorie,
-          dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
+          dureeJours: d.dureeJours ? Number(d.dureeJours) : null,
           montant: Number(d.montant), notes: d.notes.trim()
         })
         await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
@@ -321,7 +341,7 @@ export default function Abonnements() {
               <div className="min-w-0">
                 <p className="truncate text-lg font-extrabold leading-tight">{modal.clientNom || (modal.id ? 'Modifier l\'abonnement' : 'Nouvel abonnement')}</p>
                 <p className="text-sm text-white/80">
-                  {modal.categorie === 'classique' && !classiqueFixe ? 'Durée libre — définie à la saisie' : 'Durée fixe — 1 mois calendaire'}
+                  {modal.categorie === 'classique' && !classiqueFixe ? 'Durée libre — définie à la saisie' : 'Durée par défaut — 1 mois calendaire, modifiable'}
                 </p>
               </div>
             </div>
@@ -370,8 +390,11 @@ export default function Abonnements() {
                     const coul = COULEUR_CATEGORIE[c.id]
                     return (
                       <button key={c.id} type="button" onClick={() => {
-                        const tarif = tarifs[c.id]
-                        setModal((f) => recalculerDateFin({ ...f, categorie: c.id, montant: tarif != null ? String(tarif) : f.montant }, classiqueFixe))
+                        setModal((f) => {
+                          const tarif = tarifs[c.id]
+                          const dureeJours = dureeJoursInitiale(c.id, f.date, classiqueFixe, dureeMin)
+                          return recalculerDateFin({ ...f, categorie: c.id, dureeJours, montant: tarif != null ? String(tarif) : f.montant })
+                        })
                       }}
                         className={`rounded-xl border px-2 py-2 text-xs font-bold transition-all ${actif ? 'text-white shadow-[0_6px_14px_-4px_rgba(0,0,0,0.35)]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
                         style={actif ? { background: coul, borderColor: coul } : undefined}>
@@ -382,14 +405,26 @@ export default function Abonnements() {
                 </div>
               </FormGroup>
               <FormGroup label="📅 Date de souscription">
-                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, date: e.target.value }, classiqueFixe))} />
+                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, date: e.target.value }))} />
               </FormGroup>
 
-              {modal.categorie === 'classique' && !classiqueFixe && (
-                <FormGroup label="⏳ Durée (jours)" required hint={`Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. Ex : 7 = une semaine, 14 = deux semaines, 30 = un mois…`}>
-                  <Input type="number" min={dureeMin} value={modal.dureeJours} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }, classiqueFixe))} placeholder={`ex : ${dureeMin}`} />
-                </FormGroup>
-              )}
+              {/* Durée modifiable pour TOUTES les catégories — pas seulement Classique :
+                  pré-remplie sur l'équivalent d'1 mois calendaire (Simple/VIP/Classique
+                  fixe) ou sur le minimum de Paramètres (Classique libre), mais on peut y
+                  saisir plus ou moins pour un abonnement plus court ou plus long qu'un mois. */}
+              {(() => {
+                const libre = modal.categorie === 'classique' && !classiqueFixe
+                return (
+                  <FormGroup label="⏳ Durée (jours)" required={libre}
+                    hint={libre
+                      ? `Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. Ex : 7 = une semaine, 14 = deux semaines, 30 = un mois…`
+                      : "Pré-remplie sur l'équivalent d'un mois calendaire — modifiable pour un abonnement plus court ou plus long."}>
+                    <Input type="number" min={libre ? dureeMin : 1} value={modal.dureeJours}
+                      onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }))}
+                      placeholder={libre ? `ex : ${dureeMin}` : 'ex : 30'} />
+                  </FormGroup>
+                )
+              })()}
 
               <FormGroup label="🏁 Date de fin" required
                 hint={modal.dateFinManuelle ? 'Corrigée manuellement — recalculer pour revenir à la valeur automatique.' : 'Calculée automatiquement — modifiable si besoin de corriger.'}>
@@ -397,7 +432,7 @@ export default function Abonnements() {
                   <Input type="date" value={modal.dateFin}
                     onChange={(e) => setModal((f) => ({ ...f, dateFin: e.target.value, dateFinManuelle: true }))} />
                   {modal.dateFinManuelle && (
-                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateFinManuelle: false }, classiqueFixe))}
+                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateFinManuelle: false }))}
                       className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50">
                       🔄 Recalculer
                     </button>
@@ -405,20 +440,18 @@ export default function Abonnements() {
                 </div>
               </FormGroup>
 
-              {/* Verrouillé sur le tarif de Paramètres dès que la catégorie en a un fixe
-                  (Simple/VIP toujours, Classique seulement si `classiqueFixe`) — impossible
-                  de saisir un autre montant. Reste libre pour un Classique à prix libre,
-                  seul cas où aucun tarif de référence n'existe. */}
+              {/* Pré-rempli sur le tarif de Paramètres dès que la catégorie en a un fixe
+                  (Simple/VIP toujours, Classique seulement si `classiqueFixe`), mais reste
+                  modifiable — ce tarif n'est qu'un PLANCHER (ex. majoration négociée), pas
+                  un prix imposé : impossible de descendre en dessous, cf. validation dans
+                  enregistrer(). Un Classique à prix libre (Lomé) n'a pas de plancher. */}
               {(() => {
-                const montantVerrouille = modal.categorie !== 'classique' || classiqueFixe
+                const tarifPlancher = (modal.categorie === 'classique' && !classiqueFixe) ? null : tarifs[modal.categorie]
                 return (
-                  <FormGroup label="💰 Montant (FCFA)" required>
-                    <div className="relative">
-                      <Input type="number" min="0" value={modal.montant} placeholder="ex : 15000" disabled={montantVerrouille}
-                        onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))}
-                        className={montantVerrouille ? 'bg-gray-50 pr-9 font-bold text-gray-700' : ''} />
-                      {montantVerrouille && <Lock size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />}
-                    </div>
+                  <FormGroup label="💰 Montant (FCFA)" required
+                    hint={tarifPlancher > 0 ? `Minimum ${formatMoney(tarifPlancher)} pour cette catégorie — modifiable au-delà.` : undefined}>
+                    <Input type="number" min={tarifPlancher || 0} value={modal.montant} placeholder="ex : 15000"
+                      onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} />
                   </FormGroup>
                 )
               })()}
