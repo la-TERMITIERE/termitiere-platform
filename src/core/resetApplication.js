@@ -17,11 +17,11 @@ export const COLLECTIONS_A_REINITIALISER = [
   'depense_revenus_manuels', 'depense_pau_remboursements',
   'depense_alertes_dashboard_fermees', 'depense_purge_log',
   // ── MAXI AGRO ───────────────────────────────────────────────────────────
-  'agro_demandes', 'agro_factures', 'agro_inventaires', 'agro_sante', 'agro_vaccins',
+  'agro_demandes', 'agro_factures', 'agro_inventaires', 'agro_sante', 'agro_vaccins', 'agro_banque',
   // ── MAXI LOGISTIQUE ─────────────────────────────────────────────────────
   'logistique_clients', 'logistique_demandes', 'logistique_factures',
   'logistique_fournisseurs', 'logistique_inventaires', 'logistique_prestations',
-  'logistique_retours',
+  'logistique_retours', 'logistique_banque',
   // ── E-BRIQUETERIE (code module : evenementiel) ─────────────────────────
   'evenementiel_clients', 'evenementiel_demandes', 'evenementiel_factures',
   'evenementiel_inventaires', 'evenementiel_materiels', 'evenementiel_productions',
@@ -29,7 +29,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   // ── E-GARDERIE ──────────────────────────────────────────────────────────
   'garderie_enfants', 'garderie_incidents', 'garderie_journaliers', 'garderie_menus',
   'garderie_nutrition', 'garderie_paiements', 'garderie_personnel', 'garderie_presences',
-  'garderie_repas', 'garderie_soins', 'garderie_taches', 'garderie_vaccinations',
+  'garderie_repas', 'garderie_soins', 'garderie_taches', 'garderie_vaccinations', 'garderie_banque',
   // ── E-FONCIER ───────────────────────────────────────────────────────────
   'foncier_dossiers', 'foncier_pieces',
   // ── E-G.PRO ─────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'projet_alertes_notif', 'projet_purge_log',
   // ── MAXI-GYM ────────────────────────────────────────────────────────────
   'gym_abonnements', 'gym_clients', 'gym_coachs', 'gym_factures', 'gym_forfaits', 'gym_params',
-  'gym_pointages_coach', 'gym_presences', 'gym_seances',
+  'gym_pointages_coach', 'gym_presences', 'gym_seances', 'gym_banque',
   // ── Ressources humaines ─────────────────────────────────────────────────
   'rh_employes', 'rh_presences',
   // ── E-VOYAGE ────────────────────────────────────────────────────────────

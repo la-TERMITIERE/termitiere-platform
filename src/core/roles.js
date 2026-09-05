@@ -57,6 +57,23 @@ export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', '
 // l'identité de qui a validé (cf. `logistiqueVoitValidateur`, réutilisé hors logistique).
 export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
 
+// Export Excel des listes de RECETTES (factures, sources de revenus…) — volontairement
+// restreint à PAU/GE/Info UNIQUEMENT (décision explicite du 05/09/2026) : ni le reste
+// de la direction (super_admin, admin, directeur, assistant_pau), ni la hiérarchie
+// opérationnelle (gérant, contrôleur…) n'y ont accès, contrairement à FULL_ACCESS_ROLES
+// et FINANCE_VIEW_ROLES ci-dessus qui sont donc impropres à cet usage précis.
+export const EXCEL_EXPORT_ROLES = ['pau', 'ge', 'info']
+export const canExportExcel = (r) => EXCEL_EXPORT_ROLES.includes(r)
+
+// Volet « Compte bancaire » (par secteur : MAXI-AGRO, MAXI LOGISTIQUE, MAXI-GYM,
+// E-GARDERIE) — réservé UNIQUEMENT à PAU, Assistant PAU, GE et Info (décision
+// explicite du 05/09/2026) : ni le reste de la direction (super_admin, admin,
+// directeur), ni la hiérarchie opérationnelle n'y ont accès. Différent de
+// EXCEL_EXPORT_ROLES ci-dessus (qui inclut PAU/GE/Info mais PAS Assistant PAU) —
+// à ne pas fusionner, ce sont deux décisions distinctes.
+export const BANQUE_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
+export const peutVoirBanque = (r) => BANQUE_ROLES.includes(r)
+
 // Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
 //   - superviseur : interne, voit TOUS les modules ;
 //   - partenaire  : externe, voit UNIQUEMENT ses modules attribués (sectorisé).

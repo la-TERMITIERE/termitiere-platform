@@ -39,7 +39,11 @@ const EVENTS = {
   VEHICULE:       { label: 'Véhicule', emoji: '🚚' },
   LIVRAISON:      { label: 'Livraison', emoji: '📦' },
   EVENEMENT:      { label: 'Événement', emoji: '🎪' },
-  STATUT:         { label: 'Changement de statut', emoji: '🔁' }
+  STATUT:         { label: 'Changement de statut', emoji: '🔁' },
+  BANQUE_MOUVEMENT_CREATE: { label: 'Mouvement bancaire enregistré', emoji: '🏦' },
+  BANQUE_MOUVEMENT_EDIT:   { label: 'Mouvement bancaire modifié',    emoji: '✏️' },
+  BANQUE_MOUVEMENT_DELETE: { label: 'Mouvement bancaire supprimé',   emoji: '🗑️' },
+  BANQUE_SOLDE_INITIAL:    { label: 'Solde d\'ouverture modifié',    emoji: '🏦' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 

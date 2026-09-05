@@ -32,7 +32,11 @@ const EVENTS = {
   TACHE_ROUTINE_CREATE:       { label: 'Tâche routinière ajoutée',  emoji: '➕' },
   TACHE_ROUTINE_EDIT:         { label: 'Tâche routinière modifiée', emoji: '✏️' },
   TACHE_ROUTINE_DELETE:       { label: 'Tâche routinière supprimée', emoji: '🗑️' },
-  TACHES_ROUTINE_SEED:        { label: 'Tâches routinières importées', emoji: '📥' }
+  TACHES_ROUTINE_SEED:        { label: 'Tâches routinières importées', emoji: '📥' },
+  BANQUE_MOUVEMENT_CREATE: { label: 'Mouvement bancaire enregistré', emoji: '🏦' },
+  BANQUE_MOUVEMENT_EDIT:   { label: 'Mouvement bancaire modifié',    emoji: '✏️' },
+  BANQUE_MOUVEMENT_DELETE: { label: 'Mouvement bancaire supprimé',   emoji: '🗑️' },
+  BANQUE_SOLDE_INITIAL:    { label: 'Solde d\'ouverture modifié',    emoji: '🏦' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))

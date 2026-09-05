@@ -20,7 +20,11 @@ const EVENTS = {
   COACH_CREATE:       { label: 'Coach ajouté', emoji: '🧑‍🏫' },
   COACH_MODIFIE:      { label: 'Planning coach modifié', emoji: '🧑‍🏫' },
   COACH_DELETE:       { label: 'Coach retiré', emoji: '🗑️' },
-  COACH_POINTAGE:     { label: 'Arrivée coach pointée', emoji: '⏱️' }
+  COACH_POINTAGE:     { label: 'Arrivée coach pointée', emoji: '⏱️' },
+  BANQUE_MOUVEMENT_CREATE: { label: 'Mouvement bancaire enregistré', emoji: '🏦' },
+  BANQUE_MOUVEMENT_EDIT:   { label: 'Mouvement bancaire modifié',    emoji: '✏️' },
+  BANQUE_MOUVEMENT_DELETE: { label: 'Mouvement bancaire supprimé',   emoji: '🗑️' },
+  BANQUE_SOLDE_INITIAL:    { label: 'Solde d\'ouverture modifié',    emoji: '🏦' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))

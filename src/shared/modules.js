@@ -6,7 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -134,6 +134,10 @@ export const MODULE_NAV = {
   agro: [
     { label: 'Tâches Routinières', to: '/agro/routine', icon: Repeat },
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
+    // Juste après le Dashboard — réservé exclusivement à PAU/Assistant PAU/GE/Info
+    // (cf. BANQUE_ROLES) — pas même le reste de l'administration (super_admin,
+    // admin, directeur) : invisible en sidebar pour tout le monde d'autre.
+    { label: 'Compte bancaire', to: '/agro/banque', icon: Landmark, roles: BANQUE_ROLES },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
     { label: 'Dépense', to: '/agro/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire'] },
@@ -150,6 +154,11 @@ export const MODULE_NAV = {
   logistique: [
     { label: 'Tâches Routinières', to: '/logistique/routine', icon: Repeat },
     { label: 'Dashboard', to: '/logistique', icon: LayoutDashboard, end: true },
+    // Juste après le Dashboard — réservé exclusivement à PAU/Assistant PAU/GE/Info
+    // (cf. BANQUE_ROLES) — hors contexte d'un site (compte unique du secteur, pas
+    // un par salle), comme Comparatif côté gym : chemin SANS site, déclaré avant
+    // `:site/*` dans logistique/index.jsx.
+    { label: 'Compte bancaire', to: '/logistique/banque', icon: Landmark, roles: BANQUE_ROLES },
     { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
     { label: 'Pilotage & Analyses', to: '/logistique/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
@@ -247,6 +256,10 @@ export const MODULE_NAV = {
   ],
   gym: [
     { label: 'Dashboard', to: '/gym', icon: LayoutDashboard, end: true },
+    // Juste après le Dashboard — réservé exclusivement à PAU/Assistant PAU/GE/Info
+    // (cf. BANQUE_ROLES) — hors contexte d'une salle (compte unique du secteur),
+    // comme Comparatif : chemin SANS site, déclaré avant `:site/*` dans gym/index.jsx.
+    { label: 'Compte bancaire', to: '/gym/banque', icon: Landmark, roles: BANQUE_ROLES },
     { label: 'Nos forfaits', to: '/gym/forfaits', icon: Tag },
     { label: 'Séances', to: '/gym/seances', icon: Ticket },
     { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard },
@@ -293,6 +306,9 @@ export const MODULE_NAV = {
   garderie: [
     { label: 'Tâches Routinières', to: '/garderie/routine',   icon: Repeat },
     { label: 'Dashboard',          to: '/garderie',           icon: LayoutDashboard, end: true },
+    // Juste après le Dashboard — réservé exclusivement à PAU/Assistant PAU/GE/Info
+    // (cf. BANQUE_ROLES).
+    { label: 'Compte bancaire',    to: '/garderie/banque',    icon: Landmark,        roles: BANQUE_ROLES },
     { label: 'Enfants inscrits',   to: '/garderie/enfants',   icon: Baby,            roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire','tata'] },
     { label: 'Personnel / Tatas',  to: '/garderie/personnel', icon: Users,           roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie'] },
     { label: 'Présences enfants',  to: '/garderie/presences', icon: CalendarCheck },
@@ -315,7 +331,6 @@ export const MODULE_NAV = {
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: [...FINANCE_VIEW_ROLES, 'agent'] },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
-    { label: 'Compte bancaire',              to: '/depense/banque',      icon: Landmark,        roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
     { label: 'Journal et Historique',        to: '/depense/journal',      icon: BookOpen,        roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: ADMIN_VOLETS_ROLES }
