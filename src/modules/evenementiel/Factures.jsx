@@ -2,7 +2,7 @@
 // Calquée sur la facturation MAXI-AGRO — permet d'émettre des factures
 // directement depuis l'application (briques + lignes libres).
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Pencil, Eye, Receipt } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Eye, Receipt } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -15,12 +15,13 @@ import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, canExportExcel } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 
 const emptyFacture = () => ({
@@ -169,6 +170,39 @@ export default function Factures() {
 
   const totaux = modal ? calcTotaux(modal.facture) : null
 
+  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
+  // les factures actuellement affichées (recherche client + tri déjà appliqués à
+  // `liste`), jamais la collection brute.
+  function exportXLSX() {
+    const rows = liste.map((f) => {
+      const t = calcTotaux(f)
+      return {
+        'N°': f.numero,
+        'Date': formatDateShort(f.date),
+        'Client': f.client?.nom || '—',
+        'Article(s)': (f.lignes || []).filter((l) => (l.article || '').trim()).map((l) => `${l.article} ×${formatNumber(l.qte)}`).join(', '),
+        'Total TTC': t.totalTTC
+      }
+    })
+    exportRapportExcel({
+      filename: `factures-briqueterie-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Factures Briqueterie',
+        title: 'Facturation — Briqueterie',
+        subtitle: `${liste.length} facture(s)${recherche ? ` — recherche : « ${recherche} »` : ''}`,
+        columns: [
+          { key: 'N°', label: 'N°', width: 14 },
+          { key: 'Date', label: 'Date', width: 12 },
+          { key: 'Client', label: 'Client', width: 22 },
+          { key: 'Article(s)', label: 'Article(s)', width: 40 },
+          { key: 'Total TTC', label: 'Total TTC', width: 16, type: 'money' }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', 'Total TTC': rows.reduce((s, r) => s + r['Total TTC'], 0) }
+      }]
+    })
+  }
+
   const columns = [
     { key: 'numero', label: 'N°', sticky: true, width: '110px' },
     { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
@@ -205,6 +239,9 @@ export default function Factures() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Input className="max-w-xs" placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        {canExportExcel(role) && (
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
+        )}
         {peutFacturer() && <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
       </div>
 

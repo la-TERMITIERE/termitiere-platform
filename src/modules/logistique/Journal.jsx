@@ -27,7 +27,11 @@ const EVENTS = {
   RESET:          { label: 'Réinitialisation', emoji: '♻️' },
   VEHICULE:       { label: 'Véhicule', emoji: '🚚' },
   LIVRAISON:      { label: 'Livraison', emoji: '📦' },
-  STATUT:         { label: 'Changement de statut', emoji: '🔁' }
+  STATUT:         { label: 'Changement de statut', emoji: '🔁' },
+  BANQUE_MOUVEMENT_CREATE: { label: 'Mouvement bancaire enregistré', emoji: '🏦' },
+  BANQUE_MOUVEMENT_EDIT:   { label: 'Mouvement bancaire modifié',    emoji: '✏️' },
+  BANQUE_MOUVEMENT_DELETE: { label: 'Mouvement bancaire supprimé',   emoji: '🗑️' },
+  BANQUE_SOLDE_INITIAL:    { label: 'Solde d\'ouverture modifié',    emoji: '🏦' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))

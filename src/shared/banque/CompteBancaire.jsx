@@ -1,15 +1,22 @@
 // Compte bancaire — mouvements de dépôts et retraits à la banque (miroir du relevé
-// bancaire), avec solde courant calculé automatiquement. Permet de suivre les
-// mouvements de la banque du côté de l'entreprise, indépendamment de la caisse.
+// bancaire), avec solde courant calculé automatiquement. Suit les mouvements de la
+// banque indépendamment de la caisse.
+//
+// Composant PARTAGÉ, un compte bancaire distinct par secteur (MAXI-AGRO, MAXI
+// LOGISTIQUE, MAXI-GYM, E-GARDERIE) — chacun sa propre collection Firestore
+// (`${collectionPrefix}_banque`), son propre solde, ses propres mouvements.
+// Anciennement un volet UNIQUE partagé dans E-DÉPENSES (`depense_banque`) ; retiré
+// de là et éclaté par secteur à la demande explicite du 05/09/2026 — l'accès reste
+// le même partout : réservé à PAU/Assistant PAU/GE/Info (cf. BANQUE_ROLES).
 import { useMemo, useState } from 'react'
 import { Plus, FilePen, Trash2, Landmark, ArrowDownCircle, ArrowUpCircle, Pencil, FileSpreadsheet, Paperclip } from 'lucide-react'
-import Card from '../../shared/ui/Card'
-import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
-import Table from '../../shared/ui/Table'
-import FormGroup from '../../shared/forms/FormGroup'
-import Input from '../../shared/forms/Input'
-import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
+import Card from '../ui/Card'
+import Button from '../ui/Button'
+import Modal from '../ui/Modal'
+import Table from '../ui/Table'
+import FormGroup from '../forms/FormGroup'
+import Input from '../forms/Input'
+import ChampAutocomplete from '../forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { setItem, removeItem } from '../../core/db'
@@ -17,8 +24,9 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
+import { glassModalProps } from '../../utils/color'
 import * as XLSXns from 'xlsx-js-style'
-import { SECTEURS, TYPES_MOUVEMENT_BANQUE, MOIS_LABELS } from './data'
+import { TYPES_MOUVEMENT_BANQUE, MOIS_LABELS } from '../../modules/depense/data'
 import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 
 // xlsx-js-style est un module CJS : selon l'interop, l'API est sur le namespace ou `.default`.
@@ -26,17 +34,19 @@ const XLSX = XLSXns.default || XLSXns
 
 const empty = () => ({ date: todayStr(), type: 'depot', libelle: '', origine: '', personne: '', montant: '', piece: null })
 
-// Suggestions de libellé/origine — celles du relevé (dépôt de recette, retrait chèque…)
-// + secteurs de l'entreprise, pour retrouver vite les motifs récurrents.
 const LIBELLES_SUGGERES = ['DEPOT', 'RETRAIT', 'RETRAIT CHEQUE', 'ALIMENTATION CAISSE', 'AJUSTEMENT / RÉGULARISATION']
-const ORIGINES_SECTEURS = SECTEURS.map((s) => `RECETTE ${s.label}`)
 
-export default function Banque() {
+// `moduleId` sert à l'audit ; `collectionPrefix` (par défaut = moduleId) nomme la
+// collection Firestore `${collectionPrefix}_banque` — un secteur par instance,
+// jamais partagée entre modules. `secteurLabel` alimente juste une suggestion
+// d'origine des fonds (« RECETTE <secteur> »).
+export default function CompteBancaire({ moduleId, collectionPrefix = moduleId, secteurLabel, color = '#0d9488', titre = 'Compte bancaire' }) {
   const { user, role } = useAuth()
   const lectureSeule = isReadOnlyRole(role)
   const isAdmin = isFullAccessRole(role)
+  const collection = `${collectionPrefix}_banque`
 
-  const { data: mouvementsBruts, loading } = useCollection('depense_banque')
+  const { data: mouvementsBruts, loading } = useCollection(collection)
   const ouverture = useMemo(() => mouvementsBruts.find((m) => m.ouverture), [mouvementsBruts])
   const soldeInitial = Number(ouverture?.montant) || 0
 
@@ -95,10 +105,10 @@ export default function Banque() {
     () => [...new Set([...LIBELLES_SUGGERES, ...mouvementsBruts.map((m) => m.libelle).filter(Boolean)])],
     [mouvementsBruts]
   )
-  const origineSuggestions = useMemo(
-    () => [...new Set([...ORIGINES_SECTEURS, ...mouvementsBruts.map((m) => m.origine).filter(Boolean)])].sort(),
-    [mouvementsBruts]
-  )
+  const origineSuggestions = useMemo(() => {
+    const base = secteurLabel ? [`RECETTE ${secteurLabel.toUpperCase()}`] : []
+    return [...new Set([...base, ...mouvementsBruts.map((m) => m.origine).filter(Boolean)])].sort()
+  }, [mouvementsBruts, secteurLabel])
   const personneSuggestions = useMemo(
     () => [...new Set(mouvementsBruts.map((m) => m.personne).filter(Boolean))].sort(),
     [mouvementsBruts]
@@ -135,12 +145,12 @@ export default function Banque() {
       const desc = `${info.label} — ${montant.toLocaleString('fr-FR')} FCFA${d.origine ? ` (${d.origine})` : ''}`
       if (modal.isNew) {
         const id = genId()
-        await setItem('depense_banque', id, { ...d, id, montant, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() })
-        await audit('depense', 'BANQUE_MOUVEMENT_CREATE', desc, { type: d.type, montant, date: d.date })
+        await setItem(collection, id, { ...d, id, montant, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() })
+        await audit(moduleId, 'BANQUE_MOUVEMENT_CREATE', desc, { type: d.type, montant, date: d.date })
         toast.success('Mouvement enregistré ✓')
       } else {
-        await setItem('depense_banque', modal.id, { ...d, id: modal.id, montant })
-        await audit('depense', 'BANQUE_MOUVEMENT_EDIT', desc, { type: d.type, montant, date: d.date })
+        await setItem(collection, modal.id, { ...d, id: modal.id, montant })
+        await audit(moduleId, 'BANQUE_MOUVEMENT_EDIT', desc, { type: d.type, montant, date: d.date })
         toast.success('Mouvement mis à jour ✓')
       }
       setModal(null)
@@ -153,8 +163,8 @@ export default function Banque() {
     if (!toDelete || deleting) return
     setDeleting(true)
     try {
-      await removeItem('depense_banque', toDelete.id)
-      await audit('depense', 'BANQUE_MOUVEMENT_DELETE', `${TYPES_MOUVEMENT_BANQUE[toDelete.type]?.label || toDelete.type} — ${Number(toDelete.montant).toLocaleString('fr-FR')} FCFA`)
+      await removeItem(collection, toDelete.id)
+      await audit(moduleId, 'BANQUE_MOUVEMENT_DELETE', `${TYPES_MOUVEMENT_BANQUE[toDelete.type]?.label || toDelete.type} — ${Number(toDelete.montant).toLocaleString('fr-FR')} FCFA`)
       toast.success('Mouvement supprimé ✓')
       setToDelete(null)
     } finally {
@@ -167,10 +177,10 @@ export default function Banque() {
     setSaving(true)
     try {
       const montant = Number(modalOuverture.montant) || 0
-      await setItem('depense_banque', ouverture?.id || 'ouverture', {
+      await setItem(collection, ouverture?.id || 'ouverture', {
         id: ouverture?.id || 'ouverture', ouverture: true, montant, date: modalOuverture.date, type: 'ouverture'
       })
-      await audit('depense', 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${montant.toLocaleString('fr-FR')} FCFA au ${formatDateShort(modalOuverture.date)}`)
+      await audit(moduleId, 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${montant.toLocaleString('fr-FR')} FCFA au ${formatDateShort(modalOuverture.date)}`)
       toast.success('Solde d\'ouverture mis à jour ✓')
       setModalOuverture(null)
     } finally {
@@ -195,7 +205,7 @@ export default function Banque() {
     const sousTitre = filtreMois ? `MOIS : ${moisLabel.toUpperCase()} ${an}` : 'TOUTES PÉRIODES'
 
     const aoa = [
-      ['MOUVEMENT MIROIR COMPTE BANCAIRE', '', '', '', '', '', ''],
+      [`MOUVEMENT MIROIR COMPTE BANCAIRE — ${titre.toUpperCase()}`, '', '', '', '', '', ''],
       [sousTitre, '', '', '', '', '', ''],
       ['', '', '', '', '', '', ''],
       COLS
@@ -233,17 +243,17 @@ export default function Banque() {
       for (let c = 0; c < COLS.length; c++) {
         const a = XLSX.utils.encode_cell({ r, c })
         if (!ws[a]) ws[a] = { t: 's', v: '' }
-        let color = '374151'
+        let color2 = '374151'
         let bold = c === 6 // Solde toujours en gras
         if (m.__ouverture) {
           bold = c === 1 || c === 6
         } else if (m.type === 'depot' && (c === 1 || c === 4)) {
-          color = BLEU
+          color2 = BLEU
         } else if (m.type === 'retrait' && (c === 1 || c === 5)) {
-          color = ROUGE
+          color2 = ROUGE
         }
         ws[a].s = {
-          font: { name: 'Calibri', sz: 10, bold, color: { rgb: color } },
+          font: { name: 'Calibri', sz: 10, bold, color: { rgb: color2 } },
           alignment: { horizontal: c === 0 ? 'center' : (c >= 4 ? 'right' : 'left'), vertical: 'center' },
           border: allBorders,
           ...(c >= 4 ? { numFmt: '#,##0' } : {})
@@ -253,29 +263,30 @@ export default function Banque() {
     })
 
     const wb = XLSX.utils.book_new()
-    wb.Props = { Title: 'Compte bancaire — LA TERMITIÈRE', Company: 'LA TERMITIÈRE', CreatedDate: new Date() }
+    wb.Props = { Title: `${titre} — LA TERMITIÈRE`, Company: 'LA TERMITIÈRE', CreatedDate: new Date() }
     XLSX.utils.book_append_sheet(wb, ws, 'Compte bancaire')
     const suffixe = filtreMois ? `${moisLabel}-${an}` : 'Toutes-periodes'
-    XLSX.writeFile(wb, `Compte-bancaire-${suffixe}.xlsx`)
+    XLSX.writeFile(wb, `${titre.replace(/[^a-zA-Z0-9]+/g, '-')}-${suffixe}.xlsx`)
   }
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-teal-200/60 bg-teal-50/60 px-4 py-3 text-sm text-teal-800 shadow-[0_16px_36px_-16px_rgba(13,148,136,0.14)]">
-        <strong>Compte bancaire :</strong> enregistrez ici chaque <strong>dépôt</strong> et <strong>retrait</strong> effectué à la banque, pour suivre le solde bancaire de l'entreprise indépendamment de la caisse — c'est le miroir de votre relevé bancaire.
+      <div className="rounded-2xl border px-4 py-3 text-sm shadow-[0_16px_36px_-16px_rgba(0,0,0,0.14)]"
+        style={{ borderColor: color + '40', background: color + '14', color }}>
+        <strong>{titre} :</strong> enregistrez ici chaque <strong>dépôt</strong> et <strong>retrait</strong> effectué à la banque, pour suivre le solde bancaire de ce secteur indépendamment de la caisse — c'est le miroir de son relevé bancaire.
       </div>
 
       {/* Résumé */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Landmark size={22} /></div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: color + '1a', color }}><Landmark size={22} /></div>
           <div className="flex-1">
             <p className="text-xs font-semibold text-gray-500">Solde actuel</p>
             <p className="text-xl font-black text-gray-900">{soldeActuel.toLocaleString('fr-FR')} <span className="text-xs font-semibold text-gray-400">FCFA</span></p>
           </div>
           {isAdmin && (
             <button onClick={() => setModalOuverture({ montant: soldeInitial, date: ouverture?.date || todayStr() })}
-              title="Modifier le solde d'ouverture" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary">
+              title="Modifier le solde d'ouverture" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100" style={{ color }}>
               <Pencil size={14} />
             </button>
           )}
@@ -312,7 +323,7 @@ export default function Banque() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
-          {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter un mouvement</Button>}
+          {!lectureSeule && <Button style={{ backgroundColor: color }} onClick={openCreate}><Plus size={16} /> Ajouter un mouvement</Button>}
         </div>
       </div>
 
@@ -327,7 +338,7 @@ export default function Banque() {
                 {m.libelle || '—'}
                 {m.piece && (
                   <button onClick={(e) => { e.stopPropagation(); ouvrirPiece(m.piece) }} title="Voir le justificatif"
-                    className="rounded-md bg-primary/10 p-0.5 text-primary hover:bg-primary/20"><Paperclip size={11} /></button>
+                    className="rounded-md p-0.5" style={{ background: color + '1a', color }}><Paperclip size={11} /></button>
                 )}
               </p>
               {m.origine && <p className="text-xs text-gray-400">{m.origine}</p>}
@@ -343,7 +354,7 @@ export default function Banque() {
           { key: 'solde', label: 'Solde', align: 'right', render: (m) => <span className="font-extrabold text-gray-900">{m.solde.toLocaleString('fr-FR')}</span> },
           { key: 'actions', label: '', align: 'right', render: (m) => !lectureSeule && !m.__ouverture && (
             <div className="flex justify-end gap-1">
-              <button onClick={(e) => { e.stopPropagation(); openEdit(m) }} className="rounded p-1.5 text-primary hover:bg-primary/10"><FilePen size={14} /></button>
+              <button onClick={(e) => { e.stopPropagation(); openEdit(m) }} className="rounded p-1.5" style={{ color }}><FilePen size={14} /></button>
               <button onClick={(e) => { e.stopPropagation(); setToDelete(m) }} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
             </div>
           ) }
@@ -354,20 +365,15 @@ export default function Banque() {
         empty={loading ? 'Chargement…' : 'Aucun mouvement bancaire enregistré.'}
       />
 
-      {/* Modal création / édition d'un mouvement — verre dépoli ambre (charte E-DÉPENSES) */}
-      <Modal open={!!modal} onClose={() => setModal(null)} size="md"
-        panelClassName="relative overflow-hidden bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
+      {/* Modal création / édition d'un mouvement */}
+      <Modal open={!!modal} onClose={() => setModal(null)} size="md" {...glassModalProps(color)}
         title={modal?.isNew ? 'Ajouter un mouvement bancaire' : 'Modifier le mouvement'}
-        footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Enregistrer' : 'Mettre à jour'}</Button></>}>
+        footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: color }} onClick={handleSave} loading={saving}>{modal?.isNew ? 'Enregistrer' : 'Mettre à jour'}</Button></>}>
         {modal && (
           <div className="relative space-y-3">
-            {/* Halos décoratifs — reprennent l'accent du mouvement (bleu dépôt / rouge retrait) */}
-            <div className={`pointer-events-none absolute -right-16 -top-16 -z-10 h-52 w-52 rounded-full opacity-30 blur-3xl transition-colors ${modal.data.type === 'depot' ? 'bg-blue-500' : 'bg-red-500'}`} />
-            <div className="pointer-events-none absolute -bottom-20 -left-14 -z-10 h-48 w-48 rounded-full bg-amber-500 opacity-20 blur-3xl" />
-
             {/* Type de mouvement : sens (Dépôt/Retrait) + précision (type d'action) */}
-            <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🏦 Type de mouvement</p>
+            <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm backdrop-blur-md">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color }}>🏦 Type de mouvement</p>
               <div className="flex gap-2">
                 {Object.entries(TYPES_MOUVEMENT_BANQUE).map(([k, v]) => {
                   const active = modal.data.type === k
@@ -381,13 +387,13 @@ export default function Banque() {
                 })}
               </div>
               <FormGroup label="Type d'action" className="mt-3" hint="Précise le motif exact : DEPOT, RETRAIT CHEQUE N°…, ALIMENTATION CAISSE…">
-                <ChampAutocomplete value={modal.data.libelle} onChange={(v) => set('libelle', v)} suggestions={libelleSuggestions} placeholder="ex: DEPOT" accent="amber" />
+                <ChampAutocomplete value={modal.data.libelle} onChange={(v) => set('libelle', v)} suggestions={libelleSuggestions} placeholder="ex: DEPOT" />
               </FormGroup>
             </div>
 
             {/* Détails */}
-            <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails</p>
+            <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm backdrop-blur-md">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color }}>💰 Détails</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Date *"><Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} /></FormGroup>
                 <FormGroup label="Montant (FCFA) *"><Input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)} placeholder="ex: 100000" /></FormGroup>
@@ -395,26 +401,26 @@ export default function Banque() {
             </div>
 
             {/* Traçabilité */}
-            <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📍 Traçabilité</p>
+            <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm backdrop-blur-md">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color }}>📍 Traçabilité</p>
               <FormGroup label="Origine / destination des fonds" hint="D'où vient l'argent (dépôt) ou à quoi il sert (retrait).">
-                <ChampAutocomplete value={modal.data.origine} onChange={(v) => set('origine', v)} suggestions={origineSuggestions} placeholder="ex: RECETTE LOGISTIQUE" accent="amber" />
+                <ChampAutocomplete value={modal.data.origine} onChange={(v) => set('origine', v)} suggestions={origineSuggestions} placeholder={secteurLabel ? `ex: RECETTE ${secteurLabel.toUpperCase()}` : 'ex: RECETTE'} />
               </FormGroup>
               <FormGroup label="Personne en charge" className="mt-1">
-                <ChampAutocomplete value={modal.data.personne} onChange={(v) => set('personne', v)} suggestions={personneSuggestions} placeholder="ex: DONGNIMA BAWI" accent="amber" />
+                <ChampAutocomplete value={modal.data.personne} onChange={(v) => set('personne', v)} suggestions={personneSuggestions} placeholder="ex: DONGNIMA BAWI" />
               </FormGroup>
             </div>
 
             {/* Justificatif */}
-            <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📎 Justificatif <span className="font-medium normal-case text-amber-500">(photo, PDF, Excel…, optionnel)</span></p>
+            <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm backdrop-blur-md">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color }}>📎 Justificatif <span className="font-medium normal-case text-gray-400">(photo, PDF, Excel…, optionnel)</span></p>
               {modal.data.piece ? (
                 <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
                   <span className="flex items-center gap-2 text-gray-700"><Paperclip size={14} /> {modal.data.piece.nom} <span className="text-xs text-gray-400">({formatTaille(modal.data.piece.taille)})</span></span>
                   <button onClick={() => set('piece', null)} className="text-xs text-red-500 hover:underline">Retirer</button>
                 </div>
               ) : (
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-3 text-sm text-gray-500 hover:bg-amber-50">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-3 text-sm text-gray-500 hover:bg-gray-50">
                   <Paperclip size={16} /> {uploading ? 'Chargement…' : 'Ajouter un justificatif'}
                   <input type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={handlePieceChange} disabled={uploading} />
                 </label>
@@ -424,14 +430,14 @@ export default function Banque() {
         )}
       </Modal>
 
-      {/* Modal solde d'ouverture (admin) — verre dépoli ambre */}
+      {/* Modal solde d'ouverture (admin) */}
       <Modal open={!!modalOuverture} onClose={() => setModalOuverture(null)} size="sm" title="Solde d'ouverture du compte"
-        panelClassName="relative overflow-hidden bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
-        footer={<><Button variant="outline" onClick={() => setModalOuverture(null)} disabled={saving}>Annuler</Button><Button onClick={handleSaveOuverture} loading={saving}>Enregistrer</Button></>}>
+        {...glassModalProps(color)}
+        footer={<><Button variant="outline" onClick={() => setModalOuverture(null)} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: color }} onClick={handleSaveOuverture} loading={saving}>Enregistrer</Button></>}>
         {modalOuverture && (
           <div className="space-y-3">
-            <div className="rounded-xl border border-amber-100 bg-white/80 p-3 shadow-sm backdrop-blur-md">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700"><Landmark size={13} /> Solde de référence</p>
+            <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm backdrop-blur-md">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style={{ color }}><Landmark size={13} /> Solde de référence</p>
               <p className="mb-2 text-xs text-gray-500">Solde du compte bancaire avant le premier mouvement enregistré ici. Tous les soldes affichés en découlent.</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Date"><Input type="date" value={modalOuverture.date} onChange={(e) => setModalOuverture((s) => ({ ...s, date: e.target.value }))} /></FormGroup>

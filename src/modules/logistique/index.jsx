@@ -20,11 +20,12 @@ import Journal from './Journal'
 import Params from './Params'
 import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
+import Banque from './Banque'
 import AutoCarryForwardLogistique from './AutoCarryForwardLogistique'
 import { Lock } from 'lucide-react'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage, isFullAccessRole } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole, peutVoirBanque } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 
 function AccesRefuse() {
@@ -49,6 +50,7 @@ function AccesRefuseAdmin() {
 
 export default function LogistiqueModule() {
   const init = useLogistiqueStore((s) => s.init)
+  const role = useAuth((s) => s.role)
   useEffect(() => { init() }, [init])
 
   return (
@@ -56,6 +58,10 @@ export default function LogistiqueModule() {
     <AutoCarryForwardLogistique />
     <Routes>
       <Route index element={<SiteChooser />} />
+      {/* Compte bancaire : hors contexte d'un site (compte UNIQUE du secteur, pas un
+          par salle) — la route DOIT être déclarée avant `:site/*`, sinon React
+          Router la confondrait avec un id de site (même règle que Comparatif côté gym). */}
+      <Route path="banque" element={peutVoirBanque(role) ? <Banque /> : <AccesRefuseAdmin />} />
       <Route path=":site/*" element={<SiteApp />} />
       <Route path="*" element={<Navigate to="/logistique" replace />} />
     </Routes>

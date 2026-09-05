@@ -6,7 +6,7 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -25,6 +25,8 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
+import { exportRapportExcel } from '../../utils/excelReport'
+import { canExportExcel } from '../../core/roles'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
 import EcartModal from './EcartModal'
@@ -249,6 +251,42 @@ export default function Factures() {
   const totaux = modal ? calcTotaux(modal.facture.lignes, modal.facture.remise, modal.facture.tva) : null
   const filtres = [['tous', 'Toutes'], ['brouillon', `Brouillons (${compteur('brouillon')})`], ['sortie_demandee', `À approuver (${compteur('sortie_demandee')})`], ['modif_demandee', `Écarts (${compteur('modif_demandee')})`], ['sortie_approuvee', `Approuvées (${compteur('sortie_approuvee')})`], ['certifiee', `Certifiées (${compteur('certifiee')})`]]
 
+  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
+  // les factures actuellement affichées, dans l'ordre affiché (recherche client +
+  // filtre de statut + tri déjà appliqués à `liste`), jamais la collection brute.
+  function exportXLSX() {
+    const rows = liste.map((f) => {
+      const st = factureStatut(f)
+      const tot = calcTotaux(lignesEffectives(f), f.remise, f.tva)
+      return {
+        'N°': f.numero,
+        'Date': formatDateShort(f.date),
+        'Client': f.client?.nom || '—',
+        'Article(s)': lignesEffectives(f).filter((l) => (l.article || '').trim()).map((l) => `${l.article} ×${formatNumber(l.qte)}`).join(', '),
+        'Total TTC': tot.totalTTC,
+        'Statut': (FACTURE_STATUTS[st] || { label: st }).label
+      }
+    })
+    exportRapportExcel({
+      filename: `factures-maxi-agro-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Factures MAXI-AGRO',
+        title: 'Factures — MAXI-AGRO',
+        subtitle: `${liste.length} facture(s)${filtre !== 'tous' ? ` — ${filtres.find(([v]) => v === filtre)?.[1]}` : ''}${recherche ? ` — recherche : « ${recherche} »` : ''}`,
+        columns: [
+          { key: 'N°', label: 'N°', width: 14 },
+          { key: 'Date', label: 'Date', width: 12 },
+          { key: 'Client', label: 'Client', width: 22 },
+          { key: 'Article(s)', label: 'Article(s)', width: 40 },
+          { key: 'Total TTC', label: 'Total TTC', width: 16, type: 'money' },
+          { key: 'Statut', label: 'Statut', width: 16 }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', 'Total TTC': rows.reduce((s, r) => s + (r['Total TTC'] || 0), 0) }
+      }]
+    })
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -258,6 +296,9 @@ export default function Factures() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Input className="max-w-xs" placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        {canExportExcel(role) && (
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
+        )}
         {isAgent && <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
       </div>
 

@@ -1,6 +1,6 @@
 // Facturation logistique — émission obligatoire avant demande d'autorisation de sortie.
 import { useMemo, useState } from 'react'
-import { FileText, Plus, Trash2, Eye, Wallet } from 'lucide-react'
+import { FileText, FileSpreadsheet, Plus, Trash2, Eye, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -14,10 +14,11 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
+import { logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance, canExportExcel } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
@@ -65,7 +66,11 @@ export default function Factures() {
   const [filtreMois, setFiltreMois]   = useState('')
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin]     = useState('')
-  const [filtreStatut, setFiltreStatut] = useState('')
+  // Par défaut sur « Approuvée » (pas « Tous ») : c'est la seule valeur qui
+  // représente le CA réellement acquis (facture passée par le circuit demande de
+  // sortie → certification) — « Tous » mélange brouillon (pas encore autorisé)
+  // et approuvée, ce qui gonflait le Cumul facturation affiché à l'ouverture.
+  const [filtreStatut, setFiltreStatut] = useState('approuvee')
   const [filtreClient, setFiltreClient] = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const liste = useMemo(() => {
@@ -94,6 +99,38 @@ export default function Factures() {
   // ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES, qui additionne les
   // deux sites : ce n'est pas une incohérence, mais deux périmètres différents.
   const cumulFacturation = useMemo(() => liste.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0), [liste])
+
+  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
+  // les factures actuellement affichées (période, statut, client, tri déjà
+  // appliqués à `liste`), jamais la collection brute.
+  function exportXLSX() {
+    const rows = liste.map((f) => ({
+      'N° facture': f.num,
+      'Date': formatDateShort(f.date),
+      'Client': f.clientNom || '—',
+      'Prestation': f.prestationNum || '—',
+      'Montant TTC': Number(f.totalTTC) || 0,
+      'Statut': (F_STATUTS[f.statut] || F_STATUTS.brouillon).label
+    }))
+    exportRapportExcel({
+      filename: `factures-logistique-${siteLabel(site)}-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Factures Logistique',
+        title: `Factures — MAXI LOGISTIQUE (${siteLabel(site)})`,
+        subtitle: `${liste.length} facture(s)${filtreStatut ? ` — ${F_STATUTS[filtreStatut]?.label}` : ''}${filtreClient.trim() ? ` — client : « ${filtreClient} »` : ''}`,
+        columns: [
+          { key: 'N° facture', label: 'N° facture', width: 16 },
+          { key: 'Date', label: 'Date', width: 12 },
+          { key: 'Client', label: 'Client', width: 22 },
+          { key: 'Prestation', label: 'Prestation', width: 16 },
+          { key: 'Montant TTC', label: 'Montant TTC', width: 16, type: 'money' },
+          { key: 'Statut', label: 'Statut', width: 14 }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', 'Montant TTC': rows.reduce((s, r) => s + r['Montant TTC'], 0) }
+      }]
+    })
+  }
 
   async function emettre() {
     const p = prestations.find((x) => x.id === prestId)
@@ -156,6 +193,11 @@ export default function Factures() {
             value={formatMoney(cumulFacturation)}
             sub={`${liste.length} facture${liste.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}${filtreClient.trim() ? ' · client filtré' : ''}`}
             icon={Wallet} accent={COULEUR_MODULE.logistique} />
+        </div>
+      )}
+      {canExportExcel(role) && (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
         </div>
       )}
       <div className="flex flex-wrap items-end gap-2">

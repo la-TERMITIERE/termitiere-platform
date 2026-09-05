@@ -8,7 +8,6 @@ import SourcesRevenus from './SourcesRevenus'
 import Autorisations from './Autorisations'
 import Analyses from './Analyses'
 import Flux from './Flux'
-import Banque from './Banque'
 import Journal from './Journal'
 import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
@@ -55,7 +54,8 @@ export default function DepenseModule() {
       {/* Ancien écran « Rentabilité » fusionné dans « Analyses » — redirige les liens existants. */}
       <Route path="rentabilite" element={<Navigate to="/depense/analyses" replace />} />
       <Route path="flux" element={canViewFinance(role) ? <Flux /> : <AccesRefuse />} />
-      <Route path="banque" element={canViewFinance(role) ? <Banque /> : <AccesRefuse />} />
+      {/* « Compte bancaire » retiré d'ici — éclaté par secteur dans MAXI-AGRO,
+          MAXI LOGISTIQUE, MAXI-GYM et E-GARDERIE (cf. shared/banque/CompteBancaire.jsx). */}
       <Route path="partenaires" element={<Partenaires module="depense" />} />
       <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
       <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />

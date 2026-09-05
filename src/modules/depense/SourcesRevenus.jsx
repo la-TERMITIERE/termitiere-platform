@@ -4,10 +4,11 @@
 // ne sont que des essais), filtrable par secteur — même présentation que l'écran
 // « Dépenses » (tableau, filtres, clic sur une ligne pour le détail).
 import { useMemo, useState, useEffect } from 'react'
-import { TrendingUp, Search, Eye, Building2 } from 'lucide-react'
+import { TrendingUp, Search, Eye, Building2, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
+import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
@@ -17,6 +18,8 @@ import { useAuth } from '../../hooks/useAuth'
 import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { getModule } from '../../shared/modules'
+import { canExportExcel } from '../../core/roles'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, MOIS_LABELS } from './data'
 
 // Logo/icône de chaque secteur — reprend celui de son module métier (agro, logistique…)
@@ -45,7 +48,7 @@ export default function SourcesRevenus() {
   const { data: projetsTous }         = useCollection('projets')
   const { data: versementsClientTous }= useCollection('projet_versements_client')
   const { data: revenusManuelsTous }  = useCollection('depense_revenus_manuels')
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   useEffect(() => { marquerVoletVu(user?.uid, 'depenseRevenus') }, [user?.uid])
 
   const versementsClientRoutes = useMemo(
@@ -148,6 +151,41 @@ export default function SourcesRevenus() {
   const secteurDetail = detail ? SECTEURS.find((s) => s.id === detail.secteurId) : null
   const couleurDetail = secteurDetail?.color || COULEUR_MODULE.depense
 
+  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
+  // les lignes actuellement affichées (secteur, source, recherche, période déjà
+  // appliqués à `liste`), jamais la collection brute.
+  function exportXLSX() {
+    const rows = liste.map((l) => {
+      const secteur = SECTEURS.find((s) => s.id === l.secteurId)
+      return {
+        'Date': formatDateShort(l.date),
+        'Secteur': secteur?.label || l.secteurId,
+        'Revenu': l.libelle,
+        'Tiers': l.tiers || '',
+        'Source': SOURCES[l.type]?.label || l.type,
+        'Montant': l.montant
+      }
+    })
+    exportRapportExcel({
+      filename: `sources-revenus-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Sources de revenus',
+        title: 'Sources de revenus',
+        subtitle: `${liste.length} entrée(s)${filtreSecteur ? ` — secteur : ${SECTEURS.find((s) => s.id === filtreSecteur)?.label}` : ''}${filtreType ? ` — source : ${SOURCES[filtreType]?.label}` : ''}${filtrePeriodeActif ? ` — période : ${periodeLabel}` : ''}`,
+        columns: [
+          { key: 'Date', label: 'Date', width: 12 },
+          { key: 'Secteur', label: 'Secteur', width: 18 },
+          { key: 'Revenu', label: 'Revenu', width: 30 },
+          { key: 'Tiers', label: 'Tiers', width: 22 },
+          { key: 'Source', label: 'Source', width: 16 },
+          { key: 'Montant', label: 'Montant', width: 16, type: 'money' }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', 'Montant': rows.reduce((s, r) => s + r['Montant'], 0) }
+      }]
+    })
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
@@ -201,6 +239,9 @@ export default function SourcesRevenus() {
           </Select>
         </div>
         <span className="ml-auto text-xs text-gray-400">{liste.length} entrée(s) · {formatMoney(total)}</span>
+        {canExportExcel(role) && (
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
+        )}
       </div>
 
       {liste.length === 0 ? (

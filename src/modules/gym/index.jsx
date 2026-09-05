@@ -18,9 +18,10 @@ import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import SectorBesoins from '../../shared/besoins/SectorBesoins'
 import RecettesDepenses from '../depense/RecettesDepenses'
+import Banque from './Banque'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage, isFullAccessRole } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole, peutVoirBanque } from '../../core/roles'
 
 function AccesRefuse() {
   return (
@@ -54,6 +55,9 @@ export default function GymModule() {
         {/* Hors contexte d'une salle (lit Lomé ET Kara) — la route DOIT être déclarée
             avant `:site/*`, sinon React Router la confondrait avec un id de salle. */}
         <Route path="comparatif" element={isFullAccessRole(role) ? <Comparatif /> : <AccesRefuseAdmin />} />
+        {/* Compte bancaire : compte UNIQUE du secteur, hors contexte d'une salle —
+            même raison que Comparatif ci-dessus, déclarée avant `:site/*`. */}
+        <Route path="banque" element={peutVoirBanque(role) ? <Banque /> : <AccesRefuseAdmin />} />
         <Route path=":site/*" element={<SiteApp />} />
         <Route path="*" element={<Navigate to="/gym" replace />} />
       </Routes>
