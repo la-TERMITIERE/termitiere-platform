@@ -40,16 +40,25 @@ export function seanceValide(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_
   return Date.now() < finValiditeSeance(createdAt, validiteHeures).getTime()
 }
 
-// Date de fin d'un abonnement :
-//  - Simple / VIP : durée FIXE, 1 mois calendaire depuis la date de souscription.
-//  - Classique : durée LIBRE, définie par l'utilisateur en jours — minimum réglable
-//    depuis Paramètres (14 jours/2 semaines par défaut) ; pas d'offre « 1 semaine ».
-//    SAUF si `classiqueFixe` (Kara, cf. tarifAbonnementClassique dans useGymParams) :
-//    Classique se comporte alors comme Simple/VIP — durée fixe 1 mois.
-export function dateFinAbonnement(dateDebut, categorie, dureeJours, classiqueFixe = false) {
+// Nombre de jours équivalent à « 1 mois calendaire » à partir d'une date donnée
+// (28 à 31 selon le mois) — valeur PAR DÉFAUT, modifiable, du champ Durée : permet
+// de retomber exactement sur le même calcul qu'avant si l'utilisateur n'y touche pas.
+export function dureeJoursMoisDefaut(dateDebut) {
+  const debut = new Date(dateDebut || Date.now())
+  const fin = new Date(debut)
+  fin.setMonth(fin.getMonth() + 1)
+  return Math.round((fin - debut) / 86400000)
+}
+
+// Date de fin d'un abonnement, à partir d'une durée en jours — modifiable pour
+// TOUTES les catégories (pas seulement Classique) : un abonnement peut durer plus
+// ou moins qu'un mois. Sans durée renseignée (champ vidé/invalide), on retombe sur
+// le calcul du mois calendaire (comportement par défaut historique de Simple/VIP).
+export function dateFinAbonnement(dateDebut, dureeJours) {
   const d = new Date(dateDebut || Date.now())
-  if (categorie === 'classique' && !classiqueFixe) {
-    d.setDate(d.getDate() + (parseInt(dureeJours) || 0))
+  const jours = parseInt(dureeJours)
+  if (Number.isFinite(jours) && jours > 0) {
+    d.setDate(d.getDate() + jours)
   } else {
     d.setMonth(d.getMonth() + 1)
   }
