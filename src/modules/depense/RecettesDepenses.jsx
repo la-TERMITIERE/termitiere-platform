@@ -965,8 +965,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       </Modal>
 
       {/* Ajout d'une dépense depuis le volet Dépense d'un secteur métier — même circuit
-          d'autorisation qu'E-DÉPENSES (imprévue / seuil / budget restant → demande PAU,
-          sinon décaissée immédiatement), cf. confirmerNouvelleDepense. */}
+          d'autorisation qu'E-DÉPENSES (imprévue / budget restant → demande PAU, sinon
+          décaissée immédiatement), cf. confirmerNouvelleDepense. */}
       <Modal open={!!nouvelleDepense} onClose={() => setNouvelleDepense(null)} size="sm"
         title="Ajouter une dépense"
         panelClassName={theme.gradient}>
@@ -1025,8 +1025,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 </span>
               </label>
               <p className="text-[11px] text-gray-400">
-                Devient une <strong>demande envoyée au PAU</strong> si le montant dépasse le seuil, ou si elle
-                dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
+                Devient une <strong>demande envoyée au PAU</strong> si elle dépasse le budget restant du
+                secteur ce mois-ci ; sinon elle est décaissée immédiatement.
               </p>
             </div>
             <div className="flex justify-end gap-2">

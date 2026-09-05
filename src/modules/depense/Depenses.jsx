@@ -20,7 +20,7 @@ import { notify } from '../../core/notify'
 import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, SEUIL_APPROBATION_PAU } from './data'
+import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
@@ -787,7 +787,7 @@ export default function Depenses() {
         {lot && (
           <div className="space-y-3">
             <p className="rounded-xl border border-amber-200/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
-              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Une ligne devient une <strong>demande envoyée au PAU</strong> si le montant dépasse {SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA, ou si elle dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
+              Renseignez chaque ligne (secteur, catégorie, montant, date). Les lignes incomplètes sont ignorées. Une ligne devient une <strong>demande envoyée au PAU</strong> si elle dépasse le budget restant du secteur ce mois-ci ; sinon elle est décaissée immédiatement.
             </p>
 
             <div className="hidden gap-2 px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 sm:grid sm:grid-cols-12">
