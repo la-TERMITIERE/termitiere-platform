@@ -50,12 +50,6 @@ export const natureFluxDefaut = 'exploitation'
 // des projets, exclusivement dans E-G.Pro (cf. projet/Depenses.jsx).
 export const sourceFinancementDefaut = 'entreprise'
 
-// Seuil au-delà duquel une dépense E-DÉPENSES (saisie directe, hors E-G.Pro qui a son
-// propre circuit via les besoins) devient automatiquement une demande d'autorisation
-// envoyée au PAU — même si elle est « prévue ». S'ajoute au dépassement du budget alloué
-// du secteur (cf. budgetRestantSecteur dans logic.js) : n'importe lequel des deux suffit.
-export const SEUIL_APPROBATION_PAU = 20000
-
 // Circuit d'autorisation de décaissement (2 niveaux) :
 //   en_attente → approuvee → decaissee (argent réellement sorti, compté dans le budget)
 //   ou refusee à n'importe quelle étape.

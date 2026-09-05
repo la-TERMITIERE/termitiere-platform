@@ -7,7 +7,7 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { notifierBeneficiaire } from './notifications'
 import { genId } from '../../utils/formatters'
-import { SECTEURS, SEUIL_APPROBATION_PAU } from './data'
+import { SECTEURS } from './data'
 import { budgetRestantSecteur, budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
@@ -19,7 +19,6 @@ import { FULL_ACCESS_ROLES } from '../../core/roles'
 export function raisonAutorisation(d, { budgets, depenses }) {
   const montant = Number(d.montant) || 0
   if (d.imprevue) return 'dépense imprévue'
-  if (montant > SEUIL_APPROBATION_PAU) return `dépasse ${SEUIL_APPROBATION_PAU.toLocaleString('fr-FR')} FCFA`
   const estCaisseCommune = d.financePar === 'caisse_commune'
   const restant = budgetRestantSecteur(budgets, depenses, estCaisseCommune ? 'divers' : d.secteurId, d.date, estCaisseCommune ? null : d.site)
   if (restant !== null && montant > restant) return `dépasse le budget restant ${estCaisseCommune ? 'de la Caisse commune' : 'du secteur'} (${restant.toLocaleString('fr-FR')} FCFA)`
@@ -51,8 +50,8 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses }) {
 }
 
 // Crée une nouvelle dépense en appliquant le circuit d'autorisation : imprévue, ou
-// montant > seuil, ou montant > budget restant du secteur → demande envoyée au PAU
-// (statut « en attente ») ; sinon → décaissée immédiatement. Retourne { statutInitial }.
+// montant > budget restant du secteur → demande envoyée au PAU (statut « en attente »)
+// ; sinon → décaissée immédiatement. Retourne { statutInitial }.
 export async function soumettreNouvelleDepense(d, { user, budgets, depenses }) {
   const secteur = SECTEURS.find((s) => s.id === d.secteurId)
   const libelle = libelleSecteurSite(secteur, d)
