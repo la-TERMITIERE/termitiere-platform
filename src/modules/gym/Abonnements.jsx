@@ -253,6 +253,26 @@ export default function Abonnements() {
     }
   }
 
+  // Annulation d'un pointage — ex. jour coché par erreur : on retire l'enregistrement
+  // de présence de ce client pour cette date précise (accessible depuis le calendrier
+  // rapide, en cliquant sur un jour déjà pointé).
+  async function annulerPointage(a, date) {
+    const presence = allPresences.find((p) =>
+      matchSite(p, site) && p.date === date && (p.clientNom || '').trim().toLowerCase() === (a.clientNom || '').trim().toLowerCase()
+    )
+    if (!presence) return
+    if (!window.confirm(`Annuler le pointage de ${a.clientNom} du ${formatDateShort(date)} ?`)) return
+    setPointageBusy(a.id)
+    try {
+      await removeItem('gym_presences', presence.id)
+      await audit('gym', 'PRESENCE_ANNULEE', `${a.clientNom} — pointage du ${formatDateShort(date)} annulé`)
+      toast.success('Pointage annulé ✓')
+      setDateSelectionnee(null)
+    } finally {
+      setPointageBusy(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
@@ -495,12 +515,22 @@ export default function Abonnements() {
         {...glassModalProps(COULEUR_MODULE.gym)}
         footer={<>
           <Button variant="outline" onClick={() => { setCalendrierClient(null); setDateSelectionnee(null) }}>Fermer</Button>
-          {calendrierClient && abonnementActif(calendrierClient.dateFin) && (
-            <Button onClick={() => pointerArrivee(calendrierClient, dateSelectionnee)}
-              disabled={!dateSelectionnee} loading={pointageBusy === calendrierClient.id}>
-              <CheckCircle2 size={15} /> Pointer{dateSelectionnee && dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
-            </Button>
-          )}
+          {calendrierClient && abonnementActif(calendrierClient.dateFin) && (() => {
+            const dejaPointe = !!dateSelectionnee && presences.some((p) =>
+              p.date === dateSelectionnee && (p.clientNom || '').trim().toLowerCase() === calendrierClient.clientNom.trim().toLowerCase()
+            )
+            return dejaPointe ? (
+              <Button variant="danger" onClick={() => annulerPointage(calendrierClient, dateSelectionnee)}
+                loading={pointageBusy === calendrierClient.id}>
+                <Trash2 size={15} /> Annuler le pointage{dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
+              </Button>
+            ) : (
+              <Button onClick={() => pointerArrivee(calendrierClient, dateSelectionnee)}
+                disabled={!dateSelectionnee} loading={pointageBusy === calendrierClient.id}>
+                <CheckCircle2 size={15} /> Pointer{dateSelectionnee && dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
+              </Button>
+            )
+          })()}
         </>}>
         {calendrierClient && (() => {
           const pointagesClient = presences.filter((p) =>
@@ -515,8 +545,8 @@ export default function Abonnements() {
               {interactif && (
                 <p className="mt-2 text-center text-[11px] text-gray-400">
                   {dateSelectionnee
-                    ? `Jour sélectionné : ${formatDateShort(dateSelectionnee)} — clique sur « Pointer » pour enregistrer son arrivée.`
-                    : "Clique sur un jour (passé ou aujourd'hui) pour pointer une arrivée oubliée."}
+                    ? `Jour sélectionné : ${formatDateShort(dateSelectionnee)} — pointe une arrivée oubliée, ou annule un pointage fait par erreur.`
+                    : "Clique sur un jour (passé ou aujourd'hui) pour pointer une arrivée oubliée, ou annuler un pointage par erreur."}
                 </p>
               )}
             </>
