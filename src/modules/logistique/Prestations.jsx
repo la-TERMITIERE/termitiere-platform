@@ -1,11 +1,12 @@
 // Prestations / Location de matériel — quantité × tarif unitaire = montant par catégorie.
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Eye, Trash2, CheckCircle2, Coins, Save } from 'lucide-react'
+import { Plus, Eye, Trash2, CheckCircle2, Coins, Save, Wallet, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
+import StatCard from '../../shared/ui/StatCard'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -15,8 +16,8 @@ import { useLogistiqueStore } from './store/referentielStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { todayStr, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { isApproverRole, isReadOnlyRole, logistiqueVoitMontants, logistiqueVoitValidateur } from '../../core/roles'
+import { todayStr, addDays, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
+import { isApproverRole, isReadOnlyRole, logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
@@ -32,6 +33,15 @@ const STATUTS = {
   annulee: { label: 'Annulée', tone: 'danger' }
 }
 
+// Rappel visuel : une prestation dont la période est terminée depuis plus de
+// SEUIL_RELANCE_JOURS jours mais jamais facturée (statut toujours brouillon) —
+// pour repérer d'un coup d'œil celles qu'on a oublié de facturer, sans attendre
+// de tomber dessus par hasard. Indépendant du statut d'approbation ou de retour
+// du matériel : ce qui compte ici, c'est seulement « la période est passée et
+// personne n'a émis la facture ».
+const SEUIL_RELANCE_JOURS = 2
+const factureEnRetard = (p) => p.statut === 'brouillon' && !!p.dateFin && p.dateFin < addDays(todayStr(), -SEUIL_RELANCE_JOURS)
+
 export default function Prestations() {
   const { user, role } = useAuth()
   const site = useSite()
@@ -40,6 +50,7 @@ export default function Prestations() {
   // accordé) mais pas qui a approuvé la prestation (cf. `voitValidateur`).
   const voitMontants = logistiqueVoitMontants(role)
   const voitValidateur = logistiqueVoitValidateur(role)
+  const estAdministration = canViewFinance(role)
   const { data: allPrestations } = useCollection('logistique_prestations')
   const { data: clients } = useCollection('logistique_clients')
   const { data: allRetours } = useCollection('logistique_retours')
@@ -121,6 +132,15 @@ export default function Prestations() {
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [prestations, modePeriode, filtreJour, filtreMois, filtreDebut, filtreFin, filtreStatut, filtreClient])
+
+  // Cumul des prestations — somme de la liste actuellement filtrée (période, statut,
+  // client ci-dessus), comme le KPI équivalent de Facturation (`cumulFacturation`) :
+  // recalculé automatiquement dès qu'un filtre change, jamais figé sur le total brut.
+  const cumulPrestations = useMemo(() => liste.reduce((s, p) => s + (Number(p.total) || 0), 0), [liste])
+
+  // Basé sur `prestations` (site courant, PAS `liste`) : ce rappel ne doit jamais
+  // disparaître simplement parce qu'un filtre période/statut/client est actif.
+  const aRelancer = useMemo(() => prestations.filter(factureEnRetard), [prestations])
 
   function openCreate() {
     setForm({
@@ -289,6 +309,36 @@ export default function Prestations() {
   return (
     <div className="space-y-4">
       {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
+
+      {/* Rappel : prestations dont la période est passée depuis plus de
+          SEUIL_RELANCE_JOURS jours mais jamais facturées — sans ça, elles ne se
+          signalent que si on tombe dessus par hasard dans le tableau. Toujours
+          visible, quel que soit le filtre en cours (cf. `aRelancer`). */}
+      {aRelancer.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>{aRelancer.length}</strong> prestation{aRelancer.length > 1 ? 's' : ''} terminée{aRelancer.length > 1 ? 's' : ''} depuis plus de {SEUIL_RELANCE_JOURS} jours,
+            toujours pas facturée{aRelancer.length > 1 ? 's' : ''} : {aRelancer.slice(0, 4).map((p) => `${p.num} (${p.clientNom})`).join(', ')}{aRelancer.length > 4 ? '…' : ''}
+          </span>
+        </div>
+      )}
+
+      {/* Cumul des prestations — réservé à l'administration, recalculé selon les
+          filtres ci-dessous (période, statut, client). Valeur BRUTE de ce qui a
+          été créé ici, PAS le chiffre d'affaires réel : une prestation encore en
+          brouillon (jamais facturée) compte quand même dans ce total — pour le
+          CA réellement acquis, voir le Cumul facturation (statut Approuvée) dans
+          l'onglet Facturation. */}
+      {estAdministration && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            title={`Valeur brute des prestations${filtreStatut ? ` (${STATUTS[filtreStatut]?.label.toLowerCase()})` : ''}`}
+            value={formatMoney(cumulPrestations)}
+            sub={`${liste.length} prestation${liste.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}${filtreClient.trim() ? ' · client filtré' : ''} · hors facturation`}
+            icon={Wallet} accent={COULEUR_MODULE.logistique} />
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
@@ -318,7 +368,12 @@ export default function Prestations() {
             { key: 'periode', label: 'Période', render: (r) => `${formatDateShort(r.dateDebut)} → ${formatDateShort(r.dateFin)}` },
             // Colonne « Montant » retirée pour la secrétaire (cf. voitMontants).
             ...(voitMontants ? [{ key: 'total', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.total)}</strong> }] : []),
-            { key: 'statut', label: 'Facturation', render: (r) => <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge> },
+            { key: 'statut', label: 'Facturation', render: (r) => (
+              <div>
+                <Badge tone={STATUTS[r.statut]?.tone}>{STATUTS[r.statut]?.label || r.statut}</Badge>
+                {factureEnRetard(r) && <p className="mt-0.5 text-[10px] font-semibold text-amber-600">⏳ À facturer</p>}
+              </div>
+            ) },
             { key: 'etat', label: 'État', render: (r) => { const s = statutOp(r); return <Badge tone={s.tone}>{s.label}</Badge> } },
             { key: 'appr', label: 'Appro.', align: 'center', render: (r) => r.approuvee
               ? <Badge tone="success">Approuvée</Badge>
