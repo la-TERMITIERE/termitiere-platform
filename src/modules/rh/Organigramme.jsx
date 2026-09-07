@@ -38,7 +38,7 @@ export default function Organigramme() {
                   {d.membres.length === 0 && <li className="px-4 py-3 text-sm text-gray-400">Aucun membre affecté.</li>}
                   {d.membres.map((e) => (
                     <li key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 font-bold text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">{(e.nom || '?').charAt(0).toUpperCase()}</div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 font-bold text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">{(e.nom || '').trim().charAt(0).toUpperCase() || '?'}</div>
                       <div>
                         <p className="font-semibold text-gray-800 dark:text-gray-100">{e.nom}</p>
                         <p className="text-xs text-gray-500">{e.poste || 'Poste non défini'}</p>
