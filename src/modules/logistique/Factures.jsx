@@ -64,6 +64,7 @@ export default function Factures() {
   const [modePeriode, setModePeriode] = useState('jour')
   const [filtreJour, setFiltreJour]   = useState('')
   const [filtreMois, setFiltreMois]   = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin]     = useState('')
   // Par défaut sur « Approuvée » (pas « Tous ») : c'est la seule valeur qui
@@ -72,11 +73,13 @@ export default function Factures() {
   // et approuvée, ce qui gonflait le Cumul facturation affiché à l'ouverture.
   const [filtreStatut, setFiltreStatut] = useState('approuvee')
   const [filtreClient, setFiltreClient] = useState('')
-  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const liste = useMemo(() => {
     let rows = [...factures]
     if (modePeriode === 'mois' && filtreMois) {
       rows = rows.filter((f) => (f.date || '').startsWith(filtreMois))
+    } else if (modePeriode === 'annee' && filtreAnnee) {
+      rows = rows.filter((f) => (f.date || '').startsWith(filtreAnnee))
     } else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
       rows = rows.filter((f) => (!filtreDebut || f.date >= filtreDebut) && (!filtreFin || f.date <= filtreFin))
     } else if (modePeriode === 'jour' && filtreJour) {
@@ -88,7 +91,7 @@ export default function Factures() {
       rows = rows.filter((f) => (f.clientNom || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, modePeriode, filtreJour, filtreMois, filtreDebut, filtreFin, filtreStatut, filtreClient])
+  }, [factures, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
 
   // Cumul de facturation — somme de la liste actuellement filtrée (période, statut,
   // client ci-dessus) : par défaut (aucun filtre de statut) il mélange brouillon +
@@ -204,6 +207,7 @@ export default function Factures() {
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <div>

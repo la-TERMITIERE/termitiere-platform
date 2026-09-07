@@ -92,10 +92,13 @@ export default function SourcesRevenus() {
   // granularité (Jour / Mois) suivi d'UN SEUL champ de saisie, dont le TYPE change
   // selon le mode choisi (calendrier jour, ou sélecteur mois/année natif) — plutôt
   // que deux champs distincts à remplir/effacer chacun de son côté.
-  const [modePeriode, setModePeriode] = useState('jour') // 'jour' | 'mois'
+  const [modePeriode, setModePeriode] = useState('jour') // 'jour' | 'mois' | 'annee' | 'plage'
   const [filtreJour, setFiltreJour]   = useState('')
   const [filtreMois, setFiltreMois]   = useState('')
-  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : filtreJour
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin]     = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const [recherche, setRecherche]         = useState('')
   const [detail, setDetail]               = useState(null)
 
@@ -116,8 +119,10 @@ export default function SourcesRevenus() {
   const liste = useMemo(() => {
     if (!filtrePeriodeActif) return baseFiltree
     if (modePeriode === 'mois') return baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
+    if (modePeriode === 'annee') return baseFiltree.filter((l) => (l.date || '').startsWith(filtreAnnee))
+    if (modePeriode === 'plage') return baseFiltree.filter((l) => (!filtreDebut || l.date >= filtreDebut) && (!filtreFin || l.date <= filtreFin))
     return baseFiltree.filter((l) => l.date === filtreJour)
-  }, [baseFiltree, modePeriode, filtreJour, filtreMois, filtrePeriodeActif])
+  }, [baseFiltree, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtrePeriodeActif])
 
   const total = liste.reduce((s, l) => s + l.montant, 0)
 
@@ -131,7 +136,11 @@ export default function SourcesRevenus() {
     ? "Aujourd'hui"
     : modePeriode === 'mois'
       ? `${MOIS_LABELS[Number(filtreMois.slice(5, 7)) - 1]} ${filtreMois.slice(0, 4)}`
-      : formatDateShort(filtreJour)
+      : modePeriode === 'annee'
+        ? filtreAnnee
+        : modePeriode === 'plage'
+          ? `${filtreDebut ? formatDateShort(filtreDebut) : '…'} → ${filtreFin ? formatDateShort(filtreFin) : '…'}`
+          : formatDateShort(filtreJour)
   const kpiParSecteur = useMemo(() => {
     // La carte existe pour tout secteur ayant DÉJÀ eu du revenu (peu importe quand) —
     // sinon un secteur sans rien aujourd'hui disparaissait complètement de la vue au
@@ -140,14 +149,18 @@ export default function SourcesRevenus() {
       ? baseFiltree.filter((l) => l.date === aujourdhui)
       : modePeriode === 'mois'
         ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreMois))
-        : baseFiltree.filter((l) => l.date === filtreJour)
+        : modePeriode === 'annee'
+          ? baseFiltree.filter((l) => (l.date || '').startsWith(filtreAnnee))
+          : modePeriode === 'plage'
+            ? baseFiltree.filter((l) => (!filtreDebut || l.date >= filtreDebut) && (!filtreFin || l.date <= filtreFin))
+            : baseFiltree.filter((l) => l.date === filtreJour)
     const sommesPeriode = new Map()
     periode.forEach((l) => sommesPeriode.set(l.secteurId, (sommesPeriode.get(l.secteurId) || 0) + l.montant))
     const secteursConnus = new Set(baseFiltree.map((l) => l.secteurId))
     return [...secteursConnus]
       .map((id) => ({ secteur: SECTEURS.find((s) => s.id === id) || { id, label: id, color: '#64748b' }, montant: sommesPeriode.get(id) || 0 }))
       .sort((a, b) => b.montant - a.montant || a.secteur.label.localeCompare(b.secteur.label))
-  }, [baseFiltree, modePeriode, filtreJour, filtreMois, filtrePeriodeActif, aujourdhui])
+  }, [baseFiltree, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtrePeriodeActif, aujourdhui])
   const secteurDetail = detail ? SECTEURS.find((s) => s.id === detail.secteurId) : null
   const couleurDetail = secteurDetail?.color || COULEUR_MODULE.depense
 
@@ -223,7 +236,10 @@ export default function SourcesRevenus() {
             un comportement identique pour comparer les deux écrans sur la même période. */}
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
-          valeurMois={filtreMois} onMoisChange={setFiltreMois} />
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
           <Select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}>

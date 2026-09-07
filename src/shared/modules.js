@@ -158,7 +158,7 @@ export const MODULE_NAV = {
     // (cf. BANQUE_ROLES) — hors contexte d'un site (compte unique du secteur, pas
     // un par salle), comme Comparatif côté gym : chemin SANS site, déclaré avant
     // `:site/*` dans logistique/index.jsx.
-    { label: 'Compte bancaire', to: '/logistique/banque', icon: Landmark, roles: BANQUE_ROLES },
+    { label: 'Compte bancaire', to: '/logistique/banque', icon: Landmark, roles: BANQUE_ROLES, horsSite: true },
     { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
     { label: 'Pilotage & Analyses', to: '/logistique/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
@@ -259,7 +259,7 @@ export const MODULE_NAV = {
     // Juste après le Dashboard — réservé exclusivement à PAU/Assistant PAU/GE/Info
     // (cf. BANQUE_ROLES) — hors contexte d'une salle (compte unique du secteur),
     // comme Comparatif : chemin SANS site, déclaré avant `:site/*` dans gym/index.jsx.
-    { label: 'Compte bancaire', to: '/gym/banque', icon: Landmark, roles: BANQUE_ROLES },
+    { label: 'Compte bancaire', to: '/gym/banque', icon: Landmark, roles: BANQUE_ROLES, horsSite: true },
     { label: 'Nos forfaits', to: '/gym/forfaits', icon: Tag },
     { label: 'Séances', to: '/gym/seances', icon: Ticket },
     { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard },

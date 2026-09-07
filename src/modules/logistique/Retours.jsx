@@ -221,7 +221,7 @@ export default function Retours() {
                       {d.etat !== 'none' && (
                         <Input className="md:col-span-2" type="number" min="1" max={reste}
                           value={d.qte} onChange={(e) => setDraftMat(l.materielId, { qte: e.target.value })}
-                          placeholder={d.etat === 'OK' ? `Qté (${reste})` : 'Qté'} />
+                          placeholder={d.etat === 'OK' ? `Qté (${reste})` : `Qté (1 à ${reste})`} />
                       )}
                       {cassePerdu && (
                         <>

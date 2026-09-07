@@ -2,12 +2,14 @@
 // Calquée sur la facturation MAXI-AGRO — permet d'émettre des factures
 // directement depuis l'application (briques + lignes libres).
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Eye, Receipt } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Eye, Receipt, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Table from '../../shared/ui/Table'
+import StatCard from '../../shared/ui/StatCard'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -15,7 +17,7 @@ import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole, canExportExcel } from '../../core/roles'
+import { isFullAccessRole, canExportExcel, canViewFinance } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -39,6 +41,7 @@ export default function Factures() {
   // partout mais ne suppriment jamais (décision explicite).
   const peutFacturer = () => role === 'agent'
   const peutSupprimer = isFullAccessRole(role)
+  const estAdministration = canViewFinance(role)
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: ventes } = useCollection('evenementiel_ventes')
@@ -54,13 +57,33 @@ export default function Factures() {
   const [modal, setModal] = useState(null) // { facture, editId }
   const [detail, setDetail] = useState(null) // facture consultée
 
-  const liste = useMemo(
-    () =>
-      [...factures]
-        .filter((f) => (f.client?.nom || '').toLowerCase().includes(recherche.toLowerCase()))
-        .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [factures, recherche]
-  )
+  // Filtre de période (Jour / Mois / Plage) — même composant et même comportement
+  // que la Facturation MAXI LOGISTIQUE, pour que le tri se présente identiquement.
+  const [modePeriode, setModePeriode] = useState('jour')
+  const [filtreJour, setFiltreJour]   = useState('')
+  const [filtreMois, setFiltreMois]   = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin]     = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+
+  const liste = useMemo(() => {
+    let rows = [...factures].filter((f) => (f.client?.nom || '').toLowerCase().includes(recherche.toLowerCase()))
+    if (modePeriode === 'mois' && filtreMois) {
+      rows = rows.filter((f) => (f.date || '').startsWith(filtreMois))
+    } else if (modePeriode === 'annee' && filtreAnnee) {
+      rows = rows.filter((f) => (f.date || '').startsWith(filtreAnnee))
+    } else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      rows = rows.filter((f) => (!filtreDebut || f.date >= filtreDebut) && (!filtreFin || f.date <= filtreFin))
+    } else if (modePeriode === 'jour' && filtreJour) {
+      rows = rows.filter((f) => f.date === filtreJour)
+    }
+    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [factures, recherche, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+
+  // Cumul de facturation — réservé à l'administration, recalculé selon les filtres
+  // ci-dessus (période + recherche client) déjà appliqués à `liste`.
+  const cumulFacturation = useMemo(() => liste.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0), [liste])
 
   // Clients connus : ceux du référentiel + ceux déjà facturés (uniques par nom).
   const clientsConnus = useMemo(() => {
@@ -189,7 +212,7 @@ export default function Factures() {
       sections: [{
         name: 'Factures Briqueterie',
         title: 'Facturation — Briqueterie',
-        subtitle: `${liste.length} facture(s)${recherche ? ` — recherche : « ${recherche} »` : ''}`,
+        subtitle: `${liste.length} facture(s)${filtrePeriodeActif ? ' — période filtrée' : ''}${recherche ? ` — recherche : « ${recherche} »` : ''}`,
         columns: [
           { key: 'N°', label: 'N°', width: 14 },
           { key: 'Date', label: 'Date', width: 12 },
@@ -237,8 +260,27 @@ export default function Factures() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input className="max-w-xs" placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+      {estAdministration && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            title="Cumul facturation"
+            value={formatMoney(cumulFacturation)}
+            sub={`${liste.length} facture${liste.length > 1 ? 's' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}${recherche ? ' · recherche filtrée' : ''}`}
+            icon={Wallet} accent={COULEUR_MODULE.evenementiel} />
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
+          <Input placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        </div>
         {canExportExcel(role) && (
           <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
         )}

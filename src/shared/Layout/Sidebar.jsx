@@ -198,15 +198,19 @@ export default function Sidebar({ open, onClose }) {
   let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
 
   // Modules multi-sites : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
-  // On préfixe alors chaque destination par /<module>/<site>/…
+  // On préfixe alors chaque destination par /<module>/<site>/… — SAUF les entrées
+  // marquées `horsSite` (ex. Compte bancaire) : ce sont des volets communs au
+  // secteur entier (pas dupliqués par site), déclarés hors du sous-routeur
+  // `:site/*` côté <module>/index.jsx — les préfixer casserait leur lien (route
+  // inexistante) tout en les affichant quand même dans le menu.
   if (siteNames) {
     const base = `/${activeModule.id}`
     moduleNav = logSite
-      ? moduleNav.map((item) => ({
+      ? moduleNav.map((item) => item.horsSite ? item : ({
           ...item,
           to: item.to === base ? `${base}/${logSite}` : item.to.replace(`${base}/`, `${base}/${logSite}/`)
         }))
-      : []
+      : moduleNav.filter((item) => item.horsSite)
   }
 
   const moduleTitle = activeModule ? (logSite ? `${activeModule.nom} · ${siteNames[logSite]}` : activeModule.nom) : "Toujours dans l'action"

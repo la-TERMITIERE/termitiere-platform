@@ -37,15 +37,19 @@ const RANG_PODIUM = [
   { medaille: '🥉', label: '3e',  bg: 'bg-gradient-to-r from-orange-50 to-amber-50', ring: 'ring-1 ring-orange-200' }
 ]
 
-// Regroupe une liste de séances/abonnements par catégorie (Simple/Classique/VIP),
-// avec le sous-total de chaque groupe — sert au détail affiché en cliquant un KPI.
+// Regroupe une liste de séances/abonnements (ou de factures) par catégorie
+// (Simple/Classique/VIP), avec le sous-total de chaque groupe — sert au détail
+// affiché en cliquant un KPI.
 function groupesParCategorie(liste) {
   return CATEGORIES_GYM.map((c) => {
     const lignes = liste.filter((x) => x.categorie === c.id).sort((a, b) => (a.date < b.date ? 1 : -1))
-    // Sous-groupes séances/abonnements — un abonnement porte un `dateFin`, pas une
-    // séance : sert à ne jamais mélanger les deux types dans la vue « Total ».
-    const seancesLignes = lignes.filter((x) => !x.dateFin)
-    const abonnementsLignes = lignes.filter((x) => x.dateFin)
+    // Sous-groupes séances/abonnements : une facture porte `sourceType`
+    // ('seance'/'abonnement') ; à défaut (séance/abonnement bruts), un abonnement
+    // porte un `dateFin`, pas une séance — sert à ne jamais mélanger les deux
+    // types dans la vue « Total ».
+    const estAbonnement = (x) => (x.sourceType ? x.sourceType === 'abonnement' : !!x.dateFin)
+    const seancesLignes = lignes.filter((x) => !estAbonnement(x))
+    const abonnementsLignes = lignes.filter(estAbonnement)
     return { ...c, lignes, seancesLignes, abonnementsLignes, total: lignes.reduce((s, x) => s + (Number(x.montant) || 0), 0) }
   })
 }
@@ -82,6 +86,7 @@ export default function Dashboard() {
   const params = useGymParams(site)
   const { data: allSeances }     = useCollection('gym_seances')
   const { data: allAbonnements } = useCollection('gym_abonnements')
+  const { data: allFactures }    = useCollection('gym_factures')
   const { data: allClients }     = useCollection('gym_clients')
   const { data: allPresences }   = useCollection('gym_presences')
   const { data: allCoachs }        = useCollection('gym_coachs')
@@ -90,6 +95,7 @@ export default function Dashboard() {
   // ne sont pas ceux de Kara.
   const seances     = useMemo(() => allSeances.filter((s) => matchSite(s, site)), [allSeances, site])
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
+  const factures    = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const clients     = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
   const presences   = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
   const coachs         = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
@@ -118,9 +124,16 @@ export default function Dashboard() {
 
   const seancesMois     = useMemo(() => seances.filter((s) => dansPeriode(s.date)), [seances, start, end])
   const abonnementsMois = useMemo(() => abonnements.filter((a) => dansPeriode(a.date)), [abonnements, start, end])
+  // « Total encaissé » — calqué EXACTEMENT sur la Facturation (somme de
+  // `gym_factures`, pas des séances/abonnements bruts) pour que les deux chiffres
+  // soient toujours identiques sur une même période. Tant qu'une séance/un
+  // abonnement n'a pas de facture générée (cf. bouton « Générer la facture
+  // manquante » dans Séances/Abonnements), il ne compte pas ici — c'est voulu :
+  // ce KPI représente ce qui est réellement facturé, pas l'activité brute.
+  const facturesMois = useMemo(() => factures.filter((f) => dansPeriode(f.date)), [factures, start, end])
   const totalEncaisseMois = useMemo(
-    () => [...seancesMois, ...abonnementsMois].reduce((s, x) => s + (Number(x.montant) || 0), 0),
-    [seancesMois, abonnementsMois]
+    () => facturesMois.reduce((s, x) => s + (Number(x.montant) || 0), 0),
+    [facturesMois]
   )
   // Progression vs objectif du mois (Paramètres) — n'a de sens que sur « Mois en
   // cours » : comparer un quota mensuel à une période perso ou « Tout » serait trompeur.
@@ -130,9 +143,10 @@ export default function Dashboard() {
 
   const seancesMoisPrecedent     = useMemo(() => seances.filter((s) => dansPeriodePrecedente(s.date)), [seances, prevStart, prevEnd, comparable])
   const abonnementsMoisPrecedent = useMemo(() => abonnements.filter((a) => dansPeriodePrecedente(a.date)), [abonnements, prevStart, prevEnd, comparable])
+  const facturesMoisPrecedent = useMemo(() => factures.filter((f) => dansPeriodePrecedente(f.date)), [factures, prevStart, prevEnd, comparable])
   const totalEncaisseMoisPrecedent = useMemo(
-    () => [...seancesMoisPrecedent, ...abonnementsMoisPrecedent].reduce((s, x) => s + (Number(x.montant) || 0), 0),
-    [seancesMoisPrecedent, abonnementsMoisPrecedent]
+    () => facturesMoisPrecedent.reduce((s, x) => s + (Number(x.montant) || 0), 0),
+    [facturesMoisPrecedent]
   )
   const nouveauxClientsMois = useMemo(
     () => clients.filter((c) => c.createdAt && dansPeriode(new Date(c.createdAt).toISOString().slice(0, 10))).length,
@@ -265,9 +279,12 @@ export default function Dashboard() {
   const groupesModal = useMemo(() => {
     if (detailModal === 'seances')     return groupesParCategorie(seancesMois)
     if (detailModal === 'abonnements') return groupesParCategorie(abonnementsMois)
-    if (detailModal === 'total')       return groupesParCategorie([...seancesMois, ...abonnementsMois])
+    // Vue « Total » : reprend les FACTURES du mois (cf. totalEncaisseMois), pas les
+    // séances/abonnements bruts — pour que le détail affiché somme exactement au
+    // même montant que le KPI cliqué.
+    if (detailModal === 'total')       return groupesParCategorie(facturesMois)
     return []
-  }, [detailModal, seancesMois, abonnementsMois])
+  }, [detailModal, seancesMois, abonnementsMois, facturesMois])
 
   return (
     <div className="space-y-4">

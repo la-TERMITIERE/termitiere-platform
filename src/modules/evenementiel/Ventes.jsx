@@ -1,6 +1,6 @@
 // Ventes briques — création de commandes, liées aux autorisations de sortie.
 import { useMemo, useState } from 'react'
-import { Plus, Send, Trash2, Eye, ShoppingCart } from 'lucide-react'
+import { Plus, Send, Trash2, Eye, ShoppingCart, Wallet, FileSpreadsheet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -8,6 +8,8 @@ import Modal from '../../shared/ui/Modal'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
+import StatCard from '../../shared/ui/StatCard'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -18,8 +20,9 @@ import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole, canViewFinance, canExportExcel } from '../../core/roles'
 import { dernierStockBriques } from './logic'
 
 const STATUTS = {
@@ -35,6 +38,7 @@ export default function Ventes() {
   const lectureSeule = isReadOnlyRole(role)
   // Les agents modifient/créent partout mais ne suppriment jamais (décision explicite).
   const peutSupprimer = isFullAccessRole(role)
+  const estAdministration = canViewFinance(role)
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
@@ -44,7 +48,41 @@ export default function Ventes() {
   const [form, setForm] = useState(null)
   const [detail, setDetail] = useState(null)   // vente consultée
 
-  const liste = useMemo(() => [...ventes].sort((a, b) => (a.date < b.date ? 1 : -1)), [ventes])
+  // Filtre de tri — période (Jour / Mois / Plage), client et statut — même
+  // composant et même comportement que la Facturation MAXI LOGISTIQUE.
+  const [modePeriode, setModePeriode] = useState('jour')
+  const [filtreJour, setFiltreJour]   = useState('')
+  const [filtreMois, setFiltreMois]   = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin]     = useState('')
+  const [filtreStatut, setFiltreStatut] = useState('')
+  const [filtreClient, setFiltreClient] = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+
+  const liste = useMemo(() => {
+    let rows = [...ventes]
+    if (modePeriode === 'mois' && filtreMois) {
+      rows = rows.filter((v) => (v.date || '').startsWith(filtreMois))
+    } else if (modePeriode === 'annee' && filtreAnnee) {
+      rows = rows.filter((v) => (v.date || '').startsWith(filtreAnnee))
+    } else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      rows = rows.filter((v) => (!filtreDebut || v.date >= filtreDebut) && (!filtreFin || v.date <= filtreFin))
+    } else if (modePeriode === 'jour' && filtreJour) {
+      rows = rows.filter((v) => v.date === filtreJour)
+    }
+    if (filtreStatut) rows = rows.filter((v) => v.statut === filtreStatut)
+    if (filtreClient.trim()) {
+      const q = filtreClient.trim().toLowerCase()
+      rows = rows.filter((v) => (v.clientNom || '').toLowerCase().includes(q))
+    }
+    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [ventes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
+
+  // Cumul des ventes — réservé à l'administration, recalculé selon les filtres
+  // ci-dessus (période, statut, client) : sans filtre de statut, il mélange donc
+  // tous les statuts (brouillon compris), comme la valeur brute déjà affichée.
+  const cumulVentes = useMemo(() => liste.reduce((s, v) => s + (Number(v.total) || 0), 0), [liste])
 
   function openCreate() {
     setForm({
@@ -98,6 +136,40 @@ export default function Ventes() {
     toast.success('Vente supprimée')
   }
 
+  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
+  // les ventes actuellement affichées (période, statut, client, tri déjà
+  // appliqués à `liste`), jamais la collection brute.
+  function exportXLSX() {
+    const rows = liste.map((v) => ({
+      'N°': v.num,
+      'Date': formatDateShort(v.date),
+      'Client': v.clientNom || '—',
+      'Chargement': formatDateShort(v.dateChargement),
+      'Brique(s)': (v.lignes || []).filter((l) => (l.briqueNom || '').trim()).map((l) => `${l.briqueNom} ×${formatNumber(l.qte)}`).join(', '),
+      'Montant': Number(v.total) || 0,
+      'Statut': (STATUTS[v.statut] || { label: v.statut }).label
+    }))
+    exportRapportExcel({
+      filename: `ventes-briqueterie-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Ventes Briqueterie',
+        title: 'Ventes — Briqueterie',
+        subtitle: `${liste.length} vente(s)${filtreStatut ? ` — ${STATUTS[filtreStatut]?.label}` : ''}${filtrePeriodeActif ? ' — période filtrée' : ''}${filtreClient.trim() ? ` — client : « ${filtreClient} »` : ''}`,
+        columns: [
+          { key: 'N°', label: 'N°', width: 14 },
+          { key: 'Date', label: 'Date', width: 12 },
+          { key: 'Client', label: 'Client', width: 22 },
+          { key: 'Chargement', label: 'Chargement', width: 14 },
+          { key: 'Brique(s)', label: 'Brique(s)', width: 40 },
+          { key: 'Montant', label: 'Montant', width: 16, type: 'money' },
+          { key: 'Statut', label: 'Statut', width: 16 }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', 'Montant': rows.reduce((s, r) => s + (r['Montant'] || 0), 0) }
+      }]
+    })
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
@@ -119,10 +191,46 @@ export default function Ventes() {
         <strong>3 autorités</strong> (Direction, Contrôle, Commercial).{' '}
         <Link to="/evenementiel/demandes" className="font-semibold underline">Demander une autorisation →</Link>
       </div>
+      {estAdministration && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            title={`Cumul des ventes${filtreStatut ? ` (${STATUTS[filtreStatut]?.label.toLowerCase()})` : ''}`}
+            value={formatMoney(cumulVentes)}
+            sub={`${liste.length} vente${liste.length > 1 ? 's' : ''}${!filtreStatut ? ' · tous statuts confondus' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}${filtreClient.trim() ? ' · client filtré' : ''}`}
+            icon={Wallet} accent={COULEUR_MODULE.evenementiel} />
+        </div>
+      )}
+
       <div className="flex justify-end gap-2">
+        {canExportExcel(role) && (
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
+        )}
         <Link to="/evenementiel/demandes"><Button variant="outline"><Send size={16} /> Autorisations</Button></Link>
         {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Nouvelle vente</Button>}
       </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
+          <input value={filtreClient} onChange={(e) => setFiltreClient(e.target.value)} placeholder="Rechercher un client…"
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+        <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
+          {[['', 'Tous'], ...Object.entries(STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
+            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <Card className="p-0">
         <Table
           stickyHeader
