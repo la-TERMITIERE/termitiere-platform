@@ -6,7 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -284,7 +284,7 @@ export const MODULE_NAV = {
     { label: 'Charge de travail', to: '/projet/charge-travail', icon: Users, roles: PROJET_PILOTAGE_ROLES },
     { label: 'Projets',     to: '/projet/projets',     icon: FolderKanban, badgeKey: 'projetProjets' },
     { label: 'Tâches',      to: '/projet/taches',      icon: ListChecks, badgeKey: 'projetTaches' },
-    { label: 'BTP',         to: '/projet/btp',         icon: HardHat, roles: ADMIN_VOLETS_ROLES },
+    { label: 'BTP',         to: '/projet/btp',         icon: HardHat, roles: BTP_ROLES },
     { label: 'Planning',    to: '/projet/planning',    icon: CalendarDays },
     { label: 'Documents',   to: '/projet/documents',   icon: Paperclip, badgeKey: 'projetDocuments' },
     { label: 'Galerie photos', to: '/projet/galerie',  icon: Images, badgeKey: 'projetGalerie' },
