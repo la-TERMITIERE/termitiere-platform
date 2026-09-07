@@ -6,12 +6,13 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
+import StatCard from '../../shared/ui/StatCard'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -26,7 +27,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { canExportExcel } from '../../core/roles'
+import { canExportExcel, canViewFinance } from '../../core/roles'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
 import EcartModal from './EcartModal'
@@ -57,6 +58,7 @@ export default function Factures() {
   const { user, role, canManage } = useAuth()
   const isAgent = role === 'agent'
   const peutApprouver = canManage()      // hiérarchie : approuve / ajuste
+  const estAdministration = canViewFinance(role)
   const { data: factures } = useCollection('agro_factures')
   const { data: users } = useCollection('users')
   const especes = useAgroStore((s) => s.especes)
@@ -85,6 +87,16 @@ export default function Factures() {
         .filter((f) => (filtre === 'tous' ? true : factureStatut(f) === filtre))
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
     [factures, recherche, filtre]
+  )
+
+  // Cumul de facturation — réservé à l'administration, recalculé selon la recherche
+  // client + le filtre de statut déjà appliqués à `liste`. Sans filtre de statut
+  // (« Toutes »), il mélange donc brouillon/en cours/certifiée, comme le total
+  // affiché sur la période ; pour ne voir que le CA réellement acquis, filtrer sur
+  // « Certifiées » — cf. l'en-tête ci-dessous : le CA n'est compté qu'à la certification.
+  const cumulFacturation = useMemo(
+    () => liste.reduce((s, f) => s + (calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC || 0), 0),
+    [liste]
   )
 
   const compteur = (st) => factures.filter((f) => factureStatut(f) === st).length
@@ -293,6 +305,18 @@ export default function Factures() {
         <strong>Sortie de stock en 4 étapes :</strong> ① l'agent crée une facture <em>brouillon</em> → ② il demande la sortie →
         ③ la hiérarchie l'approuve (décompte du stock) → ④ l'agent <em>certifie</em> (CA enregistré, impression). En cas d'écart, l'agent signale et la hiérarchie ajuste les quantités réelles.
       </div>
+
+      {/* Cumul de facturation — réservé à l'administration (masqué à l'agent, cf.
+          canViewFinance), recalculé selon la recherche + le filtre de statut ci-dessous. */}
+      {estAdministration && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            title={`Cumul facturation${filtre !== 'tous' ? ` (${filtres.find(([v]) => v === filtre)?.[1]})` : ''}`}
+            value={formatMoney(cumulFacturation)}
+            sub={`${liste.length} facture${liste.length > 1 ? 's' : ''}${recherche ? ' · recherche filtrée' : ''}`}
+            icon={Wallet} accent={COULEUR_MODULE.agro} />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Input className="max-w-xs" placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
