@@ -711,8 +711,14 @@ export default function Depenses() {
                 </button>
               </div>
 
+              {/* Empilé, jamais en grille : la modale (max-w-lg, ~512px) reste plus
+                  étroite que le seuil `sm:` (640px) qui déclenche les colonnes — les
+                  3 champs ne tiennent jamais côte à côte sans tronquer, même sur grand
+                  écran, puisque `sm:` se base sur la largeur de l'ÉCRAN, pas de la
+                  modale. En 1 colonne, chaque libellé (dont l'astérisque *) reste
+                  toujours sur une seule ligne. */}
               {modal.data.beneficiaireType === 'externe' ? (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-3">
                   <FormGroup label="Nom de la personne" required>
                     <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
                   </FormGroup>
@@ -724,7 +730,7 @@ export default function Depenses() {
                   </FormGroup>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-3">
                   <FormGroup label="Nom du bénéficiaire" required>
                     <ChampBeneficiaire
                       value={modal.data.beneficiaireNom}
@@ -741,13 +747,6 @@ export default function Depenses() {
                   </FormGroup>
                 </div>
               )}
-              <p className="mt-1.5 text-xs text-gray-400">
-                {modal.data.beneficiaireType === 'externe'
-                  ? 'Bénéficiaire externe : pas de notification automatique (aucun compte sur la plateforme).'
-                  : modal.data.beneficiaireUid
-                    ? 'Membre de l\'entreprise : recevra une notification dans l\'application pour confirmer la réception.'
-                    : 'Nom saisi librement, sans compte associé : pas de notification automatique.'}
-              </p>
             </div>
 
             {/* Justificatif */}
