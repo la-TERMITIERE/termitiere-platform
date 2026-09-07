@@ -111,15 +111,18 @@ export default function Prestations() {
   const [modePeriode, setModePeriode] = useState('jour')
   const [filtreJour, setFiltreJour]   = useState('')
   const [filtreMois, setFiltreMois]   = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin]     = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreClient, setFiltreClient] = useState('')
-  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const liste = useMemo(() => {
     let rows = [...prestations]
     if (modePeriode === 'mois' && filtreMois) {
       rows = rows.filter((p) => (p.date || '').startsWith(filtreMois))
+    } else if (modePeriode === 'annee' && filtreAnnee) {
+      rows = rows.filter((p) => (p.date || '').startsWith(filtreAnnee))
     } else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
       rows = rows.filter((p) => (!filtreDebut || p.date >= filtreDebut) && (!filtreFin || p.date <= filtreFin))
     } else if (modePeriode === 'jour' && filtreJour) {
@@ -131,7 +134,7 @@ export default function Prestations() {
       rows = rows.filter((p) => (p.clientNom || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [prestations, modePeriode, filtreJour, filtreMois, filtreDebut, filtreFin, filtreStatut, filtreClient])
+  }, [prestations, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
 
   // Cumul des prestations — somme de la liste actuellement filtrée (période, statut,
   // client ci-dessus), comme le KPI équivalent de Facturation (`cumulFacturation`) :
@@ -343,6 +346,7 @@ export default function Prestations() {
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <div>

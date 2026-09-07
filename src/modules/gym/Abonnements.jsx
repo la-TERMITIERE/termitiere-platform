@@ -81,11 +81,13 @@ export default function Abonnements() {
   const [dateSelectionnee, setDateSelectionnee] = useState(null) // jour cliqué dans ce calendrier, à pointer
   const moisEnCours = todayStr().slice(0, 7)
 
-  // Filtre de période — Jour / Mois / Année, sur la liste affichée ci-dessous.
+  // Filtre de période — Jour / Mois / Année / Plage, sur la liste affichée ci-dessous.
   const [modePeriode, setModePeriode] = useState('mois')
   const [filtreJour, setFiltreJour] = useState('')
   const [filtreMois, setFiltreMois] = useState('')
   const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
 
   const vide = () => {
     const date = todayStr(), categorie = CATEGORIES_GYM[0].id
@@ -110,9 +112,12 @@ export default function Abonnements() {
   const liste = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((a) => (a.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((a) => (a.date || '').startsWith(filtreAnnee))
+    if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      return toutes.filter((a) => (!filtreDebut || a.date >= filtreDebut) && (!filtreFin || a.date <= filtreFin))
+    }
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((a) => a.date === filtreJour)
     return toutes
-  }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee])
+  }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
   // Dernière arrivée pointée par client — sert à afficher/estimer l'inactivité.
@@ -293,7 +298,9 @@ export default function Abonnements() {
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee} />
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvel abonnement</Button>
       </div>
 

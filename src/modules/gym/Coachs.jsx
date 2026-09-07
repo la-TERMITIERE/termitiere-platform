@@ -89,13 +89,18 @@ export default function Coachs() {
   const [filtreJour, setFiltreJour] = useState('')
   const [filtreMois, setFiltreMois] = useState('')
   const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
   const toutes = useMemo(() => [...pointages].sort((a, b) => (a.date < b.date ? 1 : -1)), [pointages])
   const historique = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((p) => (p.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((p) => (p.date || '').startsWith(filtreAnnee))
+    if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      return toutes.filter((p) => (!filtreDebut || p.date >= filtreDebut) && (!filtreFin || p.date <= filtreFin))
+    }
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((p) => p.date === filtreJour)
     return toutes
-  }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee])
+  }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   return (
     <div className="space-y-4">
@@ -214,7 +219,9 @@ export default function Coachs() {
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee} />
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       <Card className="overflow-hidden border-l-4 p-0 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]" style={cardAccentStyle(COULEUR)}>

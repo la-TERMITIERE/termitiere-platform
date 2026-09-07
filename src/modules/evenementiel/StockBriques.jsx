@@ -57,10 +57,11 @@ export default function StockBriques() {
   const [consoModal, setConsoModal] = useState(null) // { matiereId, qte, label } — consommation saisie à la main
   const [matDetail, setMatDetail] = useState(null) // matière sélectionnée pour l'historique
 
-  // Filtre de période — Jour / Mois / Plage personnalisée — sur l'historique des casses.
+  // Filtre de période — Jour / Mois / Année / Plage personnalisée — sur l'historique des casses.
   const [modePeriodeCasses, setModePeriodeCasses] = useState('mois')
   const [filtreJourCasses, setFiltreJourCasses] = useState('')
   const [filtreMoisCasses, setFiltreMoisCasses] = useState('')
+  const [filtreAnneeCasses, setFiltreAnneeCasses] = useState('')
   const [filtreDebutCasses, setFiltreDebutCasses] = useState('')
   const [filtreFinCasses, setFiltreFinCasses] = useState('')
 
@@ -298,6 +299,7 @@ export default function StockBriques() {
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
   const casses = toutesCasses.filter((c) => {
     if (modePeriodeCasses === 'mois' && filtreMoisCasses) return (c.date || '').startsWith(filtreMoisCasses)
+    if (modePeriodeCasses === 'annee' && filtreAnneeCasses) return (c.date || '').startsWith(filtreAnneeCasses)
     if (modePeriodeCasses === 'jour' && filtreJourCasses) return c.date === filtreJourCasses
     if (modePeriodeCasses === 'plage' && (filtreDebutCasses || filtreFinCasses)) {
       return (!filtreDebutCasses || c.date >= filtreDebutCasses) && (!filtreFinCasses || c.date <= filtreFinCasses)
@@ -410,6 +412,7 @@ export default function StockBriques() {
             <FiltrePeriode mode={modePeriodeCasses} onModeChange={setModePeriodeCasses}
               valeurJour={filtreJourCasses} onJourChange={setFiltreJourCasses}
               valeurMois={filtreMoisCasses} onMoisChange={setFiltreMoisCasses}
+              avecAnnee valeurAnnee={filtreAnneeCasses} onAnneeChange={setFiltreAnneeCasses}
               avecPlage valeurDebut={filtreDebutCasses} onDebutChange={setFiltreDebutCasses}
               valeurFin={filtreFinCasses} onFinChange={setFiltreFinCasses} />
           </div>

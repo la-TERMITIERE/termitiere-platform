@@ -56,11 +56,13 @@ export default function Seances() {
   const [clientDetail, setClientDetail] = useState(null)
   const [qrNouveauClient, setQrNouveauClient] = useState(null)
 
-  // Filtre de période — Jour / Mois / Année, sur la liste affichée ci-dessous.
+  // Filtre de période — Jour / Mois / Année / Plage, sur la liste affichée ci-dessous.
   const [modePeriode, setModePeriode] = useState('mois')
   const [filtreJour, setFiltreJour] = useState('')
   const [filtreMois, setFiltreMois] = useState('')
   const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
 
   const vide = () => ({ id: null, date: todayStr(), clientNom: '', telephone: '', categorie: CATEGORIES_SEANCE[0].id, montant: String(tarifs[CATEGORIES_SEANCE[0].id] || ''), notes: '', imprimer: true })
   const remplir = (s) => ({ id: s.id, date: s.date, clientNom: s.clientNom, telephone: '', categorie: s.categorie, montant: String(s.montant), notes: s.notes || '' })
@@ -69,9 +71,12 @@ export default function Seances() {
   const liste = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((s) => (s.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((s) => (s.date || '').startsWith(filtreAnnee))
+    if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      return toutes.filter((s) => (!filtreDebut || s.date >= filtreDebut) && (!filtreFin || s.date <= filtreFin))
+    }
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((s) => s.date === filtreJour)
     return toutes
-  }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee])
+  }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
   async function enregistrer() {
@@ -178,7 +183,9 @@ export default function Seances() {
         <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee} />
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvelle séance</Button>
       </div>
 
