@@ -18,7 +18,7 @@ export const ROLES = [
   { value: 'pau',              label: 'PAU',               desc: 'Direction — contrôle total sur les applications' },
   { value: 'ge',               label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
   { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction — accès total à tous les modules' },
-  { value: 'superviseur',      label: 'Superviseur',       desc: 'Consulte tout (lecture seule) — aucune action' },
+  { value: 'superviseur',      label: 'Superviseur',       desc: 'Lecture seule — voit uniquement les modules qui lui sont attribués, aucune action' },
   { value: 'gerant',           label: 'Gérant',            desc: 'Approuve les sorties et les demandes' },
   { value: 'agent',            label: 'Agent',             desc: 'Saisie des données + demandes d\'autorisation' },
   { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres, journal et analyses)' },
@@ -32,8 +32,13 @@ export const ROLES = [
 // `info` (informatique) a les mêmes droits qu'un administrateur. `assistant_pau`
 // a exactement les mêmes droits qu'`info` (décision explicite : assiste le PAU).
 export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
-// Voit TOUS les modules (full access + superviseur en lecture seule).
-export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur']
+// Voit TOUS les modules automatiquement, sans attribution individuelle.
+// Le superviseur N'EN FAIT PAS PARTIE (décision explicite du 07/09/2026) : bien
+// qu'il soit en lecture seule partout (cf. READONLY_ROLES), il ne voit que les
+// modules qui lui sont explicitement attribués (comme le partenaire) — c'est
+// à l'administration (PAU/Info/GE…) de lui donner accès module par module
+// depuis Utilisateurs, pas un accès automatique à tout.
+export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
 
 // Modules à visibilité RESTREINTE par rôle : même attribué à un utilisateur, un
 // module listé ici n'est accessible qu'aux rôles indiqués (contrôle appliqué dans
@@ -73,6 +78,14 @@ export const canExportExcel = (r) => EXCEL_EXPORT_ROLES.includes(r)
 // à ne pas fusionner, ce sont deux décisions distinctes.
 export const BANQUE_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
 export const peutVoirBanque = (r) => BANQUE_ROLES.includes(r)
+
+// Volet « BTP » d'E-G.Pro — réservé UNIQUEMENT à PAU, Assistant PAU, GE et Info
+// (décision explicite du 07/09/2026) : ni le reste de la direction (super_admin,
+// admin, directeur), ni la hiérarchie opérationnelle n'y ont accès. Même liste
+// que BANQUE_ROLES mais gardée comme constante à part (deux décisions distinctes,
+// susceptibles de diverger plus tard — ne pas fusionner).
+export const BTP_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
+export const peutVoirBtp = (r) => BTP_ROLES.includes(r)
 
 // Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
 //   - superviseur : interne, voit TOUS les modules ;

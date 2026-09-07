@@ -363,7 +363,7 @@ export default function Sidebar({ open, onClose }) {
         <div className="border-t border-white/15 p-3">
           <div className="mb-2 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 font-bold">
-              {(user?.nom || '?').charAt(0).toUpperCase()}
+              {(user?.nom || '').trim().charAt(0).toUpperCase() || '?'}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{user?.nom}</p>

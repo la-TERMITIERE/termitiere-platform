@@ -57,13 +57,16 @@ export default function Utilisateurs() {
   // Volets visibles par cet utilisateur dans un module donné — même règle que la
   // nav réelle (cf. Sidebar.jsx → canSeeNav) : rôle explicite (`roles`) ou permission
   // individuelle (`perm`, ex. gerePartenaires) ; sans l'un ou l'autre, ouvert à tous.
+  // Exclut les entrées `{ heading }` (simples séparateurs de section dans la
+  // sidebar, ex. MODULE_NAV.rh — sans `icon` ni `to`) : les compter/afficher ici
+  // comme un volet cliquable faisait planter la fiche détail (<v.icon> undefined).
   function voletsVisibles(u, moduleId) {
     const canSee = (item) => {
       if (item.roles && item.roles.includes(u.role)) return true
       if (item.perm === 'partenaires' && canManagePartenaires(u.role, u)) return true
       return !item.roles && !item.perm
     }
-    return (MODULE_NAV[moduleId] || []).filter(canSee)
+    return (MODULE_NAV[moduleId] || []).filter((item) => !item.heading).filter(canSee)
   }
 
   function toggleModule(id) {
@@ -165,7 +168,7 @@ export default function Utilisateurs() {
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white shadow-sm ring-2 ring-white dark:ring-white/10"
                   style={{ background: avatarGradient(r.login || r.nom) }}>
-                  {(r.nom || '?').charAt(0).toUpperCase()}
+                  {(r.nom || '').trim().charAt(0).toUpperCase() || '?'}
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-gray-800 dark:text-gray-100">{r.nom}</p>
@@ -260,9 +263,15 @@ export default function Utilisateurs() {
                   ci-dessous (tableaux de bord, pilotage, historiques) sans pouvoir rien créer, modifier ou approuver.
                 </p>
               )}
+              {modal.data.role === 'superviseur' && (
+                <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  👁️ <strong>Superviseur</strong> : lecture seule stricte, comme le Partenaire. Il ne voit QUE les
+                  modules cochés ci-dessous — cochez-les pour lui donner accès.
+                </p>
+              )}
               {isViewAllRole(modal.data.role) ? (
                 <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary-dark">
-                  Ce rôle ({roleLabel(modal.data.role)}) voit tous les modules{modal.data.role === 'superviseur' ? ' (en lecture seule)' : ''}.
+                  Ce rôle ({roleLabel(modal.data.role)}) voit tous les modules.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -392,7 +401,7 @@ export default function Utilisateurs() {
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white shadow-md ring-2 ring-white/60"
                 style={{ background: avatarGradient(detailUser.login || detailUser.nom) }}
               >
-                {(detailUser.nom || '?').charAt(0).toUpperCase()}
+                {(detailUser.nom || '').trim().charAt(0).toUpperCase() || '?'}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-gray-900">{detailUser.nom}</p>
