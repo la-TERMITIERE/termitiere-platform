@@ -11,6 +11,7 @@ import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
+import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
@@ -45,6 +46,10 @@ export default function Factures() {
   const { data: allDemandes } = useCollection('logistique_demandes')
   const [open, setOpen] = useState(false)
   const [prestId, setPrestId] = useState('')
+  // Date de la facture — modifiable à l'émission (par défaut aujourd'hui) : permet de
+  // saisir en retard une facture pour une prestation antérieure, sans qu'elle ne se
+  // retrouve datée du jour de la SAISIE au lieu du jour réel de l'émission.
+  const [factureDate, setFactureDate] = useState(todayStr())
   const [detail, setDetail] = useState(null)   // facture consultée
 
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
@@ -138,9 +143,10 @@ export default function Factures() {
   async function emettre() {
     const p = prestations.find((x) => x.id === prestId)
     if (!p) return toast.error('Sélectionnez une prestation')
+    if (!factureDate) return toast.error('Date requise')
     const num = genNumero(`FAC-LOG-${site.toUpperCase()}`, factures.length)
     const factureId = await addItem('logistique_factures', {
-      num, date: todayStr(), site,
+      num, date: factureDate, site,
       prestationId: p.id, prestationNum: p.num,
       clientNom: p.clientNom, evenement: p.evenement || '',
       dateDebut: p.dateDebut || '', dateFin: p.dateFin || '',
@@ -180,7 +186,7 @@ export default function Factures() {
       )}
       {peutFacturer && (
         <div className="flex justify-end">
-          <Button onClick={() => { setPrestId(aFacturer[0]?.id || ''); setOpen(true) }} disabled={!aFacturer.length}>
+          <Button onClick={() => { setPrestId(aFacturer[0]?.id || ''); setFactureDate(todayStr()); setOpen(true) }} disabled={!aFacturer.length}>
             <Plus size={16} /> Émettre une facture
           </Button>
         </div>
@@ -320,6 +326,9 @@ export default function Factures() {
           <Select value={prestId} onChange={(e) => setPrestId(e.target.value)}>
             {aFacturer.map((p) => <option key={p.id} value={p.id}>{p.num} — {p.clientNom}{voitMontants ? ` (${formatMoney(p.total)})` : ''}</option>)}
           </Select>
+        </FormGroup>
+        <FormGroup label="Date de la facture" required hint="Modifiable — pour rattraper une facture oubliée d'un jour antérieur, sans qu'elle prenne la date du jour de la saisie.">
+          <Input type="date" value={factureDate} onChange={(e) => setFactureDate(e.target.value)} />
         </FormGroup>
         {voitMontants && prestId && (() => {
           const p = prestations.find((x) => x.id === prestId)
