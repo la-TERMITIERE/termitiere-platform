@@ -9,6 +9,7 @@ import Badge from '../../shared/ui/Badge'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
@@ -33,7 +34,23 @@ export default function Production() {
   const [form, setForm] = useState(null)
   const [detail, setDetail] = useState(null) // production consultée (détail par catégorie)
 
-  const liste = useMemo(() => [...productions].sort((a, b) => (a.date < b.date ? 1 : -1)), [productions])
+  // Filtre de période — bandeau (glassmorphism). Vide par défaut = tout l'historique.
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+
+  const liste = useMemo(() => {
+    let rows = [...productions]
+    if (modePeriode === 'mois' && filtreMois) rows = rows.filter((p) => (p.date || '').startsWith(filtreMois))
+    else if (modePeriode === 'annee' && filtreAnnee) rows = rows.filter((p) => (p.date || '').startsWith(filtreAnnee))
+    else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
+      rows = rows.filter((p) => (!filtreDebut || p.date >= filtreDebut) && (!filtreFin || p.date <= filtreFin))
+    } else if (modePeriode === 'jour' && filtreJour) rows = rows.filter((p) => p.date === filtreJour)
+    return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [productions, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   function openCreate() {
     const qty = {}
@@ -141,7 +158,7 @@ export default function Production() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -149,10 +166,17 @@ export default function Production() {
         }}>
           <Factory size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Production</h2>
           <p className="text-sm text-white/80">Appatam → séchage (5-6 jours) → prêtes à vendre — cycle 24h ou 48h</p>
         </div>
+        {/* Filtre de période directement dans le bandeau (glassmorphism). */}
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       <div className="rounded-lg bg-violet-50 px-4 py-3 text-sm text-violet-800">

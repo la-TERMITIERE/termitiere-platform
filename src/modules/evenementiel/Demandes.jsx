@@ -14,6 +14,7 @@ import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem, removeItem, setItem, ts } from '../../core/db'
@@ -59,6 +60,20 @@ export default function Demandes() {
   const typeDe = (d) => d.type || 'sortie'
 
   const [filtre, setFiltre] = useState('en_attente')
+  // Filtre de période — bandeau (glassmorphism). Vide par défaut = tout l'historique
+  // (ne doit jamais masquer une demande en_attente faute d'avoir choisi une période).
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const dansPeriode = (dateStr) => {
+    if (modePeriode === 'mois') return !filtreMois || (dateStr || '').startsWith(filtreMois)
+    if (modePeriode === 'annee') return !filtreAnnee || (dateStr || '').startsWith(filtreAnnee)
+    if (modePeriode === 'plage') return (!filtreDebut || dateStr >= filtreDebut) && (!filtreFin || dateStr <= filtreFin)
+    return !filtreJour || dateStr === filtreJour
+  }
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null)
   const [commentaire, setCommentaire] = useState('')
@@ -79,8 +94,9 @@ export default function Demandes() {
   const filtrees = useMemo(() =>
     [...demandesOnglet]
       .filter((d) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(d) : normaliserStatut(d.statut) === filtre))
+      .filter((d) => dansPeriode(d.date))
       .sort((a, b) => (a.date < b.date ? 1 : -1)),
-  [demandesOnglet, filtre])
+  [demandesOnglet, filtre, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   const stockDe = (briqueId) => dernierStockBriques(inventaires, briqueId, briqueId === 'caillasses' ? 'caillasses' : 'pret')
 
@@ -357,7 +373,7 @@ export default function Demandes() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -365,10 +381,18 @@ export default function Demandes() {
         }}>
           <Shield size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Autorisations</h2>
           <p className="text-sm text-white/80">Sortie de briques et location de matériel — validation à deux niveaux</p>
         </div>
+        {/* Filtre de période directement dans le bandeau (glassmorphism) — vide par
+            défaut, ne masque jamais une demande en attente. */}
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       {/* Deux onglets, même écran, même workflow — cf. en-tête du fichier. */}
