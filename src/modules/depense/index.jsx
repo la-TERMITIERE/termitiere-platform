@@ -12,7 +12,7 @@ import Journal from './Journal'
 import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole, canViewFinance, depenseRoleEffectif } from '../../core/roles'
+import { isFullAccessRole, canViewFinance, canViewAnalysesDepense, depenseRoleEffectif } from '../../core/roles'
 
 function AccesRefuseAdmin() {
   return (
@@ -50,7 +50,9 @@ export default function DepenseModule() {
       {/* Ancien écran « Budgets » fusionné dans « Bilan par secteur » — redirige les liens existants. */}
       <Route path="budgets" element={<Navigate to="/depense/recettes-depenses" replace />} />
       <Route path="autorisations" element={<Autorisations />} />
-      <Route path="analyses" element={<Analyses />} />
+      {/* Secrétaire explicitement exclue (contrairement à Flux de trésorerie ci-dessous) —
+          décision explicite du 09/09/2026 : cf. ANALYSES_DEPENSE_ROLES. */}
+      <Route path="analyses" element={canViewAnalysesDepense(role) ? <Analyses /> : <AccesRefuse />} />
       {/* Ancien écran « Rentabilité » fusionné dans « Analyses » — redirige les liens existants. */}
       <Route path="rentabilite" element={<Navigate to="/depense/analyses" replace />} />
       <Route path="flux" element={canViewFinance(role) ? <Flux /> : <AccesRefuse />} />

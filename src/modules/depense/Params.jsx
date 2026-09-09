@@ -1,6 +1,6 @@
 // Paramètres Dépenses — export des dépenses + réinitialisation.
 import { useState, useEffect } from 'react'
-import { FileSpreadsheet, FileText, FileDown, Trash2, AlertTriangle, Archive, Save, RotateCcw } from 'lucide-react'
+import { FileSpreadsheet, FileText, FileDown, Trash2, AlertTriangle, Archive, Save, RotateCcw, BellRing } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -15,6 +15,7 @@ import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { SECTEURS } from './data'
+import { seuilsBudgetDe, SEUIL_ATTENTION_DEFAUT, SEUIL_DEPASSE_DEFAUT } from './logic'
 
 // Conservation des données : au bout de combien d'années les dépenses E-DÉPENSES
 // sont supprimées automatiquement. Réglage INDÉPENDANT de celui d'E-G.Pro (chaque
@@ -66,6 +67,90 @@ function SectionConservation() {
           Laisser vide ou 0 = purge désactivée (rien n'est supprimé automatiquement).
         </p>
       </div>
+
+      {peutModifier ? (
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><RotateCcw size={14} className="mr-1.5 animate-spin" />Enregistrement…</> : <><Save size={14} className="mr-1.5" />Enregistrer</>}
+          </Button>
+          {saved && <span className="text-xs font-semibold text-green-600">✓ Enregistré</span>}
+        </div>
+      ) : (
+        <p className="mt-4 text-xs italic text-gray-400">Réservé à la direction.</p>
+      )}
+    </Card>
+  )
+}
+
+// Seuils d'alerte budgétaire : à partir de quel taux de consommation un secteur passe
+// « Attention » (orange) puis « Dépassé » (rouge) — sur le Dashboard, dans la liste des
+// dépenses, Recettes & Dépenses et les notifications d'autorisation. Un seul réglage,
+// partagé par tous ces écrans (cf. seuilsBudgetDe/statutBudget dans logic.js).
+function SectionSeuils() {
+  const { role } = useAuth()
+  const peutModifier = isFullAccessRole(role)
+  const { data: configs } = useCollection('depense_params')
+  const seuilsActuels = seuilsBudgetDe(configs)
+  const [attention, setAttention] = useState('')
+  const [depasse, setDepasse]     = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+  const [erreur, setErreur] = useState('')
+
+  useEffect(() => {
+    setAttention(String(seuilsActuels.attention))
+    setDepasse(String(seuilsActuels.depasse))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configs])
+
+  const handleSave = async () => {
+    if (!peutModifier) return
+    setErreur('')
+    const a = Number(attention), d = Number(depasse)
+    if (!a || !d || a <= 0 || d <= 0) { setErreur('Renseignez deux pourcentages valides.'); return }
+    if (a >= d) { setErreur('Le seuil « Attention » doit être inférieur au seuil « Dépassé ».'); return }
+    setSaving(true)
+    try {
+      await setItem('depense_params', 'seuils', { id: 'seuils', attention: a, depasse: d, updatedAt: Date.now() })
+      await audit('depense', 'seuils_budget_modifies', `Seuils d'alerte budgétaire : Attention ${a}% · Dépassé ${d}%`)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><BellRing size={15} className="text-slate-500" />Seuils d'alerte budgétaire</span>}>
+      <p className="mb-4 text-xs text-gray-500">
+        À partir de quel taux de consommation du budget alloué un secteur passe « Attention » puis « Dépassé » — sur le tableau de bord, les listes et les notifications.
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 p-4 backdrop-blur-sm">
+          <p className="text-sm font-semibold text-amber-800">Attention</p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="number" min={1} max={99} disabled={!peutModifier}
+              className="w-20 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-gray-100 disabled:text-gray-500"
+              value={attention}
+              onChange={(e) => setAttention(e.target.value)}
+            />
+            <span className="text-sm font-semibold text-amber-700">%</span>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-red-200/60 bg-red-50/70 p-4 backdrop-blur-sm">
+          <p className="text-sm font-semibold text-red-800">Dépassé</p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="number" min={1} max={200} disabled={!peutModifier}
+              className="w-20 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-800 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:bg-gray-100 disabled:text-gray-500"
+              value={depasse}
+              onChange={(e) => setDepasse(e.target.value)}
+            />
+            <span className="text-sm font-semibold text-red-700">%</span>
+          </div>
+        </div>
+      </div>
+      <p className="mt-2 text-[10px] text-slate-500">Par défaut : Attention {SEUIL_ATTENTION_DEFAUT}% · Dépassé {SEUIL_DEPASSE_DEFAUT}%.</p>
+      {erreur && <p className="mt-2 text-xs font-semibold text-red-600">{erreur}</p>}
 
       {peutModifier ? (
         <div className="mt-4 flex items-center gap-3">
@@ -285,6 +370,7 @@ export default function Params() {
         </div>
       </Card>
 
+      <SectionSeuils />
       <SectionConservation />
 
       {isAdmin && (

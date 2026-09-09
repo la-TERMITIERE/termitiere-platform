@@ -201,15 +201,22 @@ export default function SourcesRevenus() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.88) 0%, rgba(26,26,26,0.88) 100%)' }}>
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
           <TrendingUp size={26} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Sources de revenus</h2>
           <p className="text-sm text-white/80">Toutes les entrées d'argent réelles — factures, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
         </div>
+        {/* Filtre de période directement dans le bandeau (glassmorphism). */}
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       {/* KPI par secteur — une carte par secteur générateur de revenu réellement présent
@@ -232,14 +239,6 @@ export default function SourcesRevenus() {
             <Input className="pl-8" placeholder="Libellé, client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
           </div>
         </div>
-        {/* Même composant qu'en MAXI LOGISTIQUE (Facturation/Prestations) — garantit
-            un comportement identique pour comparer les deux écrans sur la même période. */}
-        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
-          valeurJour={filtreJour} onJourChange={setFiltreJour}
-          valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
-          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
-          valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
           <Select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}>

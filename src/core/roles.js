@@ -62,6 +62,13 @@ export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', '
 // l'identité de qui a validé (cf. `logistiqueVoitValidateur`, réutilisé hors logistique).
 export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
 
+// Volet « Analyses » d'E-DÉPENSES — décision explicite du 09/09/2026 : la
+// secrétaire garde Flux de trésorerie (FINANCE_VIEW_ROLES, inchangé) mais PAS
+// Analyses. Dérivé de FINANCE_VIEW_ROLES (sans secretaire) + agent, plutôt qu'une
+// liste recopiée à la main, pour rester aligné si FINANCE_VIEW_ROLES change.
+export const ANALYSES_DEPENSE_ROLES = [...FINANCE_VIEW_ROLES.filter((r) => r !== 'secretaire'), 'agent']
+export const canViewAnalysesDepense = (r) => ANALYSES_DEPENSE_ROLES.includes(r)
+
 // Export Excel des listes de RECETTES (factures, sources de revenus…) — volontairement
 // restreint à PAU/GE/Info UNIQUEMENT (décision explicite du 05/09/2026) : ni le reste
 // de la direction (super_admin, admin, directeur, assistant_pau), ni la hiérarchie

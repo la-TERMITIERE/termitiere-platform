@@ -258,6 +258,89 @@ export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, 
     .filter((d) => d.financePar !== 'caisse_commune')
 }
 
+// ── Période libre (jour / plage de dates) pour l'affichage du Dashboard ──────────────
+// Le budget alloué reste une notion strictement MENSUELLE (une enveloppe par mois) —
+// mais rien n'empêche d'observer combien de cette enveloppe a été consommé sur une
+// tranche de temps plus précise qu'un mois entier (un jour, une plage de dates). Les
+// fonctions ci-dessous généralisent budgetSecteur/depensesEntrepriseSecteurMois à une
+// période arbitraire, sans toucher au circuit d'autorisation (raisonAutorisation,
+// alerterSiDepassement…) qui, lui, reste volontairement mensuel — cf. depenseActions.js.
+
+// Liste dédupliquée des couples {annee, mois} touchés par une période { mode, jour,
+// mois, annee, debut, fin } (mêmes clés que le composant FiltrePeriode). Sert à
+// additionner le budget alloué de chaque mois concerné par une plage à cheval sur
+// plusieurs mois, ou par une année entière (les 12 mois de `annee`).
+export function moisTouchesPeriode(mode, { jour, mois, annee, debut, fin } = {}) {
+  const deMoisStr = (s) => { const [a, m] = (s || '').split('-').map(Number); return a && m ? { annee: a, mois: m } : null }
+  if (mode === 'jour') { const r = deMoisStr(jour); return r ? [r] : [] }
+  if (mode === 'mois') { const r = deMoisStr(mois); return r ? [r] : [] }
+  if (mode === 'annee') {
+    const a = Number(annee)
+    if (!a) return []
+    return Array.from({ length: 12 }, (_, i) => ({ annee: a, mois: i + 1 }))
+  }
+  if (mode === 'plage') {
+    const d = debut || fin, f = fin || debut
+    if (!d || !f) return []
+    const [aD, mD] = d.split('-').map(Number)
+    const [aF, mF] = f.split('-').map(Number)
+    if (!aD || !mD || !aF || !mF) return []
+    const out = []
+    let a = aD, m = mD
+    // Garde-fou anti-boucle infinie (dates invalides) : 240 mois = 20 ans, très large.
+    for (let i = 0; i < 240 && (a < aF || (a === aF && m <= mF)); i++) {
+      out.push({ annee: a, mois: m })
+      m += 1
+      if (m > 12) { m = 1; a += 1 }
+    }
+    return out
+  }
+  return []
+}
+
+// Une date (YYYY-MM-DD) appartient-elle à la période { mode, jour, mois, annee, debut,
+// fin } ?
+export function dateDansPeriode(dateStr, mode, { jour, mois, annee, debut, fin } = {}) {
+  if (!dateStr) return false
+  if (mode === 'jour') return !!jour && dateStr === jour
+  if (mode === 'mois') return !!mois && dateStr.startsWith(mois)
+  if (mode === 'annee') return !!annee && dateStr.startsWith(String(annee))
+  if (mode === 'plage') return (!debut || dateStr >= debut) && (!fin || dateStr <= fin)
+  return false
+}
+
+// Budget alloué à un secteur (+site) sur toute une période — somme du budget de chaque
+// mois touché (cf. moisTouchesPeriode). 0 si la période ne touche aucun mois (ex. plage
+// vide) — pas de fausse alerte de dépassement dans ce cas (cf. sansBudget côté Dashboard).
+export function budgetSecteurPeriode(budgets, secteurId, moisTouches, site = null) {
+  return moisTouches.reduce((sum, { annee, mois }) => sum + budgetSecteur(budgets, secteurId, annee, mois, site), 0)
+}
+
+// Dépenses décaissées d'un secteur financées par l'entreprise (mêmes règles que
+// depensesEntrepriseSecteurMois — caisse commune, PAU, projet exclus le cas échéant),
+// mais filtrées par un prédicat de date arbitraire plutôt qu'un mois fixe.
+export function depensesEntrepriseSecteurDates(depenses, secteurId, matchDate, site = null) {
+  if (secteurId === 'divers') {
+    return depenses.filter((d) => {
+      if (!matchDate(d.date)) return false
+      if (!estDecaissee(d)) return false
+      if (d.secteurId === 'divers') return (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'projet' && d.source !== 'remboursement_pau'
+      return d.financePar === 'caisse_commune'
+    })
+  }
+  return depenses.filter((d) => {
+    if (d.secteurId !== secteurId) return false
+    if (!matchDate(d.date)) return false
+    if (!estDecaissee(d)) return false
+    if (secteurId === 'logistique' && site) return siteLogistiqueDe(d) === site
+    return true
+  })
+    .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau')
+    .filter((d) => d.source !== 'projet')
+    .filter((d) => d.source !== 'remboursement_pau')
+    .filter((d) => d.financePar !== 'caisse_commune')
+}
+
 // Dépenses décaissées d'un secteur/mois, hors dépenses de PROJET — pour le bilan
 // « Dépenses »/« Solde » propre au secteur (écran Recettes & Dépenses). Garde-fou pour
 // d'éventuelles anciennes entrées `source: 'projet'` historiques (les dépenses de
@@ -288,23 +371,46 @@ export function totalDepenses(liste) {
   return liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 }
 
-// Statut d'un secteur selon son taux de consommation du budget (0-100+).
-export function statutBudget(pct) {
-  if (pct >= 100) return { key: 'depasse', label: 'Dépassé', tone: 'danger' }
-  if (pct >= 80) return { key: 'attention', label: 'Attention', tone: 'warning' }
+// Seuils par défaut du statut budgétaire — utilisés tant que la direction n'a pas
+// défini ses propres seuils dans Paramètres (cf. seuilsBudgetDe ci-dessous).
+export const SEUIL_ATTENTION_DEFAUT = 80
+export const SEUIL_DEPASSE_DEFAUT = 100
+
+// Seuils d'alerte budgétaire configurables (Paramètres E-DÉPENSES, document
+// `depense_params/seuils`) — retombe sur les valeurs par défaut (80%/100%) tant
+// qu'aucun réglage n'existe. Un seul jeu de seuils, partagé par tous les écrans qui
+// évaluent un statut de budget (Dashboard, Dépenses, Recettes & Dépenses, Autorisations)
+// pour rester cohérent d'un écran à l'autre.
+export function seuilsBudgetDe(configs) {
+  const cfg = (configs || []).find((c) => c.id === 'seuils')
+  const attention = Number(cfg?.attention)
+  const depasse = Number(cfg?.depasse)
+  return {
+    attention: attention > 0 ? attention : SEUIL_ATTENTION_DEFAUT,
+    depasse: depasse > 0 ? depasse : SEUIL_DEPASSE_DEFAUT
+  }
+}
+
+// Statut d'un secteur selon son taux de consommation du budget (0-100+). `seuils`
+// (opt.) : { attention, depasse } — cf. seuilsBudgetDe. Par défaut 80%/100%.
+export function statutBudget(pct, seuils = {}) {
+  const attention = seuils.attention || SEUIL_ATTENTION_DEFAUT
+  const depasse = seuils.depasse || SEUIL_DEPASSE_DEFAUT
+  if (pct >= depasse) return { key: 'depasse', label: 'Dépassé', tone: 'danger' }
+  if (pct >= attention) return { key: 'attention', label: 'Attention', tone: 'warning' }
   return { key: 'ok', label: 'Dans le budget', tone: 'success' }
 }
 
-// Secteurs dont le budget est en alerte (≥80%) ou dépassé (≥100%) pour un mois donné.
-// MAXI BAT (chantiers) est exclu des alertes de budget par secteur : son suivi
-// vit exclusivement dans le volet BTP d'E-G.Pro, pas sur le Dashboard E-DÉPENSES.
-export function secteursEnAlerte(budgets, depenses, annee, mois) {
+// Secteurs dont le budget est en alerte ou dépassé (selon `seuils`, cf. statutBudget)
+// pour un mois donné. MAXI BAT (chantiers) est exclu des alertes de budget par secteur :
+// son suivi vit exclusivement dans le volet BTP d'E-G.Pro, pas sur le Dashboard E-DÉPENSES.
+export function secteursEnAlerte(budgets, depenses, annee, mois, seuils) {
   return secteursEtSites(true)
     .map((s) => {
       const alloue = budgetSecteur(budgets, s.secteurId, annee, mois, s.site)
       const depense = totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site))
       const pct = alloue > 0 ? Math.round((depense / alloue) * 100) : (depense > 0 ? 100 : 0)
-      return { ...s, alloue, depense, pct, statut: statutBudget(pct) }
+      return { ...s, alloue, depense, pct, statut: statutBudget(pct, seuils) }
     })
     .filter((s) => s.statut.key !== 'ok')
     .sort((a, b) => b.pct - a.pct)
