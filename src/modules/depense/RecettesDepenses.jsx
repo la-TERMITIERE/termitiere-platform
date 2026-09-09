@@ -23,7 +23,7 @@ import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/fo
 import { ouvrirPiece } from '../../utils/fichiers'
 import { teinterHex, shadeHex } from '../../utils/color'
 import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite } from './logic'
+import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { soumettreNouvelleDepense } from './depenseActions'
 
@@ -74,6 +74,9 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
   const { data: usersTous }           = useCollection('users')
+  const { data: depenseParams }       = useCollection('depense_params')
+  // Seuils d'alerte configurables en Paramètres — cf. Dashboard.jsx.
+  const seuils = useMemo(() => seuilsBudgetDe(depenseParams), [depenseParams])
   const { user, role: roleReel } = useAuth()
   // Écran partagé : embarqué dans d'autres modules via `secteurId` (leur onglet
   // « Dépense »), où la restriction E-DÉPENSES ne s'applique pas. Seule l'instance
@@ -187,12 +190,12 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       // ces secteurs reçoivent une enveloppe mensuelle plutôt que de facturer leurs
       // propres clients, c'est donc l'ALLOUÉ, pas le revenu, la référence naturelle.
       ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, financeesAilleurs, solde: recette - depense, soldeAlloue: alloue - depense,
-      budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct), revisionsBudget: budgetDoc?.revisions || [],
+      budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct, seuils), revisionsBudget: budgetDoc?.revisions || [],
       // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
       proposeParText: budgetDoc?.proposeParText || null, motifPropose: budgetDoc?.motifPropose || null
     }
-  }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois, seuils])
 
   // Journal consolidé de tous les apports/ajouts de budget du mois, tous secteurs (+
   // sites) confondus — onglet « Apports & ajouts » de la vue standalone. Chaque révision
@@ -390,7 +393,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     if (!nouvelleDepense.beneficiaireNom || !nouvelleDepense.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
     setDepenseSaving(true)
     try {
-      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: secteurId === 'logistique' ? (site || 'lome') : undefined }, { user, budgets, depenses })
+      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: secteurId === 'logistique' ? (site || 'lome') : undefined }, { user, budgets, depenses, seuils })
       toast.success(statutInitial === 'en_attente' ? 'Demande de décaissement soumise — en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
       setNouvelleDepense(null)
     } finally {
@@ -406,7 +409,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
   return (
     <div className="space-y-5">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: `linear-gradient(135deg, ${teinterHex(headerColor, 0.85)} 0%, ${teinterHex(shadeHex(headerColor, -35), 0.85)} 100%)` }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -414,9 +417,17 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         }}>
           <Scale size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">{headerTitre}</h2>
           <p className="text-sm text-white/80">{headerSousTitre}</p>
+        </div>
+        {/* Navigation mois — remontée dans le bandeau (glassmorphism), au lieu d'une
+            ligne séparée en dessous. Budget alloué = notion mensuelle, donc un simple
+            mois précédent/suivant reste le bon niveau de granularité ici. */}
+        <div className="relative flex w-full items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white/15 p-1 backdrop-blur-sm sm:ml-auto sm:w-auto sm:justify-start">
+          <button onClick={() => changerMois(-1)} className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+          <span className="px-1 text-sm font-bold whitespace-nowrap">{MOIS_LABELS[mois - 1]} {annee}</span>
+          <button onClick={() => changerMois(1)} className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronRight size={16} /></button>
         </div>
       </div>
 
@@ -435,19 +446,15 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         </div>
       )}
 
-      {/* Navigation mois */}
-      <div className="flex flex-wrap items-center gap-3">
-        <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
-        <span className="text-lg font-extrabold text-gray-800">{MOIS_LABELS[mois - 1]} {annee}</span>
-        <button onClick={() => changerMois(1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronRight size={16} /></button>
-        {/* Vue « Dépense » d'un module métier (agro, logistique…) : saisir une dépense
-            de ce secteur sans quitter le module, ni dépendre d'un accès à E-DÉPENSES
-            (que ces rôles n'ont pas forcément) — même circuit d'autorisation, embarqué
-            directement ici (cf. confirmerNouvelleDepense → depenseActions.js). */}
-        {masquerRevenu && secteurId && !lectureSeule && (
-          <Button onClick={ouvrirNouvelleDepense} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Ajouter une dépense</Button>
-        )}
-      </div>
+      {/* Vue « Dépense » d'un module métier (agro, logistique…) : saisir une dépense de
+          ce secteur sans quitter le module, ni dépendre d'un accès à E-DÉPENSES (que ces
+          rôles n'ont pas forcément) — même circuit d'autorisation, embarqué directement
+          ici (cf. confirmerNouvelleDepense → depenseActions.js). */}
+      {masquerRevenu && secteurId && !lectureSeule && (
+        <div className="flex justify-end">
+          <Button onClick={ouvrirNouvelleDepense} size="sm"><Plus size={14} className="mr-1" />Ajouter une dépense</Button>
+        </div>
+      )}
 
       {ongletBudget !== 'secteurs' ? (
       <div className="space-y-3">

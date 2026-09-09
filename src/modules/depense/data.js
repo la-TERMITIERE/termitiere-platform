@@ -45,6 +45,15 @@ export const NATURES_FLUX = {
 }
 export const natureFluxDefaut = 'exploitation'
 
+// Mode de règlement d'une dépense — pour rapprocher la caisse physique, le compte
+// Mobile Money et le compte bancaire avec ce qui a réellement été décaissé.
+export const MODES_PAIEMENT = [
+  { id: 'espece',   label: 'Espèces' },
+  { id: 'mobile',   label: 'Mobile Money' },
+  { id: 'virement', label: 'Virement' },
+  { id: 'cheque',   label: 'Chèque' }
+]
+
 // Source de financement d'une dépense E-DÉPENSES : toujours la trésorerie de
 // l'entreprise — l'apport personnel du promoteur (PAU) ne se suit plus qu'au niveau
 // des projets, exclusivement dans E-G.Pro (cf. projet/Depenses.jsx).

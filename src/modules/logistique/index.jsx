@@ -8,6 +8,7 @@ import Dashboard from './Dashboard'
 import SaisieMagasin from './SaisieMagasin'
 import TachesRoutinieres from './TachesRoutinieres'
 import Prestations from './Prestations'
+import Transport from './Transport'
 import Factures from './Factures'
 import Demandes from './Demandes'
 import SectorBesoins from '../../shared/besoins/SectorBesoins'
@@ -84,6 +85,7 @@ function SiteApp() {
         <Route path="routine" element={<TachesRoutinieres />} />
         <Route path="saisie" element={<SaisieMagasin />} />
         <Route path="prestations" element={<Prestations />} />
+        <Route path="transport" element={<Transport />} />
         <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
         {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
         <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' ? <RecettesDepenses secteurId="logistique" site={site} masquerRevenu /> : <AccesRefuse />} />

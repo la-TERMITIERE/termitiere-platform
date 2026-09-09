@@ -1,7 +1,7 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -20,8 +20,8 @@ import { notify } from '../../core/notify'
 import { todayStr, formatDateShort } from '../../utils/formatters'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites } from './logic'
+import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT } from './data'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -35,7 +35,7 @@ const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES'
 
 const empty = () => ({
   secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
-  description: '', piece: null, recurrente: false, imprevue: false,
+  description: '', piece: null, imprevue: false, modePaiement: 'espece',
   natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
@@ -113,6 +113,9 @@ export default function Depenses() {
   const { data: depensesReelles } = useCollection('depense_depenses')
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: users }   = useCollection('users')
+  const { data: depenseParams } = useCollection('depense_params')
+  // Seuils d'alerte configurables en Paramètres — cf. Dashboard.jsx.
+  const seuils = useMemo(() => seuilsBudgetDe(depenseParams), [depenseParams])
 
   // Tout ce qui vient d'E-G.Pro (versements, besoins de projet validés — repérables à
   // leur `projetId`, cf. projet/Besoins.jsx) n'apparaît plus ici : ça ne se consulte
@@ -309,7 +312,7 @@ export default function Depenses() {
 
   // Crée une nouvelle dépense en appliquant le circuit d'autorisation (partagé avec
   // RecettesDepenses.jsx → bouton « Ajouter une dépense » de chaque secteur métier).
-  const soumettreNouvelleDepense = (d) => soumettreNouvelleDepensePartagee(d, { user, budgets, depenses })
+  const soumettreNouvelleDepense = (d) => soumettreNouvelleDepensePartagee(d, { user, budgets, depenses, seuils })
 
   async function handleSave() {
     if (saving) return
@@ -372,7 +375,7 @@ export default function Depenses() {
     if (alloue <= 0) return
     const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), d], d.secteurId, annee, mois, d.site))
     const pct = Math.round((depenseTotal / alloue) * 100)
-    const statut = statutBudget(pct)
+    const statut = statutBudget(pct, seuils)
     if (statut.key === 'ok') return
     const libelle = libelleSecteurSite(secteur, d)
     await notify({
@@ -673,9 +676,12 @@ export default function Depenses() {
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(NATURES_FLUX).map(([k, v]) => (
                     <button key={k} type="button" onClick={() => set('natureFlux', k)}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.natureFlux === k ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.natureFlux === k ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}
                       title={v.desc}>
-                      {modal.data.natureFlux === k ? '✓ ' : ''}{v.label}
+                      {modal.data.natureFlux === k && (
+                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                      )}
+                      {v.label}
                     </button>
                   ))}
                 </div>
@@ -688,11 +694,19 @@ export default function Depenses() {
                   </p>
                 ) : null
               })()}
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={!!modal.data.recurrente} onChange={(e) => set('recurrente', e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400/30" />
-                🔁 Dépense récurrente (à reconduire chaque mois)
-              </label>
+              <FormGroup label="Mode de paiement">
+                <div className="flex flex-wrap gap-2">
+                  {MODES_PAIEMENT.map((m) => (
+                    <button key={m.id} type="button" onClick={() => set('modePaiement', m.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.modePaiement === m.id ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                      {modal.data.modePaiement === m.id && (
+                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                      )}
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </FormGroup>
             </div>
 
             {/* Bénéficiaire */}
@@ -701,12 +715,18 @@ export default function Depenses() {
               <div className="mb-2 flex gap-2">
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
-                  className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType !== 'externe' ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500'}`}>
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.beneficiaireType !== 'externe' ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                  {modal.data.beneficiaireType !== 'externe' && (
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                  )}
                   Membre de l'entreprise
                 </button>
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'externe'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
-                  className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${modal.data.beneficiaireType === 'externe' ? 'border-amber-400 bg-white text-amber-800' : 'border-gray-200 bg-white text-gray-500'}`}>
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.beneficiaireType === 'externe' ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                  {modal.data.beneficiaireType === 'externe' && (
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                  )}
                   Externe (fournisseur, prestataire…)
                 </button>
               </div>
@@ -892,6 +912,7 @@ export default function Depenses() {
             { label: 'Secteur', value: libelleSecteurSite(secteur, detail) },
             { label: 'Catégorie', value: detail.categorie || '—' },
             { label: 'Nature de flux', value: nature.label },
+            { label: 'Mode de paiement', value: MODES_PAIEMENT.find((m) => m.id === detail.modePaiement)?.label || '—' },
             { label: 'Origine', value: origine.label }
           ]
           return (

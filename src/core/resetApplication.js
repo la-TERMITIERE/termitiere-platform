@@ -21,7 +21,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   // ── MAXI LOGISTIQUE ─────────────────────────────────────────────────────
   'logistique_clients', 'logistique_demandes', 'logistique_factures',
   'logistique_fournisseurs', 'logistique_inventaires', 'logistique_prestations',
-  'logistique_retours', 'logistique_banque',
+  'logistique_retours', 'logistique_banque', 'logistique_transports',
   // ── E-BRIQUETERIE (code module : evenementiel) ─────────────────────────
   'evenementiel_clients', 'evenementiel_demandes', 'evenementiel_factures',
   'evenementiel_inventaires', 'evenementiel_materiels', 'evenementiel_productions',

@@ -6,7 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
 } from 'lucide-react'
-import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES } from '../core/roles'
+import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES, ANALYSES_DEPENSE_ROLES } from '../core/roles'
 
 export const MODULES = [
   {
@@ -161,6 +161,7 @@ export const MODULE_NAV = {
     { label: 'Compte bancaire', to: '/logistique/banque', icon: Landmark, roles: BANQUE_ROLES, horsSite: true },
     { label: 'Saisie magasin', to: '/logistique/saisie', icon: ClipboardList },
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
+    { label: 'Transport', to: '/logistique/transport', icon: Truck },
     { label: 'Pilotage & Analyses', to: '/logistique/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Dépense', to: '/logistique/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire'] },
     { label: 'Facturation', to: '/logistique/factures', icon: FileText },
@@ -329,7 +330,7 @@ export const MODULE_NAV = {
     { label: 'Budget',                       to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: [...ADMIN_VOLETS_ROLES, 'secretaire'] },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
-    { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: [...FINANCE_VIEW_ROLES, 'agent'] },
+    { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: ANALYSES_DEPENSE_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
     { label: 'Journal et Historique',        to: '/depense/journal',      icon: BookOpen,        roles: ADMIN_VOLETS_ROLES },

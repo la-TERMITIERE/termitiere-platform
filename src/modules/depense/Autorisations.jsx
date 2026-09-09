@@ -17,7 +17,7 @@ import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { formatDateShort } from '../../utils/formatters'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { notifierBeneficiaire } from './notifications'
 
 const ACTION_INFO = {
@@ -39,6 +39,9 @@ export default function Autorisations() {
   const { data: budgets }  = useCollection('depense_budgets')
   const { data: projets }  = useCollection('projets')
   const { data: besoins }  = useCollection('projet_besoins')
+  const { data: depenseParams } = useCollection('depense_params')
+  // Seuils d'alerte configurables en Paramètres — cf. Dashboard.jsx.
+  const seuils = useMemo(() => seuilsBudgetDe(depenseParams), [depenseParams])
 
   // Destinataires d'une décision (approbation/refus/certification) : la personne qui a
   // enregistré la demande, le responsable du projet E-G.Pro concerné (besoin validé) ET,
@@ -174,7 +177,7 @@ export default function Autorisations() {
     if (alloue <= 0) return
     const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), { ...d, statut: 'decaissee' }], secteurIdAlerte, annee, mois, siteAlerte))
     const pct = Math.round((depenseTotal / alloue) * 100)
-    const statut = statutBudget(pct)
+    const statut = statutBudget(pct, seuils)
     if (statut.key === 'ok') return
     const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
     await notify({

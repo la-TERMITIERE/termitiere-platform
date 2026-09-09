@@ -298,7 +298,7 @@ export default function Paiements() {
   return (
     <div className="space-y-5">
 
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -306,9 +306,23 @@ export default function Paiements() {
         }}>
           <CreditCard size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Paiements</h2>
           <p className="text-sm text-white/80">Suivi des paiements mensuels, annuels et journaliers</p>
+        </div>
+        {/* Sélecteur Mois/Année directement dans le bandeau (glassmorphism) — reprend
+            EXACTEMENT le même filtre que ci-dessous (mois « concerné », pas la date de
+            paiement elle-même) pour ne rien changer au comportement, juste son emplacement. */}
+        <div className="relative flex w-full flex-wrap items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto">
+          <select value={onglet === 'journaliers' ? filtreJoMois : filtreMois}
+            onChange={(e) => (onglet === 'journaliers' ? setFiltreJoMois : setFiltreMois)(Number(e.target.value))}
+            className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-gray-800">
+            {MOIS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
+          <input type="number" value={onglet === 'journaliers' ? filtreJoAnnee : filtreAnnee}
+            onChange={(e) => (onglet === 'journaliers' ? setFiltreJoAnnee : setFiltreAnnee)(Number(e.target.value))}
+            style={{ colorScheme: 'dark' }}
+            className="w-20 rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
         </div>
       </div>
 
@@ -330,18 +344,8 @@ export default function Paiements() {
       {/* ══ ONGLET JOURNALIERS ══ */}
       {onglet === 'journaliers' && (
         <div className="space-y-4">
-          {/* Filtres + bouton ajouter */}
+          {/* Bouton ajouter — le filtre Mois/Année de cet onglet est dans le bandeau ci-dessus. */}
           <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
-              <Select value={filtreJoMois} onChange={(e) => setFiltreJoMois(Number(e.target.value))}>
-                {MOIS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Année</label>
-              <Input type="number" value={filtreJoAnnee} onChange={(e) => setFiltreJoAnnee(Number(e.target.value))} style={{ width: 90 }} />
-            </div>
             <div className="ml-auto flex items-center gap-3">
               <div className="text-right text-sm">
                 <p className="font-semibold text-green-600">{formatMoney(totalJo)} encaissés</p>
@@ -422,16 +426,6 @@ export default function Paiements() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
-          <Select value={filtreMois} onChange={(e) => setFiltreMois(Number(e.target.value))}>
-            {MOIS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </Select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Année</label>
-          <Input type="number" value={filtreAnnee} onChange={(e) => setFiltreAnnee(Number(e.target.value))} style={{ width: 90 }} />
-        </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Enfant</label>
           <Select value={filtreEnfant} onChange={(e) => setFiltreEnfant(e.target.value)}>

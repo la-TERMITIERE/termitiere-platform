@@ -9,6 +9,7 @@ import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { setItem, updateItem, removeItem } from '../../core/db'
@@ -137,6 +138,7 @@ export default function Enfants() {
     if (type === 'journalier') {
       setJoModal({ data: emptyJournalier(), isNew: true })
       setJoPaiement({ montantPaye: '', modePaiement: 'espece' })
+      setJoRecherche('')
     } else {
       setModal({ data: { ...empty(), programme: type }, isNew: true })
     }
@@ -248,12 +250,28 @@ export default function Enfants() {
   // vers Paiements → Journaliers quand le parent paie sur place. Reste facultatif :
   // laissé vide, le paiement pourra toujours être saisi plus tard comme avant.
   const [joPaiement, setJoPaiement] = useState({ montantPaye: '', modePaiement: 'espece' })
+  // Recherche d'un enfant journalier déjà venu — évite de tout ressaisir (nom, âge,
+  // parent, contact…) à chaque nouvelle journée d'un même enfant. Purement un
+  // raccourci de saisie : les champs restent modifiables après la sélection.
+  const [joRecherche, setJoRecherche] = useState('')
 
   const journaliersFiltre = useMemo(
     () => journaliers.filter((j) => !filtreDateJo || j.date === filtreDateJo)
       .sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1),
     [journaliers, filtreDateJo]
   )
+
+  // Un enfant journalier par nom (le plus récent) — sert à pré-remplir prénom, nom,
+  // âge, parent et contact quand il revient un autre jour.
+  const journaliersConnus = useMemo(() => {
+    const map = new Map()
+    for (const j of [...journaliers].sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1)) {
+      const cle = `${(j.prenom || '').trim()} ${(j.nom || '').trim()}`.trim().toLowerCase()
+      if (!cle) continue
+      map.set(cle, j) // tri croissant par date : la plus récente écrase les précédentes
+    }
+    return [...map.values()].sort((a, b) => `${a.prenom} ${a.nom}`.localeCompare(`${b.prenom} ${b.nom}`))
+  }, [journaliers])
 
   async function handleSaveJournalier() {
     if (joSaving) return
@@ -376,6 +394,7 @@ export default function Enfants() {
               <Button onClick={() => {
                 setJoModal({ data: emptyJournalier(), isNew: true })
                 setJoPaiement({ montantPaye: '', modePaiement: 'espece' })
+                setJoRecherche('')
               }}>
                 <UserPlus size={16} /> Ajouter un journalier
               </Button>
@@ -663,6 +682,33 @@ export default function Enfants() {
                 <p className="text-sm text-white/80">Dépôt d'une seule journée — non inscrit officiellement</p>
               </div>
             </div>
+
+            {joModal.isNew && journaliersConnus.length > 0 && (
+              <div className="rounded-2xl border border-teal-200 border-l-4 border-l-teal-400 bg-teal-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                <FormGroup label="🔍 Déjà venu(e) ? Rechercher son nom" hint="Sélectionnez pour remplir automatiquement âge, parent et contact — tout reste modifiable ensuite.">
+                  <ChampAutocomplete
+                    value={joRecherche}
+                    onChange={setJoRecherche}
+                    suggestions={journaliersConnus}
+                    getLabel={(j) => `${j.prenom} ${j.nom}`}
+                    placeholder="Tapez un prénom ou un nom déjà enregistré…"
+                    accent="teal"
+                    onSelect={(j) => {
+                      setJoModal((m) => ({
+                        ...m,
+                        data: {
+                          ...m.data,
+                          prenom: j.prenom, nom: j.nom, ageApprox: j.ageApprox || '',
+                          parentNom: j.parentNom || '', parentContact: j.parentContact || '',
+                          apporteRepas: !!j.apporteRepas
+                        }
+                      }))
+                      setJoRecherche(`${j.prenom} ${j.nom}`)
+                    }}
+                  />
+                </FormGroup>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
             <div className="grid grid-cols-2 gap-3">

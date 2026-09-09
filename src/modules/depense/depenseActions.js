@@ -28,7 +28,7 @@ export function raisonAutorisation(d, { budgets, depenses }) {
 // Notifie les rôles financiers si le secteur — ou la Caisse commune si la dépense est
 // marquée `financePar: 'caisse_commune'` (cf. raisonAutorisation ci-dessus, même logique)
 // — atteint 80%+ de son budget mensuel.
-async function alerterSiDepassement(d, secteur, { user, budgets, depenses }) {
+async function alerterSiDepassement(d, secteur, { user, budgets, depenses, seuils }) {
   const [annee, mois] = (d.date || '').split('-').map(Number)
   if (!annee || !mois) return
   const estCaisseCommune = d.financePar === 'caisse_commune'
@@ -38,7 +38,7 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses }) {
   if (alloue <= 0) return
   const depenseTotal = totalDepenses(depensesEntrepriseSecteurMois([...depenses.filter((x) => x.id !== d.id), d], secteurIdAlerte, annee, mois, siteAlerte))
   const pct = Math.round((depenseTotal / alloue) * 100)
-  const statut = statutBudget(pct)
+  const statut = statutBudget(pct, seuils)
   if (statut.key === 'ok') return
   const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
   await notify({
@@ -52,7 +52,7 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses }) {
 // Crée une nouvelle dépense en appliquant le circuit d'autorisation : imprévue, ou
 // montant > budget restant du secteur → demande envoyée au PAU (statut « en attente »)
 // ; sinon → décaissée immédiatement. Retourne { statutInitial }.
-export async function soumettreNouvelleDepense(d, { user, budgets, depenses }) {
+export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seuils }) {
   const secteur = SECTEURS.find((s) => s.id === d.secteurId)
   const libelle = libelleSecteurSite(secteur, d)
   const id = genId()
@@ -98,6 +98,6 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses }) {
       link: '/depense/liste', state: { openDepenseId: id }
     }).catch(() => {})
   }
-  await alerterSiDepassement(depenseFinale, secteur, { user, budgets, depenses })
+  await alerterSiDepassement(depenseFinale, secteur, { user, budgets, depenses, seuils })
   return { statutInitial }
 }
