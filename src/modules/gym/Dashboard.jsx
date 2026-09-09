@@ -4,7 +4,7 @@ import '../../utils/chartSetup'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
-import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog } from 'lucide-react'
+import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog, X } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -61,6 +61,20 @@ const DETAIL_INFO = {
   clients:     { titre: 'Clients', icon: Users }
 }
 
+// Fermeture temporaire (par appareil) d'un rappel « à renouveler » — même recette
+// que ActiverAlertes.jsx (report en localStorage). Revient plus vite à mesure que
+// l'échéance approche : 3h dans les 3 derniers jours avant expiration (pour ne pas
+// rater le renouvellement), 24h au-delà (le temps qu'une action soit prise, sans
+// harceler). Se réévalue automatiquement grâce à l'horloge du bandeau (tick 60s).
+const CLE_DISMISS_RENOUVELLEMENT = 'termitiere_gym_renouvellement_dismiss_'
+const dismissedUntil = (id) => {
+  try { return Number(localStorage.getItem(CLE_DISMISS_RENOUVELLEMENT + id) || 0) } catch { return 0 }
+}
+const dismissRenouvellement = (id, joursRestants) => {
+  const duree = joursRestants <= 3 ? 3 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+  try { localStorage.setItem(CLE_DISMISS_RENOUVELLEMENT + id, String(Date.now() + duree)) } catch { /* ignore */ }
+}
+
 // Salutation selon l'heure du moment — relit l'horloge à chaque montage du
 // Dashboard (pas besoin de la tenir à jour en temps réel pour ce simple message).
 function salutation() {
@@ -109,8 +123,45 @@ export default function Dashboard() {
       .filter((c) => c.creneau)
       .map((c) => ({ ...c, pointage: pointagesCoach.find((p) => p.coachId === c.id && p.date === auj) }))
   }, [coachs, pointagesCoach])
+
+  // Minutes de retard d'un coach pas encore pointé, par rapport à son heure prévue
+  // (négatif tant que l'heure n'est pas encore passée). Se recalcule tout seul via
+  // `heureActuelle` (tick 60s du bandeau) — pas besoin de minuteur dédié.
+  const SEUIL_RETARD_COACH_MIN = 20
+  function minutesRetard(c) {
+    const [h, m] = c.creneau.heure.split(':').map(Number)
+    const prevu = new Date(heureActuelle)
+    prevu.setHours(h, m, 0, 0)
+    return Math.floor((heureActuelle - prevu) / 60000)
+  }
+  const coachsEnRetard = useMemo(
+    () => coachsAujourdhui.filter((c) => !c.pointage && minutesRetard(c) >= SEUIL_RETARD_COACH_MIN),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [coachsAujourdhui, heureActuelle]
+  )
+
+  // Alarme coach en retard — même recette que l'alarme abonné inactif ci-dessous :
+  // alerte l'équipe une seule fois par jour et par coach (dédoublonnée via
+  // `derniereAlerteRetardDate` sur sa fiche), dès qu'il dépasse le seuil de retard.
+  useEffect(() => {
+    for (const c of coachsEnRetard) {
+      const auj = todayStr()
+      if (c.derniereAlerteRetardDate === auj) continue
+      notify({
+        type: 'alerte',
+        title: `🔔 Coach en retard — MAXI-GYM ${siteLabel(site)}`,
+        body: `${c.nom} n'a pas encore pointé son arrivée, prévue à ${c.creneau.heure} (${minutesRetard(c)} min de retard).`,
+        module: 'gym', forRoles: ROLES.map((r) => r.value), link: `/gym/${site}/coachs`
+      }).catch(() => {})
+      updateItem('gym_coachs', c.id, { derniereAlerteRetardDate: auj })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachsEnRetard])
   const [detailModal, setDetailModal] = useState(null) // null | 'seances' | 'abonnements' | 'total' | 'clients'
   const [clientDetail, setClientDetail] = useState(null) // nom du client dont on affiche la fiche complète
+  // Force une réévaluation immédiate des rappels fermés (cf. dismissRenouvellement)
+  // au clic — la réévaluation « au fil du temps » vient gratuitement du tick heureActuelle.
+  const [dismissTick, setDismissTick] = useState(0)
 
   // Sélecteur de période partagé (mêmes presets et même emplacement — dans le
   // bandeau héro — que les autres Dashboards de l'app, ex. Briqueterie).
@@ -218,6 +269,13 @@ export default function Dashboard() {
       .sort((a, b) => (a.dateFin < b.dateFin ? -1 : 1))
       .map((a) => ({ ...a, joursRestants: Math.ceil((new Date(a.dateFin) - new Date(aujourdhui)) / 86400000) }))
   }, [abonnements])
+  // Retire ceux fermés récemment (cf. dismissRenouvellement) — se réévalue tout
+  // seul au fil du temps via `heureActuelle` (tick 60s du bandeau), donc un rappel
+  // fermé revient automatiquement dès l'expiration de son délai, sans recharger la page.
+  const abonnementsARelancer = useMemo(
+    () => abonnementsExpirentBientot.filter((a) => Date.now() >= dismissedUntil(a.id)),
+    [abonnementsExpirentBientot, dismissTick, heureActuelle]
+  )
 
   // Abonnés actifs qui ne sont pas venus depuis SEUIL_RELANCE_JOURS (7 j) — dernière
   // arrivée pointée dans gym_presences (Abonnements.jsx), ou date de souscription si
@@ -323,23 +381,41 @@ export default function Dashboard() {
           style={{ background: `linear-gradient(135deg, ${teinterHex('#ffffff', 0.55)}, ${teinterHex(COULEUR, 0.14)})` }}>
           {/* Reflet — fine lueur en haut, même recette que la nav mobile en verre. */}
           <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-2xl bg-gradient-to-b from-white/40 to-transparent" />
-          <span className="relative shrink-0 pl-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-            Coach{coachsAujourdhui.length > 1 ? 's' : ''} du jour
-          </span>
+          <div className="relative flex shrink-0 items-center gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
+              <UserCog size={14} />
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-600">
+              Coach{coachsAujourdhui.length > 1 ? 's' : ''} du jour
+            </span>
+          </div>
           <div className="relative flex flex-1 flex-wrap gap-2">
-            {coachsAujourdhui.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-full border border-white/70 bg-white/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-sm">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
-                  <UserCog size={13} />
-                </span>
-                <span className="text-sm font-semibold text-gray-700">{c.nom}</span>
-                {c.pointage ? (
-                  <Badge tone={c.pointage.statut === 'retard' ? 'warning' : 'success'}>Arrivé {c.pointage.heureArrivee}</Badge>
-                ) : (
-                  <Badge tone="neutral">Prévu {c.creneau.heure}</Badge>
-                )}
-              </div>
-            ))}
+            {coachsAujourdhui.map((c) => {
+              const arrive = !!c.pointage
+              const pointageRetard = arrive && c.pointage.statut === 'retard'
+              // Pas encore pointé ET au-delà du seuil de retard (cf. coachsEnRetard) :
+              // état ROUGE, plus visible que le simple « Prévu » ambre — c'est l'alerte.
+              const absent = !arrive && coachsEnRetard.some((x) => x.id === c.id)
+              return (
+                <div key={c.id} className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 shadow-sm backdrop-blur-sm ${
+                  absent ? 'border-red-300 bg-red-50/90' : 'border-white/70 bg-white/80'
+                }`}>
+                  <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white"
+                    style={{ background: avatarGradient(c.nom) }}>
+                    {(c.nom || '?').trim().charAt(0).toUpperCase() || '?'}
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${
+                      absent ? 'bg-red-500' : arrive ? (pointageRetard ? 'bg-amber-500' : 'bg-green-500') : 'animate-pulse bg-amber-400'
+                    }`} />
+                  </span>
+                  <span className="text-sm font-semibold text-gray-700">{c.nom}</span>
+                  <span className={`text-xs font-semibold ${
+                    absent ? 'text-red-600' : arrive ? (pointageRetard ? 'text-amber-600' : 'text-green-600') : 'text-gray-400'
+                  }`}>
+                    · {absent ? `${minutesRetard(c)} min de retard` : arrive ? `Arrivé ${c.pointage.heureArrivee}` : `Prévu ${c.creneau.heure}`}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -359,24 +435,33 @@ export default function Dashboard() {
       </div>
 
 
-      {abonnementsExpirentBientot.length > 0 && (
+      {abonnementsARelancer.length > 0 && (
         <Card title="⏰ Abonnements à renouveler bientôt">
           <div className="space-y-2">
-            {abonnementsExpirentBientot.map((a) => (
-              <button key={a.id} onClick={() => setClientDetail(a.clientNom)}
-                className="flex w-full items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-left transition-colors hover:bg-amber-100">
-                <AlertTriangle size={16} className="shrink-0 text-amber-600" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-gray-800">{a.clientNom}</p>
-                  <p className="text-xs text-gray-500">
-                    <Badge tone={categorieTone(a.categorie)}>{categorieLabel(a.categorie)}</Badge>
-                    {' '}expire le {formatDateShort(a.dateFin)}
-                  </p>
-                </div>
-                <span className="shrink-0 text-sm font-bold text-amber-700">
-                  {a.joursRestants <= 0 ? "Aujourd'hui" : a.joursRestants === 1 ? 'Demain' : `Dans ${a.joursRestants} jours`}
-                </span>
-              </button>
+            {abonnementsARelancer.map((a) => (
+              <div key={a.id}
+                className="flex w-full items-center gap-1 rounded-lg bg-amber-50 pr-1 transition-colors hover:bg-amber-100">
+                <button onClick={() => setClientDetail(a.clientNom)}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left">
+                  <AlertTriangle size={16} className="shrink-0 text-amber-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-gray-800">{a.clientNom}</p>
+                    <p className="text-xs text-gray-500">
+                      <Badge tone={categorieTone(a.categorie)}>{categorieLabel(a.categorie)}</Badge>
+                      {' '}expire le {formatDateShort(a.dateFin)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-bold text-amber-700">
+                    {a.joursRestants <= 0 ? "Aujourd'hui" : a.joursRestants === 1 ? 'Demain' : `Dans ${a.joursRestants} jours`}
+                  </span>
+                </button>
+                <button
+                  onClick={() => { dismissRenouvellement(a.id, a.joursRestants); setDismissTick((t) => t + 1) }}
+                  title={a.joursRestants <= 3 ? 'Fermer — reviendra dans 3h' : 'Fermer — reviendra demain'}
+                  className="shrink-0 rounded-full p-1.5 text-amber-400 hover:bg-amber-200 hover:text-amber-700">
+                  <X size={14} />
+                </button>
+              </div>
             ))}
           </div>
         </Card>

@@ -56,6 +56,7 @@ export default function Abonnements() {
   const { data: allClients } = useCollection('gym_clients')
   const { data: allFactures } = useCollection('gym_factures')
   const { data: allPresences } = useCollection('gym_presences')
+  const { data: allPointagesCoach } = useCollection('gym_pointages_coach')
   // Tout est cloisonné par salle, y compris la clientèle : les clients de Lomé
   // ne sont pas ceux de Kara.
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
@@ -63,6 +64,17 @@ export default function Abonnements() {
   const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const presences = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
+  const pointagesCoach = useMemo(() => allPointagesCoach.filter((p) => matchSite(p, site)), [allPointagesCoach, site])
+  // Coach à attribuer à un abonnement du jour `date` — seulement si un SEUL coach a
+  // été pointé présent ce jour-là (aucun ou plusieurs coachs présents → ambigu, on
+  // laisse l'abonnement sans coach plutôt que de deviner). Sert au suivi de
+  // performance par coach (cf. Coachs.jsx), au-delà de la simple corrélation par jour.
+  function coachDuJour(date) {
+    const idsUniques = [...new Set(pointagesCoach.filter((p) => p.date === date).map((p) => p.coachId))]
+    if (idsUniques.length !== 1) return { coachId: null, coachNom: null }
+    const p = pointagesCoach.find((x) => x.date === date && x.coachId === idsUniques[0])
+    return { coachId: p.coachId, coachNom: p.coachNom }
+  }
   const peutSupprimer = isFullAccessRole(role)
   const params = useGymParams(site)
   const dureeMin = params.dureeClassiqueMinJours
@@ -152,10 +164,11 @@ export default function Abonnements() {
       // Modification d'un abonnement existant — pas de nouvelle création de client, pas
       // de nouvelle facture ni de nouveau WhatsApp (déjà envoyés à l'enregistrement initial).
       if (d.id) {
+        const { coachId, coachNom } = coachDuJour(d.date)
         await updateItem('gym_abonnements', d.id, {
           date: d.date, dateFin, clientNom, categorie: d.categorie,
           dureeJours: d.dureeJours ? Number(d.dureeJours) : null,
-          montant: Number(d.montant), notes: d.notes.trim()
+          montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom
         })
         await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Abonnement modifié ✓')
@@ -163,10 +176,11 @@ export default function Abonnements() {
         return
       }
 
+      const { coachId, coachNom } = coachDuJour(d.date)
       const id = await addItem('gym_abonnements', {
         date: d.date, dateFin, clientNom, categorie: d.categorie,
         dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
-        montant: Number(d.montant), notes: d.notes.trim(), site,
+        montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
       await audit('gym', 'ABONNEMENT_CREATE', `${clientNom} — ${categorieLabel(d.categorie)} — jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
@@ -280,7 +294,7 @@ export default function Abonnements() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, #E8850Fe6 100%)` }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -288,19 +302,20 @@ export default function Abonnements() {
         }}>
           <CreditCard size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Abonnements</h2>
           <p className="text-sm text-white/80">{liste.length} abonnement(s) — {formatMoney(total)} au total</p>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
+        {/* Filtre de période directement dans le bandeau (glassmorphism). */}
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+      </div>
+
+      <div className="flex justify-end">
         <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvel abonnement</Button>
       </div>
 

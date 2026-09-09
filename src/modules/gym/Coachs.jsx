@@ -1,11 +1,12 @@
 // MAXI-GYM — Coachs : pointage de l'arrivée (vs planning programmé en Paramètres)
 // + performance comparée (fréquentation clients les jours où chaque coach est présent).
 import { useMemo, useState } from 'react'
-import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History } from 'lucide-react'
+import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
+import StatCard from '../../shared/ui/StatCard'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
@@ -22,6 +23,14 @@ import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle } from './uiHelpers'
 const COULEUR = '#E8850F'
 const COULEUR2 = '#A6342A'
 
+// Podium — même recette que Dashboard.jsx (clients les plus fréquents) : médaille +
+// fond dégradé pour les 3 premiers du classement, simple numéro gris au-delà.
+const RANG_PODIUM = [
+  { medaille: '🥇', bg: 'bg-gradient-to-r from-amber-50 to-yellow-50', ring: 'ring-1 ring-amber-200' },
+  { medaille: '🥈', bg: 'bg-gradient-to-r from-slate-100 to-gray-50',  ring: 'ring-1 ring-slate-200' },
+  { medaille: '🥉', bg: 'bg-gradient-to-r from-orange-50 to-amber-50', ring: 'ring-1 ring-orange-200' }
+]
+
 export default function Coachs() {
   const { user, role } = useAuth()
   const peutSaisir = !isReadOnlyRole(role)
@@ -29,9 +38,11 @@ export default function Coachs() {
   const { data: allCoachs } = useCollection('gym_coachs')
   const { data: allPointages } = useCollection('gym_pointages_coach')
   const { data: allSeances } = useCollection('gym_seances')
+  const { data: allAbonnements } = useCollection('gym_abonnements')
   const coachs = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
   const pointages = useMemo(() => allPointages.filter((p) => matchSite(p, site)), [allPointages, site])
   const seances = useMemo(() => allSeances.filter((s) => matchSite(s, site)), [allSeances, site])
+  const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
 
   const [pointing, setPointing] = useState(null) // id du coach en cours de pointage
   // Ajout/modification du planning — ouvert à tous ici (agents inclus). La
@@ -64,25 +75,36 @@ export default function Coachs() {
     } finally { setPointing(null) }
   }
 
-  // Performance : jours (uniques) où chaque coach a été réellement pointé présent,
-  // et nombre de séances enregistrées ces jours-là — un proxy de la fréquentation
-  // client en sa présence. Un même jour n'est compté qu'une fois par coach, même
-  // si (cas rare) plusieurs pointages existeraient pour ce jour.
+  // Performance : jours (uniques) où chaque coach a été réellement pointé présent —
+  // sert à calculer une moyenne par jour de présence. Séances ET abonnements sont
+  // désormais RATTACHÉS pour de vrai à un coach précis (`coachId` posé à la création,
+  // cf. Seances.jsx/Abonnements.jsx → coachDuJour), uniquement quand un seul coach
+  // était présent ce jour-là — sinon ambigu, ni l'un ni l'autre n'est compté. Ce sont
+  // donc des chiffres réels, plus une corrélation « toute la salle, ce jour-là ».
   const performance = useMemo(() => {
     const joursParCoach = new Map()
     pointages.forEach((p) => {
       if (!joursParCoach.has(p.coachId)) joursParCoach.set(p.coachId, { nom: p.coachNom, jours: new Set() })
       joursParCoach.get(p.coachId).jours.add(p.date)
     })
-    const seancesParJour = new Map()
-    seances.forEach((s) => seancesParJour.set(s.date, (seancesParJour.get(s.date) || 0) + 1))
+    const compterParCoach = (liste) => {
+      const m = new Map()
+      liste.forEach((x) => { if (x.coachId) m.set(x.coachId, (m.get(x.coachId) || 0) + 1) })
+      return m
+    }
+    const seancesParCoach = compterParCoach(seances)
+    const abonnementsParCoach = compterParCoach(abonnements)
     return [...joursParCoach.entries()].map(([coachId, { nom, jours }]) => {
-      const totalClients = [...jours].reduce((s, d) => s + (seancesParJour.get(d) || 0), 0)
+      const totalClients = seancesParCoach.get(coachId) || 0
+      const totalAbonnements = abonnementsParCoach.get(coachId) || 0
       const nbJours = jours.size
-      return { coachId, nom, nbJours, totalClients, moyenne: nbJours ? Math.round((totalClients / nbJours) * 10) / 10 : 0 }
+      return {
+        coachId, nom, nbJours, totalClients, totalAbonnements,
+        moyenne: nbJours ? Math.round((totalClients / nbJours) * 10) / 10 : 0,
+        moyenneAbo: nbJours ? Math.round((totalAbonnements / nbJours) * 10) / 10 : 0
+      }
     }).sort((a, b) => b.moyenne - a.moyenne)
-  }, [pointages, seances])
-  const maxMoyenne = Math.max(1, ...performance.map((p) => p.moyenne))
+  }, [pointages, seances, abonnements])
 
   // Historique — période filtrable, plus récent en premier.
   const [modePeriode, setModePeriode] = useState('mois')
@@ -104,7 +126,7 @@ export default function Coachs() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, ${COULEUR2}e6 100%)` }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -112,10 +134,18 @@ export default function Coachs() {
         }}>
           <UserCog size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Coachs</h2>
           <p className="text-sm text-white/80">Planning, pointage d'arrivée et performance — MAXI-GYM {siteLabel(site)}</p>
         </div>
+        {/* Filtre de période de l'historique des pointages, directement dans le
+            bandeau (glassmorphism) — même recette que Séances/Abonnements. */}
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       <Card title={titreSection(CalendarDays, "Aujourd'hui")} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
@@ -193,35 +223,41 @@ export default function Coachs() {
         )}
       </Card>
 
-      <Card title={titreSection(BarChart3, 'Performance — fréquentation en présence de chaque coach')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
-        <p className="mb-3 text-xs text-gray-500">Nombre de séances enregistrées les jours où le coach a été pointé présent — une moyenne par jour de présence, pour comparer.</p>
-        <div className="space-y-2.5">
-          {performance.map((p) => (
-            <div key={p.coachId} className="flex items-center gap-2">
-              <span className="w-24 shrink-0 truncate text-sm font-semibold text-gray-700">{p.nom}</span>
-              <div className="h-3 flex-1 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full" style={{ width: `${(p.moyenne / maxMoyenne) * 100}%`, background: `linear-gradient(90deg, ${COULEUR}, ${COULEUR2})` }} />
+      <Card title={titreSection(BarChart3, 'Performance des coachs')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+        <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+          <span>Moyenne par jour de présence — séances et abonnements réellement rattachés à ce coach</span>
+          <span className="inline-flex items-center gap-1" title="Comptées uniquement quand ce coach était le SEUL présent le jour de l'enregistrement — sinon ambigu, non comptées">ⓘ seul présent ce jour-là</span>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {performance.map((p, i) => {
+            const podium = RANG_PODIUM[i]
+            return (
+              <div key={p.coachId} className={`rounded-2xl p-3 transition-all ${podium ? `${podium.bg} ${podium.ring} shadow-sm` : 'bg-gray-50'}`}>
+                <div className="mb-2 flex items-center gap-2">
+                  {podium ? (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-sm shadow ring-1 ring-gray-200">{podium.medaille}</span>
+                  ) : (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-400 text-xs font-extrabold text-white shadow ring-1 ring-white">{i + 1}</span>
+                  )}
+                  <span className="truncate text-sm font-bold text-gray-800">{p.nom}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard title="🎫 Séances/j" value={p.moyenne} sub={`${p.nbJours} j · ${p.totalClients} au total`} icon={Ticket} accent={COULEUR} />
+                  <StatCard title="💳 Abo./j" value={p.moyenneAbo} sub={`${p.totalAbonnements} au total`} icon={CreditCard} accent="#0ea5e9" />
+                </div>
               </div>
-              <span className="w-40 shrink-0 text-right text-xs text-gray-500">
-                <strong className="text-gray-800">{p.moyenne}</strong> client(s)/jour · {p.nbJours} jour(s) · {p.totalClients} au total
-              </span>
-            </div>
-          ))}
-          {!performance.length && <p className="py-6 text-center text-sm text-gray-400">Aucun pointage encore enregistré.</p>}
+            )
+          })}
+          {!performance.length && <p className="py-6 text-center text-sm text-gray-400 sm:col-span-2">Aucun pointage encore enregistré.</p>}
         </div>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h3 className="flex items-center gap-2 text-sm font-bold text-gray-700">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: COULEUR + '18', color: COULEUR }}><History size={14} /></span>
           Historique des pointages
         </h3>
-        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
-          valeurJour={filtreJour} onJourChange={setFiltreJour}
-          valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
-          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
-          valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <span className="text-xs text-gray-400">filtré selon la période choisie dans le bandeau ci-dessus</span>
       </div>
 
       <Card className="overflow-hidden border-l-4 p-0 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]" style={cardAccentStyle(COULEUR)}>

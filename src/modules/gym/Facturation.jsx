@@ -1,6 +1,6 @@
 // MAXI-GYM — Facturation : liste des factures générées (depuis Séances/Abonnements).
 import { useMemo, useState } from 'react'
-import { Receipt, FileDown, FileSpreadsheet, Pencil, Trash2, Printer, Wallet } from 'lucide-react'
+import { Receipt, FileDown, FileSpreadsheet, Pencil, Trash2, Printer, Wallet, Ticket, CreditCard, Check } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -16,7 +16,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isFullAccessRole, canExportExcel, canViewFinance } from '../../core/roles'
+import { isFullAccessRole, canExportExcel } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { imprimerTicketSeance } from './printTicket'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -32,7 +32,6 @@ export default function Facturation() {
   const { generateFacturePDF } = usePDF('gym')
   const { role } = useAuth()
   const peutSupprimer = isFullAccessRole(role)
-  const estAdministration = canViewFinance(role)
 
   // Filtre de période — Jour / Mois / Année, sur la liste affichée ci-dessous.
   // Par défaut sur le MOIS EN COURS (pas « Tous ») : c'est ce qui permet au Cumul
@@ -61,6 +60,13 @@ export default function Facturation() {
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
+  // Cumuls détaillés — séances / abonnements / les deux combinés (3 KPI distincts,
+  // visibles de TOUS les rôles y compris l'agent : décision explicite, contrairement
+  // au reste de l'app où ces totaux restent réservés à l'administration).
+  const seancesListe = useMemo(() => liste.filter((f) => f.sourceType !== 'abonnement'), [liste])
+  const abonnementsListe = useMemo(() => liste.filter((f) => f.sourceType === 'abonnement'), [liste])
+  const totalSeances = useMemo(() => seancesListe.reduce((s, x) => s + (Number(x.montant) || 0), 0), [seancesListe])
+  const totalAbonnements = useMemo(() => abonnementsListe.reduce((s, x) => s + (Number(x.montant) || 0), 0), [abonnementsListe])
 
   function reimprimer(f) {
     generateFacturePDF({
@@ -92,40 +98,53 @@ export default function Facturation() {
     toast.success('Facture supprimée')
   }
 
-  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
-  // la liste actuellement affichée (filtre de période déjà appliqué à `liste`).
-  function exportXLSX() {
-    const rows = liste.map((f) => ({
+  // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel). Plutôt qu'exporter
+  // aveuglément toute la liste mélangée, on demande d'abord CE QUI doit être exporté
+  // (séances / abonnements / les deux) — cf. modal ci-dessous — puis on génère UNE
+  // FEUILLE PAR CATÉGORIE (au lieu d'une seule liste mêlant les deux avec une colonne
+  // « Origine ») : plus lisible à l'ouverture, chaque feuille a ses propres totaux.
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportChoix, setExportChoix] = useState('both') // 'seances' | 'abonnements' | 'both'
+
+  const feuilleDe = (nom, sousListe) => {
+    const rows = sousListe.map((f) => ({
       'N°': f.numero,
       'Date': formatDateShort(f.date),
       'Client': f.clientNom || '—',
-      'Origine': f.sourceType === 'abonnement' ? 'Abonnement' : 'Séance',
       'Description': f.description || '—',
       'Montant': Number(f.montant) || 0
     }))
+    return {
+      name: nom,
+      title: `${nom} — MAXI-GYM`,
+      subtitle: `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} — ${formatMoney(rows.reduce((s, r) => s + r['Montant'], 0))} au total`,
+      columns: [
+        { key: 'N°', label: 'N°', width: 14 },
+        { key: 'Date', label: 'Date', width: 12 },
+        { key: 'Client', label: 'Client', width: 22 },
+        { key: 'Description', label: 'Description', width: 34 },
+        { key: 'Montant', label: 'Montant', width: 16, type: 'money' }
+      ],
+      rows,
+      totals: { __label: 'TOTAL', 'Montant': rows.reduce((s, r) => s + r['Montant'], 0) }
+    }
+  }
+
+  function exportXLSX() {
+    const sections = []
+    if (exportChoix === 'seances' || exportChoix === 'both') sections.push(feuilleDe('Séances', seancesListe))
+    if (exportChoix === 'abonnements' || exportChoix === 'both') sections.push(feuilleDe('Abonnements', abonnementsListe))
+    const suffixe = exportChoix === 'seances' ? 'seances' : exportChoix === 'abonnements' ? 'abonnements' : 'completes'
     exportRapportExcel({
-      filename: `factures-maxi-gym-${todayStr()}.xlsx`,
-      sections: [{
-        name: 'Factures MAXI-GYM',
-        title: 'Factures — MAXI-GYM',
-        subtitle: `${liste.length} facture(s) — ${formatMoney(total)} au total`,
-        columns: [
-          { key: 'N°', label: 'N°', width: 14 },
-          { key: 'Date', label: 'Date', width: 12 },
-          { key: 'Client', label: 'Client', width: 22 },
-          { key: 'Origine', label: 'Origine', width: 14 },
-          { key: 'Description', label: 'Description', width: 34 },
-          { key: 'Montant', label: 'Montant', width: 16, type: 'money' }
-        ],
-        rows,
-        totals: { __label: 'TOTAL', 'Montant': rows.reduce((s, r) => s + (r['Montant'] || 0), 0) }
-      }]
+      filename: `factures-maxi-gym-${suffixe}-${todayStr()}.xlsx`,
+      sections
     })
+    setExportOpen(false)
   }
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, #A6342Ae6 100%)` }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -133,40 +152,49 @@ export default function Facturation() {
         }}>
           <Receipt size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Facturation</h2>
           <p className="text-sm text-white/80">{liste.length} facture(s) — {formatMoney(total)} au total</p>
         </div>
+        {/* Filtre de période directement dans le bandeau (glassmorphism). */}
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
         Une facture est générée automatiquement à chaque enregistrement d'une séance ou d'un abonnement. Si une facture manque pour un enregistrement plus ancien, une icône 🧾 permet de la générer directement depuis le volet Séances/Abonnements concerné. Pour les séances, le ticket de caisse s'imprime automatiquement (imprimante thermique) — l'icône 🖨️ permet de le réimprimer à tout moment.
       </div>
 
-      {/* Cumul de facturation — réservé à l'administration, recalculé selon le
-          filtre de période ci-dessous (`liste`, comme le total déjà affiché dans
-          le bandeau et repris dans l'export Excel). */}
-      {estAdministration && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
-            title="Cumul facturation"
-            value={formatMoney(total)}
-            sub={`${liste.length} facture${liste.length > 1 ? 's' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
-            icon={Wallet} accent={COULEUR_MODULE.gym} />
+      {/* 3 KPI de cumul — Séances, Abonnements, et les deux combinés — recalculés
+          selon le filtre de période ci-dessous (`liste`). Visibles à TOUS les
+          rôles, y compris l'agent (décision explicite). */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          title="Cumul séances"
+          value={formatMoney(totalSeances)}
+          sub={`${seancesListe.length} séance${seancesListe.length > 1 ? 's' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
+          icon={Ticket} accent={COULEUR_MODULE.gym} />
+        <StatCard
+          title="Cumul abonnements"
+          value={formatMoney(totalAbonnements)}
+          sub={`${abonnementsListe.length} abonnement${abonnementsListe.length > 1 ? 's' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
+          icon={CreditCard} accent="#A6342A" />
+        <StatCard
+          title="Cumul facturation (total)"
+          value={formatMoney(total)}
+          sub={`${liste.length} facture${liste.length > 1 ? 's' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
+          icon={Wallet} accent="#16a34a" />
+      </div>
+
+      {canExportExcel(role) && (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => setExportOpen(true)}><FileSpreadsheet size={16} /> Export Excel</Button>
         </div>
       )}
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
-          valeurJour={filtreJour} onJourChange={setFiltreJour}
-          valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
-          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
-          valeurFin={filtreFin} onFinChange={setFiltreFin} />
-        {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
-        )}
-      </div>
 
       <Card className="p-0">
         <Table
@@ -215,6 +243,42 @@ export default function Facturation() {
             </FormGroup>
           </div>
         )}
+      </Modal>
+
+      {/* Choix de l'export Excel — plutôt que d'exporter tout d'un coup, on demande
+          d'abord la catégorie (séances / abonnements / les deux) : chaque catégorie
+          choisie devient sa propre feuille, bien organisée, plutôt qu'une liste unique
+          mélangée avec une colonne « Origine ». */}
+      <Modal open={exportOpen} onClose={() => setExportOpen(false)} title="Exporter la facturation"
+        {...glassModalProps(COULEUR_MODULE.gym)}
+        footer={<><Button variant="outline" onClick={() => setExportOpen(false)}>Annuler</Button><Button onClick={exportXLSX}><FileSpreadsheet size={16} /> Effectuer l'export</Button></>}>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">Que voulez-vous exporter ? (période actuellement filtrée : {liste.length} facture(s))</p>
+          <div className="flex gap-2">
+            {[
+              { id: 'seances', label: 'Séances', icon: Ticket, desc: `${seancesListe.length} séance${seancesListe.length > 1 ? 's' : ''}` },
+              { id: 'abonnements', label: 'Abonnements', icon: CreditCard, desc: `${abonnementsListe.length} abonnement${abonnementsListe.length > 1 ? 's' : ''}` },
+              { id: 'both', label: 'Les deux', icon: Wallet, desc: `${liste.length} facture${liste.length > 1 ? 's' : ''}` }
+            ].map((opt) => {
+              const actif = exportChoix === opt.id
+              const Icone = opt.icon
+              return (
+                <button key={opt.id} type="button" onClick={() => setExportChoix(opt.id)}
+                  className={`relative flex flex-1 flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold transition-all ${actif ? 'shadow-[0_2px_8px_-2px_rgba(0,0,0,0.25)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}
+                  style={actif ? { borderColor: COULEUR, background: `${COULEUR}14`, color: COULEUR } : undefined}>
+                  {actif && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-white" style={{ background: COULEUR }}>
+                      <Check size={10} strokeWidth={3} />
+                    </span>
+                  )}
+                  <Icone size={18} />
+                  <span>{opt.label}</span>
+                  <span className="text-[10px] font-normal text-gray-400">{opt.desc}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </Modal>
     </div>
   )

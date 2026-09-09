@@ -68,14 +68,24 @@ export default function Clients() {
   }, [seances, abonnements, presences])
 
   const clientsAffiches = useMemo(() => {
-    return clients.filter((c) => {
-      if (filtreSite && (c.site || 'lome') !== filtreSite) return false
-      if (recherche.trim() && !(c.nom || '').toLowerCase().includes(recherche.trim().toLowerCase())) return false
-      if (afficherInactifs) return true
-      const derniere = derniereVisiteParNom.get((c.nom || '').trim().toLowerCase())
-      const jours = joursDepuis(derniere)
-      return jours == null || jours < SEUIL_INACTIVITE_JOURS
-    })
+    return clients
+      .filter((c) => {
+        if (filtreSite && (c.site || 'lome') !== filtreSite) return false
+        if (recherche.trim() && !(c.nom || '').toLowerCase().includes(recherche.trim().toLowerCase())) return false
+        if (afficherInactifs) return true
+        const derniere = derniereVisiteParNom.get((c.nom || '').trim().toLowerCase())
+        const jours = joursDepuis(derniere)
+        return jours == null || jours < SEUIL_INACTIVITE_JOURS
+      })
+      // Du plus récent au plus ancien : dernière visite en premier critère (celle
+      // affichée dans la colonne « Dernière visite ») ; à égalité (ou aucune
+      // activité recensée), on retombe sur la date d'apparition du client (`createdAt`).
+      .sort((a, b) => {
+        const da = derniereVisiteParNom.get((a.nom || '').trim().toLowerCase()) || ''
+        const db = derniereVisiteParNom.get((b.nom || '').trim().toLowerCase()) || ''
+        if (da !== db) return da < db ? 1 : -1
+        return (b.createdAt || 0) - (a.createdAt || 0)
+      })
   }, [clients, derniereVisiteParNom, afficherInactifs, filtreSite, recherche])
   const nbInactifs = clients.length - clients.filter((c) => {
     const derniere = derniereVisiteParNom.get((c.nom || '').trim().toLowerCase())
