@@ -279,7 +279,7 @@ export default function PresencesEnfants() {
   return (
     <div className="space-y-5">
 
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -287,28 +287,33 @@ export default function PresencesEnfants() {
         }}>
           <CalendarCheck size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Présences</h2>
           <p className="text-sm text-white/80">Suivi quotidien des présences et absences des enfants</p>
         </div>
+        {/* Sélecteur de JOUR — remonté dans le bandeau. Reste volontairement un seul
+            jour (pas de mode Mois/Année/Plage) : le pointage arrivée/départ est une
+            action du jour, pas une liste qu'on filtrerait sur une période. */}
+        <div className="relative flex w-full flex-wrap items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto">
+          <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
+            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+          <input type="date" value={dateFiltre} max={today} style={{ colorScheme: 'dark' }}
+            onChange={(e) => setDateFiltre(e.target.value)}
+            className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+          <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
+            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+          {!isToday && (
+            <button onClick={() => setDateFiltre(today)}
+              className="rounded-xl bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30">
+              Auj.
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Sélecteur de date + navigation */}
+      {/* Compteurs + export */}
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
-          className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50"><ChevronLeft size={15} /></button>
-        <input type="date" value={dateFiltre} max={today}
-          onChange={(e) => setDateFiltre(e.target.value)}
-          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" />
-        <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
-          className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50 disabled:opacity-30"><ChevronRight size={15} /></button>
-        {!isToday && (
-          <button onClick={() => setDateFiltre(today)}
-            className="rounded-lg bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-200">
-            Auj.
-          </button>
-        )}
-        <div className="flex gap-2 text-xs ml-1">
+        <div className="flex gap-2 text-xs">
           <span className="font-semibold text-green-600">✓{stats.presents}</span>
           <span className="font-semibold text-red-500">✗{stats.absents}</span>
           <span className="font-semibold text-yellow-600">~{stats.excuses}</span>

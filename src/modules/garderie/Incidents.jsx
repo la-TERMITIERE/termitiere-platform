@@ -8,6 +8,7 @@ import { glassModalProps, COULEUR_MODULE, teinterHex, shadeHex } from '../../uti
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { setItem } from '../../core/db'
@@ -86,6 +87,25 @@ export default function Incidents() {
 
   const [onglet, setOnglet] = useState('incidents')
 
+  // Filtre de période — dans le bandeau (glassmorphism), partagé par les onglets
+  // Incidents/Soins (tous deux ont un champ `date`). Vide par défaut = tout l'historique
+  // (un incident/soin non résolu ne doit jamais disparaître faute d'avoir choisi une
+  // période — cf. filtreResolu par défaut sur « à traiter »).
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState('')
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+  const dansPeriode = (dateStr) => {
+    if (!filtrePeriodeActif) return true
+    if (modePeriode === 'mois') return (dateStr || '').startsWith(filtreMois)
+    if (modePeriode === 'annee') return (dateStr || '').startsWith(filtreAnnee)
+    if (modePeriode === 'plage') return (!filtreDebut || dateStr >= filtreDebut) && (!filtreFin || dateStr <= filtreFin)
+    return dateStr === filtreJour
+  }
+
   // ── Incidents ──
   const [modalIncident, setModalIncident] = useState(null)
   const [filtreGravite, setFiltreGravite] = useState('')
@@ -132,11 +152,15 @@ export default function Incidents() {
 
   // ══════════════════════ INCIDENTS ══════════════════════
   const listeIncidents = useMemo(() => {
-    let rows = [...incidents]
+    let rows = [...incidents].filter((i) => dansPeriode(i.date))
     if (filtreGravite)        rows = rows.filter((i) => i.gravite === filtreGravite)
     if (filtreResolu !== '')  rows = rows.filter((i) => String(i.resolu) === filtreResolu)
     return rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-  }, [incidents, filtreGravite, filtreResolu])
+  }, [incidents, filtreGravite, filtreResolu, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  // Alarmes actives — TOUJOURS sur l'ensemble des incidents, jamais filtrées par
+  // période : une urgence non résolue du mois dernier ne doit pas disparaître de la
+  // bannière simplement parce que le filtre de période du bandeau est sur « ce mois-ci ».
+  const alarmesActives = useMemo(() => incidents.filter((i) => !i.resolu && (i.alarme || 0) >= 2), [incidents])
 
   async function handleSaveIncident() {
     const d = modalIncident.data
@@ -206,11 +230,11 @@ export default function Incidents() {
 
   // ══════════════════════ SOINS ══════════════════════
   const listeSoins = useMemo(() => {
-    let rows = [...soins]
+    let rows = [...soins].filter((s) => dansPeriode(s.date))
     if (filtreType)  rows = rows.filter((s) => s.type === filtreType)
     if (filtreSuivi !== '') rows = rows.filter((s) => String(!!s.suivi) === filtreSuivi)
     return rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-  }, [soins, filtreType, filtreSuivi])
+  }, [soins, filtreType, filtreSuivi, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   const aSuivreCount = useMemo(() => soins.filter((s) => s.suivi).length, [soins])
 
@@ -379,7 +403,7 @@ export default function Incidents() {
 
   return (
     <div className="space-y-5">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -387,10 +411,19 @@ export default function Incidents() {
         }}>
           <Stethoscope size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Santé & Infirmerie</h2>
           <p className="text-sm text-white/80">Incidents, soins courants et carnet de vaccination</p>
         </div>
+        {/* Filtre de période (Incidents/Soins) directement dans le bandeau. */}
+        {onglet !== 'vaccination' && (
+          <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+            valeurJour={filtreJour} onJourChange={setFiltreJour}
+            valeurMois={filtreMois} onMoisChange={setFiltreMois}
+            avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+            avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+            valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        )}
       </div>
 
       <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
@@ -439,18 +472,18 @@ export default function Incidents() {
         </div>
       </div>
 
-      {/* Bannière alarmes actives */}
-      {listeIncidents.filter((i) => !i.resolu && (i.alarme || 0) >= 2).length > 0 && (
+      {/* Bannière alarmes actives — toutes périodes confondues (cf. alarmesActives) */}
+      {alarmesActives.length > 0 && (
         <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 animate-pulse">
           <p className="font-bold text-red-700 flex items-center gap-2">
             <ShieldAlert size={18} />
-            {listeIncidents.filter((i) => !i.resolu && (i.alarme || 0) === 3).length > 0 &&
-              `🔴 ${listeIncidents.filter((i) => !i.resolu && (i.alarme || 0) === 3).length} URGENCE(S) — `}
-            {listeIncidents.filter((i) => !i.resolu && (i.alarme || 0) === 2).length > 0 &&
-              `🟠 ${listeIncidents.filter((i) => !i.resolu && (i.alarme || 0) === 2).length} ALERTE(S)`}
+            {alarmesActives.filter((i) => (i.alarme || 0) === 3).length > 0 &&
+              `🔴 ${alarmesActives.filter((i) => (i.alarme || 0) === 3).length} URGENCE(S) — `}
+            {alarmesActives.filter((i) => (i.alarme || 0) === 2).length > 0 &&
+              `🟠 ${alarmesActives.filter((i) => (i.alarme || 0) === 2).length} ALERTE(S)`}
           </p>
           <div className="mt-1 flex flex-wrap gap-2">
-            {listeIncidents.filter((i) => !i.resolu && (i.alarme || 0) >= 2).map((i) => (
+            {alarmesActives.map((i) => (
               <span key={i.id} className="rounded-full bg-red-100 border border-red-300 px-2 py-0.5 text-xs font-semibold text-red-800">
                 {NIVEAUX_ALARME[i.alarme || 0]?.badge} {i.enfantNom}
               </span>

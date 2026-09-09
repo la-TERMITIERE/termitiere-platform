@@ -347,7 +347,7 @@ export default function Cantine() {
   return (
     <div className="space-y-5">
 
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -355,9 +355,27 @@ export default function Cantine() {
         }}>
           <UtensilsCrossed size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Cantine & Repas</h2>
           <p className="text-sm text-white/80">Biberons, repas et suivi nutritionnel du jour</p>
+        </div>
+        {/* Sélecteur de JOUR — remonté dans le bandeau. Un seul jour (pas de mode
+            Mois/Année/Plage) : le menu et le suivi biberons sont une saisie du jour,
+            pas une liste à parcourir sur une période. */}
+        <div className="relative flex w-full flex-wrap items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto">
+          <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
+            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+          <input type="date" value={dateFiltre} max={today} style={{ colorScheme: 'dark' }}
+            onChange={(e) => setDateFiltre(e.target.value)}
+            className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+          <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
+            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+          {!isToday && (
+            <button onClick={() => setDateFiltre(today)}
+              className="rounded-xl bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30">
+              Aujourd'hui
+            </button>
+          )}
         </div>
       </div>
 
@@ -377,21 +395,8 @@ export default function Cantine() {
         ))}
       </div>
 
-      {/* Sélecteur de date */}
       <div className="flex items-center gap-3">
-        <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
-          className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
-        <Input type="date" value={dateFiltre} max={today}
-          onChange={(e) => setDateFiltre(e.target.value)} />
-        <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
-          className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50 disabled:opacity-30"><ChevronRight size={16} /></button>
-        {!isToday && (
-          <button onClick={() => setDateFiltre(today)}
-            className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-200">
-            Aujourd'hui
-          </button>
-        )}
-        <span className="ml-2 text-sm font-semibold text-gray-600">{formatDateShort(dateFiltre)}</span>
+        <span className="text-sm font-semibold text-gray-600">{formatDateShort(dateFiltre)}</span>
       </div>
 
       {/* ══ MENU DU JOUR ══ */}
