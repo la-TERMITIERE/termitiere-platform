@@ -144,7 +144,14 @@ export default function Clients() {
       <Card className="p-0">
         <Table
           columns={[
-            { key: 'nom', label: 'Nom' },
+            { key: 'nom', label: 'Nom', render: (r) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span>{r.nom}</span>
+                {r.partenaire && (
+                  <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">🤝 {r.partenaireStructure || 'partenaire'}</span>
+                )}
+              </div>
+            ) },
             { key: 'site', label: 'Salle', render: (r) => {
               const s = SITES.find((x) => x.id === (r.site || 'lome'))
               return (

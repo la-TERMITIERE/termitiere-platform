@@ -38,7 +38,8 @@ const COLLECTIONS_A_VIDER = [
   { nom: 'gym_factures', label: 'Factures' },
   { nom: 'gym_presences', label: 'Arrivées pointées' },
   { nom: 'gym_coachs', label: 'Coachs' },
-  { nom: 'gym_pointages_coach', label: 'Pointages coachs' }
+  { nom: 'gym_pointages_coach', label: 'Pointages coachs' },
+  { nom: 'gym_reglements_partenaires', label: 'Règlements partenaires' }
 ]
 
 export default function Params() {
@@ -55,6 +56,7 @@ export default function Params() {
   const { data: allPresences } = useCollection('gym_presences')
   const { data: allCoachs } = useCollection('gym_coachs')
   const { data: allPointagesCoach } = useCollection('gym_pointages_coach')
+  const { data: allReglementsPart } = useCollection('gym_reglements_partenaires')
   const seances = useMemo(() => allSeances.filter((s) => matchSite(s, site)), [allSeances, site])
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
   const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
@@ -62,9 +64,11 @@ export default function Params() {
   const presences = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
   const coachs = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
   const pointagesCoach = useMemo(() => allPointagesCoach.filter((p) => matchSite(p, site)), [allPointagesCoach, site])
+  const reglementsPart = useMemo(() => allReglementsPart.filter((r) => matchSite(r, site)), [allReglementsPart, site])
   const donnees = {
     gym_seances: seances, gym_abonnements: abonnements, gym_clients: clients, gym_factures: factures,
-    gym_presences: presences, gym_coachs: coachs, gym_pointages_coach: pointagesCoach
+    gym_presences: presences, gym_coachs: coachs, gym_pointages_coach: pointagesCoach,
+    gym_reglements_partenaires: reglementsPart
   }
   const totalEnregistrements = COLLECTIONS_A_VIDER.reduce((s, c) => s + (donnees[c.nom]?.length || 0), 0)
 

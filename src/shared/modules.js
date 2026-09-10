@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
+  Wallet, Gauge, Receipt, Landmark, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
 } from 'lucide-react'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES, ANALYSES_DEPENSE_ROLES } from '../core/roles'
 
@@ -266,6 +266,7 @@ export const MODULE_NAV = {
     { label: 'Abonnements', to: '/gym/abonnements', icon: CreditCard },
     { label: 'Facturation', to: '/gym/facturation', icon: Receipt },
     { label: 'Clients', to: '/gym/clients', icon: UserCircle },
+    { label: 'Clients partenaires', to: '/gym/clients-partenaires', icon: HandCoins, roles: FINANCE_VIEW_ROLES },
     { label: 'Coachs', to: '/gym/coachs', icon: UserCog },
     { label: 'Pilotage & Analyses', to: '/gym/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Dépense', to: '/gym/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
