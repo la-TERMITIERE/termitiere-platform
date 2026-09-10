@@ -285,9 +285,9 @@ export default function Transport() {
           l'onglet « Tous les trajets ». */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl p-4 text-white shadow-lg"
         style={{ background: `linear-gradient(to right, ${COULEUR}, ${shadeHex(COULEUR, -30)})` }}>
-        <Truck size={22} />
-        <div>
-          <h2 className="text-base font-extrabold">Transport — MAXI LOGISTIQUE ({siteLabel(site)})</h2>
+        <Truck size={22} className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-extrabold leading-tight">Transport — MAXI LOGISTIQUE ({siteLabel(site)})</h2>
           <p className="text-xs text-white/80">Sortie de camion sous autorisation · suivi départ → arrivée · recette, dépenses, marge</p>
         </div>
         {onglet === 'tous' && (
@@ -539,14 +539,14 @@ export default function Transport() {
               <div className="rounded-lg bg-white p-3">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: COULEUR }}><Clock size={13} /> Suivi</p>
                 <ul className="space-y-1.5 text-sm">
-                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-gray-400" /> Créé par <strong>{detail.agentNom || '—'}</strong>{detail.createdAt ? ` · ${dateTimeCourt(detail.createdAt)}` : ''}</li>
-                  <li className="flex items-center gap-2">
+                  <li className="flex items-start gap-2"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-gray-400" /> <span>Créé par <strong>{detail.agentNom || '—'}</strong>{detail.createdAt ? ` · ${dateTimeCourt(detail.createdAt)}` : ''}</span></li>
+                  <li className="flex items-start gap-2">
                     {st === 'en_attente'
-                      ? <><Clock size={14} className="text-amber-500" /> En attente d'autorisation de sortie</>
-                      : <><ShieldCheck size={14} className="text-green-600" /> Sortie autorisée{voitValidateur && detail.approuveePar ? <> par <strong>{detail.approuveePar}</strong></> : ''}{detail.approuveeLe ? ` · ${formatDateShort(detail.approuveeLe)}` : ''}</>}
+                      ? <><Clock size={14} className="mt-0.5 shrink-0 text-amber-500" /> <span>En attente d'autorisation de sortie</span></>
+                      : <><ShieldCheck size={14} className="mt-0.5 shrink-0 text-green-600" /> <span>Sortie autorisée{voitValidateur && detail.approuveePar ? <> par <strong>{detail.approuveePar}</strong></> : ''}{detail.approuveeLe ? ` · ${formatDateShort(detail.approuveeLe)}` : ''}</span></>}
                   </li>
                   {st === 'arrive' && (
-                    <li className="flex items-center gap-2"><Flag size={14} className="text-sky-600" /> Arrivée enregistrée{detail.arriveePar ? <> par <strong>{detail.arriveePar}</strong></> : ''}{detail.arriveeLe ? ` · ${dateTimeCourt(detail.arriveeLe)}` : ''}</li>
+                    <li className="flex items-start gap-2"><Flag size={14} className="mt-0.5 shrink-0 text-sky-600" /> <span>Arrivée enregistrée{detail.arriveePar ? <> par <strong>{detail.arriveePar}</strong></> : ''}{detail.arriveeLe ? ` · ${dateTimeCourt(detail.arriveeLe)}` : ''}</span></li>
                   )}
                 </ul>
               </div>
@@ -559,12 +559,12 @@ export default function Transport() {
                   <div className="mt-2 space-y-1">
                     {(detail.depenses || []).length === 0 && <p className="text-xs text-gray-400">Aucune dépense enregistrée.</p>}
                     {(detail.depenses || []).map((x, i) => (
-                      <div key={i} className="flex items-center justify-between rounded bg-amber-50 px-2.5 py-1 text-xs">
-                        <span className="text-amber-800">
+                      <div key={i} className="flex items-start justify-between gap-2 rounded bg-amber-50 px-2.5 py-1 text-xs">
+                        <span className="min-w-0 text-amber-800">
                           {x.label}
                           {x.ajouteePar && <span className="text-amber-500"> · ajoutée par {x.ajouteePar}{x.ajouteeLe ? ` le ${formatDateShort(x.ajouteeLe)}` : ''}</span>}
                         </span>
-                        <strong className="text-amber-800">{formatMoney(parseFloat(x.montant) || 0)}</strong>
+                        <strong className="shrink-0 text-amber-800">{formatMoney(parseFloat(x.montant) || 0)}</strong>
                       </div>
                     ))}
                   </div>
