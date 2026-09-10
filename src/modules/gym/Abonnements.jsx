@@ -591,12 +591,19 @@ export default function Abonnements() {
             const dejaPointe = !!dateSelectionnee && presences.some((p) =>
               p.date === dateSelectionnee && (p.clientNom || '').trim().toLowerCase() === calendrierClient.clientNom.trim().toLowerCase()
             )
-            return dejaPointe ? (
-              <Button variant="danger" onClick={() => annulerPointage(calendrierClient, dateSelectionnee)}
-                loading={pointageBusy === calendrierClient.id}>
-                <Trash2 size={15} /> Annuler le pointage{dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
-              </Button>
-            ) : (
+            // Annuler un pointage = suppression d'un enregistrement : réservé à
+            // l'administration et à Info (comme tous les boutons de suppression).
+            if (dejaPointe) {
+              return peutSupprimer ? (
+                <Button variant="danger" onClick={() => annulerPointage(calendrierClient, dateSelectionnee)}
+                  loading={pointageBusy === calendrierClient.id}>
+                  <Trash2 size={15} /> Annuler le pointage{dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
+                </Button>
+              ) : (
+                <span className="text-xs text-gray-400">Pointé — l'annulation est réservée à l'administration</span>
+              )
+            }
+            return (
               <Button onClick={() => pointerArrivee(calendrierClient, dateSelectionnee)}
                 disabled={!dateSelectionnee} loading={pointageBusy === calendrierClient.id}>
                 <CheckCircle2 size={15} /> Pointer{dateSelectionnee && dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}

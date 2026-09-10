@@ -221,7 +221,12 @@ export default function Transport() {
   const estMien = (t) => t.agentId && user?.uid && t.agentId === user.uid
   // Modif / suppression : l'administration (+ Info) à tout stade ; l'auteur et les
   // approbateurs uniquement tant que la sortie n'est pas autorisée.
+  // Modifier : l'administration (+ Info) à tout stade ; l'auteur et les approbateurs
+  // uniquement tant que la sortie n'est pas autorisée (pour corriger une erreur de
+  // saisie avant que le camion ne parte).
   const peutModifier = (t) => peutSaisir && (peutAdmin || ((estMien(t) || peutApprouver) && statutTrajet(t) === 'en_attente'))
+  // Supprimer : réservé à l'administration et à Info, quel que soit le statut.
+  const peutSupprimerTrajet = () => peutAdmin
   const horaire = (t) => (t.heureDepart || t.heureArrivee) ? `${t.heureDepart || '—'} → ${t.heureArriveeReelle || t.heureArrivee || '—'}` : '—'
 
   const ongletsDef = [
@@ -268,7 +273,7 @@ export default function Transport() {
             <Pencil size={15} />
           </button>
         )}
-        {peutModifier(t) && (
+        {peutSupprimerTrajet() && (
           <button onClick={() => setToDelete(t)} title="Supprimer le trajet"
             className={`${chip} border-red-200 bg-red-50 text-red-600 hover:bg-red-100`}>
             <Trash2 size={15} />
@@ -508,7 +513,7 @@ export default function Transport() {
               {peutModifier(detail) && (
                 <Button variant="outline" onClick={() => { const t = detail; setDetail(null); ouvrirEdition(t) }}><Pencil size={15} /> Modifier</Button>
               )}
-              {peutModifier(detail) && (
+              {peutSupprimerTrajet() && (
                 <Button variant="danger" onClick={() => setToDelete(detail)}><Trash2 size={15} /> Supprimer</Button>
               )}
             </div>

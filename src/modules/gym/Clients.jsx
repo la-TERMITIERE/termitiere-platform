@@ -32,6 +32,11 @@ import { SITES, siteLabel } from './site/useSite'
 const COULEUR = '#E8850F'
 const SEUIL_INACTIVITE_JOURS = 60 // deux mois — au-delà, le client sort de la liste par défaut
 
+// Clé d'agrégation par SALLE + nom : une fiche de Kara ne cumule que l'activité de
+// Kara, une fiche de Lomé que celle de Lomé — même si le même nom existe des deux
+// côtés (chaque salle a sa propre clientèle, cf. site/useSite.jsx).
+const cleClientSite = (site, nom) => `${site || 'lome'}::${(nom || '').trim().toLowerCase()}`
+
 export default function Clients() {
   const { role } = useAuth()
   const peutSupprimer = isFullAccessRole(role) // administration + Info
@@ -61,32 +66,34 @@ export default function Clients() {
     }
   }
 
-  // Cumul + dernière visite par nom de client (les séances/abonnements/présences ne
-  // portent qu'un nom libre, pas encore d'identifiant de fiche client — rapprochement
-  // par nom, insensible à la casse). Tout confondu, les deux salles — un client peut
-  // avoir une activité à l'une comme à l'autre. La « dernière visite » retient la
-  // date la plus récente parmi : arrivée pointée, séance, ou souscription d'abonnement.
+  // Cumul + dernière visite, agrégés PAR SALLE + nom (cf. cleClientSite) : l'activité
+  // de Lomé ne compte jamais dans la fiche d'un client de Kara, et inversement. Le
+  // rapprochement reste par nom libre (les séances/abonnements/présences ne portent
+  // pas encore d'identifiant de fiche client), mais borné à la salle de la ligne.
+  // La « dernière visite » retient la date la plus récente parmi : arrivée pointée,
+  // séance, ou souscription d'abonnement.
   const { cumulParNom, derniereVisiteParNom, abonnementParNom } = useMemo(() => {
     const cumul = new Map()
     const derniere = new Map()
-    const maj = (nom, montant, date) => {
-      const cle = (nom || '').trim().toLowerCase()
-      if (!cle) return
+    const maj = (site, nom, montant, date) => {
+      if (!(nom || '').trim()) return
+      const cle = cleClientSite(site, nom)
       cumul.set(cle, (cumul.get(cle) || 0) + (Number(montant) || 0))
       if (date && (!derniere.has(cle) || date > derniere.get(cle))) derniere.set(cle, date)
     }
-    for (const s of seances) maj(s.clientNom, s.montant, s.date)
-    for (const a of abonnements) maj(a.clientNom, a.montant, a.date)
+    for (const s of seances) maj(s.site, s.clientNom, s.montant, s.date)
+    for (const a of abonnements) maj(a.site, a.clientNom, a.montant, a.date)
     for (const p of presences) {
-      const cle = (p.clientNom || '').trim().toLowerCase()
-      if (cle && p.date && (!derniere.has(cle) || p.date > derniere.get(cle))) derniere.set(cle, p.date)
+      if (!(p.clientNom || '').trim()) continue
+      const cle = cleClientSite(p.site, p.clientNom)
+      if (p.date && (!derniere.has(cle) || p.date > derniere.get(cle))) derniere.set(cle, p.date)
     }
     // Abonnement le plus pertinent par client : celui en cours s'il y en a un,
     // sinon le plus récent (pour afficher au moins la dernière catégorie connue).
     const parNom = new Map()
     for (const a of [...abonnements].sort((x, y) => (x.date < y.date ? 1 : -1))) {
-      const cle = (a.clientNom || '').trim().toLowerCase()
-      if (!cle) continue
+      if (!(a.clientNom || '').trim()) continue
+      const cle = cleClientSite(a.site, a.clientNom)
       const actif = abonnementActif(a.dateFin, a.dateDebut)
       const aVenir = !!a.dateDebut && a.dateDebut > todayStr()
       const courant = parNom.get(cle)
@@ -101,7 +108,7 @@ export default function Clients() {
         if (filtreSite && (c.site || 'lome') !== filtreSite) return false
         if (recherche.trim() && !(c.nom || '').toLowerCase().includes(recherche.trim().toLowerCase())) return false
         if (afficherInactifs) return true
-        const derniere = derniereVisiteParNom.get((c.nom || '').trim().toLowerCase())
+        const derniere = derniereVisiteParNom.get(cleClientSite(c.site, c.nom))
         const jours = joursDepuis(derniere)
         return jours == null || jours < SEUIL_INACTIVITE_JOURS
       })
@@ -109,14 +116,14 @@ export default function Clients() {
       // affichée dans la colonne « Dernière visite ») ; à égalité (ou aucune
       // activité recensée), on retombe sur la date d'apparition du client (`createdAt`).
       .sort((a, b) => {
-        const da = derniereVisiteParNom.get((a.nom || '').trim().toLowerCase()) || ''
-        const db = derniereVisiteParNom.get((b.nom || '').trim().toLowerCase()) || ''
+        const da = derniereVisiteParNom.get(cleClientSite(a.site, a.nom)) || ''
+        const db = derniereVisiteParNom.get(cleClientSite(b.site, b.nom)) || ''
         if (da !== db) return da < db ? 1 : -1
         return (b.createdAt || 0) - (a.createdAt || 0)
       })
   }, [clients, derniereVisiteParNom, afficherInactifs, filtreSite, recherche])
   const nbInactifs = clients.length - clients.filter((c) => {
-    const derniere = derniereVisiteParNom.get((c.nom || '').trim().toLowerCase())
+    const derniere = derniereVisiteParNom.get(cleClientSite(c.site, c.nom))
     const jours = joursDepuis(derniere)
     return jours == null || jours < SEUIL_INACTIVITE_JOURS
   }).length
@@ -138,7 +145,7 @@ export default function Clients() {
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        Les clients apparaissent automatiquement ici dès qu'une séance ou un abonnement est enregistré à leur nom — pas d'ajout manuel. Ce répertoire regroupe <strong>les deux salles</strong> (contrairement au reste du module) : un abonné de Lomé peut se présenter à Kara pendant un séjour, et inversement — utilisez le filtre par salle et la recherche par nom pour vérifier sa salle d'origine et si son abonnement est bien valide. Un client sans passage depuis {SEUIL_INACTIVITE_JOURS} jours (deux mois) sort de la liste par défaut.
+        Les clients apparaissent automatiquement ici dès qu'une séance ou un abonnement est enregistré à leur nom — pas d'ajout manuel. Ce répertoire <strong>affiche les deux salles ensemble</strong> (contrairement au reste du module) : un abonné de Lomé peut se présenter à Kara pendant un séjour, et inversement — utilisez le filtre par salle et la recherche par nom pour vérifier sa salle d'origine et si son abonnement est bien valide. En revanche, chaque salle garde sa propre clientèle : le <strong>total dépensé, la dernière visite et le statut d'abonnement sont comptés salle par salle</strong> — l'activité de Lomé n'est jamais mêlée à celle de Kara. Un client sans passage depuis {SEUIL_INACTIVITE_JOURS} jours (deux mois) sort de la liste par défaut.
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -189,18 +196,18 @@ export default function Clients() {
               )
             } },
             { key: 'categorie', label: 'Catégorie abo.', render: (r) => {
-              const abo = abonnementParNom.get((r.nom || '').trim().toLowerCase())
+              const abo = abonnementParNom.get(cleClientSite(r.site, r.nom))
               return abo ? <Badge tone={categorieTone(abo.categorie)}>{categorieLabel(abo.categorie)}</Badge> : <span className="text-gray-400">—</span>
             } },
             { key: 'statutAbo', label: 'Statut abo.', render: (r) => {
-              const abo = abonnementParNom.get((r.nom || '').trim().toLowerCase())
+              const abo = abonnementParNom.get(cleClientSite(r.site, r.nom))
               if (!abo) return <span className="text-gray-400">Aucun</span>
               if (abo.aVenir) return <Badge tone="info">Débute le {formatDateShort(abo.dateDebut)}</Badge>
               return <Badge tone={abo.actif ? 'success' : 'neutral'}>{abo.actif ? `Actif jusqu'au ${formatDateShort(abo.dateFin)}` : 'Expiré'}</Badge>
             } },
             { key: 'telephone', label: 'Téléphone', render: (r) => r.telephone || '—' },
             { key: 'derniereVisite', label: 'Dernière visite', render: (r) => {
-              const derniere = derniereVisiteParNom.get((r.nom || '').trim().toLowerCase())
+              const derniere = derniereVisiteParNom.get(cleClientSite(r.site, r.nom))
               const jours = joursDepuis(derniere)
               if (jours == null) return <span className="text-gray-400">—</span>
               return (
@@ -209,7 +216,7 @@ export default function Clients() {
                 </Badge>
               )
             } },
-            { key: 'total', label: 'Total dépensé', align: 'right', render: (r) => <strong>{formatMoney(cumulParNom.get((r.nom || '').trim().toLowerCase()) || 0)}</strong> },
+            { key: 'total', label: 'Total dépensé', align: 'right', render: (r) => <strong>{formatMoney(cumulParNom.get(cleClientSite(r.site, r.nom)) || 0)}</strong> },
             { key: 'notes', label: 'Notes', render: (r) => r.notes || '—' },
             ...(peutSupprimer ? [{
               key: 'actions', label: '', align: 'right', render: (r) => (
