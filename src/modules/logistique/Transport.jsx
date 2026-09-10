@@ -233,23 +233,44 @@ export default function Transport() {
   // Cellule d'actions d'une ligne — dépend du statut du trajet et des droits.
   const actionsTrajet = (t) => {
     const st = statutTrajet(t)
+    // Actions bien visibles : les étapes du workflow (Autoriser / Arrivée) sont des
+    // boutons pleins avec libellé ; les autres, des pastilles teintées bordées.
+    const chip = 'inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold transition-colors'
     return (
-      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => setDetail(t)} title="Voir le détail" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={15} /></button>
+      <div className="flex flex-wrap items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <button onClick={() => setDetail(t)} title="Voir le détail du trajet"
+          className={`${chip} border-gray-200 bg-white text-gray-600 hover:bg-gray-50`}>
+          <Eye size={15} /> Détail
+        </button>
         {st === 'en_attente' && peutApprouver && (
-          <button onClick={() => approuver(t)} title="Autoriser la sortie" className="rounded-lg p-1.5 text-green-600 hover:bg-green-50"><ShieldCheck size={15} /></button>
+          <button onClick={() => approuver(t)} title="Autoriser la sortie du camion"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-green-600/40 transition-colors hover:bg-green-700">
+            <ShieldCheck size={15} /> Autoriser
+          </button>
         )}
         {st === 'en_route' && peutSaisir && (
-          <button onClick={() => marquerArrivee(t)} title="Marquer l'arrivée" className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50"><Flag size={15} /></button>
+          <button onClick={() => marquerArrivee(t)} title="Marquer l'arrivée du camion"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-sky-600/40 transition-colors hover:bg-sky-700">
+            <Flag size={15} /> Arrivée
+          </button>
         )}
         {(st === 'en_route' || st === 'arrive') && peutSaisir && (
-          <button onClick={() => setDepTrajet({ trajet: t, label: '', montant: '' })} title="Ajouter une dépense (carburant…)" className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50"><Fuel size={15} /></button>
+          <button onClick={() => setDepTrajet({ trajet: t, label: '', montant: '' })} title="Ajouter une dépense (carburant, péage…)"
+            className={`${chip} border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200`}>
+            <Fuel size={15} /> Dépense
+          </button>
         )}
         {peutModifier(t) && (
-          <button onClick={() => ouvrirEdition(t)} title="Modifier" className="rounded-lg p-1.5 hover:bg-gray-100" style={{ color: COULEUR }}><Pencil size={15} /></button>
+          <button onClick={() => ouvrirEdition(t)} title="Modifier le trajet"
+            className={`${chip} border-gray-200 bg-white hover:bg-gray-50`} style={{ color: COULEUR }}>
+            <Pencil size={15} />
+          </button>
         )}
         {peutModifier(t) && (
-          <button onClick={() => setToDelete(t)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+          <button onClick={() => setToDelete(t)} title="Supprimer le trajet"
+            className={`${chip} border-red-200 bg-red-50 text-red-600 hover:bg-red-100`}>
+            <Trash2 size={15} />
+          </button>
         )}
       </div>
     )
@@ -316,7 +337,7 @@ export default function Transport() {
       )}
       {onglet === 'route' && (
         <div className="rounded-lg bg-sky-50 px-4 py-2 text-xs text-sky-800">
-          Camions actuellement <strong>en route</strong>. À l'arrivée, cliquez sur <Flag size={12} className="inline" /> pour enregistrer l'arrivée. Une dépense (carburant, péage…) peut être ajoutée à tout moment via <Fuel size={12} className="inline" />.
+          Camions actuellement <strong>en route</strong>. À l'arrivée, cliquez sur <strong>« Arrivée »</strong> pour l'enregistrer. Une dépense (carburant, péage…) peut être ajoutée à tout moment avec <strong>« Dépense »</strong>.
         </div>
       )}
 
