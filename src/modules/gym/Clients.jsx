@@ -16,7 +16,7 @@ import Badge from '../../shared/ui/Badge'
 import Table from '../../shared/ui/Table'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
-import { formatMoney, formatDateShort } from '../../utils/formatters'
+import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { joursDepuis, categorieLabel, categorieTone, abonnementActif } from './data'
 import ClientDetailModal from './ClientDetailModal'
 import { SITES, siteLabel } from './site/useSite'
@@ -60,9 +60,10 @@ export default function Clients() {
     for (const a of [...abonnements].sort((x, y) => (x.date < y.date ? 1 : -1))) {
       const cle = (a.clientNom || '').trim().toLowerCase()
       if (!cle) continue
-      const actif = abonnementActif(a.dateFin)
+      const actif = abonnementActif(a.dateFin, a.dateDebut)
+      const aVenir = !!a.dateDebut && a.dateDebut > todayStr()
       const courant = parNom.get(cle)
-      if (!courant || (actif && !courant.actif)) parNom.set(cle, { categorie: a.categorie, actif, dateFin: a.dateFin, site: a.site })
+      if (!courant || ((actif || aVenir) && !courant.actif && !courant.aVenir)) parNom.set(cle, { categorie: a.categorie, actif, aVenir, dateFin: a.dateFin, dateDebut: a.dateDebut, site: a.site })
     }
     return { cumulParNom: cumul, derniereVisiteParNom: derniere, abonnementParNom: parNom }
   }, [seances, abonnements, presences])
@@ -160,6 +161,7 @@ export default function Clients() {
             { key: 'statutAbo', label: 'Statut abo.', render: (r) => {
               const abo = abonnementParNom.get((r.nom || '').trim().toLowerCase())
               if (!abo) return <span className="text-gray-400">Aucun</span>
+              if (abo.aVenir) return <Badge tone="info">Débute le {formatDateShort(abo.dateDebut)}</Badge>
               return <Badge tone={abo.actif ? 'success' : 'neutral'}>{abo.actif ? `Actif jusqu'au ${formatDateShort(abo.dateFin)}` : 'Expiré'}</Badge>
             } },
             { key: 'telephone', label: 'Téléphone', render: (r) => r.telephone || '—' },

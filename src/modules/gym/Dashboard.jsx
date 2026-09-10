@@ -296,7 +296,7 @@ export default function Dashboard() {
     const vus = new Set()
     const resultats = []
     for (const a of abonnements) {
-      if (!abonnementActif(a.dateFin)) continue
+      if (!abonnementActif(a.dateFin, a.dateDebut)) continue
       const cle = (a.clientNom || '').trim().toLowerCase()
       if (!cle || vus.has(cle)) continue
       vus.add(cle)

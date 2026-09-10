@@ -19,7 +19,7 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { isFullAccessRole } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
+import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import ClientDetailModal from './ClientDetailModal'
@@ -32,11 +32,13 @@ const COULEUR2 = '#E8850F'
 const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
 const heureCourte = (d) => d.toTimeString().slice(0, 5)
 
-// Recalcule `dateFin` à partir de date/durée — sauf si l'utilisateur l'a déjà
-// corrigée manuellement (`dateFinManuelle`), auquel cas on la laisse intacte.
+// Recalcule `dateFin` à partir de la DATE DE DÉBUT + durée — sauf si l'utilisateur
+// l'a déjà corrigée manuellement (`dateFinManuelle`), auquel cas on la laisse intacte.
+// `dateDebut` = début effectif de l'abonnement (par défaut = date de souscription,
+// mais peut être une date future si le client commence plus tard).
 function recalculerDateFin(next) {
   if (next.dateFinManuelle) return next
-  return { ...next, dateFin: dateFinAbonnement(next.date, next.dureeJours) }
+  return { ...next, dateFin: dateFinAbonnement(next.dateDebut || next.date, next.dureeJours) }
 }
 
 // Durée (jours) à pré-remplir pour une catégorie donnée — Classique libre garde son
@@ -105,7 +107,8 @@ export default function Abonnements() {
     const date = todayStr(), categorie = CATEGORIES_GYM[0].id
     const dureeJours = dureeJoursInitiale(categorie, date, classiqueFixe, dureeMin)
     return {
-      id: null, date, clientNom: '', telephone: '', categorie, dureeJours,
+      id: null, date, dateDebut: date, dateDebutManuelle: false,
+      clientNom: '', telephone: '', categorie, dureeJours,
       dateFin: dateFinAbonnement(date, dureeJours), dateFinManuelle: false,
       montant: String(tarifs[categorie] || ''), notes: ''
     }
@@ -113,12 +116,16 @@ export default function Abonnements() {
   // Durée d'origine d'un abonnement existant : si elle n'a pas été enregistrée (ancien
   // abonnement Simple/VIP, avant cette fonctionnalité), on la reconstitue exactement à
   // partir des dates déjà enregistrées plutôt que d'appliquer un défaut approximatif.
-  const remplir = (a) => ({
-    id: a.id, date: a.date, clientNom: a.clientNom, telephone: '', categorie: a.categorie,
-    dureeJours: a.dureeJours != null ? String(a.dureeJours) : String(Math.max(1, Math.round((new Date(a.dateFin) - new Date(a.date)) / 86400000))),
-    dateFin: a.dateFin, dateFinManuelle: true,
-    montant: String(a.montant), notes: a.notes || ''
-  })
+  const remplir = (a) => {
+    const dateDebut = a.dateDebut || a.date // abonnements antérieurs : début = souscription
+    return {
+      id: a.id, date: a.date, dateDebut, dateDebutManuelle: dateDebut !== a.date,
+      clientNom: a.clientNom, telephone: '', categorie: a.categorie,
+      dureeJours: a.dureeJours != null ? String(a.dureeJours) : String(Math.max(1, Math.round((new Date(a.dateFin) - new Date(dateDebut)) / 86400000))),
+      dateFin: a.dateFin, dateFinManuelle: true,
+      montant: String(a.montant), notes: a.notes || ''
+    }
+  }
 
   const toutes = useMemo(() => [...abonnements].sort((a, b) => (a.date < b.date ? 1 : -1)), [abonnements])
   const liste = useMemo(() => {
@@ -163,14 +170,16 @@ export default function Abonnements() {
 
       // Modification d'un abonnement existant — pas de nouvelle création de client, pas
       // de nouvelle facture ni de nouveau WhatsApp (déjà envoyés à l'enregistrement initial).
+      const dateDebut = d.dateDebut || d.date
+
       if (d.id) {
         const { coachId, coachNom } = coachDuJour(d.date)
         await updateItem('gym_abonnements', d.id, {
-          date: d.date, dateFin, clientNom, categorie: d.categorie,
+          date: d.date, dateDebut, dateFin, clientNom, categorie: d.categorie,
           dureeJours: d.dureeJours ? Number(d.dureeJours) : null,
           montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom
         })
-        await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+        await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Abonnement modifié ✓')
         setModal(null)
         return
@@ -178,12 +187,12 @@ export default function Abonnements() {
 
       const { coachId, coachNom } = coachDuJour(d.date)
       const id = await addItem('gym_abonnements', {
-        date: d.date, dateFin, clientNom, categorie: d.categorie,
+        date: d.date, dateDebut, dateFin, clientNom, categorie: d.categorie,
         dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
         montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
-      await audit('gym', 'ABONNEMENT_CREATE', `${clientNom} — ${categorieLabel(d.categorie)} — jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+      await audit('gym', 'ABONNEMENT_CREATE', `${clientNom} — ${categorieLabel(d.categorie)} — ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
       // Le répertoire Clients se construit uniquement à partir des séances/abonnements
       // réellement enregistrés — pas d'ajout manuel possible (cf. Clients.jsx). La
       // fiche est rattachée à la salle : le même nom peut donc exister des deux côtés,
@@ -200,9 +209,12 @@ export default function Abonnements() {
       }
       const telephone = telephoneSaisi || client?.telephone
       if (telephone) {
+        const validite = dateDebut !== d.date
+          ? `valable du ${formatDateShort(dateDebut)} au ${formatDateShort(dateFin)}`
+          : `valable jusqu'au ${formatDateShort(dateFin)}`
         sendWhatsApp([telephone], {
           title: '🎉 MAXI-GYM',
-          body: `Bonjour ${clientNom}, votre abonnement ${categorieLabel(d.categorie)} a bien été enregistré, valable jusqu'au ${formatDateShort(dateFin)}. Bel abonnement à MAXI-GYM ! 🏋️`
+          body: `Bonjour ${clientNom}, votre abonnement ${categorieLabel(d.categorie)} a bien été enregistré, ${validite}. Bel abonnement à MAXI-GYM ! 🏋️`
         })
       }
       // Une facture est TOUJOURS générée (visible dans le volet Facturation, avec
@@ -322,16 +334,21 @@ export default function Abonnements() {
       <Card className="p-0">
         <Table
           columns={[
-            { key: 'date', label: 'Début', render: (r) => formatDateShort(r.date) },
+            { key: 'date', label: 'Souscrit le', render: (r) => formatDateShort(r.date) },
+            { key: 'dateDebut', label: 'Début', render: (r) => {
+              const deb = r.dateDebut || r.date
+              return <span className={deb > todayStr() ? 'font-semibold text-sky-600' : ''}>{formatDateShort(deb)}</span>
+            } },
             { key: 'clientNom', label: 'Client' },
             { key: 'categorie', label: 'Catégorie', render: (r) => <Badge tone={categorieTone(r.categorie)}>{categorieLabel(r.categorie)}</Badge> },
             { key: 'dateFin', label: 'Fin', render: (r) => r.dateFin ? formatDateShort(r.dateFin) : '—' },
-            { key: 'statut', label: 'Statut', render: (r) => (
-              <Badge tone={abonnementActif(r.dateFin) ? 'success' : 'neutral'}>{abonnementActif(r.dateFin) ? 'Actif' : 'Expiré'}</Badge>
-            ) },
+            { key: 'statut', label: 'Statut', render: (r) => {
+              const st = statutAbonnement(r.dateDebut, r.dateFin)
+              return <Badge tone={st.tone}>{st.label}</Badge>
+            } },
             { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.montant)}</strong> },
             { key: 'derniereArrivee', label: 'Dernière arrivée', render: (r) => {
-              if (!abonnementActif(r.dateFin)) return '—'
+              if (!abonnementActif(r.dateFin, r.dateDebut)) return '—'
               const derniere = dernierePresenceParClient.get((r.clientNom || '').trim().toLowerCase())
               const jours = joursDepuis(derniere)
               if (jours == null) return <span className="text-gray-400">Jamais pointée</span>
@@ -343,7 +360,7 @@ export default function Abonnements() {
               const dejaFacturee = factures.some((f) => f.sourceType === 'abonnement' && f.sourceId === r.id)
               return (
                 <div className="flex justify-end gap-1">
-                  {abonnementActif(r.dateFin) && (
+                  {abonnementActif(r.dateFin, r.dateDebut) && (
                     <button onClick={(e) => { e.stopPropagation(); pointerArrivee(r) }} disabled={pointageBusy === r.id} title="Pointer l'arrivée (aujourd'hui)"
                       className="flex items-center gap-1 rounded-lg bg-green-500 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
                       <CheckCircle2 size={15} /> Pointer
@@ -434,7 +451,7 @@ export default function Abonnements() {
                       <button key={c.id} type="button" onClick={() => {
                         setModal((f) => {
                           const tarif = tarifs[c.id]
-                          const dureeJours = dureeJoursInitiale(c.id, f.date, classiqueFixe, dureeMin)
+                          const dureeJours = dureeJoursInitiale(c.id, f.dateDebut || f.date, classiqueFixe, dureeMin)
                           return recalculerDateFin({ ...f, categorie: c.id, dureeJours, montant: tarif != null ? String(tarif) : f.montant })
                         })
                       }}
@@ -446,8 +463,37 @@ export default function Abonnements() {
                   })}
                 </div>
               </FormGroup>
-              <FormGroup label="📅 Date de souscription">
-                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => recalculerDateFin({ ...f, date: e.target.value }))} />
+              <FormGroup label="📅 Date de souscription" hint="Jour où l'abonnement est enregistré / payé (compte dans le chiffre d'affaires de ce mois).">
+                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => {
+                  // Tant que la date de début n'a pas été fixée à part, elle suit la souscription.
+                  const next = { ...f, date: e.target.value }
+                  if (!f.dateDebutManuelle) next.dateDebut = e.target.value
+                  return recalculerDateFin(next)
+                })} />
+              </FormGroup>
+
+              {/* Date de début effective — par défaut = souscription, mais le client peut
+                  vouloir commencer plus tard (ex. souscrit aujourd'hui, démarre le 1er du
+                  mois prochain). C'est ELLE qui détermine la date de fin et le statut. */}
+              <FormGroup label="▶️ Début de l'abonnement" required
+                hint={modal.dateDebutManuelle
+                  ? "Le client commence à cette date — l'abonnement reste « À venir » jusque-là."
+                  : 'Par défaut le jour de la souscription. Changez-le pour un démarrage différé.'}>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={modal.dateDebut || modal.date} min={modal.date}
+                    onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dateDebut: e.target.value, dateDebutManuelle: true }))} />
+                  {modal.dateDebutManuelle && (
+                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateDebut: f.date, dateDebutManuelle: false }))}
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50">
+                      🔄 Le jour même
+                    </button>
+                  )}
+                </div>
+                {(modal.dateDebut || modal.date) > todayStr() && (
+                  <p className="mt-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
+                    ⏳ Démarrage différé — l'abonnement sera « À venir » puis « Actif » le {formatDateShort(modal.dateDebut || modal.date)}.
+                  </p>
+                )}
               </FormGroup>
 
               {/* Durée modifiable pour TOUTES les catégories — pas seulement Classique :
@@ -514,7 +560,11 @@ export default function Abonnements() {
                 <Badge tone={categorieTone(modal.categorie)}>{categorieLabel(modal.categorie)}</Badge>
               </div>
               <span className="shrink-0 text-base font-extrabold" style={{ color: COULEUR2 }}>{formatMoney(Number(modal.montant) || 0)}</span>
-              <span className="w-full shrink-0 text-[11px] text-gray-500">Jusqu'au {formatDateShort(modal.dateFin)}</span>
+              <span className="w-full shrink-0 text-[11px] text-gray-500">
+                {(modal.dateDebut || modal.date) !== modal.date
+                  ? `Du ${formatDateShort(modal.dateDebut)} au ${formatDateShort(modal.dateFin)}`
+                  : `Jusqu'au ${formatDateShort(modal.dateFin)}`}
+              </span>
             </div>
 
             {!modal.id && (
@@ -537,7 +587,7 @@ export default function Abonnements() {
         {...glassModalProps(COULEUR_MODULE.gym)}
         footer={<>
           <Button variant="outline" onClick={() => { setCalendrierClient(null); setDateSelectionnee(null) }}>Fermer</Button>
-          {calendrierClient && abonnementActif(calendrierClient.dateFin) && (() => {
+          {calendrierClient && abonnementActif(calendrierClient.dateFin, calendrierClient.dateDebut) && (() => {
             const dejaPointe = !!dateSelectionnee && presences.some((p) =>
               p.date === dateSelectionnee && (p.clientNom || '').trim().toLowerCase() === calendrierClient.clientNom.trim().toLowerCase()
             )
@@ -559,7 +609,7 @@ export default function Abonnements() {
             (p.clientNom || '').trim().toLowerCase() === calendrierClient.clientNom.trim().toLowerCase() && (p.date || '').startsWith(moisEnCours))
           // Heure d'arrivée affichée directement sur le jour concerné du calendrier.
           const details = Object.fromEntries(pointagesClient.filter((p) => p.createdAt).map((p) => [p.date, heureCourte(new Date(p.createdAt))]))
-          const interactif = abonnementActif(calendrierClient.dateFin)
+          const interactif = abonnementActif(calendrierClient.dateFin, calendrierClient.dateDebut)
           return (
             <>
               <CalendrierPresences mois={moisEnCours} joursPresents={pointagesClient.map((p) => p.date)} details={details}

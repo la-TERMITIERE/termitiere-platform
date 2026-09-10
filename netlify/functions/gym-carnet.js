@@ -85,7 +85,8 @@ export async function handler(event) {
 
     const joursPresents = presences.filter((p) => (p.date || '').startsWith(mois)).map((p) => p.date)
     const aujourdhui = new Date().toISOString().slice(0, 10)
-    const abonnementActifRow = abonnements.find((a) => (a.dateFin || '') >= aujourdhui)
+    // Actif = commencé (dateDebut passée ou absente) ET non expiré.
+    const abonnementActifRow = abonnements.find((a) => (a.dateFin || '') >= aujourdhui && (!a.dateDebut || a.dateDebut <= aujourdhui))
     const pointeAujourdhui = presences.some((p) => p.date === aujourdhui)
 
     return {

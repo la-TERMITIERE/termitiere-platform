@@ -73,9 +73,22 @@ export function dateFinAbonnement(dateDebut, dureeJours) {
   return d.toISOString().slice(0, 10)
 }
 
-export function abonnementActif(dateFin) {
+// Un abonnement est « actif » aujourd'hui : il a commencé (dateDebut passée ou nulle)
+// ET n'est pas encore expiré. `dateDebut` optionnel — les abonnements créés avant la
+// date de début différée n'en ont pas → considérés commencés le jour de souscription.
+export function abonnementActif(dateFin, dateDebut) {
+  const auj = new Date().toISOString().slice(0, 10)
+  if (dateDebut && dateDebut > auj) return false // programmé, pas encore commencé
   if (!dateFin) return true
-  return dateFin >= new Date().toISOString().slice(0, 10)
+  return dateFin >= auj
+}
+
+// Statut d'un abonnement en 3 états — pour l'affichage : À venir / Actif / Expiré.
+export function statutAbonnement(dateDebut, dateFin) {
+  const auj = new Date().toISOString().slice(0, 10)
+  if (dateDebut && dateDebut > auj) return { key: 'a_venir', label: 'À venir', tone: 'info' }
+  if (dateFin && dateFin < auj) return { key: 'expire', label: 'Expiré', tone: 'neutral' }
+  return { key: 'actif', label: 'Actif', tone: 'success' }
 }
 
 // Nombre de jours écoulés depuis une date (YYYY-MM-DD) jusqu'à aujourd'hui.
