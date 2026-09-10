@@ -271,7 +271,7 @@ export default function Params() {
         </FormGroup>
         <Button variant="danger" disabled={normaliserTexte(confirmTexte) !== normaliserTexte(TEXTE_CONFIRMATION) || totalEnregistrements === 0}
           loading={resetting} onClick={reinitialiserTout}>
-          <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM
+          <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM {siteLabel(site)}
         </Button>
       </Card>
 
