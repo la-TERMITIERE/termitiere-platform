@@ -157,7 +157,7 @@ export default function Dashboard() {
         type: 'alerte',
         title: `🔔 Coach en retard — MAXI-GYM ${siteLabel(site)}`,
         body: `${c.nom} n'a pas encore pointé son arrivée, prévue à ${c.creneau.heure} (${minutesRetard(c)} min de retard).`,
-        module: 'gym', forRoles: ROLES.map((r) => r.value), link: `/gym/${site}/coachs`
+        module: 'gym', site, forRoles: ROLES.map((r) => r.value), link: `/gym/${site}/coachs`
       }).catch(() => {})
       updateItem('gym_coachs', c.id, { derniereAlerteRetardDate: auj })
     }
@@ -327,7 +327,7 @@ export default function Dashboard() {
         type: 'alerte',
         title: `🔔 Abonné à relancer — MAXI-GYM ${siteLabel(site)}`,
         body: `${ab.clientNom} n'est pas venu depuis ${ab.jours} jours alors que son abonnement est toujours actif.`,
-        module: 'gym', forRoles: ROLES.map((r) => r.value), link: `/gym/${site}`
+        module: 'gym', site, forRoles: ROLES.map((r) => r.value), link: `/gym/${site}`
       }).catch(() => {})
       if (client.telephone) {
         sendWhatsApp([client.telephone], {

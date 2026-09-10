@@ -10,12 +10,20 @@
 // est bien abonné avant de le laisser entrer. Les KPI (Dashboard/Pilotage), eux,
 // restent strictement par salle — ce cloisonnement n'est levé qu'ici.
 import { useMemo, useState } from 'react'
-import { Users, Eye, EyeOff, Search } from 'lucide-react'
+import { Users, Eye, EyeOff, Search, Trash2, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Table from '../../shared/ui/Table'
+import Modal from '../../shared/ui/Modal'
+import Button from '../../shared/ui/Button'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import { removeItem } from '../../core/db'
+import { audit } from '../../core/audit'
+import { toast } from '../../core/notifications'
+import { isFullAccessRole } from '../../core/roles'
+import { glassModalProps } from '../../utils/color'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { joursDepuis, categorieLabel, categorieTone, abonnementActif } from './data'
 import ClientDetailModal from './ClientDetailModal'
@@ -25,6 +33,8 @@ const COULEUR = '#E8850F'
 const SEUIL_INACTIVITE_JOURS = 60 // deux mois — au-delà, le client sort de la liste par défaut
 
 export default function Clients() {
+  const { role } = useAuth()
+  const peutSupprimer = isFullAccessRole(role) // administration + Info
   const { data: clients } = useCollection('gym_clients')
   const { data: seances } = useCollection('gym_seances')
   const { data: abonnements } = useCollection('gym_abonnements')
@@ -33,6 +43,23 @@ export default function Clients() {
   const [afficherInactifs, setAfficherInactifs] = useState(false)
   const [filtreSite, setFiltreSite] = useState('') // '' = toutes les salles
   const [recherche, setRecherche] = useState('')
+  const [toDelete, setToDelete] = useState(null)
+  const [suppression, setSuppression] = useState(false)
+
+  async function confirmerSuppression() {
+    if (!toDelete || suppression) return
+    setSuppression(true)
+    try {
+      await removeItem('gym_clients', toDelete.id)
+      await audit('gym', 'CLIENT_SUPPRIME', `${toDelete.nom} — ${siteLabel(toDelete.site || 'lome')}`)
+      toast.success('Fiche client supprimée ✓')
+      setToDelete(null)
+    } catch (e) {
+      toast.error(e?.message || 'La suppression a échoué')
+    } finally {
+      setSuppression(false)
+    }
+  }
 
   // Cumul + dernière visite par nom de client (les séances/abonnements/présences ne
   // portent qu'un nom libre, pas encore d'identifiant de fiche client — rapprochement
@@ -183,7 +210,17 @@ export default function Clients() {
               )
             } },
             { key: 'total', label: 'Total dépensé', align: 'right', render: (r) => <strong>{formatMoney(cumulParNom.get((r.nom || '').trim().toLowerCase()) || 0)}</strong> },
-            { key: 'notes', label: 'Notes', render: (r) => r.notes || '—' }
+            { key: 'notes', label: 'Notes', render: (r) => r.notes || '—' },
+            ...(peutSupprimer ? [{
+              key: 'actions', label: '', align: 'right', render: (r) => (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setToDelete(r) }}
+                  title="Supprimer la fiche client"
+                  className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100">
+                  <Trash2 size={15} />
+                </button>
+              )
+            }] : [])
           ]}
           rows={clientsAffiches}
           empty="Aucun client."
@@ -193,6 +230,33 @@ export default function Clients() {
 
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
         clients={clients} seances={seances} abonnements={abonnements} presences={presences} />
+
+      {/* Confirmation de suppression d'une fiche client — réservée à l'administration.
+          L'historique des séances / abonnements / présences n'est PAS effacé : seule
+          la fiche du répertoire disparaît. */}
+      <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer cette fiche client ?"
+        {...glassModalProps('#dc2626')}
+        footer={<>
+          <Button variant="outline" onClick={() => setToDelete(null)} disabled={suppression}>Annuler</Button>
+          <Button variant="danger" onClick={confirmerSuppression} loading={suppression}>
+            <Trash2 size={15} /> Supprimer la fiche
+          </Button>
+        </>}>
+        {toDelete && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <span>
+                La fiche de <strong>{toDelete.nom}</strong> ({siteLabel(toDelete.site || 'lome')}) sera retirée du répertoire.
+                L'historique des séances, abonnements et arrivées reste conservé.
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">
+              Si ce client refait une séance ou un abonnement, une nouvelle fiche réapparaîtra automatiquement à son nom.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

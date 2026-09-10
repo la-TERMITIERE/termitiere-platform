@@ -7,7 +7,7 @@
 // Seuls les forfaits et les tarifs/paramètres restent communs aux deux salles.
 import { createContext, useContext } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { isViewAllRole } from '../../../core/roles'
+import { gymSitesAutorises } from '../../../core/gymSites'
 
 export const SITES = [
   { id: 'lome', label: 'Lomé', emoji: '🌆', accent: '#E8850F' },
@@ -21,11 +21,10 @@ export const siteLabel = (id) => SITES.find((s) => s.id === id)?.label || id
 // Sites MAXI-GYM auxquels un utilisateur a droit. Les rôles « voit tout »
 // accèdent aux deux ; les autres sont limités à `user.gymSites` (choisi à la
 // création du compte). Un compte hérité, sans ce champ, garde l'accès aux deux.
+// Source de vérité unique : core/gymSites.js (partagée avec les notifications).
 export function allowedSitesFor(user, role) {
-  if (isViewAllRole(role)) return [...SITE_IDS]
-  const raw = user?.gymSites
-  if (!Array.isArray(raw)) return [...SITE_IDS]
-  return raw.filter(isSite)
+  const sites = gymSitesAutorises(user, role)
+  return sites === null ? [...SITE_IDS] : sites.filter(isSite)
 }
 
 export function useAllowedSites() {

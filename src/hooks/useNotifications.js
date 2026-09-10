@@ -12,6 +12,7 @@ import { useCollection } from './useFirestore'
 import { useAuth } from './useAuth'
 import { updateItem, setItem } from '../core/db'
 import { useAlertesStore, setBadgeApp } from '../core/alertes'
+import { peutVoirNotifSiteGym } from '../core/gymSites'
 
 const MOUNT_TS = Date.now()
 
@@ -26,6 +27,10 @@ const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
 function isFor(n, user, role) {
   if (!user) return false
   if (n.excludeUid && n.excludeUid === user.uid) return false
+  // MAXI-GYM cloisonné par salle : une notif portant un `site` (lome/kara) n'est
+  // visible que par les comptes ayant accès à cette salle. Accès aux deux =
+  // reçoit les deux ; accès à une seule = uniquement celle-là.
+  if (n.module === 'gym' && n.site && !peutVoirNotifSiteGym(user, role, n.site)) return false
   const roles = n.forRoles || []
   const users = n.forUsers || []
   if (!roles.length && !users.length) return true
