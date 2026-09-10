@@ -233,31 +233,33 @@ export default function Transport() {
   // Cellule d'actions d'une ligne — dépend du statut du trajet et des droits.
   const actionsTrajet = (t) => {
     const st = statutTrajet(t)
-    // Actions bien visibles : les étapes du workflow (Autoriser / Arrivée) sont des
-    // boutons pleins avec libellé ; les autres, des pastilles teintées bordées.
-    const chip = 'inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold transition-colors'
+    // Actions bien visibles, toutes sur une seule ligne (le tableau défile
+    // horizontalement au besoin) : les étapes du workflow (Autoriser / Arrivée)
+    // sont des boutons pleins avec libellé ; les autres, des pastilles teintées
+    // bordées ; « Détail » est l'œil seul.
+    const chip = 'inline-flex shrink-0 items-center gap-1 rounded-lg border p-1.5 text-xs font-bold transition-colors'
     return (
-      <div className="flex flex-wrap items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => setDetail(t)} title="Voir le détail du trajet"
           className={`${chip} border-gray-200 bg-white text-gray-600 hover:bg-gray-50`}>
-          <Eye size={15} /> Détail
+          <Eye size={15} />
         </button>
         {st === 'en_attente' && peutApprouver && (
           <button onClick={() => approuver(t)} title="Autoriser la sortie du camion"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-green-600/40 transition-colors hover:bg-green-700">
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-green-600/40 transition-colors hover:bg-green-700">
             <ShieldCheck size={15} /> Autoriser
           </button>
         )}
         {st === 'en_route' && peutSaisir && (
           <button onClick={() => marquerArrivee(t)} title="Marquer l'arrivée du camion"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-sky-600/40 transition-colors hover:bg-sky-700">
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-sky-600/40 transition-colors hover:bg-sky-700">
             <Flag size={15} /> Arrivée
           </button>
         )}
         {(st === 'en_route' || st === 'arrive') && peutSaisir && (
           <button onClick={() => setDepTrajet({ trajet: t, label: '', montant: '' })} title="Ajouter une dépense (carburant, péage…)"
             className={`${chip} border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200`}>
-            <Fuel size={15} /> Dépense
+            <Fuel size={15} />
           </button>
         )}
         {peutModifier(t) && (
