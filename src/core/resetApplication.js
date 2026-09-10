@@ -13,7 +13,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'users', 'users_secret', 'notifications', 'notif_prefs', 'push_subs',
   'audit_global', 'sector_besoins', 'vues_volets',
   // ── E-DÉPENSES ──────────────────────────────────────────────────────────
-  'depense_depenses', 'depense_budgets', 'depense_banque', 'depense_params',
+  'depense_depenses', 'depense_depenses_supprimees', 'depense_budgets', 'depense_banque', 'depense_params',
   'depense_revenus_manuels', 'depense_pau_remboursements',
   'depense_alertes_dashboard_fermees', 'depense_purge_log',
   // ── MAXI AGRO ───────────────────────────────────────────────────────────

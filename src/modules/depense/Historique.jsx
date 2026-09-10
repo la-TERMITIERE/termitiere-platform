@@ -17,6 +17,9 @@ import { coutsMatieresBriqueterie, visibleDansEDepenses } from './logic'
 
 export default function Historique() {
   const { data: depensesReelles } = useCollection('depense_depenses')
+  // Dépenses supprimées (tombstones) — conservées uniquement pour la consultation ici,
+  // avec qui/quand/pourquoi. Jamais comptées dans un budget ni une autre liste.
+  const { data: depensesSupprimees } = useCollection('depense_depenses_supprimees')
   // Coût matières Briqueterie, repris en lecture seule. Tout ce qui vient d'E-G.Pro
   // (repérable à son `projetId`) n'apparaît plus ici — ça ne se consulte que depuis
   // E-G.Pro lui-même. MAXI BAT géré depuis E-G.Pro reste exclu, sauf les dépenses
@@ -25,9 +28,10 @@ export default function Historique() {
   const depenses = useMemo(
     () => [
       ...depensesReelles.filter((d) => !d.projetId),
-      ...coutsMatieresBriqueterie(inventairesBriq)
+      ...coutsMatieresBriqueterie(inventairesBriq),
+      ...depensesSupprimees.filter((d) => !d.projetId).map((d) => ({ ...d, _supprimee: true }))
     ].filter(visibleDansEDepenses),
-    [depensesReelles, inventairesBriq]
+    [depensesReelles, depensesSupprimees, inventairesBriq]
   )
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
@@ -41,7 +45,7 @@ export default function Historique() {
     return depenses
       .filter((d) => (d.date || '') >= start && (d.date || '') <= end)
       .filter((d) => !filtreSecteur || d.secteurId === filtreSecteur)
-      .filter((d) => !filtreStatut || (d.statut || 'decaissee') === filtreStatut)
+      .filter((d) => !filtreStatut || (d._supprimee ? 'supprimee' : (d.statut || 'decaissee')) === filtreStatut)
       .filter((d) => !filtreType || (filtreType === 'imprevue' ? !!d.imprevue : !d.imprevue))
       .filter((d) => {
         const q = recherche.trim().toLowerCase()
@@ -55,13 +59,15 @@ export default function Historique() {
   }, [depenses, start, end, filtreSecteur, filtreStatut, filtreType, recherche])
 
   const stats = useMemo(() => {
-    const decaissees = lignes.filter((d) => (d.statut || 'decaissee') === 'decaissee')
-    const enCircuit  = lignes.filter((d) => d.statut === 'en_attente' || d.statut === 'approuvee')
-    const refusees   = lignes.filter((d) => d.statut === 'refusee')
+    const actives    = lignes.filter((d) => !d._supprimee)
+    const decaissees = actives.filter((d) => (d.statut || 'decaissee') === 'decaissee')
+    const enCircuit  = actives.filter((d) => d.statut === 'en_attente' || d.statut === 'approuvee')
+    const refusees   = actives.filter((d) => d.statut === 'refusee')
     return {
       totalDecaisse: decaissees.reduce((s, d) => s + (Number(d.montant) || 0), 0),
       totalEnCircuit: enCircuit.reduce((s, d) => s + (Number(d.montant) || 0), 0),
       nbRefusees: refusees.length,
+      nbSupprimees: lignes.filter((d) => d._supprimee).length,
       nb: lignes.length
     }
   }, [lignes])
@@ -77,10 +83,12 @@ export default function Historique() {
         Description: d.description || '—',
         'Montant (FCFA)': Number(d.montant) || 0,
         Type: d.imprevue ? 'Imprévue' : 'Prévue',
-        Statut: statut.label,
+        Statut: d._supprimee ? 'Supprimée' : statut.label,
         'Créée par': d.enregistrePar || '—',
         'Approuvée par': d.approuveePar || '—',
         'Certifiée par': d.certifieePar || '—',
+        'Supprimée par': d._supprimee ? (d.supprimeePar || '—') : '—',
+        'Motif suppression': d._supprimee ? (d.motifSuppression || '—') : '—',
         'Bénéficiaire': d.beneficiaireNom || '—',
         'Profession / poste': d.beneficiaireFonction || '—',
         'Réception confirmée': !d.beneficiaireNom ? '—' : (!d.beneficiaireUid ? 'Externe (N/A)' : (d.recuConfirme ? 'Oui' : 'Non'))
@@ -104,6 +112,8 @@ export default function Historique() {
             { key: 'Créée par', label: 'Créée par', width: 18 },
             { key: 'Approuvée par', label: 'Approuvée par', width: 18 },
             { key: 'Certifiée par', label: 'Certifiée par', width: 18 },
+            { key: 'Supprimée par', label: 'Supprimée par', width: 18 },
+            { key: 'Motif suppression', label: 'Motif suppression', width: 30 },
             { key: 'Bénéficiaire', label: 'Bénéficiaire', width: 18 },
             { key: 'Profession / poste', label: 'Profession / poste', width: 20 },
             { key: 'Réception confirmée', label: 'Réception confirmée', width: 16 }
@@ -130,8 +140,8 @@ export default function Historique() {
           <p className="mt-1 text-xl font-extrabold text-amber-600">{stats.totalEnCircuit.toLocaleString('fr-FR')} FCFA</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Demandes refusées</p>
-          <p className="mt-1 text-xl font-extrabold text-red-600">{stats.nbRefusees}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Refusées / supprimées</p>
+          <p className="mt-1 text-xl font-extrabold text-red-600">{stats.nbRefusees} <span className="text-sm font-semibold text-gray-400">/</span> {stats.nbSupprimees}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total dépenses</p>
@@ -153,6 +163,7 @@ export default function Historique() {
           <Select className="w-auto" value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
             <option value="">Tous</option>
             {Object.entries(STATUTS_DECAISSEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            <option value="supprimee">🗑️ Supprimée</option>
           </Select>
         </div>
         <div>
@@ -199,7 +210,7 @@ export default function Historique() {
               const isOpen = openRow === d.id
               return (
                 <Fragment key={d.id}>
-                  <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setOpenRow(isOpen ? null : d.id)}>
+                  <tr className={`cursor-pointer hover:bg-gray-50 ${d._supprimee ? 'opacity-70' : ''}`} onClick={() => setOpenRow(isOpen ? null : d.id)}>
                     <td className="px-2 py-2 text-center text-gray-400">
                       {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </td>
@@ -211,12 +222,15 @@ export default function Historique() {
                       </div>
                     </td>
                     <td className="px-3 py-2 text-gray-600">
-                      {d.description || d.categorie || '—'}
+                      <span className={d._supprimee ? 'line-through' : ''}>{d.description || d.categorie || '—'}</span>
                       {/* Traçabilité visible directement : qui a effectué la dépense → qui la reçoit */}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-400">
                         <span>✍️ Par <span className="font-semibold text-gray-500">{d.enregistrePar || '—'}</span></span>
                         {d.beneficiaireNom && (
                           <span>→ 👤 <span className="font-semibold text-gray-500">{d.beneficiaireNom}</span>{d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}</span>
+                        )}
+                        {d._supprimee && (
+                          <span className="font-semibold text-red-500">🗑️ Supprimée par {d.supprimeePar || '—'}{d.supprimeeLe ? ` le ${formatDateShort(new Date(d.supprimeeLe).toISOString().slice(0, 10))}` : ''} — Motif : « {d.motifSuppression || '—'} »</span>
                         )}
                       </div>
                     </td>
@@ -224,7 +238,11 @@ export default function Historique() {
                     <td className="px-3 py-2">
                       <Badge tone={d.imprevue ? 'warning' : 'primary'}>{d.imprevue ? 'Imprévue' : 'Prévue'}</Badge>
                     </td>
-                    <td className="px-3 py-2"><Badge tone={statut.tone}>{statut.label}</Badge></td>
+                    <td className="px-3 py-2">
+                      {d._supprimee
+                        ? <Badge tone="danger">🗑️ Supprimée</Badge>
+                        : <Badge tone={statut.tone}>{statut.label}</Badge>}
+                    </td>
                   </tr>
                   {isOpen && (
                     <tr className="bg-gray-50/70">
@@ -300,6 +318,12 @@ function FriseHistorique({ d, secteur }) {
             `${d.beneficiaireNom}${d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}` +
             (d.beneficiaireUid ? (d.recuConfirme ? ` — a confirmé le ${formatDateTime(d.recuConfirmeLe)}` : '') : ' — pas de notification (aucun compte)')
           } />
+      )}
+
+      {d._supprimee && (
+        <Etape actif tone="red" titre="🗑️ Supprimée"
+          sousTitre={`Par ${d.supprimeePar || '—'} le ${formatDateTime(d.supprimeeLe)}`}
+          commentaire={d.motifSuppression} />
       )}
     </div>
   )

@@ -184,6 +184,7 @@ const PHRASE_CONFIRMATION_APP = 'SUPPRIMER TOUT'
 export default function Params() {
   const { role, user, login, logout } = useAuth()
   const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesSupprimees } = useCollection('depense_depenses_supprimees')
   const { data: budgets }  = useCollection('depense_budgets')
   const { generateRapportPDF } = usePDF('depense')
 
@@ -326,6 +327,7 @@ export default function Params() {
     setResetting(true)
     try {
       for (const d of depenses) await removeItem('depense_depenses', d.id)
+      for (const d of depensesSupprimees) await removeItem('depense_depenses_supprimees', d.id)
       for (const b of budgets) await removeItem('depense_budgets', b.id)
       await audit('depense', 'RESET', 'Réinitialisation complète des dépenses et budgets')
       toast.success('Données réinitialisées ✓')

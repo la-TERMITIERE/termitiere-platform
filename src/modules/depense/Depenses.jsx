@@ -409,6 +409,14 @@ export default function Depenses() {
       // Les dépenses de projet (E-G.Pro) n'apparaissent plus dans cette liste (cf.
       // `depenses` ci-dessus) — plus besoin de gérer leur suppression croisée ici,
       // elle se fait uniquement depuis E-G.Pro.
+      // Tombstone : la dépense quitte la liste active mais reste consultable EN DÉTAIL
+      // dans l'Historique (avec qui/quand/pourquoi). Collection dédiée → aucun risque
+      // qu'une dépense supprimée réapparaisse dans un calcul de budget ou une liste.
+      await setItem('depense_depenses_supprimees', target.id, {
+        ...target, id: target.id,
+        supprimeePar: user?.nom || user?.login || '—', supprimeeParUid: user?.uid || null,
+        supprimeeLe: Date.now(), motifSuppression: motif
+      })
       await removeItem('depense_depenses', target.id)
       await audit('depense', 'DEPENSE_DELETE',
         `${secteur?.label || target.secteurId} — ${formatMoney(Number(target.montant) || 0)}${target.categorie ? ` · ${target.categorie}` : ''}${target.description ? ` — ${target.description}` : ''} · Motif : ${motif}`,
