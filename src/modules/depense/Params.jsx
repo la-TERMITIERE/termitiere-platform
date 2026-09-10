@@ -179,11 +179,17 @@ function ligneDe(d) {
   ]
 }
 
-const PHRASE_CONFIRMATION_APP = 'SUPPRIMER TOUT'
+// La phrase RÉELLEMENT attendue est en minuscules, alors que l'écran l'affiche en
+// MAJUSCULES (cf. .toUpperCase() plus bas). Volontaire : quelqu'un qui recopie
+// machinalement ce qui est affiché (ou colle une capture) échoue ; l'administrateur
+// légitime, lui, sait qu'il faut la taper en minuscules. Friction anti-malveillance
+// sur une action irréversible qui efface TOUTE l'application.
+const PHRASE_CONFIRMATION_APP = 'supprimer tout'
 
 export default function Params() {
   const { role, user, login, logout } = useAuth()
   const { data: depenses } = useCollection('depense_depenses')
+  const { data: depensesSupprimees } = useCollection('depense_depenses_supprimees')
   const { data: budgets }  = useCollection('depense_budgets')
   const { generateRapportPDF } = usePDF('depense')
 
@@ -326,6 +332,7 @@ export default function Params() {
     setResetting(true)
     try {
       for (const d of depenses) await removeItem('depense_depenses', d.id)
+      for (const d of depensesSupprimees) await removeItem('depense_depenses_supprimees', d.id)
       for (const b of budgets) await removeItem('depense_budgets', b.id)
       await audit('depense', 'RESET', 'Réinitialisation complète des dépenses et budgets')
       toast.success('Données réinitialisées ✓')
@@ -446,7 +453,7 @@ export default function Params() {
             </p>
             <p className="text-sm text-gray-600">Pour continuer, recopiez exactement la phrase suivante :</p>
             <p className="rounded-lg bg-gray-100 px-3 py-2 text-center font-mono text-sm font-bold tracking-wide text-gray-800">
-              {PHRASE_CONFIRMATION_APP}
+              {PHRASE_CONFIRMATION_APP.toUpperCase()}
             </p>
             <input
               type="text"

@@ -10,7 +10,6 @@ import { useCollection } from '../../hooks/useFirestore'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { normaliserTexte } from '../../utils/formatters'
 import { useGymParams, saveGymParams } from './useGymParams'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { JOURS_SEMAINE, horairesVides } from './data'
@@ -18,7 +17,13 @@ import CoachFormModal from './CoachFormModal'
 import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, ChampUnite } from './uiHelpers'
 
 const COULEUR = '#E8850F'
-const TEXTE_CONFIRMATION = 'RÉINITIALISER'
+// Le mot RÉELLEMENT attendu est en minuscules sans accent, alors que l'écran
+// l'affiche en MAJUSCULES (cf. .toUpperCase() plus bas) et que la comparaison est
+// STRICTE. Volontaire : quelqu'un qui recopie machinalement ce qui est affiché (ou
+// colle une capture) échoue ; l'opérateur légitime sait qu'il faut taper
+// « reinitialiser » en minuscules. Friction anti-malveillance sur une suppression
+// définitive des données de la salle.
+const TEXTE_CONFIRMATION = 'reinitialiser'
 
 // Collections vidées par la réinitialisation — uniquement les données propres à
 // LA SALLE COURANTE (séances/abonnements/factures/présences/clients portent tous
@@ -33,7 +38,8 @@ const COLLECTIONS_A_VIDER = [
   { nom: 'gym_factures', label: 'Factures' },
   { nom: 'gym_presences', label: 'Arrivées pointées' },
   { nom: 'gym_coachs', label: 'Coachs' },
-  { nom: 'gym_pointages_coach', label: 'Pointages coachs' }
+  { nom: 'gym_pointages_coach', label: 'Pointages coachs' },
+  { nom: 'gym_reglements_partenaires', label: 'Règlements partenaires' }
 ]
 
 export default function Params() {
@@ -50,6 +56,7 @@ export default function Params() {
   const { data: allPresences } = useCollection('gym_presences')
   const { data: allCoachs } = useCollection('gym_coachs')
   const { data: allPointagesCoach } = useCollection('gym_pointages_coach')
+  const { data: allReglementsPart } = useCollection('gym_reglements_partenaires')
   const seances = useMemo(() => allSeances.filter((s) => matchSite(s, site)), [allSeances, site])
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
   const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
@@ -57,9 +64,11 @@ export default function Params() {
   const presences = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
   const coachs = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
   const pointagesCoach = useMemo(() => allPointagesCoach.filter((p) => matchSite(p, site)), [allPointagesCoach, site])
+  const reglementsPart = useMemo(() => allReglementsPart.filter((r) => matchSite(r, site)), [allReglementsPart, site])
   const donnees = {
     gym_seances: seances, gym_abonnements: abonnements, gym_clients: clients, gym_factures: factures,
-    gym_presences: presences, gym_coachs: coachs, gym_pointages_coach: pointagesCoach
+    gym_presences: presences, gym_coachs: coachs, gym_pointages_coach: pointagesCoach,
+    gym_reglements_partenaires: reglementsPart
   }
   const totalEnregistrements = COLLECTIONS_A_VIDER.reduce((s, c) => s + (donnees[c.nom]?.length || 0), 0)
 
@@ -81,7 +90,7 @@ export default function Params() {
   const [resetting, setResetting] = useState(false)
 
   async function reinitialiserTout() {
-    if (normaliserTexte(confirmTexte) !== normaliserTexte(TEXTE_CONFIRMATION)) return
+    if (confirmTexte !== TEXTE_CONFIRMATION) return
     setResetting(true)
     try {
       let compte = 0
@@ -265,13 +274,13 @@ export default function Params() {
         <p className="mb-3 text-xs text-red-600">
           Total : <strong>{totalEnregistrements} enregistrement(s)</strong>. Les tarifs et réglages ci-dessus ne sont pas touchés.
         </p>
-        <FormGroup label={`Pour confirmer, tape « ${TEXTE_CONFIRMATION} »`} hint="Accents et majuscules non requis (ex. réinitialiser fonctionne aussi).">
-          <Input value={confirmTexte} onChange={(e) => setConfirmTexte(e.target.value)} placeholder={TEXTE_CONFIRMATION}
+        <FormGroup label={`Pour confirmer, recopiez exactement : « ${TEXTE_CONFIRMATION.toUpperCase()} »`}>
+          <Input value={confirmTexte} onChange={(e) => setConfirmTexte(e.target.value)} placeholder={TEXTE_CONFIRMATION.toUpperCase()}
             className="border-red-300 focus:border-red-500 focus:ring-red-400/40" />
         </FormGroup>
-        <Button variant="danger" disabled={normaliserTexte(confirmTexte) !== normaliserTexte(TEXTE_CONFIRMATION) || totalEnregistrements === 0}
+        <Button variant="danger" disabled={confirmTexte !== TEXTE_CONFIRMATION || totalEnregistrements === 0}
           loading={resetting} onClick={reinitialiserTout}>
-          <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM
+          <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM {siteLabel(site)}
         </Button>
       </Card>
 

@@ -57,10 +57,15 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
   async function enregistrer() {
     if (!client) return
     if (!edit.nom.trim()) return toast.error('Nom requis')
+    if (edit.partenaire && !edit.partenaireStructure.trim()) return toast.error('Indiquez la structure du partenaire (ex. CIMTOGO)')
     setSaving(true)
     try {
-      await updateItem('gym_clients', client.id, { nom: edit.nom.trim(), telephone: edit.telephone.trim(), notes: edit.notes.trim() })
-      await audit('gym', 'CLIENT_MODIFIE', edit.nom.trim())
+      await updateItem('gym_clients', client.id, {
+        nom: edit.nom.trim(), telephone: edit.telephone.trim(), notes: edit.notes.trim(),
+        partenaire: !!edit.partenaire,
+        partenaireStructure: edit.partenaire ? edit.partenaireStructure.trim() : ''
+      })
+      await audit('gym', 'CLIENT_MODIFIE', `${edit.nom.trim()}${edit.partenaire ? ` — partenaire ${edit.partenaireStructure.trim()}` : ''}`)
       toast.success('Client mis à jour ✓')
       setEdit(null)
     } finally { setSaving(false) }
@@ -87,7 +92,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
           </Button>
         )}
         {!lectureSeule && client && !edit && (
-          <Button variant="outline" onClick={() => setEdit({ nom: client.nom, telephone: client.telephone || '', notes: client.notes || '' })}>
+          <Button variant="outline" onClick={() => setEdit({ nom: client.nom, telephone: client.telephone || '', notes: client.notes || '', partenaire: !!client.partenaire, partenaireStructure: client.partenaireStructure || '' })}>
             <Pencil size={14} /> Modifier
           </Button>
         )}
@@ -101,9 +106,36 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
           <FormGroup label="Nom" required><Input value={edit.nom} onChange={(e) => setEdit((f) => ({ ...f, nom: e.target.value }))} /></FormGroup>
           <FormGroup label="Téléphone" hint="Optionnel"><Input value={edit.telephone} onChange={(e) => setEdit((f) => ({ ...f, telephone: e.target.value }))} placeholder="ex : 22890000000" /></FormGroup>
           <FormGroup label="Notes" hint="Optionnel"><Input value={edit.notes} onChange={(e) => setEdit((f) => ({ ...f, notes: e.target.value }))} /></FormGroup>
+
+          {/* Client partenaire : ne paie pas à chaque séance — c'est sa structure
+              (CIMTOGO…) qui règle le lot en fin de mois. Ses séances sont alors
+              enregistrées « portées au compte du partenaire » (cf. Séances.jsx) et
+              suivies dans le volet « Clients partenaires ». */}
+          <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input type="checkbox" checked={!!edit.partenaire}
+                onChange={(e) => setEdit((f) => ({ ...f, partenaire: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-sky-600" />
+              <span className="text-sm">
+                <span className="font-semibold text-sky-900">Client partenaire</span>
+                <span className="mt-0.5 block text-xs text-sky-700">Ne paie pas sur place — sa structure règle en fin de mois. Ses séances seront « portées au compte du partenaire ».</span>
+              </span>
+            </label>
+            {edit.partenaire && (
+              <FormGroup label="Structure" required className="mt-2.5">
+                <Input value={edit.partenaireStructure} onChange={(e) => setEdit((f) => ({ ...f, partenaireStructure: e.target.value }))} placeholder="ex : CIMTOGO" />
+              </FormGroup>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
+          {client.partenaire && (
+            <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
+              🤝 Partenaire — {client.partenaireStructure || 'structure non renseignée'}
+              <span className="text-xs font-normal text-sky-600">· séances réglées par la structure en fin de mois</span>
+            </div>
+          )}
           <div className="rounded-xl bg-gray-50 p-3">
             <p className="text-sm text-gray-600">📞 {client.telephone || 'Non renseigné'}</p>
             {client.notes && <p className="mt-1 text-xs text-gray-500">📝 {client.notes}</p>}

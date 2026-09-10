@@ -9,6 +9,7 @@ import Forfaits from './Forfaits'
 import Seances from './Seances'
 import Abonnements from './Abonnements'
 import Clients from './Clients'
+import PartenairesClients from './PartenairesClients'
 import Coachs from './Coachs'
 import Comparatif from './Comparatif'
 import Pilotage from './Pilotage'
@@ -85,6 +86,7 @@ function SiteApp() {
         <Route path="besoins" element={<SectorBesoins secteurId="gym" />} />
         <Route path="facturation" element={<Facturation />} />
         <Route path="clients" element={<Clients />} />
+        <Route path="clients-partenaires" element={canViewPilotage(role) ? <PartenairesClients /> : <AccesRefuse />} />
         <Route path="coachs" element={<Coachs />} />
         <Route path="partenaires" element={<Partenaires module="gym" />} />
         <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />

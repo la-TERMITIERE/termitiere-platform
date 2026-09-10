@@ -2,7 +2,7 @@
 //   en_attente (créée) → approuvee (1er niveau) → decaissee (2e niveau, définitif, compte dans le budget)
 //   ou refusee à n'importe quelle étape.
 import { useMemo, useState } from 'react'
-import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2 } from 'lucide-react'
+import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -11,11 +11,12 @@ import FormGroup from '../../shared/forms/FormGroup'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { isApproverRole, isCertifierRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
-import { updateItem, removeItem } from '../../core/db'
+import { updateItem, removeItem, setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
-import { formatDateShort } from '../../utils/formatters'
+import { formatDateShort, formatMoney } from '../../utils/formatters'
+import { glassModalProps } from '../../utils/color'
 import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
 import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { notifierBeneficiaire } from './notifications'
@@ -76,6 +77,8 @@ export default function Autorisations() {
   const [actionModal, setActionModal] = useState(null) // { d, type: 'approuver' | 'refuser' | 'certifier' }
   const [commentaire, setCommentaire] = useState('')
   const [detail, setDetail] = useState(null) // dépense sélectionnée pour la fiche détail
+  const [toDelete, setToDelete] = useState(null) // dépense en cours de suppression
+  const [motifSuppression, setMotifSuppression] = useState('')
 
   const compteur = (st) => depenses.filter((d) => d.statut === st).length
   const filtrees = useMemo(() => {
@@ -95,21 +98,33 @@ export default function Autorisations() {
     setActionModal({ d, type })
   }
 
-  async function supprimer(d) {
+  function fermerSuppression() {
+    setToDelete(null)
+    setMotifSuppression('')
+  }
+
+  async function confirmerSuppression() {
+    const d = toDelete
+    if (!d || busy) return
+    // Le motif est OBLIGATOIRE : toute suppression de dépense doit être justifiée et
+    // tracée dans le Journal et Historique (audit ci-dessous).
+    const motif = motifSuppression.trim()
+    if (!motif) return toast.error('Indiquez le motif de la suppression')
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-    // Une demande encore en_attente n'engage rien de réel — avertissement léger. Une
-    // dépense déjà décaissée (ou approuvée) représente un vrai mouvement d'argent : on
-    // avertit clairement que sa suppression retire aussi la trace de ce décaissement
-    // (utile pour nettoyer une saisie erronée/test, mais irréversible).
-    const engagee = d.statut !== 'en_attente'
-    const avertissement = engagee
-      ? "Cette dépense est déjà DÉCAISSÉE/APPROUVÉE — la supprimer retire aussi la trace de cet argent sorti (utile pour corriger une saisie erronée ou un test, mais définitif)."
-      : "Elle n'a pas encore été approuvée — aucun engagement réel n'est perdu."
-    if (!window.confirm(`Supprimer définitivement cette dépense ?\n\n${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA\n\n${avertissement}`)) return
     await run(async () => {
+      // Tombstone : reste consultable EN DÉTAIL dans l'Historique (cf. Depenses.jsx).
+      await setItem('depense_depenses_supprimees', d.id, {
+        ...d, id: d.id,
+        supprimeePar: user?.nom || user?.login || '—', supprimeeParUid: user?.uid || null,
+        supprimeeLe: Date.now(), motifSuppression: motif
+      })
       await removeItem('depense_depenses', d.id)
-      await audit('depense', 'DECAISSEMENT_SUPPRIME', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA (statut : ${d.statut})`)
+      await audit('depense', 'DECAISSEMENT_SUPPRIME',
+        `${secteur?.label || d.secteurId} — ${formatMoney(Number(d.montant) || 0)}${d.categorie ? ` · ${d.categorie}` : ''}${d.description ? ` — ${d.description}` : ''} · Statut : ${d.statut || '—'} · Motif : ${motif}`,
+        { secteurId: d.secteurId, montant: Number(d.montant) || 0, categorie: d.categorie || null, date: d.date || null, statut: d.statut || null, motifSuppression: motif }
+      )
     }, 'Dépense supprimée')
+    fermerSuppression()
     setDetail(null)
   }
 
@@ -349,7 +364,7 @@ export default function Autorisations() {
                 <p className="flex items-center gap-1 text-xs text-gray-500"><Stamp size={13} /> En attente d'un décideur habilité à certifier</p>
               )}
               {peutSupprimer && (
-                <button onClick={() => supprimer(d)} disabled={busy}
+                <button onClick={() => { setMotifSuppression(''); setToDelete(d) }} disabled={busy}
                   className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white/70 py-2 text-xs font-semibold text-red-500 backdrop-blur-sm transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-40">
                   <Trash2 size={13} /> Supprimer définitivement{d.statut !== 'en_attente' ? ' (saisie erronée ou test)' : ''}
                 </button>
@@ -389,6 +404,56 @@ export default function Autorisations() {
             </FormGroup>
           </>
         )}
+      </Modal>
+
+      {/* Confirmation de suppression — motif OBLIGATOIRE, tracé dans le Journal. */}
+      <Modal open={!!toDelete} onClose={fermerSuppression} size="sm" title="Supprimer cette dépense ?"
+        {...glassModalProps('#dc2626')}
+        footer={<>
+          <Button variant="outline" onClick={fermerSuppression} disabled={busy}>Annuler</Button>
+          <Button variant="danger" onClick={confirmerSuppression} loading={busy} disabled={!motifSuppression.trim()}>
+            <Trash2 size={14} className="mr-1" /> Supprimer
+          </Button>
+        </>}>
+        {toDelete && (() => {
+          const secteurLbl = SECTEURS.find((s) => s.id === toDelete.secteurId)?.label || toDelete.secteurId
+          const engagee = toDelete.statut && toDelete.statut !== 'en_attente'
+          return (
+            <div className="space-y-4">
+              <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+                style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.9) 0%, rgba(127,29,29,0.9) 100%)' }}>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                  style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                  <AlertTriangle size={22} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-extrabold leading-tight">{formatMoney(Number(toDelete.montant) || 0)}</p>
+                  <p className="truncate text-sm text-white/85">{secteurLbl} · {formatDateShort(toDelete.date)}{toDelete.categorie ? ` · ${toDelete.categorie}` : ''}</p>
+                </div>
+              </div>
+
+              {toDelete.description && (
+                <p className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-600">📝 {toDelete.description}</p>
+              )}
+
+              <p className="text-sm text-gray-600">
+                {engagee
+                  ? <>Cette dépense est déjà <span className="font-semibold text-red-600">{STATUTS_DECAISSEMENT[toDelete.statut]?.label || toDelete.statut}</span> : la supprimer retire aussi la trace de cet argent sorti. </>
+                  : <>Elle n'est pas encore approuvée — aucun engagement réel n'est perdu. </>}
+                Action <span className="font-semibold text-red-600">irréversible</span>. Le motif sera enregistré dans le <span className="font-semibold">Journal et Historique</span>.
+              </p>
+
+              <FormGroup label="Motif de la suppression" required>
+                <textarea
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                  rows={3} autoFocus
+                  value={motifSuppression}
+                  onChange={(e) => setMotifSuppression(e.target.value)}
+                  placeholder="ex : doublon, erreur de saisie, demande de test…" />
+              </FormGroup>
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )

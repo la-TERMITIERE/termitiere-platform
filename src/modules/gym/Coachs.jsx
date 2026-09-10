@@ -1,6 +1,6 @@
 // MAXI-GYM — Coachs : pointage de l'arrivée (vs planning programmé en Paramètres)
 // + performance comparée (fréquentation clients les jours où chaque coach est présent).
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -51,7 +51,14 @@ export default function Coachs() {
   const [coachModal, setCoachModal] = useState(null)
   const nbJoursProgrammes = (c) => Object.values(c.horaires || {}).filter((h) => h?.actif).length
 
-  const aujourdhui = todayStr()
+  // Jour courant réévalué toutes les minutes : un volet resté ouvert après minuit
+  // doit basculer sur le planning et les pointages du nouveau jour (sinon l'équipe
+  // et les arrivées de la veille restent affichées comme « aujourd'hui »).
+  const [aujourdhui, setAujourdhui] = useState(todayStr())
+  useEffect(() => {
+    const id = setInterval(() => setAujourdhui(todayStr()), 60000)
+    return () => clearInterval(id)
+  }, [])
   const equipeDuJour = useMemo(
     () => coachs.map((c) => ({ ...c, creneau: creneauCoach(c, aujourdhui) })).sort((a, b) => (b.creneau ? 1 : 0) - (a.creneau ? 1 : 0)),
     [coachs, aujourdhui]

@@ -1,7 +1,7 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -17,7 +17,8 @@ import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
-import { todayStr, formatDateShort } from '../../utils/formatters'
+import { todayStr, formatDateShort, formatMoney } from '../../utils/formatters'
+import { glassModalProps } from '../../utils/color'
 import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT } from './data'
@@ -147,6 +148,7 @@ export default function Depenses() {
   const [savingLot, setSavingLot] = useState(false)
   const [detailId, setDetailId] = useState(null)
   const [toDelete, setToDelete] = useState(null)
+  const [motifSuppression, setMotifSuppression] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -386,22 +388,42 @@ export default function Depenses() {
     })
   }
 
+  function fermerSuppression() {
+    setToDelete(null)
+    setMotifSuppression('')
+  }
+
   async function handleDelete() {
     if (!toDelete || deleting) return
     // Garde-fou : une ligne « pont Briqueterie » n'a pas de document réel dans
     // depense_depenses — rien à supprimer ici, elle se pilote depuis le Stock Briqueterie.
-    if (toDelete.source === 'briqueterie') { setToDelete(null); return }
+    if (toDelete.source === 'briqueterie') { fermerSuppression(); return }
+    // Le motif est OBLIGATOIRE : une suppression de dépense doit toujours être
+    // justifiée et tracée (cf. audit ci-dessous → volet Journal et Historique).
+    const motif = motifSuppression.trim()
+    if (!motif) return toast.error('Indiquez le motif de la suppression')
     setDeleting(true)
     const target = toDelete
-    setToDelete(null)
     try {
       const secteur = SECTEURS.find((s) => s.id === target.secteurId)
       // Les dépenses de projet (E-G.Pro) n'apparaissent plus dans cette liste (cf.
       // `depenses` ci-dessus) — plus besoin de gérer leur suppression croisée ici,
       // elle se fait uniquement depuis E-G.Pro.
+      // Tombstone : la dépense quitte la liste active mais reste consultable EN DÉTAIL
+      // dans l'Historique (avec qui/quand/pourquoi). Collection dédiée → aucun risque
+      // qu'une dépense supprimée réapparaisse dans un calcul de budget ou une liste.
+      await setItem('depense_depenses_supprimees', target.id, {
+        ...target, id: target.id,
+        supprimeePar: user?.nom || user?.login || '—', supprimeeParUid: user?.uid || null,
+        supprimeeLe: Date.now(), motifSuppression: motif
+      })
       await removeItem('depense_depenses', target.id)
-      await audit('depense', 'DEPENSE_DELETE', `${secteur?.label || target.secteurId} — ${Number(target.montant).toLocaleString('fr-FR')} FCFA`)
+      await audit('depense', 'DEPENSE_DELETE',
+        `${secteur?.label || target.secteurId} — ${formatMoney(Number(target.montant) || 0)}${target.categorie ? ` · ${target.categorie}` : ''}${target.description ? ` — ${target.description}` : ''} · Motif : ${motif}`,
+        { secteurId: target.secteurId, montant: Number(target.montant) || 0, categorie: target.categorie || null, date: target.date || null, motifSuppression: motif }
+      )
       toast.success('Dépense supprimée ✓')
+      fermerSuppression()
     } finally {
       setDeleting(false)
     }
@@ -875,17 +897,52 @@ export default function Depenses() {
         )}
       </Modal>
 
-      {/* Modal confirmation suppression */}
-      <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer cette dépense ?"
-        footer={<><Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button><Button variant="danger" onClick={handleDelete} loading={deleting}>Supprimer</Button></>}>
-        {toDelete && (
-          <div className="space-y-2 text-sm text-gray-600">
-            <p>
-              Vous allez supprimer la dépense de <span className="font-bold text-gray-900">{Number(toDelete.montant).toLocaleString('fr-FR')} FCFA</span> du {formatDateShort(toDelete.date)}.
-              Cette action est <span className="font-semibold text-red-600">irréversible</span>.
-            </p>
-          </div>
-        )}
+      {/* Modal confirmation suppression — motif OBLIGATOIRE, tracé dans le Journal. */}
+      <Modal open={!!toDelete} onClose={fermerSuppression} size="sm" title="Supprimer cette dépense ?"
+        {...glassModalProps('#dc2626')}
+        footer={<>
+          <Button variant="outline" onClick={fermerSuppression} disabled={deleting}>Annuler</Button>
+          <Button variant="danger" onClick={handleDelete} loading={deleting} disabled={!motifSuppression.trim()}>
+            <Trash2 size={14} className="mr-1" /> Supprimer
+          </Button>
+        </>}>
+        {toDelete && (() => {
+          const secteurLbl = SECTEURS.find((s) => s.id === toDelete.secteurId)?.label || toDelete.secteurId
+          return (
+            <div className="space-y-4">
+              {/* Bandeau d'alerte rouge — même recette que les autres fenêtres du module. */}
+              <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+                style={{ background: 'linear-gradient(135deg, rgba(220,38,38,0.9) 0%, rgba(127,29,29,0.9) 100%)' }}>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white"
+                  style={{ background: '#dc2626', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55' }}>
+                  <AlertTriangle size={22} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-extrabold leading-tight">{formatMoney(Number(toDelete.montant) || 0)}</p>
+                  <p className="truncate text-sm text-white/85">{secteurLbl} · {formatDateShort(toDelete.date)}{toDelete.categorie ? ` · ${toDelete.categorie}` : ''}</p>
+                </div>
+              </div>
+
+              {toDelete.description && (
+                <p className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-600">📝 {toDelete.description}</p>
+              )}
+
+              <p className="text-sm text-gray-600">
+                Cette action est <span className="font-semibold text-red-600">irréversible</span>. Le motif ci-dessous
+                sera enregistré dans le <span className="font-semibold">Journal et Historique</span>.
+              </p>
+
+              <FormGroup label="Motif de la suppression" required>
+                <textarea
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                  rows={3} autoFocus
+                  value={motifSuppression}
+                  onChange={(e) => setMotifSuppression(e.target.value)}
+                  placeholder="ex : doublon, erreur de saisie, dépense annulée par le fournisseur…" />
+              </FormGroup>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'un besoin validé */}

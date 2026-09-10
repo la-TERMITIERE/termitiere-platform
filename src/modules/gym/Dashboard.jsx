@@ -114,15 +114,21 @@ export default function Dashboard() {
   const presences   = useMemo(() => allPresences.filter((p) => matchSite(p, site)), [allPresences, site])
   const coachs         = useMemo(() => allCoachs.filter((c) => matchSite(c, site)), [allCoachs, site])
   const pointagesCoach = useMemo(() => allPointagesCoach.filter((p) => matchSite(p, site)), [allPointagesCoach, site])
+  // Jour courant recalculé à partir du tick d'horloge (60 s) plutôt que capturé une
+  // seule fois : sans ça, un dashboard resté ouvert (poste d'accueil) garderait le
+  // « coach du jour » — et son pointage — de la veille après minuit.
+  const aujStr = heureActuelle.toISOString().split('T')[0]
+
   // Coach(s) programmé(s) aujourd'hui, avec leur statut de pointage du jour — cf.
-  // le volet « Coachs » pour le planning complet et le pointage lui-même.
+  // le volet « Coachs » pour le planning complet et le pointage lui-même. Le pointage
+  // affiché est STRICTEMENT celui du jour même : une arrivée d'un jour précédent ne
+  // doit jamais faire croire que le coach est déjà là aujourd'hui.
   const coachsAujourdhui = useMemo(() => {
-    const auj = todayStr()
     return coachs
-      .map((c) => ({ ...c, creneau: creneauCoach(c, auj) }))
+      .map((c) => ({ ...c, creneau: creneauCoach(c, aujStr) }))
       .filter((c) => c.creneau)
-      .map((c) => ({ ...c, pointage: pointagesCoach.find((p) => p.coachId === c.id && p.date === auj) }))
-  }, [coachs, pointagesCoach])
+      .map((c) => ({ ...c, pointage: pointagesCoach.find((p) => p.coachId === c.id && p.date === aujStr) }))
+  }, [coachs, pointagesCoach, aujStr])
 
   // Minutes de retard d'un coach pas encore pointé, par rapport à son heure prévue
   // (négatif tant que l'heure n'est pas encore passée). Se recalcule tout seul via
@@ -290,7 +296,7 @@ export default function Dashboard() {
     const vus = new Set()
     const resultats = []
     for (const a of abonnements) {
-      if (!abonnementActif(a.dateFin)) continue
+      if (!abonnementActif(a.dateFin, a.dateDebut)) continue
       const cle = (a.clientNom || '').trim().toLowerCase()
       if (!cle || vus.has(cle)) continue
       vus.add(cle)

@@ -13,7 +13,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'users', 'users_secret', 'notifications', 'notif_prefs', 'push_subs',
   'audit_global', 'sector_besoins', 'vues_volets',
   // ── E-DÉPENSES ──────────────────────────────────────────────────────────
-  'depense_depenses', 'depense_budgets', 'depense_banque', 'depense_params',
+  'depense_depenses', 'depense_depenses_supprimees', 'depense_budgets', 'depense_banque', 'depense_params',
   'depense_revenus_manuels', 'depense_pau_remboursements',
   'depense_alertes_dashboard_fermees', 'depense_purge_log',
   // ── MAXI AGRO ───────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'projet_alertes_notif', 'projet_purge_log',
   // ── MAXI-GYM ────────────────────────────────────────────────────────────
   'gym_abonnements', 'gym_clients', 'gym_coachs', 'gym_factures', 'gym_forfaits', 'gym_params',
-  'gym_pointages_coach', 'gym_presences', 'gym_seances', 'gym_banque',
+  'gym_pointages_coach', 'gym_presences', 'gym_seances', 'gym_banque', 'gym_reglements_partenaires',
   // ── Ressources humaines ─────────────────────────────────────────────────
   'rh_employes', 'rh_presences',
   // ── E-VOYAGE ────────────────────────────────────────────────────────────
