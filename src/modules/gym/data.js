@@ -32,12 +32,20 @@ export const VALIDITE_SEANCE_HEURES_DEFAUT = 5
 export const TARIFS_SEANCE_DEFAUT_KARA     = { simple: 1000, vip: 1500 }
 export const TARIFS_ABONNEMENT_DEFAUT_KARA = { simple: 7000, classique: 10000, vip: 15000 }
 
-export function finValiditeSeance(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_DEFAUT) {
-  return new Date((createdAt || Date.now()) + validiteHeures * 60 * 60 * 1000)
+// Fin de validité d'une séance = enregistrement + N heures. `dateSeance` ('YYYY-MM-DD')
+// sert de repli pour les séances anciennes SANS `createdAt` : on part alors de la fin
+// de leur journée (23:59) — sinon `createdAt || Date.now()` repoussait la fin de
+// validité à « maintenant + N h », laissant l'indicateur « Valide » vert pour
+// toujours sur ces séances-là.
+export function finValiditeSeance(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_DEFAUT, dateSeance = null) {
+  const base = createdAt
+    ? createdAt
+    : (dateSeance ? new Date(dateSeance + 'T23:59:59').getTime() : 0)
+  return new Date(base + validiteHeures * 60 * 60 * 1000)
 }
 
-export function seanceValide(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_DEFAUT) {
-  return Date.now() < finValiditeSeance(createdAt, validiteHeures).getTime()
+export function seanceValide(createdAt, validiteHeures = VALIDITE_SEANCE_HEURES_DEFAUT, dateSeance = null) {
+  return Date.now() < finValiditeSeance(createdAt, validiteHeures, dateSeance).getTime()
 }
 
 // Nombre de jours équivalent à « 1 mois calendaire » à partir d'une date donnée

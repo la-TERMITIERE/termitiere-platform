@@ -1,5 +1,5 @@
 // MAXI-GYM — Séances : liste complète + ajout d'une séance ponctuelle.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -66,6 +66,15 @@ export default function Seances() {
   const [suggClient, setSuggClient] = useState(false)
   const [clientDetail, setClientDetail] = useState(null)
   const [qrNouveauClient, setQrNouveauClient] = useState(null)
+
+  // Rafraîchit l'affichage toutes les 30 s : sans ça, le badge « Valide / Expirée »
+  // d'une séance est figé à sa valeur du chargement de la page et resterait « Valide »
+  // (vert) même une fois les N heures de validité écoulées, jusqu'à un rechargement.
+  const [, tickValidite] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => tickValidite((n) => n + 1), 30000)
+    return () => clearInterval(id)
+  }, [])
 
   // Filtre de période — Jour / Mois / Année / Plage, sur la liste affichée ci-dessous.
   const [modePeriode, setModePeriode] = useState('mois')
@@ -212,10 +221,10 @@ export default function Seances() {
             { key: 'categorie', label: 'Catégorie', render: (r) => <Badge tone={categorieTone(r.categorie)}>{categorieLabel(r.categorie)}</Badge> },
             { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.montant)}</strong> },
             { key: 'validite', label: 'Validité', render: (r) => {
-              const valide = seanceValide(r.createdAt, params.validiteSeanceHeures)
+              const valide = seanceValide(r.createdAt, params.validiteSeanceHeures, r.date)
               return (
                 <Badge tone={valide ? 'success' : 'neutral'}>
-                  {valide ? `Valide jusqu'à ${heureCourte(finValiditeSeance(r.createdAt, params.validiteSeanceHeures))}` : 'Expirée'}
+                  {valide ? `Valide jusqu'à ${heureCourte(finValiditeSeance(r.createdAt, params.validiteSeanceHeures, r.date))}` : 'Expirée'}
                 </Badge>
               )
             } },
