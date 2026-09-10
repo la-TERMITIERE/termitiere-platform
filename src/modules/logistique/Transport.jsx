@@ -300,18 +300,18 @@ export default function Transport() {
       {/* Cumul sur la période — onglet « Tous les trajets » uniquement, réservé à
           l'administration comme les autres KPI financiers de Logistique. */}
       {onglet === 'tous' && estAdministration && voitMontants && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="card p-4">
             <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Recette (période)</p>
-            <p className="text-xl font-extrabold" style={{ color: COULEUR }}>{formatMoney(cumul.recette)}</p>
+            <p className="text-lg font-extrabold sm:text-xl" style={{ color: COULEUR }}>{formatMoney(cumul.recette)}</p>
           </div>
           <div className="card p-4">
             <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Dépenses (période)</p>
-            <p className="text-xl font-extrabold text-amber-700">{formatMoney(cumul.depenses)}</p>
+            <p className="text-lg font-extrabold text-amber-700 sm:text-xl">{formatMoney(cumul.depenses)}</p>
           </div>
           <div className="card p-4">
             <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Marge bénéficiaire</p>
-            <p className={`text-xl font-extrabold ${cumul.marge >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatMoney(cumul.marge)}</p>
+            <p className={`text-lg font-extrabold sm:text-xl ${cumul.marge >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatMoney(cumul.marge)}</p>
           </div>
         </div>
       )}
@@ -326,7 +326,7 @@ export default function Transport() {
           </button>
         ))}
         {peutSaisir && (
-          <Button className="ml-auto" style={{ backgroundColor: COULEUR }} onClick={() => { setModal({ data: vide(), isNew: true }); setDep({ label: '', montant: '' }) }}>
+          <Button className="w-full sm:ml-auto sm:w-auto" style={{ backgroundColor: COULEUR }} onClick={() => { setModal({ data: vide(), isNew: true }); setDep({ label: '', montant: '' }) }}>
             <Plus size={16} /> Nouveau trajet
           </Button>
         )}
@@ -343,9 +343,10 @@ export default function Transport() {
         </div>
       )}
 
-      {/* Tableau des trajets */}
+      {/* Tableau des trajets — défile horizontalement sur mobile (beaucoup de
+          colonnes + colonne d'actions large). */}
       <Card className="overflow-x-auto p-0">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[920px] text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-3 py-2 text-left">N°</th>
@@ -420,7 +421,7 @@ export default function Transport() {
               </div>
             )}
             {/* Identification & date */}
-            <div className="grid grid-cols-2 gap-3 rounded-lg bg-white p-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 rounded-lg bg-white p-3 sm:grid-cols-2 md:grid-cols-3">
               <FormGroup label="Date">
                 <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
               </FormGroup>
@@ -436,7 +437,7 @@ export default function Transport() {
             {/* Itinéraire & horaires */}
             <div className="rounded-lg bg-white p-3">
               <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: COULEUR }}><MapPin size={13} /> Itinéraire & horaires</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormGroup label="Départ (lieu)"><Input value={modal.data.lieuDepart} onChange={(e) => set('lieuDepart', e.target.value)} placeholder="D'où" /></FormGroup>
                 <FormGroup label="Arrivée (lieu)"><Input value={modal.data.lieuArrivee} onChange={(e) => set('lieuArrivee', e.target.value)} placeholder="Vers où" /></FormGroup>
                 <FormGroup label="Heure de départ"><Input type="time" value={modal.data.heureDepart} onChange={(e) => set('heureDepart', e.target.value)} /></FormGroup>
@@ -468,11 +469,11 @@ export default function Transport() {
                   ))}
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-12">
-                <Input className="col-span-2 md:col-span-6" value={dep.label} onChange={(e) => setDep((d) => ({ ...d, label: e.target.value }))} placeholder="Nature (ex : Carburant / essence)" />
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+                <Input className="md:col-span-6" value={dep.label} onChange={(e) => setDep((d) => ({ ...d, label: e.target.value }))} placeholder="Nature (ex : Carburant / essence)" />
                 <Input className="md:col-span-4" type="number" min="0" value={dep.montant} onChange={(e) => setDep((d) => ({ ...d, montant: e.target.value }))} placeholder="Montant" />
-                <div className="col-span-2 md:col-span-2">
-                  <Button type="button" variant="outline" onClick={ajouterDepense}><Plus size={14} /> Ajouter</Button>
+                <div className="md:col-span-2">
+                  <Button type="button" variant="outline" className="w-full" onClick={ajouterDepense}><Plus size={14} /> Ajouter</Button>
                 </div>
               </div>
 
