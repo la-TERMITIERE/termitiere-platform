@@ -69,7 +69,7 @@ export default function Transport() {
   // Prestations.jsx/Factures.jsx.
   const transports = useMemo(() => allTransports.filter((t) => matchSite(t, site)), [allTransports, site])
 
-  const [onglet, setOnglet] = useState('route')   // 'route' | 'attente' | 'tous'
+  const [onglet, setOnglet] = useState('tous')   // 'tous' | 'attente' | 'route'
   const [modal, setModal] = useState(null)   // { data, isNew, id, dataInitial }
   const [dep, setDep] = useState({ label: '', montant: '' }) // brouillon de dépense (modale trajet)
   const [toDelete, setToDelete] = useState(null)
@@ -225,9 +225,9 @@ export default function Transport() {
   const horaire = (t) => (t.heureDepart || t.heureArrivee) ? `${t.heureDepart || '—'} → ${t.heureArriveeReelle || t.heureArrivee || '—'}` : '—'
 
   const ongletsDef = [
-    ['route', 'En cours', parStatut.en_route.length],
+    ['tous', 'Tous les trajets', null],
     ['attente', 'À autoriser', parStatut.en_attente.length],
-    ['tous', 'Tous les trajets', null]
+    ['route', 'En cours', parStatut.en_route.length]
   ]
 
   // Cellule d'actions d'une ligne — dépend du statut du trajet et des droits.
