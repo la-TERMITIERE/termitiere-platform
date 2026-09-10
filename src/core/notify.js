@@ -10,6 +10,7 @@ import { addItem, getAll } from './db'
 import { pushToUsers } from './push'
 import { sendWhatsApp } from './whatsapp'
 import { isViewAllRole } from './roles'
+import { peutVoirNotifSiteGym } from './gymSites'
 
 // Types « importants » : notification système persistante + vibration marquée
 // (demandes d'autorisation, refus, alertes). Doit rester aligné avec
@@ -26,8 +27,11 @@ export async function notify({
   forRoles = [], forUsers = [], excludeUid = null, link = '',
   ...extra // ex. { projetId } : conservé sur le document pour un nettoyage ciblé
            // plus tard (ex. suppression des notifs d'un projet supprimé).
+           // { site } : salle MAXI-GYM (lome/kara) — restreint les destinataires
+           // à ceux qui ont accès à cette salle (cf. peutVoirNotifSiteGym).
 }) {
   if (!title) return
+  const site = extra.site || null
   let id = null
   try {
     id = await addItem('notifications', {
@@ -55,6 +59,9 @@ export async function notify({
       cibles.push(...users
         .filter((u) => forRoles.includes(u.role))
         .filter((u) => !module || isViewAllRole(u.role) || (u.modules || []).includes(module))
+        // MAXI-GYM cloisonné par salle : si la notif porte un `site`, seuls les
+        // comptes ayant accès à cette salle la reçoivent (push + WhatsApp).
+        .filter((u) => module !== 'gym' || peutVoirNotifSiteGym(u, u.role, site))
         .map((u) => u.uid))
     }
     cibles = [...new Set(cibles)].filter((c) => c && c !== excludeUid)
