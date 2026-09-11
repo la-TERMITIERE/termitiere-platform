@@ -24,13 +24,16 @@ export const LOGISTIQUE_SITES = [
   { id: 'kara', label: 'Kara' }
 ]
 
-// Catégories UNITAIRES (un concept par catégorie, jamais de « X & Y » qui mélange
-// deux natures de dépense différentes) — plus précis pour l'analyse. Certains ids
-// existaient déjà sous une étiquette combinée (ex. 'salaires' = « Salaires & primes ») :
-// on les garde tels quels pour ne pas casser les dépenses déjà enregistrées, on
-// affine juste leur libellé, et on ajoute leur « moitié » manquante comme catégorie
-// à part entière (ex. 'primes'). `matieres` correspond à l'auto-génération des
-// coûts de matières premières de la Briqueterie (cf. logic.coutsMatieresBriqueterie).
+// Liste volontairement LONGUE — un peu de tout — pour couvrir tous les usages :
+// catégories UNITAIRES (un concept par catégorie, ex. 'salaires'/'primes' séparés)
+// ET, en plus, les anciennes catégories COMBINÉES « X & Y » d'origine (ex.
+// 'salaires_primes' = « Salaires & primes ») — remises à disposition telles
+// quelles pour qui préfère la version groupée. Certains ids existaient déjà sous
+// une étiquette combinée : on les garde tels quels pour ne pas casser les
+// dépenses déjà enregistrées, on affine juste leur libellé, et on ajoute leur
+// « moitié » manquante comme catégorie à part entière (ex. 'primes'). `matieres`
+// correspond à l'auto-génération des coûts de matières premières de la
+// Briqueterie (cf. logic.coutsMatieresBriqueterie).
 export const CATEGORIES_DEPENSE = [
   { id: 'salaires',      label: 'Salaires' },
   { id: 'primes',        label: 'Primes' },
@@ -68,6 +71,15 @@ export const CATEGORIES_DEPENSE = [
   { id: 'location',      label: 'Location de matériel' },
   { id: 'bureau',        label: 'Fournitures de bureau' },
   { id: 'abonnements',   label: 'Abonnements' },
+  // ── Versions combinées d'origine — remises pour qui préfère grouper ────────
+  { id: 'salaires_primes',        label: 'Salaires & primes' },
+  { id: 'fournitures_materiel',   label: 'Fournitures & matériel' },
+  { id: 'transport_carburant',    label: 'Transport & carburant' },
+  { id: 'entretien_reparations',  label: 'Entretien & réparations' },
+  { id: 'communication_telecom',  label: 'Communication & télécom' },
+  { id: 'loyer_charges',          label: 'Loyer & charges' },
+  { id: 'services_prestations',   label: 'Services & prestataires' },
+  { id: 'impots_taxes',           label: 'Impôts & taxes' },
   { id: 'autre',         label: 'Autre' }
 ]
 

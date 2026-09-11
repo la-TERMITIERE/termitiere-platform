@@ -279,14 +279,16 @@ export default function Depenses() {
     })
   }
 
-  // Suggestions de catégories : catégories prédéfinies + celles déjà saisies par les utilisateurs.
+  // Suggestions de catégories : catégories prédéfinies + celles déjà saisies par les
+  // utilisateurs. `.trim()` avant regroupement : une catégorie saisie avec un espace
+  // en trop (ex. « Autre  ») ne doit pas apparaître comme un doublon de « Autre ».
   const categorieSuggestions = useMemo(() => {
-    const saisies = depenses.map((d) => d.categorie).filter(Boolean)
+    const saisies = depenses.map((d) => (d.categorie || '').trim()).filter(Boolean)
     return [...new Set([...CATEGORIES_DEPENSE.map((c) => c.label), ...saisies])].sort()
   }, [depenses])
 
   const categoriesPresentes = useMemo(
-    () => [...new Set(depenses.map((d) => d.categorie).filter(Boolean))].sort(),
+    () => [...new Set(depenses.map((d) => (d.categorie || '').trim()).filter(Boolean))].sort(),
     [depenses]
   )
 
