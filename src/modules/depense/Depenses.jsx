@@ -689,6 +689,7 @@ export default function Depenses() {
                     value={modal.data.categorie}
                     onChange={(v) => set('categorie', v)}
                     suggestions={categorieSuggestions}
+                    maxSuggestions={categorieSuggestions.length}
                     placeholder="Saisir ou choisir une catégorie…"
                     accent="amber"
                   />
