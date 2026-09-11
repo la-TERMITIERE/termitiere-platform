@@ -65,7 +65,7 @@ export default function ChampAutocomplete({
         <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
           {!filtrees.length
             ? <p className="px-3 py-2 text-xs text-gray-400">{emptyLabel}</p>
-            : <ul className="max-h-48 overflow-y-auto py-1">
+            : <ul className="max-h-64 overflow-y-auto py-1">
                 {filtrees.map((s, i) => (
                   <li key={getLabel(s) + i}
                     className={`cursor-pointer px-3 py-2 text-sm text-gray-700 ${a.hoverBg}`}

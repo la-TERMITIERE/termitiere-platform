@@ -34,6 +34,15 @@ const SOURCE_INFO = {
 }
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
+// Claymorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
+// du flux, financement) : panneau « pâte à modeler » chaleureux (ton E-DÉPENSES,
+// #B45309), champs en relief doux avec ombre portée + reflet clair, sans bordure
+// dure. `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas .input-base,
+// pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
+const CLAY_PANEL = 'relative flex flex-wrap items-end gap-3 rounded-[28px] bg-gradient-to-br from-amber-50 via-orange-50/70 to-white p-4 shadow-[0_18px_38px_-18px_rgba(180,83,9,0.32),0_6px_16px_-8px_rgba(180,83,9,0.16),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-white/70 dark:from-[#241d14] dark:via-[#1f1a14] dark:to-[#1d2226] dark:shadow-[0_18px_38px_-18px_rgba(0,0,0,0.55)] dark:ring-white/10'
+const CLAY_LABEL = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-amber-800/70 dark:text-amber-200/60'
+const CLAY_FIELD = 'w-full appearance-none rounded-2xl border-0 bg-gradient-to-br from-white to-amber-50/90 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[5px_5px_12px_-4px_rgba(180,83,9,0.22),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:-translate-y-0.5 focus:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:ring-2 focus:ring-amber-400/60 dark:from-[#2a2118] dark:to-[#221b12] dark:text-gray-100 dark:shadow-[5px_5px_12px_-4px_rgba(0,0,0,0.5),-4px_-4px_10px_-6px_rgba(255,255,255,0.04)]'
+
 const empty = () => ({
   secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, imprevue: false, modePaiement: 'espece',
@@ -270,14 +279,16 @@ export default function Depenses() {
     })
   }
 
-  // Suggestions de catégories : catégories prédéfinies + celles déjà saisies par les utilisateurs.
+  // Suggestions de catégories : catégories prédéfinies + celles déjà saisies par les
+  // utilisateurs. `.trim()` avant regroupement : une catégorie saisie avec un espace
+  // en trop (ex. « Autre  ») ne doit pas apparaître comme un doublon de « Autre ».
   const categorieSuggestions = useMemo(() => {
-    const saisies = depenses.map((d) => d.categorie).filter(Boolean)
+    const saisies = depenses.map((d) => (d.categorie || '').trim()).filter(Boolean)
     return [...new Set([...CATEGORIES_DEPENSE.map((c) => c.label), ...saisies])].sort()
   }, [depenses])
 
   const categoriesPresentes = useMemo(
-    () => [...new Set(depenses.map((d) => d.categorie).filter(Boolean))].sort(),
+    () => [...new Set(depenses.map((d) => (d.categorie || '').trim()).filter(Boolean))].sort(),
     [depenses]
   )
 
@@ -444,62 +455,80 @@ export default function Depenses() {
           icon={PiggyBank} accent={resteCaisseCommune < 0 ? '#dc2626' : '#7c3aed'} valueColor={resteCaisseCommune < 0 ? '#dc2626' : undefined} />
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="relative">
-          <Search size={14} className="absolute left-2 top-2.5 text-gray-400" />
-          <input
-            className="rounded-lg border border-gray-200 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="Rechercher une description…"
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-          />
+      <div className={CLAY_PANEL}>
+        <div>
+          <label className={CLAY_LABEL}>Rechercher</label>
+          <div className="relative">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
+            <input
+              className={`${CLAY_FIELD} pl-8`}
+              placeholder="Rechercher une description…"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+            />
+          </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Mois</label>
+          <label className={CLAY_LABEL}>Mois</label>
           <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
             min={restreintMoisCourant ? moisPrecedentStr : undefined}
             max={restreintMoisCourant ? moisCourantStr : undefined}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            className={CLAY_FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
-          <Select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }}>
-            <option value="">Tous les secteurs</option>
-            {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </Select>
+          <label className={CLAY_LABEL}>Secteur</label>
+          <div className="relative">
+            <select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }} className={`${CLAY_FIELD} pr-9`}>
+              <option value="">Tous les secteurs</option>
+              {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
+          </div>
         </div>
         {filtreSecteur === 'logistique' && (
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-600">Site</label>
-            <Select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)}>
-              <option value="">Lomé + Kara</option>
-              {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </Select>
+            <label className={CLAY_LABEL}>Site</label>
+            <div className="relative">
+              <select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
+                <option value="">Lomé + Kara</option>
+                {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+              <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
+            </div>
           </div>
         )}
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Catégorie</label>
-          <Select value={filtreCategorie} onChange={(e) => setFiltreCategorie(e.target.value)}>
-            <option value="">Toutes</option>
-            {categoriesPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
-          </Select>
+          <label className={CLAY_LABEL}>Catégorie</label>
+          <div className="relative">
+            <select value={filtreCategorie} onChange={(e) => setFiltreCategorie(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
+              <option value="">Toutes</option>
+              {categoriesPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
+          </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Nature du flux</label>
-          <Select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)}>
-            <option value="">Toutes</option>
-            {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </Select>
+          <label className={CLAY_LABEL}>Nature du flux</label>
+          <div className="relative">
+            <select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
+              <option value="">Toutes</option>
+              {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
+          </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Financement</label>
-          <Select value={filtreFinancement} onChange={(e) => setFiltreFinancement(e.target.value)}>
-            <option value="">Tous</option>
-            <option value="caisse_commune">💰 Caisse commune uniquement</option>
-          </Select>
+          <label className={CLAY_LABEL}>Financement</label>
+          <div className="relative">
+            <select value={filtreFinancement} onChange={(e) => setFiltreFinancement(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
+              <option value="">Tous</option>
+              <option value="caisse_commune">💰 Caisse commune uniquement</option>
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
+          </div>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-gray-400">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
+          <span className="text-xs font-semibold text-amber-800/60 dark:text-amber-200/50">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
           <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
           {!lectureSeule && <Button variant="outline" onClick={openLot}><Layers size={16} /> Ajout multiple</Button>}
           {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
@@ -660,6 +689,7 @@ export default function Depenses() {
                     value={modal.data.categorie}
                     onChange={(v) => set('categorie', v)}
                     suggestions={categorieSuggestions}
+                    maxSuggestions={categorieSuggestions.length}
                     placeholder="Saisir ou choisir une catégorie…"
                     accent="amber"
                   />
