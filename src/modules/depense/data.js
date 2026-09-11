@@ -58,6 +58,16 @@ export const CATEGORIES_DEPENSE = [
   { id: 'bancaire',      label: 'Frais bancaires' },
   { id: 'informatique',  label: 'Informatique' },
   { id: 'deplacement',   label: 'Déplacement' },
+  { id: 'peage',         label: 'Péage' },
+  { id: 'gardiennage',   label: 'Gardiennage' },
+  { id: 'nettoyage',     label: 'Nettoyage' },
+  { id: 'restauration',  label: 'Restauration' },
+  { id: 'hebergement',   label: 'Hébergement' },
+  { id: 'amendes',       label: 'Amendes' },
+  { id: 'dons',          label: 'Dons' },
+  { id: 'location',      label: 'Location de matériel' },
+  { id: 'bureau',        label: 'Fournitures de bureau' },
+  { id: 'abonnements',   label: 'Abonnements' },
   { id: 'autre',         label: 'Autre' }
 ]
 
