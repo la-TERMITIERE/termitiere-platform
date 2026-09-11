@@ -47,6 +47,7 @@ const empty = () => ({
   secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, imprevue: false, modePaiement: 'espece',
   natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
+  secteursConcernes: [],
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
@@ -186,8 +187,15 @@ export default function Depenses() {
 
   const liste = useMemo(() => {
     let rows = [...depenses]
-    if (filtreSecteur)   rows = rows.filter((d) => d.secteurId === filtreSecteur)
-    if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => siteLogistiqueDe(d) === filtreSite)
+    // Une dépense filtre sur son secteur PRINCIPAL, mais aussi sur les « autres
+    // secteurs concernés » (cf. secteursConcernes) — ex. une charge payée depuis
+    // la Caisse commune qui profite en réalité à plusieurs secteurs à la fois.
+    if (filtreSecteur) rows = rows.filter((d) => d.secteurId === filtreSecteur || (d.secteursConcernes || []).includes(filtreSecteur))
+    // Le sous-filtre par site ne s'applique qu'aux lignes RATTACHÉES à Logistique
+    // (site connu) — une ligne d'un autre secteur qui ne fait que « concerner »
+    // Logistique en plus n'a pas de site propre, donc reste visible quel que soit
+    // le site choisi.
+    if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => d.secteurId !== 'logistique' || siteLogistiqueDe(d) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
     if (filtreFinancement === 'caisse_commune') rows = rows.filter((d) => d.financePar === 'caisse_commune')
@@ -257,6 +265,7 @@ export default function Depenses() {
         montant: Number(d.montant) || 0,
         agreeur: agreeur || '—',
         secteur: libelleSecteurSite(secteur, d),
+        autresSecteurs: (d.secteursConcernes || []).map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ') || '—',
         financement: d.financePar === 'caisse_commune' ? 'Caisse commune' : 'Secteur'
       }
     })
@@ -271,6 +280,7 @@ export default function Depenses() {
           { key: 'montant', label: 'Montant', width: 16, type: 'money' },
           { key: 'agreeur', label: "Nom de l'agréeur", width: 26 },
           { key: 'secteur', label: 'Secteur', width: 20 },
+          { key: 'autresSecteurs', label: 'Autres secteurs concernés', width: 26 },
           { key: 'financement', label: 'Financement', width: 16 }
         ],
         rows,
@@ -597,6 +607,11 @@ export default function Depenses() {
                         <Badge tone={nature.tone}>{nature.label}</Badge>
                         <Badge tone={origine.tone}>{origine.label}</Badge>
                         {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
+                        {(d.secteursConcernes || []).length > 0 && (
+                          <span title={`Concerne aussi : ${d.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')}`}>
+                            <Badge tone="info">+{d.secteursConcernes.length} secteur{d.secteursConcernes.length > 1 ? 's' : ''}</Badge>
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -718,6 +733,32 @@ export default function Depenses() {
                     <span className="block text-xs text-gray-500">Reste affichée sous ce secteur, mais ne consomme pas son budget — c'est le budget de la Caisse commune qui est réduit à la place.</span>
                   </span>
                 </label>
+              )}
+              {/* Une dépense peut profiter à PLUSIEURS secteurs à la fois (ex. une charge
+                  payée depuis la Caisse commune pour plusieurs secteurs en même temps) —
+                  le secteur ci-dessus reste celui qui porte le montant (budget consommé
+                  une seule fois) ; ceux cochés ici ne servent qu'au tri : la dépense
+                  apparaîtra AUSSI quand on filtrera sur l'un d'eux. */}
+              {modal.data.secteurId && (
+                <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
+                  <p className="text-sm font-semibold text-gray-700">Autres secteurs concernés <span className="font-normal text-gray-400">(optionnel)</span></p>
+                  <p className="mb-1.5 text-xs text-gray-500">Cette dépense apparaîtra aussi quand on filtrera sur ces secteurs-là — le montant n'est compté qu'une fois, sur le secteur ci-dessus.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SECTEURS.filter((s) => s.id !== 'divers' && s.id !== modal.data.secteurId).map((s) => {
+                      const actif = (modal.data.secteursConcernes || []).includes(s.id)
+                      return (
+                        <button key={s.id} type="button"
+                          onClick={() => set('secteursConcernes', actif
+                            ? (modal.data.secteursConcernes || []).filter((x) => x !== s.id)
+                            : [...(modal.data.secteursConcernes || []), s.id])}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all ${actif ? 'border-amber-400 bg-amber-100 text-amber-900' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                          {actif && <Check size={10} strokeWidth={3} />}
+                          {s.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -997,6 +1038,9 @@ export default function Depenses() {
           const chips = [
             { label: 'Date', value: formatDateShort(detail.date) },
             { label: 'Secteur', value: libelleSecteurSite(secteur, detail) },
+            ...((detail.secteursConcernes || []).length > 0
+              ? [{ label: 'Concerne aussi', value: detail.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ') }]
+              : []),
             { label: 'Catégorie', value: detail.categorie || '—' },
             { label: 'Nature de flux', value: nature.label },
             { label: 'Mode de paiement', value: MODES_PAIEMENT.find((m) => m.id === detail.modePaiement)?.label || '—' },
