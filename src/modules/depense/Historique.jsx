@@ -44,7 +44,9 @@ export default function Historique() {
   const lignes = useMemo(() => {
     return depenses
       .filter((d) => (d.date || '') >= start && (d.date || '') <= end)
-      .filter((d) => !filtreSecteur || d.secteurId === filtreSecteur)
+      // Filtre aussi sur les « autres secteurs concernés » (cf. Depenses.jsx) : une
+      // dépense qui profite à plusieurs secteurs à la fois doit ressortir dans chacun.
+      .filter((d) => !filtreSecteur || d.secteurId === filtreSecteur || (d.secteursConcernes || []).includes(filtreSecteur))
       .filter((d) => !filtreStatut || (d._supprimee ? 'supprimee' : (d.statut || 'decaissee')) === filtreStatut)
       .filter((d) => !filtreType || (filtreType === 'imprevue' ? !!d.imprevue : !d.imprevue))
       .filter((d) => {
@@ -219,6 +221,11 @@ export default function Historique() {
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
                         {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
+                        {(d.secteursConcernes || []).length > 0 && (
+                          <span title={`Concerne aussi : ${d.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')}`}>
+                            <Badge tone="info">+{d.secteursConcernes.length}</Badge>
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-gray-600">

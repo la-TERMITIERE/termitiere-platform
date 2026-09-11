@@ -44,9 +44,16 @@ const CLAY_LABEL = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wide t
 const CLAY_FIELD = 'w-full appearance-none rounded-2xl border-0 bg-gradient-to-br from-white to-amber-50/90 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[5px_5px_12px_-4px_rgba(180,83,9,0.22),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:-translate-y-0.5 focus:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:ring-2 focus:ring-amber-400/60 dark:from-[#2a2118] dark:to-[#221b12] dark:text-gray-100 dark:shadow-[5px_5px_12px_-4px_rgba(0,0,0,0.5),-4px_-4px_10px_-6px_rgba(255,255,255,0.04)]'
 
 const empty = () => ({
-  secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
+  // Par défaut : Siège (Caisse commune) — la dépense « ordinaire », sans secteur
+  // particulier. L'utilisateur bascule sur « Oui » s'il veut désigner un secteur.
+  secteurId: 'divers', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, imprevue: false, modePaiement: 'espece',
   natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
+  // « Cette dépense concerne-t-elle un secteur ? » (n'a de sens que pour une
+  // dépense Caisse commune) — Non par défaut. concerneAutreSecteur ne pilote que
+  // l'affichage du sélecteur ; secteursConcernes (0 ou 1 élément) est la seule
+  // donnée réellement utilisée au tri.
+  concerneAutreSecteur: false, secteursConcernes: [],
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
@@ -186,8 +193,15 @@ export default function Depenses() {
 
   const liste = useMemo(() => {
     let rows = [...depenses]
-    if (filtreSecteur)   rows = rows.filter((d) => d.secteurId === filtreSecteur)
-    if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => siteLogistiqueDe(d) === filtreSite)
+    // Une dépense filtre sur son secteur PRINCIPAL, mais aussi sur les « autres
+    // secteurs concernés » (cf. secteursConcernes) — ex. une charge payée depuis
+    // la Caisse commune qui profite en réalité à plusieurs secteurs à la fois.
+    if (filtreSecteur) rows = rows.filter((d) => d.secteurId === filtreSecteur || (d.secteursConcernes || []).includes(filtreSecteur))
+    // Le sous-filtre par site ne s'applique qu'aux lignes RATTACHÉES à Logistique
+    // (site connu) — une ligne d'un autre secteur qui ne fait que « concerner »
+    // Logistique en plus n'a pas de site propre, donc reste visible quel que soit
+    // le site choisi.
+    if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => d.secteurId !== 'logistique' || siteLogistiqueDe(d) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
     if (filtreFinancement === 'caisse_commune') rows = rows.filter((d) => d.financePar === 'caisse_commune')
@@ -257,6 +271,7 @@ export default function Depenses() {
         montant: Number(d.montant) || 0,
         agreeur: agreeur || '—',
         secteur: libelleSecteurSite(secteur, d),
+        autresSecteurs: (d.secteursConcernes || []).map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ') || '—',
         financement: d.financePar === 'caisse_commune' ? 'Caisse commune' : 'Secteur'
       }
     })
@@ -271,6 +286,7 @@ export default function Depenses() {
           { key: 'montant', label: 'Montant', width: 16, type: 'money' },
           { key: 'agreeur', label: "Nom de l'agréeur", width: 26 },
           { key: 'secteur', label: 'Secteur', width: 20 },
+          { key: 'autresSecteurs', label: 'Autres secteurs concernés', width: 26 },
           { key: 'financement', label: 'Financement', width: 16 }
         ],
         rows,
@@ -293,7 +309,7 @@ export default function Depenses() {
   )
 
   function openCreate() { setModal({ data: empty(), isNew: true }) }
-  function openEdit(d)  { setModal({ data: { ...empty(), ...d }, isNew: false, id: d.id }) }
+  function openEdit(d)  { setModal({ data: { ...empty(), ...d, concerneAutreSecteur: (d.secteursConcernes || []).length > 0 }, isNew: false, id: d.id }) }
 
   // ── Ajout multiple (lot) ──
   const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '', imprevue: false })
@@ -597,6 +613,11 @@ export default function Depenses() {
                         <Badge tone={nature.tone}>{nature.label}</Badge>
                         <Badge tone={origine.tone}>{origine.label}</Badge>
                         {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
+                        {(d.secteursConcernes || []).length > 0 && (
+                          <span title={`Concerne aussi : ${d.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')}`}>
+                            <Badge tone="info">+{d.secteursConcernes.length} secteur{d.secteursConcernes.length > 1 ? 's' : ''}</Badge>
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -669,10 +690,14 @@ export default function Depenses() {
             {/* Détails de la dépense */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
+              {/* Secteur EN PREMIER, CAISSE COMMUNE par défaut : c'est elle qui alimente
+                  les dépenses par défaut — y compris, via « Autres secteurs concernés »
+                  ci-dessous, celles qui profitent en réalité à d'autres secteurs. Choisir
+                  un secteur précis, c'est décider que la dépense est prélevée sur la
+                  somme qui LUI est allouée (son propre budget). */}
               <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Secteur *" hint="CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — dépenses/apports communs à tous.">
+                <FormGroup label="Secteur *" hint="CAISSE COMMUNE (par défaut) : dépense financée par le fonds commun. Un autre secteur : prélevée sur son propre budget alloué.">
                   <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
-                    <option value="">— Choisir —</option>
                     {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </Select>
                 </FormGroup>
@@ -718,6 +743,40 @@ export default function Depenses() {
                     <span className="block text-xs text-gray-500">Reste affichée sous ce secteur, mais ne consomme pas son budget — c'est le budget de la Caisse commune qui est réduit à la place.</span>
                   </span>
                 </label>
+              )}
+              {/* Une dépense Caisse commune peut, EN PLUS, concerner un secteur précis
+                  (ex. profite en réalité à ce secteur-là) — n'a de sens QUE pour la
+                  Caisse commune : dès qu'un secteur précis est choisi ci-dessus, la
+                  dépense est déjà prélevée sur SON budget, pas besoin de le redire.
+                  Non par défaut. Le montant n'est de toute façon compté qu'une fois
+                  (sur la Caisse commune) ; ceci ne sert qu'au tri : la dépense
+                  apparaîtra AUSSI quand on filtrera sur ce secteur. */}
+              {modal.data.secteurId === 'divers' && (
+                <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
+                  <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur ? <span className="font-normal text-gray-400">(optionnel)</span></p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => set('concerneAutreSecteur', true)}
+                      className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.concerneAutreSecteur
+                        ? 'scale-105 bg-green-500 text-white shadow-[0_4px_14px_-2px_rgba(34,197,94,0.6)]'
+                        : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-green-300 hover:text-green-600 hover:shadow-sm'}`}>
+                      ✅ Oui
+                    </button>
+                    <button type="button" onClick={() => { set('concerneAutreSecteur', false); set('secteursConcernes', []) }}
+                      className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${!modal.data.concerneAutreSecteur
+                        ? 'scale-105 bg-red-500 text-white shadow-[0_4px_14px_-2px_rgba(239,68,68,0.6)]'
+                        : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-red-300 hover:text-red-600 hover:shadow-sm'}`}>
+                      ❌ Non
+                    </button>
+                  </div>
+                  {modal.data.concerneAutreSecteur && (
+                    <FormGroup label="Secteur concerné" className="mt-2" hint="Cette dépense apparaîtra aussi quand on filtrera sur ce secteur — le montant reste compté une seule fois, sur la Caisse commune.">
+                      <Select value={(modal.data.secteursConcernes || [])[0] || ''} onChange={(e) => set('secteursConcernes', e.target.value ? [e.target.value] : [])}>
+                        <option value="">— Choisir —</option>
+                        {SECTEURS.filter((s) => s.id !== 'divers').map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      </Select>
+                    </FormGroup>
+                  )}
+                </div>
               )}
             </div>
 
@@ -997,6 +1056,9 @@ export default function Depenses() {
           const chips = [
             { label: 'Date', value: formatDateShort(detail.date) },
             { label: 'Secteur', value: libelleSecteurSite(secteur, detail) },
+            ...((detail.secteursConcernes || []).length > 0
+              ? [{ label: 'Concerne aussi', value: detail.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ') }]
+              : []),
             { label: 'Catégorie', value: detail.categorie || '—' },
             { label: 'Nature de flux', value: nature.label },
             { label: 'Mode de paiement', value: MODES_PAIEMENT.find((m) => m.id === detail.modePaiement)?.label || '—' },
