@@ -44,7 +44,9 @@ const CLAY_LABEL = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wide t
 const CLAY_FIELD = 'w-full appearance-none rounded-2xl border-0 bg-gradient-to-br from-white to-amber-50/90 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[5px_5px_12px_-4px_rgba(180,83,9,0.22),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:-translate-y-0.5 focus:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:ring-2 focus:ring-amber-400/60 dark:from-[#2a2118] dark:to-[#221b12] dark:text-gray-100 dark:shadow-[5px_5px_12px_-4px_rgba(0,0,0,0.5),-4px_-4px_10px_-6px_rgba(255,255,255,0.04)]'
 
 const empty = () => ({
-  secteurId: '', site: '', categorie: '', montant: '', date: todayStr(),
+  // Par défaut : Siège (Caisse commune) — la dépense « ordinaire », sans secteur
+  // particulier. L'utilisateur bascule sur « Oui » s'il veut désigner un secteur.
+  secteurId: 'divers', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, imprevue: false, modePaiement: 'espece',
   natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
   secteursConcernes: [],
@@ -684,21 +686,45 @@ export default function Depenses() {
             {/* Détails de la dépense */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
-              <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Secteur *" hint="CAISSE COMMUNE : pour une somme qui ne concerne pas un secteur précis — dépenses/apports communs à tous.">
-                  <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
-                    <option value="">— Choisir —</option>
-                    {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </Select>
-                </FormGroup>
-                {modal.data.secteurId === 'logistique' && (
-                  <FormGroup label="Site *" hint="Budget alloué séparément par site.">
-                    <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
-                      <option value="">— Choisir —</option>
-                      {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                    </Select>
-                  </FormGroup>
+              {/* Question préalable : la dépense concerne-t-elle un secteur précis ?
+                  OUI (vert) → on choisit le secteur de destination ci-dessous.
+                  NON (rouge) → dépense classée au SIÈGE (Caisse commune), le cas
+                  ordinaire par défaut — pas besoin de choisir de secteur. Modifiable
+                  à tout moment après enregistrement, comme le reste de la fiche. */}
+              <div className="mb-3">
+                <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur particulier ? *</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { if (modal.data.secteurId === 'divers') set('secteurId', '') }}
+                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-all ${modal.data.secteurId !== 'divers' ? 'border-green-500 bg-green-50 text-green-700 shadow-sm' : 'border-gray-200 bg-white text-gray-400 hover:border-green-300 hover:text-green-600'}`}>
+                    ✅ Oui
+                  </button>
+                  <button type="button" onClick={() => set('secteurId', 'divers')}
+                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-all ${modal.data.secteurId === 'divers' ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-gray-200 bg-white text-gray-400 hover:border-red-300 hover:text-red-600'}`}>
+                    ❌ Non — Siège
+                  </button>
+                </div>
+                {modal.data.secteurId === 'divers' ? (
+                  <p className="mt-1.5 text-xs text-gray-500">→ Dépense classée au <strong>Siège (Caisse commune)</strong> — une dépense ordinaire, sans secteur particulier.</p>
+                ) : (
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <FormGroup label="Secteur *" hint="Secteur de destination de la somme.">
+                      <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
+                        <option value="">— Choisir —</option>
+                        {SECTEURS.filter((s) => s.id !== 'divers').map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      </Select>
+                    </FormGroup>
+                    {modal.data.secteurId === 'logistique' && (
+                      <FormGroup label="Site *" hint="Budget alloué séparément par site.">
+                        <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
+                          <option value="">— Choisir —</option>
+                          {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </Select>
+                      </FormGroup>
+                    )}
+                  </div>
                 )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Catégorie *">
                   <ChampAutocomplete
                     value={modal.data.categorie}
