@@ -693,13 +693,17 @@ export default function Depenses() {
                   à tout moment après enregistrement, comme le reste de la fiche. */}
               <div className="mb-3">
                 <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur particulier ? *</p>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <button type="button" onClick={() => { if (modal.data.secteurId === 'divers') set('secteurId', '') }}
-                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-all ${modal.data.secteurId !== 'divers' ? 'border-green-500 bg-green-50 text-green-700 shadow-sm' : 'border-gray-200 bg-white text-gray-400 hover:border-green-300 hover:text-green-600'}`}>
+                    className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.secteurId !== 'divers'
+                      ? 'scale-105 bg-green-500 text-white shadow-[0_4px_14px_-2px_rgba(34,197,94,0.6)]'
+                      : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-green-300 hover:text-green-600 hover:shadow-sm'}`}>
                     ✅ Oui
                   </button>
                   <button type="button" onClick={() => set('secteurId', 'divers')}
-                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-all ${modal.data.secteurId === 'divers' ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-gray-200 bg-white text-gray-400 hover:border-red-300 hover:text-red-600'}`}>
+                    className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.secteurId === 'divers'
+                      ? 'scale-105 bg-red-500 text-white shadow-[0_4px_14px_-2px_rgba(239,68,68,0.6)]'
+                      : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-red-300 hover:text-red-600 hover:shadow-sm'}`}>
                     ❌ Non — Siège
                   </button>
                 </div>
