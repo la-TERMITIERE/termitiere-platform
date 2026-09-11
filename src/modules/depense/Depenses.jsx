@@ -686,49 +686,25 @@ export default function Depenses() {
             {/* Détails de la dépense */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
-              {/* Question préalable : la dépense concerne-t-elle un secteur précis ?
-                  OUI (vert) → on choisit le secteur de destination ci-dessous.
-                  NON (rouge) → dépense classée au SIÈGE (Caisse commune), le cas
-                  ordinaire par défaut — pas besoin de choisir de secteur. Modifiable
-                  à tout moment après enregistrement, comme le reste de la fiche. */}
-              <div className="mb-3">
-                <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur particulier ? *</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => { if (modal.data.secteurId === 'divers') set('secteurId', '') }}
-                    className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.secteurId !== 'divers'
-                      ? 'scale-105 bg-green-500 text-white shadow-[0_4px_14px_-2px_rgba(34,197,94,0.6)]'
-                      : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-green-300 hover:text-green-600 hover:shadow-sm'}`}>
-                    ✅ Oui
-                  </button>
-                  <button type="button" onClick={() => set('secteurId', 'divers')}
-                    className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.secteurId === 'divers'
-                      ? 'scale-105 bg-red-500 text-white shadow-[0_4px_14px_-2px_rgba(239,68,68,0.6)]'
-                      : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-red-300 hover:text-red-600 hover:shadow-sm'}`}>
-                    ❌ Non — Siège
-                  </button>
-                </div>
-                {modal.data.secteurId === 'divers' ? (
-                  <p className="mt-1.5 text-xs text-gray-500">→ Dépense classée au <strong>Siège (Caisse commune)</strong> — une dépense ordinaire, sans secteur particulier.</p>
-                ) : (
-                  <div className="mt-2 grid grid-cols-2 gap-3">
-                    <FormGroup label="Secteur *" hint="Secteur de destination de la somme.">
-                      <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
-                        <option value="">— Choisir —</option>
-                        {SECTEURS.filter((s) => s.id !== 'divers').map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                      </Select>
-                    </FormGroup>
-                    {modal.data.secteurId === 'logistique' && (
-                      <FormGroup label="Site *" hint="Budget alloué séparément par site.">
-                        <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
-                          <option value="">— Choisir —</option>
-                          {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                        </Select>
-                      </FormGroup>
-                    )}
-                  </div>
-                )}
-              </div>
+              {/* Secteur EN PREMIER, CAISSE COMMUNE par défaut : c'est elle qui alimente
+                  les dépenses par défaut — y compris, via « Autres secteurs concernés »
+                  ci-dessous, celles qui profitent en réalité à d'autres secteurs. Choisir
+                  un secteur précis, c'est décider que la dépense est prélevée sur la
+                  somme qui LUI est allouée (son propre budget). */}
               <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Secteur *" hint="CAISSE COMMUNE (par défaut) : dépense financée par le fonds commun. Un autre secteur : prélevée sur son propre budget alloué.">
+                  <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
+                    {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </Select>
+                </FormGroup>
+                {modal.data.secteurId === 'logistique' && (
+                  <FormGroup label="Site *" hint="Budget alloué séparément par site.">
+                    <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
+                      <option value="">— Choisir —</option>
+                      {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </Select>
+                  </FormGroup>
+                )}
                 <FormGroup label="Catégorie *">
                   <ChampAutocomplete
                     value={modal.data.categorie}
@@ -764,17 +740,19 @@ export default function Depenses() {
                   </span>
                 </label>
               )}
-              {/* Une dépense peut profiter à PLUSIEURS secteurs à la fois (ex. une charge
-                  payée depuis la Caisse commune pour plusieurs secteurs en même temps) —
-                  le secteur ci-dessus reste celui qui porte le montant (budget consommé
-                  une seule fois) ; ceux cochés ici ne servent qu'au tri : la dépense
-                  apparaîtra AUSSI quand on filtrera sur l'un d'eux. */}
-              {modal.data.secteurId && (
+              {/* Une dépense de la CAISSE COMMUNE peut profiter à PLUSIEURS secteurs à la
+                  fois — n'a de sens QUE dans ce cas : dès qu'un secteur précis est
+                  choisi ci-dessus, la dépense est prélevée sur SON propre budget, pas
+                  besoin de la rattacher à d'autres. Le montant n'est de toute façon
+                  compté qu'une fois (sur la Caisse commune) ; les secteurs cochés ici
+                  ne servent qu'au tri : la dépense apparaîtra AUSSI quand on filtrera
+                  sur l'un d'eux. */}
+              {modal.data.secteurId === 'divers' && (
                 <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
-                  <p className="text-sm font-semibold text-gray-700">Autres secteurs concernés <span className="font-normal text-gray-400">(optionnel)</span></p>
-                  <p className="mb-1.5 text-xs text-gray-500">Cette dépense apparaîtra aussi quand on filtrera sur ces secteurs-là — le montant n'est compté qu'une fois, sur le secteur ci-dessus.</p>
+                  <p className="text-sm font-semibold text-gray-700">Secteurs concernés <span className="font-normal text-gray-400">(optionnel)</span></p>
+                  <p className="mb-1.5 text-xs text-gray-500">Si cette dépense de la Caisse commune profite en réalité à un ou plusieurs secteurs, cochez-les — elle apparaîtra aussi quand on filtrera dessus. Le montant reste compté une seule fois, sur la Caisse commune.</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {SECTEURS.filter((s) => s.id !== 'divers' && s.id !== modal.data.secteurId).map((s) => {
+                    {SECTEURS.filter((s) => s.id !== 'divers').map((s) => {
                       const actif = (modal.data.secteursConcernes || []).includes(s.id)
                       return (
                         <button key={s.id} type="button"
