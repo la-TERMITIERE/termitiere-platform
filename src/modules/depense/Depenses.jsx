@@ -49,7 +49,11 @@ const empty = () => ({
   secteurId: 'divers', site: '', categorie: '', montant: '', date: todayStr(),
   description: '', piece: null, imprevue: false, modePaiement: 'espece',
   natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
-  secteursConcernes: [],
+  // « Cette dépense concerne-t-elle un secteur ? » (n'a de sens que pour une
+  // dépense Caisse commune) — Non par défaut. concerneAutreSecteur ne pilote que
+  // l'affichage du sélecteur ; secteursConcernes (0 ou 1 élément) est la seule
+  // donnée réellement utilisée au tri.
+  concerneAutreSecteur: false, secteursConcernes: [],
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
@@ -305,7 +309,7 @@ export default function Depenses() {
   )
 
   function openCreate() { setModal({ data: empty(), isNew: true }) }
-  function openEdit(d)  { setModal({ data: { ...empty(), ...d }, isNew: false, id: d.id }) }
+  function openEdit(d)  { setModal({ data: { ...empty(), ...d, concerneAutreSecteur: (d.secteursConcernes || []).length > 0 }, isNew: false, id: d.id }) }
 
   // ── Ajout multiple (lot) ──
   const ligneVide = () => ({ secteurId: '', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '', imprevue: false })
@@ -740,32 +744,38 @@ export default function Depenses() {
                   </span>
                 </label>
               )}
-              {/* Une dépense de la CAISSE COMMUNE peut profiter à PLUSIEURS secteurs à la
-                  fois — n'a de sens QUE dans ce cas : dès qu'un secteur précis est
-                  choisi ci-dessus, la dépense est prélevée sur SON propre budget, pas
-                  besoin de la rattacher à d'autres. Le montant n'est de toute façon
-                  compté qu'une fois (sur la Caisse commune) ; les secteurs cochés ici
-                  ne servent qu'au tri : la dépense apparaîtra AUSSI quand on filtrera
-                  sur l'un d'eux. */}
+              {/* Une dépense Caisse commune peut, EN PLUS, concerner un secteur précis
+                  (ex. profite en réalité à ce secteur-là) — n'a de sens QUE pour la
+                  Caisse commune : dès qu'un secteur précis est choisi ci-dessus, la
+                  dépense est déjà prélevée sur SON budget, pas besoin de le redire.
+                  Non par défaut. Le montant n'est de toute façon compté qu'une fois
+                  (sur la Caisse commune) ; ceci ne sert qu'au tri : la dépense
+                  apparaîtra AUSSI quand on filtrera sur ce secteur. */}
               {modal.data.secteurId === 'divers' && (
                 <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
-                  <p className="text-sm font-semibold text-gray-700">Secteurs concernés <span className="font-normal text-gray-400">(optionnel)</span></p>
-                  <p className="mb-1.5 text-xs text-gray-500">Si cette dépense de la Caisse commune profite en réalité à un ou plusieurs secteurs, cochez-les — elle apparaîtra aussi quand on filtrera dessus. Le montant reste compté une seule fois, sur la Caisse commune.</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SECTEURS.filter((s) => s.id !== 'divers').map((s) => {
-                      const actif = (modal.data.secteursConcernes || []).includes(s.id)
-                      return (
-                        <button key={s.id} type="button"
-                          onClick={() => set('secteursConcernes', actif
-                            ? (modal.data.secteursConcernes || []).filter((x) => x !== s.id)
-                            : [...(modal.data.secteursConcernes || []), s.id])}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all ${actif ? 'border-amber-400 bg-amber-100 text-amber-900' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
-                          {actif && <Check size={10} strokeWidth={3} />}
-                          {s.label}
-                        </button>
-                      )
-                    })}
+                  <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur ? <span className="font-normal text-gray-400">(optionnel)</span></p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => set('concerneAutreSecteur', true)}
+                      className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.concerneAutreSecteur
+                        ? 'scale-105 bg-green-500 text-white shadow-[0_4px_14px_-2px_rgba(34,197,94,0.6)]'
+                        : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-green-300 hover:text-green-600 hover:shadow-sm'}`}>
+                      ✅ Oui
+                    </button>
+                    <button type="button" onClick={() => { set('concerneAutreSecteur', false); set('secteursConcernes', []) }}
+                      className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${!modal.data.concerneAutreSecteur
+                        ? 'scale-105 bg-red-500 text-white shadow-[0_4px_14px_-2px_rgba(239,68,68,0.6)]'
+                        : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-red-300 hover:text-red-600 hover:shadow-sm'}`}>
+                      ❌ Non
+                    </button>
                   </div>
+                  {modal.data.concerneAutreSecteur && (
+                    <FormGroup label="Secteur concerné" className="mt-2" hint="Cette dépense apparaîtra aussi quand on filtrera sur ce secteur — le montant reste compté une seule fois, sur la Caisse commune.">
+                      <Select value={(modal.data.secteursConcernes || [])[0] || ''} onChange={(e) => set('secteursConcernes', e.target.value ? [e.target.value] : [])}>
+                        <option value="">— Choisir —</option>
+                        {SECTEURS.filter((s) => s.id !== 'divers').map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      </Select>
+                    </FormGroup>
+                  )}
                 </div>
               )}
             </div>
