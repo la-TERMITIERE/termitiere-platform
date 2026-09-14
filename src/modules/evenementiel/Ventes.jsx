@@ -1,6 +1,6 @@
 // Ventes briques — création de commandes, liées aux autorisations de sortie.
 import { useMemo, useState } from 'react'
-import { Plus, Send, Trash2, Eye, ShoppingCart, Wallet, FileSpreadsheet } from 'lucide-react'
+import { Plus, Send, Trash2, Eye, Pencil, ShoppingCart, Wallet, FileSpreadsheet, AlertTriangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -17,13 +17,13 @@ import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
-import { addItem, removeItem } from '../../core/db'
+import { addItem, updateItem, removeItem, setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { isReadOnlyRole, isFullAccessRole, canViewFinance, canExportExcel } from '../../core/roles'
-import { dernierStockBriques } from './logic'
+import { dernierStockBriques, appliquerDeltasStockBriques } from './logic'
 
 const STATUTS = {
   brouillon: { label: 'Brouillon', tone: 'neutral' },
@@ -42,11 +42,15 @@ export default function Ventes() {
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: inventaires } = useCollection('evenementiel_inventaires')
+  const { data: demandes } = useCollection('evenementiel_demandes')
+  const { data: factures } = useCollection('evenementiel_factures')
   const briques = useBriqueterieStore((s) => s.briques)
 
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [detail, setDetail] = useState(null)   // vente consultée
+  const [toDelete, setToDelete] = useState(null)
+  const [suppression, setSuppression] = useState(false)
 
   // Filtre de tri — période (Jour / Mois / Plage), client et statut — même
   // composant et même comportement que la Facturation MAXI LOGISTIQUE.
@@ -86,11 +90,28 @@ export default function Ventes() {
 
   function openCreate() {
     setForm({
+      id: null,
       clientId: clients[0]?.id || '',
       clientNom: clients[0]?.nom || '',
       dateChargement: todayStr(),
       lignes: [{ briqueId: briques.find((b) => b.id !== 'caillasses')?.id || '', qte: 100, prixUnitaire: 350 }],
       notes: ''
+    })
+    setOpen(true)
+  }
+
+  // Modifier — ouvert aux agents comme à l'administration (contrairement à la
+  // suppression, réservée admin + Info), mais uniquement tant que la vente est
+  // un BROUILLON : au-delà, le stock a bougé et/ou une facture existe, il faut
+  // repasser par l'annulation de l'autorisation (onglet Autorisations) d'abord.
+  function openEdit(v) {
+    setForm({
+      id: v.id,
+      clientId: v.clientId || '',
+      clientNom: v.clientNom || '',
+      dateChargement: v.dateChargement || todayStr(),
+      lignes: (v.lignes || []).map((l) => ({ briqueId: l.briqueId, qte: l.qte, prixUnitaire: l.prixUnitaire })),
+      notes: v.notes || ''
     })
     setOpen(true)
   }
@@ -110,30 +131,70 @@ export default function Ventes() {
       }
     }
     const client = clients.find((c) => c.id === form.clientId)
-    const num = genNumero('VTE', ventes.length)
     const lignes = form.lignes.map((l) => {
       const b = briques.find((x) => x.id === l.briqueId)
       const qte = parseInt(l.qte) || 0
       const pu = parseFloat(l.prixUnitaire) || b?.tarifVente || 0
       return { briqueId: b?.id, briqueNom: b?.nom, qte, prixUnitaire: pu, montant: qte * pu }
     })
-    await addItem('evenementiel_ventes', {
-      num, date: todayStr(), clientId: form.clientId, clientNom: client?.nom || form.clientNom,
-      dateChargement: form.dateChargement, lignes, total: lignes.reduce((s, l) => s + l.montant, 0),
-      statut: 'brouillon', notes: form.notes, agentNom: user.nom
-    })
-    await audit('evenementiel', 'VENTE', num)
-    toast.success('Vente créée ✓ — demandez les 3 autorisations avant le chargement')
+    const total = lignes.reduce((s, l) => s + l.montant, 0)
+    if (form.id) {
+      await updateItem('evenementiel_ventes', form.id, {
+        clientId: form.clientId, clientNom: client?.nom || form.clientNom,
+        dateChargement: form.dateChargement, lignes, total, notes: form.notes
+      })
+      const vAvant = ventes.find((v) => v.id === form.id)
+      await audit('evenementiel', 'VENTE_EDIT', vAvant?.num || form.id)
+      toast.success('Vente modifiée ✓')
+    } else {
+      const num = genNumero('VTE', ventes.length)
+      await addItem('evenementiel_ventes', {
+        num, date: todayStr(), clientId: form.clientId, clientNom: client?.nom || form.clientNom,
+        dateChargement: form.dateChargement, lignes, total,
+        statut: 'brouillon', notes: form.notes, agentNom: user.nom
+      })
+      await audit('evenementiel', 'VENTE', num)
+      toast.success('Vente créée ✓ — demandez les 3 autorisations avant le chargement')
+    }
     setOpen(false)
   }
 
-  // Une vente n'est supprimable qu'en BROUILLON : dès qu'une autorisation de
-  // sortie est engagée dessus, elle se retire depuis l'onglet Autorisations.
-  async function supprimer(v) {
-    if (!confirm(`Supprimer la vente ${v.num} (${v.clientNom}) ?`)) return
-    await removeItem('evenementiel_ventes', v.id)
-    await audit('evenementiel', 'VENTE_DELETE', v.num)
-    toast.success('Vente supprimée')
+  // Suppression — administration + Info, à TOUT statut (pas seulement brouillon) :
+  //  - brouillon / en_attente : le stock n'a pas encore bougé, simple suppression
+  //    (+ l'autorisation en attente liée, si elle existe, pour ne rien laisser
+  //    d'orphelin).
+  //  - autorisée / chargée : le stock a déjà été décrémenté à la certification —
+  //    on le restaure (quantités remises en stock « prêt »/« caillasses »), puis
+  //    on supprime l'autorisation et la facture liées s'il y en a.
+  async function confirmerSuppression() {
+    const v = toDelete
+    if (!v || suppression) return
+    setSuppression(true)
+    try {
+      if (v.statut === 'autorisee' || v.statut === 'chargee') {
+        const deltas = (v.lignes || []).map((l) => ({ id: l.briqueId, delta: -(parseInt(l.qte) || 0) }))
+        const maj = appliquerDeltasStockBriques(inventaires, deltas)
+        if (maj) {
+          await setItem('evenementiel_inventaires', maj.date, {
+            ...maj.inv, date: maj.date, briques: maj.briques, savedAt: ts(),
+            agentId: user.uid, agentNom: user.nom
+          })
+        }
+      }
+      const demande = demandes.find((d) => d.venteId === v.id)
+      if (demande) await removeItem('evenementiel_demandes', demande.id)
+      const facture = factures.find((f) => f.venteId === v.id)
+      if (facture) await removeItem('evenementiel_factures', facture.id)
+      await removeItem('evenementiel_ventes', v.id)
+      await audit('evenementiel', 'VENTE_DELETE',
+        `${v.num} — ${v.clientNom || ''}${v.statut !== 'brouillon' ? ` (${STATUTS[v.statut]?.label || v.statut} — stock restauré)` : ''}`)
+      toast.success('Vente supprimée ✓')
+      setToDelete(null)
+    } catch (e) {
+      toast.error(e?.message || 'La suppression a échoué')
+    } finally {
+      setSuppression(false)
+    }
   }
 
   // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
@@ -244,8 +305,11 @@ export default function Ventes() {
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-                {peutSupprimer && r.statut === 'brouillon' && (
-                  <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                {!lectureSeule && r.statut === 'brouillon' && (
+                  <button onClick={() => openEdit(r)} title="Modifier la vente" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                )}
+                {peutSupprimer && (
+                  <button onClick={() => setToDelete(r)} title="Supprimer la vente" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                 )}
               </div>
             ) }
@@ -285,8 +349,8 @@ export default function Ventes() {
         )}
       </Modal>
 
-      <Modal open={open} onClose={() => setOpen(false)} size="lg" title="Nouvelle vente"
-        footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
+      <Modal open={open} onClose={() => setOpen(false)} size="lg" title={form?.id ? 'Modifier la vente' : 'Nouvelle vente'}
+        footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>{form?.id ? 'Mettre à jour' : 'Enregistrer'}</Button></>}>
         {form && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -326,6 +390,32 @@ export default function Ventes() {
               <Plus size={14} /> Ligne
             </Button>
             <p className="text-right text-lg font-extrabold">Total : {formatMoney(totalForm)}</p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirmation de suppression — le contenu s'adapte selon que le stock a
+          déjà été décrémenté ou non (cf. confirmerSuppression). */}
+      <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer cette vente ?"
+        {...glassModalProps('#dc2626')}
+        footer={<>
+          <Button variant="outline" onClick={() => setToDelete(null)} disabled={suppression}>Annuler</Button>
+          <Button variant="danger" onClick={confirmerSuppression} loading={suppression}>
+            <Trash2 size={15} /> Supprimer
+          </Button>
+        </>}>
+        {toDelete && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <span>
+                Supprimer la vente <strong>{toDelete.num}</strong> ({toDelete.clientNom}) — {formatMoney(toDelete.total)}.
+                {toDelete.statut !== 'brouillon' && (
+                  <> Cette vente est <strong>{(STATUTS[toDelete.statut]?.label || toDelete.statut).toLowerCase()}</strong> : le stock déjà sorti sera <strong>restauré</strong>, et l'autorisation{demandes.some((d) => d.venteId === toDelete.id) || factures.some((f) => f.venteId === toDelete.id) ? '/la facture liée' : ' liée'} sera supprimée avec elle.</>
+                )}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">Action irréversible — tracée dans le Journal.</p>
           </div>
         )}
       </Modal>

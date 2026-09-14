@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "edepenses-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/Lenovo/Documents/E-DEPENSES_sout", "run", "dev", "--", "--port", "5190", "--strictPort"],
+      "port": 5190
     }
   ]
 }
