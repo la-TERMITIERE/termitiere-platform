@@ -38,6 +38,10 @@ export default function Ventes() {
   const lectureSeule = isReadOnlyRole(role)
   // Les agents modifient/créent partout mais ne suppriment jamais (décision explicite).
   const peutSupprimer = isFullAccessRole(role)
+  // L'administration (Info compris, cf. isFullAccessRole) peut modifier une vente à
+  // TOUT statut (stock/facture réajustés dans save()) ; un agent uniquement tant
+  // qu'elle est encore un brouillon (rien n'a encore bougé en stock/facturation).
+  const peutModifierVente = (v) => isFullAccessRole(role) || (!lectureSeule && v.statut === 'brouillon')
   const estAdministration = canViewFinance(role)
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: clients } = useCollection('evenementiel_clients')
@@ -100,10 +104,10 @@ export default function Ventes() {
     setOpen(true)
   }
 
-  // Modifier — ouvert aux agents comme à l'administration (contrairement à la
-  // suppression, réservée admin + Info), mais uniquement tant que la vente est
-  // un BROUILLON : au-delà, le stock a bougé et/ou une facture existe, il faut
-  // repasser par l'annulation de l'autorisation (onglet Autorisations) d'abord.
+  // Modifier — ouvert aux agents comme à l'administration (Info compris). Un
+  // agent seulement tant que la vente est un BROUILLON ; l'administration à tout
+  // statut, save() réajustant alors le stock déjà décrémenté et la facture liée
+  // (cf. peutModifierVente).
   function openEdit(v) {
     setForm({
       id: v.id,
@@ -123,11 +127,19 @@ export default function Ventes() {
 
   async function save() {
     if (!form.clientNom?.trim() && !form.clientId) return toast.error('Client requis')
+    // Vente déjà certifiée (administration uniquement, cf. peutModifierVente) :
+    // le stock a déjà été décrémenté pour les quantités ACTUELLES — seul le
+    // SURPLUS éventuel (nouvelle qté − ancienne qté) doit encore trouver de la
+    // place ; la quantité déjà sortie n'est pas à re-vérifier.
+    const vAvant = form.id ? ventes.find((v) => v.id === form.id) : null
+    const dejaCertifiee = vAvant && (vAvant.statut === 'autorisee' || vAvant.statut === 'chargee')
+    const ancienneQte = (briqueId) => (vAvant?.lignes || []).filter((l) => l.briqueId === briqueId).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
     for (const l of form.lignes) {
       const stock = dernierStockBriques(inventaires, l.briqueId, l.briqueId === 'caillasses' ? 'caillasses' : 'pret')
-      if ((parseInt(l.qte) || 0) > stock) {
+      const dispo = dejaCertifiee ? stock + ancienneQte(l.briqueId) : stock
+      if ((parseInt(l.qte) || 0) > dispo) {
         const b = briques.find((x) => x.id === l.briqueId)
-        return toast.error(`Stock insuffisant pour ${b?.nom} (${stock} disponible)`)
+        return toast.error(`Stock insuffisant pour ${b?.nom} (${dispo} disponible)`)
       }
     }
     const client = clients.find((c) => c.id === form.clientId)
@@ -143,8 +155,28 @@ export default function Ventes() {
         clientId: form.clientId, clientNom: client?.nom || form.clientNom,
         dateChargement: form.dateChargement, lignes, total, notes: form.notes
       })
-      const vAvant = ventes.find((v) => v.id === form.id)
-      await audit('evenementiel', 'VENTE_EDIT', vAvant?.num || form.id)
+      if (dejaCertifiee) {
+        // Répercute l'écart de quantités par brique sur le stock déjà décrémenté
+        // (delta > 0 → on sort le surplus ; delta < 0 → l'excédent rentre au stock).
+        const briqueIds = new Set([...(vAvant.lignes || []).map((l) => l.briqueId), ...lignes.map((l) => l.briqueId)])
+        const deltas = [...briqueIds].map((id) => {
+          const apres = lignes.filter((l) => l.briqueId === id).reduce((s, l) => s + (l.qte || 0), 0)
+          return { id, delta: apres - ancienneQte(id) }
+        }).filter((d) => d.id && d.delta !== 0)
+        if (deltas.length) {
+          const maj = appliquerDeltasStockBriques(inventaires, deltas)
+          if (maj) {
+            await setItem('evenementiel_inventaires', maj.date, {
+              ...maj.inv, date: maj.date, briques: maj.briques, savedAt: ts(),
+              agentId: user.uid, agentNom: user.nom
+            })
+          }
+        }
+        // Répercute le nouveau montant sur la facture déjà émise, s'il y en a une.
+        const facture = factures.find((f) => f.venteId === form.id)
+        if (facture) await updateItem('evenementiel_factures', facture.id, { totalHT: total, totalTTC: total })
+      }
+      await audit('evenementiel', 'VENTE_EDIT', `${vAvant?.num || form.id}${dejaCertifiee ? ` (${STATUTS[vAvant.statut]?.label || vAvant.statut} — stock/facture réajustés)` : ''}`)
       toast.success('Vente modifiée ✓')
     } else {
       const num = genNumero('VTE', ventes.length)
@@ -305,7 +337,7 @@ export default function Ventes() {
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-                {!lectureSeule && r.statut === 'brouillon' && (
+                {peutModifierVente(r) && (
                   <button onClick={() => openEdit(r)} title="Modifier la vente" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
                 )}
                 {peutSupprimer && (
@@ -353,6 +385,15 @@ export default function Ventes() {
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>{form?.id ? 'Mettre à jour' : 'Enregistrer'}</Button></>}>
         {form && (
           <div className="space-y-4">
+            {form.id && ventes.find((v) => v.id === form.id)?.statut !== 'brouillon' && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <span>
+                  Cette vente est déjà <strong>{(STATUTS[ventes.find((v) => v.id === form.id)?.statut]?.label || '').toLowerCase()}</strong> :
+                  modifier les quantités réajustera automatiquement le stock déjà sorti et la facture liée, s'il y en a une.
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Client">
                 <Select value={form.clientId} onChange={(e) => {
