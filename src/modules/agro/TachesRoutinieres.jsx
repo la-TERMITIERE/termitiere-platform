@@ -38,6 +38,10 @@ export default function TachesRoutinieresAgro() {
       planningPersonnel
       assignationObligatoire
       employesDisponibles={employesDisponibles}
+      // Demande explicite : plus de notification « ✅ Tâche effectuée » envoyée à
+      // celui qui a assigné la tâche, propre à MAXI-AGRO (les autres modules qui
+      // utilisent ce composant partagé — GARDERIE, MAXI LOGISTIQUE — la gardent).
+      notifierAssignateur={false}
     />
   )
 }

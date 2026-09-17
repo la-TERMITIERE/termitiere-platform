@@ -169,7 +169,7 @@ function LigneTache({ it, color, perUser, showHeure, checksDate, peutAgir, estAu
 // peut supprimer ; l'administration garde la main sur les deux dans tous les cas.
 // `assignationObligatoire` impose un agent + une heure pour toute NOUVELLE tâche
 // (agro : plus de tâche « orpheline » créée sans destinataire ni horaire).
-export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches = [], color = '#0d9488', titre = 'Tâches Routinières', description, perUserCategories = [], planningPersonnel = false, assignationObligatoire = false, employesDisponibles = [], icon: Icon = Repeat }) {
+export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches = [], color = '#0d9488', titre = 'Tâches Routinières', description, perUserCategories = [], planningPersonnel = false, assignationObligatoire = false, employesDisponibles = [], icon: Icon = Repeat, notifierAssignateur = true }) {
   const { user, role } = useAuth()
   const itemsCol = `${collectionPrefix}_items`
   const checksCol = `${collectionPrefix}_checks`
@@ -272,7 +272,8 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
     // effectuée (pas à la décoche) — pour qu'il sache que « sa » tâche a été faite
     // sans avoir à revenir vérifier lui-même. N'existe que pour les tâches assignées
     // (assigneParUid absent sur les tâches partagées par catégorie → rien n'est envoyé).
-    if (!estFait && item.assigneParUid && item.assigneParUid !== user.uid) {
+    // Désactivable par module (ex. MAXI-AGRO, cf. notifierAssignateur={false}).
+    if (notifierAssignateur && !estFait && item.assigneParUid && item.assigneParUid !== user.uid) {
       notify({
         type: 'info',
         title: `✅ Tâche effectuée — ${item.assigneNom || user.nom}`,
