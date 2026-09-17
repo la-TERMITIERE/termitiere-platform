@@ -84,8 +84,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // super_admin/admin/directeur au niveau agent (cf. depenseRoleEffectif).
   const role = secteurId ? roleReel : depenseRoleEffectif(roleReel)
   const lectureSeule = isReadOnlyRole(role)
-  // Modifier/supprimer un apport (ajout de budget) : réservé à l'administration
-  // + Info — ici, avec depenseRoleEffectif ci-dessus, ça revient à pau/ge/info.
+  // Un apport (ajout de budget) : MODIFIER est ouvert à tout le monde (secrétaire
+  // comprise) — seuls les rôles en lecture seule (superviseur, partenaire) en sont
+  // exclus. SUPPRIMER reste réservé à l'administration + Info (ici, avec
+  // depenseRoleEffectif ci-dessus, ça revient à pau/ge/info).
+  const peutModifierApport = !lectureSeule
   const peutGererApport = isFullAccessRole(role)
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
@@ -609,10 +612,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 </span>
                 {r.motif && <span className="text-xs text-gray-500">{r.motif}</span>}
                 <span className="ml-auto text-[11px] text-gray-400">{r.auteur || '—'} · {formatDateTime(r.date)}</span>
-                {peutGererApport && (
+                {(peutModifierApport || peutGererApport) && (
                   <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600"><Pencil size={14} /></button>
-                    <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+                    {peutModifierApport && <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600"><Pencil size={14} /></button>}
+                    {peutGererApport && <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
                   </span>
                 )}
               </div>
@@ -1087,10 +1090,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                         <p className="mt-0.5 text-gray-600">{r.motif}</p>
                         <p className="mt-0.5 text-[10px] text-gray-400">par {r.auteur || '—'} · {formatDateTime(r.date)}</p>
                       </div>
-                      {peutGererApport && (
+                      {(peutModifierApport || peutGererApport) && (
                         <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-100 hover:text-violet-600"><Pencil size={13} /></button>
-                          <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600"><Trash2 size={13} /></button>
+                          {peutModifierApport && <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-100 hover:text-violet-600"><Pencil size={13} /></button>}
+                          {peutGererApport && <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600"><Trash2 size={13} /></button>}
                         </span>
                       )}
                     </div>
@@ -1105,7 +1108,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       </Modal>
 
       {/* Détail d'UN apport — cliqué depuis l'historique ci-dessus ou l'onglet
-          « Apports & ajouts ». Modifier/Supprimer réservés à l'administration + Info
+          « Apports & ajouts ». Modifier ouvert à tout le monde (sauf lecture seule,
+          secrétaire comprise) ; Supprimer réservé à l'administration + Info
           (peutGererApport) ; tout le monde peut consulter le détail. */}
       <Modal open={!!apportDetail} onClose={() => setApportDetail(null)} size="sm"
         title={apportEditMode ? "Modifier l'apport" : 'Détail de l\'apport'}
@@ -1123,7 +1127,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               ) : <span />}
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={() => setApportDetail(null)}>Fermer</Button>
-                {peutGererApport && <Button onClick={demarrerEditionApport}><Pencil size={14} /> Modifier</Button>}
+                {peutModifierApport && <Button onClick={demarrerEditionApport}><Pencil size={14} /> Modifier</Button>}
               </div>
             </div>
           )
@@ -1154,7 +1158,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 </div>
               </div>
               {!peutGererApport && (
-                <p className="text-[11px] text-gray-500">Modifier/supprimer un apport est réservé à l'administration et à Info.</p>
+                <p className="text-[11px] text-gray-500">Supprimer un apport est réservé à l'administration et à Info.</p>
               )}
             </div>
           )
