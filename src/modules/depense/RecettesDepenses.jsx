@@ -413,15 +413,22 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     setApportEditMode(false)
   }
 
-  function demarrerEditionApport() {
-    if (!apportDetail) return
-    const { entry, ctx } = apportDetail
+  // Ouvre directement en mode édition — utilisé aussi bien depuis le bouton
+  // Modifier de la modale détail que depuis l'icône crayon posée à même la bande
+  // (liste), sans passer par l'étape « consulter le détail » d'abord.
+  function ouvrirEditionApport(entry, ctx) {
+    setApportDetail({ entry, ctx })
     setApportForm({
       montant: String(ctx.estCaisseCommune ? entry.nouveau - entry.ancien : entry.nouveau),
       motif: entry.motif || '',
       date: new Date(entry.date || Date.now()).toISOString().slice(0, 10)
     })
     setApportEditMode(true)
+  }
+
+  function demarrerEditionApport() {
+    if (!apportDetail) return
+    ouvrirEditionApport(apportDetail.entry, apportDetail.ctx)
   }
 
   async function sauverApportEdit() {
@@ -452,9 +459,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     }
   }
 
-  async function supprimerApportCourant() {
-    if (!apportDetail || apportSaving) return
-    const { entry, ctx } = apportDetail
+  // Paramétrée (entry/ctx explicites) pour être appelable aussi bien depuis la
+  // modale détail que depuis l'icône corbeille posée à même la bande (liste),
+  // sans dépendre de l'état `apportDetail` (pas forcément ouvert dans ce cas).
+  async function supprimerApport(entry, ctx) {
+    if (apportSaving) return
     if (!window.confirm('Supprimer cet apport ?\nLes totaux des apports suivants seront recalculés en conséquence.')) return
     setApportSaving(true)
     try {
@@ -467,10 +476,15 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       })
       await audit('depense', 'BUDGET_APPORT_SUPPRIME', `${ctx.secteurLabel} — apport supprimé`, { secteurId: ctx.secteurId, annee, mois })
       toast.success('Apport supprimé ✓')
-      setApportDetail(null)
+      setApportDetail((d) => (d && d.entry.id === entry.id ? null : d))
     } finally {
       setApportSaving(false)
     }
+  }
+
+  async function supprimerApportCourant() {
+    if (!apportDetail) return
+    await supprimerApport(apportDetail.entry, apportDetail.ctx)
   }
 
   const ouvrirNouvelleDepense = () => setNouvelleDepense({
@@ -583,20 +597,27 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           </div>
         ) : (
           <div className="space-y-2">
-            {apportsTous.map((r) => (
-              <button key={r.id} onClick={() => ouvrirApportDetail(r, {
-                budgetId: r.budgetId, secteurId: r.secteurId, site: r.site, secteurLabel: r.secteurLabel,
-                revisions: r.revisions, estCaisseCommune: r.secteurId === 'divers'
-              })}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-l-4 bg-white/80 px-4 py-2.5 text-left shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-gray-50/60" style={{ borderLeftColor: r.secteurColor }}>
+            {apportsTous.map((r) => {
+              const ctx = { budgetId: r.budgetId, secteurId: r.secteurId, site: r.site, secteurLabel: r.secteurLabel, revisions: r.revisions, estCaisseCommune: r.secteurId === 'divers' }
+              return (
+              <div key={r.id} role="button" tabIndex={0} onClick={() => ouvrirApportDetail(r, ctx)}
+                onKeyDown={(e) => { if (e.key === 'Enter') ouvrirApportDetail(r, ctx) }}
+                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-l-4 bg-white/80 px-4 py-2.5 text-left shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-gray-50/60 cursor-pointer" style={{ borderLeftColor: r.secteurColor }}>
                 <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: r.secteurColor + '1a', color: r.secteurColor }}>{r.secteurLabel}</span>
                 <span className="font-bold text-gray-800">
                   {r.secteurId === 'divers' ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
                 </span>
                 {r.motif && <span className="text-xs text-gray-500">{r.motif}</span>}
                 <span className="ml-auto text-[11px] text-gray-400">{r.auteur || '—'} · {formatDateTime(r.date)}</span>
-              </button>
-            ))}
+                {peutGererApport && (
+                  <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600"><Pencil size={14} /></button>
+                    <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+                  </span>
+                )}
+              </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -1053,19 +1074,28 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-gray-400"><History size={12} /> {estCaisseCommune ? 'Historique des ajouts' : 'Historique des allocations & révisions'}</p>
                 <div className="max-h-52 space-y-2 overflow-y-auto">
-                  {[...revision.revisions].reverse().map((r) => (
-                    <button key={r.id} onClick={() => ouvrirApportDetail(r, {
-                      budgetId: revision.id, secteurId: revision.secteurId, site: revision.site, secteurLabel: revision.secteurLabel,
-                      revisions: revision.revisions, estCaisseCommune
-                    })}
-                      className="w-full rounded-lg bg-gray-50 px-3 py-2 text-left text-xs transition-colors hover:bg-gray-100">
-                      <p className="font-semibold text-gray-700">
-                        {estCaisseCommune ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
-                      </p>
-                      <p className="mt-0.5 text-gray-600">{r.motif}</p>
-                      <p className="mt-0.5 text-[10px] text-gray-400">par {r.auteur || '—'} · {formatDateTime(r.date)}</p>
-                    </button>
-                  ))}
+                  {[...revision.revisions].reverse().map((r) => {
+                    const ctx = { budgetId: revision.id, secteurId: revision.secteurId, site: revision.site, secteurLabel: revision.secteurLabel, revisions: revision.revisions, estCaisseCommune }
+                    return (
+                    <div key={r.id} role="button" tabIndex={0} onClick={() => ouvrirApportDetail(r, ctx)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') ouvrirApportDetail(r, ctx) }}
+                      className="flex w-full cursor-pointer items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-left text-xs transition-colors hover:bg-gray-100">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-700">
+                          {estCaisseCommune ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
+                        </p>
+                        <p className="mt-0.5 text-gray-600">{r.motif}</p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">par {r.auteur || '—'} · {formatDateTime(r.date)}</p>
+                      </div>
+                      {peutGererApport && (
+                        <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-100 hover:text-violet-600"><Pencil size={13} /></button>
+                          <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600"><Trash2 size={13} /></button>
+                        </span>
+                      )}
+                    </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
