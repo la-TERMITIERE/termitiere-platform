@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Trash2, Send, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2 } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -14,7 +14,7 @@ import Modal from '../../shared/ui/Modal'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -84,6 +84,9 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // super_admin/admin/directeur au niveau agent (cf. depenseRoleEffectif).
   const role = secteurId ? roleReel : depenseRoleEffectif(roleReel)
   const lectureSeule = isReadOnlyRole(role)
+  // Modifier/supprimer un apport (ajout de budget) : réservé à l'administration
+  // + Info — ici, avec depenseRoleEffectif ci-dessus, ça revient à pau/ge/info.
+  const peutGererApport = isFullAccessRole(role)
 
   const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
 
@@ -147,6 +150,14 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const [ongletBudget, setOngletBudget] = useState('secteurs')
   const [secteurAjoutChoisi, setSecteurAjoutChoisi] = useState('')
   const [triApportsDesc, setTriApportsDesc] = useState(true) // tri par date de l'onglet « Apports & ajouts » : true = plus récent d'abord
+  // Détail / édition d'un apport précis (un élément de `revisions`) — cf. apportsTous
+  // et l'historique dans la modale d'ajout. `ctx` = { budgetId, secteurId, site,
+  // secteurLabel, revisions, estCaisseCommune } : tout ce qu'il faut pour réécrire
+  // proprement le document `depense_budgets` après édition/suppression.
+  const [apportDetail, setApportDetail] = useState(null) // { entry, ctx }
+  const [apportEditMode, setApportEditMode] = useState(false)
+  const [apportForm, setApportForm] = useState({ montant: '', motif: '', date: '' })
+  const [apportSaving, setApportSaving] = useState(false)
 
   const changerMois = (delta) => {
     let m = mois + delta, a = annee
@@ -205,7 +216,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     const out = []
     parSecteur.forEach((s) => {
       (s.revisionsBudget || []).forEach((r) => {
-        out.push({ ...r, secteurId: s.secteurId, secteurLabel: s.label, secteurColor: s.color })
+        out.push({ ...r, secteurId: s.secteurId, secteurLabel: s.label, secteurColor: s.color, site: s.site, budgetId: s.budgetId, revisions: s.revisionsBudget })
       })
     })
     return out.sort((a, b) => triApportsDesc ? (b.date || 0) - (a.date || 0) : (a.date || 0) - (b.date || 0))
@@ -378,6 +389,104 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     }
   }
 
+  // ── Détail / édition / suppression d'UN apport ──────────────────────────────
+  // Reconstruit la chaîne ancien/nouveau de `revisions` après édition ou
+  // suppression d'une entrée au milieu du tableau (ordre = ordre d'ajout, pas
+  // forcément l'ordre des dates puisqu'un apport peut être antidaté).
+  // - Caisse commune (cumulatif) : le montant AJOUTÉ (nouveau − ancien) de chaque
+  //   entrée est préservé, seuls les totaux ancien/nouveau sont recalculés en
+  //   cascade.
+  // - Autres secteurs (remplacement) : c'est le montant CIBLE (nouveau) de chaque
+  //   entrée qui est préservé, seul `ancien` est recalé sur le total précédent.
+  function recomputerChaineApports(revisions, estCaisseCommune) {
+    let running = 0
+    return revisions.map((r) => {
+      const ancien = running
+      const nouveau = estCaisseCommune ? ancien + (r.nouveau - r.ancien) : r.nouveau
+      running = nouveau
+      return { ...r, ancien, nouveau }
+    })
+  }
+
+  function ouvrirApportDetail(entry, ctx) {
+    setApportDetail({ entry, ctx })
+    setApportEditMode(false)
+  }
+
+  // Ouvre directement en mode édition — utilisé aussi bien depuis le bouton
+  // Modifier de la modale détail que depuis l'icône crayon posée à même la bande
+  // (liste), sans passer par l'étape « consulter le détail » d'abord.
+  function ouvrirEditionApport(entry, ctx) {
+    setApportDetail({ entry, ctx })
+    setApportForm({
+      montant: String(ctx.estCaisseCommune ? entry.nouveau - entry.ancien : entry.nouveau),
+      motif: entry.motif || '',
+      date: new Date(entry.date || Date.now()).toISOString().slice(0, 10)
+    })
+    setApportEditMode(true)
+  }
+
+  function demarrerEditionApport() {
+    if (!apportDetail) return
+    ouvrirEditionApport(apportDetail.entry, apportDetail.ctx)
+  }
+
+  async function sauverApportEdit() {
+    if (!apportDetail || apportSaving) return
+    const { entry, ctx } = apportDetail
+    const montant = Number(apportForm.montant)
+    if (apportForm.montant === '' || Number.isNaN(montant) || montant < 0) return toast.error('Montant requis')
+    if (!apportForm.date) return toast.error('Date requise')
+    setApportSaving(true)
+    try {
+      const heure = new Date(entry.date || Date.now())
+      const dateEntry = new Date(`${apportForm.date}T00:00:00`)
+      dateEntry.setHours(heure.getHours(), heure.getMinutes(), heure.getSeconds())
+      const brut = ctx.revisions.map((r) => r.id === entry.id
+        ? { ...r, nouveau: ctx.estCaisseCommune ? r.ancien + montant : montant, motif: apportForm.motif.trim(), date: dateEntry.getTime() }
+        : r)
+      const revisions = recomputerChaineApports(brut, ctx.estCaisseCommune)
+      const dernier = revisions[revisions.length - 1]
+      await setItem('depense_budgets', ctx.budgetId, {
+        id: ctx.budgetId, secteurId: ctx.secteurId, site: ctx.site || null, annee, mois,
+        montant: dernier ? dernier.nouveau : 0, revisions, updatedAt: Date.now()
+      })
+      await audit('depense', 'BUDGET_APPORT_MODIFIE', `${ctx.secteurLabel} — apport modifié (${fmt(montant)} FCFA)`, { secteurId: ctx.secteurId, annee, mois })
+      toast.success('Apport modifié ✓')
+      setApportDetail(null)
+    } finally {
+      setApportSaving(false)
+    }
+  }
+
+  // Paramétrée (entry/ctx explicites) pour être appelable aussi bien depuis la
+  // modale détail que depuis l'icône corbeille posée à même la bande (liste),
+  // sans dépendre de l'état `apportDetail` (pas forcément ouvert dans ce cas).
+  async function supprimerApport(entry, ctx) {
+    if (apportSaving) return
+    if (!window.confirm('Supprimer cet apport ?\nLes totaux des apports suivants seront recalculés en conséquence.')) return
+    setApportSaving(true)
+    try {
+      const brut = ctx.revisions.filter((r) => r.id !== entry.id)
+      const revisions = recomputerChaineApports(brut, ctx.estCaisseCommune)
+      const dernier = revisions[revisions.length - 1]
+      await setItem('depense_budgets', ctx.budgetId, {
+        id: ctx.budgetId, secteurId: ctx.secteurId, site: ctx.site || null, annee, mois,
+        montant: dernier ? dernier.nouveau : 0, revisions, updatedAt: Date.now()
+      })
+      await audit('depense', 'BUDGET_APPORT_SUPPRIME', `${ctx.secteurLabel} — apport supprimé`, { secteurId: ctx.secteurId, annee, mois })
+      toast.success('Apport supprimé ✓')
+      setApportDetail((d) => (d && d.entry.id === entry.id ? null : d))
+    } finally {
+      setApportSaving(false)
+    }
+  }
+
+  async function supprimerApportCourant() {
+    if (!apportDetail) return
+    await supprimerApport(apportDetail.entry, apportDetail.ctx)
+  }
+
   const ouvrirNouvelleDepense = () => setNouvelleDepense({
     categorie: '', montant: '', date: todayStr(), description: '',
     beneficiaireNom: '', beneficiaireTelephone: '',
@@ -488,16 +597,27 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           </div>
         ) : (
           <div className="space-y-2">
-            {apportsTous.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-l-4 bg-white/80 px-4 py-2.5 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150" style={{ borderLeftColor: r.secteurColor }}>
+            {apportsTous.map((r) => {
+              const ctx = { budgetId: r.budgetId, secteurId: r.secteurId, site: r.site, secteurLabel: r.secteurLabel, revisions: r.revisions, estCaisseCommune: r.secteurId === 'divers' }
+              return (
+              <div key={r.id} role="button" tabIndex={0} onClick={() => ouvrirApportDetail(r, ctx)}
+                onKeyDown={(e) => { if (e.key === 'Enter') ouvrirApportDetail(r, ctx) }}
+                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-l-4 bg-white/80 px-4 py-2.5 text-left shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-gray-50/60 cursor-pointer" style={{ borderLeftColor: r.secteurColor }}>
                 <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: r.secteurColor + '1a', color: r.secteurColor }}>{r.secteurLabel}</span>
                 <span className="font-bold text-gray-800">
                   {r.secteurId === 'divers' ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
                 </span>
                 {r.motif && <span className="text-xs text-gray-500">{r.motif}</span>}
                 <span className="ml-auto text-[11px] text-gray-400">{r.auteur || '—'} · {formatDateTime(r.date)}</span>
+                {peutGererApport && (
+                  <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600"><Pencil size={14} /></button>
+                    <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+                  </span>
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -954,19 +1074,112 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-gray-400"><History size={12} /> {estCaisseCommune ? 'Historique des ajouts' : 'Historique des allocations & révisions'}</p>
                 <div className="max-h-52 space-y-2 overflow-y-auto">
-                  {[...revision.revisions].reverse().map((r) => (
-                    <div key={r.id} className="rounded-lg bg-gray-50 px-3 py-2 text-xs">
-                      <p className="font-semibold text-gray-700">
-                        {estCaisseCommune ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
-                      </p>
-                      <p className="mt-0.5 text-gray-600">{r.motif}</p>
-                      <p className="mt-0.5 text-[10px] text-gray-400">par {r.auteur || '—'} · {formatDateTime(r.date)}</p>
+                  {[...revision.revisions].reverse().map((r) => {
+                    const ctx = { budgetId: revision.id, secteurId: revision.secteurId, site: revision.site, secteurLabel: revision.secteurLabel, revisions: revision.revisions, estCaisseCommune }
+                    return (
+                    <div key={r.id} role="button" tabIndex={0} onClick={() => ouvrirApportDetail(r, ctx)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') ouvrirApportDetail(r, ctx) }}
+                      className="flex w-full cursor-pointer items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-left text-xs transition-colors hover:bg-gray-100">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-700">
+                          {estCaisseCommune ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
+                        </p>
+                        <p className="mt-0.5 text-gray-600">{r.motif}</p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">par {r.auteur || '—'} · {formatDateTime(r.date)}</p>
+                      </div>
+                      {peutGererApport && (
+                        <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-100 hover:text-violet-600"><Pencil size={13} /></button>
+                          <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600"><Trash2 size={13} /></button>
+                        </span>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
           </div>
+          )
+        })()}
+      </Modal>
+
+      {/* Détail d'UN apport — cliqué depuis l'historique ci-dessus ou l'onglet
+          « Apports & ajouts ». Modifier/Supprimer réservés à l'administration + Info
+          (peutGererApport) ; tout le monde peut consulter le détail. */}
+      <Modal open={!!apportDetail} onClose={() => setApportDetail(null)} size="sm"
+        title={apportEditMode ? "Modifier l'apport" : 'Détail de l\'apport'}
+        panelClassName={theme.gradient}
+        footer={apportDetail && (
+          apportEditMode ? (
+            <>
+              <Button variant="ghost" onClick={() => setApportEditMode(false)} disabled={apportSaving}>Annuler</Button>
+              <Button onClick={sauverApportEdit} loading={apportSaving}>Enregistrer</Button>
+            </>
+          ) : (
+            <div className="flex w-full items-center justify-between gap-2">
+              {peutGererApport ? (
+                <Button size="sm" variant="danger" onClick={supprimerApportCourant} loading={apportSaving}><Trash2 size={14} /> Supprimer</Button>
+              ) : <span />}
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setApportDetail(null)}>Fermer</Button>
+                {peutGererApport && <Button onClick={demarrerEditionApport}><Pencil size={14} /> Modifier</Button>}
+              </div>
+            </div>
+          )
+        )}>
+        {apportDetail && !apportEditMode && (() => {
+          const { entry, ctx } = apportDetail
+          return (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase text-gray-400">{ctx.secteurLabel}</p>
+                <p className="text-lg font-extrabold text-gray-800">
+                  {ctx.estCaisseCommune ? `+${fmt(entry.nouveau - entry.ancien)} FCFA` : `${fmt(entry.ancien)} → ${fmt(entry.nouveau)} FCFA`}
+                </p>
+                {ctx.estCaisseCommune && <p className="text-xs text-gray-500">Nouveau total : {fmt(entry.nouveau)} FCFA (avant : {fmt(entry.ancien)} FCFA)</p>}
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase text-gray-400">Motif</p>
+                <p className="font-medium text-gray-700">{entry.motif || '—'}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-white p-3 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase text-gray-400">Date</p>
+                  <p className="font-medium text-gray-700">{formatDateTime(entry.date)}</p>
+                </div>
+                <div className="rounded-xl bg-white p-3 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase text-gray-400">Auteur</p>
+                  <p className="font-medium text-gray-700">{entry.auteur || '—'}</p>
+                </div>
+              </div>
+              {!peutGererApport && (
+                <p className="text-[11px] text-gray-500">Modifier/supprimer un apport est réservé à l'administration et à Info.</p>
+              )}
+            </div>
+          )
+        })()}
+        {apportDetail && apportEditMode && (() => {
+          const { ctx } = apportDetail
+          return (
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">{ctx.estCaisseCommune ? 'Montant ajouté (FCFA)' : 'Nouveau montant (FCFA)'}</label>
+                <input type="number" min="0" value={apportForm.montant} onChange={(e) => setApportForm((f) => ({ ...f, montant: e.target.value }))} autoFocus
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+                <input type="date" value={apportForm.date} onChange={(e) => setApportForm((f) => ({ ...f, date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Motif <span className="font-normal normal-case text-gray-400">(optionnel)</span></label>
+                <input value={apportForm.motif} onChange={(e) => setApportForm((f) => ({ ...f, motif: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+              <p className="text-[11px] text-gray-400">Les totaux des apports suivants seront recalculés automatiquement.</p>
+            </div>
           )
         })()}
       </Modal>

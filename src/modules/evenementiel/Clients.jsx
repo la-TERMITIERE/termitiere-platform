@@ -1,6 +1,6 @@
 // Clients briqueterie.
 import { useState } from 'react'
-import { Plus, Trash2, Users } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -61,9 +61,9 @@ export default function Clients() {
             { key: 'adresse', label: 'Adresse' },
             { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 hover:bg-gray-100">✏️</button>
+                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
                 {peutSupprimer && (
-                  <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeItem('evenementiel_clients', r.id) }} className="text-red-500"><Trash2 size={16} /></button>
+                  <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeItem('evenementiel_clients', r.id) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                 )}
               </div>
             ) }
