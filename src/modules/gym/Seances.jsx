@@ -115,6 +115,15 @@ export default function Seances() {
         await updateItem('gym_seances', d.id, {
           date: d.date, clientNom, categorie: d.categorie, montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom
         })
+        // La facture déjà générée à la création garde sinon l'ancien montant — le
+        // Dashboard/Facturation (sommes des `gym_factures`) resterait alors désynchronisé.
+        const factureLiee = factures.find((f) => f.sourceType === 'seance' && f.sourceId === d.id)
+        if (factureLiee) {
+          await updateItem('gym_factures', factureLiee.id, {
+            date: d.date, clientNom, categorie: d.categorie,
+            description: `Séance ${categorieLabel(d.categorie)}`, montant: Number(d.montant)
+          })
+        }
         await audit('gym', 'SEANCE_MODIFIEE', `${clientNom} — ${categorieLabel(d.categorie)} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Séance modifiée ✓')
         setModal(null)
