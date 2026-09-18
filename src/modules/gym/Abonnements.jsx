@@ -179,6 +179,15 @@ export default function Abonnements() {
           dureeJours: d.dureeJours ? Number(d.dureeJours) : null,
           montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom
         })
+        // La facture déjà générée à la création garde sinon l'ancien montant — le
+        // Dashboard/Facturation (sommes des `gym_factures`) resterait alors désynchronisé.
+        const factureLiee = factures.find((f) => f.sourceType === 'abonnement' && f.sourceId === d.id)
+        if (factureLiee) {
+          await updateItem('gym_factures', factureLiee.id, {
+            date: d.date, clientNom, categorie: d.categorie,
+            description: `Abonnement ${categorieLabel(d.categorie)} — jusqu'au ${dateFin}`, montant: Number(d.montant)
+          })
+        }
         await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Abonnement modifié ✓')
         setModal(null)
