@@ -135,7 +135,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/98 shadow-[0_-6px_18px_-12px_rgba(26,26,26,0.18)] md:hidden dark:border-white/10 dark:bg-neutral-900/98"
+      className="fixed inset-x-0 bottom-0 z-40 rounded-t-3xl border border-b-0 border-gray-200 bg-white shadow-[0_-6px_18px_-12px_rgba(26,26,26,0.18)] md:hidden dark:border-white/10 dark:bg-neutral-900"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="relative">
