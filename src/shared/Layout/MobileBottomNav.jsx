@@ -135,17 +135,29 @@ export default function MobileBottomNav({ onOpenMenu }) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 rounded-t-3xl border border-b-0 border-gray-200 bg-white shadow-[0_-6px_18px_-12px_rgba(26,26,26,0.18)] md:hidden dark:border-white/10 dark:bg-neutral-900"
+      className="fixed inset-x-3 bottom-3 z-40 overflow-hidden rounded-[28px] border border-white/70 bg-white/75 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.35),inset_0_1px_0_0_rgba(255,255,255,0.6)] backdrop-blur-xl backdrop-saturate-150 md:hidden dark:border-white/10 dark:bg-neutral-900/65"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
+      {/* Dégradé d'ambiance — léger, concentré vers la fin (le bord droit) de la
+          barre, teinté de la couleur du module en cours (celle aussi reprise par la
+          pastille active) : la barre « prend la couleur » du module ouvert sans
+          jamais nuire à la lisibilité des icônes/labels. */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: `linear-gradient(90deg, transparent 45%, ${teinterHex(accentColor, 0.16)} 100%)` }} />
       <div className="relative">
-        <div ref={scrollRef} className="relative flex items-center gap-0.5 overflow-x-auto px-2 py-1.5 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-          {/* Pastille active — plate, sans flou ni bordure lumineuse, teintée de la
-              couleur du module en cours, glisse derrière l'onglet sélectionné. */}
+        {/* `justify-center` tant que tout tient à l'écran (le groupe d'icônes reste
+            centré dans la barre plutôt que collé à gauche) ; dès que ça déborde
+            (cf. `debordement`), on repasse au flux normal pour que le défilement
+            démarre bien depuis le premier onglet. */}
+        <div ref={scrollRef} className={`relative flex items-center gap-0.5 overflow-x-auto px-2 py-1.5 [&::-webkit-scrollbar]:hidden ${debordement ? '' : 'justify-center'}`} style={{ scrollbarWidth: 'none' }}>
+          {/* Pastille active — bien visible (teinte + bordure pleine dans la couleur
+              du module), glisse en douceur derrière l'onglet sélectionné. */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-1.5 rounded-xl transition-all duration-300 ease-out"
-            style={{ left: pill.left, width: pill.width, opacity: pill.visible ? 1 : 0, background: teinterHex(accentColor, 0.12) }}
+            className="pointer-events-none absolute inset-y-1.5 rounded-2xl border transition-all duration-300 ease-out"
+            style={{
+              left: pill.left, width: pill.width, opacity: pill.visible ? 1 : 0,
+              background: teinterHex(accentColor, 0.14), borderColor: teinterHex(accentColor, 0.35)
+            }}
           />
           {items.map((item) => (
             <NavLink
@@ -154,8 +166,8 @@ export default function MobileBottomNav({ onOpenMenu }) {
               end={item.end}
               ref={(el) => { if (el) itemRefs.current.set(item.to, el); else itemRefs.current.delete(item.to) }}
               className={({ isActive }) =>
-                `relative z-10 flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-semibold transition-all active:scale-90 ${
-                  isActive ? '' : 'text-gray-400 hover:text-gray-600 dark:text-white/45 dark:hover:text-white/75'
+                `relative z-10 flex shrink-0 flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[10px] font-semibold transition-all active:scale-90 ${
+                  isActive ? 'font-bold' : 'text-gray-900 hover:text-black dark:text-white/80 dark:hover:text-white'
                 }`
               }
               style={({ isActive }) => (isActive ? { color: accentColor } : undefined)}
@@ -169,7 +181,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
           {showMenuButton && (
             <button
               onClick={onOpenMenu}
-              className="relative z-10 flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-semibold text-gray-400 transition-all active:scale-90 hover:text-gray-600 dark:text-white/45 dark:hover:text-white/75"
+              className="relative z-10 flex shrink-0 flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[10px] font-semibold text-gray-900 transition-all active:scale-90 hover:text-black dark:text-white/80 dark:hover:text-white"
             >
               <span className="flex h-7 w-7 items-center justify-center">
                 <Grid2x2 size={18} />
@@ -179,9 +191,11 @@ export default function MobileBottomNav({ onOpenMenu }) {
           )}
         </div>
         {/* Dégradé de fondu — signale qu'il reste des onglets hors champ à droite
-            (cf. commentaire ESSENTIELS) au lieu de les couper en silence. */}
+            (cf. commentaire ESSENTIELS) au lieu de les couper en silence. Teinte
+            claire assortie au verre de la barre (pas de blanc plein, qui casserait
+            l'effet glassmorphism). */}
         {debordement && (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-neutral-900" />
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/80 to-transparent dark:from-neutral-900/80" />
         )}
       </div>
     </nav>

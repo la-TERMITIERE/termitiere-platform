@@ -34,16 +34,16 @@ const SOURCE_INFO = {
 }
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
-// Claymorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
-// du flux, financement) : panneau « pâte à modeler » chaleureux (ton E-DÉPENSES,
-// #B45309), champs en relief doux avec ombre portée + reflet clair, sans bordure
-// dure. En PC, les filtres restent sur une même ligne (flex-wrap) ; ils passent
-// à la ligne un par un dès que la largeur manque (mobile/tablette étroite).
-// `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas .input-base,
-// pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
-const CLAY_PANEL = 'relative flex flex-wrap items-end gap-3 rounded-[28px] bg-gradient-to-br from-amber-50 via-orange-50/70 to-white p-4 shadow-[0_18px_38px_-18px_rgba(180,83,9,0.32),0_6px_16px_-8px_rgba(180,83,9,0.16),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-white/70 dark:from-[#241d14] dark:via-[#1f1a14] dark:to-[#1d2226] dark:shadow-[0_18px_38px_-18px_rgba(0,0,0,0.55)] dark:ring-white/10'
+// Glassmorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
+// du flux, financement) : panneau en verre dépoli neutre (plus de fond
+// ambre/orange ni d'ombres « pâte à modeler ») — flou + translucidité, bordure
+// claire fine. En PC, les filtres restent sur une même ligne (flex-wrap) ; ils
+// passent à la ligne un par un dès que la largeur manque (mobile/tablette
+// étroite). `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas
+// .input-base, pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
+const CLAY_PANEL = 'relative flex flex-wrap items-end gap-3 rounded-[28px] border border-white/60 bg-white/55 p-4 shadow-[0_18px_38px_-18px_rgba(26,26,26,0.28),inset_0_1px_0_0_rgba(255,255,255,0.6)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-white/[0.04]'
 const CLAY_LABEL = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-amber-800/70 dark:text-amber-200/60'
-const CLAY_FIELD = 'w-full appearance-none rounded-2xl border-0 bg-gradient-to-br from-white to-amber-50/90 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[5px_5px_12px_-4px_rgba(180,83,9,0.22),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:-translate-y-0.5 focus:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:ring-2 focus:ring-amber-400/60 dark:from-[#2a2118] dark:to-[#221b12] dark:text-gray-100 dark:shadow-[5px_5px_12px_-4px_rgba(0,0,0,0.5),-4px_-4px_10px_-6px_rgba(255,255,255,0.04)]'
+const CLAY_FIELD = 'w-full appearance-none rounded-2xl border border-white/60 bg-white/70 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[0_2px_10px_-4px_rgba(26,26,26,0.12)] outline-none backdrop-blur-md transition-all duration-200 hover:bg-white/85 focus:bg-white/90 focus:ring-2 focus:ring-amber-400/50 dark:border-white/10 dark:bg-white/5 dark:text-gray-100 dark:hover:bg-white/10'
 
 // Pastille Oui/Non glassmorphism (flou + fond translucide au repos, dégradé plein +
 // halo lumineux une fois active) — réutilisée pour tous les couples Oui/Non du
