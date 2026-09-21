@@ -1,7 +1,7 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -13,13 +13,13 @@ import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { setItem, removeItem } from '../../core/db'
+import { setItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, formatDateShort, formatMoney } from '../../utils/formatters'
 import { glassModalProps } from '../../utils/color'
-import { lireFichier, ouvrirPiece, formatTaille } from '../../utils/fichiers'
+import { ouvrirPiece } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT } from './data'
 import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
@@ -34,26 +34,49 @@ const SOURCE_INFO = {
 }
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
-// Claymorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
-// du flux, financement) : panneau « pâte à modeler » chaleureux (ton E-DÉPENSES,
-// #B45309), champs en relief doux avec ombre portée + reflet clair, sans bordure
-// dure. `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas .input-base,
-// pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
-const CLAY_PANEL = 'relative flex flex-wrap items-end gap-3 rounded-[28px] bg-gradient-to-br from-amber-50 via-orange-50/70 to-white p-4 shadow-[0_18px_38px_-18px_rgba(180,83,9,0.32),0_6px_16px_-8px_rgba(180,83,9,0.16),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-white/70 dark:from-[#241d14] dark:via-[#1f1a14] dark:to-[#1d2226] dark:shadow-[0_18px_38px_-18px_rgba(0,0,0,0.55)] dark:ring-white/10'
+// Glassmorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
+// du flux, financement) : panneau en verre dépoli neutre (plus de fond
+// ambre/orange ni d'ombres « pâte à modeler ») — flou + translucidité, bordure
+// claire fine. En PC, les filtres restent sur une même ligne (flex-wrap) ; ils
+// passent à la ligne un par un dès que la largeur manque (mobile/tablette
+// étroite). `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas
+// .input-base, pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
+const CLAY_PANEL = 'relative flex flex-wrap items-end gap-3 rounded-[28px] border border-white/60 bg-white/55 p-4 shadow-[0_18px_38px_-18px_rgba(26,26,26,0.28),inset_0_1px_0_0_rgba(255,255,255,0.6)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-white/[0.04]'
 const CLAY_LABEL = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-amber-800/70 dark:text-amber-200/60'
-const CLAY_FIELD = 'w-full appearance-none rounded-2xl border-0 bg-gradient-to-br from-white to-amber-50/90 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[5px_5px_12px_-4px_rgba(180,83,9,0.22),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:-translate-y-0.5 focus:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:ring-2 focus:ring-amber-400/60 dark:from-[#2a2118] dark:to-[#221b12] dark:text-gray-100 dark:shadow-[5px_5px_12px_-4px_rgba(0,0,0,0.5),-4px_-4px_10px_-6px_rgba(255,255,255,0.04)]'
+const CLAY_FIELD = 'w-full appearance-none rounded-2xl border border-white/60 bg-white/70 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[0_2px_10px_-4px_rgba(26,26,26,0.12)] outline-none backdrop-blur-md transition-all duration-200 hover:bg-white/85 focus:bg-white/90 focus:ring-2 focus:ring-amber-400/50 dark:border-white/10 dark:bg-white/5 dark:text-gray-100 dark:hover:bg-white/10'
+
+// Pastille Oui/Non glassmorphism (flou + fond translucide au repos, dégradé plein +
+// halo lumineux une fois active) — réutilisée pour tous les couples Oui/Non du
+// formulaire. `active` au sens strict (=== true / === false) : cliquer sur la
+// pastille déjà active l'annule (l'appelant repasse alors la valeur à `null`,
+// aucune des deux pastilles n'est active) plutôt que de forcer un choix.
+function pillToggleClass(active, tone) {
+  const plein = tone === 'green'
+    ? 'bg-gradient-to-br from-green-400 to-emerald-600 shadow-[0_6px_20px_-4px_rgba(34,197,94,0.65),inset_0_1px_0_0_rgba(255,255,255,0.5)]'
+    : 'bg-gradient-to-br from-red-400 to-rose-600 shadow-[0_6px_20px_-4px_rgba(239,68,68,0.65),inset_0_1px_0_0_rgba(255,255,255,0.5)]'
+  const repos = tone === 'green'
+    ? 'hover:border-green-300/70 hover:text-green-700 hover:bg-green-50/50'
+    : 'hover:border-red-300/70 hover:text-red-700 hover:bg-red-50/50'
+  return `inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold backdrop-blur-md transition-all duration-200 ${active
+    ? `scale-105 text-white ${plein}`
+    : `border border-white/60 bg-white/30 text-gray-500 hover:scale-105 hover:shadow-sm ${repos}`}`
+}
 
 const empty = () => ({
   // Par défaut : Siège (Caisse commune) — la dépense « ordinaire », sans secteur
   // particulier. L'utilisateur bascule sur « Oui » s'il veut désigner un secteur.
   secteurId: 'divers', site: '', categorie: '', montant: '', date: todayStr(),
-  description: '', piece: null, imprevue: false, modePaiement: 'espece',
+  description: '', imprevue: false, modePaiement: 'espece',
   natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '',
   // « Cette dépense concerne-t-elle un secteur ? » (n'a de sens que pour une
   // dépense Caisse commune) — Non par défaut. concerneAutreSecteur ne pilote que
   // l'affichage du sélecteur ; secteursConcernes (0 ou 1 élément) est la seule
   // donnée réellement utilisée au tri.
   concerneAutreSecteur: false, secteursConcernes: [],
+  // « Justificatif requis (Reçus) ? » — Oui par défaut : l'auteur de la dépense doit
+  // en principe rapporter un reçu. `justificatifRecu` se confirme ensuite depuis la
+  // liste (bande) une fois la dépense décaissée — cf. bouton dédié + alerte Dashboard.
+  justificatifRequis: true, justificatifRecu: false,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
 
@@ -167,7 +190,6 @@ export default function Depenses() {
   const [motifSuppression, setMotifSuppression] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [uploading, setUploading] = useState(false)
 
   // La fenêtre de détail est indexée par id (pas par snapshot) : ainsi, si un chef de
   // projet modifie la dépense dans E-G.Pro pendant qu'elle est ouverte ici, le détail
@@ -319,19 +341,15 @@ export default function Depenses() {
   const retirerLigne = (i) => setLot((rows) => (rows.length > 1 ? rows.filter((_, idx) => idx !== i) : rows))
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
-  async function handlePieceChange(e) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setUploading(true)
-    try {
-      const piece = await lireFichier(file)
-      set('piece', piece)
-    } catch (err) {
-      toast.error(err.message || 'Fichier illisible')
-    } finally {
-      setUploading(false)
-    }
+  // Confirme que le justificatif (reçu) demandé à la saisie a bien été rapporté par
+  // le bénéficiaire — fait taire l'alerte correspondante sur le Dashboard (secrétaire,
+  // info, assistant PAU). Mise à jour ciblée (updateItem), pas de remplacement complet.
+  async function confirmerJustificatif(d) {
+    await updateItem('depense_depenses', d.id, {
+      justificatifRecu: true, justificatifRecuLe: Date.now(), justificatifRecuPar: user?.nom || user?.login || '—'
+    })
+    await audit('depense', 'JUSTIFICATIF_CONFIRME', `${d.beneficiaireNom || '—'} — ${formatMoney(Number(d.montant) || 0)}`)
+    toast.success('Justificatif confirmé reçu ✓')
   }
 
   // Raison pour laquelle une dépense (E-DÉPENSES uniquement — E-G.Pro a son propre
@@ -586,6 +604,9 @@ export default function Depenses() {
                 // SUPPRESSION, elle, reste réservée à l'admin (action plus irréversible).
                 const modifiable = !importe && (isAdmin || role === 'secretaire' || d.statut === 'en_attente' || !d.statut)
                 const supprimable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
+                // Justificatif à confirmer : dépense décaissée (l'argent est réellement
+                // sorti), justificatif marqué requis à la saisie, pas encore confirmé reçu.
+                const justificatifAConfirmer = d.justificatifRequis && !d.justificatifRecu && (d.statut === 'decaissee' || !d.statut)
                 const cell = 'bg-white py-3 align-middle transition-colors group-hover:bg-amber-50/40'
                 return (
                   <tr key={d.id} onClick={() => setDetailId(d.id)}
@@ -649,6 +670,17 @@ export default function Depenses() {
                     {/* Statut + justificatif */}
                     <td className={`${cell} px-4 text-center`}>
                       <Badge tone={statut.tone}>{statut.label}</Badge>
+                      {d.justificatifRequis && (
+                        justificatifAConfirmer ? (
+                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600">
+                            <AlertTriangle size={11} /> justif. attendu
+                          </span>
+                        ) : d.justificatifRecu ? (
+                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-600">
+                            <FileCheck2 size={11} /> justif. reçu
+                          </span>
+                        ) : null
+                      )}
                       {d.piece && (
                         <button onClick={(e) => { e.stopPropagation(); ouvrirPiece(d.piece) }} title="Voir le justificatif"
                           className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
@@ -666,6 +698,10 @@ export default function Depenses() {
                         <button onClick={() => setDetailId(d.id)} title="Voir les détails" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Eye size={15} /></button>
                         {modifiable && (
                           <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><FilePen size={15} /></button>
+                        )}
+                        {justificatifAConfirmer && !lectureSeule && (
+                          <button onClick={() => confirmerJustificatif(d)} title="Confirmer que le justificatif (reçu) a été rapporté"
+                            className="rounded-lg p-1.5 text-green-600 hover:bg-green-50"><FileCheck2 size={15} /></button>
                         )}
                         {supprimable && (
                           <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
@@ -755,16 +791,21 @@ export default function Depenses() {
                 <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
                   <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur ? <span className="font-normal text-gray-400">(optionnel)</span></p>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => set('concerneAutreSecteur', true)}
-                      className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${modal.data.concerneAutreSecteur
-                        ? 'scale-105 bg-green-500 text-white shadow-[0_4px_14px_-2px_rgba(34,197,94,0.6)]'
-                        : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-green-300 hover:text-green-600 hover:shadow-sm'}`}>
+                    <button type="button"
+                      onClick={() => {
+                        const suivant = modal.data.concerneAutreSecteur === true ? null : true
+                        set('concerneAutreSecteur', suivant)
+                        if (suivant !== true) set('secteursConcernes', [])
+                      }}
+                      className={pillToggleClass(modal.data.concerneAutreSecteur === true, 'green')}>
                       ✅ Oui
                     </button>
-                    <button type="button" onClick={() => { set('concerneAutreSecteur', false); set('secteursConcernes', []) }}
-                      className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${!modal.data.concerneAutreSecteur
-                        ? 'scale-105 bg-red-500 text-white shadow-[0_4px_14px_-2px_rgba(239,68,68,0.6)]'
-                        : 'border border-gray-200 bg-white text-gray-400 hover:scale-105 hover:border-red-300 hover:text-red-600 hover:shadow-sm'}`}>
+                    <button type="button"
+                      onClick={() => {
+                        set('concerneAutreSecteur', modal.data.concerneAutreSecteur === false ? null : false)
+                        set('secteursConcernes', [])
+                      }}
+                      className={pillToggleClass(modal.data.concerneAutreSecteur === false, 'red')}>
                       ❌ Non
                     </button>
                   </div>
@@ -880,19 +921,27 @@ export default function Depenses() {
               )}
             </div>
 
-            {/* Justificatif */}
+            {/* Justificatif requis ? — Oui/Non, pas d'upload : le justificatif (reçu) reste
+                physique, rapporté par le bénéficiaire. Sa réception se confirme APRÈS coup,
+                depuis la liste (bande) une fois la dépense décaissée. Tant qu'il est marqué
+                requis et non confirmé reçu, une alerte reste active sur le Dashboard
+                (secrétaire, info, assistant PAU). */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">📎 Justificatif <span className="font-medium normal-case text-amber-500">(photo, PDF, Excel…, optionnel)</span></p>
-              {modal.data.piece ? (
-                <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
-                  <span className="flex items-center gap-2 text-gray-700"><Paperclip size={14} /> {modal.data.piece.nom} <span className="text-xs text-gray-400">({formatTaille(modal.data.piece.taille)})</span></span>
-                  <button onClick={() => set('piece', null)} className="text-xs text-red-500 hover:underline">Retirer</button>
-                </div>
-              ) : (
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-3 text-sm text-gray-500 hover:bg-amber-50">
-                  <Paperclip size={16} /> {uploading ? 'Chargement…' : 'Ajouter un justificatif'}
-                  <input type="file" accept="image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={handlePieceChange} disabled={uploading} />
-                </label>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🧾 Un reçu sera-t-il rapporté pour cette dépense ?</p>
+              <div className="flex items-center gap-2">
+                <button type="button"
+                  onClick={() => set('justificatifRequis', modal.data.justificatifRequis === true ? null : true)}
+                  className={pillToggleClass(modal.data.justificatifRequis === true, 'green')}>
+                  ✅ Oui
+                </button>
+                <button type="button"
+                  onClick={() => set('justificatifRequis', modal.data.justificatifRequis === false ? null : false)}
+                  className={pillToggleClass(modal.data.justificatifRequis === false, 'red')}>
+                  ❌ Non
+                </button>
+              </div>
+              {modal.data.justificatifRequis === true && (
+                <p className="mt-2 text-xs text-gray-500">Le bénéficiaire devra rapporter un reçu — sinon une alerte reste active sur le Dashboard jusqu'à confirmation.</p>
               )}
             </div>
           </div>
