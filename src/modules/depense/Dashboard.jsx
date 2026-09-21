@@ -29,9 +29,10 @@ function visibiliteAlerte(alerteId, fermetures) {
 }
 
 const TYPE_ALERTE = {
-  budget_depasse:   { color: 'text-red-600',   bg: 'bg-red-50',   iconBg: 'bg-red-100',   icon: AlertTriangle, label: 'Budget dépassé'  },
-  budget_attention: { color: 'text-amber-600', bg: 'bg-amber-50', iconBg: 'bg-amber-100', icon: AlertTriangle, label: 'Budget en alerte' },
-  demande:          { color: 'text-amber-600', bg: 'bg-amber-50', iconBg: 'bg-amber-100', icon: Stamp,         label: 'Décaissement à traiter' }
+  budget_depasse:       { color: 'text-red-600',    bg: 'bg-red-50',    iconBg: 'bg-red-100',    icon: AlertTriangle, label: 'Budget dépassé'  },
+  budget_attention:     { color: 'text-amber-600',  bg: 'bg-amber-50',  iconBg: 'bg-amber-100',  icon: AlertTriangle, label: 'Budget en alerte' },
+  demande:              { color: 'text-amber-600',  bg: 'bg-amber-50',  iconBg: 'bg-amber-100',  icon: Stamp,         label: 'Décaissement à traiter' },
+  justificatif_manquant: { color: 'text-orange-600', bg: 'bg-orange-50', iconBg: 'bg-orange-100', icon: Receipt,       label: 'Justificatif manquant' }
 }
 
 export default function Dashboard() {
@@ -59,6 +60,9 @@ export default function Dashboard() {
   // dépassement) ni au détail des revenus/financement — seulement au total dépensé
   // et au reste, dont il a besoin pour suivre sa propre saisie.
   const restreintAgent = role === 'agent'
+  // Alerte « justificatif manquant » — réservée à ces trois rôles précis (décision
+  // explicite), même si d'autres (pau, ge) voient par ailleurs le reste des alertes.
+  const voitAlerteJustificatif = ['secretaire', 'info', 'assistant_pau'].includes(role)
 
   // Période affichée par TOUT le Dashboard (KPI, Répartition par secteur, alertes,
   // Dépenses récentes) — un seul sélecteur dans le bandeau, Jour/Mois/Année/Plage,
@@ -144,10 +148,20 @@ export default function Dashboard() {
   // alertes fermées (remplace l'ancien `${annee}-${mois}` fixe).
   const periodeKey = modePeriode === 'jour' ? `j_${jourSel}` : modePeriode === 'annee' ? `a_${anneeSel}` : modePeriode === 'plage' ? `p_${debutSel}_${finSel}` : `m_${moisSel}`
 
-  // Alertes unifiées (budget, décaissements en attente) — même présentation/
-  // comportement que le widget « Alertes » d'E-G.Pro : une carte, dismiss (✕)
-  // avec réapparition après 2 min (5x/jour max), clic → détail. Réservé à
-  // l'administration comme le reste des KPI financiers.
+  // Dépenses décaissées dont le justificatif (reçu) a été marqué requis à la saisie
+  // mais pas encore confirmé reçu (cf. bouton dédié dans Depenses.jsx) — pas de
+  // filtre sur la période affichée : un justificatif manquant le reste tant qu'il
+  // n'est pas confirmé, quelle que soit la période consultée sur ce Dashboard.
+  const justificatifsManquants = useMemo(
+    () => depenses.filter((d) => d.justificatifRequis && !d.justificatifRecu && (d.statut === 'decaissee' || !d.statut)),
+    [depenses]
+  )
+
+  // Alertes unifiées (budget, décaissements en attente, justificatif manquant) — même
+  // présentation/comportement que le widget « Alertes » d'E-G.Pro : une carte, dismiss
+  // (✕) avec réapparition après 2 min (5x/jour max), clic → détail. Réservé à
+  // l'administration comme le reste des KPI financiers (l'alerte justificatif, elle,
+  // est en plus restreinte à secrétaire/info/assistant PAU — cf. voitAlerteJustificatif).
   const alertesCard = useMemo(() => {
     const out = []
     alertes.forEach((s) => {
@@ -165,8 +179,19 @@ export default function Dashboard() {
         message: `${enAttenteCount} demande${enAttenteCount > 1 ? 's' : ''} en attente d'autorisation`
       })
     }
+    if (voitAlerteJustificatif) {
+      justificatifsManquants.forEach((d) => {
+        const secteurLbl = SECTEURS.find((s) => s.id === d.secteurId)?.label || d.secteurId
+        out.push({
+          id: `justificatif_${d.id}`,
+          type: 'justificatif_manquant',
+          message: `${d.beneficiaireNom || 'Le bénéficiaire'} n'a pas encore rapporté le justificatif (reçu) — ${formatMoney(Number(d.montant) || 0)} · ${secteurLbl}`,
+          depenseId: d.id
+        })
+      })
+    }
     return out
-  }, [alertes, enAttenteCount, periodeKey])
+  }, [alertes, enAttenteCount, periodeKey, voitAlerteJustificatif, justificatifsManquants])
 
   const alertesVisibles = useMemo(
     () => alertesCard.filter((a) => visibiliteAlerte(a.id, fermeesDashboard)),
@@ -274,6 +299,7 @@ export default function Dashboard() {
                 const Icone = cfg.icon
                 const onClickAlerte = () => {
                   if (a.type === 'demande') navigate('/depense/autorisations')
+                  else if (a.type === 'justificatif_manquant') navigate('/depense/liste', { state: { openDepenseId: a.depenseId } })
                   else navigate('/depense/recettes-depenses', { state: { openSecteurId: a.secteurId, annee: periodeRef.annee, mois: periodeRef.mois } })
                 }
                 return (
