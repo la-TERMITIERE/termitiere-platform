@@ -34,14 +34,14 @@ const SOURCE_INFO = {
 }
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
-// Bandeau de filtres (recherche, mois, secteur, catégorie, nature du flux,
-// financement) : grille « bento » (cellules de tailles inégales, « Rechercher »
-// en vedette sur 2 colonnes) posée sur un panneau glassmorphism (flou + fond
-// translucide, ton E-DÉPENSES #B45309) — chaque filtre vit dans sa propre
-// tuile de verre. `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas
-// .input-base, pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
-const CLAY_PANEL = 'relative grid grid-cols-2 gap-3 overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white/55 via-amber-50/45 to-orange-100/35 p-4 shadow-[0_20px_45px_-20px_rgba(180,83,9,0.35),0_8px_20px_-10px_rgba(180,83,9,0.18),inset_0_1px_0_0_rgba(255,255,255,0.6)] backdrop-blur-2xl backdrop-saturate-150 sm:grid-cols-6 dark:border-white/10 dark:from-white/[0.06] dark:via-white/[0.03] dark:to-transparent dark:shadow-[0_20px_45px_-20px_rgba(0,0,0,0.6)]'
-const GLASS_TILE = 'rounded-2xl border border-white/50 bg-white/30 p-2.5 shadow-[0_8px_20px_-10px_rgba(180,83,9,0.2)] backdrop-blur-md transition-colors duration-200 hover:bg-white/45 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
+// Claymorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
+// du flux, financement) : panneau « pâte à modeler » chaleureux (ton E-DÉPENSES,
+// #B45309), champs en relief doux avec ombre portée + reflet clair, sans bordure
+// dure. En PC, les filtres restent sur une même ligne (flex-wrap) ; ils passent
+// à la ligne un par un dès que la largeur manque (mobile/tablette étroite).
+// `CLAY_FIELD` s'utilise sur des <input>/<select> BRUTS (pas .input-base,
+// pour ne pas avoir à lutter contre sa bordure/son rayon par-dessus).
+const CLAY_PANEL = 'relative flex flex-wrap items-end gap-3 rounded-[28px] bg-gradient-to-br from-amber-50 via-orange-50/70 to-white p-4 shadow-[0_18px_38px_-18px_rgba(180,83,9,0.32),0_6px_16px_-8px_rgba(180,83,9,0.16),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-white/70 dark:from-[#241d14] dark:via-[#1f1a14] dark:to-[#1d2226] dark:shadow-[0_18px_38px_-18px_rgba(0,0,0,0.55)] dark:ring-white/10'
 const CLAY_LABEL = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-amber-800/70 dark:text-amber-200/60'
 const CLAY_FIELD = 'w-full appearance-none rounded-2xl border-0 bg-gradient-to-br from-white to-amber-50/90 px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-[5px_5px_12px_-4px_rgba(180,83,9,0.22),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:-translate-y-0.5 focus:shadow-[6px_6px_16px_-4px_rgba(180,83,9,0.3),-4px_-4px_10px_-6px_rgba(255,255,255,0.95)] focus:ring-2 focus:ring-amber-400/60 dark:from-[#2a2118] dark:to-[#221b12] dark:text-gray-100 dark:shadow-[5px_5px_12px_-4px_rgba(0,0,0,0.5),-4px_-4px_10px_-6px_rgba(255,255,255,0.04)]'
 
@@ -490,7 +490,7 @@ export default function Depenses() {
       </div>
 
       <div className={CLAY_PANEL}>
-        <div className={`${GLASS_TILE} col-span-2`}>
+        <div>
           <label className={CLAY_LABEL}>Rechercher</label>
           <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
@@ -502,14 +502,14 @@ export default function Depenses() {
             />
           </div>
         </div>
-        <div className={GLASS_TILE}>
+        <div>
           <label className={CLAY_LABEL}>Mois</label>
           <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
             min={restreintMoisCourant ? moisPrecedentStr : undefined}
             max={restreintMoisCourant ? moisCourantStr : undefined}
             className={CLAY_FIELD} />
         </div>
-        <div className={GLASS_TILE}>
+        <div>
           <label className={CLAY_LABEL}>Secteur</label>
           <div className="relative">
             <select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }} className={`${CLAY_FIELD} pr-9`}>
@@ -520,7 +520,7 @@ export default function Depenses() {
           </div>
         </div>
         {filtreSecteur === 'logistique' && (
-          <div className={GLASS_TILE}>
+          <div>
             <label className={CLAY_LABEL}>Site</label>
             <div className="relative">
               <select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
@@ -531,7 +531,7 @@ export default function Depenses() {
             </div>
           </div>
         )}
-        <div className={GLASS_TILE}>
+        <div>
           <label className={CLAY_LABEL}>Catégorie</label>
           <div className="relative">
             <select value={filtreCategorie} onChange={(e) => setFiltreCategorie(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
@@ -541,7 +541,7 @@ export default function Depenses() {
             <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
           </div>
         </div>
-        <div className={GLASS_TILE}>
+        <div>
           <label className={CLAY_LABEL}>Nature du flux</label>
           <div className="relative">
             <select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
@@ -551,7 +551,7 @@ export default function Depenses() {
             <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
           </div>
         </div>
-        <div className={GLASS_TILE}>
+        <div>
           <label className={CLAY_LABEL}>Financement</label>
           <div className="relative">
             <select value={filtreFinancement} onChange={(e) => setFiltreFinancement(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
@@ -561,8 +561,8 @@ export default function Depenses() {
             <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
           </div>
         </div>
-        <div className={`${GLASS_TILE} col-span-2 flex flex-wrap items-center gap-3 sm:col-span-6`}>
-          <span className="mr-auto text-xs font-semibold text-amber-800/60 dark:text-amber-200/50">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs font-semibold text-amber-800/60 dark:text-amber-200/50">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
           <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
           {!lectureSeule && <Button variant="outline" onClick={openLot}><Layers size={16} /> Ajout multiple</Button>}
           {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}

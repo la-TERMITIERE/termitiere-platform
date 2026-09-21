@@ -152,9 +152,15 @@ export default function Dashboard() {
   // mais pas encore confirmé reçu (cf. bouton dédié dans Depenses.jsx) — pas de
   // filtre sur la période affichée : un justificatif manquant le reste tant qu'il
   // n'est pas confirmé, quelle que soit la période consultée sur ce Dashboard.
-  const justificatifsManquants = useMemo(
-    () => depenses.filter((d) => d.justificatifRequis && !d.justificatifRecu && (d.statut === 'decaissee' || !d.statut)),
-    [depenses]
+  // L'alerte ne se déclenche que 24h après le décaissement (`certifieeLe` pour un
+  // décaissement passé par le circuit d'autorisation, sinon `createdAt` — décaissée
+  // d'emblée à la saisie) : on laisse le temps au bénéficiaire de rapporter le reçu
+  // avant de signaler quoi que ce soit. PAS de useMemo ici — recalculée à chaque
+  // rendu (dont le tick périodique ci-dessous) pour que l'alerte apparaisse d'elle-
+  // même dès les 24h écoulées, sans attendre un changement des données.
+  const justificatifsManquants = depenses.filter((d) =>
+    d.justificatifRequis && !d.justificatifRecu && (d.statut === 'decaissee' || !d.statut) &&
+    Date.now() - (d.certifieeLe || d.createdAt || 0) >= 24 * 60 * 60 * 1000
   )
 
   // Alertes unifiées (budget, décaissements en attente, justificatif manquant) — même
