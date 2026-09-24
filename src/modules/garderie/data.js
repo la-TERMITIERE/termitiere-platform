@@ -54,6 +54,7 @@ export const STATUTS_PRESENCE = {
 
 export const TYPES_PAIEMENT = [
   { id: 'mensuel',       label: 'Mensualité'       },
+  { id: 'annuel',        label: 'Annuelle'         },
   { id: 'court_sejour', label: 'Court séjour'      },
   { id: 'inscription',  label: 'Frais d\'inscription' },
   { id: 'fourniture',   label: 'Fournitures'       },

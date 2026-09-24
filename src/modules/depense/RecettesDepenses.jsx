@@ -11,6 +11,7 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
@@ -21,7 +22,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
-import { teinterHex, shadeHex } from '../../utils/color'
+import { teinterHex, shadeHex, COULEUR_MODULE } from '../../utils/color'
 import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
 import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
@@ -546,16 +547,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       {/* Onglets — uniquement sur la vue standalone (pas quand embarqué dans un module
           métier via secteurId, qui n'a pas de vue consolidée tous-secteurs). */}
       {!secteurId && (
-        <div className="flex gap-2 border-b border-gray-200">
-          <button onClick={() => setOngletBudget('secteurs')}
-            className={`border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${ongletBudget === 'secteurs' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-            Par secteur
-          </button>
-          <button onClick={() => setOngletBudget('apports')}
-            className={`border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${ongletBudget === 'apports' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-            Apports & ajouts{apportsTous.length > 0 ? ` (${apportsTous.length})` : ''}
-          </button>
-        </div>
+        <PillTabs active={ongletBudget} onChange={setOngletBudget} accent={COULEUR_MODULE.depense} tabs={[
+          { id: 'secteurs', label: 'Par secteur', accent: COULEUR_MODULE.depense },
+          { id: 'apports', label: `Apports & ajouts${apportsTous.length > 0 ? ` (${apportsTous.length})` : ''}`, accent: '#0d9488' }
+        ]} />
       )}
 
       {/* Vue « Dépense » d'un module métier (agro, logistique…) : saisir une dépense de

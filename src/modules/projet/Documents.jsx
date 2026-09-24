@@ -128,7 +128,7 @@ export default function Documents() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Documents</h2>
-          <p className="text-sm text-white/80">{totalDocs} document{totalDocs !== 1 ? 's' : ''} attaché{totalDocs !== 1 ? 's' : ''} — PDF, images, contrats, plans</p>
+          <p className="text-sm text-white/80">{totalDocs} document{totalDocs !== 1 ? 's' : ''} attaché{totalDocs !== 1 ? 's' : ''} : PDF, images, contrats, plans</p>
         </div>
       </div>
 

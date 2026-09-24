@@ -151,7 +151,7 @@ export default function Params() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Paramètres</h2>
-          <p className="text-sm text-white/80">Tarifs, durées et validité — MAXI-GYM {siteLabel(site)}</p>
+          <p className="text-sm text-white/80">Tarifs, durées et validité : MAXI-GYM {siteLabel(site)}</p>
         </div>
       </div>
 

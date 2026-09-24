@@ -11,10 +11,12 @@ import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
+import { COULEUR_MODULE } from '../../utils/color'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem, removeItem, setItem, ts } from '../../core/db'
@@ -383,7 +385,7 @@ export default function Demandes() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Autorisations</h2>
-          <p className="text-sm text-white/80">Sortie de briques et location de matériel — validation à deux niveaux</p>
+          <p className="text-sm text-white/80">Sortie de briques et location de matériel : validation à deux niveaux</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism) — vide par
             défaut, ne masque jamais une demande en attente. */}
@@ -396,19 +398,12 @@ export default function Demandes() {
       </div>
 
       {/* Deux onglets, même écran, même workflow — cf. en-tête du fichier. */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'sortie', label: '📦 Sortie briques' },
-          { id: 'location', label: `🔑 Location matériel${nbLocationEnAttente ? ` (${nbLocationEnAttente})` : ''}` }
-        ].map((t) => (
-          <button key={t.id} onClick={() => { setOngletDemande(t.id); setFiltre('en_attente') }}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              ongletDemande === t.id ? 'border-secondary text-secondary' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs active={ongletDemande} accent={COULEUR_MODULE.evenementiel}
+        onChange={(id) => { setOngletDemande(id); setFiltre('en_attente') }}
+        tabs={[
+          { id: 'sortie', label: '📦 Sortie briques', accent: '#7c3aed' },
+          { id: 'location', label: `🔑 Location matériel${nbLocationEnAttente ? ` (${nbLocationEnAttente})` : ''}`, accent: '#0891b2' }
+        ]} />
 
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <Shield size={16} className="mr-1 inline" />

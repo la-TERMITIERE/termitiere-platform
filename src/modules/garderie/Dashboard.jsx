@@ -4,7 +4,7 @@ import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useGarderieStore } from './store/garderieStore'
-import { STATUTS_PRESENCE, GRAVITES_INCIDENT, GROUPES_AGE } from './data'
+import { STATUTS_PRESENCE, GRAVITES_INCIDENT, GROUPES_AGE, programmeDuGroupe } from './data'
 import { statsPresencesJour, calcAge, aImpayes, journaliersActifsSurDate, enfantsSansRenouvellement, journaliersActifsSurDate as _jsd } from './logic'
 
 // Âge en mois depuis la date de naissance
@@ -137,14 +137,16 @@ export default function Dashboard() {
     })
   }, [enfants, presences, nutrition, today, deletedEnfantIds, params, heureNow])
 
-  // ── Soldes partiels après le 15 du mois ──────────────────────────────────
+  // ── Soldes partiels après le 15 du mois — GARDERIE uniquement (paiement
+  // mensuel). La maternelle a un système différent (frais annuels versés en
+  // tranche à l'inscription puis à mi-année) : cf. enfantsMaternelleNonSoldes.
   const enfantsPartielsNonSoldes = useMemo(() => {
     const jourDuMois = new Date().getDate()
     if (jourDuMois < 15) return [] // alerte inactive avant le 15
 
     const moisCourant = today.slice(0, 7) // "YYYY-MM"
     return enfantsVisibles
-      .filter((e) => e.statut === 'actif')
+      .filter((e) => e.statut === 'actif' && (e.programme || programmeDuGroupe(e.groupe)) !== 'maternelle')
       .map((e) => {
         const p = paiements.find(
           (p) => p.enfantId === e.id &&
@@ -157,6 +159,26 @@ export default function Dashboard() {
       })
       .filter(Boolean)
   }, [enfantsVisibles, paiements, today])
+
+  // ── MATERNELLE : frais de scolarité annuels versés en tranche — la 2ᵉ moitié
+  // est attendue 6 mois après le 1er versement (`p.date`, préservé tel quel par
+  // le solde partiel — cf. handleSolde dans Paiements.jsx, qui ne réécrit jamais
+  // `date`). Les enfants déjà soldés à l'inscription ne remontent jamais ici
+  // puisqu'on ne regarde que les paiements encore `partiel`.
+  const enfantsMaternelleNonSoldes = useMemo(() => {
+    const seuil = new Date()
+    seuil.setMonth(seuil.getMonth() - 6)
+    const seuilStr = seuil.toISOString().slice(0, 10)
+    return enfantsVisibles
+      .filter((e) => e.statut === 'actif' && (e.programme || programmeDuGroupe(e.groupe)) === 'maternelle')
+      .map((e) => {
+        const p = paiements.find((p) => p.enfantId === e.id && p.statut === 'partiel')
+        if (!p || !p.date || p.date > seuilStr) return null
+        const reste = (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)
+        return reste > 0 ? { ...e, reste, montantPaye: p.montantPaye, montantDu: p.montantDu, datePremierVersement: p.date } : null
+      })
+      .filter(Boolean)
+  }, [enfantsVisibles, paiements])
 
   // ── Absences répétées sans justification ─────────────────────────────────
   const enfantsAbsentsRepetes = useMemo(() => {
@@ -352,6 +374,30 @@ export default function Dashboard() {
                 ))}
               </div>
               <p className="text-xs text-amber-500 mt-1">Cliquez pour accéder aux paiements</p>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* ── Alerte MATERNELLE : 2ᵉ tranche annuelle non versée 6 mois après le 1er versement ── */}
+      {enfantsMaternelleNonSoldes.length > 0 && (
+        <button
+          onClick={() => navigate('/garderie/paiements')}
+          className="w-full rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-left shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-colors hover:bg-emerald-100">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={18} className="text-emerald-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-emerald-700 text-sm">
+                🎓 {enfantsMaternelleNonSoldes.length} enfant{enfantsMaternelleNonSoldes.length > 1 ? 's' : ''} de maternelle n'a pas soldé (6 mois après le 1er versement)
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {enfantsMaternelleNonSoldes.map((e) => (
+                  <span key={e.id} className="rounded-full border border-emerald-400 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                    {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-emerald-600 mt-1">Frais de scolarité annuels — 2ᵉ tranche attendue 6 mois après le 1er versement · Cliquez pour accéder aux paiements</p>
             </div>
           </div>
         </button>

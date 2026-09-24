@@ -13,17 +13,38 @@ export function calcAge(dateNaissance) {
   return `${annees} an${annees > 1 ? 's' : ''} ${mois} mois`
 }
 
+// Bandes d'âge (en mois) — communes à groupeRecommande (date de naissance
+// exacte) et groupeDepuisAgeTexte (âge saisi en texte libre).
+function groupeDepuisMoisTotal(moisTotal) {
+  if (moisTotal < 12) return 'nourrisson'
+  if (moisTotal < 36) return 'bambin'
+  if (moisTotal < 48) return 'petite_section'
+  if (moisTotal < 60) return 'moyenne_section'
+  return 'grande_section'
+}
+
 // Retourne le groupe d'âge recommandé selon l'âge en mois.
 export function groupeRecommande(dateNaissance) {
   if (!dateNaissance) return ''
   const naissance = new Date(dateNaissance)
   const now = new Date()
   const moisTotal = (now.getFullYear() - naissance.getFullYear()) * 12 + (now.getMonth() - naissance.getMonth())
-  if (moisTotal < 12) return 'nourrisson'
-  if (moisTotal < 36) return 'bambin'
-  if (moisTotal < 48) return 'petite_section'
-  if (moisTotal < 60) return 'moyenne_section'
-  return 'grande_section'
+  return groupeDepuisMoisTotal(moisTotal)
+}
+
+// Déduit un groupe d'âge à partir d'un âge saisi en texte libre (« 2 ans »,
+// « 18 mois », « 2 ans 3 mois »…) — utilisé quand la date de naissance exacte
+// est inconnue (cf. Enfants.jsx, champ « Âge (si date inconnue) »). Retourne ''
+// si aucun nombre d'années/mois n'est reconnaissable dans le texte — le champ
+// Groupe d'âge reste alors à choisir manuellement, sans rien écraser.
+export function groupeDepuisAgeTexte(ageSaisi) {
+  if (!ageSaisi || !ageSaisi.trim()) return ''
+  const texte = ageSaisi.toLowerCase()
+  const ansMatch = texte.match(/(\d+)\s*an/)
+  const moisMatch = texte.match(/(\d+)\s*mois/)
+  if (!ansMatch && !moisMatch) return ''
+  const moisTotal = (ansMatch ? Number(ansMatch[1]) * 12 : 0) + (moisMatch ? Number(moisMatch[1]) : 0)
+  return groupeDepuisMoisTotal(moisTotal)
 }
 
 // Résumé des présences du jour pour le dashboard.

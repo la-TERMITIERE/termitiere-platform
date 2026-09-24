@@ -226,7 +226,7 @@ export default function Galerie() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Galerie photos</h2>
-          <p className="text-sm text-white/80">{toutesImages.length} photo{toutesImages.length !== 1 ? 's' : ''} — avancement de chantier</p>
+          <p className="text-sm text-white/80">{toutesImages.length} photo{toutesImages.length !== 1 ? 's' : ''} : avancement de chantier</p>
         </div>
       </div>
 

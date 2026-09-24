@@ -12,9 +12,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Save, Send, CheckCircle2, Plus, Trash2, Lock, Pencil, History } from 'lucide-react'
+import { COULEUR_MODULE } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -546,18 +548,11 @@ export default function Saisie() {
       )}
 
       {/* Onglets + ajout d'article */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200">
-        {[['animaux', 'Animaux'], ['aliments', 'Aliments & Divers']].map(([v, l]) => (
-          <button
-            key={v}
-            onClick={() => setTab(v)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${
-              tab === v ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {l}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <PillTabs active={tab} onChange={setTab} accent={COULEUR_MODULE.agro} tabs={[
+          { id: 'animaux', label: 'Animaux', accent: COULEUR_MODULE.agro },
+          { id: 'aliments', label: 'Aliments & Divers', accent: '#d97706' }
+        ]} />
         {peutSaisir && (
           <Button
             size="sm"

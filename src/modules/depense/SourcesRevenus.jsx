@@ -208,7 +208,7 @@ export default function SourcesRevenus() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Sources de revenus</h2>
-          <p className="text-sm text-white/80">Toutes les entrées d'argent réelles — factures, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
+          <p className="text-sm text-white/80">Toutes les entrées d'argent réelles : factures, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism). */}
         <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}

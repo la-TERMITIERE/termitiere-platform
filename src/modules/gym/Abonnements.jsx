@@ -325,7 +325,7 @@ export default function Abonnements() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Abonnements</h2>
-          <p className="text-sm text-white/80">{liste.length} abonnement(s) — {formatMoney(total)} au total</p>
+          <p className="text-sm text-white/80">{liste.length} abonnement(s) : {formatMoney(total)} au total</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism). */}
         <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}

@@ -228,7 +228,7 @@ export default function Seances() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Séances</h2>
-          <p className="text-sm text-white/80">{liste.length} séance(s) — {formatMoney(total)} au total — valables {params.validiteSeanceHeures} h</p>
+          <p className="text-sm text-white/80">{liste.length} séance(s) : {formatMoney(total)} au total : valables {params.validiteSeanceHeures} h</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism) — à la place
             d'une ligne séparée en dessous. */}

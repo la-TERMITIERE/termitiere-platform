@@ -5,6 +5,7 @@ import { Users, Baby, CreditCard, TrendingUp, UserCheck, AlertTriangle, Calendar
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
 import { useGarderieStore } from './store/garderieStore'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { GROUPES_AGE, MOIS } from './data'
@@ -17,17 +18,26 @@ function StatTile({ icon: Icon, label, value, sub, color = '#E8390E', onClick })
   const Comp = onClick ? 'button' : 'div'
   return (
     <Comp onClick={onClick}
-      className={`card flex items-center gap-4 p-4 ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all' : ''}`}>
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-        style={{ background: color + '1a', color }}>
+      className={`card flex items-center gap-4 p-4 text-left transition-all duration-200 ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_20px_40px_-16px_rgba(26,26,26,0.25)]' : 'hover:shadow-md'}`}>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.5),inset_0_-2px_3px_0_rgba(0,0,0,0.06)]"
+        style={{ background: `linear-gradient(135deg, ${color}26 0%, ${color}14 100%)`, color }}>
         <Icon size={22} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 truncate">{label}</p>
-        <p className="text-2xl font-extrabold text-gray-900">{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+        <p className="truncate text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+        <p className="text-2xl font-extrabold tabular-nums text-gray-900">{value}</p>
+        {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
       </div>
     </Comp>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+      <p className="text-xs font-bold uppercase tracking-wider text-gray-500">{children}</p>
+    </div>
   )
 }
 
@@ -45,6 +55,11 @@ function MiniBar({ label, value, max, color }) {
 }
 
 export default function Analyses() {
+  const { role } = useAuth()
+  // La Gérante Garderie gère l'opérationnel mais ne doit rien voir de financier
+  // (revenus, recouvrement…) dans ce volet — accès restreint à l'effectif,
+  // aux présences et à la performance du personnel.
+  const argentVisible = role !== 'gerante_garderie'
   const { data: enfants }     = useCollection('garderie_enfants')
   const { data: presences }   = useCollection('garderie_presences')
   const { data: paiements }   = useCollection('garderie_paiements')
@@ -266,7 +281,7 @@ export default function Analyses() {
   return (
     <div className="space-y-5">
 
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -274,75 +289,65 @@ export default function Analyses() {
         }}>
           <BarChart2 size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Analyse & Pilotage</h2>
           <p className="text-sm text-white/80">Vue consolidée de la garderie</p>
         </div>
-      </div>
 
-      {/* ── Onglets + sélecteur ── */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex items-center gap-3">
-          {/* Onglets */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-semibold">
-            <button onClick={() => setVue('mensuel')}
-              className={`px-4 py-2 transition-colors ${vue === 'mensuel' ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-              📅 Mensuel
-            </button>
-            <button onClick={() => setVue('annuel')}
-              className={`px-4 py-2 transition-colors ${vue === 'annuel' ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-              📆 Annuel
-            </button>
-          </div>
-          {/* Sélecteur mois (mensuel seulement) */}
-          {vue === 'mensuel' && (
-          <select
-            value={moisSel}
-            onChange={(e) => setMoisSel(Number(e.target.value))}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300">
-            {MOIS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+        {/* Tri par période — même format que les autres volets (pastille
+            blanche sur le dégradé du module) : Mensuel ou Annuel. */}
+        <div className="relative flex w-full flex-wrap items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto">
+          <select value={vue} onChange={(e) => setVue(e.target.value)}
+            className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-gray-800">
+            <option value="mensuel">Mensuel</option>
+            <option value="annuel">Annuel</option>
           </select>
+
+          {vue === 'mensuel' && (
+            <select value={moisSel} onChange={(e) => setMoisSel(Number(e.target.value))} style={{ colorScheme: 'dark' }}
+              className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-gray-800">
+              {MOIS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+            </select>
           )}
-          <input
-            type="number" value={anneeSel}
-            onChange={(e) => setAnneeSel(Number(e.target.value))}
-            className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" />
+
+          <input type="number" value={anneeSel} onChange={(e) => setAnneeSel(Number(e.target.value))}
+            style={{ colorScheme: 'dark' }}
+            className="w-20 rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
         </div>
       </div>
 
       {/* ══ VUE ANNUELLE ══ */}
       {vue === 'annuel' && (
         <div className="space-y-6">
-          {/* KPIs annuels */}
+          {/* KPIs annuels — masqués pour la Gérante Garderie (contenu financier) */}
+          {argentVisible && (<>
           <div>
-            <p className="mb-1 text-xs font-bold uppercase text-gray-400 tracking-wider">💰 Bilan annuel {anneeSel}</p>
+            <SectionLabel>💰 Bilan annuel {anneeSel}</SectionLabel>
             <p className="mb-3 text-[10px] text-gray-400 italic">Ces 4 chiffres résument toute l'activité financière de la garderie sur l'année {anneeSel}.</p>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <div className="card p-4 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200">
-                <p className="text-xs font-medium uppercase text-orange-600">Total revenus</p>
-                <p className="text-2xl font-extrabold text-orange-800">{formatMoney(annuel.totalRevAnnuel + annuel.totalJoAnnuel)}</p>
-                <p className="text-xs text-orange-500 mt-0.5">Tout ce qui a été encaissé</p>
-              </div>
-              <div className="card p-4 bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
-                <p className="text-xs font-medium uppercase text-green-600">Revenus inscrits</p>
-                <p className="text-2xl font-extrabold text-green-800">{formatMoney(annuel.totalRevAnnuel)}</p>
-                <p className="text-xs text-green-500 mt-0.5">Mensualités payées sur l'année</p>
-              </div>
-              <div className="card p-4 bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
-                <p className="text-xs font-medium uppercase text-purple-600">Revenus journaliers</p>
-                <p className="text-2xl font-extrabold text-purple-800">{formatMoney(annuel.totalJoAnnuel)}</p>
-                <p className="text-xs text-purple-500 mt-0.5">Enfants à la journée sur l'année</p>
-              </div>
-              <div className="card p-4 bg-gradient-to-br from-red-50 to-red-100 border border-red-200">
-                <p className="text-xs font-medium uppercase text-red-600">Taux recouvrement</p>
-                <p className="text-2xl font-extrabold text-red-800">{annuel.tauxRecovMoyen}%</p>
-                <p className="text-xs text-red-500 mt-0.5">Encaissé ÷ Attendu — moy. annuelle</p>
-              </div>
+              {[
+                { Icon: Wallet, label: 'Total revenus', value: formatMoney(annuel.totalRevAnnuel + annuel.totalJoAnnuel), sub: 'Tout ce qui a été encaissé', color: ORANGE },
+                { Icon: CreditCard, label: 'Revenus inscrits', value: formatMoney(annuel.totalRevAnnuel), sub: "Mensualités payées sur l'année", color: GREEN },
+                { Icon: Star, label: 'Revenus journaliers', value: formatMoney(annuel.totalJoAnnuel), sub: "Enfants à la journée sur l'année", color: PURPLE },
+                { Icon: TrendingUp, label: 'Taux recouvrement', value: `${annuel.tauxRecovMoyen}%`, sub: 'Encaissé ÷ Attendu · moy. annuelle', color: '#dc2626' }
+              ].map((c) => (
+                <div key={c.label} className="card flex items-center gap-4 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.5),inset_0_-2px_3px_0_rgba(0,0,0,0.06)]"
+                    style={{ background: `linear-gradient(135deg, ${c.color}26 0%, ${c.color}14 100%)`, color: c.color }}>
+                    <c.Icon size={22} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold uppercase tracking-wide text-gray-500">{c.label}</p>
+                    <p className="text-2xl font-extrabold tabular-nums text-gray-900">{c.value}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">{c.sub}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Revenus 12 mois */}
-          <Card title={`📈 Revenus mensuels — ${anneeSel}`}>
+          <Card title={`📈 Revenus mensuels : ${anneeSel}`}>
             <p className="text-[10px] text-gray-400 italic mb-1">📆 Annuel · Montants encaissés mois par mois</p>
             <p className="text-[10px] text-gray-400 mb-3">Chaque barre représente ce que la garderie a encaissé ce mois-là. <strong>Orange</strong> = mensualités des inscrits · <strong>Violet</strong> = journaliers. Survolez une barre pour voir le détail.</p>
             <Bar
@@ -365,9 +370,10 @@ export default function Analyses() {
               }}
             />
           </Card>
+          </>)}
 
           {/* Présences 12 mois */}
-          <Card title={`📅 Présences moyennes par jour — ${anneeSel}`}>
+          <Card title={`📅 Présences moyennes par jour : ${anneeSel}`}>
             <p className="text-[10px] text-gray-400 italic mb-1">📆 Annuel · Nombre moyen d'enfants présents par jour</p>
             <p className="text-[10px] text-gray-400 mb-3">La courbe montre combien d'enfants venaient en moyenne chaque jour, mois par mois. Un pic = mois chargé. Un creux = mois calme (vacances, maladie…).</p>
             <Line
@@ -393,7 +399,7 @@ export default function Analyses() {
           </Card>
 
           {/* Performance personnel annuelle */}
-          <Card title={`👩 Performance du personnel — ${anneeSel}`}>
+          <Card title={`👩 Performance du personnel : ${anneeSel}`}>
             <p className="text-[10px] text-gray-400 italic mb-1">📆 Annuel · <span className="font-mono">Taux = Jours présents ÷ Jours ouvrés × 100</span></p>
             <p className="text-[10px] text-gray-400 mb-3">Classement des tatas selon leur assiduité sur toute l'année. 🥇🥈🥉 pour les 3 meilleures. Plus le pourcentage est élevé, plus la tata a été présente régulièrement.</p>
             {annuel.perfPersonnel.length === 0 ? (
@@ -404,7 +410,7 @@ export default function Analyses() {
                   const couleur = p.taux >= 80 ? GREEN : p.taux >= 50 ? '#f59e0b' : '#dc2626'
                   const medaille = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`
                   return (
-                    <div key={p.id} className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                    <div key={p.id} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5 text-sm transition-colors hover:bg-gray-100">
                       <span className="text-base shrink-0 w-6 text-center">{medaille}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
@@ -441,7 +447,7 @@ export default function Analyses() {
 
       {/* ── KPIs Rangée 1 : Effectifs ── */}
       <div>
-        <p className="mb-2 text-xs font-bold uppercase text-gray-400 tracking-wider">👥 Effectifs</p>
+        <SectionLabel>👥 Effectifs</SectionLabel>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <StatTile icon={Baby} label="Enfants inscrits" value={enfantsActifs.length}
             sub={<>🔴 Temps réel · <span className="italic">{kpis.tauxOccupation}% des {kpis.capacite} places</span></>}
@@ -455,9 +461,10 @@ export default function Analyses() {
         </div>
       </div>
 
-      {/* ── KPIs Rangée 2 : Finances ── */}
+      {/* ── KPIs Rangée 2 : Finances — masqués pour la Gérante Garderie ── */}
+      {argentVisible && (
       <div>
-        <p className="mb-2 text-xs font-bold uppercase text-gray-400 tracking-wider">💰 Finances — {MOIS[moisSel]} {anneeSel}</p>
+        <SectionLabel>💰 Finances : {MOIS[moisSel]} {anneeSel}</SectionLabel>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile icon={CreditCard} label="Revenus inscrits" value={formatMoney(kpis.totalPaye)}
             sub="📅 Mensuel · mensualités encaissées"
@@ -465,24 +472,19 @@ export default function Analyses() {
           <StatTile icon={Star} label="Revenus journaliers" value={formatMoney(kpis.revJo)}
             sub="📅 Mensuel · paiements à la journée"
             color={PURPLE} />
-          <div className="card flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-700">
-              <CreditCard size={22} />
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-green-600">Total revenus</p>
-              <p className="text-2xl font-extrabold text-green-800">{formatMoney(kpis.totalPaye + kpis.revJo)}</p>
-              <p className="text-xs text-green-500 mt-0.5">📅 Mensuel · inscrits + journaliers</p>
-            </div>
-          </div>
+          <StatTile icon={Wallet} label="Total revenus" value={formatMoney(kpis.totalPaye + kpis.revJo)}
+            sub="📅 Mensuel · inscrits + journaliers"
+            color={GREEN} />
           <StatTile icon={AlertTriangle} label="Impayés ce mois" value={kpis.nImpayes}
             sub="📅 Mensuel · impayés + non renouvelés"
             color="#dc2626" />
         </div>
       </div>
+      )}
 
       {/* ── Ligne 2 : Revenus 6 mois + Répartition abonnements ── */}
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className={`grid gap-5 ${argentVisible ? 'lg:grid-cols-3' : ''}`}>
+        {argentVisible && (
         <Card title="📈 Revenus sur 6 mois" className="lg:col-span-2">
           <p className="text-[10px] text-gray-400 italic mb-2">📅 Mensuel · Somme des montants payés par mois</p>
           <Bar
@@ -533,6 +535,7 @@ export default function Analyses() {
             }}
           />
         </Card>
+        )}
 
         <Card title="🍼 Répartition abonnements">
           <p className="text-[10px] text-gray-400 italic mb-2">🔴 Temps réel · Inscrits actifs du moment</p>
@@ -564,7 +567,7 @@ export default function Analyses() {
 
       {/* ── Ligne 3 : Présences du mois + Groupes d'âge ── */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <Card title={`📅 Présences — ${MOIS[moisSel]} ${anneeSel}`} className="lg:col-span-2">
+        <Card title={`📅 Présences : ${MOIS[moisSel]} ${anneeSel}`} className="lg:col-span-2">
           {presencesMois.labels.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-400">Aucune présence enregistrée ce mois.</p>
           ) : (
@@ -640,7 +643,7 @@ export default function Analyses() {
 
       {/* ── Ligne 4 : Taux présence par enfant + Personnel ── */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title={`🏆 Taux de présence par enfant — ${MOIS[moisSel]}`}>
+        <Card title={`🏆 Taux de présence par enfant : ${MOIS[moisSel]}`}>
           <p className="text-[10px] text-gray-400 italic mb-2">
             📆 Par jour · <span className="font-mono">Taux = Jours présents ÷ Jours d'école × 100</span>
           </p>
@@ -678,7 +681,7 @@ export default function Analyses() {
           )}
         </Card>
 
-        <Card title={`👩 Pointage personnel — ${MOIS[moisSel]}`}>
+        <Card title={`👩 Pointage personnel : ${MOIS[moisSel]}`}>
           <p className="text-[10px] text-gray-400 italic mb-3">
             📆 Par jour · <span className="font-mono">Taux = Jours présents ÷ Jours ouvrés × 100</span>
             {statsPersonnel[0]?.joursOuvres > 0 && <span className="ml-2 text-gray-500">({statsPersonnel[0]?.joursOuvres} jours ouvrés ce mois)</span>}
@@ -721,9 +724,10 @@ export default function Analyses() {
         </Card>
       </div>
 
-      {/* ── Ligne 5 : Recouvrement paiements + Incidents ── */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card title={`💰 Recouvrement — ${MOIS[moisSel]} ${anneeSel}`}>
+      {/* ── Ligne 5 : Recouvrement paiements (masqué pour la Gérante Garderie) + Incidents ── */}
+      <div className={`grid gap-5 ${argentVisible ? 'lg:grid-cols-2' : ''}`}>
+        {argentVisible && (
+        <Card title={`💰 Recouvrement : ${MOIS[moisSel]} ${anneeSel}`}>
           <div className="space-y-4">
             <p className="text-[10px] text-gray-400 italic">📅 Mensuel · <span className="font-mono">Taux = Encaissé ÷ Attendu × 100</span></p>
             {/* Barre de recouvrement */}
@@ -761,8 +765,9 @@ export default function Analyses() {
             )}
           </div>
         </Card>
+        )}
 
-        <Card title="⚠️ Incidents — Vue globale">
+        <Card title="⚠️ Incidents : vue globale">
           <p className="text-[10px] text-gray-400 italic mb-2">🔴 Temps réel · Tous les incidents depuis le début</p>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">

@@ -21,7 +21,7 @@ export const ROLES = [
   { value: 'superviseur',      label: 'Superviseur',       desc: 'Lecture seule — voit uniquement les modules qui lui sont attribués, aucune action' },
   { value: 'gerant',           label: 'Gérant',            desc: 'Approuve les sorties et les demandes' },
   { value: 'agent',            label: 'Agent',             desc: 'Saisie des données + demandes d\'autorisation' },
-  { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres, journal et analyses)' },
+  { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres et journal)' },
   { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie — présences, cantine, incidents' },
   { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif — E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
   { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro — accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },

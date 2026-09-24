@@ -72,7 +72,7 @@ export default function ChargeTravail() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Charge de travail</h2>
-          <p className="text-sm text-white/80">Qui porte quoi, tous secteurs confondus — tâches actives par personne, pour repérer les surcharges.</p>
+          <p className="text-sm text-white/80">Qui porte quoi, tous secteurs confondus : tâches actives par personne, pour repérer les surcharges.</p>
         </div>
       </div>
 
