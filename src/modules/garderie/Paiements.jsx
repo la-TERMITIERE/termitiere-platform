@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Plus, FileSpreadsheet, Printer, CheckCircle2, CreditCard, AlertTriangle, Wallet, UserPlus, User } from 'lucide-react'
+import { Plus, FileSpreadsheet, Printer, CheckCircle2, CreditCard, AlertTriangle, Wallet, UserPlus, User, Search } from 'lucide-react'
 import { genererRecuPaiement } from './recuPDF'
 import Card from '../../shared/ui/Card'
-import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
+import ModePaiementBoutons from './ModePaiementBoutons'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { setItem, updateItem } from '../../core/db'
@@ -22,10 +24,14 @@ import { TYPES_PAIEMENT, MODES_PAIEMENT, STATUTS_PAIEMENT, MOIS, programmeDuGrou
 import { tarifSuggere } from './logic'
 import { useGarderieStore } from './store/garderieStore'
 import { exportRapportExcel } from '../../utils/excelReport'
+import { toggleScolariteClass } from './pastilles'
 
 const now = new Date()
 // Types de paiement pour lesquels les frais de cuisine (payés à part par les parents) s'appliquent.
-const TYPES_AVEC_CUISINE = ['inscription', 'mensuel', 'court_sejour']
+const TYPES_AVEC_CUISINE = ['inscription', 'mensuel', 'annuel', 'court_sejour']
+// Types pour lesquels la scolarité peut être réglée par tranche ou en totalité
+// (même bascule que sur le formulaire d'inscription, cf. Enfants.jsx).
+const TYPES_AVEC_TRANCHE = ['mensuel', 'annuel']
 const empty = () => ({
   enfantId: '', enfantNom: '',
   type: 'mensuel', mois: now.getMonth() + 1, annee: now.getFullYear(),
@@ -42,9 +48,14 @@ export default function Paiements() {
 
   const [onglet, setOnglet]             = useState('inscrits')
   const [modal, setModal]               = useState(null)
+  // Bascule tranche/totalité affichée quand `modal.data.type` fait partie de
+  // TYPES_AVEC_TRANCHE — champ d'interface uniquement (pas persisté tel quel :
+  // il ne fait que piloter comment `montantPaye` est saisi/pré-rempli).
+  const [modeScolarite, setModeScolarite] = useState(null)
   const [soldeModal, setSoldeModal]     = useState(null)
   const [soldeSaving, setSoldeSaving]   = useState(false)
   const [filtreEnfant, setFiltreEnfant] = useState('')
+  const [rechercheEnfant, setRechercheEnfant] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreMois, setFiltreMois]     = useState(now.getMonth() + 1)
   const [filtreAnnee, setFiltreAnnee]   = useState(now.getFullYear())
@@ -84,11 +95,15 @@ export default function Paiements() {
   const liste = useMemo(() => {
     let rows = [...paiements]
     if (filtreEnfant) rows = rows.filter((p) => p.enfantId === filtreEnfant)
+    if (rechercheEnfant.trim()) {
+      const q = rechercheEnfant.toLowerCase()
+      rows = rows.filter((p) => (p.enfantNom || '').toLowerCase().includes(q))
+    }
     if (filtreStatut) rows = rows.filter((p) => p.statut === filtreStatut)
     if (filtreMois)  rows = rows.filter((p) => Number(p.mois) === Number(filtreMois))
     if (filtreAnnee) rows = rows.filter((p) => Number(p.annee) === Number(filtreAnnee))
     return rows.sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1)
-  }, [paiements, filtreEnfant, filtreStatut, filtreMois, filtreAnnee])
+  }, [paiements, filtreEnfant, rechercheEnfant, filtreStatut, filtreMois, filtreAnnee])
 
   const totalPaye   = useMemo(() => liste.reduce((s, p) => s + (Number(p.montantPaye) || 0), 0), [liste])
   const totalDu     = useMemo(() => liste.reduce((s, p) => s + (Number(p.montantDu) || 0), 0), [liste])
@@ -129,11 +144,15 @@ export default function Paiements() {
 
   function openCreate() {
     setModal({ data: { ...empty(), montantDu: params.tarifMensuel, montantCuisine: params.fraisCuisine || '' }, isNew: true })
+    setModeScolarite(null)
   }
 
   async function handleSave() {
     const d = modal.data
     if (!d.enfantId) return toast.error('Sélectionnez un enfant')
+    if (TYPES_AVEC_TRANCHE.includes(d.type) && !modeScolarite) {
+      return toast.error('Précisez si le paiement est fait par tranche ou en totalité')
+    }
     if (!d.montantDu || !d.montantPaye) return toast.error('Montants requis')
     const avecCuisine = TYPES_AVEC_CUISINE.includes(d.type)
     const montantCuisine = avecCuisine ? (Number(d.montantCuisine) || 0) : 0
@@ -172,6 +191,7 @@ export default function Paiements() {
   }
 
   // Bascule le type de paiement — pré-remplit les frais de cuisine s'ils s'appliquent.
+  // Réinitialise la bascule tranche/totalité : elle ne concerne que TYPES_AVEC_TRANCHE.
   function onTypeChange(type) {
     setModal((m) => ({
       ...m,
@@ -181,6 +201,7 @@ export default function Paiements() {
         montantCuisine: m.data.montantCuisine || (TYPES_AVEC_CUISINE.includes(type) ? String(params.fraisCuisine || '') : '')
       }
     }))
+    setModeScolarite(null)
   }
 
   // ── Paiements journaliers depuis garderie_paiements ──
@@ -326,20 +347,11 @@ export default function Paiements() {
         </div>
       </div>
 
-      {/* Onglets */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'inscrits',    label: '🍼 Enfants inscrits' },
-          { id: 'journaliers', label: '🚪 Journaliers' }
-        ].map((t) => (
-          <button key={t.id} onClick={() => setOnglet(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              onglet === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Onglets — une couleur distincte par volet */}
+      <PillTabs active={onglet} onChange={setOnglet} accent={COULEUR_MODULE.garderie} tabs={[
+        { id: 'inscrits',    label: '🍼 Enfants inscrits', accent: '#2563eb' },
+        { id: 'journaliers', label: '🚪 Journaliers', accent: '#E8390E' }
+      ]} />
 
       {/* ══ ONGLET JOURNALIERS ══ */}
       {onglet === 'journaliers' && (
@@ -415,31 +427,49 @@ export default function Paiements() {
       {/* ══ ONGLET INSCRITS ══ */}
       {onglet === 'inscrits' && <>
 
-      {/* KPI cliquables — détail par catégorie (Garderie / Maternelle) */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard title="Payé" value={formatMoney(totalPaye)} icon={CheckCircle2} accent="#16a34a"
-          onClick={() => setDetailKpi('paye')} />
-        <StatCard title="Attendu" value={formatMoney(totalDu)} icon={Wallet} accent="#f59e0b"
-          onClick={() => setDetailKpi('du')} />
-        <StatCard title="Restant" value={formatMoney(totalReste)} icon={AlertTriangle} accent="#dc2626"
-          onClick={() => setDetailKpi('reste')} />
+      {/* KPI — bande unique glassmorphism, cliquable pour le détail par catégorie
+          (même design que Présences enfants) */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/50 bg-white/55 shadow-[0_8px_28px_-10px_rgba(0,0,0,0.15),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150">
+        <div className="flex divide-x divide-gray-200/70">
+          {[
+            { label: 'Payé', value: formatMoney(totalPaye), icon: CheckCircle2, accent: '#16a34a', onClick: () => setDetailKpi('paye') },
+            { label: 'Attendu', value: formatMoney(totalDu), icon: Wallet, accent: '#f59e0b', onClick: () => setDetailKpi('du') },
+            { label: 'Restant', value: formatMoney(totalReste), icon: AlertTriangle, accent: '#dc2626', onClick: () => setDetailKpi('reste') }
+          ].map((k) => (
+            <button key={k.label} type="button" onClick={k.onClick}
+              className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-center transition-colors hover:bg-black/5">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                style={{ background: k.accent + '1a', color: k.accent }}>
+                <k.icon className="h-3 w-3" />
+              </div>
+              <p className="w-full truncate text-[8px] font-semibold uppercase tracking-wide text-gray-500" title={k.label}>{k.label}</p>
+              <p className="text-[11px] font-extrabold leading-tight text-gray-900">{k.value}</p>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Enfant</label>
-          <Select value={filtreEnfant} onChange={(e) => setFiltreEnfant(e.target.value)}>
-            <option value="">Tous</option>
-            {enfantsActifs.map((e) => <option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}
-          </Select>
+      {/* Filtres + actions — bande glassmorphism, dégradé subtil entre la couleur
+          du module (orange) et le blanc (même design que Présences enfants) */}
+      <div className="relative flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 p-2.5 shadow-[0_10px_24px_-12px_rgba(26,26,26,0.2),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.16) 0%, rgba(245,168,0,0.08) 35%, rgba(255,255,255,0.65) 75%)' }}>
+        <div className="relative min-w-[160px] flex-1 sm:flex-none">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            className="w-full rounded-xl border border-gray-200/80 bg-white/80 py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            placeholder="Rechercher un enfant…"
+            value={rechercheEnfant}
+            onChange={(e) => setRechercheEnfant(e.target.value)}
+          />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Statut</label>
-          <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
-            <option value="">Tous</option>
-            {Object.entries(STATUTS_PAIEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </Select>
-        </div>
+        <Select value={filtreEnfant} onChange={(e) => setFiltreEnfant(e.target.value)} className="w-auto !bg-white/80">
+          <option value="">Tous les enfants</option>
+          {enfantsActifs.map((e) => <option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}
+        </Select>
+        <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className="w-auto !bg-white/80">
+          <option value="">Tous les statuts</option>
+          {Object.entries(STATUTS_PAIEMENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </Select>
         <div className="ml-auto flex items-center gap-3">
           <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export</Button>
           <Button onClick={openCreate}><Plus size={16} /> Nouveau paiement</Button>
@@ -448,18 +478,18 @@ export default function Paiements() {
 
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-3 py-2 text-left">Enfant</th>
-              <th className="px-3 py-2 text-left">Type</th>
-              <th className="px-3 py-2 text-left">Période</th>
-              <th className="px-3 py-2 text-right">Dû</th>
-              <th className="px-3 py-2 text-right">Payé</th>
-              <th className="px-3 py-2 text-right">Reste</th>
-              <th className="px-3 py-2 text-left">Mode</th>
-              <th className="px-3 py-2 text-left">Statut</th>
-              <th className="px-3 py-2 text-left">Date</th>
-              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2.5 text-left">Enfant</th>
+              <th className="px-3 py-2.5 text-left">Type</th>
+              <th className="px-3 py-2.5 text-left">Période</th>
+              <th className="px-3 py-2.5 text-right">Dû</th>
+              <th className="px-3 py-2.5 text-right">Payé</th>
+              <th className="px-3 py-2.5 text-right">Reste</th>
+              <th className="px-3 py-2.5 text-left">Mode</th>
+              <th className="px-3 py-2.5 text-left">Statut</th>
+              <th className="px-3 py-2.5 text-left">Date</th>
+              <th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -468,49 +498,71 @@ export default function Paiements() {
             )}
             {liste.map((p) => {
               const reste = (Number(p.montantDu) || 0) - (Number(p.montantPaye) || 0)
+              const programme = programmeDePaiement(p)
               return (
-              <tr key={p.id} className="hover:bg-orange-50 transition-colors">
-                <td className="px-3 py-2 font-semibold">{p.enfantNom || '—'}</td>
-                <td className="px-3 py-2">{TYPES_PAIEMENT.find((t) => t.id === p.type)?.label || p.type}</td>
-                <td className="px-3 py-2 text-xs text-gray-500">{MOIS[(p.mois || 1) - 1]} {p.annee}</td>
-                <td className="px-3 py-2 text-right font-mono text-xs">{formatMoney(p.montantDu)}</td>
-                <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-green-700">{formatMoney(p.montantPaye)}</td>
-                <td className="px-3 py-2 text-right font-mono text-xs font-bold">
+              <tr key={p.id} className="transition-all hover:-translate-y-px hover:bg-orange-50/60 hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.1)]">
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-xs font-bold text-white shadow-[0_3px_6px_-1px_rgba(234,88,12,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.6),inset_0_-2px_3px_0_rgba(0,0,0,0.15)]">
+                      {(p.enfantNom?.[0] || '?').toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{p.enfantNom || '—'}</p>
+                      {programme && (
+                        <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold ${programme === 'maternelle' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {programme === 'maternelle' ? '🎓 Maternelle' : '🍼 Garderie'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-gray-600">{TYPES_PAIEMENT.find((t) => t.id === p.type)?.label || p.type}</td>
+                <td className="px-3 py-3 text-xs text-gray-500">{MOIS[(p.mois || 1) - 1]} {p.annee}</td>
+                <td className="px-3 py-3 text-right font-semibold tabular-nums text-gray-700">{formatMoney(p.montantDu)}</td>
+                <td className="px-3 py-3 text-right font-semibold tabular-nums text-green-700">{formatMoney(p.montantPaye)}</td>
+                <td className="px-3 py-3 text-right font-bold tabular-nums">
                   {reste > 0
                     ? <span className="text-red-600">{formatMoney(reste)}</span>
                     : <span className="text-green-500">—</span>}
                 </td>
-                <td className="px-3 py-2 text-xs">{MODES_PAIEMENT.find((m) => m.id === p.modePaiement)?.label || p.modePaiement}</td>
-                <td className="px-3 py-2"><Badge tone={STATUTS_PAIEMENT[p.statut]?.tone}>{STATUTS_PAIEMENT[p.statut]?.label}</Badge></td>
-                <td className="px-3 py-2 text-xs text-gray-400">{formatDateShort(p.date)}</td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-col gap-1">
+                <td className="px-3 py-3 text-xs text-gray-500">{MODES_PAIEMENT.find((m) => m.id === p.modePaiement)?.label || p.modePaiement}</td>
+                <td className="px-3 py-3"><Badge tone={STATUTS_PAIEMENT[p.statut]?.tone}>{STATUTS_PAIEMENT[p.statut]?.label}</Badge></td>
+                <td className="px-3 py-3 text-xs text-gray-400">{formatDateShort(p.date)}</td>
+                <td className="px-3 py-3">
+                  <div className="flex flex-col items-end gap-1">
                     {p.statut === 'partiel' && reste > 0 && (
                       <button
                         onClick={() => setSoldeModal({ paiement: p, montantComplement: String(reste), modePaiement: p.modePaiement || 'espece' })}
-                        className="flex items-center gap-1 rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700 hover:bg-green-200">
+                        className="inline-flex items-center gap-1 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-3px_rgba(22,163,74,0.6),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-transform hover:scale-105">
                         <CheckCircle2 size={12} /> Solder
                       </button>
                     )}
                     <div className="flex gap-1">
-                  <button onClick={() => setModal({
-                    data: {
-                      ...empty(), ...p,
-                      montantCuisine: p.montantCuisine || '',
-                      montantDu: Number(p.montantDu || 0) - Number(p.montantCuisine || 0)
-                    },
-                    isNew: false, id: p.id
-                  })}
-                    className="rounded px-2 py-1 text-xs text-orange-600 hover:bg-orange-50 font-semibold">Éditer</button>
-                  <button
-                    onClick={() => {
-                      const enfant = enfantsActifs.find((e) => e.id === p.enfantId)
-                      genererRecuPaiement(p, enfant)
-                    }}
-                    title="Télécharger le reçu PDF"
-                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-green-600 hover:bg-green-50 font-semibold">
-                    <Printer size={12} /> Reçu
-                  </button>
+                      <button onClick={() => {
+                        const montantDuHorsCuisine = Number(p.montantDu || 0) - Number(p.montantCuisine || 0)
+                        setModal({
+                          data: {
+                            ...empty(), ...p,
+                            montantCuisine: p.montantCuisine || '',
+                            montantDu: montantDuHorsCuisine
+                          },
+                          isNew: false, id: p.id
+                        })
+                        setModeScolarite(
+                          Number(p.montantPaye || 0) >= montantDuHorsCuisine + Number(p.montantCuisine || 0) ? 'totalite'
+                            : Number(p.montantPaye || 0) > 0 ? 'tranche' : null
+                        )
+                      }}
+                        className="rounded-full border border-orange-200 px-2.5 py-1 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-100">Éditer</button>
+                      <button
+                        onClick={() => {
+                          const enfant = enfantsActifs.find((e) => e.id === p.enfantId)
+                          genererRecuPaiement(p, enfant)
+                        }}
+                        title="Télécharger le reçu PDF"
+                        className="inline-flex items-center gap-1 rounded-full border border-green-200 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100">
+                        <Printer size={12} /> Reçu
+                      </button>
                     </div>
                   </div>
                 </td>
@@ -671,10 +723,8 @@ export default function Paiements() {
                     placeholder="ex: 5000" autoFocus={!!joPayModal.journalierId} />
                 </FormGroup>
                 <FormGroup label="Mode de paiement">
-                  <Select value={joPayModal.modePaiement}
-                    onChange={(e) => setJoPayModal((m) => ({ ...m, modePaiement: e.target.value }))}>
-                    {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                  </Select>
+                  <ModePaiementBoutons value={joPayModal.modePaiement}
+                    onChange={(v) => setJoPayModal((m) => ({ ...m, modePaiement: v }))} />
                 </FormGroup>
               </div>
             </div>
@@ -746,9 +796,8 @@ export default function Paiements() {
               </FormGroup>
 
               <FormGroup label="Mode de paiement">
-                <Select value={soldeModal.modePaiement} onChange={(e) => setSoldeModal((m) => ({ ...m, modePaiement: e.target.value }))}>
-                  {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </Select>
+                <ModePaiementBoutons value={soldeModal.modePaiement}
+                  onChange={(v) => setSoldeModal((m) => ({ ...m, modePaiement: v }))} />
               </FormGroup>
             </div>
           )
@@ -803,10 +852,17 @@ export default function Paiements() {
               })()}
             </FormGroup>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <FormGroup label="Type de paiement">
-                <Select value={modal.data.type} onChange={(e) => onTypeChange(e.target.value)}>
-                  {TYPES_PAIEMENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </Select>
+              <FormGroup label="Type de paiement" hint="Choisissez dans la liste ou saisissez librement">
+                <ChampAutocomplete
+                  value={TYPES_PAIEMENT.find((t) => t.id === modal.data.type)?.label ?? modal.data.type}
+                  onChange={(v) => {
+                    const connu = TYPES_PAIEMENT.find((t) => t.label.toLowerCase() === (v || '').trim().toLowerCase())
+                    onTypeChange(connu ? connu.id : v)
+                  }}
+                  suggestions={TYPES_PAIEMENT.map((t) => t.label)}
+                  placeholder="ex: Mensualité, Annuelle…"
+                  accent="orange"
+                />
               </FormGroup>
               <FormGroup label="Mois concerné *">
                 <Select value={modal.data.mois} onChange={(e) => set('mois', Number(e.target.value))}>
@@ -834,9 +890,38 @@ export default function Paiements() {
                 <FormGroup label="Montant dû (FCFA) *">
                   <Input type="number" value={modal.data.montantDu} onChange={(e) => set('montantDu', e.target.value)} />
                 </FormGroup>
-                <FormGroup label="Montant payé (FCFA) *">
-                  <Input type="number" value={modal.data.montantPaye} onChange={(e) => set('montantPaye', e.target.value)} />
-                </FormGroup>
+                {TYPES_AVEC_TRANCHE.includes(modal.data.type) ? (
+                  <div>
+                    <p className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Payé par tranche ou en totalité ? *</p>
+                    <div className="flex items-center gap-2">
+                      <button type="button"
+                        onClick={() => setModeScolarite((s) => s === 'tranche' ? null : 'tranche')}
+                        className={toggleScolariteClass(modeScolarite === 'tranche', 'blue')}>
+                        🧩 Par tranche
+                      </button>
+                      <button type="button"
+                        onClick={() => {
+                          const suivant = modeScolarite === 'totalite' ? null : 'totalite'
+                          setModeScolarite(suivant)
+                          if (suivant === 'totalite') set('montantPaye', modal.data.montantDu)
+                        }}
+                        className={toggleScolariteClass(modeScolarite === 'totalite', 'green')}>
+                        ✅ Totalité
+                      </button>
+                    </div>
+                    {modeScolarite === 'tranche' && (
+                      <Input type="number" min="0" className="mt-2" value={modal.data.montantPaye}
+                        onChange={(e) => set('montantPaye', e.target.value)} placeholder="Montant versé maintenant" autoFocus />
+                    )}
+                    {modeScolarite === 'totalite' && Number(modal.data.montantDu) > 0 && (
+                      <p className="mt-2 text-xs font-semibold text-green-700">✅ Montant payé = montant dû ({formatMoney(Number(modal.data.montantDu))})</p>
+                    )}
+                  </div>
+                ) : (
+                  <FormGroup label="Montant payé (FCFA) *">
+                    <Input type="number" value={modal.data.montantPaye} onChange={(e) => set('montantPaye', e.target.value)} />
+                  </FormGroup>
+                )}
                 {TYPES_AVEC_CUISINE.includes(modal.data.type) && (
                   <FormGroup label="Frais de cuisine (FCFA)">
                     <Input type="number" min="0" value={modal.data.montantCuisine} onChange={(e) => set('montantCuisine', e.target.value)} placeholder="0" />
@@ -844,9 +929,7 @@ export default function Paiements() {
                   </FormGroup>
                 )}
                 <FormGroup label="Mode de paiement">
-                  <Select value={modal.data.modePaiement} onChange={(e) => set('modePaiement', e.target.value)}>
-                    {MODES_PAIEMENT.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                  </Select>
+                  <ModePaiementBoutons value={modal.data.modePaiement} onChange={(v) => set('modePaiement', v)} />
                 </FormGroup>
                 <FormGroup label="Date de paiement">
                   <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />

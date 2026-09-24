@@ -140,7 +140,7 @@ export default function Clients() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Clients</h2>
-          <p className="text-sm text-white/80">Répertoire des deux salles — cliquer une ligne pour voir la fiche</p>
+          <p className="text-sm text-white/80">Répertoire des deux salles : cliquer une ligne pour voir la fiche</p>
         </div>
       </div>
 

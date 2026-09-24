@@ -4,6 +4,7 @@ import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import { glassModalProps, COULEUR_MODULE, teinterHex, shadeHex } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -431,21 +432,12 @@ export default function Incidents() {
         <p>Incidents graves avec alarme, soins courants (température, bobos, médicaments) et carnet de vaccination — tout le suivi santé des enfants regroupé ici.</p>
       </div>
 
-      {/* Onglets */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'incidents',    label: '⚠️ Incidents' },
-          { id: 'soins',        label: '🩹 Soins courants' },
-          { id: 'vaccinations', label: '💉 Vaccination' }
-        ].map((t) => (
-          <button key={t.id} onClick={() => setOnglet(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              onglet === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Onglets — une couleur distincte par volet */}
+      <PillTabs active={onglet} onChange={setOnglet} accent={COULEUR_MODULE.garderie} tabs={[
+        { id: 'incidents',    label: '⚠️ Incidents', accent: '#dc2626' },
+        { id: 'soins',        label: '🩹 Soins courants', accent: '#0d9488' },
+        { id: 'vaccinations', label: '💉 Vaccination', accent: '#7c3aed' }
+      ]} />
 
       {/* ══════════════ ONGLET INCIDENTS ══════════════ */}
       {onglet === 'incidents' && <>

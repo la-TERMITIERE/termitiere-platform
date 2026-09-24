@@ -9,6 +9,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuthStore } from '../../core/auth'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
+import PillTabs from '../../shared/ui/PillTabs'
 import RecettesDepenses from '../depense/RecettesDepenses'
 import Depenses from './Depenses'
 import DetailProjetModal from './DetailProjetModal'
@@ -17,6 +18,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { SECTEURS } from '../depense/data'
 import { projetsVisibles, scopeParProjets, secteurEffectif, projetEnRetard, SECTEURS_PROJET } from './logic'
+import { COULEUR_MODULE } from '../../utils/color'
 import { STATUTS_PROJET, TYPES_PROJET } from './data'
 
 const SECTEUR_BTP = 'bat'
@@ -198,21 +200,17 @@ export default function Btp() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">BTP — Bâtiment & Travaux Publics</h2>
-          <p className="text-sm text-white/80">Chantiers, tâches et dépenses réunis au même endroit — réservé à l'administration</p>
+          <p className="text-sm text-white/80">Chantiers, tâches et dépenses réunis au même endroit : réservé à l'administration</p>
         </div>
       </div>
 
-      {/* Barre d'onglets — Chantiers à gauche, Dépenses à droite */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {ONGLETS.map((o) => (
-          <button key={o.id} type="button" onClick={() => setOnglet(o.id)}
-            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-bold transition-colors ${
-              onglet === o.id ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-400 hover:text-gray-600'
-            }`}>
-            <o.icon size={16} /> {o.label}
-          </button>
-        ))}
-      </div>
+      {/* Barre d'onglets — Chantiers à gauche, Dépenses à droite, une couleur
+          distincte par volet */}
+      <PillTabs active={onglet} onChange={setOnglet} accent={COULEUR_MODULE.projet}
+        tabs={ONGLETS.map((o) => ({
+          id: o.id, label: <><o.icon size={16} /> {o.label}</>,
+          accent: o.id === 'chantiers' ? COULEUR_MODULE.projet : o.id === 'depenses' ? '#B45309' : '#7c3aed'
+        }))} />
 
       {onglet === 'chantiers' && (
         <div className="space-y-6">

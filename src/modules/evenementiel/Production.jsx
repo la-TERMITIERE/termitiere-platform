@@ -282,7 +282,7 @@ export default function Production() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Production</h2>
-          <p className="text-sm text-white/80">Appatam → séchage (5-6 jours) → prêtes à vendre — cycle 24h ou 48h</p>
+          <p className="text-sm text-white/80">Appatam → séchage (5-6 jours) → prêtes à vendre : cycle 24h ou 48h</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism). */}
         <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}

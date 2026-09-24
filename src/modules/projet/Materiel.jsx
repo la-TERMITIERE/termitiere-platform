@@ -357,7 +357,7 @@ export default function Materiel() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Matériel & Matériaux</h2>
-          <p className="text-sm text-white/80">{magasins.length} magasin(s) — {compteurGlobal('sur_site')} matériel(s) sur site — Consommables (stock), outillage, véhicules, gros équipement</p>
+          <p className="text-sm text-white/80">{magasins.length} magasin(s) : {compteurGlobal('sur_site')} matériel(s) sur site : consommables (stock), outillage, véhicules, gros équipement</p>
         </div>
       </div>
 

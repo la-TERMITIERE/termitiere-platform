@@ -1,8 +1,10 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Plus, UtensilsCrossed, ChevronLeft, ChevronRight, Pencil, CheckCircle2, Clock, Trash2, Milk, CalendarDays } from 'lucide-react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { Plus, UtensilsCrossed, ChevronLeft, ChevronRight, Pencil, CheckCircle2, Clock, Trash2, Milk, CalendarDays, ArrowLeft, Search } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
@@ -12,6 +14,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { programmeDuGroupe } from './data'
 import { useGarderieStore } from './store/garderieStore'
 import { journaliersActifsSurDate } from './logic'
 import { removeItem } from '../../core/db'
@@ -62,9 +65,16 @@ const OBSERVATIONS_BIBERON = [
   { id: 'regurgitation', label: '⚠️ Régurgitation' }
 ]
 
-function repasMenuActuel(menu) {
+// La Maternelle (enfants scolarisés à la journée, deux récréations) ne mange
+// pas comme la Garderie (repas continus toute la journée) — chaque programme a
+// donc sa propre structure de « menu » du jour.
+function repasMenuActuel(menu, mode) {
   if (!menu) return null
   const h = new Date().getHours()
+  if (mode === 'maternelle') {
+    if (h < 12) return { label: '🥐 Récréation 1', desc: menu.recreation1 }
+    return              { label: '🍪 Récréation 2', desc: menu.recreation2 }
+  }
   if (h < 10) return { label: '🌅 Petit-déjeuner', desc: menu.petitDejeuner }
   if (h < 15) return { label: '🍛 Déjeuner',       desc: menu.dejeuner }
   return              { label: '🍎 Goûter',          desc: menu.gouter }
@@ -76,7 +86,9 @@ function addDays(dateStr, n) {
   return d.toISOString().slice(0, 10)
 }
 
-const emptyMenu = () => ({ petitDejeuner: '', dejeuner: '', gouter: '', notes: '' })
+const emptyMenu = (mode) => mode === 'maternelle'
+  ? { recreation1: '', recreation2: '', notes: '' }
+  : { petitDejeuner: '', dejeuner: '', gouter: '', notes: '' }
 
 export default function Cantine() {
   const { user } = useAuth()
@@ -90,12 +102,19 @@ export default function Cantine() {
   const { data: journaliers } = useCollection('garderie_journaliers')
   const { data: nutrition }   = useCollection('garderie_nutrition')
 
+  // Programme actif — piloté par le menu déroulant de la barre latérale
+  // (Sidebar.jsx → CantineNavMenu), qui navigue vers /garderie/cantine?programme=…
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const mode = searchParams.get('programme') === 'maternelle' ? 'maternelle' : 'garderie'
+
   const today = todayStr()
   const [onglet, setOnglet]         = useState('menu')
   const [dateFiltre, setDateFiltre] = useState(today)
   const [menuModal, setMenuModal]   = useState(null)
   const [saving, setSaving]             = useState(false)
   const [saisiSpecial, setSaisiSpecial] = useState({})
+  const [rechercheRepas, setRechercheRepas] = useState('')
   const [savingTous, setSavingTous]     = useState(false)
   const [biberonModal, setBiberonModal] = useState(null)
   const [biberonForm, setBiberonForm]   = useState({ heure: new Date().toTimeString().slice(0,5), typeLait: 'artificiel', quantite: '', observation: 'bien', notes: '' })
@@ -108,6 +127,12 @@ export default function Cantine() {
     }, 60000)
     return () => clearInterval(timer)
   }, [])
+
+  // L'onglet Nourrissons (biberons) n'existe qu'en Garderie — pas de sens en
+  // Maternelle (3-6 ans). Revient sur Menu si on bascule de programme depuis cet onglet.
+  useEffect(() => {
+    if (mode === 'maternelle' && onglet === 'nourrissons') setOnglet('menu')
+  }, [mode, onglet])
 
   const isToday = dateFiltre === today
 
@@ -195,30 +220,44 @@ export default function Cantine() {
     toast.success('Biberon supprimé ✓')
   }
 
+  // Un menu Garderie et un menu Maternelle du même jour ne doivent jamais se
+  // confondre (structures différentes — 3 repas vs 2 récréations) : identifiant
+  // du menu suffixé par programme. La Garderie garde l'ID historique (simple
+  // date) pour rester compatible avec les menus déjà saisis avant ce découpage.
+  const menuId = mode === 'maternelle' ? `${dateFiltre}_maternelle` : dateFiltre
   const menuDuJour = useMemo(
-    () => menus.find((m) => m.date === dateFiltre) || null,
-    [menus, dateFiltre]
+    () => menus.find((m) => m.id === menuId) || null,
+    [menus, menuId]
   )
 
-  // Enfants présents actifs uniquement
+  // Enfants présents actifs du programme courant uniquement (Garderie ou Maternelle).
   const enfantsActifs = useMemo(() =>
     enfants
       .filter((e) => e.statut === 'actif' && !deletedEnfantIds.has(e.id) && enfantsPresentsIds.has(e.id))
+      .filter((e) => (e.programme || programmeDuGroupe(e.groupe)) === mode)
       .sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1),
-    [enfants, deletedEnfantIds, enfantsPresentsIds]
+    [enfants, deletedEnfantIds, enfantsPresentsIds, mode]
   )
 
+  // Les enfants journaliers (dépôt d'une seule journée) n'existent qu'en
+  // Garderie — jamais en Maternelle.
   const journaliersJour = useMemo(() =>
-    journaliersActifsSurDate(journaliers, dateFiltre)
+    mode === 'maternelle' ? [] : journaliersActifsSurDate(journaliers, dateFiltre)
       .map((j) => ({ ...j, _typeEnfant: 'journalier' }))
       .sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1),
-    [journaliers, dateFiltre]
+    [journaliers, dateFiltre, mode]
   )
 
   const tousEnfants = useMemo(() =>
     [...enfantsActifs.map((e) => ({ ...e, _typeEnfant: 'inscrit' })), ...journaliersJour],
     [enfantsActifs, journaliersJour]
   )
+
+  const tousEnfantsFiltres = useMemo(() => {
+    if (!rechercheRepas.trim()) return tousEnfants
+    const q = rechercheRepas.toLowerCase()
+    return tousEnfants.filter((e) => `${e.prenom} ${e.nom}`.toLowerCase().includes(q))
+  }, [tousEnfants, rechercheRepas])
 
   const repasParEnfant = useMemo(() => {
     const map = {}
@@ -243,11 +282,13 @@ export default function Cantine() {
   async function handleSaveMenu() {
     if (saving) return
     const d = menuModal.data
-    if (!d.dejeuner.trim()) return toast.error('Le déjeuner est requis')
+    if (mode === 'maternelle') {
+      if (!d.recreation1.trim()) return toast.error('La récréation 1 est requise')
+    } else if (!d.dejeuner.trim()) return toast.error('Le déjeuner est requis')
     setSaving(true)
     try {
-      await setItem('garderie_menus', dateFiltre, { ...d, date: dateFiltre, id: dateFiltre })
-      audit('garderie', 'MENU_SAVE', formatDateShort(dateFiltre))
+      await setItem('garderie_menus', menuId, { ...d, date: dateFiltre, programme: mode, id: menuId })
+      audit('garderie', 'MENU_SAVE', `${formatDateShort(dateFiltre)} — ${mode === 'maternelle' ? 'Maternelle' : 'Garderie'}`)
       toast.success('Menu enregistré ✓')
       setMenuModal(null)
     } finally {
@@ -258,7 +299,7 @@ export default function Cantine() {
   async function servirRepas(champ) {
     if (!menuDuJour) return
     const heure = new Date().toTimeString().slice(0, 5)
-    await setItem('garderie_menus', dateFiltre, { ...menuDuJour, [champ]: heure, id: dateFiltre })
+    await setItem('garderie_menus', menuId, { ...menuDuJour, [champ]: heure, id: menuId })
     audit('garderie', 'REPAS_SERVI', champ, { date: dateFiltre, heure })
     toast.success(`Servi à ${heure} ✓`)
   }
@@ -280,7 +321,7 @@ export default function Cantine() {
       setSaisiSpecial((prev) => ({ ...prev, [ref]: existant?.descriptionSpecial || '' }))
       return
     }
-    const repasActuel = typeRepas === 'menu' ? repasMenuActuel(menuDuJour) : null
+    const repasActuel = typeRepas === 'menu' ? repasMenuActuel(menuDuJour, mode) : null
     await setItem('garderie_repas', id, {
       id, date: dateFiltre, enfantRef: ref,
       enfantNom: `${enfant.prenom} ${enfant.nom}`,
@@ -297,7 +338,7 @@ export default function Cantine() {
   async function tousAuMenu() {
     if (savingTous || tousEnfants.length === 0) return
     setSavingTous(true)
-    const repasActuel = repasMenuActuel(menuDuJour)
+    const repasActuel = repasMenuActuel(menuDuJour, mode)
     try {
       await Promise.all(tousEnfants.map((enfant) => {
         const ref = refEnfant(enfant)
@@ -349,6 +390,10 @@ export default function Cantine() {
 
       <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
+        <button onClick={() => navigate('/garderie')} title="Retour au tableau de bord"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition-all duration-200 hover:bg-white/30 hover:shadow-[0_0_16px_4px_rgba(255,255,255,0.8)]">
+          <ArrowLeft size={18} />
+        </button>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: '#E8390E', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
@@ -356,8 +401,15 @@ export default function Cantine() {
           <UtensilsCrossed size={28} color="white" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-extrabold">Cantine & Repas</h2>
-          <p className="text-sm text-white/80">Biberons, repas et suivi nutritionnel du jour</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-extrabold">Cantine & Repas</h2>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold text-white backdrop-blur-sm">
+              {mode === 'maternelle' ? '🎓 Maternelle' : '🍼 Garderie'}
+            </span>
+          </div>
+          <p className="text-sm text-white/80">
+            {mode === 'maternelle' ? 'Récréations et repas du jour' : 'Biberons, repas et suivi nutritionnel du jour'}
+          </p>
         </div>
         {/* Sélecteur de JOUR — remonté dans le bandeau. Un seul jour (pas de mode
             Mois/Année/Plage) : le menu et le suivi biberons sont une saisie du jour,
@@ -379,21 +431,13 @@ export default function Cantine() {
         </div>
       </div>
 
-      {/* Onglets */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'menu',        label: '🍽️ Menu du jour' },
-          { id: 'repas',       label: '🧒 Repas des enfants' },
-          { id: 'nourrissons', label: `🍼 Nourrissons${nourrissons.length > 0 ? ` (${nourrissons.length})` : ''}` }
-        ].map((t) => (
-          <button key={t.id} onClick={() => setOnglet(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              onglet === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Onglets — une couleur distincte par volet (comme Présences enfants),
+          Nourrissons (biberons) n'existe qu'en Garderie (0-2 ans) */}
+      <PillTabs active={onglet} onChange={setOnglet} accent={COULEUR_MODULE.garderie} tabs={[
+        { id: 'menu',  label: mode === 'maternelle' ? '🍽️ Récréations du jour' : '🍽️ Menu du jour', accent: '#E8390E' },
+        { id: 'repas', label: '🧒 Repas des enfants', accent: '#2563eb' },
+        ...(mode === 'garderie' ? [{ id: 'nourrissons', label: `🍼 Nourrissons${nourrissons.length > 0 ? ` (${nourrissons.length})` : ''}`, accent: '#db2777' }] : [])
+      ]} />
 
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold text-gray-600">{formatDateShort(dateFiltre)}</span>
@@ -403,55 +447,71 @@ export default function Cantine() {
       {onglet === 'menu' && (
         <div className="space-y-4">
           {menuDuJour ? (
-            <Card>
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <UtensilsCrossed size={18} className="text-orange-500" /> Menu du {formatDateShort(dateFiltre)}
+            <Card className="overflow-hidden !p-0">
+              <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 via-amber-50 to-white px-4 py-3.5 sm:px-5">
+                <h3 className="flex items-center gap-2 font-extrabold text-gray-800">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-red-500 text-white shadow-[0_3px_8px_-2px_rgba(232,57,14,0.6)]">
+                    <UtensilsCrossed size={15} />
+                  </span>
+                  Menu du {formatDateShort(dateFiltre)}
                 </h3>
                 {garderieOuverte ? (
-                  <Button variant="outline" onClick={() => setMenuModal({ data: { ...emptyMenu(), ...menuDuJour } })}>
+                  <Button variant="outline" onClick={() => setMenuModal({ data: { ...emptyMenu(mode), ...menuDuJour } })}>
                     <Pencil size={14} /> Modifier
                   </Button>
                 ) : (
-                  <span className="text-xs text-gray-400 italic">🔒 Fermée</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">🔒 Fermée</span>
                 )}
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: '🌅 Petit-déjeuner', desc: menuDuJour.petitDejeuner, champ: 'heurePetitDejeuner', heureServie: menuDuJour.heurePetitDejeuner },
-                  { label: '🍛 Déjeuner',       desc: menuDuJour.dejeuner,      champ: 'heureDejeuner',      heureServie: menuDuJour.heureDejeuner },
-                  { label: '🍎 Goûter',          desc: menuDuJour.gouter,        champ: 'heureGouter',        heureServie: menuDuJour.heureGouter }
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl bg-orange-50 p-3 flex flex-col gap-2">
-                    <p className="text-xs font-bold text-orange-600">{item.label}</p>
-                    <p className="text-sm text-gray-800 flex-1">
-                      {item.desc || <span className="italic text-gray-400">Non renseigné</span>}
+              <div className={`grid gap-3 p-4 sm:p-5 ${mode === 'maternelle' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+                {(mode === 'maternelle' ? [
+                  { emoji: '🥐', texte: 'Récréation 1', desc: menuDuJour.recreation1, champ: 'heureRecreation1', heureServie: menuDuJour.heureRecreation1 },
+                  { emoji: '🍪', texte: 'Récréation 2', desc: menuDuJour.recreation2, champ: 'heureRecreation2', heureServie: menuDuJour.heureRecreation2 }
+                ] : [
+                  { emoji: '🌅', texte: 'Petit-déjeuner', desc: menuDuJour.petitDejeuner, champ: 'heurePetitDejeuner', heureServie: menuDuJour.heurePetitDejeuner },
+                  { emoji: '🍛', texte: 'Déjeuner',       desc: menuDuJour.dejeuner,      champ: 'heureDejeuner',      heureServie: menuDuJour.heureDejeuner },
+                  { emoji: '🍎', texte: 'Goûter',          desc: menuDuJour.gouter,        champ: 'heureGouter',        heureServie: menuDuJour.heureGouter }
+                ]).map((item) => (
+                  <div key={item.texte}
+                    className={`group relative flex flex-col gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-16px_rgba(232,57,14,0.35)] ${
+                      item.heureServie ? 'border-green-100 bg-gradient-to-b from-green-50/70 to-white' : 'border-orange-100 bg-gradient-to-b from-orange-50/70 to-white'
+                    }`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-lg shadow-[0_2px_6px_-1px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(0,0,0,0.04)]">
+                        {item.emoji}
+                      </span>
+                      <p className="text-xs font-bold uppercase tracking-wide text-orange-600">{item.texte}</p>
+                    </div>
+                    <p className="min-h-[2.5rem] flex-1 text-[15px] font-semibold leading-snug text-gray-800">
+                      {item.desc || <span className="text-sm font-normal italic text-gray-400">Non renseigné</span>}
                     </p>
-                    {item.heureServie ? (
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 text-xs font-bold text-green-600">
-                          <CheckCircle2 size={13} /> Servi à {item.heureServie}
-                        </span>
-                        {isToday && (
-                          <button onClick={() => servirRepas(item.champ)}
-                            className="text-[10px] text-gray-400 hover:text-orange-500 underline">corriger</button>
-                        )}
-                      </div>
-                    ) : isToday && garderieOuverte ? (
-                      <button onClick={() => servirRepas(item.champ)}
-                        className="flex items-center justify-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-600 transition-colors">
-                        <Clock size={12} /> Servir maintenant
-                      </button>
-                    ) : isToday && !garderieOuverte ? (
-                      <span className="text-xs text-gray-300 italic">Garderie fermée</span>
-                    ) : (
-                      <span className="text-xs text-gray-300 italic">Non servi</span>
-                    )}
+                    <div className="flex items-center justify-between gap-2 border-t border-black/5 pt-3">
+                      {item.heureServie ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">
+                            <CheckCircle2 size={13} /> Servi à {item.heureServie}
+                          </span>
+                          {isToday && (
+                            <button onClick={() => servirRepas(item.champ)}
+                              className="text-[10px] text-gray-400 hover:text-orange-500 underline">corriger</button>
+                          )}
+                        </>
+                      ) : isToday && garderieOuverte ? (
+                        <button onClick={() => servirRepas(item.champ)}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-orange-400 to-red-500 px-3 py-2 text-xs font-bold text-white shadow-[0_4px_12px_-3px_rgba(232,57,14,0.6),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-transform hover:scale-[1.03]">
+                          <Clock size={13} /> Servir maintenant
+                        </button>
+                      ) : isToday && !garderieOuverte ? (
+                        <span className="text-xs italic text-gray-400">Garderie fermée</span>
+                      ) : (
+                        <span className="text-xs italic text-gray-400">Non servi</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
               {menuDuJour.notes && (
-                <p className="mt-3 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+                <p className="mx-4 mb-4 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 sm:mx-5 sm:mb-5">
                   ⚠️ <span className="font-semibold">Infos importantes :</span> {menuDuJour.notes}
                 </p>
               )}
@@ -462,8 +522,8 @@ export default function Cantine() {
                 <UtensilsCrossed size={40} className="text-gray-300" />
                 <p className="text-gray-400 text-sm">Aucun menu saisi pour ce jour.</p>
                 {garderieOuverte ? (
-                  <Button onClick={() => setMenuModal({ data: emptyMenu() })}>
-                    <Plus size={16} /> Saisir le menu du jour
+                  <Button onClick={() => setMenuModal({ data: emptyMenu(mode) })}>
+                    <Plus size={16} /> {mode === 'maternelle' ? 'Saisir les récréations du jour' : 'Saisir le menu du jour'}
                   </Button>
                 ) : (
                   <p className="text-xs text-gray-400 italic">🔒 Garderie fermée — saisie impossible après {params.heureFermeture || '18:00'}</p>
@@ -504,7 +564,7 @@ export default function Cantine() {
               <div>
                 <p className="text-sm font-bold text-green-800">Tous les enfants ont mangé le menu du jour ?</p>
                 <p className="text-xs text-green-600">
-                  {repasMenuActuel(menuDuJour)?.label} — {repasMenuActuel(menuDuJour)?.desc || 'Menu non renseigné'}
+                  {repasMenuActuel(menuDuJour, mode)?.label} — {repasMenuActuel(menuDuJour, mode)?.desc || 'Menu non renseigné'}
                 </p>
               </div>
               {garderieOuverte ? (
@@ -517,6 +577,16 @@ export default function Cantine() {
               )}
             </div>
           )}
+
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 sm:w-72"
+              placeholder="Rechercher un enfant…"
+              value={rechercheRepas}
+              onChange={(e) => setRechercheRepas(e.target.value)}
+            />
+          </div>
 
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
@@ -534,7 +604,10 @@ export default function Cantine() {
                     Aucun enfant présent ce jour. Marquez les arrivées dans le module <strong>Présences</strong>.
                   </td></tr>
                 )}
-                {tousEnfants.map((e) => {
+                {tousEnfants.length > 0 && tousEnfantsFiltres.length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-sm text-gray-400">Aucun enfant trouvé.</td></tr>
+                )}
+                {tousEnfantsFiltres.map((e) => {
                   const ref = refEnfant(e)
                   const r = repasParEnfant[ref]
                   const isMenu    = r?.typeRepas === 'menu'
@@ -877,18 +950,33 @@ export default function Cantine() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🌅 Petit-déjeuner</p>
-              <Input value={menuModal.data.petitDejeuner} onChange={(e) => setMenu('petitDejeuner', e.target.value)} placeholder="ex: Bouillie de mil, lait…" />
-            </div>
-            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">🍛 Déjeuner *</p>
-              <Input value={menuModal.data.dejeuner} onChange={(e) => setMenu('dejeuner', e.target.value)} placeholder="ex: Riz sauce arachide, viande de bœuf" />
-            </div>
-            <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-green-700">🍎 Goûter</p>
-              <Input value={menuModal.data.gouter} onChange={(e) => setMenu('gouter', e.target.value)} placeholder="ex: Biscuits, jus de fruit…" />
-            </div>
+            {mode === 'maternelle' ? (
+              <>
+                <div className="rounded-2xl border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🥐 Récréation 1 *</p>
+                  <Input value={menuModal.data.recreation1} onChange={(e) => setMenu('recreation1', e.target.value)} placeholder="ex: Biscuits, lait…" />
+                </div>
+                <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">🍪 Récréation 2</p>
+                  <Input value={menuModal.data.recreation2} onChange={(e) => setMenu('recreation2', e.target.value)} placeholder="ex: Fruit, jus…" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🌅 Petit-déjeuner</p>
+                  <Input value={menuModal.data.petitDejeuner} onChange={(e) => setMenu('petitDejeuner', e.target.value)} placeholder="ex: Bouillie de mil, lait…" />
+                </div>
+                <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">🍛 Déjeuner *</p>
+                  <Input value={menuModal.data.dejeuner} onChange={(e) => setMenu('dejeuner', e.target.value)} placeholder="ex: Riz sauce arachide, viande de bœuf" />
+                </div>
+                <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-green-700">🍎 Goûter</p>
+                  <Input value={menuModal.data.gouter} onChange={(e) => setMenu('gouter', e.target.value)} placeholder="ex: Biscuits, jus de fruit…" />
+                </div>
+              </>
+            )}
 
             <FormGroup label="⚠️ Infos importantes du jour">
               <textarea

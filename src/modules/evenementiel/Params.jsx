@@ -130,7 +130,7 @@ export default function Params() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Paramètres</h2>
-          <p className="text-sm text-white/80">Recettes de production — consommation de matières pour 1000 briques</p>
+          <p className="text-sm text-white/80">Recettes de production : consommation de matières pour 1000 briques</p>
         </div>
       </div>
 

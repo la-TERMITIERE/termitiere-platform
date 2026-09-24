@@ -59,7 +59,7 @@ export default function GarderieModule() {
         <GarderieGuard roles={ROLES_GESTION}><Paiements /></GarderieGuard>
       } />
       <Route path="analyses" element={
-        <GarderieGuard roles={ROLES_DIRECTION}><Analyses /></GarderieGuard>
+        <GarderieGuard roles={[...ROLES_DIRECTION, 'gerante_garderie']}><Analyses /></GarderieGuard>
       } />
       {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
       <Route path="finances" element={

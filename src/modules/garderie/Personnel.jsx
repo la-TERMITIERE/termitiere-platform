@@ -1,10 +1,11 @@
 import { useMemo, useState, useRef } from 'react'
-import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle, Eye, Camera, X, Loader2, UserCheck, UserX, CalendarDays, Users } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, LogOut, FilePen, Trash2, Timer, CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle, Eye, Camera, X, Loader2, UserCheck, UserX, CalendarDays, Users, Search } from 'lucide-react'
 import { compresserPhotoProfil } from '../../utils/fichiers'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
+import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -51,6 +52,14 @@ export default function Personnel() {
 
   const today = todayStr()
   const [dateFiltre, setDateFiltre] = useState(today)
+  // Tri par période — Jour (pointage arrivée/départ), ou Mois/Année/Plage
+  // (récapitulatif par personnel, sans action de pointage : format identique
+  // à Présences enfants / Enfants inscrits).
+  const [modePeriode, setModePeriode] = useState('jour') // 'jour' | 'mois' | 'annee' | 'plage'
+  const [moisSel, setMoisSel] = useState(today.slice(0, 7))
+  const [anneeSel, setAnneeSel] = useState(today.slice(0, 4))
+  const [debutSel, setDebutSel] = useState(today)
+  const [finSel, setFinSel]     = useState(today)
   const [onglet, setOnglet]         = useState('pointage')
   const [modal, setModal]                 = useState(null)
   const [detail, setDetail]               = useState(null)
@@ -62,6 +71,7 @@ export default function Personnel() {
   const [deletedIds, setDeletedIds]           = useState(new Set())
   const [absenceModal, setAbsenceModal]       = useState(null) // { p, pt }
   const [justification, setJustification]     = useState('')
+  const [rechercheTata, setRechercheTata]     = useState('')
 
   // Cache optimiste : mis à jour immédiatement au clic, avant que Firebase réponde
   const [cache, setCache] = useState({})
@@ -71,6 +81,21 @@ export default function Personnel() {
       .sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1),
     [personnel, deletedIds]
   )
+
+  // Toutes les fiches (actives + inactives), pour l'onglet « Gérer les tatas »
+  const personnelToutes = useMemo(
+    () => [...personnel].filter((p) => !deletedIds.has(p.id) && p.statut !== 'supprime')
+      .sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1),
+    [personnel, deletedIds]
+  )
+
+  const filtreNom = (liste) => {
+    if (!rechercheTata.trim()) return liste
+    const q = rechercheTata.toLowerCase()
+    return liste.filter((p) => `${p.prenom} ${p.nom}`.toLowerCase().includes(q))
+  }
+  const personnelActifFiltre  = useMemo(() => filtreNom(personnelActif), [personnelActif, rechercheTata])
+  const personnelToutesFiltre = useMemo(() => filtreNom(personnelToutes), [personnelToutes, rechercheTata])
 
   // Clé stable : une seule entrée par personnel par jour
   const presenceKey = (personnelId, date) => `${personnelId}__${date}`
@@ -95,6 +120,43 @@ export default function Personnel() {
     const repartis = pts.filter((p) => p.heureDepart).length
     return { arrives, repartis, total: personnelActif.length }
   }, [presences, dateFiltre, personnelActif])
+
+  const changerMois = (delta) => {
+    const [a, m] = moisSel.split('-').map(Number)
+    let mm = m + delta, aa = a
+    if (mm < 1) { mm = 12; aa -= 1 }
+    if (mm > 12) { mm = 1; aa += 1 }
+    setMoisSel(`${aa}-${String(mm).padStart(2, '0')}`)
+  }
+
+  // Une date appartient-elle à la période affichée par le bandeau ?
+  const dansPeriodeAffichee = (dateStr) => {
+    if (!dateStr) return false
+    if (modePeriode === 'mois') return dateStr.startsWith(moisSel)
+    if (modePeriode === 'annee') return dateStr.startsWith(anneeSel)
+    if (modePeriode === 'plage') return (!debutSel || dateStr >= debutSel) && (!finSel || dateStr <= finSel)
+    return dateStr === dateFiltre
+  }
+
+  // Récapitulatif par personnel (Mois/Plage) — présences/absences sur la période,
+  // sans action de pointage (une arrivée/un départ ne s'enregistre que sur un jour précis).
+  const resumeParPersonnel = useMemo(() => {
+    const map = new Map()
+    personnelActif.forEach((p) => map.set(p.id, { presents: 0, absents: 0 }))
+    presences.filter((pt) => pt.personnelId && dansPeriodeAffichee(pt.date)).forEach((pt) => {
+      const r = map.get(pt.personnelId)
+      if (!r) return
+      if (pt.statut === 'absent') r.absents++
+      else if (pt.heureArrivee) r.presents++
+    })
+    return map
+  }, [presences, personnelActif, modePeriode, moisSel, anneeSel, debutSel, finSel])
+
+  const statsPeriode = useMemo(() => {
+    let presents = 0, absents = 0
+    resumeParPersonnel.forEach((r) => { presents += r.presents; absents += r.absents })
+    return { presents, absents }
+  }, [resumeParPersonnel])
 
   async function handleSave() {
     if (saving) return
@@ -317,7 +379,7 @@ export default function Personnel() {
   return (
     <div className="space-y-5">
 
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -325,30 +387,84 @@ export default function Personnel() {
         }}>
           <Users size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Personnel & Tatas</h2>
-          <p className="text-sm text-white/80">Équipe encadrante — fiches, horaires, historique</p>
+          <p className="text-sm text-white/80">Équipe encadrante : fiches, horaires, historique</p>
         </div>
+
+        {/* Tri par période — même format que le sélecteur de Présences enfants
+            (pastille blanche sur le dégradé du module) : Jour (pointage), ou
+            Mois/Plage (récapitulatif par personnel, sans action de pointage). */}
+        {onglet === 'pointage' && (
+          <div className="relative flex w-full flex-wrap items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto">
+            <select value={modePeriode} onChange={(e) => setModePeriode(e.target.value)}
+              className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-gray-800">
+              <option value="jour">Jour</option>
+              <option value="mois">Mois</option>
+              <option value="annee">Année</option>
+              <option value="plage">Plage</option>
+            </select>
+
+            {modePeriode === 'jour' && (
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
+                  className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+                <input type="date" value={dateFiltre} max={today} style={{ colorScheme: 'dark' }}
+                  onChange={(e) => setDateFiltre(e.target.value)}
+                  className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+                <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
+                  className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+                {!isToday && (
+                  <button onClick={() => setDateFiltre(today)}
+                    className="rounded-xl bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30">
+                    Auj.
+                  </button>
+                )}
+              </div>
+            )}
+
+            {modePeriode === 'mois' && (
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => changerMois(-1)}
+                  className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+                <input type="month" value={moisSel} max={today.slice(0, 7)} style={{ colorScheme: 'dark' }}
+                  onChange={(e) => setMoisSel(e.target.value)}
+                  className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+                <button onClick={() => changerMois(1)} disabled={moisSel >= today.slice(0, 7)}
+                  className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+              </div>
+            )}
+
+            {modePeriode === 'annee' && (
+              <input type="number" value={anneeSel} onChange={(e) => setAnneeSel(e.target.value)}
+                placeholder="ex: 2026" min="2020" max="2099"
+                className="w-24 rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50" />
+            )}
+
+            {modePeriode === 'plage' && (
+              <div className="flex items-center gap-1">
+                <input type="date" value={debutSel} max={finSel || today} style={{ colorScheme: 'dark' }}
+                  onChange={(e) => setDebutSel(e.target.value)}
+                  className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+                <span className="text-xs text-white/60">→</span>
+                <input type="date" value={finSel} min={debutSel || undefined} max={today} style={{ colorScheme: 'dark' }}
+                  onChange={(e) => setFinSel(e.target.value)}
+                  className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Onglets */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[{ id: 'pointage', label: '📋 Pointage journalier' }, { id: 'fiches', label: '👩 Gérer les tatas' }].map((t) => (
-          <button key={t.id} onClick={() => setOnglet(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${onglet === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Onglets — une couleur distincte par volet */}
+      <PillTabs active={onglet} onChange={setOnglet} accent={COULEUR_MODULE.garderie} tabs={[
+        { id: 'pointage', label: '📋 Pointage journalier', accent: '#2563eb' },
+        { id: 'fiches', label: '👩 Gérer les tatas', accent: '#E8390E' }
+      ]} />
 
-      {/* Explication du fonctionnement */}
-      {onglet === 'pointage' && (
+      {onglet === 'pointage' && personnelActif.length === 0 && (
         <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          <p className="font-semibold mb-0.5">💡 Comment ça fonctionne ?</p>
-          <p>Les tatas enregistrées dans <strong>"Gérer les tatas"</strong> apparaissent <strong>automatiquement chaque jour</strong> ici. Tu n'as rien à ajouter — il suffit de cliquer <strong>Arrivée</strong> quand elles arrivent et <strong>Départ</strong> quand elles repartent.</p>
-          {personnelActif.length === 0 && (
-            <p className="mt-1 font-semibold text-blue-600">👉 Aucune tata enregistrée — allez dans l'onglet <strong>"Gérer les tatas"</strong> pour en ajouter.</p>
-          )}
+          👉 Aucune tata enregistrée — allez dans l'onglet <strong>"Gérer les tatas"</strong> pour en ajouter.
         </div>
       )}
       {onglet === 'fiches' && (
@@ -360,41 +476,97 @@ export default function Personnel() {
 
       {onglet === 'pointage' && (
         <>
-          {/* Sélecteur de date */}
+          {/* KPI — bande unique glassmorphism (même design que Présences enfants) */}
+          <div className="relative overflow-hidden rounded-3xl border border-white/50 bg-white/55 shadow-[0_8px_28px_-10px_rgba(0,0,0,0.15),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150">
+            <div className="flex divide-x divide-gray-200/70">
+              {(modePeriode === 'jour'
+                ? [
+                    { label: 'Arrivées', value: stats.arrives, icon: CheckCircle2, accent: '#16a34a' },
+                    { label: 'Départs', value: stats.repartis, icon: LogOut, accent: '#dc2626' },
+                    { label: 'Membres', value: stats.total, icon: Users, accent: '#94a3b8' }
+                  ]
+                : [
+                    { label: 'Présences', value: statsPeriode.presents, icon: CheckCircle2, accent: '#16a34a' },
+                    { label: 'Absences', value: statsPeriode.absents, icon: LogOut, accent: '#dc2626' },
+                    { label: 'Personnel suivi', value: personnelActif.length, icon: Users, accent: '#94a3b8' }
+                  ]
+              ).map((k) => (
+                <div key={k.label} className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-center">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                    style={{ background: k.accent + '1a', color: k.accent }}>
+                    <k.icon className="h-3 w-3" />
+                  </div>
+                  <p className="w-full truncate text-[8px] font-semibold uppercase tracking-wide text-gray-500" title={k.label}>{k.label}</p>
+                  <p className="text-sm font-extrabold leading-none text-gray-900">{k.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-3">
-            <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
-              className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50"><ChevronLeft size={16} /></button>
-            <div>
-              <Input type="date" value={dateFiltre} max={today}
-                onChange={(e) => setDateFiltre(e.target.value)} />
+            <div className="relative min-w-[180px] flex-1 sm:flex-none">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 sm:w-64"
+                placeholder="Rechercher une tata…"
+                value={rechercheTata}
+                onChange={(e) => setRechercheTata(e.target.value)}
+              />
             </div>
-            <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
-              className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50 disabled:opacity-30"><ChevronRight size={16} /></button>
-            {!isToday && (
-              <button onClick={() => setDateFiltre(today)}
-                className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-200">
-                Aujourd'hui
-              </button>
+            {modePeriode === 'jour' && isToday && (
+              <p className="text-xs text-gray-400">
+                💡 Cliquez <strong className="text-gray-600">Arrivée</strong> / <strong className="text-gray-600">Départ</strong> pour pointer, ou <em>"saisir"</em> pour une heure manuelle.
+              </p>
             )}
-
-            {/* Stats rapides */}
-            <div className="flex gap-4 ml-2 text-sm">
-              <span className="font-semibold text-green-600">🟢 {stats.arrives} arrivée(s)</span>
-              <span className="font-semibold text-red-500">🔴 {stats.repartis} départ(s)</span>
-              <span className="text-gray-400">/ {stats.total} membres</span>
-            </div>
-
             <div className="ml-auto">
               <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export</Button>
             </div>
           </div>
 
-          {isToday && (
-            <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-2 text-sm text-orange-800">
-              <strong>Aujourd'hui :</strong> Cliquez <strong>Arrivée</strong> dès qu'une tata arrive, <strong>Départ</strong> quand elle repart. Utilisez <em>"saisir"</em> pour entrer une heure manuellement.
-            </div>
-          )}
-
+          {modePeriode !== 'jour' ? (
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Nom</th>
+                  <th className="px-3 py-2 text-left">Poste</th>
+                  <th className="px-3 py-2 text-center">✅ Présences</th>
+                  <th className="px-3 py-2 text-center">❌ Absences</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {personnelActif.length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-sm text-gray-400">Aucun personnel actif.</td></tr>
+                )}
+                {personnelActif.length > 0 && personnelActifFiltre.length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-sm text-gray-400">Aucune tata trouvée.</td></tr>
+                )}
+                {personnelActifFiltre.map((p) => {
+                  const r = resumeParPersonnel.get(p.id) || { presents: 0, absents: 0 }
+                  return (
+                    <tr key={p.id}>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          {p.photo ? (
+                            <img src={p.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-xs font-bold text-white shadow-[0_3px_6px_-1px_rgba(234,88,12,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.6),inset_0_-2px_3px_0_rgba(0,0,0,0.15)]">
+                              {(p.prenom?.[0] || '?').toUpperCase()}
+                            </div>
+                          )}
+                          <p className="font-semibold">{p.prenom} {p.nom}</p>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-gray-500">{POSTES_PERSONNEL.find((x) => x.id === p.poste)?.label || p.poste}</td>
+                      <td className="px-3 py-3 text-center font-bold text-green-600">{r.presents}</td>
+                      <td className="px-3 py-3 text-center font-bold text-red-500">{r.absents}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </Card>
+          ) : (
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -411,7 +583,10 @@ export default function Personnel() {
                 {personnelActif.length === 0 && (
                   <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Aucun personnel actif.</td></tr>
                 )}
-                {personnelActif.map((p) => {
+                {personnelActif.length > 0 && personnelActifFiltre.length === 0 && (
+                  <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Aucune tata trouvée.</td></tr>
+                )}
+                {personnelActifFiltre.map((p) => {
                   const pt = getPointage(p.id)
                   const duree = calcDuree(pt?.heureArrivee, pt?.heureDepart)
                   return (
@@ -421,7 +596,7 @@ export default function Personnel() {
                           {p.photo ? (
                             <img src={p.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
                           ) : (
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-xs font-bold text-white shadow-[0_3px_6px_-1px_rgba(234,88,12,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.6),inset_0_-2px_3px_0_rgba(0,0,0,0.15)]">
                               {(p.prenom?.[0] || '?').toUpperCase()}
                             </div>
                           )}
@@ -535,13 +710,23 @@ export default function Personnel() {
               </tbody>
             </table>
           </Card>
+          )}
         </>
       )}
 
       {onglet === 'fiches' && (
         <>
-          <div className="flex justify-end">
-            <Button onClick={() => setModal({ data: emptyPersonnel(), isNew: true })}>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[180px] flex-1 sm:flex-none">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 sm:w-64"
+                placeholder="Rechercher une tata…"
+                value={rechercheTata}
+                onChange={(e) => setRechercheTata(e.target.value)}
+              />
+            </div>
+            <Button onClick={() => setModal({ data: emptyPersonnel(), isNew: true })} className="ml-auto">
               <Plus size={16} /> Ajouter un membre
             </Button>
           </div>
@@ -559,17 +744,20 @@ export default function Personnel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {personnel.length === 0 && (
+                {personnelToutes.length === 0 && (
                   <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucun membre du personnel.</td></tr>
                 )}
-                {[...personnel].filter((p) => !deletedIds.has(p.id) && p.statut !== 'supprime').sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1).map((p) => (
+                {personnelToutes.length > 0 && personnelToutesFiltre.length === 0 && (
+                  <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucune tata trouvée.</td></tr>
+                )}
+                {personnelToutesFiltre.map((p) => (
                   <tr key={p.id} onClick={() => setDetail(p)} className="cursor-pointer hover:bg-orange-50 transition-colors">
                     <td className="px-3 py-2 font-semibold">
                       <div className="flex items-center gap-2">
                         {p.photo ? (
                           <img src={p.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
                         ) : (
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-xs font-bold text-white shadow-[0_3px_6px_-1px_rgba(234,88,12,0.5),inset_0_1px_1px_0_rgba(255,255,255,0.6),inset_0_-2px_3px_0_rgba(0,0,0,0.15)]">
                             {(p.prenom?.[0] || '?').toUpperCase()}
                           </div>
                         )}
@@ -635,7 +823,7 @@ export default function Personnel() {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-lg font-extrabold leading-tight">{absenceModal.p.prenom} {absenceModal.p.nom}</p>
-                <p className="text-sm text-white/80">{formatDateShort(dateFiltre)} — sera marquée absente</p>
+                <p className="text-sm text-white/80">{formatDateShort(dateFiltre)} : sera marquée absente</p>
               </div>
             </div>
             <FormGroup label="Motif / Justification (optionnel)">
@@ -770,7 +958,7 @@ export default function Personnel() {
                 <p className="truncate text-lg font-extrabold leading-tight">
                   {modal.data.prenom || modal.data.nom ? `${modal.data.prenom} ${modal.data.nom}`.trim() : (modal.isNew ? 'Nouveau membre' : 'Fiche personnel')}
                 </p>
-                <p className="text-sm text-white/80">Photo JPG ou PNG — recadrée automatiquement en carré</p>
+                <p className="text-sm text-white/80">Photo JPG ou PNG : recadrée automatiquement en carré</p>
               </div>
             </div>
 

@@ -81,7 +81,7 @@ export default function Partenaires({ module, suggestions }) {
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-extrabold">Partenaires</h2>
-          <p className="text-sm text-white/80">Contacts externes du secteur — ce ne sont pas des employés</p>
+          <p className="text-sm text-white/80">Contacts externes du secteur : ce ne sont pas des employés</p>
         </div>
       </div>
 

@@ -510,7 +510,7 @@ export default function Taches() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Tâches</h2>
-          <p className="text-sm text-white/80">Checklist de la direction — suivi et statistiques</p>
+          <p className="text-sm text-white/80">Checklist de la direction : suivi et statistiques</p>
         </div>
       </div>
 

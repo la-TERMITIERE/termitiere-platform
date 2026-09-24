@@ -143,7 +143,7 @@ export default function Coachs() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Coachs</h2>
-          <p className="text-sm text-white/80">Planning, pointage d'arrivée et performance — MAXI-GYM {siteLabel(site)}</p>
+          <p className="text-sm text-white/80">Planning, pointage d'arrivée et performance : MAXI-GYM {siteLabel(site)}</p>
         </div>
         {/* Filtre de période de l'historique des pointages, directement dans le
             bandeau (glassmorphism) — même recette que Séances/Abonnements. */}

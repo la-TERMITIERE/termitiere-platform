@@ -132,7 +132,7 @@ export default function Pilotage() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Pilotage & Analyses</h2>
-          <p className="text-sm text-white/80">Tendances et aide à la décision — MAXI-GYM</p>
+          <p className="text-sm text-white/80">Tendances et aide à la décision : MAXI-GYM</p>
         </div>
       </div>
 

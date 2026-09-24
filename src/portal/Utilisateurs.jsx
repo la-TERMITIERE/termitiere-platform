@@ -148,7 +148,7 @@ export default function Utilisateurs() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-extrabold sm:text-xl">Gestion des utilisateurs</h1>
-            <p className="truncate text-sm text-white/80">{users.length} compte{users.length > 1 ? 's' : ''} — rôles et accès aux modules</p>
+            <p className="truncate text-sm text-white/80">{users.length} compte{users.length > 1 ? 's' : ''} : rôles et accès aux modules</p>
           </div>
         </div>
         <Button onClick={openNew} variant="ghost" className="relative w-full hover:opacity-90 sm:ml-auto sm:w-auto" style={{ background: '#ffffff', color: '#BC3C31' }}><Plus size={16} /> Nouvel utilisateur</Button>

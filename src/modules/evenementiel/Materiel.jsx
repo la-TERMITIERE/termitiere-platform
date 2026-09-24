@@ -23,6 +23,7 @@ import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import StatCard from '../../shared/ui/StatCard'
+import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
@@ -36,6 +37,7 @@ import { formatDateShort, formatDateTime, formatMoney, genNumero, nowHM, todaySt
 import { marquerVoletVu } from '../../shared/nouveautes'
 import { APPROVER_ROLES } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
+import { COULEUR_MODULE } from '../../utils/color'
 
 // Stock actuel d'une matière première dans Stock briques (dernier inventaire enregistré
 // qui la mentionne) — utilisé UNE SEULE FOIS, pour l'import initial ci-dessous.
@@ -355,25 +357,18 @@ export default function Materiel() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Matériel & Matériaux</h2>
-          <p className="text-sm text-white/80">{compteur('sur_site')} matériel(s) sur site — Outillage, véhicules, gros équipement, consommables</p>
+          <p className="text-sm text-white/80">{compteur('sur_site')} matériel(s) sur site : outillage, véhicules, gros équipement, consommables</p>
         </div>
       </div>
 
       {/* Deux fenêtres : Matériaux (consommables, avec KPI de stock) et Matériels
           (outillage/véhicules/gros équipement, suivi d'état). */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'materiaux', label: '📦 Matériaux' },
-          { id: 'materiels', label: '🔧 Matériels' }
-        ].map((t) => (
-          <button key={t.id} onClick={() => { setOnglet(t.id); setFiltreCateg('') }}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              onglet === t.id ? 'border-violet-500 text-violet-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs active={onglet} accent={COULEUR_MODULE.evenementiel}
+        onChange={(id) => { setOnglet(id); setFiltreCateg('') }}
+        tabs={[
+          { id: 'materiaux', label: '📦 Matériaux', accent: '#7c3aed' },
+          { id: 'materiels', label: '🔧 Matériels', accent: '#ea580c' }
+        ]} />
 
       {/* Import ponctuel du stock actuel de Stock briques (ciment, sable, gravillon…) —
           disparaît une fois toutes les matières importées ; les deux stocks évoluent

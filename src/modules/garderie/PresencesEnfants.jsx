@@ -16,7 +16,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { GROUPES_AGE, STATUTS_PRESENCE } from './data'
+import { GROUPES_AGE, STATUTS_PRESENCE, programmeDuGroupe } from './data'
 import { useGarderieStore } from './store/garderieStore'
 import { journaliersActifsSurDate, enfantsSansRenouvellement } from './logic'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -51,6 +51,18 @@ export default function PresencesEnfants() {
 
   const today = todayStr()
   const [dateFiltre, setDateFiltre]   = useState(today)
+  // Le pointage (Arrivée/Départ/Récupéré par) ne fait sens que pour UN jour — les
+  // modes Mois/Plage basculent donc la liste vers un récapitulatif par enfant
+  // (jours présents/absents/excusés sur la période), sans actions de pointage.
+  const [modePeriode, setModePeriode] = useState('jour') // 'jour' | 'mois' | 'annee' | 'plage'
+  // Volets séparés par catégorie (mode Jour uniquement) — tout mélangé dans un
+  // seul tableau devenait vite illisible dès que l'effectif grandit ; chaque
+  // catégorie a maintenant son propre tableau de pointage.
+  const [ongletPointage, setOngletPointage] = useState('garderie') // 'garderie' | 'maternelle' | 'journaliers'
+  const [moisSel, setMoisSel] = useState(today.slice(0, 7))
+  const [anneeSel, setAnneeSel] = useState(today.slice(0, 4))
+  const [debutSel, setDebutSel] = useState(today)
+  const [finSel, setFinSel]     = useState(today)
   const [filtreGroupe, setFiltreGroupe] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
   const [recherche, setRecherche]     = useState('')
@@ -63,6 +75,23 @@ export default function PresencesEnfants() {
   const [cache, setCache] = useState({})
 
   const isToday = dateFiltre === today
+
+  const changerMois = (delta) => {
+    const [a, m] = moisSel.split('-').map(Number)
+    let mm = m + delta, aa = a
+    if (mm < 1) { mm = 12; aa -= 1 }
+    if (mm > 12) { mm = 1; aa += 1 }
+    setMoisSel(`${aa}-${String(mm).padStart(2, '0')}`)
+  }
+
+  // Une date appartient-elle à la période affichée par le bandeau ?
+  const dansPeriodeAffichee = (dateStr) => {
+    if (!dateStr) return false
+    if (modePeriode === 'mois') return dateStr.startsWith(moisSel)
+    if (modePeriode === 'annee') return dateStr.startsWith(anneeSel)
+    if (modePeriode === 'plage') return (!debutSel || dateStr >= debutSel) && (!finSel || dateStr <= finSel)
+    return dateStr === dateFiltre
+  }
 
   // Clé stable par enfant par jour
   const presKey = (enfantId, date) => `enf_${enfantId}_${date}`
@@ -128,8 +157,15 @@ export default function PresencesEnfants() {
 
   const liste = useMemo(() => {
     let rows = [...enfantsActifs]
+    // En mode Jour, chaque catégorie (Garderie / Maternelle) a son propre
+    // volet — les journaliers ont leur propre tableau, pas de filtre ici.
+    if (modePeriode === 'jour' && ongletPointage !== 'journaliers') {
+      rows = rows.filter((e) => (e.programme || programmeDuGroupe(e.groupe)) === ongletPointage)
+    }
     if (filtreGroupe) rows = rows.filter((e) => e.groupe === filtreGroupe)
-    if (filtreStatut) {
+    // Le filtre Statut (Présent/Absent/…) n'a de sens qu'en mode Jour — un
+    // enfant sur un Mois/une Plage a plusieurs statuts, pas un seul.
+    if (filtreStatut && modePeriode === 'jour') {
       rows = rows.filter((e) => {
         const p = getPresence(e.id)
         if (filtreStatut === 'present')   return p?.statut === 'present'
@@ -144,7 +180,7 @@ export default function PresencesEnfants() {
       rows = rows.filter((e) => `${e.prenom} ${e.nom} ${e.parentNom}`.toLowerCase().includes(q))
     }
     return rows.sort((a, b) => `${a.prenom} ${a.nom}` < `${b.prenom} ${b.nom}` ? -1 : 1)
-  }, [enfantsActifs, filtreGroupe, filtreStatut, recherche, presences, cache, dateFiltre])
+  }, [enfantsActifs, filtreGroupe, filtreStatut, recherche, presences, cache, dateFiltre, modePeriode, ongletPointage])
 
   const stats = useMemo(() => {
     const presents   = enfantsActifs.filter((e) => getPresence(e.id)?.statut === 'present').length
@@ -159,6 +195,36 @@ export default function PresencesEnfants() {
       total: enfantsActifs.length + journaliersJour.length
     }
   }, [enfantsActifs, journaliersJour, presences, cache, dateFiltre])
+
+  // ── Mode Mois / Plage : récapitulatif par enfant sur la période (jours
+  // présents/absents/excusés) — le pointage (arrivée/départ) reste réservé au
+  // mode Jour, une action ne s'appliquant qu'à une seule journée précise.
+  const resumeParEnfant = useMemo(() => {
+    if (modePeriode === 'jour') return null
+    const map = new Map()
+    enfantsActifs.forEach((e) => map.set(e.id, { presents: 0, absents: 0, excuses: 0 }))
+    presences.forEach((p) => {
+      if (!p.enfantId || p.personnelId || !dansPeriodeAffichee(p.date)) return
+      const entry = map.get(p.enfantId)
+      if (!entry) return
+      if (p.statut === 'present') entry.presents++
+      else if (p.statut === 'absent') entry.absents++
+      else if (p.statut === 'excuse') entry.excuses++
+    })
+    return map
+  }, [enfantsActifs, presences, modePeriode, moisSel, anneeSel, debutSel, finSel])
+
+  const statsPeriode = useMemo(() => {
+    if (modePeriode === 'jour') return null
+    let presents = 0, absents = 0, excuses = 0
+    presences.forEach((p) => {
+      if (!p.enfantId || p.personnelId || !dansPeriodeAffichee(p.date)) return
+      if (p.statut === 'present') presents++
+      else if (p.statut === 'absent') absents++
+      else if (p.statut === 'excuse') excuses++
+    })
+    return { presents, absents, excuses }
+  }, [presences, modePeriode, moisSel, anneeSel, debutSel, finSel])
 
   async function enregistrer(enfant, champs) {
     const existing = getPresence(enfant.id)
@@ -291,72 +357,198 @@ export default function PresencesEnfants() {
           <h2 className="text-lg font-extrabold">Présences</h2>
           <p className="text-sm text-white/80">Suivi quotidien des présences et absences des enfants</p>
         </div>
-        {/* Sélecteur de JOUR — remonté dans le bandeau. Reste volontairement un seul
-            jour (pas de mode Mois/Année/Plage) : le pointage arrivée/départ est une
-            action du jour, pas une liste qu'on filtrerait sur une période. */}
+        {/* Sélecteur de période — Jour (pointage arrivée/départ), ou Mois/Plage
+            (récapitulatif par enfant, sans action de pointage : une arrivée/un
+            départ ne s'enregistre que sur UN jour précis). */}
         <div className="relative flex w-full flex-wrap items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto">
-          <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
-            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
-          <input type="date" value={dateFiltre} max={today} style={{ colorScheme: 'dark' }}
-            onChange={(e) => setDateFiltre(e.target.value)}
-            className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
-          <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
-            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
-          {!isToday && (
-            <button onClick={() => setDateFiltre(today)}
-              className="rounded-xl bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30">
-              Auj.
-            </button>
+          <select value={modePeriode} onChange={(e) => setModePeriode(e.target.value)}
+            className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-gray-800">
+            <option value="jour">Jour</option>
+            <option value="mois">Mois</option>
+            <option value="annee">Année</option>
+            <option value="plage">Plage</option>
+          </select>
+
+          {modePeriode === 'jour' && (
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => setDateFiltre(addDays(dateFiltre, -1))}
+                className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+              <input type="date" value={dateFiltre} max={today} style={{ colorScheme: 'dark' }}
+                onChange={(e) => setDateFiltre(e.target.value)}
+                className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+              <button onClick={() => setDateFiltre(addDays(dateFiltre, 1))} disabled={dateFiltre >= today}
+                className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+              {!isToday && (
+                <button onClick={() => setDateFiltre(today)}
+                  className="rounded-xl bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30">
+                  Auj.
+                </button>
+              )}
+            </div>
+          )}
+
+          {modePeriode === 'mois' && (
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => changerMois(-1)}
+                className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"><ChevronLeft size={16} /></button>
+              <input type="month" value={moisSel} max={today.slice(0, 7)} style={{ colorScheme: 'dark' }}
+                onChange={(e) => setMoisSel(e.target.value)}
+                className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+              <button onClick={() => changerMois(1)} disabled={moisSel >= today.slice(0, 7)}
+                className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+            </div>
+          )}
+
+          {modePeriode === 'annee' && (
+            <input type="number" value={anneeSel} onChange={(e) => setAnneeSel(e.target.value)}
+              placeholder="ex: 2026" min="2020" max="2099"
+              className="w-24 rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50" />
+          )}
+
+          {modePeriode === 'plage' && (
+            <div className="flex items-center gap-1">
+              <input type="date" value={debutSel} max={finSel || today} style={{ colorScheme: 'dark' }}
+                onChange={(e) => setDebutSel(e.target.value)}
+                className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+              <span className="text-xs text-white/60">→</span>
+              <input type="date" value={finSel} min={debutSel || undefined} max={today} style={{ colorScheme: 'dark' }}
+                onChange={(e) => setFinSel(e.target.value)}
+                className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50" />
+            </div>
           )}
         </div>
       </div>
 
-      {/* Compteurs + export */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-2 text-xs">
-          <span className="font-semibold text-green-600">✓{stats.presents}</span>
-          <span className="font-semibold text-red-500">✗{stats.absents}</span>
-          <span className="font-semibold text-yellow-600">~{stats.excuses}</span>
-          <span className="text-gray-400">?{stats.nonPointes}/{stats.total}</span>
-        </div>
-        <div className="ml-auto">
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={15} /> Export</Button>
+      {/* KPI — bande unique glassmorphism, tous les indicateurs alignés */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/50 bg-white/55 shadow-[0_8px_28px_-10px_rgba(0,0,0,0.15),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150">
+        <div className="flex divide-x divide-gray-200/70">
+          {(modePeriode === 'jour'
+            ? [
+                { label: 'Présents', value: stats.presents, icon: CheckCircle2, accent: '#16a34a' },
+                { label: 'Absents', value: stats.absents, icon: XCircle, accent: '#dc2626' },
+                { label: 'Excusés', value: stats.excuses, icon: Clock, accent: '#ca8a04' },
+                { label: 'Non pointés', value: stats.nonPointes, sub: `sur ${stats.total}`, icon: User, accent: '#94a3b8' }
+              ]
+            : [
+                { label: 'Présences', value: statsPeriode.presents, icon: CheckCircle2, accent: '#16a34a' },
+                { label: 'Absences', value: statsPeriode.absents, icon: XCircle, accent: '#dc2626' },
+                { label: 'Excusés', value: statsPeriode.excuses, icon: Clock, accent: '#ca8a04' },
+                { label: 'Enfants suivis', value: enfantsActifs.length, icon: User, accent: '#94a3b8' }
+              ]
+          ).map((k) => (
+            <div key={k.label} className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-center">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                style={{ background: k.accent + '1a', color: k.accent }}>
+                <k.icon className="h-3 w-3" />
+              </div>
+              <p className="w-full truncate text-[8px] font-semibold uppercase tracking-wide text-gray-500" title={k.label}>{k.label}</p>
+              <p className="text-sm font-extrabold leading-none text-gray-900">{k.value}</p>
+              {k.sub && <p className="text-[8px] text-gray-400">{k.sub}</p>}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Filtres */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="relative">
-          <Search size={14} className="absolute left-2 top-2.5 text-gray-400" />
-          <input className="rounded-lg border border-gray-200 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+      {/* Filtres + export — une seule bande glassmorphism compacte, tout aligné,
+          dégradé subtil entre la couleur du module (orange) et le blanc */}
+      <div className="relative flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 p-2.5 shadow-[0_10px_24px_-12px_rgba(26,26,26,0.2),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.16) 0%, rgba(245,168,0,0.08) 35%, rgba(255,255,255,0.65) 75%)' }}>
+        <div className="relative min-w-[160px] flex-1 sm:flex-none">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input className="w-full rounded-xl border border-gray-200/80 bg-white/80 py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             placeholder="Rechercher un enfant…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Groupe</label>
-          <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)}>
-            <option value="">Tous les groupes</option>
-            {GROUPES_AGE.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-          </Select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Statut</label>
-          <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
-            <option value="">Tous</option>
+        <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)} className="w-auto !bg-white/80">
+          <option value="">Tous les groupes</option>
+          {GROUPES_AGE.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+        </Select>
+        {modePeriode === 'jour' && (
+          <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className="w-auto !bg-white/80">
+            <option value="">Tous les statuts</option>
             <option value="present">Présents</option>
             <option value="absent">Absents</option>
             <option value="excuse">Excusés</option>
             <option value="non_pointe">Non pointés</option>
           </Select>
-        </div>
+        )}
+        <Button variant="outline" onClick={exportXLSX} className="ml-auto shrink-0"><FileSpreadsheet size={15} /> Export</Button>
       </div>
 
-      {isToday && (
+      {modePeriode === 'jour' && isToday && (
         <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-2 text-sm text-orange-800">
           <strong>Aujourd'hui :</strong> Cliquez <strong>Arrivée</strong> à l'entrée de l'enfant, <strong>Départ</strong> à la sortie, et <strong>Récupéré par</strong> pour noter qui est venu le chercher.
         </div>
       )}
 
-      {/* Tableau */}
+      {/* Onglets — un tableau à part par catégorie, plutôt que tous les enfants
+          mélangés ensemble (illisible dès que l'effectif grandit). Chaque
+          catégorie a sa propre couleur de signal lumineux au clic. */}
+      {modePeriode === 'jour' && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'garderie',    icon: '🍼', label: 'Garderie',
+              active: 'scale-105 bg-gradient-to-br from-blue-400 to-blue-600 text-white shadow-[0_6px_18px_-4px_rgba(37,99,235,0.6),inset_0_1px_0_0_rgba(255,255,255,0.5)]',
+              hover: 'hover:border-blue-300 hover:text-blue-600' },
+            { id: 'maternelle',  icon: '🎓', label: 'Maternelle',
+              active: 'scale-105 bg-gradient-to-br from-green-400 to-emerald-600 text-white shadow-[0_6px_18px_-4px_rgba(22,163,74,0.6),inset_0_1px_0_0_rgba(255,255,255,0.5)]',
+              hover: 'hover:border-green-300 hover:text-green-600' },
+            { id: 'journaliers', icon: '🚪', label: `Journaliers${journaliersJour.length > 0 ? ` (${journaliersJour.length})` : ''}`,
+              active: 'scale-105 bg-gradient-to-br from-orange-400 to-red-500 text-white shadow-[0_6px_18px_-4px_rgba(232,57,14,0.6),inset_0_1px_0_0_rgba(255,255,255,0.5)]',
+              hover: 'hover:border-orange-300 hover:text-orange-600' }
+          ].map((t) => {
+            const active = ongletPointage === t.id
+            return (
+              <button key={t.id} type="button" onClick={() => setOngletPointage(t.id)}
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all duration-200 ${active
+                  ? t.active
+                  : `border border-gray-200 bg-white text-gray-500 hover:scale-105 hover:shadow-sm ${t.hover}`}`}>
+                <span className={`h-2 w-2 shrink-0 rounded-full transition-all ${active ? 'bg-white shadow-[0_0_8px_2px_rgba(255,255,255,0.9)]' : 'bg-gray-300'}`} />
+                <span>{t.icon}</span> {t.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Tableau — pointage (mode Jour) ou récapitulatif par enfant (Mois/Plage) */}
+      {modePeriode !== 'jour' ? (
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Enfant</th>
+                <th className="px-3 py-2 text-left">Groupe</th>
+                <th className="px-3 py-2 text-center">✅ Présences</th>
+                <th className="px-3 py-2 text-center">❌ Absences</th>
+                <th className="px-3 py-2 text-center">🟡 Excusés</th>
+                <th className="px-3 py-2 text-center">Total pointé</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {liste.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Aucun enfant trouvé.</td></tr>
+              )}
+              {liste.map((e) => {
+                const r = resumeParEnfant.get(e.id) || { presents: 0, absents: 0, excuses: 0 }
+                const totalPointe = r.presents + r.absents + r.excuses
+                return (
+                  <tr key={e.id} className="transition-colors hover:bg-orange-50/40">
+                    <td className="px-3 py-3">
+                      <p className="font-semibold">{e.prenom} {e.nom}</p>
+                      <p className="text-xs text-gray-400">{e.parentNom || '—'}</p>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-gray-500">{GROUPES_AGE.find((g) => g.id === e.groupe)?.label || '—'}</td>
+                    <td className="px-3 py-3 text-center font-bold text-green-600">{r.presents}</td>
+                    <td className="px-3 py-3 text-center font-bold text-red-500">{r.absents}</td>
+                    <td className="px-3 py-3 text-center font-bold text-yellow-600">{r.excuses}</td>
+                    <td className="px-3 py-3 text-center text-xs text-gray-400">{totalPointe}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </Card>
+      ) : ongletPointage !== 'journaliers' ? (
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -528,15 +720,29 @@ export default function PresencesEnfants() {
                 </tr>
               )
             })}
-
-            {/* ── Journaliers actifs ce jour ── */}
+          </tbody>
+        </table>
+      </Card>
+      ) : (
+      <Card className="overflow-x-auto p-0">
+        <table className="w-full text-sm">
+          <thead className="bg-orange-50 text-xs uppercase text-orange-600">
+            <tr>
+              <th className="px-3 py-2 text-left">Enfant</th>
+              <th className="px-3 py-2 text-left">Groupe</th>
+              <th className="px-3 py-2 text-center">🟢 Arrivée</th>
+              <th className="px-3 py-2 text-center">🔴 Départ</th>
+              <th className="px-3 py-2 text-center">⏱ Durée</th>
+              <th className="px-3 py-2 text-center">👤 Récupéré par</th>
+              <th className="px-3 py-2 text-center">Statut</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {journaliersJour.length === 0 && (
+              <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-400">Aucun journalier présent aujourd'hui.</td></tr>
+            )}
             {journaliersJour.length > 0 && (
               <>
-                <tr>
-                  <td colSpan={7} className="bg-orange-50 px-3 py-1.5 text-xs font-bold uppercase text-orange-600">
-                    🚪 Enfants journaliers — {journaliersJour.length} présent(s)
-                  </td>
-                </tr>
                 {journaliersJour.map((jo) => {
                   const pJo = getPresenceJo(jo.id)
                   const dureeJo = calcDuree(pJo?.heureArrivee, pJo?.heureDepart)
@@ -608,6 +814,7 @@ export default function PresencesEnfants() {
           </tbody>
         </table>
       </Card>
+      )}
 
       {/* Modal saisie manuelle */}
       <Modal

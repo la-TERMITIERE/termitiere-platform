@@ -130,7 +130,7 @@ export default function Propositions() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Propositions de projets</h2>
-          <p className="text-sm text-white/80">Ouvert à tout le monde — suggère un projet, l'administration décide.</p>
+          <p className="text-sm text-white/80">Ouvert à tout le monde : suggère un projet, l'administration décide.</p>
         </div>
       </div>
 

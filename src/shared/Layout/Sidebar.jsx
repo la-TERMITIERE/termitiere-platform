@@ -110,6 +110,52 @@ function EnfantsNavMenu({ item, isActive, currentSearch, onNavigate }) {
   )
 }
 
+// Menu « Cantine & Repas » imbriqué — la Maternelle (deux récréations, enfants
+// scolarisés à la journée) ne mange pas comme la Garderie (repas continus toute
+// la journée + biberons pour les nourrissons) : deux écrans distincts plutôt
+// qu'une liste mélangée. Même mécanique que EnfantsNavMenu ci-dessus.
+const CANTINE_CATEGORIES = [
+  { key: 'garderie',   label: 'Cantine Garderie',   emoji: '🍼', query: '?programme=garderie' },
+  { key: 'maternelle', label: 'Cantine Maternelle', emoji: '🎓', query: '?programme=maternelle' }
+]
+
+function CantineNavMenu({ item, isActive, currentSearch, onNavigate }) {
+  const [ouvert, setOuvert] = useState(isActive)
+
+  const itemClass = `flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+    isActive ? 'bg-white/20 text-white shadow-[0_16px_32px_-12px_rgba(0,0,0,0.45),0_4px_10px_-4px_rgba(0,0,0,0.3)]'
+      : 'text-white/80 hover:bg-white/10 hover:text-white'
+  }`
+
+  const activeKey = (() => {
+    const p = new URLSearchParams(currentSearch)
+    return p.get('programme') === 'maternelle' ? 'maternelle' : 'garderie'
+  })()
+
+  return (
+    <div>
+      <button type="button" onClick={() => setOuvert((o) => !o)} className={itemClass}>
+        <item.icon size={18} /> {item.label}
+        <span className="ml-auto">{ouvert ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
+      </button>
+
+      {ouvert && (
+        <div className="ml-3 mt-1 space-y-0.5 border-l border-white/15 pl-2">
+          {CANTINE_CATEGORIES.map((c) => (
+            <Link key={c.key} to={`/garderie/cantine${c.query}`} onClick={onNavigate}
+              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold transition-all ${
+                isActive && activeKey === c.key ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}>
+              <span>{c.emoji}</span>
+              <span className="flex-1 truncate">{c.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
   const { user, role, hasModule, isAdmin, logout } = useAuth()
@@ -342,6 +388,11 @@ export default function Sidebar({ open, onClose }) {
                 ) : item.to === '/garderie/enfants' ? (
                   <EnfantsNavMenu key={item.to} item={item}
                     isActive={location.pathname.startsWith('/garderie/enfants')}
+                    currentSearch={location.search}
+                    onNavigate={onClose} />
+                ) : item.to === '/garderie/cantine' ? (
+                  <CantineNavMenu key={item.to} item={item}
+                    isActive={location.pathname.startsWith('/garderie/cantine')}
                     currentSearch={location.search}
                     onNavigate={onClose} />
                 ) : (
