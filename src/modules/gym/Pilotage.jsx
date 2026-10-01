@@ -2,10 +2,11 @@
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Minus, Lightbulb, CreditCard, Wallet, Coins, Ticket, Flame, User } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Lightbulb, CreditCard, Wallet, Coins, Ticket, Flame, User, Calendar, PieChart } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { CATEGORIES_GYM, categorieLabel, categorieTone, derniersMoisGym, croissanceGym } from './data'
@@ -42,8 +43,26 @@ export default function Pilotage() {
   const toutes = useMemo(() => [...seances, ...abonnements], [seances, abonnements])
   const totalCumule = useMemo(() => toutes.reduce((s, x) => s + (Number(x.montant) || 0), 0), [toutes])
 
-  // Mois de référence — les 6 mois affichés se terminent ici (par défaut : le mois en cours).
-  const [moisRef, setMoisRef] = useState(todayStr().slice(0, 7))
+  // Mois de référence — les 6 mois affichés se terminent ici (par défaut : le mois en
+  // cours). Même sélecteur Jour/Mois/Année/Plage que le reste de MAXI-GYM : quel que
+  // soit le mode choisi, on en déduit le mois d'ancrage (le jour → son mois, l'année →
+  // décembre ou le mois en cours si c'est l'année en cours, la plage → le mois de sa fin).
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const moisRef = useMemo(() => {
+    const auj = todayStr()
+    if (modePeriode === 'jour') return (filtreJour || auj).slice(0, 7)
+    if (modePeriode === 'annee') {
+      const an = filtreAnnee || auj.slice(0, 4)
+      return an === auj.slice(0, 4) ? auj.slice(0, 7) : `${an}-12`
+    }
+    if (modePeriode === 'plage') return (filtreFin || auj).slice(0, 7)
+    return filtreMois || auj.slice(0, 7)
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const ancre = useMemo(() => {
     const [a, m] = moisRef.split('-').map(Number)
     return new Date(a, m - 1, 1)
@@ -77,11 +96,37 @@ export default function Pilotage() {
     }).sort((a, b) => b.montant - a.montant)
   }, [toutes, mois6])
 
+  // Dégradé vertical (clair → couleur pleine) par barre — même recette que le
+  // Dashboard, plus esthétique qu'un aplat uni. `chartArea` n'existe qu'une fois le
+  // premier rendu fait ; on retombe sur la couleur pleine avant ça (évite un crash).
+  const degradeVertical = (ctx, couleur) => {
+    const { chartArea, ctx: c } = ctx.chart
+    if (!chartArea) return couleur
+    const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+    gradient.addColorStop(0, couleur)
+    gradient.addColorStop(1, couleur + '99')
+    return gradient
+  }
+  const optionsGraphe = (money = true, afficherLegende = true) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: afficherLegende, position: 'top', align: 'end', labels: { boxWidth: 10, usePointStyle: true, font: { weight: 'bold' } } },
+      tooltip: {
+        backgroundColor: 'rgba(30,30,30,0.9)', padding: 10, cornerRadius: 10, displayColors: afficherLegende,
+        titleFont: { weight: 'bold' },
+        callbacks: { label: (ctx) => ` ${afficherLegende ? ctx.dataset.label + ': ' : ''}${money ? formatMoney(ctx.parsed.y) : ctx.parsed.y}` }
+      }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { weight: 'bold' } } },
+      y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { stepSize: money ? undefined : 1, callback: (v) => money ? formatMoney(v) : v } }
+    }
+  })
   const chartData = {
     labels: parMois.map((m) => m.label),
     datasets: [
-      { label: 'Séances', data: parMois.map((m) => m.revenuSeances), backgroundColor: `${COULEUR}cc`, borderColor: COULEUR, borderWidth: 1, borderRadius: 6 },
-      { label: 'Abonnements', data: parMois.map((m) => m.revenuAbonnements), backgroundColor: `${COULEUR2}cc`, borderColor: COULEUR2, borderWidth: 1, borderRadius: 6 }
+      { label: 'Séances', data: parMois.map((m) => m.revenuSeances), backgroundColor: (ctx) => degradeVertical(ctx, COULEUR), hoverBackgroundColor: COULEUR, borderRadius: 8, borderSkipped: false, maxBarThickness: 40 },
+      { label: 'Abonnements', data: parMois.map((m) => m.revenuAbonnements), backgroundColor: (ctx) => degradeVertical(ctx, COULEUR2), hoverBackgroundColor: COULEUR2, borderRadius: 8, borderSkipped: false, maxBarThickness: 40 }
     ]
   }
 
@@ -99,7 +144,7 @@ export default function Pilotage() {
   }, [seances, moisRef])
   const chartJournalier = {
     labels: seancesParJour.map((_, i) => String(i + 1)),
-    datasets: [{ label: 'Séances', data: seancesParJour, backgroundColor: `${COULEUR}cc`, borderColor: COULEUR, borderWidth: 1, borderRadius: 4 }]
+    datasets: [{ label: 'Séances', data: seancesParJour, backgroundColor: (ctx) => degradeVertical(ctx, COULEUR), hoverBackgroundColor: COULEUR, borderRadius: 6, borderSkipped: false, maxBarThickness: 22 }]
   }
 
   // Top clients — séances et abonnements comptés séparément (nombre d'entrées, pas montant).
@@ -120,32 +165,49 @@ export default function Pilotage() {
   const revenuAbonnementsTotal = abonnements.reduce((s, x) => s + (Number(x.montant) || 0), 0)
   const pctAbonnements = totalCumule > 0 ? Math.round((revenuAbonnementsTotal / totalCumule) * 100) : 0
 
+  // Ombre « 3D » des avatars/badges — liseré clair en haut, ombre interne sombre en
+  // bas, ombre portée : même recette que le Dashboard, pour un rendu bombé/glossy.
+  const OMBRE_3D = '0 6px 14px -4px rgba(0,0,0,0.35), inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)'
+
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, ${COULEUR2}e6 100%)` }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: COULEUR, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
-        }}>
-          <TrendingUp size={28} color="white" />
+        <div style={{ position: 'relative', width: 64, height: 64, flexShrink: 0 }}>
+          {/* Anneau tournant — même recette que le Dashboard : le badge reste net,
+              seul le halo dégradé balaye son contour en continu. */}
+          <style>{`
+            @keyframes gym-pilotage-ring-spin { to { transform: rotate(360deg); } }
+          `}</style>
+          <div style={{
+            position: 'absolute', inset: -3, borderRadius: '50%',
+            background: 'conic-gradient(from 0deg, #ffffff00, #ffffffe6 35%, #ffffff00 70%)',
+            animation: 'gym-pilotage-ring-spin 2.2s linear infinite'
+          }} />
+          <div style={{
+            position: 'relative', width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: COULEUR, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
+          }}>
+            <TrendingUp size={28} color="white" />
+          </div>
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Pilotage & Analyses</h2>
           <p className="text-sm text-white/80">Tendances et aide à la décision : MAXI-GYM</p>
         </div>
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-semibold text-gray-600">Mois de référence (les 6 derniers mois affichés se terminent ici)</label>
-        <input type="month" value={moisRef} onChange={(e) => setMoisRef(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-      </div>
+      <p className="-mt-2 text-xs text-gray-400">Les 6 derniers mois affichés se terminent au mois d'ancrage choisi ci-dessus.</p>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard title="Chiffre d'affaires cumulé" value={formatMoney(totalCumule)} icon={Wallet} accent={COULEUR} />
-        <StatCard title="CA du mois sélectionné" value={formatMoney(caMoisActuel)} icon={Coins} accent={COULEUR2} />
-        <StatCard
+        <StatCard glass title="Chiffre d'affaires cumulé" value={formatMoney(totalCumule)} icon={Wallet} accent={COULEUR} />
+        <StatCard glass title="CA du mois sélectionné" value={formatMoney(caMoisActuel)} icon={Coins} accent={COULEUR2} />
+        <StatCard glass
           title="Évolution vs mois dernier"
           value={croissance === null ? '—' : `${croissance >= 0 ? '+' : ''}${croissance}%`}
           icon={croissance === null ? Minus : croissance >= 0 ? TrendingUp : TrendingDown}
@@ -154,34 +216,43 @@ export default function Pilotage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <StatCard title="Séances (total)" value={seances.length} icon={Ticket} accent={COULEUR} />
-        <StatCard title="Abonnements (total)" value={abonnements.length} icon={CreditCard} accent={COULEUR2} />
+        <StatCard glass title="Séances (total)" value={seances.length} icon={Ticket} accent={COULEUR} />
+        <StatCard glass title="Abonnements (total)" value={abonnements.length} icon={CreditCard} accent={COULEUR2} />
       </div>
 
-      <Card title="Revenu des 6 derniers mois — séances vs abonnements">
+      <Card title="Revenu des 6 derniers mois : séances vs abonnements"
+        className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/50 via-white to-white">
         <div style={{ height: 260 }}>
-          <Bar data={chartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+          <Bar data={chartData} options={optionsGraphe(true, true)} />
         </div>
       </Card>
 
-      <Card title={`Séances par jour — ${moisRef}`}>
+      <Card title={`Séances par jour : ${moisRef}`}
+        className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/50 via-white to-white">
         {seancesParJour.every((n) => n === 0) ? (
-          <p className="py-4 text-center text-sm text-gray-400">Aucune séance ce mois-ci.</p>
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100/70 text-orange-300">
+              <Calendar size={22} />
+            </span>
+            <p className="text-sm text-gray-400">Aucune séance ce mois-ci.</p>
+          </div>
         ) : (
           <div style={{ height: 220 }}>
-            <Bar data={chartJournalier} options={{
-              responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-            }} />
+            <Bar data={chartJournalier} options={optionsGraphe(false, false)} />
           </div>
         )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="🏆 Top séances (par client)">
+        <Card title="🏆 Top séances (par client)"
+          className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/50 via-white to-white">
           {topSeances.length === 0 ? (
-            <p className="py-4 text-center text-sm text-gray-400">Aucune séance pour l'instant.</p>
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100/70 text-orange-300">
+                <Flame size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Aucune séance pour l'instant.</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {topSeances.map((c, i) => {
@@ -190,7 +261,7 @@ export default function Pilotage() {
                   <button key={c.nom} onClick={() => setClientDetail(c.nom)}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${podium ? `${podium.bg} ${podium.ring} shadow-sm` : 'bg-gray-50 hover:bg-gray-100'}`}>
                     <div className="relative shrink-0">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm" style={{ background: avatarGradient(c.nom) }}>
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(c.nom), boxShadow: OMBRE_3D }}>
                         <User size={15} />
                       </span>
                       {podium ? (
@@ -210,9 +281,15 @@ export default function Pilotage() {
           )}
         </Card>
 
-        <Card title="🏆 Top abonnements (par client)">
+        <Card title="🏆 Top abonnements (par client)"
+          className="overflow-hidden border-red-100/60 bg-gradient-to-br from-red-50/50 via-white to-white">
           {topAbonnements.length === 0 ? (
-            <p className="py-4 text-center text-sm text-gray-400">Aucun abonnement pour l'instant.</p>
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100/70 text-red-300">
+                <Flame size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Aucun abonnement pour l'instant.</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {topAbonnements.map((c, i) => {
@@ -221,7 +298,7 @@ export default function Pilotage() {
                   <button key={c.nom} onClick={() => setClientDetail(c.nom)}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${podium ? `${podium.bg} ${podium.ring} shadow-sm` : 'bg-gray-50 hover:bg-gray-100'}`}>
                     <div className="relative shrink-0">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm" style={{ background: avatarGradient(c.nom) }}>
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(c.nom), boxShadow: OMBRE_3D }}>
                         <User size={15} />
                       </span>
                       {podium ? (
@@ -242,13 +319,19 @@ export default function Pilotage() {
         </Card>
       </div>
 
-      <Card title="Répartition par catégorie (6 derniers mois)">
+      <Card title="Répartition par catégorie (6 derniers mois)"
+        className="overflow-hidden border-amber-100/60 bg-gradient-to-br from-amber-50/50 via-white to-white">
         {parCategorie.every((c) => c.montant === 0) ? (
-          <p className="py-4 text-center text-sm text-gray-400">Pas encore assez de données.</p>
+          <div className="flex flex-col items-center gap-2 py-8 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100/70 text-amber-300">
+              <PieChart size={22} />
+            </span>
+            <p className="text-sm text-gray-400">Pas encore assez de données.</p>
+          </div>
         ) : (
           <div className="space-y-2.5">
             {parCategorie.map((c) => (
-              <div key={c.id} className="overflow-hidden rounded-xl border-l-4 bg-gray-50 p-3 transition-colors hover:bg-gray-100/70" style={{ borderColor: COULEUR_BARRE[c.id] }}>
+              <div key={c.id} className="overflow-hidden rounded-xl border-l-4 bg-white/70 p-3 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md" style={{ borderColor: COULEUR_BARRE[c.id] }}>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Badge tone={c.tone}>{c.label}</Badge>
@@ -268,24 +351,25 @@ export default function Pilotage() {
         )}
       </Card>
 
-      <Card title="💡 Aide à la décision">
+      <Card title="💡 Aide à la décision"
+        className="overflow-hidden border-orange-100/50 bg-gradient-to-br from-orange-50/30 via-red-50/10 to-white">
         <div className="space-y-2.5 text-sm text-gray-700">
           {totalCumule === 0 ? (
-            <p className="flex items-start gap-2 text-gray-400"><Lightbulb size={16} className="mt-0.5 shrink-0" /> Pas encore assez de données pour dégager une tendance — revenez après quelques séances/abonnements enregistrés.</p>
+            <p className="flex items-start gap-2 text-gray-400"><Lightbulb size={16} className="mt-0.5 shrink-0" /> Pas encore assez de données pour dégager une tendance : revenez après quelques séances/abonnements enregistrés.</p>
           ) : (
             <>
               {categoriePrincipale && categoriePrincipale.montant > 0 && (
-                <p className="flex items-start gap-2">
+                <p className="flex items-start gap-2 rounded-xl bg-white/60 p-2.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                   <Lightbulb size={16} className="mt-0.5 shrink-0 text-amber-500" />
-                  La catégorie <strong>{categorieLabel(categoriePrincipale.id)}</strong> génère le plus de revenu ({categoriePrincipale.pct}% du chiffre d'affaires des 6 derniers mois) — c'est votre offre la plus demandée.
+                  La catégorie <strong>{categorieLabel(categoriePrincipale.id)}</strong> génère le plus de revenu ({categoriePrincipale.pct}% du chiffre d'affaires des 6 derniers mois) : c'est votre offre la plus demandée.
                 </p>
               )}
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 rounded-xl bg-white/60 p-2.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                 <CreditCard size={16} className="mt-0.5 shrink-0 text-amber-500" />
-                Les abonnements représentent <strong>{pctAbonnements}%</strong> du chiffre d'affaires cumulé, contre <strong>{100 - pctAbonnements}%</strong> pour les séances ponctuelles — {pctAbonnements >= 50 ? 'un bon signe de fidélisation' : 'il y a peut-être une marge pour convertir plus de clients occasionnels en abonnés'}.
+                Les abonnements représentent <strong>{pctAbonnements}%</strong> du chiffre d'affaires cumulé, contre <strong>{100 - pctAbonnements}%</strong> pour les séances ponctuelles : {pctAbonnements >= 50 ? 'un bon signe de fidélisation' : 'il y a peut-être une marge pour convertir plus de clients occasionnels en abonnés'}.
               </p>
               {croissance !== null && (
-                <p className="flex items-start gap-2">
+                <p className="flex items-start gap-2 rounded-xl bg-white/60 p-2.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                   {croissance >= 0 ? <TrendingUp size={16} className="mt-0.5 shrink-0 text-green-600" /> : <TrendingDown size={16} className="mt-0.5 shrink-0 text-red-600" />}
                   Le chiffre d'affaires est {croissance >= 0 ? 'en hausse' : 'en baisse'} de <strong>{Math.abs(croissance)}%</strong> par rapport au mois précédent.
                 </p>

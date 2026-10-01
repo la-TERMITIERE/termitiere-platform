@@ -18,7 +18,16 @@ export default {
         caprins: '#16a34a',
         volailles: '#ea580c'
       },
-      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      keyframes: {
+        wiggle: {
+          '0%, 100%': { transform: 'rotate(-10deg)' },
+          '50%': { transform: 'rotate(10deg)' }
+        }
+      },
+      animation: {
+        wiggle: 'wiggle 1.8s ease-in-out infinite'
+      }
     }
   },
   plugins: []

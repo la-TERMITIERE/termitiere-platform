@@ -1,6 +1,6 @@
 // MAXI-GYM — Séances : liste complète + ajout d'une séance ponctuelle.
 import { useEffect, useMemo, useState } from 'react'
-import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock } from 'lucide-react'
+import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -15,7 +15,8 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { sendWhatsApp } from '../../core/whatsapp'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, canExportGym } from '../../core/roles'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { CATEGORIES_SEANCE, categorieLabel, categorieTone, categorieDesc, finValiditeSeance, seanceValide, genQrToken, QR_CARNET_ACTIF } from './data'
@@ -98,6 +99,37 @@ export default function Seances() {
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
+
+  // Export Excel — reprend exactement la liste affichée (`liste`), donc le
+  // filtre de période (Jour/Mois/Année/Plage) sélectionné ci-dessus.
+  function exportXLSX() {
+    const rows = liste.map((s) => ({
+      Date: formatDateShort(s.date),
+      Client: s.clientNom + (s.partenaire ? ` (partenaire${s.partenaireStructure ? ` — ${s.partenaireStructure}` : ''})` : ''),
+      Catégorie: categorieLabel(s.categorie),
+      Montant: Number(s.montant) || 0,
+      Notes: s.notes || '—',
+      'Enregistrée par': s.enregistrePar || '—'
+    }))
+    exportRapportExcel({
+      filename: `seances-maxi-gym-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Séances',
+        title: 'Séances — MAXI-GYM',
+        subtitle: `${liste.length} séance(s) · ${formatMoney(total)} au total`,
+        columns: [
+          { key: 'Date', label: 'Date', width: 14 },
+          { key: 'Client', label: 'Client', width: 28 },
+          { key: 'Catégorie', label: 'Catégorie', width: 16 },
+          { key: 'Montant', label: 'Montant', width: 16, type: 'money' },
+          { key: 'Notes', label: 'Notes', width: 30 },
+          { key: 'Enregistrée par', label: 'Enregistrée par', width: 20 }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', Montant: total }
+      }]
+    })
+  }
 
   async function enregistrer() {
     const d = modal
@@ -238,9 +270,15 @@ export default function Seances() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        {canExportGym(role) && (
+          <button onClick={exportXLSX}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <FileSpreadsheet size={14} /> Export Excel
+          </button>
+        )}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
         <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvelle séance</Button>
       </div>
 

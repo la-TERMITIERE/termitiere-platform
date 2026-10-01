@@ -1,7 +1,7 @@
 // MAXI-GYM — Coachs : pointage de l'arrivée (vs planning programmé en Paramètres)
 // + performance comparée (fréquentation clients les jours où chaque coach est présent).
 import { useEffect, useMemo, useState } from 'react'
-import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard } from 'lucide-react'
+import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard, FileText } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Table from '../../shared/ui/Table'
@@ -13,7 +13,8 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isReadOnlyRole } from '../../core/roles'
+import { isReadOnlyRole, canExportGym } from '../../core/roles'
+import { genererRapportMultiPDF } from '../../utils/exportPDF'
 import { todayStr, formatDateShort, nowHM } from '../../utils/formatters'
 import { creneauCoach, statutPointage, horairesVides, JOURS_SEMAINE } from './data'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -131,6 +132,34 @@ export default function Coachs() {
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
+  // Export PDF — reprend exactement `historique` (donc le filtre de période actif),
+  // avec une synthèse littéraire (répartition par coach + taux de retard) au
+  // lieu d'un graphique.
+  async function exportPDFDoc() {
+    const parCoach = new Map()
+    historique.forEach((p) => parCoach.set(p.coachNom, (parCoach.get(p.coachNom) || 0) + 1))
+    const retards = historique.filter((p) => p.statut === 'retard').length
+    const detailCoach = [...parCoach.entries()].sort((a, b) => b[1] - a[1]).map(([nom, n]) => `${nom} (${n})`).join(' · ')
+    const synthese = historique.length === 0
+      ? 'Aucun pointage enregistré sur la période sélectionnée.'
+      : `${historique.length} pointage(s) enregistré(s) sur la période pour ${parCoach.size} coach(s) — ${siteLabel(site)}. Répartition : ${detailCoach}. ${retards} pointage(s) en retard sur le total, soit ${Math.round((retards / historique.length) * 100)} %.`
+    await genererRapportMultiPDF({
+      titre: 'RAPPORT DES POINTAGES COACHS',
+      module: 'gym',
+      sections: [{
+        nom: 'Historique des pointages',
+        sousTitre: `${historique.length} pointage(s) — ${siteLabel(site)}`,
+        synthese,
+        colonnes: ['Date', 'Coach', 'Programmé', 'Arrivée réelle', 'Statut', 'Pointé par'],
+        lignes: historique.map((p) => [
+          formatDateShort(p.date), p.coachNom, p.heureProgrammee || '—', p.heureArrivee || '—',
+          p.statut === 'retard' ? 'En retard' : 'À l\'heure', p.par || '—'
+        ])
+      }],
+      fichier: `coachs-maxi-gym-pointages-${todayStr()}.pdf`
+    })
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
@@ -153,6 +182,12 @@ export default function Coachs() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        {canExportGym(role) && (
+          <button onClick={exportPDFDoc}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <FileText size={14} /> Export PDF
+          </button>
+        )}
       </div>
 
       <Card title={titreSection(CalendarDays, "Aujourd'hui")} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>

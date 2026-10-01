@@ -1,7 +1,7 @@
 // MAXI-GYM — Abonnements : liste complète + ajout d'un abonnement.
 // Simple / VIP : durée fixe 1 mois, tarif fixe. Classique : durée ET tarif libres.
 import { useMemo, useState } from 'react'
-import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays } from 'lucide-react'
+import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -16,7 +16,8 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { sendWhatsApp } from '../../core/whatsapp'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, canExportGym } from '../../core/roles'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
@@ -138,6 +139,46 @@ export default function Abonnements() {
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
+
+  // Export Excel — reprend exactement la liste affichée (`liste`), donc le
+  // filtre de période (Jour/Mois/Année/Plage) sélectionné ci-dessus.
+  function exportXLSX() {
+    const rows = liste.map((a) => {
+      const st = statutAbonnement(a.dateDebut, a.dateFin)
+      return {
+        'Souscrit le': formatDateShort(a.date),
+        'Début': formatDateShort(a.dateDebut || a.date),
+        Client: a.clientNom,
+        Catégorie: categorieLabel(a.categorie),
+        Fin: a.dateFin ? formatDateShort(a.dateFin) : '—',
+        Statut: st.label,
+        Montant: Number(a.montant) || 0,
+        Notes: a.notes || '—',
+        'Enregistré par': a.enregistrePar || '—'
+      }
+    })
+    exportRapportExcel({
+      filename: `abonnements-maxi-gym-${todayStr()}.xlsx`,
+      sections: [{
+        name: 'Abonnements',
+        title: 'Abonnements — MAXI-GYM',
+        subtitle: `${liste.length} abonnement(s) · ${formatMoney(total)} au total`,
+        columns: [
+          { key: 'Souscrit le', label: 'Souscrit le', width: 14 },
+          { key: 'Début', label: 'Début', width: 14 },
+          { key: 'Client', label: 'Client', width: 24 },
+          { key: 'Catégorie', label: 'Catégorie', width: 16 },
+          { key: 'Fin', label: 'Fin', width: 14 },
+          { key: 'Statut', label: 'Statut', width: 14 },
+          { key: 'Montant', label: 'Montant', width: 16, type: 'money' },
+          { key: 'Notes', label: 'Notes', width: 30 },
+          { key: 'Enregistré par', label: 'Enregistré par', width: 20 }
+        ],
+        rows,
+        totals: { __label: 'TOTAL', Montant: total }
+      }]
+    })
+  }
 
   // Dernière arrivée pointée par client — sert à afficher/estimer l'inactivité.
   const dernierePresenceParClient = useMemo(() => {
@@ -334,9 +375,15 @@ export default function Abonnements() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        {canExportGym(role) && (
+          <button onClick={exportXLSX}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <FileSpreadsheet size={14} /> Export Excel
+          </button>
+        )}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
         <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvel abonnement</Button>
       </div>
 

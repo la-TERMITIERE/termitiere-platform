@@ -77,6 +77,11 @@ export const canViewAnalysesDepense = (r) => ANALYSES_DEPENSE_ROLES.includes(r)
 export const EXCEL_EXPORT_ROLES = ['pau', 'ge', 'info']
 export const canExportExcel = (r) => EXCEL_EXPORT_ROLES.includes(r)
 
+// MAXI-GYM : décision explicite — l'agent a aussi accès aux exports (Excel/PDF)
+// du module, en plus de EXCEL_EXPORT_ROLES ci-dessus. Propre à gym, ne touche
+// pas la règle globale canExportExcel réutilisée ailleurs.
+export const canExportGym = (r) => canExportExcel(r) || r === 'agent'
+
 // Volet « Compte bancaire » (par secteur : MAXI-AGRO, MAXI LOGISTIQUE, MAXI-GYM,
 // E-GARDERIE) — réservé UNIQUEMENT à PAU, Assistant PAU, GE et Info (décision
 // explicite du 05/09/2026) : ni le reste de la direction (super_admin, admin,
