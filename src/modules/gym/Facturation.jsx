@@ -1,6 +1,6 @@
 // MAXI-GYM — Facturation : liste des factures générées (depuis Séances/Abonnements).
 import { useMemo, useState } from 'react'
-import { Receipt, FileDown, FileSpreadsheet, Pencil, Trash2, Printer, Wallet, Ticket, CreditCard, Check } from 'lucide-react'
+import { Receipt, FileDown, FileSpreadsheet, FileText, Pencil, Trash2, Printer, Wallet, Ticket, CreditCard, Check } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -16,10 +16,12 @@ import { useAuth } from '../../hooks/useAuth'
 import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isFullAccessRole, canExportExcel } from '../../core/roles'
+import { isFullAccessRole, canExportGym } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { imprimerTicketSeance } from './printTicket'
 import { exportRapportExcel } from '../../utils/excelReport'
+import { genererRapportMultiPDF } from '../../utils/exportPDF'
+import { categorieLabel } from './data'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useSite, matchSite } from './site/useSite'
 
@@ -142,6 +144,50 @@ export default function Facturation() {
     setExportOpen(false)
   }
 
+  // Synthèse littéraire par catégorie (simple/classique/vip) — remplace un
+  // graphique par un court paragraphe résumant la répartition du rapport PDF.
+  function syntheseParCategorie(sousListe, nom) {
+    if (sousListe.length === 0) return `Aucun enregistrement "${nom}" sur la période sélectionnée.`
+    const totalSection = sousListe.reduce((s, f) => s + (Number(f.montant) || 0), 0)
+    const map = new Map()
+    sousListe.forEach((f) => {
+      const cat = categorieLabel(f.categorie) || 'Autre'
+      const e = map.get(cat) || { n: 0, montant: 0 }
+      e.n++; e.montant += Number(f.montant) || 0
+      map.set(cat, e)
+    })
+    const entries = [...map.entries()].sort((a, b) => b[1].montant - a[1].montant)
+    const detail = entries.map(([cat, e]) => `${cat} : ${e.n} (${formatMoney(e.montant)})`).join(' · ')
+    const top = entries[0]
+    return `${sousListe.length} enregistrement(s) "${nom}" sur la période, pour un total de ${formatMoney(totalSection)}. Répartition par catégorie — ${detail}. La catégorie la plus active est "${top[0]}", avec ${formatMoney(top[1].montant)} encaissés.`
+  }
+
+  const sectionPdfDe = (nom, sousListe) => {
+    const totalSection = sousListe.reduce((s, f) => s + (Number(f.montant) || 0), 0)
+    return {
+      nom,
+      sousTitre: `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} · ${formatMoney(totalSection)} au total`,
+      synthese: syntheseParCategorie(sousListe, nom),
+      colonnes: ['N°', 'Date', 'Client', 'Description', 'Montant (FCFA)'],
+      lignes: sousListe.map((f) => [f.numero, formatDateShort(f.date), f.clientNom || '—', f.description || '—', (Number(f.montant) || 0).toLocaleString('fr-FR')]),
+      totalRow: ['', '', '', 'TOTAL', totalSection.toLocaleString('fr-FR')]
+    }
+  }
+
+  async function exportPDFDoc() {
+    const sections = []
+    if (exportChoix === 'seances' || exportChoix === 'both') sections.push(sectionPdfDe('Séances', seancesListe))
+    if (exportChoix === 'abonnements' || exportChoix === 'both') sections.push(sectionPdfDe('Abonnements', abonnementsListe))
+    const suffixe = exportChoix === 'seances' ? 'seances' : exportChoix === 'abonnements' ? 'abonnements' : 'completes'
+    await genererRapportMultiPDF({
+      titre: 'RAPPORT DE FACTURATION',
+      module: 'gym',
+      sections,
+      fichier: `factures-maxi-gym-${suffixe}-${todayStr()}.pdf`
+    })
+    setExportOpen(false)
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
@@ -163,6 +209,12 @@ export default function Facturation() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        {canExportGym(role) && (
+          <button onClick={() => setExportOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <FileSpreadsheet size={14} /> Exporter
+          </button>
+        )}
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
@@ -189,12 +241,6 @@ export default function Facturation() {
           sub={`${liste.length} facture${liste.length > 1 ? 's' : ''}${filtrePeriodeActif ? ' · période filtrée' : ''}`}
           icon={Wallet} accent="#16a34a" />
       </div>
-
-      {canExportExcel(role) && (
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => setExportOpen(true)}><FileSpreadsheet size={16} /> Export Excel</Button>
-        </div>
-      )}
 
       <Card className="p-0">
         <Table
@@ -251,7 +297,11 @@ export default function Facturation() {
           mélangée avec une colonne « Origine ». */}
       <Modal open={exportOpen} onClose={() => setExportOpen(false)} title="Exporter la facturation"
         {...glassModalProps(COULEUR_MODULE.gym)}
-        footer={<><Button variant="outline" onClick={() => setExportOpen(false)}>Annuler</Button><Button onClick={exportXLSX}><FileSpreadsheet size={16} /> Effectuer l'export</Button></>}>
+        footer={<>
+          <Button variant="outline" onClick={() => setExportOpen(false)}>Annuler</Button>
+          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Excel</Button>
+          <Button onClick={exportPDFDoc}><FileText size={16} /> PDF</Button>
+        </>}>
         <div className="space-y-3">
           <p className="text-sm text-gray-600">Que voulez-vous exporter ? (période actuellement filtrée : {liste.length} facture(s))</p>
           <div className="flex gap-2">

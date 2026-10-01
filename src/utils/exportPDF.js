@@ -335,3 +335,88 @@ export async function genererRapportPDF({ titre, colonnes, lignes, fichier, modu
   footer(doc, cfg)
   doc.save(fichier || 'rapport.pdf')
 }
+
+// ─── RAPPORT MULTI-SECTIONS (avec synthèse littéraire) ───────────────────────
+// Un rapport = plusieurs sections indépendantes (ex: Séances, Abonnements…),
+// chacune avec un court paragraphe de synthèse + son tableau détaillé.
+//   sections: [{ nom, sousTitre?, synthese?: string, colonnes, lignes, totalRow? }]
+export async function genererRapportMultiPDF({ titre, module = 'default', sections = [], fichier }) {
+  const cfg = MODULE_CONFIG[module] || MODULE_CONFIG.default
+  const [logoTermitiere, logoModule] = await Promise.all([
+    chargerLogo('/termitiere-logo.png').then(r => r || chargerLogo('/logo-mark.png')),
+    chargerLogo(cfg.logo)
+  ])
+
+  const doc = new jsPDF()
+  let y = await headerPremium(doc, titre, cfg, logoTermitiere, logoModule)
+  const PAGE_H = doc.internal.pageSize.getHeight()
+  const MARGE_BAS = 24
+
+  for (const section of sections) {
+    // Nouvelle page si la section ne peut clairement pas commencer ici (titre +
+    // synthèse minimum) — le tableau gère lui-même ses propres sauts de page.
+    if (y > PAGE_H - MARGE_BAS - 50) { doc.addPage(); y = 16 }
+
+    // ── Titre de section ──
+    doc.setFillColor(...cfg.couleur)
+    doc.rect(14, y, 3, 6, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12.5)
+    doc.setTextColor(...cfg.couleur2)
+    doc.text(section.nom, 19, y + 5)
+    if (section.sousTitre) {
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(8.5)
+      doc.setTextColor(120, 120, 120)
+      doc.text(section.sousTitre, 196, y + 5, { align: 'right' })
+    }
+    y += 10
+
+    // ── Synthèse littéraire (si fournie) — un court paragraphe au lieu d'un
+    // graphique, dans un encart clair avec un liseré de la couleur du module.
+    if (section.synthese) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      const texte = doc.splitTextToSize(section.synthese, 172)
+      const boxH = texte.length * 4.3 + 8
+      doc.setFillColor(250, 250, 250)
+      doc.setDrawColor(...cfg.couleur)
+      doc.setLineWidth(0.3)
+      doc.roundedRect(14, y, 182, boxH, 2, 2, 'FD')
+      doc.setFillColor(...cfg.couleur)
+      doc.rect(14, y, 1.2, boxH, 'F')
+      doc.setTextColor(70, 70, 70)
+      doc.text(texte, 19, y + 6)
+      y += boxH + 6
+    }
+
+    // ── Tableau détaillé ──
+    autoTable(doc, {
+      startY: y,
+      head: [section.colonnes],
+      body: section.lignes,
+      foot: section.totalRow ? [section.totalRow] : undefined,
+      theme: 'striped',
+      headStyles: { fillColor: cfg.couleur, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      footStyles: { fillColor: [245, 245, 245], textColor: [30, 30, 30], fontStyle: 'bold', fontSize: 8.5 },
+      styles: { fontSize: 8, cellPadding: 2.8 },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      margin: { bottom: MARGE_BAS },
+      didDrawPage: () => { y = 16 } // si le tableau saute une page, la section suivante repart du haut
+    })
+    y = doc.lastAutoTable.finalY + 12
+  }
+
+  // Pied de page + numérotation sur TOUTES les pages du document.
+  const nbPages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= nbPages; p++) {
+    doc.setPage(p)
+    footer(doc, cfg)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(255, 255, 255)
+    doc.text(`Page ${p} / ${nbPages}`, 196, doc.internal.pageSize.getHeight() - 3.5, { align: 'right' })
+  }
+
+  doc.save(fichier || 'rapport.pdf')
+}

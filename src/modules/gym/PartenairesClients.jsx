@@ -11,6 +11,7 @@ import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import StatCard from '../../shared/ui/StatCard'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { usePDF } from '../../hooks/usePDF'
@@ -53,10 +54,26 @@ export default function PartenairesClients() {
     [allReglements, site]
   )
 
-  // Mois de travail (sélecteur dans le bandeau) — on règle toutes les séances non
-  // réglées dont la date est ≤ dernier jour de ce mois (le mois courant + les
-  // éventuels arriérés des mois précédents).
-  const [mois, setMois] = useState(todayStr().slice(0, 7))
+  // Mois de travail (sélecteur dans le bandeau, même format Jour/Mois/Année/Plage que
+  // le reste de MAXI-GYM) — on règle toutes les séances non réglées dont la date est
+  // ≤ dernier jour de ce mois (le mois courant + les éventuels arriérés des mois
+  // précédents). Quel que soit le mode choisi, on en déduit le mois d'arrêté.
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const mois = useMemo(() => {
+    const auj = todayStr()
+    if (modePeriode === 'jour') return (filtreJour || auj).slice(0, 7)
+    if (modePeriode === 'annee') {
+      const an = filtreAnnee || auj.slice(0, 4)
+      return an === auj.slice(0, 4) ? auj.slice(0, 7) : `${an}-12`
+    }
+    if (modePeriode === 'plage') return (filtreFin || auj).slice(0, 7)
+    return filtreMois || auj.slice(0, 7)
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const dateLimite = finDeMois(mois)
 
   const [aConfirmer, setAConfirmer] = useState(null) // { structure, seances[], total }
@@ -203,11 +220,22 @@ export default function PartenairesClients() {
             {groupes.length} structure(s) — {nbSeancesDues} séance(s) à régler — {formatMoney(totalDu)} dû
           </p>
         </div>
-        <label className="flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-sm font-semibold backdrop-blur-sm">
-          Arrêté au mois de
-          <input type="month" value={mois} onChange={(e) => setMois(e.target.value)}
-            className="rounded-lg border-0 bg-white/90 px-2 py-1 text-gray-800" />
-        </label>
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <button onClick={exportPDF} disabled={nbSeancesDues === 0}
+          className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50">
+          <FileDown size={14} /> PDF
+        </button>
+        {canExportExcel(role) && (
+          <button onClick={exportXLSX} disabled={groupes.length === 0}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50">
+            <FileSpreadsheet size={14} /> Excel
+          </button>
+        )}
       </div>
 
       <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
@@ -217,16 +245,9 @@ export default function PartenairesClients() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard title="Structures partenaires" value={groupes.length} icon={Handshake} accent={COULEUR} />
-        <StatCard title="Séances à régler" value={nbSeancesDues} icon={AlertTriangle} accent="#d97706" />
-        <StatCard title="Montant dû" value={formatMoney(totalDu)} icon={FileDown} accent="#dc2626" />
-      </div>
-
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" onClick={exportPDF} disabled={nbSeancesDues === 0}><FileDown size={16} /> Export PDF</Button>
-        {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX} disabled={groupes.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
-        )}
+        <StatCard glass title="Structures partenaires" value={groupes.length} icon={Handshake} accent={COULEUR} />
+        <StatCard glass title="Séances à régler" value={nbSeancesDues} icon={AlertTriangle} accent="#d97706" />
+        <StatCard glass title="Montant dû" value={formatMoney(totalDu)} icon={FileDown} accent="#dc2626" />
       </div>
 
       {groupes.length === 0 ? (

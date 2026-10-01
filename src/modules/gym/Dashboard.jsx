@@ -4,13 +4,13 @@ import '../../utils/chartSetup'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
-import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog, X } from 'lucide-react'
+import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog, X, Clock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
-import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { updateItem } from '../../core/db'
@@ -73,6 +73,17 @@ const dismissedUntil = (id) => {
 const dismissRenouvellement = (id, joursRestants) => {
   const duree = joursRestants <= 3 ? 3 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
   try { localStorage.setItem(CLE_DISMISS_RENOUVELLEMENT + id, String(Date.now() + duree)) } catch { /* ignore */ }
+}
+
+// Même recette pour les rappels « abonné inactif » — clé par nom de client (pas
+// d'id stable sur ces entrées, dérivées à la volée). Report fixe de 24h : le temps
+// qu'une relance soit traitée, sans harceler à chaque rechargement du dashboard.
+const CLE_DISMISS_INACTIF = 'termitiere_gym_inactif_dismiss_'
+const dismissedUntilInactif = (cle) => {
+  try { return Number(localStorage.getItem(CLE_DISMISS_INACTIF + cle) || 0) } catch { return 0 }
+}
+const dismissInactif = (cle) => {
+  try { localStorage.setItem(CLE_DISMISS_INACTIF + cle, String(Date.now() + 24 * 60 * 60 * 1000)) } catch { /* ignore */ }
 }
 
 // Salutation selon l'heure du moment — relit l'horloge à chaque montage du
@@ -168,16 +179,65 @@ export default function Dashboard() {
   // Force une réévaluation immédiate des rappels fermés (cf. dismissRenouvellement)
   // au clic — la réévaluation « au fil du temps » vient gratuitement du tick heureActuelle.
   const [dismissTick, setDismissTick] = useState(0)
+  // Liste des renouvellements repliée par défaut (trop longue affichée en entier) —
+  // on ne montre que les plus urgents (déjà triés par échéance croissante), avec
+  // un bouton pour dérouler le reste au besoin.
+  const [voirTousRenouvellements, setVoirTousRenouvellements] = useState(false)
+  const LIMITE_RENOUVELLEMENTS = 5
+  const [voirToutActivite, setVoirToutActivite] = useState(false)
+  const LIMITE_ACTIVITE = 5
+  const [voirTousClients, setVoirTousClients] = useState(false)
+  const LIMITE_CLIENTS = 5
+  // Ombre « 3D » partagée par les badges/avatars de ce dashboard — liseré clair en
+  // haut + ombre interne sombre en bas + ombre portée, pour un rendu bombé/glossy
+  // plutôt que plat.
+  const OMBRE_3D = '0 6px 14px -4px rgba(0,0,0,0.35), inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)'
+  // Nom (clé) de la ligne « Abonnés à relancer » en plein signal lumineux — la ligne
+  // flashe un court instant avant de disparaître, pour un retour visuel immédiat au clic.
+  const [flashInactif, setFlashInactif] = useState(null)
+  function handleDismissInactif(cle) {
+    setFlashInactif(cle)
+    setTimeout(() => {
+      dismissInactif(cle)
+      setDismissTick((t) => t + 1)
+      setFlashInactif(null)
+    }, 350)
+  }
 
-  // Sélecteur de période partagé (mêmes presets et même emplacement — dans le
-  // bandeau héro — que les autres Dashboards de l'app, ex. Briqueterie).
-  const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
+  // Sélecteur de période — même format Jour/Mois/Année/Plage que les autres volets
+  // de MAXI-GYM (Facturation/Séances/Abonnements/Coachs), posé dans le bandeau héro.
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const { start, end } = useMemo(() => {
+    const auj = todayStr()
+    if (modePeriode === 'jour') {
+      const j = filtreJour || auj
+      return { start: j, end: j }
+    }
+    if (modePeriode === 'annee') {
+      const an = filtreAnnee || auj.slice(0, 4)
+      return { start: `${an}-01-01`, end: an === auj.slice(0, 4) ? auj : `${an}-12-31` }
+    }
+    if (modePeriode === 'plage') {
+      return { start: filtreDebut || auj, end: filtreFin || auj }
+    }
+    const mois = filtreMois || auj.slice(0, 7)
+    const finMois = new Date(Number(mois.slice(0, 4)), Number(mois.slice(5, 7)), 0).toISOString().slice(0, 10)
+    return { start: `${mois}-01`, end: mois === auj.slice(0, 7) ? auj : finMois }
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const dansPeriode = (d) => (d || '') >= start && (d || '') <= end
-  const comparable = preset !== 'all'
+  // Chaque mode (jour/mois/année/plage) a toujours une période précédente bien
+  // définie (plus de preset « Tout l'historique ») — la comparaison reste donc
+  // systématiquement pertinente.
+  const comparable = true
   const dayCount = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
   const prevEnd = addDays(start, -1)
   const prevStart = addDays(prevEnd, -(dayCount - 1))
-  const dansPeriodePrecedente = (d) => comparable && (d || '') >= prevStart && (d || '') <= prevEnd
+  const dansPeriodePrecedente = (d) => (d || '') >= prevStart && (d || '') <= prevEnd
 
   const seancesMois     = useMemo(() => seances.filter((s) => dansPeriode(s.date)), [seances, start, end])
   const abonnementsMois = useMemo(() => abonnements.filter((a) => dansPeriode(a.date)), [abonnements, start, end])
@@ -196,7 +256,7 @@ export default function Dashboard() {
   // cours » : comparer un quota mensuel à une période perso ou « Tout » serait trompeur.
   const objectif = params.objectifMensuel
   const pctObjectif = objectif > 0 ? Math.round((totalEncaisseMois / objectif) * 100) : null
-  const afficherObjectif = preset === 'mois' && objectif > 0
+  const afficherObjectif = modePeriode === 'mois' && filtreMois === todayStr().slice(0, 7) && objectif > 0
 
   const seancesMoisPrecedent     = useMemo(() => seances.filter((s) => dansPeriodePrecedente(s.date)), [seances, prevStart, prevEnd, comparable])
   const abonnementsMoisPrecedent = useMemo(() => abonnements.filter((a) => dansPeriodePrecedente(a.date)), [abonnements, prevStart, prevEnd, comparable])
@@ -228,24 +288,44 @@ export default function Dashboard() {
   const activiteRecente = useMemo(() => {
     const s = seances.map((x) => ({ ...x, type: 'seance' }))
     const a = abonnements.map((x) => ({ ...x, type: 'abonnement' }))
-    return [...s, ...a].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)).slice(0, 8)
+    return [...s, ...a].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)).slice(0, 20)
   }, [seances, abonnements])
 
+  // Dégradé vertical (clair → couleur pleine) par barre, calculé sur le canvas —
+  // plus esthétique qu'un aplat uni, tout en gardant la couleur propre à chaque
+  // catégorie (cf. COULEUR_BARRE). `chartArea` n'existe qu'une fois le premier
+  // rendu fait ; on retombe sur la couleur pleine avant ça (évite un crash).
   const barData = (groupes) => ({
     labels: groupes.map((g) => g.label),
     datasets: [{
       data: groupes.map((g) => g.montant),
-      backgroundColor: groupes.map((g) => COULEUR_BARRE[g.id]),
-      borderRadius: 8, maxBarThickness: 64
+      backgroundColor: (ctx) => {
+        const couleur = COULEUR_BARRE[groupes[ctx.dataIndex]?.id] || '#94a3b8'
+        const { chartArea, ctx: c } = ctx.chart
+        if (!chartArea) return couleur
+        const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+        gradient.addColorStop(0, couleur)
+        gradient.addColorStop(1, couleur + '99')
+        return gradient
+      },
+      hoverBackgroundColor: groupes.map((g) => COULEUR_BARRE[g.id]),
+      borderRadius: 10, borderSkipped: false, maxBarThickness: 56
     }]
   })
   const barOptions = {
     responsive: true, maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
-      tooltip: { callbacks: { label: (ctx) => ` ${formatMoney(ctx.parsed.y)}` } }
+      tooltip: {
+        backgroundColor: 'rgba(30,30,30,0.9)', padding: 10, cornerRadius: 10, displayColors: false,
+        titleFont: { weight: 'bold' },
+        callbacks: { label: (ctx) => ` ${formatMoney(ctx.parsed.y)}` }
+      }
     },
-    scales: { y: { beginAtZero: true, ticks: { callback: (v) => formatMoney(v) } } }
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { weight: 'bold' } } },
+      y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { callback: (v) => formatMoney(v) } }
+    }
   }
 
   // Clients les plus fréquents (toutes périodes confondues) — classés par nombre
@@ -260,7 +340,7 @@ export default function Dashboard() {
       c.montant += Number(x.montant) || 0
       parClient.set(nom, c)
     }
-    return [...parClient.values()].sort((a, b) => b.nb - a.nb).slice(0, 5)
+    return [...parClient.values()].sort((a, b) => b.nb - a.nb).slice(0, 10)
   }, [seances, abonnements])
 
   // Abonnements arrivant à échéance dans les 7 prochains jours — pour relancer les
@@ -308,6 +388,12 @@ export default function Dashboard() {
     }
     return resultats.sort((x, y) => y.jours - x.jours)
   }, [abonnements, presences])
+  // Retire ceux fermés récemment (cf. dismissInactif) — même mécanique que
+  // abonnementsARelancer ci-dessus (se réévalue seule via heureActuelle/dismissTick).
+  const abonnesInactifsAffiches = useMemo(
+    () => abonnesInactifs.filter((a) => Date.now() >= dismissedUntilInactif(a.clientNom.trim().toLowerCase())),
+    [abonnesInactifs, dismissTick, heureActuelle]
+  )
 
   // Alarme abonné inactif — best-effort : se déclenche quand cet écran est ouvert et
   // détecte un abonné fraîchement passé sous le seuil d'inactivité (une seule fois
@@ -377,9 +463,12 @@ export default function Dashboard() {
             MAXI-GYM {siteLabel(site)} · {heureActuelle.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        <div className="w-full sm:w-auto sm:ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:font-semibold [&_.input-base]:text-white [&_label]:font-bold [&_label]:text-white">
-          {periodNode}
-        </div>
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       {coachsAujourdhui.length > 0 && (
@@ -388,8 +477,27 @@ export default function Dashboard() {
           {/* Reflet — fine lueur en haut, même recette que la nav mobile en verre. */}
           <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-2xl bg-gradient-to-b from-white/40 to-transparent" />
           <div className="relative flex shrink-0 items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
-              <UserCog size={14} />
+            <style>{`
+              @keyframes gym-coach-attente {
+                0%, 100% { box-shadow: ${OMBRE_3D}, 0 0 0 0 rgba(252,211,77,0.55); }
+                50% { box-shadow: ${OMBRE_3D}, 0 0 12px 5px rgba(252,211,77,0.55); }
+              }
+            `}</style>
+            {/* Halo respirant — ne s'anime que tant qu'au moins un coach du jour
+                n'est ni arrivé ni en retard (état « Prévu »), pour signaler qu'on
+                l'attend ; s'arrête dès qu'il pointe (ou passe en retard). Lueur douce
+                qui gonfle/dégonfle (box-shadow), distincte du animate-ping déjà
+                utilisé ailleurs sur ce dashboard (badges d'alerte). Icône en relief
+                « 3D » (ombre interne claire/sombre + ombre portée). */}
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white"
+              style={{
+                background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})`,
+                animation: coachsAujourdhui.some((c) => !c.pointage && !coachsEnRetard.some((x) => x.id === c.id))
+                  ? 'gym-coach-attente 2s ease-in-out infinite'
+                  : undefined,
+                boxShadow: OMBRE_3D
+              }}>
+              <UserCog size={15} className="relative" />
             </span>
             <span className="text-xs font-bold uppercase tracking-wide text-gray-600">
               Coach{coachsAujourdhui.length > 1 ? 's' : ''} du jour
@@ -427,131 +535,196 @@ export default function Dashboard() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Séances" value={seancesMois.length} icon={Ticket} accent={COULEUR} onClick={() => setDetailModal('seances')}
+        <StatCard glass title="Séances" value={seancesMois.length} icon={Ticket} accent={COULEUR} onClick={() => setDetailModal('seances')}
           variation={comparable ? seancesMois.length - seancesMoisPrecedent.length : undefined} variationLabel="période préc. · cliquer" />
-        <StatCard title="Abonnements" value={abonnementsMois.length} icon={CreditCard} accent={COULEUR2} onClick={() => setDetailModal('abonnements')}
+        <StatCard glass title="Abonnements" value={abonnementsMois.length} icon={CreditCard} accent={COULEUR2} onClick={() => setDetailModal('abonnements')}
           variation={comparable ? abonnementsMois.length - abonnementsMoisPrecedent.length : undefined} variationLabel="période préc. · cliquer" />
-        <StatCard title="Total encaissé" value={formatMoney(totalEncaisseMois)} icon={Wallet} accent={COULEUR} onClick={() => setDetailModal('total')}
+        <StatCard glass title="Total encaissé" value={formatMoney(totalEncaisseMois)} icon={Wallet} accent={COULEUR} onClick={() => setDetailModal('total')}
           variation={comparable ? totalEncaisseMois - totalEncaisseMoisPrecedent : undefined}
           variationLabel={afficherObjectif
             ? <>🎯 {formatMoney(objectif)} · <strong style={{ color: pctObjectif >= 100 ? '#16a34a' : COULEUR }}>{pctObjectif}%</strong></>
             : (comparable ? `${formatMoney(totalEncaisseMoisPrecedent)} · période préc.` : undefined)} />
-        <StatCard title="Clients" value={clients.length} icon={Users} accent={COULEUR2} onClick={() => setDetailModal('clients')}
+        <StatCard glass title="Clients" value={clients.length} icon={Users} accent={COULEUR2} onClick={() => setDetailModal('clients')}
           sub={nouveauxClientsMois > 0 ? `+${nouveauxClientsMois} nouveau${nouveauxClientsMois > 1 ? 'x' : ''} sur la période` : undefined} />
       </div>
 
 
       {abonnementsARelancer.length > 0 && (
-        <Card title="⏰ Abonnements à renouveler bientôt">
+        <Card title="⏰ Abonnements à renouveler bientôt"
+          className="overflow-hidden border-amber-50 bg-gradient-to-br from-amber-50/25 via-white to-white">
           <div className="space-y-2">
-            {abonnementsARelancer.map((a) => (
-              <div key={a.id}
-                className="flex w-full items-center gap-1 rounded-lg bg-amber-50 pr-1 transition-colors hover:bg-amber-100">
-                <button onClick={() => setClientDetail(a.clientNom)}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left">
-                  <AlertTriangle size={16} className="shrink-0 text-amber-600" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-800">{a.clientNom}</p>
-                    <p className="text-xs text-gray-500">
-                      <Badge tone={categorieTone(a.categorie)}>{categorieLabel(a.categorie)}</Badge>
-                      {' '}expire le {formatDateShort(a.dateFin)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-sm font-bold text-amber-700">
-                    {a.joursRestants <= 0 ? "Aujourd'hui" : a.joursRestants === 1 ? 'Demain' : `Dans ${a.joursRestants} jours`}
-                  </span>
-                </button>
-                <button
-                  onClick={() => { dismissRenouvellement(a.id, a.joursRestants); setDismissTick((t) => t + 1) }}
-                  title={a.joursRestants <= 3 ? 'Fermer — reviendra dans 3h' : 'Fermer — reviendra demain'}
-                  className="shrink-0 rounded-full p-1.5 text-amber-400 hover:bg-amber-200 hover:text-amber-700">
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
+            {(voirTousRenouvellements ? abonnementsARelancer : abonnementsARelancer.slice(0, LIMITE_RENOUVELLEMENTS)).map((a) => {
+              const urgent = a.joursRestants <= 1
+              return (
+                <div key={a.id}
+                  className="group relative flex w-full items-center gap-1 overflow-hidden rounded-2xl border border-amber-100/50 bg-white/55 pr-1 shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                  <span aria-hidden="true" className="pointer-events-none absolute -inset-x-4 -top-6 h-10 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
+                  <button onClick={() => setClientDetail(a.clientNom)}
+                    className="relative flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
+                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-500">
+                      {urgent && <span className="absolute inset-0 animate-ping rounded-full bg-amber-300 opacity-40" />}
+                      <AlertTriangle size={16} className="relative" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-gray-800">{a.clientNom}</p>
+                      <p className="text-xs text-gray-500">
+                        <Badge tone={categorieTone(a.categorie)}>{categorieLabel(a.categorie)}</Badge>
+                        {' '}expire le {formatDateShort(a.dateFin)}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${urgent ? 'bg-amber-400 text-white' : 'bg-amber-50 text-amber-600'}`}>
+                      {a.joursRestants <= 0 ? "Aujourd'hui" : a.joursRestants === 1 ? 'Demain' : `Dans ${a.joursRestants} jours`}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { dismissRenouvellement(a.id, a.joursRestants); setDismissTick((t) => t + 1) }}
+                    title={a.joursRestants <= 3 ? 'Fermer — reviendra dans 3h' : 'Fermer — reviendra demain'}
+                    className="relative shrink-0 rounded-full p-1.5 text-amber-300 hover:bg-amber-50 hover:text-amber-600">
+                    <X size={14} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
+          {abonnementsARelancer.length > LIMITE_RENOUVELLEMENTS && (
+            <button onClick={() => setVoirTousRenouvellements((v) => !v)}
+              className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-50">
+              {voirTousRenouvellements ? 'Réduire' : `Voir les ${abonnementsARelancer.length - LIMITE_RENOUVELLEMENTS} autres`}
+            </button>
+          )}
         </Card>
       )}
 
-      {abonnesInactifs.length > 0 && (
-        <Card title="🔔 Abonnés à relancer — inactifs depuis 7 jours ou plus">
+      {abonnesInactifsAffiches.length > 0 && (
+        <Card title="🔔 Abonnés à relancer : inactifs depuis 7 jours ou plus">
+          <style>{`
+            @keyframes gym-signal-lumineux {
+              0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+              50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.45), 0 0 24px 6px rgba(239,68,68,0.5); }
+            }
+          `}</style>
           <div className="space-y-2">
-            {abonnesInactifs.map((a) => (
-              <button key={a.clientNom} onClick={() => setClientDetail(a.clientNom)}
-                className="flex w-full items-center gap-3 rounded-lg bg-red-50 px-3 py-2 text-left transition-colors hover:bg-red-100">
-                <BellRing size={16} className="shrink-0 text-red-600" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-gray-800">{a.clientNom}</p>
-                  <p className="text-xs text-gray-500">Dernière arrivée : {formatDateShort(a.derniere)}</p>
+            {abonnesInactifsAffiches.map((a) => {
+              const tresInactif = a.jours >= 14
+              const cle = a.clientNom.trim().toLowerCase()
+              const flashe = flashInactif === cle
+              return (
+                <div key={a.clientNom}
+                  className={`group flex w-full items-center gap-1 rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 to-white pr-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${flashe ? 'animate-[gym-signal-lumineux_0.35s_ease-out]' : ''}`}>
+                  <button onClick={() => setClientDetail(a.clientNom)}
+                    className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
+                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                      {tresInactif && <span className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-50" />}
+                      <BellRing size={16} className="relative" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-gray-800">{a.clientNom}</p>
+                      <p className="text-xs text-gray-500">Dernière arrivée : {formatDateShort(a.derniere)}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${tresInactif ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'}`}>
+                      Il y a {a.jours} jours
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleDismissInactif(cle)}
+                    title="Fermer — reviendra demain"
+                    className="shrink-0 rounded-full p-1.5 text-red-400 hover:bg-red-200 hover:text-red-700">
+                    <X size={14} />
+                  </button>
                 </div>
-                <span className="shrink-0 text-sm font-bold text-red-700">Il y a {a.jours} jours</span>
-              </button>
-            ))}
+              )
+            })}
           </div>
         </Card>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="🕒 Activité récente">
+        <Card title="🕒 Activité récente" className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/60 via-white to-white">
           {activiteRecente.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucune activité pour l'instant.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {activiteRecente.map((x) => (
-                <button key={x.id} onClick={() => setClientDetail(x.clientNom)}
-                  className="flex w-full items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 text-left transition-colors hover:bg-gray-100">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(x.clientNom) }}>
-                    <User size={14} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-800">{x.clientNom}</p>
-                    <p className="text-[11px] text-gray-400">
-                      <Badge tone={x.type === 'abonnement' ? 'purple' : 'info'}>{x.type === 'abonnement' ? 'Abonnement' : 'Séance'}</Badge>
-                      {' '}{categorieLabel(x.categorie)} · {formatDateShort(x.date)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-bold text-gray-700">{formatMoney(x.montant)}</span>
-                </button>
-              ))}
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100/70 text-orange-300">
+                <Clock size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Aucune activité pour l'instant.</p>
             </div>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                {(voirToutActivite ? activiteRecente : activiteRecente.slice(0, LIMITE_ACTIVITE)).map((x) => (
+                  <button key={x.id} onClick={() => setClientDetail(x.clientNom)}
+                    className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-white/60 bg-white/65 px-3 py-2 text-left shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(x.clientNom), boxShadow: OMBRE_3D }}>
+                      <User size={14} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-gray-800">{x.clientNom}</p>
+                      <p className="text-[11px] text-gray-400">
+                        <Badge tone={x.type === 'abonnement' ? 'purple' : 'info'}>{x.type === 'abonnement' ? 'Abonnement' : 'Séance'}</Badge>
+                        {' '}{categorieLabel(x.categorie)} · {formatDateShort(x.date)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-bold text-gray-700">{formatMoney(x.montant)}</span>
+                  </button>
+                ))}
+              </div>
+              {activiteRecente.length > LIMITE_ACTIVITE && (
+                <button onClick={() => setVoirToutActivite((v) => !v)}
+                  className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-50">
+                  {voirToutActivite ? 'Réduire' : `Voir les ${activiteRecente.length - LIMITE_ACTIVITE} autres`}
+                </button>
+              )}
+            </>
           )}
         </Card>
 
-        <Card title="Clients les plus fréquents">
+        <Card title="Clients les plus fréquents" className="overflow-hidden border-amber-100/60 bg-gradient-to-br from-amber-50/60 via-white to-white">
           {clientsFideles.length === 0 ? (
-            <p className="py-4 text-center text-sm text-gray-400">Aucun client pour l'instant.</p>
-          ) : (
-            <div className="space-y-2">
-              {clientsFideles.map((c, i) => {
-                const podium = RANG_PODIUM[i]
-                return (
-                  <button key={c.nom} onClick={() => setClientDetail(c.nom)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${podium ? `${podium.bg} ${podium.ring} shadow-sm` : 'bg-gray-50 hover:bg-gray-100'}`}>
-                    <div className="relative shrink-0">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full text-white shadow-sm" style={{ background: avatarGradient(c.nom) }}>
-                        <User size={16} />
-                      </span>
-                      {podium ? (
-                        <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs leading-none shadow ring-1 ring-gray-200" title={podium.label}>
-                          {podium.medaille}
-                        </span>
-                      ) : (
-                        <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-[10px] font-extrabold text-white shadow ring-1 ring-white">
-                          {i + 1}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold text-gray-800">{c.nom}</p>
-                      <p className="text-xs text-gray-500">{formatMoney(c.montant)} au total</p>
-                    </div>
-                    <span className="flex shrink-0 items-center gap-1 text-sm font-bold" style={{ color: COULEUR }}>
-                      <Flame size={14} /> {c.nb} passage{c.nb > 1 ? 's' : ''}
-                    </span>
-                  </button>
-                )
-              })}
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100/70 text-amber-300">
+                <Flame size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Aucun client pour l'instant.</p>
             </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {(voirTousClients ? clientsFideles : clientsFideles.slice(0, LIMITE_CLIENTS)).map((c, i) => {
+                  const podium = RANG_PODIUM[i]
+                  return (
+                    <button key={c.nom} onClick={() => setClientDetail(c.nom)}
+                      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-left shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${podium ? `${podium.bg} ${podium.ring}` : 'border border-white/60 bg-white/65'}`}>
+                      <div className="relative shrink-0">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(c.nom), boxShadow: OMBRE_3D }}>
+                          <User size={16} />
+                        </span>
+                        {podium ? (
+                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs leading-none shadow ring-1 ring-gray-200" title={podium.label}>
+                            {podium.medaille}
+                          </span>
+                        ) : (
+                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-[10px] font-extrabold text-white shadow ring-1 ring-white">
+                            {i + 1}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-gray-800">{c.nom}</p>
+                        <p className="text-xs text-gray-500">{formatMoney(c.montant)} au total</p>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1 text-sm font-bold" style={{ color: COULEUR }}>
+                        <Flame size={14} /> {c.nb} passage{c.nb > 1 ? 's' : ''}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {clientsFideles.length > LIMITE_CLIENTS && (
+                <button onClick={() => setVoirTousClients((v) => !v)}
+                  className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-50">
+                  {voirTousClients ? 'Réduire' : `Voir les ${clientsFideles.length - LIMITE_CLIENTS} autres`}
+                </button>
+              )}
+            </>
           )}
         </Card>
       </div>
@@ -559,9 +732,14 @@ export default function Dashboard() {
       {/* Bento : deux diagrammes EN BANDE classés (séances / abonnements), jamais
           mélangés — chaque catégorie garde sa couleur (cf. COULEUR_BARRE) dans les deux. */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card title="🎫 Séances par catégorie">
+        <Card title="🎫 Séances par catégorie" className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/50 via-white to-white">
           {totalSeancesMois === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucune séance sur cette période.</p>
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100/70 text-orange-300">
+                <Ticket size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Aucune séance sur cette période.</p>
+            </div>
           ) : (
             <div style={{ height: 220 }}>
               <Bar data={barData(seancesParCategorie)} options={barOptions} />
@@ -569,9 +747,14 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card title="💳 Abonnements par catégorie">
+        <Card title="💳 Abonnements par catégorie" className="overflow-hidden border-red-100/60 bg-gradient-to-br from-red-50/50 via-white to-white">
           {totalAbonnementsMois === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucun abonnement sur cette période.</p>
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100/70 text-red-300">
+                <CreditCard size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Aucun abonnement sur cette période.</p>
+            </div>
           ) : (
             <div style={{ height: 220 }}>
               <Bar data={barData(abonnementsParCategorie)} options={barOptions} />

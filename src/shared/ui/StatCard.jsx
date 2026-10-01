@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 
 export default function StatCard({
   title, value, sub, variation, variationLabel,
-  icon: Icon, accent = '#16a34a', onClick, valueColor
+  icon: Icon, accent = '#16a34a', onClick, valueColor, glass = false
 }) {
   const hasVar = variation !== undefined && variation !== null && variation !== ''
   const up = Number(variation) >= 0
@@ -15,14 +15,33 @@ export default function StatCard({
     <Comp
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`card group flex w-full items-center gap-2.5 p-3 text-left transition-all sm:gap-3.5 sm:p-4 ${
+      className={`card group relative flex w-full items-center gap-2.5 overflow-hidden p-3 text-left transition-all sm:gap-3.5 sm:p-4 ${
+        glass ? 'border-white/50 backdrop-blur-xl' : ''
+      } ${
         onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]' : ''
       }`}
+      // Teinte translucide propre à l'accent de la carte (prioritaire sur le
+      // fond opaque de `.card` grâce au style inline) + reflet diagonal, même
+      // recette « verre » que la nav mobile — indispensable pour que l'effet
+      // se voie même posé sur un fond de page clair/uni.
+      style={glass ? { background: `linear-gradient(135deg, ${accent}1f 0%, #ffffffcc 70%)` } : undefined}
     >
+      {glass && (
+        <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/80 via-white/20 to-transparent" />
+      )}
       {Icon && (
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12"
-          style={{ background: accent + '1a', color: accent }}
+          // En mode `glass`, l'icône passe d'un pavé pastel plat à un badge dégradé
+          // « 3D » (liseré clair en haut, ombre interne sombre en bas, ombre portée
+          // teintée) — même recette bombée/glossy que les autres badges du dashboard.
+          style={glass
+            ? {
+                background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+                color: '#fff',
+                boxShadow: `0 6px 14px -4px ${accent}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)`
+              }
+            : { background: accent + '1a', color: accent }}
         >
           <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
         </div>

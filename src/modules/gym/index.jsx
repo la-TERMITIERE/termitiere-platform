@@ -81,7 +81,7 @@ function SiteApp() {
         <Route path="forfaits" element={<Forfaits />} />
         <Route path="seances" element={<Seances />} />
         <Route path="abonnements" element={<Abonnements />} />
-        <Route path="pilotage" element={canViewPilotage(role) ? <Pilotage /> : <AccesRefuse />} />
+        <Route path="pilotage" element={canViewPilotage(role) || role === 'agent' ? <Pilotage /> : <AccesRefuse />} />
         <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="gym" masquerRevenu /> : <AccesRefuse />} />
         <Route path="besoins" element={<SectorBesoins secteurId="gym" />} />
         <Route path="facturation" element={<Facturation />} />

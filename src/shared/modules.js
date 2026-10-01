@@ -66,7 +66,7 @@ export const MODULES = [
   {
     id: 'comptabilite',
     nom: 'COMPTABILITÉ',
-    description: 'Comptabilité générale — écritures, balance, grand livre, TVA, immobilisations',
+    description: 'Comptabilité générale : écritures, balance, grand livre, TVA, immobilisations',
     icon: Calculator,
     emoji: '📊',
     color: '#ea580c',
@@ -106,7 +106,7 @@ export const MODULES = [
   {
     id: 'gym',
     nom: 'MAXI-GYM',
-    description: 'Salle de sport — séances et abonnements clients',
+    description: 'Salle de sport : séances et abonnements clients',
     icon: Dumbbell,
     emoji: '🏋️',
     // Couleurs reprises directement du logo (orange du ruban + rouge de l'icône) —
@@ -268,7 +268,7 @@ export const MODULE_NAV = {
     { label: 'Clients', to: '/gym/clients', icon: UserCircle },
     { label: 'Clients partenaires', to: '/gym/clients-partenaires', icon: HandCoins, roles: FINANCE_VIEW_ROLES },
     { label: 'Coachs', to: '/gym/coachs', icon: UserCog },
-    { label: 'Pilotage & Analyses', to: '/gym/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
+    { label: 'Pilotage & Analyses', to: '/gym/pilotage', icon: TrendingUp, roles: [...FINANCE_VIEW_ROLES, 'agent'] },
     { label: 'Dépense', to: '/gym/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Besoins', to: '/gym/besoins', icon: PackagePlus, badgeKey: 'gymBesoins' },
     { label: 'Partenaires', to: '/gym/partenaires', icon: Handshake, perm: 'partenaires' },
