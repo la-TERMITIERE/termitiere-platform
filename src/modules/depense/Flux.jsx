@@ -13,6 +13,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, NATURES_FLUX } from './data'
 import { soldesFluxMois, croissance, derniersMois, moisPrecedent, coutsMatieresBriqueterie, visibleDansEDepenses } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
+import { icone3D } from '../../utils/color'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
@@ -149,8 +150,8 @@ export default function Flux() {
 
       <Card>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: couleurCroissance + '18' }}>
-            <IconCroissance size={20} style={{ color: couleurCroissance }} />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleurCroissance)}>
+            <IconCroissance size={20} />
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-700">

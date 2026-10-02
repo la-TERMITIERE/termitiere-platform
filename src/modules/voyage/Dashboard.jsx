@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Plane, ShoppingCart, PiggyBank, Globe, ArrowRight } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
@@ -87,12 +88,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.title} className="card p-4">
-            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
-            <p className="truncate text-xl font-extrabold text-gray-900" title={String(k.value)}>{k.value}</p>
-            {k.sub && <p className="mt-0.5 truncate text-[11px] font-semibold text-gray-400" title={k.sub}>{k.sub}</p>}
-          </div>
+          <StatCard key={k.title} title={k.title} value={k.value} sub={k.sub} icon={k.icon} accent={k.color} />
         ))}
       </div>
 

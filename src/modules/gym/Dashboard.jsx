@@ -18,9 +18,9 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
 import { ROLES } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { SEXES, indexSexeClients, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
+import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
 import ClientDetailModal from './ClientDetailModal'
-import { SexeDonut } from './SexeUI'
+import { SexeDonut, SexeBadge } from './SexeUI'
 import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { useGymParams } from './useGymParams'
@@ -188,6 +188,7 @@ export default function Dashboard() {
   const [voirToutActivite, setVoirToutActivite] = useState(false)
   const LIMITE_ACTIVITE = 5
   const [voirTousClients, setVoirTousClients] = useState(false)
+  const [modeFideles, setModeFideles] = useState('tous') // 'tous' | 'seances' | 'abonnements'
   const LIMITE_CLIENTS = 5
   // Ombre « 3D » partagée par les badges/avatars de ce dashboard — liseré clair en
   // haut + ombre interne sombre en bas + ombre portée, pour un rendu bombé/glossy
@@ -291,6 +292,7 @@ export default function Dashboard() {
   // Activité récente (séances + abonnements confondus) — les derniers enregistrements,
   // toujours utile même avec peu de données (contrairement à un graphique sur 7 jours,
   // vide et peu parlant tant qu'il n'y a pas assez d'historique).
+  const idxSexeDash = useMemo(() => indexSexeClients(clients), [clients])
   const activiteRecente = useMemo(() => {
     const s = seances.map((x) => ({ ...x, type: 'seance' }))
     const a = abonnements.map((x) => ({ ...x, type: 'abonnement' }))
@@ -338,20 +340,43 @@ export default function Dashboard() {
     }
   }
 
-  // Clients les plus fréquents (toutes périodes confondues) — classés par nombre
-  // de passages (séances + abonnements), pas par montant dépensé.
+  // Clients les plus fréquents (toutes périodes confondues), selon le bouton choisi :
+  //  - Tous        : nombre de passages (séances + abonnements) ;
+  //  - Séances     : nombre de séances ponctuelles ;
+  //  - Abonnements : JOURS de présence pointés des abonnés (un jour compté une fois).
+  // Chaque ligne porte aussi le type (abonné / séances) et le sexe du client.
   const clientsFideles = useMemo(() => {
+    const idx = indexSexeClients(clients)
     const parClient = new Map()
-    for (const x of [...seances, ...abonnements]) {
-      const nom = (x.clientNom || '').trim()
-      if (!nom) continue
-      const c = parClient.get(nom) || { nom, nb: 0, montant: 0 }
-      c.nb += 1
-      c.montant += Number(x.montant) || 0
-      parClient.set(nom, c)
+    const get = (nom) => {
+      const cle = nom.toLowerCase()
+      if (!parClient.has(cle)) parClient.set(cle, { nom, cle, nbS: 0, nbA: 0, montantS: 0, montantA: 0, jours: new Set() })
+      return parClient.get(cle)
     }
-    return [...parClient.values()].sort((a, b) => b.nb - a.nb).slice(0, 10)
-  }, [seances, abonnements])
+    for (const x of seances) {
+      const nom = (x.clientNom || '').trim(); if (!nom) continue
+      const c = get(nom); c.nbS += 1; c.montantS += Number(x.montant) || 0
+    }
+    for (const x of abonnements) {
+      const nom = (x.clientNom || '').trim(); if (!nom) continue
+      const c = get(nom); c.nbA += 1; c.montantA += Number(x.montant) || 0
+    }
+    for (const pr of presences) {
+      const nom = (pr.clientNom || '').trim(); if (!nom) continue
+      const c = parClient.get(nom.toLowerCase())
+      if (c) c.jours.add(pr.date)
+    }
+    const lignes = [...parClient.values()].map((c) => {
+      const sexe = idx.get(c.cle) || ''
+      if (modeFideles === 'seances') return { ...c, sexe, nb: c.nbS, montant: c.montantS, libelle: (n) => `${n} séance${n > 1 ? 's' : ''}` }
+      if (modeFideles === 'abonnements') return { ...c, sexe, nb: c.jours.size, montant: c.montantA, libelle: (n) => `${n} jour${n > 1 ? 's' : ''} présent${n > 1 ? 's' : ''}` }
+      return { ...c, sexe, nb: c.nbS + c.nbA, montant: c.montantS + c.montantA, libelle: (n) => `${n} passage${n > 1 ? 's' : ''}` }
+    })
+    return lignes
+      .filter((c) => (modeFideles === 'seances' ? c.nbS > 0 : modeFideles === 'abonnements' ? c.nbA > 0 : true))
+      .sort((a, b) => b.nb - a.nb || (modeFideles === 'abonnements' ? b.nbA - a.nbA : 0))
+      .slice(0, 10)
+  }, [seances, abonnements, presences, clients, modeFideles])
 
   // Abonnements arrivant à échéance dans les 7 prochains jours — pour relancer les
   // clients avant l'expiration plutôt que de les perdre silencieusement.
@@ -667,7 +692,7 @@ export default function Dashboard() {
                       <User size={14} />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-gray-800">{x.clientNom}</p>
+                      <p className="flex items-center gap-1.5 font-semibold text-gray-800"><span className="truncate">{x.clientNom}</span> <SexeBadge sexe={sexeDe(x, idxSexeDash)} /></p>
                       <p className="text-[11px] text-gray-400">
                         <Badge tone={x.type === 'abonnement' ? 'purple' : 'info'}>{x.type === 'abonnement' ? 'Abonnement' : 'Séance'}</Badge>
                         {' '}{categorieLabel(x.categorie)} · {formatDateShort(x.date)}
@@ -688,6 +713,16 @@ export default function Dashboard() {
         </Card>
 
         <Card title="Clients les plus fréquents" className="overflow-hidden border-amber-100/60 bg-gradient-to-br from-amber-50/60 via-white to-white">
+          {/* Boutons : ce qui compte pour le classement (tous / séances / abonnements). */}
+          <div className="mb-3 flex gap-1 rounded-2xl border border-amber-100 bg-white/70 p-1">
+            {[['tous', 'Tous'], ['seances', '🎫 Séances'], ['abonnements', '💳 Abonnements']].map(([v, l]) => (
+              <button key={v} type="button" onClick={() => { setModeFideles(v); setVoirTousClients(false) }}
+                className={`flex-1 rounded-xl px-2 py-1.5 text-xs font-bold transition-colors ${modeFideles === v ? 'text-white shadow-sm' : 'text-gray-500 hover:bg-amber-50'}`}
+                style={modeFideles === v ? { background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` } : undefined}>
+                {l}
+              </button>
+            ))}
+          </div>
           {clientsFideles.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100/70 text-amber-300">
@@ -718,11 +753,15 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold text-gray-800">{c.nom}</p>
-                        <p className="text-xs text-gray-500">{formatMoney(c.montant)} au total</p>
+                        <p className="flex items-center gap-1.5 font-bold text-gray-800"><span className="truncate">{c.nom}</span> <SexeBadge sexe={c.sexe} /></p>
+                        <p className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+                          {formatMoney(c.montant)}
+                          {modeFideles === 'tous' && c.nbA > 0 && <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">💳 Abonné</span>}
+                          {modeFideles === 'tous' && c.nbS > 0 && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">🎫 {c.nbS} séance{c.nbS > 1 ? 's' : ''}</span>}
+                        </p>
                       </div>
                       <span className="flex shrink-0 items-center gap-1 text-sm font-bold" style={{ color: COULEUR }}>
-                        <Flame size={14} /> {c.nb} passage{c.nb > 1 ? 's' : ''}
+                        <Flame size={14} /> {c.libelle(c.nb)}
                       </span>
                     </button>
                   )

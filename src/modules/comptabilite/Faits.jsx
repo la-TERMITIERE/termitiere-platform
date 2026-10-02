@@ -1,5 +1,6 @@
 // COMPTABILITÉ — Faits comptables (aligné FEZIRE /accounting/faits-comptables).
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { Repeat, Info } from 'lucide-react'
 import { CATALOGUE_FAITS, MODELES_ACTIFS } from './moteur'
@@ -56,5 +57,5 @@ export default function Faits() {
 }
 
 function Stat({ label, value }) {
-  return <Card><div className="text-xs uppercase tracking-wide text-gray-400">{label}</div><div className="text-2xl font-extrabold">{value}</div></Card>
+  return <StatCard title={label} value={value} accent="#64748b" />
 }

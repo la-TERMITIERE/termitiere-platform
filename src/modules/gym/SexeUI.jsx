@@ -48,29 +48,82 @@ export function SexeBadge({ sexe }) {
   )
 }
 
-// Donut Femmes / Hommes (personnes distinctes). `mini` : petit format pour le Dashboard.
+// Plugin Chart.js « donut 3D » : épaisseur (anneau extrudé vers le bas, teinte plus
+// sombre) + reflet brillant sur chaque part, sans incliner le graphique : le disque
+// reste DROIT mais se lit comme un vrai relief.
+const assombrir = (hex, t) => {
+  const n = parseInt(hex.replace('#', ''), 16)
+  const m = (v) => Math.round(v * (1 - t))
+  return `rgb(${m((n >> 16) & 255)},${m((n >> 8) & 255)},${m(n & 255)})`
+}
+const PROFONDEUR_DONUT = 16
+const donut3D = {
+  id: 'donut3D',
+  beforeDatasetsDraw(chart, _a, opts) {
+    const p = opts?.profondeur ?? PROFONDEUR_DONUT
+    const { ctx } = chart
+    const couleurs = chart.data.datasets[0].backgroundColor
+    chart.getDatasetMeta(0).data.forEach((arc, i) => {
+      const { x, y, startAngle, endAngle, innerRadius, outerRadius } = arc.getProps(['x', 'y', 'startAngle', 'endAngle', 'innerRadius', 'outerRadius'], true)
+      if (!(endAngle - startAngle > 0)) return
+      ctx.save()
+      ctx.fillStyle = assombrir(couleurs[i], 0.38)
+      for (let d = p; d >= 1; d -= 1) {
+        ctx.beginPath()
+        ctx.arc(x, y + d, outerRadius, startAngle, endAngle)
+        ctx.arc(x, y + d, innerRadius, endAngle, startAngle, true)
+        ctx.closePath(); ctx.fill()
+      }
+      ctx.restore()
+    })
+  },
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart
+    chart.getDatasetMeta(0).data.forEach((arc) => {
+      const { x, y, startAngle, endAngle, innerRadius, outerRadius } = arc.getProps(['x', 'y', 'startAngle', 'endAngle', 'innerRadius', 'outerRadius'], true)
+      if (!(endAngle - startAngle > 0)) return
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(x, y, outerRadius, startAngle, endAngle)
+      ctx.arc(x, y, innerRadius, endAngle, startAngle, true)
+      ctx.closePath()
+      const g = ctx.createLinearGradient(x - outerRadius, y - outerRadius, x + outerRadius, y + outerRadius)
+      g.addColorStop(0, 'rgba(255,255,255,0.55)')
+      g.addColorStop(0.45, 'rgba(255,255,255,0.08)')
+      g.addColorStop(1, 'rgba(0,0,0,0.18)')
+      ctx.fillStyle = g
+      ctx.fill()
+      ctx.restore()
+    })
+  }
+}
+
+// Donut Femmes / Hommes (personnes distinctes) en 3D. `mini` : format Dashboard.
 export function SexeDonut({ stats, mini = false }) {
-  const taille = mini ? 96 : 190
+  const taille = mini ? 170 : 270
   const data = {
     labels: SEXES.map((s) => s.court),
     datasets: [{
       data: [stats.F.personnes, stats.H.personnes],
-      backgroundColor: SEXES.map((s) => s.couleur), borderColor: '#ffffff', borderWidth: mini ? 2 : 3, hoverOffset: mini ? 2 : 6
+      backgroundColor: SEXES.map((s) => s.couleur), borderColor: '#ffffff', borderWidth: mini ? 2 : 3, hoverOffset: mini ? 3 : 8
     }]
   }
   const options = {
-    responsive: true, maintainAspectRatio: false, cutout: mini ? '66%' : '64%',
+    responsive: true, maintainAspectRatio: false, cutout: '60%',
+    layout: { padding: { top: 6, left: 8, right: 8, bottom: PROFONDEUR_DONUT + 4 } },
     plugins: {
       legend: { display: false },
+      donut3D: { profondeur: mini ? 9 : PROFONDEUR_DONUT },
       tooltip: { callbacks: { label: (c) => ` ${c.label} : ${c.parsed} personne${c.parsed > 1 ? 's' : ''}` } }
     }
   }
   return (
-    <div className="relative shrink-0" style={{ width: taille, height: taille }}>
-      <Doughnut data={data} options={options} />
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`${mini ? 'text-base' : 'text-2xl'} font-extrabold leading-none text-gray-800`}>{stats.connus}</span>
-        <span className={`${mini ? 'text-[9px]' : 'text-[11px]'} font-semibold text-gray-400`}>personne{stats.connus > 1 ? 's' : ''}</span>
+    <div className="relative shrink-0" style={{ width: taille, height: taille, filter: 'drop-shadow(0 12px 8px rgba(0,0,0,0.16))' }}>
+      <Doughnut data={data} options={options} plugins={[donut3D]} />
+      {/* Centre du trou : centre de l'anneau, décalé vers le haut de la profondeur du relief. */}
+      <div className="pointer-events-none absolute inset-x-0 flex flex-col items-center justify-center" style={{ top: 0, bottom: PROFONDEUR_DONUT }}>
+        <span className={`${mini ? 'text-2xl' : 'text-4xl'} font-extrabold leading-none text-gray-800`}>{stats.connus}</span>
+        <span className={`${mini ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-400`}>personne{stats.connus > 1 ? 's' : ''}</span>
       </div>
     </div>
   )

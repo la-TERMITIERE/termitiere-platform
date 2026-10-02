@@ -4,6 +4,7 @@
 import { useMemo } from 'react'
 import { Trophy, ListChecks, CheckCircle2, Clock3 } from 'lucide-react'
 import Card from '../ui/Card'
+import StatCard from '../ui/StatCard'
 import { usePeriodSelect } from '../ui/PeriodSelect'
 import { formatDateTime } from '../../utils/formatters'
 
@@ -103,15 +104,6 @@ export default function RoutineStatistiques({ itemsPersonnels, checks, color, us
   )
 }
 
-function StatTuile({ icon: Icon, color, label, value, sub }) {
-  return (
-    <div className="card p-3">
-      <div className="mb-1 flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</p>
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: color + '1a', color }}><Icon size={15} /></span>
-      </div>
-      <p className="text-xl font-extrabold" style={{ color }}>{value}</p>
-      {sub && <p className="mt-0.5 truncate text-[11px] text-gray-400">{sub}</p>}
-    </div>
-  )
+function StatTuile({ icon, color, label, value, sub }) {
+  return <StatCard title={label} value={value} sub={sub} icon={icon} accent={color} valueColor={color} />
 }

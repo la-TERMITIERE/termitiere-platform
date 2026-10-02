@@ -2,11 +2,14 @@
 // - `variation` (nombre signé) : si fourni, l'ÉCART devient l'élément dominant
 //   (gros, coloré, fléché) et la valeur globale passe au second plan (gris).
 // - `onClick` : rend la carte cliquable (ouvre un détail) avec chevron + survol.
+// - `chip` (texte) + `chipGood` : pastille d'écart déjà formatée (ex. « +12.5 % »).
+// - `glass` (vrai par défaut, `glass={false}` pour l'ancien rendu plat) : verre teinté
+//   + icône 3D, identique dans TOUS les modules.
 import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 
 export default function StatCard({
   title, value, sub, variation, variationLabel,
-  icon: Icon, accent = '#16a34a', onClick, valueColor, glass = false
+  icon: Icon, accent = '#16a34a', onClick, valueColor, glass = true, chip, chipGood = true
 }) {
   const hasVar = variation !== undefined && variation !== null && variation !== ''
   const up = Number(variation) >= 0
@@ -52,7 +55,10 @@ export default function StatCard({
           <p className="truncate text-[11px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs" title={title}>{title}</p>
           {/* L'écart est une PASTILLE discrète : la valeur reste l'élément dominant
               et lisible (avant, l'écart écrasait la valeur → peu ergonomique). */}
-          {hasVar && (
+          {chip && (
+            <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${chipGood ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>{chip}</span>
+          )}
+          {hasVar && !chip && (
             <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${up ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
               {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               {up ? '+' : ''}{variation}

@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
 import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle, AlarmClock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
@@ -677,26 +678,14 @@ function ScopeTab({ active, color, onClick, children }) {
 }
 
 // `invert` : une hausse est une MAUVAISE nouvelle (décès) — on inverse le code couleur.
-function Indic({ title, value, icon: Icon, color, sub, delta, money, invert, onClick }) {
+function Indic({ title, value, icon, color, sub, delta, money, invert, onClick }) {
+  const aDelta = delta !== undefined && delta !== 0
   const favorable = invert ? delta < 0 : delta > 0
   return (
-    <button onClick={onClick} disabled={!onClick}
-      className={`card p-3 text-left transition-all ${onClick ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
-      <div className="mb-1 flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{title}</p>
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: color + '1a', color }}><Icon size={15} /></span>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <p className="text-xl font-extrabold" style={{ color }}>{value}</p>
-        {delta !== undefined && delta !== 0 && (
-          <span className={`text-xs font-bold ${favorable ? 'text-green-600' : 'text-red-600'}`}>
-            {delta > 0 ? <TrendingUp size={12} className="inline" /> : <TrendingDown size={12} className="inline" />}
-            {money ? formatMoney(Math.abs(delta)) : Math.abs(delta)}
-          </span>
-        )}
-      </div>
-      {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}{onClick ? ' : détails' : ''}</p>}
-    </button>
+    <StatCard title={title} value={value} icon={icon} accent={color} onClick={onClick}
+      sub={sub ? `${sub}${onClick ? ' : détails' : ''}` : undefined}
+      chip={aDelta ? `${delta > 0 ? '+' : '−'}${money ? formatMoney(Math.abs(delta)) : Math.abs(delta)}` : undefined}
+      chipGood={favorable} />
   )
 }
 

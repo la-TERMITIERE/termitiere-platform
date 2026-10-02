@@ -9,6 +9,7 @@ import {
   Percent, Users, Boxes, Factory
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
 import { useBriqueterieStore } from './store/referentielStore'
@@ -260,28 +261,15 @@ export default function Pilotage() {
       <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs : {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
       {/* KPI décisionnels avec variation vs période précédente */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {kpis.map((k) => {
           const raw = k.delta != null ? k.delta : (k.deltaPP != null ? k.deltaPP : null)
           const positive = (raw ?? 0) >= 0
           const good = k.up ? positive : !positive
           const chip = k.delta != null ? `${positive ? '+' : ''}${k.delta.toFixed(1)} %` : (k.deltaPP != null ? `${positive ? '+' : ''}${k.deltaPP.toFixed(1)} pt` : null)
           return (
-          <button key={k.id} type="button" onClick={() => setModal(k.id)}
-            className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg">
-            <div className="mb-2 flex items-center justify-between gap-1">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
-              {chip && (
-                <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                  {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{chip}
-                </span>
-              )}
-            </div>
-            {/* truncate + title : un montant long est coupé proprement, lisible au survol. */}
-            <p className="truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
-            <p className="truncate text-lg font-extrabold leading-tight text-gray-900 sm:text-xl" title={String(k.value)}>{k.value}</p>
-            {k.sub && <p className="mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
-          </button>
+          <StatCard key={k.id} title={k.title} value={k.value} sub={k.sub} icon={k.icon} accent={k.color}
+            onClick={() => setModal(k.id)} chip={chip || undefined} chipGood={good} />
         )})}
       </div>
       {comparable && <p className="-mt-3 text-[11px] text-gray-400">▲▼ variation vs période précédente équivalente ({formatDateShort(prevStart)} → {formatDateShort(prevEnd)})</p>}

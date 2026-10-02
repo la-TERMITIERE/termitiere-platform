@@ -61,3 +61,12 @@ export function glassModalProps(color) {
     panelStyle: { background: `linear-gradient(160deg, ${teinterHex('#ffffff', 0.96)}, ${teinterHex(color, 0.08)})` }
   }
 }
+
+// Style « 3D » d'un badge d'icône (liseré clair en haut, ombre interne sombre en bas,
+// ombre portée teintée) : même recette que les KPI glass de StatCard, à réutiliser
+// pour toute icône de KPI hors StatCard.
+export const icone3D = (accent) => ({
+  background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+  color: '#fff',
+  boxShadow: `0 6px 14px -4px ${accent}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)`
+})
