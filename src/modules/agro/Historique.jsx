@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { FileSpreadsheet, ArrowDownCircle, ArrowUpCircle, Skull } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Select from '../../shared/forms/Select'
@@ -153,16 +154,6 @@ export default function Historique() {
   )
 }
 
-function Stat({ title, value, color, icon: Icon }) {
-  return (
-    <div className="card flex items-center gap-3 p-4">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: color + '1a', color }}>
-        <Icon size={22} />
-      </div>
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{title}</p>
-        <p className="text-2xl font-extrabold" style={{ color }}>{value}</p>
-      </div>
-    </div>
-  )
+function Stat({ title, value, color, icon }) {
+  return <StatCard title={title} value={value} icon={icon} accent={color} valueColor={color} />
 }

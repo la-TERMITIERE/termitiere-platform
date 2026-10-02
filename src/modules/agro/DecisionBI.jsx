@@ -6,6 +6,7 @@ import {
   AlertTriangle, ClipboardList, Stethoscope, Send, Skull, Baby, ChevronRight
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Modal from '../../shared/ui/Modal'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor } from './data'
@@ -354,24 +355,10 @@ export default function DecisionBI({
       <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs : {scopeLabel}</p>
 
       {/* Grille KPI principale */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {kpis.map((k) => (
-          <button
-            key={k.id}
-            type="button"
-            onClick={() => setKpiDetail(k.id)}
-            className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg"
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}>
-                <k.icon size={18} />
-              </div>
-              <TrendingUp size={14} className="text-gray-300 opacity-0 group-hover:opacity-100" />
-            </div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
-            <p className="text-xl font-extrabold text-gray-900">{k.value}</p>
-            {k.sub && <p className="mt-0.5 text-[10px] text-gray-400">{k.sub}</p>}
-          </button>
+          <StatCard key={k.id} title={k.title} value={k.value} sub={k.sub} icon={k.icon} accent={k.color}
+            onClick={() => setKpiDetail(k.id)} />
         ))}
       </div>
 

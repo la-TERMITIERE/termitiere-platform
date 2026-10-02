@@ -1,5 +1,6 @@
 // COMPTABILITÉ — Automatisation d'écriture (aligné FEZIRE /accounting/posting-templates).
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { Wrench } from 'lucide-react'
 import { MODELES_ACTIFS } from './moteur'
@@ -54,5 +55,5 @@ export default function Automatisation() {
 }
 
 function Stat({ label, value, tone }) {
-  return <Card><div className="text-xs uppercase tracking-wide text-gray-400">{label}</div><div className={`text-2xl font-extrabold ${tone === 'success' ? 'text-green-600' : ''}`}>{value}</div></Card>
+  return <StatCard title={label} value={value} accent={tone === 'success' ? '#16a34a' : '#64748b'} />
 }

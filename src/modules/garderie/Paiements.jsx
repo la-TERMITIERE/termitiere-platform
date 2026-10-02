@@ -19,7 +19,7 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, genId, formatDateShort } from '../../utils/formatters'
 import { formatMoney } from '../../utils/formatters'
-import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
 import { TYPES_PAIEMENT, MODES_PAIEMENT, STATUTS_PAIEMENT, MOIS, programmeDuGroupe } from './data'
 import { tarifSuggere } from './logic'
 import { useGarderieStore } from './store/garderieStore'
@@ -439,7 +439,7 @@ export default function Paiements() {
             <button key={k.label} type="button" onClick={k.onClick}
               className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-center transition-colors hover:bg-black/5">
               <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-                style={{ background: k.accent + '1a', color: k.accent }}>
+                style={icone3D(k.accent)}>
                 <k.icon className="h-3 w-3" />
               </div>
               <p className="w-full truncate text-[8px] font-semibold uppercase tracking-wide text-gray-500" title={k.label}>{k.label}</p>

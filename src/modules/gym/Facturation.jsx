@@ -117,24 +117,32 @@ export default function Facturation() {
   const [exportOpen, setExportOpen] = useState(false)
   const [exportChoix, setExportChoix] = useState('both') // 'seances' | 'abonnements' | 'both'
 
-  const feuilleDe = (nom, sousListe) => {
+  // `avecOrigine` : feuille « Séances et abonnements » (les deux mélangés, avec une
+  // colonne Origine) — placée EN PREMIER quand on exporte « Les deux », pour que les
+  // séances ET les abonnements soient visibles dès l'ouverture du classeur (sinon seul
+  // le premier onglet, « Séances », s'affichait et l'onglet « Abonnements » passait inaperçu).
+  const feuilleDe = (nom, sousListe, avecOrigine = false) => {
     const rows = sousListe.map((f) => ({
       'N°': f.numero,
       'Date': formatDateShort(f.date),
       'Client': f.clientNom || '—',
       'Sexe': sexeInfo(sexeDe(f, idxSexe))?.label || '—',
+      ...(avecOrigine ? { 'Origine': f.sourceType === 'abonnement' ? 'Abonnement' : 'Séance' } : {}),
       'Description': f.description || '—',
       'Montant': Number(f.montant) || 0
     }))
     return {
       name: nom,
       title: `${nom} : MAXI-GYM`,
-      subtitle: `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} : ${formatMoney(rows.reduce((s, r) => s + r['Montant'], 0))} au total`,
+      subtitle: avecOrigine
+        ? `${sousListe.length} facture${sousListe.length > 1 ? 's' : ''} (${seancesListe.length} séance${seancesListe.length > 1 ? 's' : ''}, ${abonnementsListe.length} abonnement${abonnementsListe.length > 1 ? 's' : ''}) : ${formatMoney(rows.reduce((s, r) => s + r['Montant'], 0))} au total`
+        : `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} : ${formatMoney(rows.reduce((s, r) => s + r['Montant'], 0))} au total`,
       columns: [
         { key: 'N°', label: 'N°', width: 14 },
         { key: 'Date', label: 'Date', width: 12 },
         { key: 'Client', label: 'Client', width: 22 },
         { key: 'Sexe', label: 'Sexe', width: 10 },
+        ...(avecOrigine ? [{ key: 'Origine', label: 'Origine', width: 14 }] : []),
         { key: 'Description', label: 'Description', width: 34 },
         { key: 'Montant', label: 'Montant', width: 16, type: 'money' }
       ],
@@ -145,6 +153,7 @@ export default function Facturation() {
 
   function exportXLSX() {
     const sections = []
+    if (exportChoix === 'both') sections.push(feuilleDe('Séances et abonnements', liste, true))
     if (exportChoix === 'seances' || exportChoix === 'both') sections.push(feuilleDe('Séances', seancesListe))
     if (exportChoix === 'abonnements' || exportChoix === 'both') sections.push(feuilleDe('Abonnements', abonnementsListe))
     const suffixe = exportChoix === 'seances' ? 'seances' : exportChoix === 'abonnements' ? 'abonnements' : 'completes'

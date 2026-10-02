@@ -8,6 +8,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Scale, BadgeDollarSign, Package, TrendingUp, FileSpreadsheet, Save, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
@@ -183,11 +184,7 @@ export default function Marge() {
       {/* KPI */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.title} className="card p-4">
-            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{k.title}</p>
-            <p className="truncate text-xl font-extrabold text-gray-900" title={String(k.value)}>{k.value}</p>
-          </div>
+          <StatCard key={k.title} title={k.title} value={k.value} icon={k.icon} accent={k.color} />
         ))}
       </div>
 
