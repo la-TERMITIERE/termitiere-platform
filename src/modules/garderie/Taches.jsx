@@ -187,7 +187,7 @@ function OngletTaches() {
     if (fait) {
       notify({
         type: 'info',
-        title: `✅ Tâche effectuée — ${t.titre}`,
+        title: `✅ Tâche effectuée : ${t.titre}`,
         body: `Cochée par ${user.nom}`,
         module: 'garderie',
         forRoles: ['ge','gerante_garderie'],
@@ -203,7 +203,7 @@ function OngletTaches() {
   return (
     <div className="space-y-5">
       <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-        <p className="font-semibold mb-0.5">📋 Tâches — Checklist de la direction</p>
+        <p className="font-semibold mb-0.5">📋 Tâches : Checklist de la direction</p>
         <p>
           {canGerer
             ? 'Programmez des tâches pour les tatas et/ou la gérante de la garderie. Ils pourront cocher chaque tâche une fois effectuée.'
@@ -240,7 +240,7 @@ function OngletTaches() {
 
       <Card className="p-0 divide-y divide-gray-100">
         {listeAFaire.length === 0 && (
-          <p className="py-10 text-center text-sm text-gray-400">✅ Aucune tâche à faire — tout est à jour !</p>
+          <p className="py-10 text-center text-sm text-gray-400">✅ Aucune tâche à faire : tout est à jour !</p>
         )}
         {listeAFaire.map((t) => (
           <TacheRow key={t.id} t={t} canGerer={canGerer} toggleFait={toggleFait} setModal={setModal} setToDelete={setToDelete} />
@@ -306,7 +306,7 @@ function OngletTaches() {
                       const t = tatas.find((x) => x.uid === e.target.value)
                       setModal((m) => ({ ...m, data: { ...m.data, assigneUid: e.target.value, assigneNom: t?.nom || '' } }))
                     }}>
-                    <option value="">— Choisir une tata —</option>
+                    <option value="">Choisir une tata</option>
                     {tatas.map((t) => <option key={t.uid} value={t.uid}>{t.nom}</option>)}
                   </Select>
                 </FormGroup>
@@ -403,7 +403,7 @@ function OngletStatistiques() {
   if (!taches.length) {
     return (
       <Card className="py-12 text-center text-sm text-gray-400">
-        Aucune tâche enregistrée — les statistiques apparaîtront dès la première tâche programmée.
+        Aucune tâche enregistrée : les statistiques apparaîtront dès la première tâche programmée.
       </Card>
     )
   }

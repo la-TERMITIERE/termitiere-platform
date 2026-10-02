@@ -142,7 +142,7 @@ export default function CompteBancaire({ moduleId, collectionPrefix = moduleId, 
     try {
       const montant = Number(d.montant)
       const info = TYPES_MOUVEMENT_BANQUE[d.type]
-      const desc = `${info.label} — ${montant.toLocaleString('fr-FR')} FCFA${d.origine ? ` (${d.origine})` : ''}`
+      const desc = `${info.label} : ${montant.toLocaleString('fr-FR')} FCFA${d.origine ? ` (${d.origine})` : ''}`
       if (modal.isNew) {
         const id = genId()
         await setItem(collection, id, { ...d, id, montant, enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() })
@@ -164,7 +164,7 @@ export default function CompteBancaire({ moduleId, collectionPrefix = moduleId, 
     setDeleting(true)
     try {
       await removeItem(collection, toDelete.id)
-      await audit(moduleId, 'BANQUE_MOUVEMENT_DELETE', `${TYPES_MOUVEMENT_BANQUE[toDelete.type]?.label || toDelete.type} — ${Number(toDelete.montant).toLocaleString('fr-FR')} FCFA`)
+      await audit(moduleId, 'BANQUE_MOUVEMENT_DELETE', `${TYPES_MOUVEMENT_BANQUE[toDelete.type]?.label || toDelete.type} : ${Number(toDelete.montant).toLocaleString('fr-FR')} FCFA`)
       toast.success('Mouvement supprimé ✓')
       setToDelete(null)
     } finally {
@@ -205,7 +205,7 @@ export default function CompteBancaire({ moduleId, collectionPrefix = moduleId, 
     const sousTitre = filtreMois ? `MOIS : ${moisLabel.toUpperCase()} ${an}` : 'TOUTES PÉRIODES'
 
     const aoa = [
-      [`MOUVEMENT MIROIR COMPTE BANCAIRE — ${titre.toUpperCase()}`, '', '', '', '', '', ''],
+      [`MOUVEMENT MIROIR COMPTE BANCAIRE : ${titre.toUpperCase()}`, '', '', '', '', '', ''],
       [sousTitre, '', '', '', '', '', ''],
       ['', '', '', '', '', '', ''],
       COLS
@@ -263,7 +263,7 @@ export default function CompteBancaire({ moduleId, collectionPrefix = moduleId, 
     })
 
     const wb = XLSX.utils.book_new()
-    wb.Props = { Title: `${titre} — LA TERMITIÈRE`, Company: 'LA TERMITIÈRE', CreatedDate: new Date() }
+    wb.Props = { Title: `${titre} : LA TERMITIÈRE`, Company: 'LA TERMITIÈRE', CreatedDate: new Date() }
     XLSX.utils.book_append_sheet(wb, ws, 'Compte bancaire')
     const suffixe = filtreMois ? `${moisLabel}-${an}` : 'Toutes-periodes'
     XLSX.writeFile(wb, `${titre.replace(/[^a-zA-Z0-9]+/g, '-')}-${suffixe}.xlsx`)
@@ -273,7 +273,7 @@ export default function CompteBancaire({ moduleId, collectionPrefix = moduleId, 
     <div className="space-y-5">
       <div className="rounded-2xl border px-4 py-3 text-sm shadow-[0_16px_36px_-16px_rgba(0,0,0,0.14)]"
         style={{ borderColor: color + '40', background: color + '14', color }}>
-        <strong>{titre} :</strong> enregistrez ici chaque <strong>dépôt</strong> et <strong>retrait</strong> effectué à la banque, pour suivre le solde bancaire de ce secteur indépendamment de la caisse — c'est le miroir de son relevé bancaire.
+        <strong>{titre} :</strong> enregistrez ici chaque <strong>dépôt</strong> et <strong>retrait</strong> effectué à la banque, pour suivre le solde bancaire de ce secteur indépendamment de la caisse : c'est le miroir de son relevé bancaire.
       </div>
 
       {/* Résumé */}

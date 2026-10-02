@@ -33,7 +33,7 @@ export default function Departements() {
     toast.success('Enregistré ✓'); setModal(null)
   }
   async function supprimer(d) {
-    if (!d.id) return toast.error('Département par défaut — non supprimable')
+    if (!d.id) return toast.error('Département par défaut : non supprimable')
     if (confirm(`Supprimer « ${d.nom} » ?`)) { await removeItem(COL.departements, d.id); toast.success('Supprimé') }
   }
 

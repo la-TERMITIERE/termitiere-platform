@@ -69,7 +69,7 @@ export default function Historique() {
       filename: `historique-maxi-agro-${start}_${end}.xlsx`,
       sections: [{
         id: 'historique', name: 'Historique',
-        title: 'Historique des mouvements — MAXI-AGRO',
+        title: 'Historique des mouvements : MAXI-AGRO',
         subtitle: `Du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} mouvement(s)`,
         columns: [
           { key: 'Date', label: 'Date', width: 14 },

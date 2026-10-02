@@ -132,7 +132,7 @@ export default function StockBriques() {
       }]
       return { ...s, [matiereId]: { ...cur, entrees } }
     })
-    toast.success('Arrivage ajouté — n\'oubliez pas d\'enregistrer')
+    toast.success('Arrivage ajouté : n\'oubliez pas d\'enregistrer')
     setArrivage(null)
   }
 
@@ -152,7 +152,7 @@ export default function StockBriques() {
       }]
       return { ...s, [matiereId]: { ...cur, consommations } }
     })
-    toast.success('Consommation enregistrée — n\'oubliez pas d\'enregistrer')
+    toast.success('Consommation enregistrée : n\'oubliez pas d\'enregistrer')
     setConsoModal(null)
   }
 
@@ -271,7 +271,7 @@ export default function StockBriques() {
       agentNom: user.nom
     })
 
-    toast.success('Transfert enregistré — n\'oubliez pas de sauvegarder le stock')
+    toast.success('Transfert enregistré : n\'oubliez pas de sauvegarder le stock')
     setTransferModal(null)
   }
 
@@ -520,7 +520,7 @@ export default function StockBriques() {
         <p className="px-4 py-2 text-[11px] text-gray-400">Le stock initial se reporte automatiquement du solde de la veille. Pensez à <strong>Enregistrer</strong> après un arrivage ou une correction.</p>
       </Card>
 
-      <Modal open={!!transferModal} onClose={() => setTransferModal(null)} title={`Transfert — ${transferModal?.briqueNom}`}
+      <Modal open={!!transferModal} onClose={() => setTransferModal(null)} title={`Transfert : ${transferModal?.briqueNom}`}
         footer={<><Button variant="ghost" onClick={() => setTransferModal(null)}>Annuler</Button><Button onClick={executerTransfert}>Confirmer</Button></>}>
         {transferModal && (
           <div className="space-y-3">
@@ -540,7 +540,7 @@ export default function StockBriques() {
                 </FormGroup>
                 {transferModal.dateSechage && joursDepuis(transferModal.dateSechage) < DUREE_SECHAGE_JOURS && (
                   <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    <AlertTriangle size={14} /> Séchage &lt; {DUREE_SECHAGE_JOURS} jours — risque de casse au chargement
+                    <AlertTriangle size={14} /> Séchage &lt; {DUREE_SECHAGE_JOURS} jours : risque de casse au chargement
                   </div>
                 )}
               </>
@@ -577,7 +577,7 @@ export default function StockBriques() {
           <div className="space-y-3">
             <FormGroup label="Matière">
               <Select value={consoModal.matiereId} onChange={(e) => setConsoModal((a) => ({ ...a, matiereId: e.target.value }))}>
-                {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom} ({m.unite}) — dispo : {Math.round(matFin(m.id) * 10) / 10}</option>)}
+                {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom} ({m.unite}) : dispo : {Math.round(matFin(m.id) * 10) / 10}</option>)}
               </Select>
             </FormGroup>
             <FormGroup label="Quantité consommée"><Input type="number" min="0" step="0.1" value={consoModal.qte} onChange={(e) => setConsoModal((a) => ({ ...a, qte: e.target.value }))} autoFocus /></FormGroup>
@@ -587,7 +587,7 @@ export default function StockBriques() {
       </Modal>
 
       {/* Détail des mouvements d'une matière (arrivages + consommations) */}
-      <Modal open={!!matDetail} onClose={() => setMatDetail(null)} title={matDetail ? `Mouvements — ${matDetail.nom}` : ''} {...glassModalProps(COULEUR_MODULE.evenementiel)}>
+      <Modal open={!!matDetail} onClose={() => setMatDetail(null)} title={matDetail ? `Mouvements : ${matDetail.nom}` : ''} {...glassModalProps(COULEUR_MODULE.evenementiel)}>
         {matDetail && (() => {
           const c = matStock[matDetail.id] || { init: 0, entrees: [], consommations: [] }
           return (
@@ -602,7 +602,7 @@ export default function StockBriques() {
                 <p className="mb-1 text-xs font-bold uppercase text-green-700">Arrivages</p>
                 {(c.entrees || []).length
                   ? (c.entrees || []).map((e, i) => (
-                    <p key={i} className="text-xs text-gray-600">• {formatDateShort(e.date)} — <strong>+{formatNumber(e.qte)}</strong> {matDetail.unite}{e.label ? ` · ${e.label}` : ''}{e.cout ? ` · ${formatNumber(e.cout)} F/u` : ''}</p>
+                    <p key={i} className="text-xs text-gray-600">• {formatDateShort(e.date)} : <strong>+{formatNumber(e.qte)}</strong> {matDetail.unite}{e.label ? ` · ${e.label}` : ''}{e.cout ? ` · ${formatNumber(e.cout)} F/u` : ''}</p>
                   ))
                   : <p className="text-xs text-gray-400">Aucun arrivage saisi ce jour.</p>}
               </div>

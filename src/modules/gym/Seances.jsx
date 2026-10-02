@@ -112,7 +112,7 @@ export default function Seances() {
   function exportXLSX() {
     const rows = liste.map((s) => ({
       Date: formatDateShort(s.date),
-      Client: s.clientNom + (s.partenaire ? ` (partenaire${s.partenaireStructure ? ` — ${s.partenaireStructure}` : ''})` : ''),
+      Client: s.clientNom + (s.partenaire ? ` (partenaire${s.partenaireStructure ? ` : ${s.partenaireStructure}` : ''})` : ''),
       Sexe: sexeInfo(sexeDe(s, idxSexe))?.label || '—',
       Catégorie: categorieLabel(s.categorie),
       Montant: Number(s.montant) || 0,
@@ -123,7 +123,7 @@ export default function Seances() {
       filename: `seances-maxi-gym-${todayStr()}.xlsx`,
       sections: [{
         name: 'Séances',
-        title: 'Séances — MAXI-GYM',
+        title: 'Séances : MAXI-GYM',
         subtitle: `${liste.length} séance(s) · ${formatMoney(total)} au total`,
         columns: [
           { key: 'Date', label: 'Date', width: 14 },
@@ -170,7 +170,7 @@ export default function Seances() {
             ...(d.sexe ? { sexe: d.sexe } : {})
           })
         }
-        await audit('gym', 'SEANCE_MODIFIEE', `${clientNom} — ${categorieLabel(d.categorie)} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+        await audit('gym', 'SEANCE_MODIFIEE', `${clientNom} : ${categorieLabel(d.categorie)} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Séance modifiée ✓')
         setModal(null)
         return
@@ -214,7 +214,7 @@ export default function Seances() {
         partenaire: estPartenaire, partenaireStructure, regleParPartenaire: false,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
-      await audit('gym', 'SEANCE_CREATE', `${clientNom} — ${categorieLabel(d.categorie)} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA${estPartenaire ? ` — portée au compte ${partenaireStructure}` : ''}`)
+      await audit('gym', 'SEANCE_CREATE', `${clientNom} : ${categorieLabel(d.categorie)} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA${estPartenaire ? ` : portée au compte ${partenaireStructure}` : ''}`)
       const telephone = telephoneSaisi || client?.telephone
       if (telephone) {
         sendWhatsApp([telephone], {
@@ -224,7 +224,7 @@ export default function Seances() {
       }
 
       if (estPartenaire) {
-        toast.success(`Séance portée au compte de ${partenaireStructure} — à régler en fin de mois ✓`)
+        toast.success(`Séance portée au compte de ${partenaireStructure} : à régler en fin de mois ✓`)
         setModal(null)
       } else {
         // Une facture est TOUJOURS générée pour un client normal (visible dans le
@@ -236,7 +236,7 @@ export default function Seances() {
           user, site, date: d.date, sexe: d.sexe, imprime: d.imprimer
         })
         if (d.imprimer) imprimerTicketSeance(facture)
-        toast.success(d.imprimer ? 'Séance enregistrée — reçu imprimé ✓' : 'Séance enregistrée ✓')
+        toast.success(d.imprimer ? 'Séance enregistrée : reçu imprimé ✓' : 'Séance enregistrée ✓')
         setModal(null)
       }
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
@@ -261,7 +261,7 @@ export default function Seances() {
   async function supprimer(s) {
     if (!confirm(`Supprimer la séance de ${s.clientNom} du ${formatDateShort(s.date)} ?`)) return
     await removeItem('gym_seances', s.id)
-    await audit('gym', 'SEANCE_DELETE', `${s.clientNom} — ${Number(s.montant).toLocaleString('fr-FR')} FCFA`)
+    await audit('gym', 'SEANCE_DELETE', `${s.clientNom} : ${Number(s.montant).toLocaleString('fr-FR')} FCFA`)
     toast.success('Séance supprimée')
   }
 
@@ -346,7 +346,7 @@ export default function Seances() {
                 <div className="flex justify-end gap-1">
                   {facture ? (
                     <button onClick={(e) => { e.stopPropagation(); imprimerTicketSeance(facture) }}
-                      title={facture.imprime === false ? 'Pas encore imprimé — cliquer pour imprimer' : 'Réimprimer le ticket'}
+                      title={facture.imprime === false ? 'Pas encore imprimé : cliquer pour imprimer' : 'Réimprimer le ticket'}
                       className={`rounded p-1.5 hover:bg-orange-50 ${facture.imprime === false ? 'text-amber-500' : 'text-orange-600'}`}><Printer size={16} /></button>
                   ) : (
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
@@ -425,7 +425,7 @@ export default function Seances() {
                 <SexeBoutons value={modal.sexe} onChange={(v) => setModal((f) => ({ ...f, sexe: v }))} />
               </FormGroup>
               {!modal.id && (
-                <FormGroup label="📱 Téléphone (WhatsApp)" hint="Optionnel — pour la confirmation WhatsApp automatique">
+                <FormGroup label="📱 Téléphone (WhatsApp)" hint="Optionnel : pour la confirmation WhatsApp automatique">
                   <div className="relative">
                     <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-green-500" />
                     <Input className="pl-8" value={modal.telephone} onChange={(e) => setModal((f) => ({ ...f, telephone: e.target.value }))} placeholder="ex : 22890000000" />
@@ -520,7 +520,7 @@ export default function Seances() {
                 <p className="ml-6 mt-0.5 text-[11px] text-gray-400">
                   {modal.imprimer
                     ? '🧾 Une facture sera générée et le ticket de caisse s\'imprimera aussitôt.'
-                    : 'Une facture sera quand même générée (visible dans Facturation) — mais sans impression immédiate. Réimprimable à tout moment depuis la liste.'}
+                    : 'Une facture sera quand même générée (visible dans Facturation) : mais sans impression immédiate. Réimprimable à tout moment depuis la liste.'}
                 </p>
               </div>
             )}

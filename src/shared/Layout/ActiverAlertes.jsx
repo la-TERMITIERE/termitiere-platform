@@ -49,7 +49,7 @@ export default function ActiverAlertes() {
       if (p === 'granted') {
         const ok = await subscribeToPush(user)
         if (ok) toast.success('Notifications activées sur cet appareil ✅')
-        else toast.warning('Alertes activées à l’écran, mais l’abonnement « appli fermée » a échoué — réessayez ou vérifiez votre connexion.')
+        else toast.warning('Alertes activées à l’écran, mais l’abonnement « appli fermée » a échoué : réessayez ou vérifiez votre connexion.')
         // Confirmation visible immédiatement, comme sur les autres applis.
         try {
           const reg = await navigator.serviceWorker?.getRegistration()
@@ -127,7 +127,7 @@ export default function ActiverAlertes() {
             <p className="text-[15px] font-bold text-gray-900">Activer les notifications</p>
             <p className="mt-0.5 text-[13px] leading-snug text-gray-600">
               Recevez les demandes d’autorisation, les sorties et les validations
-              directement sur cet appareil — même application fermée.
+              directement sur cet appareil : même application fermée.
             </p>
             <div className="mt-2.5 flex items-center gap-2">
               <button onClick={activer} disabled={enCours}

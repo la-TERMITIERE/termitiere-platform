@@ -114,7 +114,7 @@ export default function Transport() {
       <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-violet-700 to-violet-900 p-4 text-white shadow-lg">
         <Truck size={22} />
         <div>
-          <h2 className="text-base font-extrabold">Transport — Briqueterie</h2>
+          <h2 className="text-base font-extrabold">Transport : Briqueterie</h2>
           <p className="text-xs text-white/80">Camions & livraisons : trajets, horaires, cargaison, recette, dépenses, marge</p>
         </div>
         <div className="w-full sm:ml-auto sm:w-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white">
@@ -250,7 +250,7 @@ export default function Transport() {
                 <Input type="number" min="0" value={modal.data.recette} onChange={(e) => set('recette', e.target.value)} placeholder="Montant facturé / gagné pour ce trajet" />
               </FormGroup>
 
-              <p className="mt-3 mb-1 text-xs font-semibold text-gray-500">Dépenses (carburant, péage, main d'œuvre…) — ajoutez-les une à une</p>
+              <p className="mt-3 mb-1 text-xs font-semibold text-gray-500">Dépenses (carburant, péage, main d'œuvre…) : ajoutez-les une à une</p>
               {(modal.data.depenses || []).length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {modal.data.depenses.map((x, i) => (
@@ -282,7 +282,7 @@ export default function Transport() {
       {/* Confirmation suppression */}
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer ce trajet ?"
         footer={<><Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button><Button variant="danger" onClick={supprimer}>Supprimer</Button></>}>
-        {toDelete && <p className="text-sm text-gray-600">Supprimer le trajet du {formatDateShort(toDelete.date)} — {toDelete.plaque} ?</p>}
+        {toDelete && <p className="text-sm text-gray-600">Supprimer le trajet du {formatDateShort(toDelete.date)} : {toDelete.plaque} ?</p>}
       </Modal>
     </div>
   )

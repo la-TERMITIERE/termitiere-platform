@@ -29,7 +29,7 @@ export default function TachesRoutinieresAgro() {
       moduleId="agro"
       collectionPrefix="agro_routine"
       color={COULEUR_MODULE.agro}
-      titre="Tâches Routinières — MAXI-AGRO"
+      titre="Tâches Routinières : MAXI-AGRO"
       description="Planning personnel : chaque tâche est assignée à un agent précis, avec une heure prévue."
       // Planning personnel : chaque NOUVELLE tâche routinière doit être assignée à
       // un agent précis avec une heure prévue — les tâches quotidiennes de la ferme

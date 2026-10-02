@@ -72,7 +72,7 @@ export default function ProjetAlerteWatcher() {
         const gagne = await claimOnce('projet_alertes_notif', alerte.id, { compteur: 1, dernierEnvoi: Date.now(), jour: todayStr() }).catch(() => false)
         if (!gagne) return
         await notify({
-          type: 'success', title: titre, body: `${alerte.projetNom} — ${alerte.message}`,
+          type: 'success', title: titre, body: `${alerte.projetNom} : ${alerte.message}`,
           module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, ...lienDetail(alerte),
           projetId: alerte.projetId
         }).catch(() => {})
@@ -89,7 +89,7 @@ export default function ProjetAlerteWatcher() {
         const gagne = await claimOnce('projet_alertes_notif', cleJour, { envoyeLe: Date.now() }).catch(() => false)
         if (!gagne) return
         await notify({
-          type: 'warning', title: titre, body: `${alerte.projetNom} — ${alerte.message}`,
+          type: 'warning', title: titre, body: `${alerte.projetNom} : ${alerte.message}`,
           module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, ...lienDetail(alerte),
           projetId: alerte.projetId
         }).catch(() => {})
@@ -103,7 +103,7 @@ export default function ProjetAlerteWatcher() {
       if (dernierEnvoi && Date.now() - dernierEnvoi < SEMAINE_MS) return
 
       await notify({
-        type: 'warning', title: titre, body: `${alerte.projetNom} — ${alerte.message}`,
+        type: 'warning', title: titre, body: `${alerte.projetNom} : ${alerte.message}`,
         module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers, ...lienDetail(alerte),
         projetId: alerte.projetId
       }).catch(() => {})

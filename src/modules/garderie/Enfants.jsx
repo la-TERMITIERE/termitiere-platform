@@ -125,7 +125,7 @@ export default function Enfants() {
       // Échec réel : on démasque et on prévient, au lieu de prétendre que la
       // suppression a marché alors que l'enfant est toujours en base.
       unmarkEnfantDeleted(target.id)
-      toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} — réessayez.`)
+      toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} : réessayez.`)
     } finally {
       setDeleting(false)
     }
@@ -291,7 +291,7 @@ export default function Enfants() {
             type: 'inscription', mois: moisP, annee: anneeP,
             montantDu: montantInscription, montantPaye: montantInscription, montantCuisine: 0,
             modePaiement: paiementInscription.modePaiement, statut: 'paye',
-            date: d.dateInscription || todayStr(), notes: "Frais d'inscription — saisis à l'inscription"
+            date: d.dateInscription || todayStr(), notes: "Frais d'inscription : saisis à l'inscription"
           })
           audit('garderie', 'PAIEMENT_CREATE', enfantNomComplet, { type: 'inscription', montant: montantInscription })
           recap.push(`inscription ${formatMoney(montantInscription)}`)
@@ -309,16 +309,16 @@ export default function Enfants() {
             montantDu: montantDuTotal, montantPaye: montantVerse, montantCuisine,
             modePaiement: paiementInscription.modePaiement, statut,
             date: d.dateInscription || todayStr(),
-            notes: `Scolarité — ${parTranche ? 'paiement par tranche' : 'payée en totalité'} (saisie à l'inscription)`
+            notes: `Scolarité : ${parTranche ? 'paiement par tranche' : 'payée en totalité'} (saisie à l'inscription)`
           })
           audit('garderie', 'PAIEMENT_CREATE', enfantNomComplet, { type: 'mensuel', montant: montantVerse })
           recap.push(`scolarité ${formatMoney(montantVerse)}${parTranche ? ' (tranche)' : ''}`)
         }
 
         if (recap.length > 0) {
-          notify({ type: 'info', title: `💰 Paiement(s) reçu(s) — ${enfantNomComplet}`, body: recap.join(' · '), module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+          notify({ type: 'info', title: `💰 Paiement(s) reçu(s) : ${enfantNomComplet}`, body: recap.join(' · '), module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
         }
-        toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓${recap.length ? ' — paiement(s) enregistré(s)' : ''}`)
+        toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓${recap.length ? ' : paiement(s) enregistré(s)' : ''}`)
       } else {
         await setItem('garderie_enfants', modal.id, { ...d, id: modal.id })
         audit('garderie', 'ENFANT_EDIT', `${d.prenom} ${d.nom}`)
@@ -457,8 +457,8 @@ export default function Enfants() {
             notes: ''
           })
           audit('garderie', 'JOURNALIER_PAIEMENT', `${d.prenom} ${d.nom}`, { montant })
-          notify({ type: 'info', title: `💰 Paiement journalier — ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
-          toast.success(`${d.prenom} ${d.nom} enregistré(e) — paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
+          notify({ type: 'info', title: `💰 Paiement journalier : ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+          toast.success(`${d.prenom} ${d.nom} enregistré(e) : paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
         } else {
           toast.success(`${d.prenom} ${d.nom} enregistré(e) ✓`)
         }
@@ -727,7 +727,7 @@ export default function Enfants() {
           tout leur historique (présences, paiements). */}
       {enfants.filter((e) => e.statut === 'supprime' && !deletedEnfantIds.has(e.id)).length > 0 && (
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800 flex items-center justify-between">
-          <p>⚠️ {enfants.filter((e) => e.statut === 'supprime').length} enfant(s) en suppression incomplète — masqués mais encore présents en base.</p>
+          <p>⚠️ {enfants.filter((e) => e.statut === 'supprime').length} enfant(s) en suppression incomplète : masqués mais encore présents en base.</p>
           <button
             onClick={async () => {
               const aNettoyer = enfants.filter((e) => e.statut === 'supprime')
@@ -735,7 +735,7 @@ export default function Enfants() {
               for (const e of aNettoyer) {
                 try { await removeItem('garderie_enfants', e.id) } catch { echecs++ }
               }
-              if (echecs) toast.error(`${aNettoyer.length - echecs} nettoyé(s), ${echecs} échec(s) — réessayez.`)
+              if (echecs) toast.error(`${aNettoyer.length - echecs} nettoyé(s), ${echecs} échec(s) : réessayez.`)
               else toast.success(`${aNettoyer.length} enfant(s) nettoyé(s) ✓`)
             }}
             className="ml-3 rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold text-white hover:bg-orange-600 shrink-0">
@@ -829,7 +829,7 @@ export default function Enfants() {
                     return (
                       <span className={`font-semibold ${joursRestants !== null && joursRestants <= 7 ? 'text-red-600' : 'text-orange-600'}`}>
                         Court séjour{joursRestants !== null && (
-                          joursRestants < 0 ? ' — terminé' : ` — fin dans ${joursRestants}j`
+                          joursRestants < 0 ? ' : terminé' : ` : fin dans ${joursRestants}j`
                         )}
                       </span>
                     )
@@ -867,9 +867,9 @@ export default function Enfants() {
         <p className="mb-4 text-sm text-gray-500">Choisissez le type d'inscription pour cet enfant :</p>
         <div className="space-y-2.5">
           {[
-            { type: 'maternelle', icon: GraduationCap, label: 'Maternelle', sub: 'Enfant inscrit — 3 à 6 ans', color: '#16a34a', tint: 'bg-green-50 border-green-200 hover:border-green-400' },
-            { type: 'garderie',   icon: Baby,           label: 'Garderie',   sub: 'Enfant inscrit — 0 à 2 ans', color: '#3b82f6', tint: 'bg-blue-50 border-blue-200 hover:border-blue-400' },
-            { type: 'journalier', icon: DoorOpen,       label: 'Enfant journalier', sub: "Non inscrit officiellement — dépôt d'une seule journée", color: '#E8390E', tint: 'bg-orange-50 border-orange-200 hover:border-orange-400' }
+            { type: 'maternelle', icon: GraduationCap, label: 'Maternelle', sub: 'Enfant inscrit : 3 à 6 ans', color: '#16a34a', tint: 'bg-green-50 border-green-200 hover:border-green-400' },
+            { type: 'garderie',   icon: Baby,           label: 'Garderie',   sub: 'Enfant inscrit : 0 à 2 ans', color: '#3b82f6', tint: 'bg-blue-50 border-blue-200 hover:border-blue-400' },
+            { type: 'journalier', icon: DoorOpen,       label: 'Enfant journalier', sub: "Non inscrit officiellement : dépôt d'une seule journée", color: '#E8390E', tint: 'bg-orange-50 border-orange-200 hover:border-orange-400' }
           ].map((o) => (
             <button key={o.type} onClick={() => choisirTypeInscription(o.type)}
               className={`group flex w-full items-center gap-3.5 rounded-2xl border-2 px-4 py-3.5 text-left shadow-[0_10px_24px_-14px_rgba(26,26,26,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(26,26,26,0.26)] ${o.tint}`}>
@@ -918,7 +918,7 @@ export default function Enfants() {
 
             {joModal.isNew && journaliersConnus.length > 0 && (
               <div className="rounded-2xl border border-teal-200 border-l-4 border-l-teal-400 bg-teal-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
-                <FormGroup label="🔍 Déjà venu(e) ? Rechercher son nom" hint="Sélectionnez pour remplir automatiquement âge, parent et contact — tout reste modifiable ensuite.">
+                <FormGroup label="🔍 Déjà venu(e) ? Rechercher son nom" hint="Sélectionnez pour remplir automatiquement âge, parent et contact : tout reste modifiable ensuite.">
                   <ChampAutocomplete
                     value={joRecherche}
                     onChange={setJoRecherche}
@@ -998,7 +998,7 @@ export default function Enfants() {
                   </FormGroup>
                 </div>
                 <p className="mt-2 text-[11px] text-green-600">
-                  Laissez vide si le paiement se fera plus tard — vous pourrez toujours l'enregistrer dans <strong>Paiements → Journaliers</strong>.
+                  Laissez vide si le paiement se fera plus tard : vous pourrez toujours l'enregistrer dans <strong>Paiements → Journaliers</strong>.
                 </p>
               </div>
             ) : (
@@ -1208,7 +1208,7 @@ export default function Enfants() {
                     // mensuel/court séjour possible pour ce programme.
                     if (prog === 'maternelle') set('typeAbonnement', 'annuel')
                   }}>
-                    <option value="">— Choisir —</option>
+                    <option value="">Choisir</option>
                     {GROUPES_AGE
                       .filter((g) => !modal.data.programme || GROUPES_PAR_PROGRAMME[modal.data.programme].includes(g.id))
                       .map((g) => <option key={g.id} value={g.id}>{g.label} ({g.desc})</option>)}
@@ -1283,7 +1283,7 @@ export default function Enfants() {
             {modal.isNew && (
               <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
                 <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-green-700">
-                  💰 Paiements <span className="font-medium normal-case text-green-500">(optionnel — si le parent règle maintenant)</span>
+                  💰 Paiements <span className="font-medium normal-case text-green-500">(optionnel : si le parent règle maintenant)</span>
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1485,7 +1485,7 @@ export default function Enfants() {
                   <div>
                     <span className="font-semibold text-gray-500">Abonnement :</span>{' '}
                     {detail.typeAbonnement === 'court_sejour'
-                      ? `Court séjour (${detail.dureeSemaines} sem.) — jusqu'au ${formatDateShort(dateFinCourtSejour(detail.dateInscription, detail.dureeSemaines))}`
+                      ? `Court séjour (${detail.dureeSemaines} sem.) : jusqu'au ${formatDateShort(dateFinCourtSejour(detail.dateInscription, detail.dureeSemaines))}`
                       : detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}
                   </div>
                   {detail.typeAbonnement === 'court_sejour' && (() => {

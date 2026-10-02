@@ -117,7 +117,7 @@ export async function pushToUsers(uids, payload) {
     if (info && info.total > 0 && info.sent === 0) {
       console.warn(
         `[push] aucun envoi abouti (0/${info.total}). Vérifiez que VAPID_PUBLIC ` +
-        '(Netlify) et la clé publique du client sont identiques — cf. docs/NOTIFICATIONS.md.'
+        '(Netlify) et la clé publique du client sont identiques : cf. docs/NOTIFICATIONS.md.'
       )
     } else if (info && info.skipped) {
       console.warn('[push] ignoré :', info.skipped)

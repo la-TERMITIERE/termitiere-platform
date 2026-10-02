@@ -76,9 +76,9 @@ export default function RoutineStatistiques({ itemsPersonnels, checks, color, us
         </p>
       )}
 
-      <Card title="Classement par agent — fréquence d'exécution">
+      <Card title="Classement par agent : fréquence d'exécution">
         <p className="mb-3 text-xs text-gray-500">
-          Taux = complétions réelles / (tâches assignées × jours de la période) — une estimation pour comparer les agents entre eux, pas une mesure exacte jour par jour.
+          Taux = complétions réelles / (tâches assignées × jours de la période) : une estimation pour comparer les agents entre eux, pas une mesure exacte jour par jour.
         </p>
         <div className="space-y-2.5">
           {parAgent.map((a, i) => (

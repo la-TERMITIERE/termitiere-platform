@@ -174,7 +174,7 @@ export default function Dashboard() {
       out.push({
         id: `budget_${s.id}_${periodeKey}`,
         type: s.statut.key === 'depasse' ? 'budget_depasse' : 'budget_attention',
-        message: `${s.label} — ${s.pct}% consommé (${formatMoney(s.depense)} / ${formatMoney(s.alloue)})`,
+        message: `${s.label} : ${s.pct}% consommé (${formatMoney(s.depense)} / ${formatMoney(s.alloue)})`,
         secteurId: s.id
       })
     })
@@ -191,7 +191,7 @@ export default function Dashboard() {
         out.push({
           id: `justificatif_${d.id}`,
           type: 'justificatif_manquant',
-          message: `${d.beneficiaireNom || 'Le bénéficiaire'} n'a pas encore rapporté le justificatif (reçu) — ${formatMoney(Number(d.montant) || 0)} · ${secteurLbl}`,
+          message: `${d.beneficiaireNom || 'Le bénéficiaire'} n'a pas encore rapporté le justificatif (reçu) : ${formatMoney(Number(d.montant) || 0)} · ${secteurLbl}`,
           depenseId: d.id
         })
       })
@@ -390,7 +390,7 @@ export default function Dashboard() {
                       {s.depense > 0 && <div className="h-1.5 rounded-full bg-red-200" style={{ width: '100%' }} />}
                     </div>
                     <p className="mt-1.5 text-xs italic text-gray-400">
-                      {peutAllouer ? 'Aucun budget alloué — cliquez pour en définir un.' : 'Aucun budget alloué pour ce secteur.'}
+                      {peutAllouer ? 'Aucun budget alloué : cliquez pour en définir un.' : 'Aucun budget alloué pour ce secteur.'}
                     </p>
                   </>
                 ) : (

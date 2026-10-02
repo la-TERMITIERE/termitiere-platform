@@ -139,7 +139,7 @@ export default function Documents() {
             <FolderKanban size={16} className="shrink-0 text-teal-500" />
             <select className="w-full bg-transparent text-sm focus:outline-none"
               value={projetId} onChange={(e) => { setProjetId(e.target.value); setTacheIdAjout('') }}>
-              <option value="">— Choisir un projet —</option>
+              <option value="">Choisir un projet</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </div>
@@ -148,7 +148,7 @@ export default function Documents() {
             <div className="flex min-w-[200px] items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:ring-2 focus-within:ring-teal-400">
               <select className="w-full bg-transparent text-sm focus:outline-none"
                 value={tacheIdAjout} onChange={(e) => setTacheIdAjout(e.target.value)}>
-                <option value="">— Documents généraux du projet —</option>
+                <option value="">Documents généraux du projet</option>
                 {tachesDuProjetToutes.map((t) => <option key={t.id} value={t.id}>📋 {t.titre}</option>)}
               </select>
             </div>
@@ -206,7 +206,7 @@ export default function Documents() {
               onRemove={handleRemove}
               noDelete={!peutSupprimer}
               rubriques={RUBRIQUES}
-              label={tacheAjout ? `Documents — ${projet.nom} / ${tacheAjout.titre}` : `Documents — ${projet.nom}`}
+              label={tacheAjout ? `Documents : ${projet.nom} / ${tacheAjout.titre}` : `Documents : ${projet.nom}`}
               withLegende
             />
           </Card>

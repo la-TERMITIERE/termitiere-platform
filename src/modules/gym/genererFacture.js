@@ -22,7 +22,7 @@ export async function genererFactureGym({ factures, sourceType, sourceId, client
     enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
   }
   await addItem('gym_factures', payload)
-  await audit('gym', 'FACTURE_CREATE', `${numero} — ${clientNom} — ${Number(montant).toLocaleString('fr-FR')} FCFA`)
+  await audit('gym', 'FACTURE_CREATE', `${numero} : ${clientNom} : ${Number(montant).toLocaleString('fr-FR')} FCFA`)
   if (generatePDF) {
     await generatePDF({
       numero, date: payload.date,

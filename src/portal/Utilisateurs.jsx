@@ -240,7 +240,7 @@ export default function Utilisateurs() {
                   suggestions={secteursSuggestions}
                 />
               </FormGroup>
-              <FormGroup label="Poste (fonction dans l'entreprise)" className="col-span-2" hint="Ex. Comptable, Responsable RH, Gérant… — affiché notamment quand cette personne est choisie comme bénéficiaire d'un décaissement.">
+              <FormGroup label="Poste (fonction dans l'entreprise)" className="col-span-2" hint="Ex. Comptable, Responsable RH, Gérant… : affiché notamment quand cette personne est choisie comme bénéficiaire d'un décaissement.">
                 <ChampAutocomplete
                   value={modal.data.poste}
                   onChange={(v) => setModal((m) => ({ ...m, data: { ...m.data, poste: v } }))}
@@ -248,7 +248,7 @@ export default function Utilisateurs() {
                   placeholder="ex: Comptable"
                 />
               </FormGroup>
-              <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 — pour les alertes WhatsApp">
+              <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 : pour les alertes WhatsApp">
                 <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />
               </FormGroup>
               <FormGroup label={modal.isNew ? 'Mot de passe' : 'Réinitialiser le mot de passe'} className="col-span-2" hint={modal.isNew ? '' : 'Laissez vide pour conserver l\'actuel'}>
@@ -266,7 +266,7 @@ export default function Utilisateurs() {
               {modal.data.role === 'superviseur' && (
                 <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   👁️ <strong>Superviseur</strong> : lecture seule stricte, comme le Partenaire. Il ne voit QUE les
-                  modules cochés ci-dessous — cochez-les pour lui donner accès.
+                  modules cochés ci-dessous : cochez-les pour lui donner accès.
                 </p>
               )}
               {isViewAllRole(modal.data.role) ? (

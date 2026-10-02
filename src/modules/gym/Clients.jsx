@@ -56,7 +56,7 @@ export default function Clients() {
     setSuppression(true)
     try {
       await removeItem('gym_clients', toDelete.id)
-      await audit('gym', 'CLIENT_SUPPRIME', `${toDelete.nom} — ${siteLabel(toDelete.site || 'lome')}`)
+      await audit('gym', 'CLIENT_SUPPRIME', `${toDelete.nom} : ${siteLabel(toDelete.site || 'lome')}`)
       toast.success('Fiche client supprimée ✓')
       setToDelete(null)
     } catch (e) {
@@ -145,7 +145,7 @@ export default function Clients() {
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        Les clients apparaissent automatiquement ici dès qu'une séance ou un abonnement est enregistré à leur nom — pas d'ajout manuel. Ce répertoire <strong>affiche les deux salles ensemble</strong> (contrairement au reste du module) : un abonné de Lomé peut se présenter à Kara pendant un séjour, et inversement — utilisez le filtre par salle et la recherche par nom pour vérifier sa salle d'origine et si son abonnement est bien valide. En revanche, chaque salle garde sa propre clientèle : le <strong>total dépensé, la dernière visite et le statut d'abonnement sont comptés salle par salle</strong> — l'activité de Lomé n'est jamais mêlée à celle de Kara. Un client sans passage depuis {SEUIL_INACTIVITE_JOURS} jours (deux mois) sort de la liste par défaut.
+        Les clients apparaissent automatiquement ici dès qu'une séance ou un abonnement est enregistré à leur nom : pas d'ajout manuel. Ce répertoire <strong>affiche les deux salles ensemble</strong> (contrairement au reste du module) : un abonné de Lomé peut se présenter à Kara pendant un séjour, et inversement : utilisez le filtre par salle et la recherche par nom pour vérifier sa salle d'origine et si son abonnement est bien valide. En revanche, chaque salle garde sa propre clientèle : le <strong>total dépensé, la dernière visite et le statut d'abonnement sont comptés salle par salle</strong> : l'activité de Lomé n'est jamais mêlée à celle de Kara. Un client sans passage depuis {SEUIL_INACTIVITE_JOURS} jours (deux mois) sort de la liste par défaut.
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

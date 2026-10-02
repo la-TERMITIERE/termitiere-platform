@@ -73,7 +73,7 @@ function OngletJournal({ evenements }) {
       filename: `journal-depenses-${start}_${end}.xlsx`,
       sections: [{
         id: 'journal', name: 'Journal Dépenses',
-        title: 'Journal d\'activité — Dépenses',
+        title: 'Journal d\'activité : Dépenses',
         subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} événement(s)`,
         columns: [
           { key: 'Date / Heure', label: 'Date / Heure', width: 20 },

@@ -5,6 +5,6 @@ import { COULEUR_MODULE } from '../../utils/color'
 export default function Banque() {
   return (
     <CompteBancaire moduleId="garderie" color={COULEUR_MODULE.garderie}
-      titre="Compte bancaire — E-GARDERIE" secteurLabel="E-GARDERIE" />
+      titre="Compte bancaire : E-GARDERIE" secteurLabel="E-GARDERIE" />
   )
 }

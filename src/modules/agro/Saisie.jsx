@@ -143,13 +143,13 @@ export default function Saisie() {
   // (qui, quand, ancien→nouveau, motif) VISIBLE de tous, audite et signale.
   // Ne touche ni les autres articles, ni `savedAt` : la fusion RTDB est ciblée.
   async function ajusterInit({ kind, id, nom, nouveau, motif }) {
-    if (!user) return toast.error('Session expirée — reconnectez-vous')
+    if (!user) return toast.error('Session expirée : reconnectez-vous')
     const collKey = kind === 'animaux' ? 'animaux' : 'aliments'
     const src = kind === 'animaux' ? anim : alim
     const d = src[id] || { init: 0, entrees: [], sorties: [] }
     const ancien = parseFloat(d.init) || 0
     const val = Math.max(0, parseFloat(nouveau) || 0)
-    if (val === ancien) return toast.error('La valeur est identique — aucun ajustement.')
+    if (val === ancien) return toast.error('La valeur est identique : aucun ajustement.')
 
     const inv = getInventaire(inventaires, date)
     const autoSor = autoSorOf(id, kind)
@@ -170,18 +170,18 @@ export default function Saisie() {
     try {
       await setItem('agro_inventaires', date, { date, [collKey]: collMap })
       await audit('agro', 'AJUST_EF_INITIAL',
-        `EF Initial ${nom} (${date}) : ${ancien} → ${val}${marqueur.motif ? ` — ${marqueur.motif}` : ''}`,
+        `EF Initial ${nom} (${date}) : ${ancien} → ${val}${marqueur.motif ? ` : ${marqueur.motif}` : ''}`,
         { date, article: nom, ancien, nouveau: val, motif: marqueur.motif })
       await notify({
         type: 'alerte',
-        title: `Effectif initial réajusté — ${nom}`,
+        title: `Effectif initial réajusté : ${nom}`,
         body: `${date} · ${ancien} → ${val} (par ${user.nom})${marqueur.motif ? `\nMotif : ${marqueur.motif}` : ''}`,
         module: 'agro',
         forRoles: [...APPROVER_ROLES, 'agent', 'superviseur'],
         excludeUid: user.uid,
         link: '/agro/saisie'
       })
-      toast.success(`Effectif initial de ${nom} réajusté (${ancien} → ${val}) ✓ — équipe notifiée`)
+      toast.success(`Effectif initial de ${nom} réajusté (${ancien} → ${val}) ✓ : équipe notifiée`)
       setInitModal(null)
     } catch (e) {
       toast.error('Erreur : ' + e.message)
@@ -284,13 +284,13 @@ export default function Saisie() {
     markDirty()
     setTab(kind === 'animal' ? 'animaux' : 'aliments')
     setAddModal(null)
-    toast.success(`${article.nom} ajouté ✓ — pensez à enregistrer la saisie`)
+    toast.success(`${article.nom} ajouté ✓ : pensez à enregistrer la saisie`)
   }
 
   async function save() {
     if (!date) return toast.error('Choisissez une date')
-    if (!user) return toast.error('Session expirée — reconnectez-vous')
-    if (!referentielReady) return toast.error('Référentiel en cours de chargement — patientez quelques secondes puis réessayez')
+    if (!user) return toast.error('Session expirée : reconnectez-vous')
+    if (!referentielReady) return toast.error('Référentiel en cours de chargement : patientez quelques secondes puis réessayez')
     // Validation : tout mouvement « Autres » ou « Décès » doit être précisé.
     const articleManquant = (coll, src) => {
       for (const e of coll) {
@@ -303,13 +303,13 @@ export default function Saisie() {
       return null
     }
     const ko = articleManquant(especes, anim) || articleManquant(aliments, alim)
-    if (ko) return toast.error(`Précisez le motif « ${ko.type} » — ${ko.nom}`)
+    if (ko) return toast.error(`Précisez le motif « ${ko.type} » : ${ko.nom}`)
 
     // Validation : toute mutation sortante doit désigner une espèce de destination.
     const mutSansCible = especes.find((e) =>
       (anim[e.id]?.sorties || []).some((l) => l.type === 'Mutation' && (parseInt(l.qte) || 0) > 0 && !l.cible)
     )
-    if (mutSansCible) return toast.error(`Choisissez l'espèce de destination de la mutation — ${mutSansCible.nom}`)
+    if (mutSansCible) return toast.error(`Choisissez l'espèce de destination de la mutation : ${mutSansCible.nom}`)
 
     setSaving(true)
     try {
@@ -321,7 +321,7 @@ export default function Saisie() {
       })
       dirtyRef.current = false // saisie validée → plus de brouillon en attente
       const totalTetes = Object.values(animaux).reduce((s, a) => s + (a.fin || 0), 0)
-      await audit('agro', 'SAISIE', `Saisie du ${date} : ${totEnt} entrée(s), ${totSor} sortie(s) — ${totalTetes} têtes au total`, {
+      await audit('agro', 'SAISIE', `Saisie du ${date} : ${totEnt} entrée(s), ${totSor} sortie(s) : ${totalTetes} têtes au total`, {
         date, totalEntrees: totEnt, totalSorties: totSor, totalTetes,
         détail: detailMouvements(especes, anim, autoSorOf)
       })
@@ -329,11 +329,11 @@ export default function Saisie() {
       const sortiesNotif = nouvellesSortiesNotifiable(especes, aliments, anim, alim, existing)
       if (sortiesNotif.length) {
         const body = sortiesNotif
-          .map((l) => `• ${l.qte} × ${l.article} — ${l.type}${l.motif ? ` (${l.motif})` : ''}`)
+          .map((l) => `• ${l.qte} × ${l.article} : ${l.type}${l.motif ? ` (${l.motif})` : ''}`)
           .join('\n')
         await notify({
           type: 'info',
-          title: `Sorties saisies — ${user.nom}`,
+          title: `Sorties saisies : ${user.nom}`,
           body: `Date ${date} :\n${body}`,
           module: 'agro',
           forRoles: APPROVER_ROLES,
@@ -346,11 +346,11 @@ export default function Saisie() {
       const entreesNotif = nouvellesEntreesNotifiable(especes, aliments, anim, alim, existing)
       if (entreesNotif.length) {
         const body = entreesNotif
-          .map((l) => `• ${l.qte} × ${l.article} — ${l.type}${l.motif ? ` (${l.motif})` : ''}`)
+          .map((l) => `• ${l.qte} × ${l.article} : ${l.type}${l.motif ? ` (${l.motif})` : ''}`)
           .join('\n')
         await notify({
           type: 'info',
-          title: `Entrées saisies — ${user.nom}`,
+          title: `Entrées saisies : ${user.nom}`,
           body: `Date ${date} :\n${body}`,
           module: 'agro',
           forRoles: APPROVER_ROLES,
@@ -363,7 +363,7 @@ export default function Saisie() {
       // enregistrement Maxi-Agro doit les alerter) + aux autres responsables.
       await notify({
         type: 'info',
-        title: `Saisie enregistrée — ${user.nom}`,
+        title: `Saisie enregistrée : ${user.nom}`,
         body: `Saisie du ${formatDateShort(date)} enregistrée · ${totalTetes} têtes au total`,
         module: 'agro',
         forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])],
@@ -376,7 +376,7 @@ export default function Saisie() {
       if (date < todayStr() && existing?.savedAt) {
         await notify({
           type: 'demande',
-          title: `⚠️ Chiffre d'un jour passé modifié — ${user.nom}`,
+          title: `⚠️ Chiffre d'un jour passé modifié : ${user.nom}`,
           body: `La saisie du ${formatDateShort(date)} a été modifiée après coup · ${totalTetes} têtes au total`,
           module: 'agro',
           forRoles: ['ge', 'pau'],
@@ -385,7 +385,7 @@ export default function Saisie() {
         })
       }
 
-      toast.success('Saisie enregistrée ✓ — GE & PAU notifiés')
+      toast.success('Saisie enregistrée ✓ : GE & PAU notifiés')
     } catch (e) {
       toast.error('Erreur : ' + e.message)
     } finally {
@@ -404,12 +404,12 @@ export default function Saisie() {
           <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
             <tr>
               <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left">{kind === 'animaux' ? 'Espèce' : 'Article'}</th>
-              <th className="bg-gray-50 px-2 py-2" title={peutAjusterInit ? 'Reporté de la veille — réajustable après audit (crayon)' : 'Reporté automatiquement de la veille — verrouillé'}>EF Initial {peutAjusterInit ? '✏️' : '🔒'}</th>
+              <th className="bg-gray-50 px-2 py-2" title={peutAjusterInit ? 'Reporté de la veille : réajustable après audit (crayon)' : 'Reporté automatiquement de la veille : verrouillé'}>EF Initial {peutAjusterInit ? '✏️' : '🔒'}</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Entrées</th>
               <th className="bg-gray-50 px-2 py-2 text-center">Sorties</th>
               <th className="bg-gray-50 px-2 py-2" title="Calculé automatiquement">EF Final 🔒</th>
               {kind === 'animaux' && (
-                <th className="bg-gray-50 px-2 py-2 text-center" title="Nombre d'animaux malades ce jour — sert au taux de morbidité">Malades 🤒</th>
+                <th className="bg-gray-50 px-2 py-2 text-center" title="Nombre d'animaux malades ce jour : sert au taux de morbidité">Malades 🤒</th>
               )}
             </tr>
           </thead>
@@ -452,7 +452,7 @@ export default function Saisie() {
                             </button>
                           )}
                           {d.initAjuste && (
-                            <span title={`Réajusté par ${d.initAjuste.parNom} : ${d.initAjuste.ancien} → ${d.initAjuste.nouveau}${d.initAjuste.motif ? ` — ${d.initAjuste.motif}` : ''}`}
+                            <span title={`Réajusté par ${d.initAjuste.parNom} : ${d.initAjuste.ancien} → ${d.initAjuste.nouveau}${d.initAjuste.motif ? ` : ${d.initAjuste.motif}` : ''}`}
                               className="cursor-help text-amber-600"><History size={13} /></span>
                           )}
                         </div>
@@ -511,37 +511,37 @@ export default function Saisie() {
 
       {!peutSaisir && (
         <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 font-semibold">
-          👁️ Mode consultation — seuls les agents peuvent saisir et enregistrer des données.
+          👁️ Mode consultation : seuls les agents peuvent saisir et enregistrer des données.
         </div>
       )}
       {peutSaisir && Array.isArray(catsAutorisees) && (
         <div className={`rounded-lg px-3 py-2 text-sm font-semibold ${agentSansDroit ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-800'}`}>
           {agentSansDroit
-            ? '🔒 Aucune catégorie d’animaux ne vous est attribuée — contactez l’administrateur pour obtenir des droits de saisie.'
+            ? '🔒 Aucune catégorie d’animaux ne vous est attribuée : contactez l’administrateur pour obtenir des droits de saisie.'
             : `🔑 Vos catégories autorisées : ${catsAutorisees.join(', ')}.`}
         </div>
       )}
       {ajustementsJour.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <p className="mb-1 flex items-center gap-1 font-bold"><History size={14} /> Effectif initial réajusté ({date}) — après audit</p>
+          <p className="mb-1 flex items-center gap-1 font-bold"><History size={14} /> Effectif initial réajusté ({date}) : après audit</p>
           {ajustementsJour.map((x, i) => (
             <p key={i}>
               • <strong>{x.nom}</strong> : {x.ancien} → <strong>{x.nouveau}</strong>
               <span className="text-amber-700"> par {x.parNom}{x.le ? ` · ${formatDateTime(x.le)}` : ''}</span>
-              {x.motif ? ` — « ${x.motif} »` : ''}
+              {x.motif ? ` : « ${x.motif} »` : ''}
             </p>
           ))}
         </div>
       )}
       {!dejaSaisi && draftSavedAt && (
         <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
-          💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} — vos données sont en sécurité même sans clic sur « Enregistrer ». Pensez tout de même à enregistrer pour notifier les responsables.
+          💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} : vos données sont en sécurité même sans clic sur « Enregistrer ». Pensez tout de même à enregistrer pour notifier les responsables.
         </div>
       )}
       {dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
           <CheckCircle2 size={16} />
-          Saisie du {formatDateTime(existing.savedAt)} —{' '}
+          Saisie du {formatDateTime(existing.savedAt)} :{' '}
           <strong>{Object.values(existing.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0)} têtes</strong>
           {peutSaisir && <span className="text-green-600">· Chaque agent ne peut modifier que ses propres mouvements</span>}
         </div>
@@ -730,7 +730,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
     <Modal
       open
       onClose={onClose}
-      title={`${dir === 'entree' ? '⬇️ Entrées' : '⬆️ Sorties'} — ${nom}`}
+      title={`${dir === 'entree' ? '⬇️ Entrées' : '⬆️ Sorties'} : ${nom}`}
       footer={<Button onClick={onClose}>Terminer</Button>}
     >
       <p className="mb-3 text-sm text-gray-500">
@@ -739,13 +739,13 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
 
       {dir === 'sortie' && (
         <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
-          Les sorties <strong>Ventes</strong> et <strong>Dons</strong> passent par une demande à approuver — bouton « Demander une sortie ».
+          Les sorties <strong>Ventes</strong> et <strong>Dons</strong> passent par une demande à approuver : bouton « Demander une sortie ».
         </p>
       )}
 
       {dir === 'sortie' && (autoSor || 0) > 0 && (
         <p className="mb-3 text-xs text-gray-400">
-          {autoSor} vente(s) issue(s) de demandes approuvées — consultez l'onglet Demandes (non modifiable ici).
+          {autoSor} vente(s) issue(s) de demandes approuvées : consultez l'onglet Demandes (non modifiable ici).
         </p>
       )}
 
@@ -767,7 +767,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
           <div key={i} className={`rounded-lg border p-2 ${locked ? 'border-amber-200 bg-amber-50/50' : 'border-gray-200'}`}>
             {locked && l.agentNom && (
               <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-amber-700">
-                <Lock size={10} /> Saisi par {l.agentNom} — lecture seule
+                <Lock size={10} /> Saisi par {l.agentNom} : lecture seule
               </p>
             )}
             <div className="flex items-center gap-2">
@@ -784,7 +784,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
             {kind === 'animaux' && dir === 'sortie' && l.type === 'Mutation' && (
               <div className="mt-2">
                 <Select value={l.cible || ''} disabled={locked} onChange={(e) => setLigne(i, { cible: e.target.value })}>
-                  <option value="">— Espèce de destination (où va l'animal) —</option>
+                  <option value="">Espèce de destination (où va l'animal)</option>
                   {ciblesPossibles.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
                 </Select>
                 <p className="mt-1 text-[11px] text-sky-600">↪︎ +{l.qte || 0} sera ajouté automatiquement à l'espèce de destination.</p>
@@ -824,12 +824,12 @@ function AjustInitModal({ modal, date, onClose, onSave }) {
   const ecart = nouveau - (parseFloat(modal.ancien) || 0)
 
   function submit() {
-    if (!motif.trim()) return toast.error('Motif obligatoire — ex. : constat d’audit du jour')
+    if (!motif.trim()) return toast.error('Motif obligatoire : ex. : constat d’audit du jour')
     onSave({ kind: modal.kind, id: modal.id, nom: modal.nom, nouveau, motif })
   }
 
   return (
-    <Modal open onClose={onClose} title={`Réajuster l'effectif initial — ${modal.nom}`}
+    <Modal open onClose={onClose} title={`Réajuster l'effectif initial : ${modal.nom}`}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button variant="warning" onClick={submit}>Réajuster & signaler</Button></>}>
       <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
         Réservé à la direction. À utiliser lorsque l'<strong>effectif réel constaté</strong> (audit, comptage) diffère de l'app.
@@ -849,7 +849,7 @@ function AjustInitModal({ modal, date, onClose, onSave }) {
         </p>
       )}
       <FormGroup label="Motif de l'ajustement" required hint="Visible dans le journal et la notification envoyée à l'équipe.">
-        <Input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex. : comptage d'audit du 12/08 — 2 décès non saisis" />
+        <Input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex. : comptage d'audit du 12/08 : 2 décès non saisis" />
       </FormGroup>
     </Modal>
   )

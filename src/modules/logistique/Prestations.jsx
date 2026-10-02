@@ -79,10 +79,10 @@ export default function Prestations() {
     const pris = (p.lignes || []).filter((l) => l.materielId).reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
     const rendu = rets.reduce((s, r) => s + (parseInt(r.qte) || 0), 0)
     const today = todayStr()
-    if (pris > 0 && rendu >= pris) return { label: 'Terminée — retour OK', tone: 'success' }
+    if (pris > 0 && rendu >= pris) return { label: 'Terminée : retour OK', tone: 'success' }
     if (today < (p.dateDebut || '')) return { label: 'À venir', tone: 'info' }
     if (today <= (p.dateFin || '')) return { label: 'En cours', tone: 'warning' }
-    return { label: 'Terminée — retour en attente', tone: 'neutral' }
+    return { label: 'Terminée : retour en attente', tone: 'neutral' }
   }
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
@@ -100,7 +100,7 @@ export default function Prestations() {
     setDepSaving(true)
     try {
       await updateItem('logistique_prestations', detail.id, { depenses: clean })
-      await audit('logistique', 'PRESTATION_DEPENSES', `${detail.num} — ${clean.length} dépense(s)`)
+      await audit('logistique', 'PRESTATION_DEPENSES', `${detail.num} : ${clean.length} dépense(s)`)
       setDetail((d) => (d ? { ...d, depenses: clean } : d))
       toast.success('Dépenses enregistrées ✓')
     } catch (e) { toast.error(e.message) } finally { setDepSaving(false) }
@@ -313,7 +313,7 @@ export default function Prestations() {
         evenement, dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
         lignes, frais, depenses, total
       })
-      await audit('logistique', 'PRESTATION_MODIFIEE', `${siteLabel(site)} — ${form.num || form.id} — ${formatMoney(total)}`)
+      await audit('logistique', 'PRESTATION_MODIFIEE', `${siteLabel(site)} : ${form.num || form.id} : ${formatMoney(total)}`)
       toast.success('Prestation modifiée ✓')
     } else {
       const num = genNumero(`PREST-${site.toUpperCase()}`, prestations.length)
@@ -325,8 +325,8 @@ export default function Prestations() {
         lignes, frais, depenses, total, statut: 'brouillon',
         agentId: user.uid, agentNom: user.nom
       })
-      await audit('logistique', 'PRESTATION', `${siteLabel(site)} — ${num} — ${formatMoney(total)}`)
-      toast.success('Prestation enregistrée ✓ — en attente d\'approbation, facturable dès à présent')
+      await audit('logistique', 'PRESTATION', `${siteLabel(site)} : ${num} : ${formatMoney(total)}`)
+      toast.success('Prestation enregistrée ✓ : en attente d\'approbation, facturable dès à présent')
     }
     setOpen(false)
   }
@@ -336,8 +336,8 @@ export default function Prestations() {
   async function approuver(p) {
     if (!peutApprouver) return toast.error('Action réservée aux gérants / direction')
     await updateItem('logistique_prestations', p.id, { approuvee: true, approuveePar: user.nom, approuveeLe: todayStr() })
-    await audit('logistique', 'PRESTATION_APPROUVEE', `${p.num} — autorisée pour facturation`)
-    toast.success(`Prestation ${p.num} approuvée ✓ — elle peut maintenant être facturée`)
+    await audit('logistique', 'PRESTATION_APPROUVEE', `${p.num} : autorisée pour facturation`)
+    toast.success(`Prestation ${p.num} approuvée ✓ : elle peut maintenant être facturée`)
   }
 
   // Suppression réservée au BROUILLON : dès qu'elle est facturée, la prestation
@@ -345,7 +345,7 @@ export default function Prestations() {
   async function supprimer(p) {
     if (!confirm(`Supprimer la prestation ${p.num} (${p.clientNom}) ?`)) return
     await removeItem('logistique_prestations', p.id)
-    await audit('logistique', 'PRESTATION_DELETE', `${siteLabel(site)} — ${p.num}`)
+    await audit('logistique', 'PRESTATION_DELETE', `${siteLabel(site)} : ${p.num}`)
     toast.success('Prestation supprimée')
   }
 
@@ -480,7 +480,7 @@ export default function Prestations() {
               ))}
             </div>
             {form.type === 'prestation' && (
-              <p className="-mt-2 text-[11px] text-gray-400">Une prestation permet de renseigner les <strong>dépenses internes</strong> (frais de mission, transport de l'équipe…) — même plus tard. Elles n'entrent pas dans le montant facturé mais servent à calculer le bénéfice.</p>
+              <p className="-mt-2 text-[11px] text-gray-400">Une prestation permet de renseigner les <strong>dépenses internes</strong> (frais de mission, transport de l'équipe…) : même plus tard. Elles n'entrent pas dans le montant facturé mais servent à calculer le bénéfice.</p>
             )}
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Client">
@@ -489,7 +489,7 @@ export default function Prestations() {
                   setForm((f) => ({ ...f, clientId: e.target.value, clientNom: c?.nom || '' }))
                 }}>
                   {clients.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                  {!clients.length && <option value="">— Créez un client d'abord —</option>}
+                  {!clients.length && <option value="">Créez un client d'abord</option>}
                 </Select>
               </FormGroup>
               <FormGroup label="Événement">
@@ -507,7 +507,7 @@ export default function Prestations() {
               <FormGroup label="Lieu"><Input value={form.lieu} onChange={(e) => setForm((f) => ({ ...f, lieu: e.target.value }))} /></FormGroup>
               <FormGroup label="Date début"><Input type="date" value={form.dateDebut} onChange={(e) => setPeriode({ dateDebut: e.target.value })} /></FormGroup>
               <FormGroup label="Date fin"><Input type="date" value={form.dateFin} onChange={(e) => setPeriode({ dateFin: e.target.value })} /></FormGroup>
-              <div className="col-span-2 -mt-1 text-xs text-gray-500">Durée de la période : <strong>{nbJoursInclus(form.dateDebut, form.dateFin)} jour(s)</strong> — appliquée par défaut à chaque ligne (modifiable).</div>
+              <div className="col-span-2 -mt-1 text-xs text-gray-500">Durée de la période : <strong>{nbJoursInclus(form.dateDebut, form.dateFin)} jour(s)</strong> : appliquée par défaut à chaque ligne (modifiable).</div>
             </div>
 
             <p className="text-xs font-bold uppercase text-gray-500">Matériel loué</p>
@@ -647,7 +647,7 @@ export default function Prestations() {
                           <button type="button" onClick={() => setDepLater((a) => a.filter((_, k) => k !== i))} title="Retirer cette ligne" className="flex items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 md:col-span-1"><Trash2 size={15} /></button>
                         </div>
                       ))}
-                      {!depLater.length && <p className="text-xs text-orange-500/80">Aucune dépense — ajoutez-en une si la prestation a généré des frais internes.</p>}
+                      {!depLater.length && <p className="text-xs text-orange-500/80">Aucune dépense : ajoutez-en une si la prestation a généré des frais internes.</p>}
                       <div className="mt-3 flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => setDepLater((a) => [...a, { label: '', montant: 0 }])}><Plus size={14} /> Dépense</Button>
                         <Button size="sm" onClick={saveDepensesLater} loading={depSaving}><Save size={14} /> Enregistrer</Button>
@@ -700,8 +700,8 @@ export default function Prestations() {
                     {rets.map((r, i) => (
                       <p key={i} className="text-xs text-gray-500">
                         <span className="font-mono text-[11px] text-gray-400">{formatDateShort(r.date)}</span>
-                        {' — '}<span className="font-semibold text-gray-600">{r.qte} × {r.materielNom}</span>
-                        {' '}<span className="text-gray-400">({r.type})</span>{r.motif ? ` — ${r.motif}` : ''}
+                        {' : '}<span className="font-semibold text-gray-600">{r.qte} × {r.materielNom}</span>
+                        {' '}<span className="text-gray-400">({r.type})</span>{r.motif ? ` : ${r.motif}` : ''}
                       </p>
                     ))}
                   </div>

@@ -164,7 +164,7 @@ export default function Paiements() {
       const id = genId()
       await setItem('garderie_paiements', id, { ...payload, id })
       audit('garderie', 'PAIEMENT_CREATE', d.enfantNom, { mois: d.mois, annee: d.annee, montant: d.montantPaye })
-      notify({ type: 'info', title: `💰 Paiement reçu — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé' : statut === 'partiel' ? 'Partiel' : 'Impayé'}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+      notify({ type: 'info', title: `💰 Paiement reçu : ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA : ${statut === 'paye' ? 'Soldé' : statut === 'partiel' ? 'Partiel' : 'Impayé'}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
       toast.success('Paiement enregistré ✓')
     } else {
       const id = modal.id
@@ -240,7 +240,7 @@ export default function Paiements() {
         notes: ''
       })
       audit('garderie', 'JOURNALIER_PAIEMENT', d.enfantNom, { montant: Number(d.montantPaye) })
-      notify({ type: 'info', title: `💰 Paiement journalier — ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+      notify({ type: 'info', title: `💰 Paiement journalier : ${d.enfantNom}`, body: `${Number(d.montantPaye).toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
       toast.success('Paiement enregistré ✓')
       setJoPayModal(null)
     } finally {
@@ -270,8 +270,8 @@ export default function Paiements() {
         id: paiement.id
       })
       audit('garderie', 'PAIEMENT_SOLDE', paiement.enfantNom, { complement, statut })
-      notify({ type: 'info', title: `💰 Paiement soldé — ${paiement.enfantNom}`, body: `Complément de ${complement.toLocaleString('fr-FR')} FCFA — ${statut === 'paye' ? 'Soldé ✓' : 'Partiel'}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
-      toast.success(statut === 'paye' ? 'Paiement soldé ✓' : `Complément enregistré — reste ${formatMoney(reste - complement)} FCFA`)
+      notify({ type: 'info', title: `💰 Paiement soldé : ${paiement.enfantNom}`, body: `Complément de ${complement.toLocaleString('fr-FR')} FCFA : ${statut === 'paye' ? 'Soldé ✓' : 'Partiel'}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+      toast.success(statut === 'paye' ? 'Paiement soldé ✓' : `Complément enregistré : reste ${formatMoney(reste - complement)} FCFA`)
       setSoldeModal(null)
     } finally {
       setSoldeSaving(false)
@@ -296,7 +296,7 @@ export default function Paiements() {
       filename: `paiements-garderie-${filtreAnnee}-${filtreMois}.xlsx`,
       sections: [{
         id: 'paiements', name: 'Paiements',
-        title: 'Suivi des paiements — Garderie',
+        title: 'Suivi des paiements : Garderie',
         subtitle: `${MOIS[(filtreMois || 1) - 1]} ${filtreAnnee} · ${liste.length} enregistrement(s)`,
         columns: [
           { key: 'Enfant', label: 'Enfant', width: 22 },
@@ -611,7 +611,7 @@ export default function Paiements() {
                 return (
                   <div key={s.key}>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <p className="text-xs font-bold uppercase text-gray-500">{s.label} — {rows.length} enfant(s)</p>
+                      <p className="text-xs font-bold uppercase text-gray-500">{s.label} : {rows.length} enfant(s)</p>
                       <p className="text-xs font-extrabold text-gray-700">{formatMoney(montantKpi(rows))}</p>
                     </div>
                     <div className="space-y-1.5">
@@ -643,7 +643,7 @@ export default function Paiements() {
         onClose={() => setJoPayModal(null)}
         size="md"
         {...glassModalProps('#E8390E')}
-        title="Paiement — Enfant journalier"
+        title="Paiement : Enfant journalier"
         footer={
           <>
             <Button variant="outline" onClick={() => setJoPayModal(null)} disabled={joPaySaving}>Annuler</Button>
@@ -684,12 +684,12 @@ export default function Paiements() {
                   }
                 }}
               >
-                <option value="">— Choisir un journalier enregistré —</option>
+                <option value="">Choisir un journalier enregistré</option>
                 {[...journaliers]
                   .sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1)
                   .map((j) => (
                     <option key={j.id} value={j.id}>
-                      {j.prenom} {j.nom} — {j.date ? new Date(j.date).toLocaleDateString('fr-FR') : ''} ({j.nombreJours || 1} jour{Number(j.nombreJours) > 1 ? 's' : ''})
+                      {j.prenom} {j.nom} : {j.date ? new Date(j.date).toLocaleDateString('fr-FR') : ''} ({j.nombreJours || 1} jour{Number(j.nombreJours) > 1 ? 's' : ''})
                     </option>
                   ))}
               </Select>
@@ -828,7 +828,7 @@ export default function Paiements() {
             <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
             <FormGroup label="Enfant *">
               <Select value={modal.data.enfantId} onChange={(e) => onEnfantChange(e.target.value)}>
-                <option value="">— Choisir un enfant sans paiement ce mois —</option>
+                <option value="">Choisir un enfant sans paiement ce mois</option>
                 {enfantsSansPaiement.length === 0 ? (
                   <option disabled>✅ Tous les enfants ont payé ce mois</option>
                 ) : (
@@ -925,7 +925,7 @@ export default function Paiements() {
                 {TYPES_AVEC_CUISINE.includes(modal.data.type) && (
                   <FormGroup label="Frais de cuisine (FCFA)">
                     <Input type="number" min="0" value={modal.data.montantCuisine} onChange={(e) => set('montantCuisine', e.target.value)} placeholder="0" />
-                    <p className="mt-1 text-xs text-gray-500">Payés à part par les parents — ajoutés au montant dû</p>
+                    <p className="mt-1 text-xs text-gray-500">Payés à part par les parents : ajoutés au montant dû</p>
                   </FormGroup>
                 )}
                 <FormGroup label="Mode de paiement">

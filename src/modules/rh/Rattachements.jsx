@@ -43,7 +43,7 @@ export default function Rattachements() {
                   ? <Badge tone="success"><Link2 size={12} /> {e.userLogin || 'compte lié'}</Badge>
                   : <Badge tone="neutral"><Link2Off size={12} /> Non rattaché</Badge>}
                 <select value={e.userId || ''} onChange={(ev) => lier(e, ev.target.value)} className="input-base !w-auto">
-                  <option value="">— Aucun compte —</option>
+                  <option value="">Aucun compte</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.login} ({u.nom})</option>)}
                 </select>
               </li>

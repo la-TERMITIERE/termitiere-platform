@@ -95,7 +95,7 @@ function OngletJournal({ evenements, loading }) {
       filename: `journal-garderie-${start}_${end}.xlsx`,
       sections: [{
         id: 'journal', name: 'Journal Garderie',
-        title: 'Journal d\'activité — Garderie',
+        title: 'Journal d\'activité : Garderie',
         subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} événement(s)`,
         columns: [
           { key: 'Date / Heure', label: 'Date / Heure', width: 20 },

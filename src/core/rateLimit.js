@@ -28,7 +28,7 @@ export function checkRate(routeKey, kind = 'write') {
   const arr = (WINDOWS[key] || []).filter((t) => now - t < perMs)
   if (arr.length >= max) {
     const wait = Math.ceil((perMs - (now - arr[0])) / 1000)
-    throw new Error(`Trop de requêtes (${routeKey}) — réessayez dans ${wait}s.`)
+    throw new Error(`Trop de requêtes (${routeKey}) : réessayez dans ${wait}s.`)
   }
   arr.push(now)
   WINDOWS[key] = arr

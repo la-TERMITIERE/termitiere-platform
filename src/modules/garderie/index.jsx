@@ -18,7 +18,7 @@ import Partenaires from '../../shared/partenaires/Partenaires'
 import Banque from './Banque'
 import { useGarderieStore } from './store/garderieStore'
 import { useAuth } from '../../hooks/useAuth'
-import { FULL_ACCESS_ROLES, BANQUE_ROLES } from '../../core/roles'
+import { FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES } from '../../core/roles'
 
 // Guard : redirige vers le dashboard si le rôle n'est pas autorisé
 function GarderieGuard({ roles, children }) {
@@ -31,7 +31,7 @@ function GarderieGuard({ roles, children }) {
 // Le partenaire (externe, lecture seule) consulte comme le superviseur — s'il a le module.
 const ROLES_GESTION   = [...FULL_ACCESS_ROLES, 'gerant', 'gerante_garderie', 'superviseur', 'partenaire']
 const ROLES_DIRECTION = [...FULL_ACCESS_ROLES, 'gerant', 'superviseur', 'partenaire']
-const ROLES_ADMIN     = [...FULL_ACCESS_ROLES]
+const ROLES_ADMIN     = [...ADMIN_VOLETS_ROLES]
 
 export default function GarderieModule() {
   const init = useGarderieStore((s) => s.init)

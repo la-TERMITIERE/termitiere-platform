@@ -176,7 +176,7 @@ export default function Incidents() {
       const graviteLabel = d.gravite === 'grave' ? '🔴 GRAVE' : d.gravite === 'moyen' ? '🟠 Moyen' : '🟡 Faible'
       notify({
         type: d.gravite === 'grave' ? 'demande' : 'info',
-        title: `⚠️ Incident ${graviteLabel} — ${d.enfantNom}`,
+        title: `⚠️ Incident ${graviteLabel} : ${d.enfantNom}`,
         body: d.description?.slice(0, 80) || d.type,
         module: 'garderie',
         forRoles: d.gravite === 'grave' ? ['ge','gerante_garderie','agent'] : ['ge','gerante_garderie'],
@@ -195,8 +195,8 @@ export default function Incidents() {
   async function marquerResolu(i) {
     await setItem('garderie_incidents', i.id, { ...i, resolu: true, alarme: 0 })
     audit('garderie', 'INCIDENT_RESOLU', i.enfantNom)
-    notify({ type: 'info', title: `✅ Incident résolu — ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/incidents' })
-    toast.success('Incident résolu — alarme désactivée ✓')
+    notify({ type: 'info', title: `✅ Incident résolu : ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/incidents' })
+    toast.success('Incident résolu : alarme désactivée ✓')
   }
 
   async function changerAlarme(i, niveau) {
@@ -211,7 +211,7 @@ export default function Incidents() {
       const n = NIVEAUX_ALARME[niveau]
       notify({
         type: niveau === 3 ? 'demande' : 'info',
-        title: `${n.badge} Alarme ${n.label} — ${i.enfantNom}`,
+        title: `${n.badge} Alarme ${n.label} : ${i.enfantNom}`,
         body: i.description?.slice(0, 80) || i.type,
         module: 'garderie',
         forRoles: niveau === 3 ? ['ge','gerante_garderie','agent'] : ['ge','gerante_garderie'],
@@ -262,8 +262,8 @@ export default function Incidents() {
       audit('garderie', 'SOIN_CREATE', d.enfantNom, { type: d.type })
       notify({
         type: 'info',
-        title: `🩺 Soin enregistré — ${d.enfantNom}`,
-        body: `${TYPES_SOIN.find((t) => t.id === d.type)?.label || d.type} — ${d.description.slice(0, 60)}`,
+        title: `🩺 Soin enregistré : ${d.enfantNom}`,
+        body: `${TYPES_SOIN.find((t) => t.id === d.type)?.label || d.type} : ${d.description.slice(0, 60)}`,
         module: 'garderie',
         forRoles: ['ge','gerante_garderie'],
         excludeUid: user.uid,
@@ -384,7 +384,7 @@ export default function Incidents() {
       const etat = carnet.vaccins[v.id] || { recu: false, date: '', notes: '' }
       return [
         v.label, v.age,
-        etat.recu ? '✓ Reçu' : '— En attente',
+        etat.recu ? '✓ Reçu' : 'En attente',
         etat.recu && etat.date ? formatDateShort(etat.date) : '—',
         etat.notes || ''
       ]
@@ -394,7 +394,7 @@ export default function Incidents() {
       lignes.push([a.label, '—', '✓ Reçu', a.date ? formatDateShort(a.date) : '—', a.notes || ''])
     })
     genererRapportPDF({
-      titre: `Carnet de vaccination — ${carnet.enfantNom}`,
+      titre: `Carnet de vaccination : ${carnet.enfantNom}`,
       colonnes: ['Vaccin', 'Âge recommandé', 'Statut', 'Date', 'Notes'],
       lignes,
       fichier: `carnet-vaccination-${carnet.enfantNom.replace(/\s+/g, '-')}.pdf`,
@@ -429,7 +429,7 @@ export default function Incidents() {
 
       <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
         <p className="font-semibold mb-0.5">⚕️ Santé & Infirmerie</p>
-        <p>Incidents graves avec alarme, soins courants (température, bobos, médicaments) et carnet de vaccination — tout le suivi santé des enfants regroupé ici.</p>
+        <p>Incidents graves avec alarme, soins courants (température, bobos, médicaments) et carnet de vaccination : tout le suivi santé des enfants regroupé ici.</p>
       </div>
 
       {/* Onglets — une couleur distincte par volet */}
@@ -470,7 +470,7 @@ export default function Incidents() {
           <p className="font-bold text-red-700 flex items-center gap-2">
             <ShieldAlert size={18} />
             {alarmesActives.filter((i) => (i.alarme || 0) === 3).length > 0 &&
-              `🔴 ${alarmesActives.filter((i) => (i.alarme || 0) === 3).length} URGENCE(S) — `}
+              `🔴 ${alarmesActives.filter((i) => (i.alarme || 0) === 3).length} URGENCE(S) : `}
             {alarmesActives.filter((i) => (i.alarme || 0) === 2).length > 0 &&
               `🟠 ${alarmesActives.filter((i) => (i.alarme || 0) === 2).length} ALERTE(S)`}
           </p>
@@ -761,7 +761,7 @@ export default function Incidents() {
             <div className="rounded-2xl border border-gray-200 border-l-4 bg-gray-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]" style={{ borderLeftColor: couleur }}>
               <FormGroup label="Enfant concerné *">
                 <Select value={modalIncident.data.enfantId} onChange={(e) => onEnfantChangeIncident(e.target.value)}>
-                  <option value="">— Choisir —</option>
+                  <option value="">Choisir</option>
                   {tousEnfantsSelectables.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
                 </Select>
               </FormGroup>
@@ -830,7 +830,7 @@ export default function Incidents() {
             <div className="rounded-2xl border border-rose-200 border-l-4 border-l-rose-400 bg-rose-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
             <FormGroup label="Enfant concerné *">
               <Select value={modalSoin.data.enfantId} onChange={(e) => onEnfantChangeSoin(e.target.value)}>
-                <option value="">— Choisir —</option>
+                <option value="">Choisir</option>
                 {tousEnfantsSelectables.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
               </Select>
             </FormGroup>
@@ -842,7 +842,7 @@ export default function Incidents() {
               </FormGroup>
               <FormGroup label="Administré par">
                 <Select value={modalSoin.data.administrePar} onChange={(e) => setSoin('administrePar', e.target.value)}>
-                  <option value="">— Choisir —</option>
+                  <option value="">Choisir</option>
                   {personnelActif.map((p) => (
                     <option key={p.id} value={`${p.prenom} ${p.nom}`}>{p.prenom} {p.nom}</option>
                   ))}

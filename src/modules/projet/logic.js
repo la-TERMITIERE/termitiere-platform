@@ -188,7 +188,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
         projetId: p.id,
         projetNom: p.nom,
         cibleType: 'tache', cibleId: t.id,
-        message: `Tâche "${t.titre}" — échéance dépassée de ${joursRetard} jour${joursRetard > 1 ? 's' : ''} (assignée à : ${t.assignee || 'non assignée'}).`,
+        message: `Tâche "${t.titre}" : échéance dépassée de ${joursRetard} jour${joursRetard > 1 ? 's' : ''} (assignée à : ${t.assignee || 'non assignée'}).`,
         date: t.echeance,
         priorite: t.priorite
       })
@@ -217,7 +217,7 @@ export function genererAlertes(projets = [], taches = [], depenses = [], seuils 
       id: 'reste_a_payer_global',
       type: 'reste_a_payer',
       cibleType: 'liste',
-      message: `${restesAPayer.length} tâche${restesAPayer.length > 1 ? 's' : ''} avec un solde à régler — total ${total.toLocaleString('fr-FR')} FCFA.`,
+      message: `${restesAPayer.length} tâche${restesAPayer.length > 1 ? 's' : ''} avec un solde à régler : total ${total.toLocaleString('fr-FR')} FCFA.`,
       details: restesAPayer.sort((a, b) => b.reste - a.reste),
       date: now,
       priorite: 'normale'

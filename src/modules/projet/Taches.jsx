@@ -53,7 +53,7 @@ function ChampAssignee({ value, onChange, users }) {
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
           {!suggestions.length
-            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur — votre saisie sera utilisée.</p>
+            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur : votre saisie sera utilisée.</p>
             : <ul className="max-h-48 overflow-y-auto py-1">
                 {suggestions.map((u) => {
                   const nom = u.nom || u.login || ''
@@ -254,7 +254,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
           date: versementDate ? new Date(versementDate).getTime() : now,
           montant: montantVerse,
           categorie: 'sous_traitance',
-          description: `Versement — ${form.titre}`,
+          description: `Versement : ${form.titre}`,
           fournisseur: form.prestataireNom || '',
           prestataireMetier: form.prestataireMetier || '',
           prestataireTelephone: form.prestataireTelephone || '',
@@ -269,7 +269,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
             .reduce((s, d) => s + (Number(d.montant) || 0), 0) + montantVerse
           await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
         }
-        await audit('projet', 'depense_ajoutee', `${montantVerse.toLocaleString('fr-FR')} FCFA — ${form.titre}`)
+        await audit('projet', 'depense_ajoutee', `${montantVerse.toLocaleString('fr-FR')} FCFA : ${form.titre}`)
       }
       setModal(false)
     } finally { setSaving(false) }
@@ -318,7 +318,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
         { id: `rev_${Date.now()}`, ancien, nouveau, motif: revMotif.trim(), date: Date.now(), auteur: user?.nom || user?.login || null }
       ]
       await setItem('projet_taches', revision.id, { ...revision, montantPrevu: nouveau, revisionsMontant: revisions, updatedAt: Date.now() })
-      await audit('projet', 'tache_montant_revise', `${revision.titre} — ${formatMoney(ancien)} → ${formatMoney(nouveau)} (${revMotif.trim()})`)
+      await audit('projet', 'tache_montant_revise', `${revision.titre} : ${formatMoney(ancien)} → ${formatMoney(nouveau)} (${revMotif.trim()})`)
       setRevision(null)
       setDetail((d) => (d && d.id === revision.id ? { ...d, montantPrevu: nouveau, revisionsMontant: revisions } : d))
     } finally { setRevSaving(false) }
@@ -332,7 +332,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
   const confirmerReport = async (t) => {
     if (!nouvelleDate) return
     await setItem('projet_taches', t.id, { ...t, echeance: new Date(nouvelleDate).getTime(), updatedAt: Date.now() })
-    await audit('projet', 'tache_modifiee', `${t.titre} — reportée au ${nouvelleDate}`)
+    await audit('projet', 'tache_modifiee', `${t.titre} : reportée au ${nouvelleDate}`)
     setReportId(null)
   }
 
@@ -419,7 +419,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                   {/* Titre + projet / phase */}
                   <p className="mt-2 font-bold leading-snug text-gray-800">{t.titre}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {projet && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">📋 {projet.nom}{projet.lieu ? ` — ${projet.lieu}` : ''}</span>}
+                    {projet && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">📋 {projet.nom}{projet.lieu ? ` : ${projet.lieu}` : ''}</span>}
                     {t.phase && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{t.phase}</span>}
                   </div>
 
@@ -522,7 +522,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                 <label className="mb-1 block text-xs font-medium text-gray-600">Projet</label>
                 <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value }))}>
-                  <option value="">— Sélectionner un projet —</option>
+                  <option value="">Sélectionner un projet</option>
                   {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
                 </select>
               </div>
@@ -607,7 +607,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                 className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${!noteValide && form.note !== '' ? 'border-red-300' : 'border-gray-200'}`}
                 placeholder="Décris les détails de la tâche : nature exacte des travaux, conditions, matériaux, remarques…"
                 value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
-              <p className="mt-1 text-[11px] text-gray-500">Champ obligatoire — précise ici tout ce qui doit être retenu sur cette tâche.</p>
+              <p className="mt-1 text-[11px] text-gray-500">Champ obligatoire : précise ici tout ce qui doit être retenu sur cette tâche.</p>
             </div>
           </div>
 
@@ -657,8 +657,8 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
               </div>
               <p className="text-[11px] text-gray-500 -mt-1">
                 {editing
-                  ? "Renseigne un montant pour enregistrer un nouveau versement pour cette tâche — il s'ajoutera automatiquement au volet Dépenses, en plus des versements déjà effectués. Laisse à 0 (ou vide) si tu ne veux rien ajouter."
-                  : "Renseigne un montant pour enregistrer tout de suite un premier versement — il s'ajoutera automatiquement au volet Dépenses, lié à cette tâche. Laisse à 0 (ou vide) s'il n'y a pas encore de paiement."}
+                  ? "Renseigne un montant pour enregistrer un nouveau versement pour cette tâche : il s'ajoutera automatiquement au volet Dépenses, en plus des versements déjà effectués. Laisse à 0 (ou vide) si tu ne veux rien ajouter."
+                  : "Renseigne un montant pour enregistrer tout de suite un premier versement : il s'ajoutera automatiquement au volet Dépenses, lié à cette tâche. Laisse à 0 (ou vide) s'il n'y a pas encore de paiement."}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -682,7 +682,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Source de financement <span className="font-normal text-gray-400">— qui paie ce versement ?</span>
+                  Source de financement <span className="font-normal text-gray-400">: qui paie ce versement ?</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {SOURCES_FIN.map((s) => (
@@ -762,7 +762,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {projet && <div><span className="text-gray-500">Projet : </span><span className="font-semibold text-teal-700">{projet.nom}{projet.lieu ? ` — ${projet.lieu}` : ''}</span></div>}
+                {projet && <div><span className="text-gray-500">Projet : </span><span className="font-semibold text-teal-700">{projet.nom}{projet.lieu ? ` : ${projet.lieu}` : ''}</span></div>}
                 {detail.phase && <div><span className="text-gray-500">{libelleEtape(projet?.type)} : </span><span className="font-semibold">{detail.phase}</span></div>}
                 <div><span className="text-gray-500">Assigné à : </span><span className="font-semibold">{detail.assignee || '—'}</span></div>
                 <div><span className="text-gray-500">Date de début : </span><span className="font-semibold">{detail.dateDebut ? formatDateShort(detail.dateDebut) : '—'}</span></div>
@@ -782,7 +782,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
                   <p className="mb-1 text-xs font-bold uppercase text-teal-700">Prestataire</p>
                   <p className="text-sm text-gray-700">
                     {detail.prestataireNom || '—'}
-                    {detail.prestataireMetier && ` — ${METIERS_PRESTATAIRE.find((m) => m.id === detail.prestataireMetier)?.label || detail.prestataireMetier}`}
+                    {detail.prestataireMetier && ` : ${METIERS_PRESTATAIRE.find((m) => m.id === detail.prestataireMetier)?.label || detail.prestataireMetier}`}
                   </p>
                   {detail.prestataireTelephone && <p className="text-sm text-gray-500">{detail.prestataireTelephone}</p>}
                 </div>
@@ -865,7 +865,7 @@ export function OngletTaches({ taches, projets, users, depenses, initialFiltrePh
       </Modal>
 
       {/* Révision du montant arrêté */}
-      <Modal open={!!revision} onClose={() => setRevision(null)} title={revision ? `Réviser le montant — ${revision.titre}` : 'Réviser le montant'}>
+      <Modal open={!!revision} onClose={() => setRevision(null)} title={revision ? `Réviser le montant : ${revision.titre}` : 'Réviser le montant'}>
         {revision && (
           <div className="space-y-3">
             <p className="text-sm text-gray-500">

@@ -340,7 +340,7 @@ export default function Pilotage() {
           <ScopeTab key={c} active={scope === c} color={catColor(c)} onClick={() => setScope(c)}>{c}</ScopeTab>
         ))}
       </div>
-      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
+      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs : {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => {
@@ -374,7 +374,7 @@ export default function Pilotage() {
       {comparable && <p className="-mt-3 text-[11px] text-gray-400">▲▼ variation vs période précédente équivalente ({formatDateShort(prevStart)} → {formatDateShort(prevEnd)})</p>}
 
       {/* Hero BI : CA par sous-période, actuel vs précédent (momentum & saisonnalité) */}
-      <Card title="Chiffre d'affaires par sous-période — actuel vs précédent">
+      <Card title="Chiffre d'affaires par sous-période : actuel vs précédent">
         <div className="h-64">
           {caTrend.cur.some((v) => v > 0) || (caTrend.prev || []).some((v) => v > 0) ? (
             <Bar data={{
@@ -402,7 +402,7 @@ export default function Pilotage() {
       </Card>
 
       {/* Tendance des casses / pertes — actuel vs précédent (pièces) */}
-      <Card title="Casse / perte par sous-période — actuel vs précédent">
+      <Card title="Casse / perte par sous-période : actuel vs précédent">
         <div className="h-56">
           {caTrend.casseCur.some((v) => v > 0) || (caTrend.cassePrev || []).some((v) => v > 0) ? (
             <Bar data={{
@@ -451,11 +451,11 @@ export default function Pilotage() {
       </div>
 
       {!analyse.parElement.length ? (
-        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune prestation sur la période — élargissez la plage.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune prestation sur la période : élargissez la plage.</p></Card>
       ) : (
         <>
           {/* Tendances colorées par catégorie — le plus sollicité */}
-          <Card title="Tendances par catégorie — le plus sollicité">
+          <Card title="Tendances par catégorie : le plus sollicité">
             <div className="grid gap-3 sm:grid-cols-2">
               {analyse.parCategorie.map((c) => {
                 const color = catColor(c.cat)
@@ -487,7 +487,7 @@ export default function Pilotage() {
           </Card>
 
           {/* Classement des éléments — triable par sollicitation ou par CA */}
-          <Card title="Analyse par élément — sollicitations, quantités, CA">
+          <Card title="Analyse par élément : sollicitations, quantités, CA">
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-xs font-semibold text-gray-400">Trier par :</span>
               <button onClick={() => setElementSort('count')} type="button"
@@ -692,7 +692,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
     )
   }
   return (
-    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}
+    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} : ${scopeLabel}`}
       panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
       <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>

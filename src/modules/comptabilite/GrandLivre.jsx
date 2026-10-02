@@ -211,7 +211,7 @@ function BalanceAuxiliaire({ bal }) {
     <Card className="!p-0 overflow-hidden">
       <div className="border-b border-gray-100 px-4 py-3 dark:border-white/10">
         <p className="font-bold text-gray-800 dark:text-gray-100">Balance Auxiliaire (Tiers)</p>
-        <p className="text-xs text-gray-500">Soldes des comptes de tiers — clients, fournisseurs, personnel, État.</p>
+        <p className="text-xs text-gray-500">Soldes des comptes de tiers : clients, fournisseurs, personnel, État.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

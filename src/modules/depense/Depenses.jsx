@@ -115,7 +115,7 @@ function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
           {!suggestions.length
-            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur — votre saisie sera utilisée.</p>
+            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur : votre saisie sera utilisée.</p>
             : <ul className="max-h-48 overflow-y-auto py-1">
                 {suggestions.map((u) => (
                   <li key={u.uid}
@@ -348,7 +348,7 @@ export default function Depenses() {
     await updateItem('depense_depenses', d.id, {
       justificatifRecu: true, justificatifRecuLe: Date.now(), justificatifRecuPar: user?.nom || user?.login || '—'
     })
-    await audit('depense', 'JUSTIFICATIF_CONFIRME', `${d.beneficiaireNom || '—'} — ${formatMoney(Number(d.montant) || 0)}`)
+    await audit('depense', 'JUSTIFICATIF_CONFIRME', `${d.beneficiaireNom || '—'} : ${formatMoney(Number(d.montant) || 0)}`)
     toast.success('Justificatif confirmé reçu ✓')
   }
 
@@ -369,8 +369,8 @@ export default function Depenses() {
     if (!d.categorie) return toast.error('Catégorie requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     if (!d.date) return toast.error('Date requise')
-    if (!d.description || !d.description.trim()) return toast.error('Description requise — précisez le motif de la dépense')
-    if (!d.beneficiaireNom || !d.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
+    if (!d.description || !d.description.trim()) return toast.error('Description requise : précisez le motif de la dépense')
+    if (!d.beneficiaireNom || !d.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis : identifiez qui reçoit la somme')
 
     setSaving(true)
     try {
@@ -378,13 +378,13 @@ export default function Depenses() {
         const { statutInitial } = await soumettreNouvelleDepense(d)
         toast.success(
           statutInitial === 'en_attente'
-            ? 'Demande de décaissement soumise — en attente d\'autorisation ✓'
+            ? 'Demande de décaissement soumise : en attente d\'autorisation ✓'
             : 'Dépense enregistrée ✓'
         )
       } else {
         const secteur = SECTEURS.find((s) => s.id === d.secteurId)
         await setItem('depense_depenses', modal.id, { ...d, id: modal.id })
-        await audit('depense', 'DEPENSE_EDIT', `${libelleSecteurSite(secteur, d)} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+        await audit('depense', 'DEPENSE_EDIT', `${libelleSecteurSite(secteur, d)} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Dépense mise à jour ✓')
         await alerterSiDepassement({ ...d, id: modal.id }, secteur)
       }
@@ -427,7 +427,7 @@ export default function Depenses() {
     const libelle = libelleSecteurSite(secteur, d)
     await notify({
       type: statut.key === 'depasse' ? 'danger' : 'warning',
-      title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
+      title: statut.key === 'depasse' ? `🔴 Budget dépassé : ${libelle}` : `🟠 Budget en alerte : ${libelle}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
       module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
@@ -464,7 +464,7 @@ export default function Depenses() {
       })
       await removeItem('depense_depenses', target.id)
       await audit('depense', 'DEPENSE_DELETE',
-        `${secteur?.label || target.secteurId} — ${formatMoney(Number(target.montant) || 0)}${target.categorie ? ` · ${target.categorie}` : ''}${target.description ? ` — ${target.description}` : ''} · Motif : ${motif}`,
+        `${secteur?.label || target.secteurId} : ${formatMoney(Number(target.montant) || 0)}${target.categorie ? ` · ${target.categorie}` : ''}${target.description ? ` : ${target.description}` : ''} · Motif : ${motif}`,
         { secteurId: target.secteurId, montant: Number(target.montant) || 0, categorie: target.categorie || null, date: target.date || null, motifSuppression: motif }
       )
       toast.success('Dépense supprimée ✓')
@@ -481,10 +481,10 @@ export default function Depenses() {
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard title="Total dépenses (liste affichée)" value={`${totalListe.toLocaleString('fr-FR')} FCFA`}
           sub={`${liste.length} dépense(s)`} icon={Receipt} accent="#B45309" />
-        <StatCard title="Budget alloué — autres secteurs" value={`${budgetAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
+        <StatCard title="Budget alloué : autres secteurs" value={`${budgetAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
           sub={`Dépensé ${depenseAutresSecteurs.toLocaleString('fr-FR')} FCFA · Reste ${resteAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
           icon={Building2} accent={resteAutresSecteurs < 0 ? '#dc2626' : '#0d9488'} valueColor={resteAutresSecteurs < 0 ? '#dc2626' : undefined} />
-        <StatCard title="Budget alloué — Caisse commune" value={`${budgetCaisseCommune.toLocaleString('fr-FR')} FCFA`}
+        <StatCard title="Budget alloué : Caisse commune" value={`${budgetCaisseCommune.toLocaleString('fr-FR')} FCFA`}
           sub={`Dépensé ${depenseCaisseCommune.toLocaleString('fr-FR')} FCFA · Reste ${resteCaisseCommune.toLocaleString('fr-FR')} FCFA`}
           icon={PiggyBank} accent={resteCaisseCommune < 0 ? '#dc2626' : '#7c3aed'} valueColor={resteCaisseCommune < 0 ? '#dc2626' : undefined} />
       </div>
@@ -740,7 +740,7 @@ export default function Depenses() {
                 {modal.data.secteurId === 'logistique' && (
                   <FormGroup label="Site *" hint="Budget alloué séparément par site.">
                     <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
-                      <option value="">— Choisir —</option>
+                      <option value="">Choisir</option>
                       {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </Select>
                   </FormGroup>
@@ -776,7 +776,7 @@ export default function Depenses() {
                     onChange={(e) => set('financePar', e.target.checked ? 'caisse_commune' : '')} />
                   <span>
                     💰 Payée depuis la <strong>Caisse commune</strong>
-                    <span className="block text-xs text-gray-500">Reste affichée sous ce secteur, mais ne consomme pas son budget — c'est le budget de la Caisse commune qui est réduit à la place.</span>
+                    <span className="block text-xs text-gray-500">Reste affichée sous ce secteur, mais ne consomme pas son budget : c'est le budget de la Caisse commune qui est réduit à la place.</span>
                   </span>
                 </label>
               )}
@@ -810,9 +810,9 @@ export default function Depenses() {
                     </button>
                   </div>
                   {modal.data.concerneAutreSecteur && (
-                    <FormGroup label="Secteur concerné" className="mt-2" hint="Cette dépense apparaîtra aussi quand on filtrera sur ce secteur — le montant reste compté une seule fois, sur la Caisse commune.">
+                    <FormGroup label="Secteur concerné" className="mt-2" hint="Cette dépense apparaîtra aussi quand on filtrera sur ce secteur : le montant reste compté une seule fois, sur la Caisse commune.">
                       <Select value={(modal.data.secteursConcernes || [])[0] || ''} onChange={(e) => set('secteursConcernes', e.target.value ? [e.target.value] : [])}>
-                        <option value="">— Choisir —</option>
+                        <option value="">Choisir</option>
                         {SECTEURS.filter((s) => s.id !== 'divers').map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </Select>
                     </FormGroup>
@@ -842,7 +842,7 @@ export default function Depenses() {
                 const raison = raisonAutorisation(modal.data)
                 return raison ? (
                   <p className="flex items-start gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">
-                    💰 Cette dépense sera envoyée en demande d'autorisation au PAU — {raison}.
+                    💰 Cette dépense sera envoyée en demande d'autorisation au PAU : {raison}.
                   </p>
                 ) : null
               })()}
@@ -863,7 +863,7 @@ export default function Depenses() {
 
             {/* Bénéficiaire */}
             <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="text-red-500">*</span> <span className="font-medium normal-case text-amber-500">— qui reçoit l'argent</span></p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="text-red-500">*</span> <span className="font-medium normal-case text-amber-500">: qui reçoit l'argent</span></p>
               <div className="mb-2 flex gap-2">
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
@@ -941,7 +941,7 @@ export default function Depenses() {
                 </button>
               </div>
               {modal.data.justificatifRequis === true && (
-                <p className="mt-2 text-xs text-gray-500">Le bénéficiaire devra rapporter un reçu — sinon une alerte reste active sur le Dashboard jusqu'à confirmation.</p>
+                <p className="mt-2 text-xs text-gray-500">Le bénéficiaire devra rapporter un reçu : sinon une alerte reste active sur le Dashboard jusqu'à confirmation.</p>
               )}
             </div>
           </div>
@@ -986,19 +986,19 @@ export default function Depenses() {
                   <div key={i} className="grid grid-cols-2 items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 sm:grid-cols-12">
                     <div className="space-y-1 sm:col-span-2">
                       <Select value={r.secteurId} onChange={(e) => setLigne(i, 'secteurId', e.target.value)}>
-                        <option value="">— Secteur —</option>
+                        <option value="">Secteur</option>
                         {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </Select>
                       {r.secteurId === 'logistique' && (
                         <Select value={r.site} onChange={(e) => setLigne(i, 'site', e.target.value)}>
-                          <option value="">— Site —</option>
+                          <option value="">Site</option>
                           {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                         </Select>
                       )}
                     </div>
                     <div className="sm:col-span-2">
                       <Select value={r.categorie} onChange={(e) => setLigne(i, 'categorie', e.target.value)}>
-                        <option value="">— Catégorie —</option>
+                        <option value="">Catégorie</option>
                         {CATEGORIES_DEPENSE.map((c) => <option key={c.id} value={c.label}>{c.label}</option>)}
                       </Select>
                     </div>
@@ -1014,7 +1014,7 @@ export default function Depenses() {
                     </div>
                     <div className="flex items-center justify-center sm:col-span-1">
                       {r.secteurId && r.secteurId !== 'divers' && (
-                        <input type="checkbox" title="💰 Payée depuis la Caisse commune — ne consomme pas le budget de ce secteur"
+                        <input type="checkbox" title="💰 Payée depuis la Caisse commune : ne consomme pas le budget de ce secteur"
                           checked={r.financePar === 'caisse_commune'}
                           onChange={(e) => setLigne(i, 'financePar', e.target.checked ? 'caisse_commune' : '')} />
                       )}

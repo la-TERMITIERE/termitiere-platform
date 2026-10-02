@@ -4,8 +4,8 @@ import CrudList from './CrudList'
 import { COL } from './store/rhStore'
 
 const NOTES = [
-  { value: 'A', label: 'A — Excellent' }, { value: 'B', label: 'B — Bon' },
-  { value: 'C', label: 'C — Satisfaisant' }, { value: 'D', label: 'D — À améliorer' }
+  { value: 'A', label: 'A : Excellent' }, { value: 'B', label: 'B : Bon' },
+  { value: 'C', label: 'C : Satisfaisant' }, { value: 'D', label: 'D : À améliorer' }
 ]
 const toneNote = (v) => ({ A: 'success', B: 'info', C: 'warning', D: 'danger' }[v] || 'neutral')
 

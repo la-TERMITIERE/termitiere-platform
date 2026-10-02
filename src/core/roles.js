@@ -12,20 +12,20 @@
 // approbateur — d'où leur présence dans les groupes ci-dessous.
 
 export const ROLES = [
-  { value: 'super_admin',      label: 'Super-admin',       desc: 'Concepteur — contrôle total + technique' },
-  { value: 'info',             label: 'Info',              desc: 'Informatique — accès total, comme un administrateur' },
-  { value: 'assistant_pau',    label: 'Assistant PAU',     desc: 'Assiste le PAU — accès total, comme Info' },
-  { value: 'pau',              label: 'PAU',               desc: 'Direction — contrôle total sur les applications' },
+  { value: 'super_admin',      label: 'Super-admin',       desc: 'Concepteur : contrôle total + technique' },
+  { value: 'info',             label: 'Info',              desc: 'Informatique : accès total, comme un administrateur' },
+  { value: 'assistant_pau',    label: 'Assistant PAU',     desc: 'Assiste le PAU : accès total, comme Info' },
+  { value: 'pau',              label: 'PAU',               desc: 'Direction : contrôle total sur les applications' },
   { value: 'ge',               label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
-  { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction — accès total à tous les modules' },
-  { value: 'superviseur',      label: 'Superviseur',       desc: 'Lecture seule — voit uniquement les modules qui lui sont attribués, aucune action' },
+  { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction : accès total à tous les modules' },
+  { value: 'superviseur',      label: 'Superviseur',       desc: 'Lecture seule : voit uniquement les modules qui lui sont attribués, aucune action' },
   { value: 'gerant',           label: 'Gérant',            desc: 'Approuve les sorties et les demandes' },
   { value: 'agent',            label: 'Agent',             desc: 'Saisie des données + demandes d\'autorisation' },
   { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres et journal)' },
-  { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie — présences, cantine, incidents' },
-  { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif — E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
-  { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro — accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },
-  { value: 'partenaire',       label: 'Partenaire',        desc: 'Externe — lecture seule sur SES modules uniquement (sectorisé) ; voit le pilotage, ne modifie rien' },
+  { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie : présences, cantine, incidents' },
+  { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif : E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
+  { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro : accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },
+  { value: 'partenaire',       label: 'Partenaire',        desc: 'Externe : lecture seule sur SES modules uniquement (sectorisé) ; voit le pilotage, ne modifie rien' },
 ]
 
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
@@ -116,7 +116,10 @@ export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)
 // reste de la hiérarchie (gérant, superviseur, contrôleur, chefs de projet, secrétaires,
 // agents, partenaires…) en est exclu : ces volets tracent l'activité de tous, y compris
 // la leur, et exposent la configuration sensible du module.
-export const ADMIN_VOLETS_ROLES = FULL_ACCESS_ROLES
+// L'Assistant PAU en est EXCLU (décision explicite du 02/10/2026) : malgré son accès
+// total ailleurs, il ne voit ni le Journal/Historique ni les Paramètres d'aucun module.
+export const ADMIN_VOLETS_ROLES = FULL_ACCESS_ROLES.filter((r) => r !== 'assistant_pau')
+export const peutVoirVoletsAdmin = (r) => ADMIN_VOLETS_ROLES.includes(r)
 
 // MAXI LOGISTIQUE : rôles qui ne doivent voir AUCUN montant (tarifs, totaux, frais,
 // dépenses). Historiquement la secrétaire en était privée — accès explicitement

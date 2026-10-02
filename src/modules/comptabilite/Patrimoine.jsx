@@ -70,7 +70,7 @@ export default function Patrimoine() {
           <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
             <Building2 className="text-orange-600" /> Immobilier / Patrimoine
           </h1>
-          <p className="text-sm text-gray-500">Biens immobiliers de l'entreprise — terrains, bâtiments, locaux</p>
+          <p className="text-sm text-gray-500">Biens immobiliers de l'entreprise : terrains, bâtiments, locaux</p>
         </div>
         <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouveau bien</Button>
       </header>
@@ -113,7 +113,7 @@ export default function Patrimoine() {
                 {b.superficie && <p className="flex items-center gap-1.5"><Ruler size={13} className="text-gray-400" /> {b.superficie}</p>}
                 {b.titreFoncier && <p className="flex items-center gap-1.5"><FileText size={13} className="text-gray-400" /> TF : {b.titreFoncier}</p>}
                 {b.dateAcquisition && <p className="text-xs text-gray-400">Acquis le {formatDateShort(b.dateAcquisition)}</p>}
-                {Number(b.loyerMensuel) > 0 && <p className="text-green-600">Loyer : {formatMoney(b.loyerMensuel)}/mois{b.locataire ? ` — ${b.locataire}` : ''}</p>}
+                {Number(b.loyerMensuel) > 0 && <p className="text-green-600">Loyer : {formatMoney(b.loyerMensuel)}/mois{b.locataire ? ` : ${b.locataire}` : ''}</p>}
                 {b.affectation && <p className="text-xs text-gray-400">Affectation : {b.affectation}</p>}
               </div>
               <div className="mt-auto flex justify-end gap-1 pt-1">
@@ -134,7 +134,7 @@ export default function Patrimoine() {
           <div className="space-y-3">
             <Champ label="Désignation">
               <input value={modal.designation} onChange={(e) => setModal({ ...modal, designation: e.target.value })}
-                placeholder="ex. Immeuble R+2 — Adidogomé" className="input-base" />
+                placeholder="ex. Immeuble R+2 : Adidogomé" className="input-base" />
             </Champ>
             <div className="grid grid-cols-2 gap-3">
               <Champ label="Nature du bien">

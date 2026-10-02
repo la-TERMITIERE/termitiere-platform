@@ -18,7 +18,7 @@ const ACCENTS = {
 
 export default function ChampAutocomplete({
   value, onChange, suggestions = [], placeholder = '', className, maxSuggestions = 8,
-  getLabel = (s) => s, onSelect, emptyLabel = 'Aucune suggestion — votre saisie sera utilisée.',
+  getLabel = (s) => s, onSelect, emptyLabel = 'Aucune suggestion : votre saisie sera utilisée.',
   accent = 'teal', autoFocus = false
 }) {
   const [open, setOpen] = useState(false)

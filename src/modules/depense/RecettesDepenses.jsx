@@ -117,7 +117,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       if (secteurId === 'logistique') {
         const siteEffectif = site || 'lome'
         const siteLbl = LOGISTIQUE_SITES.find((x) => x.id === siteEffectif)?.label || siteEffectif
-        return [{ ...s, secteurId: 'logistique', site: siteEffectif, label: `${s.label} — ${siteLbl}` }]
+        return [{ ...s, secteurId: 'logistique', site: siteEffectif, label: `${s.label} : ${siteLbl}` }]
       }
       return [{ ...s, secteurId, site: null }]
     }
@@ -129,8 +129,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const headerColor = secteurId ? (SECTEURS.find((s) => s.id === secteurId)?.color || '#B45309') : '#B45309'
   const headerTitre = secteurId ? (masquerRevenu ? 'Dépenses' : 'Recettes & Dépenses') : 'Budget'
   const headerSousTitre = secteurId
-    ? `${secteursAffiches[0]?.label || ''} — bilan financier mensuel`
-    : 'Bilan financier consolidé — tous les secteurs'
+    ? `${secteursAffiches[0]?.label || ''} : bilan financier mensuel`
+    : 'Bilan financier consolidé : tous les secteurs'
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -299,7 +299,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           updatedAt: Date.now()
         })
         await audit('depense', estAllocation ? 'BUDGET_PROPOSE' : 'BUDGET_REVISION_PROPOSEE',
-          `${revision.secteurLabel} — ${fmt(nouveau)} FCFA proposés, en attente de confirmation`,
+          `${revision.secteurLabel} : ${fmt(nouveau)} FCFA proposés, en attente de confirmation`,
           { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
         // Le secteur (pas l'administration) doit confirmer la réception avant que le
         // montant ne compte comme « Budget alloué » dans les KPI.
@@ -307,13 +307,13 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         if (destinataires.length) {
           await notify({
             type: 'demande',
-            title: `💰 Budget proposé — ${revision.secteurLabel}`,
-            body: `${fmt(nouveau)} FCFA pour ${MOIS_LABELS[mois - 1]} ${annee} — confirmez la réception pour l'activer.`,
+            title: `💰 Budget proposé : ${revision.secteurLabel}`,
+            body: `${fmt(nouveau)} FCFA pour ${MOIS_LABELS[mois - 1]} ${annee} : confirmez la réception pour l'activer.`,
             module: 'depense', forUsers: destinataires, excludeUid: user?.uid,
             link: revision.secteurId === 'logistique' && revision.site ? `/logistique/${revision.site}/finances` : (ROUTE_FINANCES_PAR_SECTEUR[revision.secteurId] || '/depense/recettes-depenses')
           }).catch(() => {})
         }
-        toast.success('Budget proposé — en attente de confirmation du secteur ✓')
+        toast.success('Budget proposé : en attente de confirmation du secteur ✓')
         setRevision(null)
         return
       }
@@ -325,18 +325,18 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       })
       const actionAudit = estCaisseCommune ? 'BUDGET_AJOUTE' : (estAllocation ? 'BUDGET_ALLOUE' : 'BUDGET_REVISE')
       const libelleAudit = estCaisseCommune
-        ? `${revision.secteurLabel} — +${fmt(nouveau - ancien)} FCFA ajoutés (total ${fmt(nouveau)} FCFA)${motif ? ' — ' + motif : ''}`
+        ? `${revision.secteurLabel} : +${fmt(nouveau - ancien)} FCFA ajoutés (total ${fmt(nouveau)} FCFA)${motif ? ' : ' + motif : ''}`
         : estAllocation
-          ? `${revision.secteurLabel} — budget alloué ${fmt(nouveau)} FCFA`
-          : `${revision.secteurLabel} — ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${motif})`
+          ? `${revision.secteurLabel} : budget alloué ${fmt(nouveau)} FCFA`
+          : `${revision.secteurLabel} : ${fmt(ancien)} → ${fmt(nouveau)} FCFA (${motif})`
       await audit('depense', actionAudit, libelleAudit, { secteurId: revision.secteurId, annee, mois, ancien, nouveau })
       // Réservé à l'administration : montant alloué/révisé/ajouté pour un secteur.
       await notify({
         type: 'info',
-        title: estCaisseCommune ? `➕ Caisse commune — ${revision.secteurLabel}` : (estAllocation ? `💰 Budget alloué — ${revision.secteurLabel}` : `🔄 Budget révisé — ${revision.secteurLabel}`),
+        title: estCaisseCommune ? `➕ Caisse commune : ${revision.secteurLabel}` : (estAllocation ? `💰 Budget alloué : ${revision.secteurLabel}` : `🔄 Budget révisé : ${revision.secteurLabel}`),
         body: estCaisseCommune
-          ? `+${fmt(nouveau - ancien)} FCFA ajoutés — nouveau total ${fmt(nouveau)} FCFA.`
-          : estAllocation ? `${fmt(nouveau)} FCFA alloués pour ${MOIS_LABELS[mois - 1]} ${annee}.` : `${fmt(ancien)} → ${fmt(nouveau)} FCFA — ${motif}`,
+          ? `+${fmt(nouveau - ancien)} FCFA ajoutés : nouveau total ${fmt(nouveau)} FCFA.`
+          : estAllocation ? `${fmt(nouveau)} FCFA alloués pour ${MOIS_LABELS[mois - 1]} ${annee}.` : `${fmt(ancien)} → ${fmt(nouveau)} FCFA : ${motif}`,
         module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
         link: '/depense/recettes-depenses', state: { openSecteurId: revision.secteurId, annee, mois }
       }).catch(() => {})
@@ -357,7 +357,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       const ancien = s.alloue
       const nouveau = s.montantPropose
       const entry = {
-        id: genId(), ancien, nouveau, motif: `${s.motifPropose || 'Allocation'} — confirmé reçu`,
+        id: genId(), ancien, nouveau, motif: `${s.motifPropose || 'Allocation'} : confirmé reçu`,
         date: Date.now(), auteur: user?.nom || user?.login || '—'
       }
       const revisions = [...s.revisionsBudget, entry]
@@ -365,9 +365,9 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         id: s.budgetId, secteurId: s.secteurId, site: s.site || null, annee, mois, montant: nouveau, revisions,
         montantPropose: null, motifPropose: null, statutValidation: null, updatedAt: Date.now()
       })
-      await audit('depense', 'BUDGET_RECEPTION_CONFIRMEE', `${s.label} — ${fmt(nouveau)} FCFA confirmés reçus`, { secteurId: s.secteurId, site: s.site || null, annee, mois, ancien, nouveau })
+      await audit('depense', 'BUDGET_RECEPTION_CONFIRMEE', `${s.label} : ${fmt(nouveau)} FCFA confirmés reçus`, { secteurId: s.secteurId, site: s.site || null, annee, mois, ancien, nouveau })
       await notify({
-        type: 'success', title: `✅ Budget confirmé reçu — ${s.label}`,
+        type: 'success', title: `✅ Budget confirmé reçu : ${s.label}`,
         body: `${fmt(nouveau)} FCFA confirmés par ${user?.nom || user?.login || '—'} pour ${MOIS_LABELS[mois - 1]} ${annee}.`,
         module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
         link: '/depense/recettes-depenses', state: { openSecteurId: s.id, annee, mois }
@@ -385,7 +385,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     setRevSaving(true)
     try {
       await removeItem('depense_budgets', revision.id)
-      await audit('depense', 'BUDGET_SUPPRIME', `${revision.secteurLabel} — budget supprimé (${MOIS_LABELS[mois - 1]} ${annee})`, { secteurId: revision.secteurId, annee, mois })
+      await audit('depense', 'BUDGET_SUPPRIME', `${revision.secteurLabel} : budget supprimé (${MOIS_LABELS[mois - 1]} ${annee})`, { secteurId: revision.secteurId, annee, mois })
       toast.success('Budget supprimé ✓')
       setRevision(null)
     } finally {
@@ -455,7 +455,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         id: ctx.budgetId, secteurId: ctx.secteurId, site: ctx.site || null, annee, mois,
         montant: dernier ? dernier.nouveau : 0, revisions, updatedAt: Date.now()
       })
-      await audit('depense', 'BUDGET_APPORT_MODIFIE', `${ctx.secteurLabel} — apport modifié (${fmt(montant)} FCFA)`, { secteurId: ctx.secteurId, annee, mois })
+      await audit('depense', 'BUDGET_APPORT_MODIFIE', `${ctx.secteurLabel} : apport modifié (${fmt(montant)} FCFA)`, { secteurId: ctx.secteurId, annee, mois })
       toast.success('Apport modifié ✓')
       setApportDetail(null)
     } finally {
@@ -478,7 +478,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         id: ctx.budgetId, secteurId: ctx.secteurId, site: ctx.site || null, annee, mois,
         montant: dernier ? dernier.nouveau : 0, revisions, updatedAt: Date.now()
       })
-      await audit('depense', 'BUDGET_APPORT_SUPPRIME', `${ctx.secteurLabel} — apport supprimé`, { secteurId: ctx.secteurId, annee, mois })
+      await audit('depense', 'BUDGET_APPORT_SUPPRIME', `${ctx.secteurLabel} : apport supprimé`, { secteurId: ctx.secteurId, annee, mois })
       toast.success('Apport supprimé ✓')
       setApportDetail((d) => (d && d.entry.id === entry.id ? null : d))
     } finally {
@@ -502,12 +502,12 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     if (!nouvelleDepense.categorie) return toast.error('Catégorie requise')
     if (!nouvelleDepense.montant || Number(nouvelleDepense.montant) <= 0) return toast.error('Montant requis')
     if (!nouvelleDepense.date) return toast.error('Date requise')
-    if (!nouvelleDepense.description || !nouvelleDepense.description.trim()) return toast.error('Description requise — précisez le motif de la dépense')
-    if (!nouvelleDepense.beneficiaireNom || !nouvelleDepense.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
+    if (!nouvelleDepense.description || !nouvelleDepense.description.trim()) return toast.error('Description requise : précisez le motif de la dépense')
+    if (!nouvelleDepense.beneficiaireNom || !nouvelleDepense.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis : identifiez qui reçoit la somme')
     setDepenseSaving(true)
     try {
       const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: secteurId === 'logistique' ? (site || 'lome') : undefined }, { user, budgets, depenses, seuils })
-      toast.success(statutInitial === 'en_attente' ? 'Demande de décaissement soumise — en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
+      toast.success(statutInitial === 'en_attente' ? 'Demande de décaissement soumise : en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
       setNouvelleDepense(null)
     } finally {
       setDepenseSaving(false)
@@ -566,7 +566,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       {ongletBudget !== 'secteurs' ? (
       <div className="space-y-3">
         <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-          Tous les apports/ajouts de budget du mois, tous secteurs confondus — historique consolidé. Choisis un secteur ci-dessous pour ajouter une somme directement, sans passer par sa carte.
+          Tous les apports/ajouts de budget du mois, tous secteurs confondus : historique consolidé. Choisis un secteur ci-dessous pour ajouter une somme directement, sans passer par sa carte.
         </div>
         {!lectureSeule && (
           <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/80 p-3 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150">
@@ -578,7 +578,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               if (s) ouvrirRevision(s)
               setSecteurAjoutChoisi('')
             }}>
-              <option value="">— Choisir un secteur —</option>
+              <option value="">Choisir un secteur</option>
               {parSecteur.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </Select>
           </div>
@@ -586,7 +586,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         {apportsTous.length > 0 && (
           <button onClick={() => setTriApportsDesc((v) => !v)}
             className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-amber-700">
-            <History size={12} /> Trié par date {triApportsDesc ? '(plus récent d\'abord)' : '(plus ancien d\'abord)'} — inverser
+            <History size={12} /> Trié par date {triApportsDesc ? '(plus récent d\'abord)' : '(plus ancien d\'abord)'} : inverser
           </button>
         )}
         {apportsTous.length === 0 ? (
@@ -723,7 +723,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   <Send size={13} className="shrink-0 text-amber-600" />
                   <span className="text-xs text-amber-800">
                     <b>{fmt(s.montantPropose)} FCFA</b> proposés par {s.proposeParText}
-                    {s.motifPropose ? ` — ${s.motifPropose}` : ''} · en attente de confirmation de réception
+                    {s.motifPropose ? ` : ${s.motifPropose}` : ''} · en attente de confirmation de réception
                   </span>
                   {!lectureSeule && (
                     <button onClick={() => validerReceptionBudget(s)} disabled={validationBusy === s.budgetId}
@@ -831,7 +831,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
       {/* Détail financier d'un secteur — récapitulatif complet du mois */}
       <Modal open={!!secteurDetail} onClose={() => setSecteurDetail(null)} size="md"
-        title={secteurDetail ? `Détail financier — ${secteurDetail.label} · ${MOIS_LABELS[mois - 1]} ${annee}` : 'Détail'}
+        title={secteurDetail ? `Détail financier : ${secteurDetail.label} · ${MOIS_LABELS[mois - 1]} ${annee}` : 'Détail'}
         panelClassName={theme.gradient}
         footer={<Button variant="outline" onClick={() => setSecteurDetail(null)}>Fermer</Button>}>
         {secteurDetail && (
@@ -974,7 +974,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
       {/* Allocation (1ère fois) / Révision (budget existant) / Ajout cumulatif (Caisse commune) */}
       <Modal open={!!revision} onClose={() => setRevision(null)} size="sm"
-        title={revision ? (revision.secteurId === 'divers' ? `Ajouter un apport — ${revision.secteurLabel}` : `${revision.montantActuel > 0 ? 'Réviser' : 'Allouer'} le budget — ${revision.secteurLabel}`) : 'Budget'}
+        title={revision ? (revision.secteurId === 'divers' ? `Ajouter un apport : ${revision.secteurLabel}` : `${revision.montantActuel > 0 ? 'Réviser' : 'Allouer'} le budget : ${revision.secteurLabel}`) : 'Budget'}
         panelClassName={theme.gradient}>
         {revision && (() => {
           const estAllocation = revision.montantActuel === 0
@@ -984,7 +984,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           <div className="space-y-4">
             {requiertValidation && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-                <Send size={12} className="mr-1 inline" /> Ce montant sera envoyé au secteur pour confirmation — il ne comptera
+                <Send size={12} className="mr-1 inline" /> Ce montant sera envoyé au secteur pour confirmation : il ne comptera
                 comme « Budget alloué » qu'une fois la réception confirmée.
               </div>
             )}
@@ -1006,7 +1006,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                     </div>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-400">
-                    S'ADDITIONNE au montant déjà présent — pas de remplacement.
+                    S'ADDITIONNE au montant déjà présent : pas de remplacement.
                     {Number(revMontant) > 0 ? ` Nouveau total : ${fmt(revision.montantActuel + Number(revMontant))} FCFA.` : ''}
                   </p>
                   <div className="mt-2">
@@ -1030,7 +1030,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
                     </div>
                   </div>
-                  <p className="mt-1 text-[11px] text-gray-400">Première allocation du mois — aucun motif requis.</p>
+                  <p className="mt-1 text-[11px] text-gray-400">Première allocation du mois : aucun motif requis.</p>
                 </div>
               ) : (
                 <>
@@ -1196,7 +1196,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                 <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Catégorie</label>
                 <select value={nouvelleDepense.categorie} onChange={(e) => setNouvelleDepense((d) => ({ ...d, categorie: e.target.value }))}
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300">
-                  <option value="">— Choisir —</option>
+                  <option value="">Choisir</option>
                   {CATEGORIES_DEPENSE.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
@@ -1240,7 +1240,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   onChange={(e) => setNouvelleDepense((d) => ({ ...d, financePar: e.target.checked ? 'caisse_commune' : '' }))} />
                 <span>
                   💰 Payée depuis la <strong>Caisse commune</strong>
-                  <span className="block text-[11px] text-gray-500">Ne consomme pas le budget de ce secteur — réduit celui de la Caisse commune à la place.</span>
+                  <span className="block text-[11px] text-gray-500">Ne consomme pas le budget de ce secteur : réduit celui de la Caisse commune à la place.</span>
                 </span>
               </label>
               <p className="text-[11px] text-gray-400">

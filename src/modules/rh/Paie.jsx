@@ -42,7 +42,7 @@ export default function Paie() {
     }
     toast.success(`${n} bulletin(s) en brouillon pour ${moisLabel(mois)}${saut ? ` · ${saut} déjà validé(s) conservé(s)` : ''}`)
   }
-  async function valider(b) { await updateItem(COL.bulletins, b.id, { statut: 'valide' }); toast.success('Bulletin validé — comptabilisé ✓') }
+  async function valider(b) { await updateItem(COL.bulletins, b.id, { statut: 'valide' }); toast.success('Bulletin validé : comptabilisé ✓') }
   async function marquerPaye(b) { await updateItem(COL.bulletins, b.id, { statut: 'paye' }); toast.success('Marqué payé') }
   async function validerMois() {
     const brouillons = bulletinsMois.filter((b) => b.statut === 'brouillon')
@@ -64,7 +64,7 @@ export default function Paie() {
           <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
             <Receipt className="text-sky-600" /> Paie &amp; Bulletins
           </h1>
-          <p className="text-sm text-gray-500">Génération des bulletins mensuels — CNSS et ITS (barème Togo).</p>
+          <p className="text-sm text-gray-500">Génération des bulletins mensuels : CNSS et ITS (barème Togo).</p>
         </div>
         <div className="flex items-end gap-2">
           <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className="input-base !w-auto" />

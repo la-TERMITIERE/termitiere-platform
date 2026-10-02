@@ -282,7 +282,7 @@ export default function Dashboard() {
         <div>
           <h2 className="text-lg font-extrabold drop-shadow">{params.nom}</h2>
           <p className="text-sm text-orange-50/90">
-            Enfants · Personnel · Présences · Paiements · Incidents — {formatDateShort(today)}
+            Enfants · Personnel · Présences · Paiements · Incidents : {formatDateShort(today)}
           </p>
         </div>
       </div>
@@ -386,7 +386,7 @@ export default function Dashboard() {
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsPartielsNonSoldes.map((e) => (
                   <span key={e.id} className="rounded-full border border-amber-400 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                    {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
+                    {e.prenom} {e.nom} : reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
                   </span>
                 ))}
               </div>
@@ -410,11 +410,11 @@ export default function Dashboard() {
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsMaternelleNonSoldes.map((e) => (
                   <span key={e.id} className="rounded-full border border-emerald-400 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                    {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
+                    {e.prenom} {e.nom} : reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-emerald-600 mt-1">Frais de scolarité annuels — 2ᵉ tranche attendue 6 mois après le 1er versement · Cliquez pour accéder aux paiements</p>
+              <p className="text-xs text-emerald-600 mt-1">Frais de scolarité annuels : 2ᵉ tranche attendue 6 mois après le 1er versement · Cliquez pour accéder aux paiements</p>
             </div>
           </div>
         </button>
@@ -434,7 +434,7 @@ export default function Dashboard() {
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsAbsentsRepetes.map((e) => (
                   <span key={e.id} className="rounded-full border border-orange-400 bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
-                    {e.prenom} {e.nom} — {e.joursAbsents}j consécutifs
+                    {e.prenom} {e.nom} : {e.joursAbsents}j consécutifs
                   </span>
                 ))}
               </div>
@@ -590,7 +590,7 @@ export default function Dashboard() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Personnel du jour */}
         <div className="rounded-3xl border border-white/50 bg-white/40 p-4 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 md:p-5">
-          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Personnel — pointage du jour</h3>
+          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Personnel : pointage du jour</h3>
           {personnelAujourdhui.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">Aucun membre du personnel actif.</p>
           ) : (
@@ -732,7 +732,7 @@ export default function Dashboard() {
       <Modal
         open={modal === 'presences'}
         onClose={() => setModal(null)}
-        title={`Présences du jour — ${formatDateShort(today)}`}
+        title={`Présences du jour : ${formatDateShort(today)}`}
         size="lg"
         panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >
@@ -770,7 +770,7 @@ export default function Dashboard() {
       <Modal
         open={modal === 'impayes'}
         onClose={() => setModal(null)}
-        title={`💰 Enfants non à jour — ${enfantsNonPayes.length} concerné(s)`}
+        title={`💰 Enfants non à jour : ${enfantsNonPayes.length} concerné(s)`}
         size="md"
         panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >

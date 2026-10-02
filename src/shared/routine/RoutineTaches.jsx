@@ -110,9 +110,9 @@ function LigneTache({ it, color, perUser, showHeure, checksDate, peutAgir, estAu
           )}
           {it.titre}
         </p>
-        {enRetard && <p className="mt-0.5 text-[11px] font-semibold text-red-500">En retard — prévue à {it.heure}</p>}
+        {enRetard && <p className="mt-0.5 text-[11px] font-semibold text-red-500">En retard : prévue à {it.heure}</p>}
         {perUser && !jeLaiFaite && cliquable && (
-          <p className="mt-0.5 text-[11px] font-medium text-amber-600">À effectuer par chaque agent — cochez lorsque vous l'avez faite.</p>
+          <p className="mt-0.5 text-[11px] font-medium text-amber-600">À effectuer par chaque agent : cochez lorsque vous l'avez faite.</p>
         )}
         {it.personnalisee && it.createdBy && peutVoirTracabilite && (
           <p className="mt-0.5 text-xs text-gray-400">Ajouté par {it.createdBy}</p>
@@ -125,7 +125,7 @@ function LigneTache({ it, color, perUser, showHeure, checksDate, peutAgir, estAu
             {perUser && <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Effectué par</p>}
             {listeEffectues.map((ev, i) => (
               <p key={i} className="text-xs font-semibold text-green-600">
-                ✓ {new Date(ev.le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} — {ev.par || 'Inconnu'}
+                ✓ {new Date(ev.le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} : {ev.par || 'Inconnu'}
               </p>
             ))}
           </div>
@@ -276,7 +276,7 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
     if (notifierAssignateur && !estFait && item.assigneParUid && item.assigneParUid !== user.uid) {
       notify({
         type: 'info',
-        title: `✅ Tâche effectuée — ${item.assigneNom || user.nom}`,
+        title: `✅ Tâche effectuée : ${item.assigneNom || user.nom}`,
         body: `${item.titre}${item.heure ? ` (prévue à ${item.heure})` : ''}`,
         module: moduleId, forUsers: [item.assigneParUid], link: `/${moduleId}/routine`
       })
@@ -427,7 +427,7 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
         <div>
           <h2 className="text-lg font-extrabold">{titre}</h2>
           <p className="text-sm text-white/80">
-            {description || 'Checklist quotidienne, organisée par catégorie. Cochez chaque tâche une fois effectuée — la liste se réinitialise automatiquement le lendemain.'}
+            {description || 'Checklist quotidienne, organisée par catégorie. Cochez chaque tâche une fois effectuée : la liste se réinitialise automatiquement le lendemain.'}
           </p>
         </div>
       </div>
@@ -496,14 +496,14 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
 
       {!estAujourdhui && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-          Consultation d'une journée passée — lecture seule, les cases ne peuvent plus être modifiées ici.
+          Consultation d'une journée passée : lecture seule, les cases ne peuvent plus être modifiées ici.
         </div>
       )}
 
       {planningPersonnel && planningParEmploye.length > 0 && (
         <div className="space-y-4">
           <h3 className="flex items-center gap-1.5 text-sm font-bold text-gray-700">
-            <AlarmClock size={15} style={{ color }} /> Planning personnel — par employé
+            <AlarmClock size={15} style={{ color }} /> Planning personnel : par employé
           </h3>
           {planningParEmploye.map(([uid, nom, taches]) => {
             const faites = taches.filter((t) => checksDate[t.id]?.fait).length
@@ -585,7 +585,7 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
               <textarea className="input-base min-h-[110px]" value={modal.data.titres || ''}
                 onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, titres: e.target.value } }))}
                 placeholder={'ex :\nNourrir les poules\nNettoyer les enclos'} />
-              <Hint>Une tâche par ligne — chaque ligne devient une tâche indépendante pour chaque agent sélectionné ci-dessous.</Hint>
+              <Hint>Une tâche par ligne : chaque ligne devient une tâche indépendante pour chaque agent sélectionné ci-dessous.</Hint>
             </FormGroup>
             <FormGroup label="Assigner à" required={assignationObligatoire}>
               <label className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-gray-700">
@@ -611,12 +611,12 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
                 })}
                 {!employesDisponibles.length && <p className="text-xs text-gray-600">Aucun agent disponible.</p>}
               </div>
-              <Hint>Sélectionnez un ou plusieurs agents — chacun reçoit sa propre copie de ces tâches (donnez la même tâche à tous d'un coup, ou une série à une ou plusieurs personnes).</Hint>
+              <Hint>Sélectionnez un ou plusieurs agents : chacun reçoit sa propre copie de ces tâches (donnez la même tâche à tous d'un coup, ou une série à une ou plusieurs personnes).</Hint>
             </FormGroup>
             <FormGroup label="Heure prévue" required={assignationObligatoire}>
               <Input type="time" value={modal.data.heure || ''}
                 onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, heure: e.target.value } }))} />
-              <Hint>S'applique à toutes les tâches de cette liste — une alerte apparaîtra sur le tableau de bord de chaque agent à partir de cette heure.</Hint>
+              <Hint>S'applique à toutes les tâches de cette liste : une alerte apparaîtra sur le tableau de bord de chaque agent à partir de cette heure.</Hint>
             </FormGroup>
           </div>
         ) : (
@@ -639,10 +639,10 @@ export default function RoutineTaches({ moduleId, collectionPrefix, seedTaches =
                   <Select value={modal.data.assigneUid || ''}
                     onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, assigneUid: e.target.value } }))}
                     options={[
-                      { value: '', label: '— Non assigné (tâche partagée) —' },
+                      { value: '', label: 'Non assigné (tâche partagée)' },
                       ...employesDisponibles.map((emp) => ({ value: emp.uid, label: emp.uid === user.uid ? `${emp.nom} (moi)` : emp.nom }))
                     ]} />
-                  <Hint>Optionnel — videz pour renvoyer cette tâche vers la liste partagée classée par catégorie.</Hint>
+                  <Hint>Optionnel : videz pour renvoyer cette tâche vers la liste partagée classée par catégorie.</Hint>
                 </FormGroup>
                 {modal.data.assigneUid && (
                   <FormGroup label="Heure prévue">

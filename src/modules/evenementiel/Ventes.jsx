@@ -176,7 +176,7 @@ export default function Ventes() {
         const facture = factures.find((f) => f.venteId === form.id)
         if (facture) await updateItem('evenementiel_factures', facture.id, { totalHT: total, totalTTC: total })
       }
-      await audit('evenementiel', 'VENTE_EDIT', `${vAvant?.num || form.id}${dejaCertifiee ? ` (${STATUTS[vAvant.statut]?.label || vAvant.statut} — stock/facture réajustés)` : ''}`)
+      await audit('evenementiel', 'VENTE_EDIT', `${vAvant?.num || form.id}${dejaCertifiee ? ` (${STATUTS[vAvant.statut]?.label || vAvant.statut} : stock/facture réajustés)` : ''}`)
       toast.success('Vente modifiée ✓')
     } else {
       const num = genNumero('VTE', ventes.length)
@@ -186,7 +186,7 @@ export default function Ventes() {
         statut: 'brouillon', notes: form.notes, agentNom: user.nom
       })
       await audit('evenementiel', 'VENTE', num)
-      toast.success('Vente créée ✓ — demandez les 3 autorisations avant le chargement')
+      toast.success('Vente créée ✓ : demandez les 3 autorisations avant le chargement')
     }
     setOpen(false)
   }
@@ -219,7 +219,7 @@ export default function Ventes() {
       if (facture) await removeItem('evenementiel_factures', facture.id)
       await removeItem('evenementiel_ventes', v.id)
       await audit('evenementiel', 'VENTE_DELETE',
-        `${v.num} — ${v.clientNom || ''}${v.statut !== 'brouillon' ? ` (${STATUTS[v.statut]?.label || v.statut} — stock restauré)` : ''}`)
+        `${v.num} : ${v.clientNom || ''}${v.statut !== 'brouillon' ? ` (${STATUTS[v.statut]?.label || v.statut} : stock restauré)` : ''}`)
       toast.success('Vente supprimée ✓')
       setToDelete(null)
     } catch (e) {
@@ -246,8 +246,8 @@ export default function Ventes() {
       filename: `ventes-briqueterie-${todayStr()}.xlsx`,
       sections: [{
         name: 'Ventes Briqueterie',
-        title: 'Ventes — Briqueterie',
-        subtitle: `${liste.length} vente(s)${filtreStatut ? ` — ${STATUTS[filtreStatut]?.label}` : ''}${filtrePeriodeActif ? ' — période filtrée' : ''}${filtreClient.trim() ? ` — client : « ${filtreClient} »` : ''}`,
+        title: 'Ventes : Briqueterie',
+        subtitle: `${liste.length} vente(s)${filtreStatut ? ` : ${STATUTS[filtreStatut]?.label}` : ''}${filtrePeriodeActif ? ' : période filtrée' : ''}${filtreClient.trim() ? ` : client : « ${filtreClient} »` : ''}`,
         columns: [
           { key: 'N°', label: 'N°', width: 14 },
           { key: 'Date', label: 'Date', width: 12 },
@@ -401,7 +401,7 @@ export default function Ventes() {
                   setForm((f) => ({ ...f, clientId: e.target.value, clientNom: c?.nom || '' }))
                 }}>
                   {clients.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                  {!clients.length && <option value="">— Créez un client —</option>}
+                  {!clients.length && <option value="">Créez un client</option>}
                 </Select>
               </FormGroup>
               <FormGroup label="Date chargement"><Input type="date" value={form.dateChargement} onChange={(e) => setForm((f) => ({ ...f, dateChargement: e.target.value }))} /></FormGroup>
@@ -450,13 +450,13 @@ export default function Ventes() {
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <span>
-                Supprimer la vente <strong>{toDelete.num}</strong> ({toDelete.clientNom}) — {formatMoney(toDelete.total)}.
+                Supprimer la vente <strong>{toDelete.num}</strong> ({toDelete.clientNom}) : {formatMoney(toDelete.total)}.
                 {toDelete.statut !== 'brouillon' && (
                   <> Cette vente est <strong>{(STATUTS[toDelete.statut]?.label || toDelete.statut).toLowerCase()}</strong> : le stock déjà sorti sera <strong>restauré</strong>, et l'autorisation{demandes.some((d) => d.venteId === toDelete.id) || factures.some((f) => f.venteId === toDelete.id) ? '/la facture liée' : ' liée'} sera supprimée avec elle.</>
                 )}
               </span>
             </div>
-            <p className="text-xs text-gray-500">Action irréversible — tracée dans le Journal.</p>
+            <p className="text-xs text-gray-500">Action irréversible : tracée dans le Journal.</p>
           </div>
         )}
       </Modal>

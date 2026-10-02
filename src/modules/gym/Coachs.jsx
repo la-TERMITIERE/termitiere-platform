@@ -78,7 +78,7 @@ export default function Coachs() {
         heureProgrammee: creneau.heure, heureArrivee, statut,
         par: user?.nom || user?.login || '—'
       })
-      await audit('gym', 'COACH_POINTAGE', `${c.nom} — arrivé à ${heureArrivee} (prévu ${creneau.heure}) — ${siteLabel(site)}`)
+      await audit('gym', 'COACH_POINTAGE', `${c.nom} : arrivé à ${heureArrivee} (prévu ${creneau.heure}) : ${siteLabel(site)}`)
       toast.success(`${c.nom} pointé à ${heureArrivee} ✓`)
     } finally { setPointing(null) }
   }
@@ -142,13 +142,13 @@ export default function Coachs() {
     const detailCoach = [...parCoach.entries()].sort((a, b) => b[1] - a[1]).map(([nom, n]) => `${nom} (${n})`).join(' · ')
     const synthese = historique.length === 0
       ? 'Aucun pointage enregistré sur la période sélectionnée.'
-      : `${historique.length} pointage(s) enregistré(s) sur la période pour ${parCoach.size} coach(s) — ${siteLabel(site)}. Répartition : ${detailCoach}. ${retards} pointage(s) en retard sur le total, soit ${Math.round((retards / historique.length) * 100)} %.`
+      : `${historique.length} pointage(s) enregistré(s) sur la période pour ${parCoach.size} coach(s) : ${siteLabel(site)}. Répartition : ${detailCoach}. ${retards} pointage(s) en retard sur le total, soit ${Math.round((retards / historique.length) * 100)} %.`
     await genererRapportMultiPDF({
       titre: 'RAPPORT DES POINTAGES COACHS',
       module: 'gym',
       sections: [{
         nom: 'Historique des pointages',
-        sousTitre: `${historique.length} pointage(s) — ${siteLabel(site)}`,
+        sousTitre: `${historique.length} pointage(s) : ${siteLabel(site)}`,
         synthese,
         colonnes: ['Date', 'Coach', 'Programmé', 'Arrivée réelle', 'Statut', 'Pointé par'],
         lignes: historique.map((p) => [
@@ -226,7 +226,7 @@ export default function Coachs() {
               </div>
             )
           })}
-          {!equipeDuJour.length && <p className="py-6 text-center text-sm text-gray-400">Aucun coach enregistré — ajoutez-en ci-dessous.</p>}
+          {!equipeDuJour.length && <p className="py-6 text-center text-sm text-gray-400">Aucun coach enregistré : ajoutez-en ci-dessous.</p>}
         </div>
       </Card>
 
@@ -267,8 +267,8 @@ export default function Coachs() {
 
       <Card title={titreSection(BarChart3, 'Performance des coachs')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
         <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-          <span>Moyenne par jour de présence — séances et abonnements réellement rattachés à ce coach</span>
-          <span className="inline-flex items-center gap-1" title="Comptées uniquement quand ce coach était le SEUL présent le jour de l'enregistrement — sinon ambigu, non comptées">ⓘ seul présent ce jour-là</span>
+          <span>Moyenne par jour de présence : séances et abonnements réellement rattachés à ce coach</span>
+          <span className="inline-flex items-center gap-1" title="Comptées uniquement quand ce coach était le SEUL présent le jour de l'enregistrement : sinon ambigu, non comptées">ⓘ seul présent ce jour-là</span>
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {performance.map((p, i) => {

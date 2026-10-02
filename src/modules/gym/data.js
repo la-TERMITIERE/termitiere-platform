@@ -3,7 +3,7 @@
 // « Classique » n'existe que pour les abonnements (durée et tarif libres) — pas de
 // séance classique (cf. CATEGORIES_SEANCE, sous-ensemble utilisé par Seances.jsx).
 export const CATEGORIES_GYM = [
-  { id: 'simple',    label: 'Simple',    tone: 'neutral', desc: 'Accès salle — sans tapis roulant ni escalator' },
+  { id: 'simple',    label: 'Simple',    tone: 'neutral', desc: 'Accès salle : sans tapis roulant ni escalator' },
   { id: 'classique', label: 'Classique', tone: 'info',    desc: 'Durée et tarif définis à la saisie (abonnement uniquement)' },
   { id: 'vip',       label: 'VIP',       tone: 'warning', desc: 'Accès complet, avec tapis roulant et escalator' }
 ]

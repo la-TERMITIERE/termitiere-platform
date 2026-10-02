@@ -54,7 +54,7 @@ export async function handler(event) {
     || (event.headers['x-forwarded-for'] || '').split(',')[0].trim()
     || 'unknown'
   if (rateLimited(ip)) {
-    return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de tentatives — réessayez dans une minute.' }) }
+    return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de tentatives : réessayez dans une minute.' }) }
   }
 
   if (!ensureAdmin()) {
@@ -85,11 +85,11 @@ export async function handler(event) {
     if (!dejaPointe) {
       await db.ref('tp/gym_presences').push({
         clientNom: client.nom, date: aujourdhui, site, source: 'client',
-        enregistrePar: 'Client (auto — carnet QR)', enregistreParUid: null, createdAt: Date.now()
+        enregistrePar: 'Client (auto : carnet QR)', enregistreParUid: null, createdAt: Date.now()
       })
       await db.ref('tp/audit_global').push({
         userId: 'client', userNom: client.nom, userRole: '', module: 'gym',
-        action: 'PRESENCE_POINTEE', details: `${client.nom} — arrivée auto-pointée via le carnet QR`,
+        action: 'PRESENCE_POINTEE', details: `${client.nom} : arrivée auto-pointée via le carnet QR`,
         meta: null, timestamp: Date.now()
       })
     }
@@ -100,6 +100,6 @@ export async function handler(event) {
     return { statusCode: 200, body: JSON.stringify({ ok: true, dejaPointe, joursPresents }) }
   } catch (e) {
     console.error('[gym-carnet-pointer] erreur :', e?.message)
-    return { statusCode: 200, body: JSON.stringify({ ok: false, error: 'Erreur — réessayez.' }) }
+    return { statusCode: 200, body: JSON.stringify({ ok: false, error: 'Erreur : réessayez.' }) }
   }
 }

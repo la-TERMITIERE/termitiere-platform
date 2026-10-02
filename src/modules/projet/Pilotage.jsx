@@ -245,7 +245,7 @@ export default function Pilotage() {
                       </>
                     )}
                 </p>
-                <p className="text-xs text-gray-400">Retards, dépassements de budget et de tâches — notifiés au responsable du projet et à la direction.</p>
+                <p className="text-xs text-gray-400">Retards, dépassements de budget et de tâches : notifiés au responsable du projet et à la direction.</p>
                 <p className="mt-0.5 text-[10px] italic text-gray-400">
                   📐 Critique = projet en retard ou budget global dépassé. Avertissement = tâche en dépassement (&gt; 1000 FCFA), tâche en retard, ou projet actif sans tâche terminée depuis 7 jours.
                 </p>
@@ -295,7 +295,7 @@ export default function Pilotage() {
 
       {/* Jauges synthétiques — indicateurs qualité */}
       <Card title={<TitreGraphe label="Indicateurs de qualité"
-        description="Trois angles complémentaires pour évaluer la santé du portefeuille — délais, budget et progression terrain." />}>
+        description="Trois angles complémentaires pour évaluer la santé du portefeuille : délais, budget et progression terrain." />}>
         <div className="flex flex-wrap justify-around gap-6 py-2">
           {tauxDelai !== null
             ? <Jauge pct={tauxDelai} color={tauxDelai >= 70 ? GREEN : tauxDelai >= 40 ? AMBER : RED}
@@ -323,7 +323,7 @@ export default function Pilotage() {
         </Card>
 
         {/* Budget vs Dépenses */}
-        <Card title={<TitreGraphe label="Budget vs Dépenses par projet" description="Comparer le budget alloué aux dépenses réelles pour chaque projet — détecter les dépassements." />}>
+        <Card title={<TitreGraphe label="Budget vs Dépenses par projet" description="Comparer le budget alloué aux dépenses réelles pour chaque projet : détecter les dépassements." />}>
           {budgetData.labels.length ? (
             <div className="h-48"><Bar data={budgetData} options={barOpts} /></div>
           ) : (

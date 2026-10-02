@@ -54,7 +54,7 @@ function ensureAdmin() {
 
 export default async () => {
   if (!ensureAdmin()) {
-    console.warn('[besoins-relance] FIREBASE_SERVICE_ACCOUNT absent — rien à faire.')
+    console.warn('[besoins-relance] FIREBASE_SERVICE_ACCOUNT absent : rien à faire.')
     return new Response('Config manquante (FIREBASE_SERVICE_ACCOUNT)', { status: 200 })
   }
 
@@ -78,7 +78,7 @@ export default async () => {
   ].filter((b) => (b.validation || 'en_attente') === 'en_attente' && b.statut !== 'annule')
 
   if (!enAttente.length) {
-    console.log('[besoins-relance] Aucun besoin en attente — rien à envoyer.')
+    console.log('[besoins-relance] Aucun besoin en attente : rien à envoyer.')
     return new Response('Rien à relancer', { status: 200 })
   }
 
@@ -97,7 +97,7 @@ export default async () => {
   // 3) Message récapitulatif — un push par destinataire vaut mieux qu'un par
   //    besoin (3 rappels/jour × N besoins en attente aurait vite spammé).
   const apercu = enAttente.slice(0, 3)
-    .map((b) => `${b.titre}${contexteDe(b) ? ' — ' + contexteDe(b) : ''}`)
+    .map((b) => `${b.titre}${contexteDe(b) ? ' : ' + contexteDe(b) : ''}`)
     .join(' · ')
   const reste = enAttente.length - apercu.split(' · ').length
   const titre = `🔔 ${enAttente.length} besoin(s) en attente de validation`
@@ -143,7 +143,7 @@ export default async () => {
         })
       )
   } else {
-    console.warn('[besoins-relance] VAPID_PUBLIC/VAPID_PRIVATE absents — push désactivé, cloche in-app seule.')
+    console.warn('[besoins-relance] VAPID_PUBLIC/VAPID_PRIVATE absents : push désactivé, cloche in-app seule.')
   }
 
   await Promise.all([...notifWrites, ...pushWrites])

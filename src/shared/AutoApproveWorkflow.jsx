@@ -90,12 +90,12 @@ export default function AutoApproveWorkflow({ collection, module, lien = `/${mod
           stockDecremente: true
         })
         await effetsCertification(module, d, horodate)
-        await audit(module, 'CERTIFICATION', `${d.num || d.id} — autorisation auto (10 min)`)
+        await audit(module, 'CERTIFICATION', `${d.num || d.id} : autorisation auto (10 min)`)
         const dest = [d.demandeur].filter(Boolean)
         if (dest.length) {
           await notify({
             type: 'approuve', title: 'Autorisation certifiée automatiquement ✅',
-            body: `${d.num || ''} — délai de 10 min dépassé, autorisation accordée`,
+            body: `${d.num || ''} : délai de 10 min dépassé, autorisation accordée`,
             module, forUsers: dest, link: lien
           })
           pushToUsers(dest, { title: 'Autorisation certifiée automatiquement ✅', body: `${d.num || ''}`, url: lien })

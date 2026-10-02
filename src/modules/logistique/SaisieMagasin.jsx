@@ -91,7 +91,7 @@ export default function SaisieMagasin() {
     saveMateriel({ id, nom: nom.trim(), cat: cat.trim().toUpperCase(), unite: unite || 'unités', coutAchat: parseFloat(coutAchat) || 0, tarifLocation: 0 })
     setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
     setAddModal(false)
-    toast.success(`${nom.trim()} ajouté ✓ — pensez à enregistrer la saisie`)
+    toast.success(`${nom.trim()} ajouté ✓ : pensez à enregistrer la saisie`)
   }
 
   const existing = getInventaire(inventaires, date)
@@ -172,7 +172,7 @@ export default function SaisieMagasin() {
 
   async function save() {
     if (!user) return toast.error('Session expirée')
-    if (!referentielReady) return toast.error('Référentiel en cours de chargement — patientez puis réessayez')
+    if (!referentielReady) return toast.error('Référentiel en cours de chargement : patientez puis réessayez')
     setSaving(true)
     try {
       const materiels = {}
@@ -192,7 +192,7 @@ export default function SaisieMagasin() {
         date, site, agentId: user.uid, agentNom: user.nom, savedAt: ts(), materiels
       })
       dirtyRef.current = false
-      await audit('logistique', 'SAISIE_MAGASIN', `${site === 'lome' ? 'Lomé' : 'Kara'} — saisie magasin du ${date}${peutEditerInit && !peutSaisir ? ' (stocks initiaux — admin)' : ''}`)
+      await audit('logistique', 'SAISIE_MAGASIN', `${site === 'lome' ? 'Lomé' : 'Kara'} : saisie magasin du ${date}${peutEditerInit && !peutSaisir ? ' (stocks initiaux : admin)' : ''}`)
       toast.success('Saisie enregistrée ✓')
     } catch (e) {
       toast.error(e.message)
@@ -239,7 +239,7 @@ export default function SaisieMagasin() {
       )}
       {peutEditerInit && !peutSaisir && (
         <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          🛠️ Mode administrateur — vous pouvez renseigner les <strong>stocks initiaux de départ</strong> (colonne « Stock Initial ») pour caler l'appli sur le stock physique, puis <strong>Enregistrer</strong>.
+          🛠️ Mode administrateur : vous pouvez renseigner les <strong>stocks initiaux de départ</strong> (colonne « Stock Initial ») pour caler l'appli sur le stock physique, puis <strong>Enregistrer</strong>.
         </div>
       )}
       {!peutSaisir && peutEditerInit && (
@@ -247,7 +247,7 @@ export default function SaisieMagasin() {
       )}
       {draftSavedAt && !dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
-          💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} — vos données sont en sécurité même sans clic sur « Enregistrer ».
+          💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} : vos données sont en sécurité même sans clic sur « Enregistrer ».
         </div>
       )}
       <div className="flex flex-wrap items-end gap-3">
@@ -264,7 +264,7 @@ export default function SaisieMagasin() {
       {dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
           <CheckCircle2 size={16} />
-          Saisie du {formatDateTime(existing.savedAt)} — chaque agent modifie uniquement ses mouvements
+          Saisie du {formatDateTime(existing.savedAt)} : chaque agent modifie uniquement ses mouvements
         </div>
       )}
 
@@ -329,7 +329,7 @@ export default function SaisieMagasin() {
       />
 
       {/* Retours — LECTURE SEULE (saisis via la page « Retour matériel ») */}
-      <Modal open={!!retourDetail} onClose={() => setRetourDetail(null)} title={`Retours — ${retourDetail?.nom || ''}`}
+      <Modal open={!!retourDetail} onClose={() => setRetourDetail(null)} title={`Retours : ${retourDetail?.nom || ''}`}
         panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           🔒 Les retours s'enregistrent depuis la page <strong>Retour matériel</strong> (pour la traçabilité). Ils sont en lecture seule ici.
@@ -452,7 +452,7 @@ function MouvementModal({ modal, stock, autoSor, user, peutSaisir, onClose, onCh
   const delLigne = (i) => { if (peutEditer(lignes[i])) onChange(lignes.filter((_, k) => k !== i)) }
 
   return (
-    <Modal open onClose={onClose} title={`${titles[dir]} — ${nom}`} footer={<Button onClick={onClose}>Terminer</Button>}>
+    <Modal open onClose={onClose} title={`${titles[dir]} : ${nom}`} footer={<Button onClick={onClose}>Terminer</Button>}>
       <p className="mb-3 text-sm text-gray-500">Unité : <strong>{unite}</strong></p>
       {dir === 'sortie' && (
         <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">

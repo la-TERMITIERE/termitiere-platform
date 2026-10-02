@@ -31,7 +31,7 @@ export function libelleSecteurSite(secteur, d) {
   if (d?.secteurId === 'logistique') {
     const site = siteLogistiqueDe(d)
     const s = LOGISTIQUE_SITES.find((x) => x.id === site)
-    return `${secteur?.label || d.secteurId} — ${s?.label || site}`
+    return `${secteur?.label || d.secteurId} : ${s?.label || site}`
   }
   return secteur?.label || d?.secteurId
 }
@@ -45,7 +45,7 @@ export function secteursEtSites(excluBat = true) {
     .flatMap((s) => {
       if (s.id === 'logistique') {
         return LOGISTIQUE_SITES.map(({ id: site, label: siteLbl }) => ({
-          ...s, id: `logistique__${site}`, secteurId: 'logistique', site, label: `${s.label} — ${siteLbl}`
+          ...s, id: `logistique__${site}`, secteurId: 'logistique', site, label: `${s.label} : ${siteLbl}`
         }))
       }
       return [{ ...s, secteurId: s.id, site: null }]
@@ -98,7 +98,7 @@ export function depensesProjetVersSecteurs(depensesProjet = [], projets = [], ta
       categorie: d.categorie || 'autre',
       montant: Number(d.montant) || 0,
       date: d.date ? new Date(d.date).toISOString().slice(0, 10) : '',
-      description: [projet?.nom, tache?.titre, d.description].filter(Boolean).join(' — ') || d.description || '',
+      description: [projet?.nom, tache?.titre, d.description].filter(Boolean).join(' : ') || d.description || '',
       noteOrigine: d.description || '',
       natureFlux: natureFluxProjet(projet),
       // Source de financement saisie dans E-G.Pro (apport du PAU ou fonds entreprise) :
@@ -178,7 +178,7 @@ export function coutsMatieresBriqueterie(inventaires = []) {
       montant: cout,
       date: inv.date ? String(inv.date).slice(0, 10) : '',
       description: 'Achat de matières premières (Briqueterie)',
-      noteOrigine: 'Coût des matières entrées ce jour — saisi dans le Stock de la Briqueterie',
+      noteOrigine: 'Coût des matières entrées ce jour : saisi dans le Stock de la Briqueterie',
       natureFlux: natureFluxDefaut,
       statut: 'decaissee',
       source: 'briqueterie',

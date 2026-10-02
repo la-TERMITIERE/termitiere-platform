@@ -34,7 +34,7 @@ export default function TachesRoutinieresLogistique() {
       collectionPrefix={`logistique_${site}_routine`}
       seedTaches={SEED_TACHES}
       color={COULEUR_MODULE.logistique}
-      titre="Tâches Routinières — MAXI LOGISTIQUE"
+      titre="Tâches Routinières : MAXI LOGISTIQUE"
       description="Checklist quotidienne du dépôt (ouverture, matériel, livraisons, fermeture), à vérifier chaque jour par les agents."
     />
   )

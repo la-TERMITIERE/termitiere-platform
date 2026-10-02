@@ -55,7 +55,7 @@ export default function PiecesJointes({ pieces = [], onAdd, onRemove, readOnly =
                 onSelect={(r) => setRubrique(r.id || r)}
                 suggestions={rubriques}
                 getLabel={(r) => r.label || r}
-                placeholder="— Rubrique —"
+                placeholder="Rubrique"
                 className="w-full rounded-lg border border-gray-200 bg-white py-1.5 px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400"
               />
             </div>

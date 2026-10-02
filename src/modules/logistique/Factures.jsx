@@ -34,11 +34,11 @@ export default function Factures() {
   const { user, role } = useAuth()
   const site = useSite()
   const peutFacturer = role === 'agent'
-  // Modification (corriger un doublon, une date erronée…) : l'agent (auteur) ET le
+  // Modification (corriger un doublon, une date erronée…) : l'agent (auteur), la secrétaire ET le
   // reste du personnel d'administration peuvent agir. Suppression : réservée à
   // l'administration (admin/PAU/GE/direction/Info) — jamais à l'agent seul, pour
   // éviter qu'une facture ne disparaisse sans supervision.
-  const peutModifierFacture = role === 'agent' || isFullAccessRole(role)
+  const peutModifierFacture = role === 'agent' || role === 'secretaire' || isFullAccessRole(role)
   const peutSupprimerFacture = isFullAccessRole(role)
   // La secrétaire voit désormais les montants de facturation (accès explicitement
   // accordé) mais pas qui a approuvé la facture (cf. `voitValidateur`).
@@ -136,8 +136,8 @@ export default function Factures() {
       filename: `factures-logistique-${siteLabel(site)}-${todayStr()}.xlsx`,
       sections: [{
         name: 'Factures Logistique',
-        title: `Factures — MAXI LOGISTIQUE (${siteLabel(site)})`,
-        subtitle: `${liste.length} facture(s)${filtreStatut ? ` — ${F_STATUTS[filtreStatut]?.label}` : ''}${filtreClient.trim() ? ` — client : « ${filtreClient} »` : ''}`,
+        title: `Factures : MAXI LOGISTIQUE (${siteLabel(site)})`,
+        subtitle: `${liste.length} facture(s)${filtreStatut ? ` : ${F_STATUTS[filtreStatut]?.label}` : ''}${filtreClient.trim() ? ` : client : « ${filtreClient} »` : ''}`,
         columns: [
           { key: 'N° facture', label: 'N° facture', width: 16 },
           { key: 'Date', label: 'Date', width: 12 },
@@ -166,8 +166,8 @@ export default function Factures() {
       statut: 'brouillon', agentNom: user.nom, agentId: user.uid
     })
     await updateItem('logistique_prestations', p.id, { statut: 'facturee', factureId, factureNum: num })
-    await audit('logistique', 'FACTURE', `${siteLabel(site)} — ${num} — ${formatMoney(p.total)} (brouillon)`)
-    toast.success(`Facture ${num} émise en brouillon ✓ — émettez l'autorisation de sortie liée`)
+    await audit('logistique', 'FACTURE', `${siteLabel(site)} : ${num} : ${formatMoney(p.total)} (brouillon)`)
+    toast.success(`Facture ${num} émise en brouillon ✓ : émettez l'autorisation de sortie liée`)
     setOpen(false)
   }
 
@@ -177,8 +177,8 @@ export default function Factures() {
     if (!confirm(`Supprimer la facture ${f.num} (${f.clientNom}) ?\nLa prestation ${f.prestationNum || ''} redevient facturable.`)) return
     await removeItem('logistique_factures', f.id)
     if (f.prestationId) await updateItem('logistique_prestations', f.prestationId, { statut: 'brouillon', factureId: null, factureNum: null })
-    await audit('logistique', 'FACTURE_DELETE', `${siteLabel(site)} — ${f.num}`)
-    toast.success('Facture supprimée — la prestation redevient facturable')
+    await audit('logistique', 'FACTURE_DELETE', `${siteLabel(site)} : ${f.num}`)
+    toast.success('Facture supprimée : la prestation redevient facturable')
   }
 
   function ouvrirEdition(f) {
@@ -212,7 +212,7 @@ export default function Factures() {
     }
     await updateItem('logistique_factures', edit.id, patch)
     await audit('logistique', 'FACTURE_MODIFIEE',
-      `${siteLabel(site)} — ${edit.num} — date → ${formatDateShort(editDate)}${montantChange ? ` · montant ${formatMoney(montantActuel)} → ${formatMoney(montantEdit)} (${editMotif.trim()})` : ''}`)
+      `${siteLabel(site)} : ${edit.num} : date → ${formatDateShort(editDate)}${montantChange ? ` · montant ${formatMoney(montantActuel)} → ${formatMoney(montantEdit)} (${editMotif.trim()})` : ''}`)
     toast.success(`Facture ${edit.num} modifiée ✓`)
     setEdit(null)
   }
@@ -241,8 +241,8 @@ export default function Factures() {
         await updateItem('logistique_prestations', toAnnuler.prestationId, { statut: 'brouillon', factureId: null, factureNum: null })
       }
       await audit('logistique', 'FACTURE_ANNULATION',
-        `${siteLabel(site)} — ${toAnnuler.num} (approuvée) — ${formatMoney(toAnnuler.totalTTC)} retiré du CA, autorisation de sortie annulée${demandeLiee ? ` (${demandeLiee.num})` : ''}, stock réintégré`)
-      toast.success(`Facture ${toAnnuler.num} annulée ✓ — CA et stock corrigés, autorisation de sortie annulée`)
+        `${siteLabel(site)} : ${toAnnuler.num} (approuvée) : ${formatMoney(toAnnuler.totalTTC)} retiré du CA, autorisation de sortie annulée${demandeLiee ? ` (${demandeLiee.num})` : ''}, stock réintégré`)
+      toast.success(`Facture ${toAnnuler.num} annulée ✓ : CA et stock corrigés, autorisation de sortie annulée`)
       setToAnnuler(null)
     } catch (e) {
       toast.error(e.message)
@@ -293,7 +293,7 @@ export default function Factures() {
 
       {peutFacturer && !aFacturer.length && (
         <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Aucune prestation à facturer. Créez d'abord une prestation (onglet Prestations) — elle est facturable dès qu'elle est en brouillon.
+          Aucune prestation à facturer. Créez d'abord une prestation (onglet Prestations) : elle est facturable dès qu'elle est en brouillon.
         </div>
       )}
       {peutFacturer && (
@@ -435,10 +435,10 @@ export default function Factures() {
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={emettre}><FileText size={16} /> Émettre</Button></>}>
         <FormGroup label="Prestation à facturer" required>
           <Select value={prestId} onChange={(e) => setPrestId(e.target.value)}>
-            {aFacturer.map((p) => <option key={p.id} value={p.id}>{p.num} — {p.clientNom}{voitMontants ? ` (${formatMoney(p.total)})` : ''}</option>)}
+            {aFacturer.map((p) => <option key={p.id} value={p.id}>{p.num} : {p.clientNom}{voitMontants ? ` (${formatMoney(p.total)})` : ''}</option>)}
           </Select>
         </FormGroup>
-        <FormGroup label="Date de la facture" required hint="Modifiable — pour rattraper une facture oubliée d'un jour antérieur, sans qu'elle prenne la date du jour de la saisie.">
+        <FormGroup label="Date de la facture" required hint="Modifiable : pour rattraper une facture oubliée d'un jour antérieur, sans qu'elle prenne la date du jour de la saisie.">
           <Input type="date" value={factureDate} onChange={(e) => setFactureDate(e.target.value)} />
         </FormGroup>
         {voitMontants && prestId && (() => {
@@ -517,14 +517,14 @@ export default function Factures() {
           <div className="space-y-3">
             <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">
               <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              <span>Cette facture est <strong>déjà approuvée</strong> ({toAnnuler.clientNom} — {formatMoney(toAnnuler.totalTTC)}). L'annuler déclenche automatiquement :</span>
+              <span>Cette facture est <strong>déjà approuvée</strong> ({toAnnuler.clientNom} : {formatMoney(toAnnuler.totalTTC)}). L'annuler déclenche automatiquement :</span>
             </div>
             <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
               <li>le montant sort du <strong>chiffre d'affaires</strong> ;</li>
               <li>l'<strong>autorisation de sortie</strong> liée est annulée et le <strong>stock sorti est réintégré</strong> ;</li>
               <li>la <strong>prestation</strong> {toAnnuler.prestationNum} redevient facturable (brouillon).</li>
             </ul>
-            <p className="text-xs text-gray-500">Action réservée à l'administration, irréversible — à utiliser pour corriger un doublon ou une erreur de facturation.</p>
+            <p className="text-xs text-gray-500">Action réservée à l'administration, irréversible : à utiliser pour corriger un doublon ou une erreur de facturation.</p>
           </div>
         )}
       </Modal>

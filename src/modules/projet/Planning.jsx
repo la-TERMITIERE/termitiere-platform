@@ -263,7 +263,7 @@ function GanttView({ projets, taches }) {
                           className="absolute top-1 bottom-1 w-0.5 rounded-full pointer-events-none opacity-70" />
                         <div className="transition-transform duration-150 hover:scale-125"
                           style={{ left: `calc(${pct(t.echeance)}% - 7px)`, position:'absolute', top:'50%', transform:'translateY(-50%)' }}
-                          title={`${t.titre} — échéance : ${formatDateShort(t.echeance)}`}>
+                          title={`${t.titre} : échéance : ${formatDateShort(t.echeance)}`}>
                           <div style={{ width:14, height:14, borderRadius:4, transform:'rotate(45deg)', background: terminee ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow:'0 2px 6px -1px rgba(0,0,0,0.3), inset 0 1px 0 0 rgba(255,255,255,0.4)' }} />
                         </div>
                         {/* Date sous le marqueur */}

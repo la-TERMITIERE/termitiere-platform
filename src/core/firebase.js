@@ -71,7 +71,7 @@ if (isFirebaseConfigured) {
     setPersistence(auth, browserLocalPersistence).catch(() => {})
   } catch (e) { /* services annexes optionnels */ }
 } else {
-  console.warn('[TERMITIÈRE] Aucune base configurée — mode DÉMO local (localStorage).')
+  console.warn('[TERMITIÈRE] Aucune base configurée : mode DÉMO local (localStorage).')
 }
 
 // E-mail synthétique déterministe dérivé de l'identifiant de connexion, pour

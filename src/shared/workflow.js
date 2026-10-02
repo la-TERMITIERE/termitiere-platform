@@ -10,7 +10,7 @@
 
 export const STATUTS_DEMANDE = {
   en_attente:  { label: '⏳ En attente', short: 'En attente', tone: 'warning' },
-  approuve_n1: { label: '🟡 Approuvé — à certifier', short: 'À certifier', tone: 'info' },
+  approuve_n1: { label: '🟡 Approuvé : à certifier', short: 'À certifier', tone: 'info' },
   certifie:    { label: '✅ Certifié', short: 'Certifié', tone: 'success' },
   refuse:      { label: '❌ Refusé', short: 'Refusé', tone: 'danger' }
 }

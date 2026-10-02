@@ -94,15 +94,15 @@ export default function Demandes() {
     await run(() => wfDemander(f, user), '📤 Demande de sortie soumise à la hiérarchie ✓')
     setCreateOpen(false); setPick('')
   }
-  function approuver(f) { if (confirm(`Approuver la sortie de la facture ${f.numero} ? Le stock sera décompté.`)) run(() => wfApprouver(f, user), '✅ Sortie approuvée — stock décompté') }
+  function approuver(f) { if (confirm(`Approuver la sortie de la facture ${f.numero} ? Le stock sera décompté.`)) run(() => wfApprouver(f, user), '✅ Sortie approuvée : stock décompté') }
   function refuser(f) { const m = prompt(`Refuser la sortie de ${f.numero} ?\nMotif (optionnel) :`); if (m !== null) run(() => wfRefuser(f, user, m), 'Sortie refusée') }
-  function certifier(f) { const { totalTTC } = factureTotaux(f); if (confirm(`Certifier ${f.numero} pour ${formatMoney(totalTTC)} ? Définitive et imprimable.`)) run(() => wfCertifier(f, user), '✅ Facture certifiée — CA enregistré') }
+  function certifier(f) { const { totalTTC } = factureTotaux(f); if (confirm(`Certifier ${f.numero} pour ${formatMoney(totalTTC)} ? Définitive et imprimable.`)) run(() => wfCertifier(f, user), '✅ Facture certifiée : CA enregistré') }
   function signaler(f) { const m = prompt(`Signaler un écart sur ${f.numero}\n(reliquats retournés, pertes au marché)\nMessage :`); if (m !== null) run(() => wfSignaler(f, user, m), '📝 Demande de modification envoyée') }
-  async function ajuster(f, ajustements) { await run(() => wfAjuster(f, user, ajustements), '✅ Quantités réelles ajustées — stock réajusté'); setEcart(null) }
+  async function ajuster(f, ajustements) { await run(() => wfAjuster(f, user, ajustements), '✅ Quantités réelles ajustées : stock réajusté'); setEcart(null) }
 
   // Suppression : possible tant que la sortie n'a pas été approuvée (stock intact).
   function supprimer(f) {
-    if (!confirm(`Supprimer définitivement la demande de sortie ${f.numero} ?\nLa facture sera retirée — aucun stock n'a encore bougé.`)) return
+    if (!confirm(`Supprimer définitivement la demande de sortie ${f.numero} ?\nLa facture sera retirée : aucun stock n'a encore bougé.`)) return
     run(() => wfSupprimer(f), 'Demande supprimée')
   }
 
@@ -116,7 +116,7 @@ export default function Demandes() {
   }
   async function trancher(accepte) {
     await run(() => wfTrancherCorrectif(correctif, user, accepte),
-      accepte ? '✅ Correctif appliqué — stock et CA réajustés' : 'Correctif refusé')
+      accepte ? '✅ Correctif appliqué : stock et CA réajustés' : 'Correctif refusé')
     setCorrectif(null)
   }
 
@@ -161,7 +161,7 @@ export default function Demandes() {
         <Package size={18} className="mt-0.5 shrink-0" />
         <p>
           <strong>Toute sortie passe par une facture.</strong> L'agent crée d'abord une facture (brouillon) dans <em>Facturation</em>,
-          puis demande ici la sortie en la sélectionnant. La hiérarchie approuve (le stock est décompté), puis l'agent certifie —
+          puis demande ici la sortie en la sélectionnant. La hiérarchie approuve (le stock est décompté), puis l'agent certifie,
           ou signale un écart que la hiérarchie ajuste (vendus / morts / retournés).
         </p>
       </div>
@@ -262,7 +262,7 @@ export default function Demandes() {
             <FormGroup label="Facture à sortir (brouillon)" required hint="La demande hérite de toutes les informations de la facture.">
               <Select value={pick} onChange={(e) => setPick(e.target.value)}>
                 {brouillons.map((f) => (
-                  <option key={f.id} value={f.id}>{f.numero} — {f.client?.nom || '—'} — {formatMoney(factureTotaux(f).totalTTC)}</option>
+                  <option key={f.id} value={f.id}>{f.numero} : {f.client?.nom || '—'} : {formatMoney(factureTotaux(f).totalTTC)}</option>
                 ))}
               </Select>
             </FormGroup>

@@ -95,7 +95,7 @@ export async function handler(event) {
     || (event.headers['x-forwarded-for'] || '').split(',')[0].trim()
     || 'unknown'
   if (rateLimited(ip)) {
-    return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de tentatives — réessayez dans une minute.' }) }
+    return { statusCode: 429, body: JSON.stringify({ ok: false, error: 'Trop de tentatives : réessayez dans une minute.' }) }
   }
 
   if (!ensureAdmin()) {
@@ -147,6 +147,6 @@ export async function handler(event) {
     return { statusCode: 200, body: JSON.stringify({ ok: true, token }) }
   } catch (e) {
     console.error('[login] erreur :', e?.message)
-    return { statusCode: 200, body: JSON.stringify({ ok: false, error: 'Connexion impossible — réessayez.' }) }
+    return { statusCode: 200, body: JSON.stringify({ ok: false, error: 'Connexion impossible : réessayez.' }) }
   }
 }

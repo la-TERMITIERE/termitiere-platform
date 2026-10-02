@@ -111,10 +111,10 @@ async function appliquerEcartInventaire(facture, ligneIdx, articleId, dead, ret)
   // Retire les anciennes lignes tagguées de cette facture+ligne, puis réinsère.
   const sorties = (node.sorties || []).filter((x) => x.agentId !== decTag && x.agentId !== relTag)
   const entrees = (node.entrees || []).filter((x) => x.agentId !== retTag)
-  if (dead > 0) sorties.push({ type: 'Décès', qte: dead, label: `Mortalité au marché — ${num}`, agentId: decTag, agentNom: 'Facturation' })
+  if (dead > 0) sorties.push({ type: 'Décès', qte: dead, label: `Mortalité au marché : ${num}`, agentId: decTag, agentNom: 'Facturation' })
   if (ret > 0) {
-    sorties.push({ type: 'Autres', qte: ret, label: `Reliquat parti puis retourné — ${num}`, agentId: relTag, agentNom: 'Facturation' })
-    entrees.push({ type: 'Retour du marché', qte: ret, label: `Retour du marché — ${num}`, agentId: retTag, agentNom: 'Facturation' })
+    sorties.push({ type: 'Autres', qte: ret, label: `Reliquat parti puis retourné : ${num}`, agentId: relTag, agentNom: 'Facturation' })
+    entrees.push({ type: 'Retour du marché', qte: ret, label: `Retour du marché : ${num}`, agentId: retTag, agentNom: 'Facturation' })
   }
 
   // Recalcul exact des agrégats (init + entrées + mutations − sorties − autoSor).

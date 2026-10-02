@@ -239,7 +239,7 @@ export default function ProjetsExplorer() {
           )}
         </div>
         <EnTete icon={ListChecks} accent={secteurActuel?.color || '#0d9488'}
-          titre={`${projetActuel?.nom || 'Projet'} — Catégories de tâches`}
+          titre={`${projetActuel?.nom || 'Projet'} : Catégories de tâches`}
           sousTitre="Choisissez une catégorie pour voir les tâches correspondantes" />
         {categories.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
@@ -261,7 +261,7 @@ export default function ProjetsExplorer() {
                 <option value="" disabled>▾ Choisir une catégorie de tâches…</option>
                 {categories.map((c) => (
                   <option key={c.phase} value={c.phase}>
-                    {emojiCategorie(c.phase)} {c.phase === NON_CLASSEES ? 'Non classées' : c.phase} — {c.count} tâche{c.count > 1 ? 's' : ''}
+                    {emojiCategorie(c.phase)} {c.phase === NON_CLASSEES ? 'Non classées' : c.phase} : {c.count} tâche{c.count > 1 ? 's' : ''}
                   </option>
                 ))}
               </select>
@@ -295,7 +295,7 @@ export default function ProjetsExplorer() {
           )}
         </div>
         <EnTete icon={FolderKanban} accent={secteurActuel?.color || '#0d9488'}
-          titre={`${secteurActuel?.label || secteurId} — Projets`}
+          titre={`${secteurActuel?.label || secteurId} : Projets`}
           sousTitre="Choisissez un projet pour voir ses catégories de tâches" />
         {projetsDuSecteurAvecCompte.length === 0 ? (
           <p className="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">

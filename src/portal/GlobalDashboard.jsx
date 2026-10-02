@@ -111,7 +111,7 @@ export default function GlobalDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <h1 className="text-xl font-extrabold text-gray-900">Tableau de bord global — La Termitière</h1>
+      <h1 className="text-xl font-extrabold text-gray-900">Tableau de bord global : La Termitière</h1>
 
       {/* KPI cards par domaine */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -167,7 +167,7 @@ export default function GlobalDashboard() {
       {/* Mini-courbes par secteur */}
       <div className="grid gap-4 lg:grid-cols-2">
         {hasModule('agro') && (
-          <Card title="MAXI-AGRO — Évolution effectif (12 dernières saisies)">
+          <Card title="MAXI-AGRO : Évolution effectif (12 dernières saisies)">
             <div className="h-40">
               {last12Agro.length
                 ? <Line data={chartAgro} options={chartOpts} />
@@ -180,7 +180,7 @@ export default function GlobalDashboard() {
           </Card>
         )}
         {hasModule('evenementiel') && (
-          <Card title="Briqueterie — Production mensuelle">
+          <Card title="Briqueterie : Production mensuelle">
             <div className="h-40">
               {prodLast12.data.length
                 ? <Bar data={chartBriq} options={chartOpts} />
@@ -193,7 +193,7 @@ export default function GlobalDashboard() {
           </Card>
         )}
         {hasModule('logistique') && (
-          <Card title="Logistique — Activité du mois">
+          <Card title="Logistique : Activité du mois">
             <div className="grid grid-cols-2 gap-3 py-4">
               <div className="rounded-lg bg-sky-50 p-3 text-center">
                 <p className="text-2xl font-extrabold text-sky-700">{prestationsMois}</p>
@@ -207,7 +207,7 @@ export default function GlobalDashboard() {
           </Card>
         )}
         {hasModule('foncier') && (
-          <Card title="Foncier — Portefeuille dossiers">
+          <Card title="Foncier : Portefeuille dossiers">
             <div className="grid grid-cols-2 gap-3 py-4">
               <div className="rounded-lg bg-green-50 p-3 text-center">
                 <p className="text-2xl font-extrabold text-green-700">{dossiersActifs}</p>

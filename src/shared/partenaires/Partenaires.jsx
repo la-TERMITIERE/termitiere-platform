@@ -56,7 +56,7 @@ export default function Partenaires({ module, suggestions }) {
     const p = { nom: modal.data.nom.trim(), contact: (modal.data.contact || '').trim(), type: (modal.data.type || '').trim() }
     if (!p.nom) return toast.error('Nom du partenaire requis')
     if (modal.id) { await updateItem(col, modal.id, p); await audit(module, 'PARTENAIRE_EDIT', p.nom) }
-    else { await addItem(col, p); await audit(module, 'PARTENAIRE', `${p.nom}${p.type ? ' — ' + p.type : ''}`) }
+    else { await addItem(col, p); await audit(module, 'PARTENAIRE', `${p.nom}${p.type ? ' : ' + p.type : ''}`) }
     toast.success('Partenaire enregistré ✓')
     setModal(null)
   }
@@ -93,7 +93,7 @@ export default function Partenaires({ module, suggestions }) {
 
       {!peutGerer && (
         <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          👁️ Mode consultation — la gestion des partenaires est réservée à l'utilisateur désigné par la direction.
+          👁️ Mode consultation : la gestion des partenaires est réservée à l'utilisateur désigné par la direction.
         </div>
       )}
 

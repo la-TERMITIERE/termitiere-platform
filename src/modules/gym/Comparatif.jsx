@@ -135,7 +135,7 @@ export default function Comparatif() {
         </div>
       </Card>
 
-      <Card title={titreSection(Trophy, 'Classement des coachs — Lomé & Kara')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+      <Card title={titreSection(Trophy, 'Classement des coachs : Lomé & Kara')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
         <p className="mb-3 text-xs text-gray-500">
           Fréquentation moyenne (nombre de séances par jour de présence pointée), tous coachs des deux salles mélangés, sur la période choisie.
         </p>
@@ -170,7 +170,7 @@ export default function Comparatif() {
           {SITES.map((s) => {
             const d = stats[s.id]
             return (
-              <Card key={s.id} title={titreSection(Target, `Objectif — ${s.label}`)} className={CARD_ACCENT_CLASS} style={cardAccentStyle(s.accent)}>
+              <Card key={s.id} title={titreSection(Target, `Objectif : ${s.label}`)} className={CARD_ACCENT_CLASS} style={cardAccentStyle(s.accent)}>
                 {d.objectif > 0 ? (
                   <>
                     <div className="mb-2 flex items-center justify-between text-sm">
@@ -183,7 +183,7 @@ export default function Comparatif() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-center text-sm text-gray-400">Pas d'objectif défini pour {s.label} — à paramétrer dans Paramètres.</p>
+                  <p className="text-center text-sm text-gray-400">Pas d'objectif défini pour {s.label} : à paramétrer dans Paramètres.</p>
                 )}
               </Card>
             )

@@ -33,7 +33,7 @@ export default function RelanceFacturesBrouillon() {
         await notify({
           type: 'warning',
           title: `Facture ${f.num} toujours en brouillon ⏳`,
-          body: `${siteLabel(f.site)} — ${f.clientNom || ''} : l'autorisation de sortie n'a pas encore été soumise (rappel ${prochainRang}/${MAX_RAPPELS}).`,
+          body: `${siteLabel(f.site)} : ${f.clientNom || ''} : l'autorisation de sortie n'a pas encore été soumise (rappel ${prochainRang}/${MAX_RAPPELS}).`,
           module: 'logistique',
           forUsers: [f.agentId],
           link: `/logistique/${f.site || 'lome'}/factures`

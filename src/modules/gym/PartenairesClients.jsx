@@ -115,7 +115,7 @@ export default function PartenairesClients() {
     try {
       const numero = genNumero('FACT-GYM', allFactures.length)
       const nb = aRegler.length
-      const description = `Règlement partenaire ${structure} — ${libelleMois(mois)} — ${nb} séance${nb > 1 ? 's' : ''}`
+      const description = `Règlement partenaire ${structure} : ${libelleMois(mois)} : ${nb} séance${nb > 1 ? 's' : ''}`
       // 1) Une seule facture globale — comptée dans l'encaissement du mois où le
       //    règlement est effectué (date du jour).
       await addItem('gym_factures', {
@@ -136,8 +136,8 @@ export default function PartenairesClients() {
         seanceIds: aRegler.map((s) => s.id),
         reglePar: user?.nom || user?.login || '—', regleParUid: user?.uid || null, createdAt: Date.now()
       })
-      await audit('gym', 'REGLEMENT_PARTENAIRE', `${structure} — ${libelleMois(mois)} — ${nb} séance${nb > 1 ? 's' : ''} — ${formatMoney(total)} — facture ${numero}`, { structure, mois, nbSeances: nb, montant: total, factureNumero: numero, site })
-      toast.success(`Mois réglé pour ${structure} — facture ${numero} générée ✓`)
+      await audit('gym', 'REGLEMENT_PARTENAIRE', `${structure} : ${libelleMois(mois)} : ${nb} séance${nb > 1 ? 's' : ''} : ${formatMoney(total)} : facture ${numero}`, { structure, mois, nbSeances: nb, montant: total, factureNumero: numero, site })
+      toast.success(`Mois réglé pour ${structure} : facture ${numero} générée ✓`)
       setAConfirmer(null)
     } finally { setSaving(false) }
   }
@@ -147,8 +147,8 @@ export default function PartenairesClients() {
       .filter((g) => g.aRegler.length > 0)
       .map((g) => ({
         name: g.structure.slice(0, 28),
-        title: `${g.structure} — séances à régler`,
-        subtitle: `${g.aRegler.length} séance(s) jusqu'à ${formatDateShort(dateLimite)} — ${formatMoney(g.montantARegler)}`,
+        title: `${g.structure} : séances à régler`,
+        subtitle: `${g.aRegler.length} séance(s) jusqu'à ${formatDateShort(dateLimite)} : ${formatMoney(g.montantARegler)}`,
         columns: [
           { key: 'Date', label: 'Date', width: 12 },
           { key: 'Client', label: 'Client', width: 26 },
@@ -163,7 +163,7 @@ export default function PartenairesClients() {
       }))
     const sectionReglements = {
       name: 'Règlements',
-      title: 'Règlements effectués — MAXI-GYM',
+      title: 'Règlements effectués : MAXI-GYM',
       subtitle: `${reglements.length} règlement(s)`,
       columns: [
         { key: 'Date', label: 'Date règlement', width: 14 },
@@ -192,11 +192,11 @@ export default function PartenairesClients() {
       for (const s of g.aReglerTri) {
         lignes.push([g.structure, formatDateShort(s.date), s.clientNom || '—', categorieLabel(s.categorie), formatMoney(s.montant)])
       }
-      lignes.push([`— Sous-total ${g.structure}`, '', '', `${g.aRegler.length} séance(s)`, formatMoney(g.montantARegler)])
+      lignes.push([`Sous-total ${g.structure}`, '', '', `${g.aRegler.length} séance(s)`, formatMoney(g.montantARegler)])
     }
     lignes.push(['TOTAL DÛ', '', '', `${nbSeancesDues} séance(s)`, formatMoney(totalDu)])
     generateRapportPDF({
-      titre: `Clients partenaires — MAXI-GYM ${siteLabel(site)} — arrêté au ${formatDateShort(dateLimite)}`,
+      titre: `Clients partenaires : MAXI-GYM ${siteLabel(site)} : arrêté au ${formatDateShort(dateLimite)}`,
       colonnes: ['Structure', 'Date', 'Client', 'Catégorie', 'Montant'],
       lignes,
       fichier: `clients-partenaires-maxi-gym-${siteLabel(site).toLowerCase()}-${todayStr()}.pdf`,
@@ -265,7 +265,7 @@ export default function PartenairesClients() {
                   {g.reglees.length > 0 && <Badge tone="success">{g.reglees.length} réglée(s)</Badge>}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {g.aRegler.length} séance(s) à régler jusqu'au {formatDateShort(dateLimite)} — <strong className="text-gray-700">{formatMoney(g.montantARegler)}</strong>
+                  {g.aRegler.length} séance(s) à régler jusqu'au {formatDateShort(dateLimite)} : <strong className="text-gray-700">{formatMoney(g.montantARegler)}</strong>
                 </p>
               </div>
               {peutRegler && g.aRegler.length > 0 && (
@@ -323,7 +323,7 @@ export default function PartenairesClients() {
             <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 p-4 text-white">
               <p className="text-sm font-semibold opacity-90">🤝 {aConfirmer.structure}</p>
               <p className="mt-1 text-2xl font-extrabold">{formatMoney(aConfirmer.total)}</p>
-              <p className="text-sm opacity-90">{aConfirmer.seances.length} séance(s) — {libelleMois(mois)} et antérieurs</p>
+              <p className="text-sm opacity-90">{aConfirmer.seances.length} séance(s) : {libelleMois(mois)} et antérieurs</p>
             </div>
             <p className="text-sm text-gray-600">
               Les {aConfirmer.seances.length} séance(s) non réglée(s) jusqu'au {formatDateShort(dateLimite)} seront marquées

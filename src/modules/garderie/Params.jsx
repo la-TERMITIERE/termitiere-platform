@@ -155,7 +155,7 @@ export default function Params() {
       filename: `enfants-garderie-${todayStr()}.xlsx`,
       sections: [{
         id: 'enfants', name: 'Enfants inscrits',
-        title: 'Liste des enfants inscrits — Garderie',
+        title: 'Liste des enfants inscrits : Garderie',
         subtitle: `Exporté le ${formatDateShort(todayStr())} · ${enfants.length} enfant(s)`,
         columns: [
           { key: 'Prénom', label: 'Prénom', width: 14 },
@@ -193,7 +193,7 @@ export default function Params() {
       filename: `personnel-garderie-${todayStr()}.xlsx`,
       sections: [{
         id: 'personnel', name: 'Personnel',
-        title: 'Liste du personnel — Garderie',
+        title: 'Liste du personnel : Garderie',
         subtitle: `Exporté le ${formatDateShort(todayStr())} · ${personnel.length} membre(s)`,
         columns: [
           { key: 'Prénom', label: 'Prénom', width: 14 },
@@ -232,7 +232,7 @@ export default function Params() {
       <Card title="Configuration de la garderie">
         {!canEdit && (
           <div className="mb-3 rounded-lg bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
-            Lecture seule — réservé aux administrateurs.
+            Lecture seule : réservé aux administrateurs.
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
@@ -251,7 +251,7 @@ export default function Params() {
           <FormGroup label="Frais d'inscription (FCFA)">
             <Input type="number" value={form.tarifInscription} onChange={(e) => set('tarifInscription', Number(e.target.value))} disabled={!canEdit} />
           </FormGroup>
-          <FormGroup label="Frais de cuisine (FCFA) — payés à part par les parents">
+          <FormGroup label="Frais de cuisine (FCFA) : payés à part par les parents">
             <Input type="number" min="0" value={form.fraisCuisine ?? 0} onChange={(e) => set('fraisCuisine', Number(e.target.value))} disabled={!canEdit} />
           </FormGroup>
           <FormGroup label="Alerte absences répétées (jours consécutifs)">
@@ -356,7 +356,7 @@ export default function Params() {
           <Card title="⚠️ Tout réinitialiser" className="border border-red-200">
             <p className="mb-3 text-sm text-gray-500">
               Efface <strong>toutes les données</strong> de la garderie : enfants, parents, présences, paiements,
-              incidents, soins, vaccinations, tâches, menus, repas, nutrition et personnel — <strong>ainsi que</strong> les
+              incidents, soins, vaccinations, tâches, menus, repas, nutrition et personnel : <strong>ainsi que</strong> les
               entrées du Journal (historique) concernant la garderie, et toute dépense/budget/revenu E-DÉPENSES saisi
               sous le secteur GARDERIE (pour qu'aucun total d'un autre module ne reste faussé par des essais).
               <strong className="text-red-600"> Cette action est irréversible.</strong>

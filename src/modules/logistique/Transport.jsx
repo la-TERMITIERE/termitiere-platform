@@ -172,14 +172,14 @@ export default function Transport() {
       if (modal.isNew) {
         const id = genId()
         await setItem('logistique_transports', id, { id, num: genNumero(`TR-${site.toUpperCase()}`, transports.length), createdAt: Date.now(), approuvee: false, ...payload })
-        await audit('logistique', 'TRANSPORT', `${siteLabel(site)} — ${payload.plaque} · ${d.lieuDepart || '?'} → ${d.lieuArrivee || '?'}`)
-        toast.success("Trajet enregistré ✓ — en attente d'autorisation de sortie")
+        await audit('logistique', 'TRANSPORT', `${siteLabel(site)} : ${payload.plaque} · ${d.lieuDepart || '?'} → ${d.lieuArrivee || '?'}`)
+        toast.success("Trajet enregistré ✓ : en attente d'autorisation de sortie")
       } else {
         // On repart de la fiche en base (`dataInitial`) : le statut (approuvee /
         // arrivee / horodatages) est préservé même si un admin corrige un trajet
         // déjà autorisé ou arrivé.
         await setItem('logistique_transports', modal.id, { ...modal.dataInitial, ...payload, id: modal.id })
-        await audit('logistique', 'TRANSPORT_EDIT', `${siteLabel(site)} — ${payload.plaque} · ${STATUTS_TRAJET[statutTrajet(modal.dataInitial)].label}`)
+        await audit('logistique', 'TRANSPORT_EDIT', `${siteLabel(site)} : ${payload.plaque} · ${STATUTS_TRAJET[statutTrajet(modal.dataInitial)].label}`)
         toast.success('Trajet mis à jour ✓')
       }
       setModal(null)
@@ -192,7 +192,7 @@ export default function Transport() {
   async function approuver(t) {
     if (!peutApprouver) return toast.error('Action réservée aux gérants / direction')
     await updateItem('logistique_transports', t.id, { approuvee: true, approuveePar: user.nom, approuveeLe: todayStr() })
-    await audit('logistique', 'TRANSPORT_APPROUVE', `${siteLabel(site)} — ${t.num || t.plaque} — sortie autorisée`)
+    await audit('logistique', 'TRANSPORT_APPROUVE', `${siteLabel(site)} : ${t.num || t.plaque} : sortie autorisée`)
     toast.success(`Sortie autorisée pour ${t.num || t.plaque} ✓`)
     setDetail((d) => (d && d.id === t.id ? { ...d, approuvee: true, approuveePar: user.nom, approuveeLe: todayStr() } : d))
   }
@@ -206,7 +206,7 @@ export default function Transport() {
       const patch = { arrivee: true, arriveeLe: Date.now(), arriveePar: user.nom, heureArriveeReelle: hm }
       if (!t.heureArrivee) patch.heureArrivee = hm
       await updateItem('logistique_transports', t.id, patch)
-      await audit('logistique', 'TRANSPORT_ARRIVEE', `${siteLabel(site)} — ${t.num || t.plaque} — arrivé le ${todayStr()} à ${hm}`)
+      await audit('logistique', 'TRANSPORT_ARRIVEE', `${siteLabel(site)} : ${t.num || t.plaque} : arrivé le ${todayStr()} à ${hm}`)
       toast.success('Arrivée enregistrée ✓')
       setDetail((d) => (d && d.id === t.id ? { ...d, ...patch } : d))
     } finally { setSaving(false) }
@@ -228,7 +228,7 @@ export default function Transport() {
       await updateItem('logistique_transports', t.id, {
         depenses, totalDepenses: totDep, marge: (parseFloat(t.recette) || 0) - totDep
       })
-      await audit('logistique', 'TRANSPORT_DEPENSE', `${siteLabel(site)} — ${t.num || t.plaque} — +${formatMoney(montant)} · ${label}`)
+      await audit('logistique', 'TRANSPORT_DEPENSE', `${siteLabel(site)} : ${t.num || t.plaque} : +${formatMoney(montant)} · ${label}`)
       toast.success('Dépense ajoutée au trajet ✓')
       setDetail((d) => (d && d.id === t.id ? { ...d, depenses } : d))
       setDepTrajet(null)
@@ -239,7 +239,7 @@ export default function Transport() {
     const t = toDelete
     setToDelete(null)
     await removeItem('logistique_transports', t.id)
-    await audit('logistique', 'TRANSPORT_DELETE', `${siteLabel(site)} — ${t.plaque || ''} · ${t.num || ''} · ${STATUTS_TRAJET[statutTrajet(t)].label}`)
+    await audit('logistique', 'TRANSPORT_DELETE', `${siteLabel(site)} : ${t.plaque || ''} · ${t.num || ''} · ${STATUTS_TRAJET[statutTrajet(t)].label}`)
     toast.success('Trajet supprimé ✓')
     setDetail((d) => (d && d.id === t.id ? null : d))
   }
@@ -447,7 +447,7 @@ export default function Transport() {
           <div className="space-y-3">
             {!modal.isNew && statutTrajet(modal.dataInitial) !== 'en_attente' && (
               <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Ce trajet est déjà <strong>{STATUTS_TRAJET[statutTrajet(modal.dataInitial)].label.toLowerCase()}</strong> — modification réservée à l'administration. Le statut et les horodatages sont conservés.
+                Ce trajet est déjà <strong>{STATUTS_TRAJET[statutTrajet(modal.dataInitial)].label.toLowerCase()}</strong> : modification réservée à l'administration. Le statut et les horodatages sont conservés.
               </div>
             )}
             {/* Identification & date */}
@@ -488,7 +488,7 @@ export default function Transport() {
                 <Input type="number" min="0" value={modal.data.recette} onChange={(e) => set('recette', e.target.value)} placeholder="Montant facturé / gagné pour ce trajet" />
               </FormGroup>
 
-              <p className="mt-3 mb-1 text-xs font-semibold text-gray-500">Dépenses (carburant, péage, main d'œuvre…) — ajoutez-les une à une</p>
+              <p className="mt-3 mb-1 text-xs font-semibold text-gray-500">Dépenses (carburant, péage, main d'œuvre…) : ajoutez-les une à une</p>
               {(modal.data.depenses || []).length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {modal.data.depenses.map((x, i) => (
@@ -519,7 +519,7 @@ export default function Transport() {
 
       {/* Détail d'un trajet (clic sur une ligne) */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
-        title={detail ? `Trajet ${detail.num || ''} — ${detail.plaque || ''}` : ''}
+        title={detail ? `Trajet ${detail.num || ''} : ${detail.plaque || ''}` : ''}
         {...glassModalProps(COULEUR)}
         footer={detail && (() => {
           const st = statutTrajet(detail)
@@ -613,7 +613,7 @@ export default function Transport() {
         footer={<><Button variant="outline" onClick={() => setDepTrajet(null)}>Annuler</Button><Button style={{ backgroundColor: COULEUR }} loading={saving} onClick={ajouterDepenseTrajet}>Ajouter</Button></>}>
         {depTrajet && (
           <div className="space-y-3">
-            <p className="text-xs text-gray-500">Trajet {depTrajet.trajet.num || ''} — {depTrajet.trajet.plaque} · {depTrajet.trajet.lieuDepart || '?'} → {depTrajet.trajet.lieuArrivee || '?'}</p>
+            <p className="text-xs text-gray-500">Trajet {depTrajet.trajet.num || ''} : {depTrajet.trajet.plaque} · {depTrajet.trajet.lieuDepart || '?'} → {depTrajet.trajet.lieuArrivee || '?'}</p>
             <FormGroup label="Nature de la dépense" required>
               <Input value={depTrajet.label} onChange={(e) => setDepTrajet((s) => ({ ...s, label: e.target.value }))} placeholder="ex : Carburant / essence, péage, réparation…" autoFocus />
             </FormGroup>
@@ -629,7 +629,7 @@ export default function Transport() {
         footer={<><Button variant="outline" onClick={() => setToDelete(null)}>Annuler</Button><Button variant="danger" onClick={supprimer}>Supprimer</Button></>}>
         {toDelete && (
           <p className="text-sm text-gray-600">
-            Supprimer le trajet {toDelete.num || ''} du {formatDateShort(toDelete.date)} — {toDelete.plaque}
+            Supprimer le trajet {toDelete.num || ''} du {formatDateShort(toDelete.date)} : {toDelete.plaque}
             {statutTrajet(toDelete) !== 'en_attente' && <> (<strong>{STATUTS_TRAJET[statutTrajet(toDelete)].label.toLowerCase()}</strong>)</>} ?
           </p>
         )}

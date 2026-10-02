@@ -160,13 +160,13 @@ export default function VoyageDetail() {
       date: todayStr(), par: user.nom
     }
     await updateItem('voyage_articles', article.id, { ...article, achat })
-    await audit('voyage', 'ACHAT', `${article.designation} — ${f.nom} · ${formatMoney(achat.total)} · voyage ${voyage.num}`)
+    await audit('voyage', 'ACHAT', `${article.designation} : ${f.nom} · ${formatMoney(achat.total)} · voyage ${voyage.num}`)
     await notify({
-      type: 'info', title: `🛒 Achat validé — ${voyage.pays}`,
+      type: 'info', title: `🛒 Achat validé : ${voyage.pays}`,
       body: `${article.designation} × ${qte} chez ${f.nom} · ${formatMoney(achat.total)} (prix figé au taux du jour)`,
       module: 'voyage', forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])], excludeUid: user.uid, link: `/voyage/voyages/${id}`
     })
-    toast.success('Achat enregistré — prix figé ✓')
+    toast.success('Achat enregistré : prix figé ✓')
     setAchatModal(null)
   }
   async function annulerAchat(a) {
@@ -221,7 +221,7 @@ export default function VoyageDetail() {
       <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-800 p-4 text-white shadow-lg">
         <div>
           <Link to="/voyage/voyages" className="mb-1 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white"><ArrowLeft size={14} /> Voyages</Link>
-          <h2 className="text-lg font-extrabold">{voyage.voyageurNom} · {voyage.pays}{voyage.ville ? ` — ${voyage.ville}` : ''}</h2>
+          <h2 className="text-lg font-extrabold">{voyage.voyageurNom} · {voyage.pays}{voyage.ville ? ` : ${voyage.ville}` : ''}</h2>
           <p className="text-sm text-white/80">
             {voyage.dateDepart ? formatDateShort(voyage.dateDepart) : '—'}{voyage.dateRetour ? ` → ${formatDateShort(voyage.dateRetour)}` : ''}
             {voyage.motif ? ` · ${voyage.motif}` : ''}
@@ -317,7 +317,7 @@ export default function VoyageDetail() {
               {/* Achat figé */}
               {a.achat && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-green-100 bg-green-50/60 px-4 py-2 text-xs text-green-800">
-                  <span><Lock size={11} className="mr-1 inline" /><strong>Prix figé</strong> le {formatDateShort(a.achat.date)} — fournisseur <strong>{a.achat.fournisseurNom}</strong></span>
+                  <span><Lock size={11} className="mr-1 inline" /><strong>Prix figé</strong> le {formatDateShort(a.achat.date)} : fournisseur <strong>{a.achat.fournisseurNom}</strong></span>
                   <span>PU : {fmtDevise(a.achat.prixUnitaire, symDe(a.achat.devise))} = <strong>{formatMoney(a.achat.prixUnitaireFCFA)}</strong> (taux {formatNumber(a.achat.tauxFige)})</span>
                   <span>× {formatNumber(a.achat.quantite)} = <strong className="text-green-900">{formatMoney(a.achat.total)}</strong></span>
                   {isAdmin && <button onClick={() => annulerAchat(a)} className="ml-auto font-semibold text-red-500 underline">annuler</button>}
@@ -366,7 +366,7 @@ export default function VoyageDetail() {
                       )
                     })}
                     {!(a.fournisseurs || []).length && (
-                      <tr><td colSpan={7} className="px-3 py-4 text-center text-sm text-gray-400">Aucun fournisseur — ajoutez-en pour comparer les prix.</td></tr>
+                      <tr><td colSpan={7} className="px-3 py-4 text-center text-sm text-gray-400">Aucun fournisseur : ajoutez-en pour comparer les prix.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -443,7 +443,7 @@ export default function VoyageDetail() {
               <FormGroup label="Contact"><Input value={fournModal.data.contact} onChange={(e) => setFournModal((m) => ({ ...m, data: { ...m.data, contact: e.target.value } }))} placeholder="tél / WeChat / email" /></FormGroup>
               <FormGroup label="Devise">
                 <Select value={fournModal.data.devise} onChange={(e) => setFournModal((m) => ({ ...m, data: { ...m.data, devise: e.target.value } }))}>
-                  {devises.map((d) => <option key={d.code} value={d.code}>{d.code} — {d.nom}</option>)}
+                  {devises.map((d) => <option key={d.code} value={d.code}>{d.code} : {d.nom}</option>)}
                 </Select>
               </FormGroup>
               <FormGroup label="Prix unitaire (devise)" required><Input type="number" min="0" step="0.01" value={fournModal.data.prixUnitaire} onChange={(e) => setFournModal((m) => ({ ...m, data: { ...m.data, prixUnitaire: e.target.value } }))} /></FormGroup>
@@ -473,7 +473,7 @@ export default function VoyageDetail() {
             <div className="space-y-3">
               <FormGroup label="Fournisseur">
                 <Select value={achatModal.fournisseurIndex} onChange={(e) => setAchatModal((m) => ({ ...m, fournisseurIndex: parseInt(e.target.value) }))}>
-                  {(a.fournisseurs || []).map((x, i) => <option key={i} value={i}>{x.nom} — {fmtDevise(x.prixUnitaire, symDe(x.devise))} ≈ {formatMoney(Math.round(enFCFA(x.prixUnitaire, tauxDe(x.devise))))}</option>)}
+                  {(a.fournisseurs || []).map((x, i) => <option key={i} value={i}>{x.nom} : {fmtDevise(x.prixUnitaire, symDe(x.devise))} ≈ {formatMoney(Math.round(enFCFA(x.prixUnitaire, tauxDe(x.devise))))}</option>)}
                 </Select>
               </FormGroup>
               <FormGroup label="Quantité achetée"><Input type="number" min="1" value={achatModal.quantite} onChange={(e) => setAchatModal((m) => ({ ...m, quantite: e.target.value }))} /></FormGroup>
@@ -502,7 +502,7 @@ export default function VoyageDetail() {
               <FormGroup label="Montant"><Input type="number" min="0" value={depModal.montant} onChange={(e) => setDepModal((m) => ({ ...m, montant: e.target.value }))} /></FormGroup>
               <FormGroup label="Devise">
                 <Select value={depModal.devise} onChange={(e) => setDepModal((m) => ({ ...m, devise: e.target.value }))}>
-                  {devises.map((d) => <option key={d.code} value={d.code}>{d.code} — {d.nom}</option>)}
+                  {devises.map((d) => <option key={d.code} value={d.code}>{d.code} : {d.nom}</option>)}
                 </Select>
               </FormGroup>
             </div>

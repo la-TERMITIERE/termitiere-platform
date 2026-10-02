@@ -96,7 +96,7 @@ export default function Facturation() {
       await updateItem('gym_factures', edit.id, {
         clientNom: edit.clientNom.trim(), montant: Number(edit.montant), description: edit.description.trim()
       })
-      await audit('gym', 'FACTURE_MODIFIEE', `${edit.numero} — ${edit.clientNom.trim()} — ${Number(edit.montant).toLocaleString('fr-FR')} FCFA`)
+      await audit('gym', 'FACTURE_MODIFIEE', `${edit.numero} : ${edit.clientNom.trim()} : ${Number(edit.montant).toLocaleString('fr-FR')} FCFA`)
       toast.success('Facture modifiée ✓')
       setEdit(null)
     } finally { setSaving(false) }
@@ -105,7 +105,7 @@ export default function Facturation() {
   async function supprimer(f) {
     if (!confirm(`Supprimer la facture ${f.numero} de ${f.clientNom} ?`)) return
     await removeItem('gym_factures', f.id)
-    await audit('gym', 'FACTURE_SUPPRIMEE', `${f.numero} — ${f.clientNom}`)
+    await audit('gym', 'FACTURE_SUPPRIMEE', `${f.numero} : ${f.clientNom}`)
     toast.success('Facture supprimée')
   }
 
@@ -128,8 +128,8 @@ export default function Facturation() {
     }))
     return {
       name: nom,
-      title: `${nom} — MAXI-GYM`,
-      subtitle: `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} — ${formatMoney(rows.reduce((s, r) => s + r['Montant'], 0))} au total`,
+      title: `${nom} : MAXI-GYM`,
+      subtitle: `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} : ${formatMoney(rows.reduce((s, r) => s + r['Montant'], 0))} au total`,
       columns: [
         { key: 'N°', label: 'N°', width: 14 },
         { key: 'Date', label: 'Date', width: 12 },
@@ -170,7 +170,7 @@ export default function Facturation() {
     const entries = [...map.entries()].sort((a, b) => b[1].montant - a[1].montant)
     const detail = entries.map(([cat, e]) => `${cat} : ${e.n} (${formatMoney(e.montant)})`).join(' · ')
     const top = entries[0]
-    return `${sousListe.length} enregistrement(s) "${nom}" sur la période, pour un total de ${formatMoney(totalSection)}. Répartition par catégorie — ${detail}. La catégorie la plus active est "${top[0]}", avec ${formatMoney(top[1].montant)} encaissés.`
+    return `${sousListe.length} enregistrement(s) "${nom}" sur la période, pour un total de ${formatMoney(totalSection)}. Répartition par catégorie : ${detail}. La catégorie la plus active est "${top[0]}", avec ${formatMoney(top[1].montant)} encaissés.`
   }
 
   const sectionPdfDe = (nom, sousListe) => {
@@ -230,7 +230,7 @@ export default function Facturation() {
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        Une facture est générée automatiquement à chaque enregistrement d'une séance ou d'un abonnement. Si une facture manque pour un enregistrement plus ancien, une icône 🧾 permet de la générer directement depuis le volet Séances/Abonnements concerné. Pour les séances, le ticket de caisse s'imprime automatiquement (imprimante thermique) — l'icône 🖨️ permet de le réimprimer à tout moment.
+        Une facture est générée automatiquement à chaque enregistrement d'une séance ou d'un abonnement. Si une facture manque pour un enregistrement plus ancien, une icône 🧾 permet de la générer directement depuis le volet Séances/Abonnements concerné. Pour les séances, le ticket de caisse s'imprime automatiquement (imprimante thermique) : l'icône 🖨️ permet de le réimprimer à tout moment.
       </div>
 
       {/* 3 KPI de cumul — Séances, Abonnements, et les deux combinés — recalculés
@@ -268,7 +268,7 @@ export default function Facturation() {
               <div className="flex justify-end gap-1">
                 {r.sourceType === 'seance' ? (
                   <button onClick={() => imprimerTicketSeance(r)}
-                    title={r.imprime === false ? 'Pas encore imprimé — cliquer pour imprimer' : 'Réimprimer le ticket'}
+                    title={r.imprime === false ? 'Pas encore imprimé : cliquer pour imprimer' : 'Réimprimer le ticket'}
                     className={`rounded p-1.5 hover:bg-orange-50 ${r.imprime === false ? 'text-amber-500' : 'text-orange-600'}`}><Printer size={16} /></button>
                 ) : (
                   <button onClick={() => reimprimer(r)} title="Télécharger le PDF" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><FileDown size={16} /></button>

@@ -123,7 +123,7 @@ export default function Flux() {
       </div>
 
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Chaque dépense décaissée est classée par <strong>nature de flux</strong> (Exploitation, Investissement ou Perte — voir l'onglet Dépenses). Le solde d'exploitation compare cette dépense au revenu réel du mois ; investissement et pertes sont des sorties pures, sans revenu suivi en face.
+        Chaque dépense décaissée est classée par <strong>nature de flux</strong> (Exploitation, Investissement ou Perte : voir l'onglet Dépenses). Le solde d'exploitation compare cette dépense au revenu réel du mois ; investissement et pertes sont des sorties pures, sans revenu suivi en face.
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -164,7 +164,7 @@ export default function Flux() {
         </div>
       </Card>
 
-      <Card title={`Entrées vs sorties — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+      <Card title={`Entrées vs sorties : ${MOIS_LABELS[mois - 1]} ${annee}`}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
             <p className="text-xs font-bold uppercase tracking-wide text-green-700">💰 Entrées</p>
@@ -189,7 +189,7 @@ export default function Flux() {
         </div>
       </Card>
 
-      <Card title="Tendance sur 6 mois — solde par nature de flux">
+      <Card title="Tendance sur 6 mois : solde par nature de flux">
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
           <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#0d9488' }} /> Exploitation (fonctionnement)</span>
           <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d97706' }} /> Investissement</span>

@@ -185,7 +185,7 @@ export default function Journal() {
       filename: `journal-logistique-${start}_${end}.xlsx`,
       sections: [{
         id: 'journal', name: 'Journal Logistique',
-        title: 'Journal d\'activité — Logistique & Événementiel',
+        title: 'Journal d\'activité : Logistique & Événementiel',
         subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} événement(s)`,
         columns: [
           { key: 'Date / Heure', label: 'Date / Heure', width: 20 },

@@ -58,7 +58,7 @@ export default function Voyages() {
       })
       await audit('voyage', 'VOYAGE_CREATE', `${d.voyageurNom} → ${d.pays}`)
       await notify({
-        type: 'demande', title: `✈️ Nouveau voyage d'achat — ${d.pays}`,
+        type: 'demande', title: `✈️ Nouveau voyage d'achat : ${d.pays}`,
         body: `${d.voyageurNom} part${d.dateDepart ? ' le ' + formatDateShort(d.dateDepart) : ''}${d.motif ? ` · ${d.motif}` : ''}`,
         module: 'voyage', forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])], excludeUid: user.uid, link: '/voyage/voyages'
       })
@@ -84,7 +84,7 @@ export default function Voyages() {
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600"><Plane size={22} /></div>
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">Voyages d'achat</h2>
-            <p className="text-sm text-gray-500">Missions d'achat à l'étranger — fournisseurs, prix et conversions</p>
+            <p className="text-sm text-gray-500">Missions d'achat à l'étranger : fournisseurs, prix et conversions</p>
           </div>
         </div>
         {peutSaisir && <Button style={{ backgroundColor: '#4f46e5' }} onClick={() => setModal({ data: vide() })}><Plus size={16} /> Nouveau voyage</Button>}
@@ -147,7 +147,7 @@ export default function Voyages() {
               </FormGroup>
               <FormGroup label="Devise du budget">
                 <Select value={modal.data.budgetDevise} onChange={(e) => set('budgetDevise', e.target.value)}>
-                  {devises.map((d) => <option key={d.code} value={d.code}>{d.code} — {d.nom}</option>)}
+                  {devises.map((d) => <option key={d.code} value={d.code}>{d.code} : {d.nom}</option>)}
                 </Select>
               </FormGroup>
             </div>

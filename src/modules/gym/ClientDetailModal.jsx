@@ -66,7 +66,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
         partenaire: !!edit.partenaire,
         partenaireStructure: edit.partenaire ? edit.partenaireStructure.trim() : ''
       })
-      await audit('gym', 'CLIENT_MODIFIE', `${edit.nom.trim()}${edit.partenaire ? ` — partenaire ${edit.partenaireStructure.trim()}` : ''}`)
+      await audit('gym', 'CLIENT_MODIFIE', `${edit.nom.trim()}${edit.partenaire ? ` : partenaire ${edit.partenaireStructure.trim()}` : ''}`)
       toast.success('Client mis à jour ✓')
       setEdit(null)
     } finally { setSaving(false) }
@@ -120,7 +120,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
                 className="mt-0.5 h-4 w-4 shrink-0 accent-sky-600" />
               <span className="text-sm">
                 <span className="font-semibold text-sky-900">Client partenaire</span>
-                <span className="mt-0.5 block text-xs text-sky-700">Ne paie pas sur place — sa structure règle en fin de mois. Ses séances seront « portées au compte du partenaire ».</span>
+                <span className="mt-0.5 block text-xs text-sky-700">Ne paie pas sur place : sa structure règle en fin de mois. Ses séances seront « portées au compte du partenaire ».</span>
               </span>
             </label>
             {edit.partenaire && (
@@ -134,14 +134,14 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
         <div className="space-y-3">
           {client.partenaire && (
             <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
-              🤝 Partenaire — {client.partenaireStructure || 'structure non renseignée'}
+              🤝 Partenaire : {client.partenaireStructure || 'structure non renseignée'}
               <span className="text-xs font-normal text-sky-600">· séances réglées par la structure en fin de mois</span>
             </div>
           )}
           <div className="rounded-xl bg-gray-50 p-3">
             <p className="text-sm text-gray-600">📞 {client.telephone || 'Non renseigné'}{sexeInfo(client.sexe) && <span className="ml-2 font-semibold" style={{ color: sexeInfo(client.sexe).couleur }}>{sexeInfo(client.sexe).symbole} {sexeInfo(client.sexe).label}</span>}</p>
             {client.notes && <p className="mt-1 text-xs text-gray-500">📝 {client.notes}</p>}
-            <p className="mt-2 text-sm font-bold text-gray-800">{formatMoney(total)} au total — {historique.length} passage{historique.length > 1 ? 's' : ''}</p>
+            <p className="mt-2 text-sm font-bold text-gray-800">{formatMoney(total)} au total : {historique.length} passage{historique.length > 1 ? 's' : ''}</p>
           </div>
 
           {/* Calendrier du mois — exactement la même vue que le carnet public du

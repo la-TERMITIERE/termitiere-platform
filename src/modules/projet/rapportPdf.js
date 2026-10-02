@@ -33,7 +33,7 @@ export async function genererRapportProjetPDF(projet, taches, depenses, commenta
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, MARGIN, 20)
-  doc.text('E-G.Pro — LA TERMITIÈRE', W - MARGIN, 20, { align: 'right' })
+  doc.text('E-G.Pro : LA TERMITIÈRE', W - MARGIN, 20, { align: 'right' })
 
   y = 36
 
@@ -199,7 +199,7 @@ export async function genererRapportProjetPDF(projet, taches, depenses, commenta
     doc.setFontSize(7)
     doc.setTextColor(...GRAY)
     doc.text(`Page ${i} / ${pages}`, W / 2, 290, { align: 'center' })
-    doc.text('E-G.Pro — LA TERMITIÈRE', MARGIN, 290)
+    doc.text('E-G.Pro : LA TERMITIÈRE', MARGIN, 290)
     doc.text(new Date().toLocaleDateString('fr-FR'), W - MARGIN, 290, { align: 'right' })
   }
 

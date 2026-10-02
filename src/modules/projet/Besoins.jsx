@@ -218,8 +218,8 @@ export default function Besoins() {
     const demandeurTel = user?.telephone ? ` · ☎ ${user.telephone}` : ''
     await notify({
       type: 'info',
-      title: `📦 Nouveau besoin — ${projet.nom}`,
-      body: `${titre} — en attente de validation · ✍️ ${user?.nom || user?.login || '—'}${demandeurTel}`,
+      title: `📦 Nouveau besoin : ${projet.nom}`,
+      body: `${titre} : en attente de validation · ✍️ ${user?.nom || user?.login || '—'}${demandeurTel}`,
       module: 'projet', forRoles: BESOINS_NOTIF_ROLES, forUsers, excludeUid: user?.uid, link: '/projet/besoins'
     }).catch(() => {})
   }
@@ -288,7 +288,7 @@ export default function Besoins() {
         })
         await audit('projet', 'besoin_cree', l.titre.trim())
       }
-      await notifierResponsable(lot.projetId, `${valides.length} nouveau(x) besoin(s)${lot.section?.trim() ? ' — ' + lot.section.trim() : ''}`)
+      await notifierResponsable(lot.projetId, `${valides.length} nouveau(x) besoin(s)${lot.section?.trim() ? ' : ' + lot.section.trim() : ''}`)
       toast.success(`${valides.length} besoin(s) ajouté(s) ✓`)
       setLot(null)
     } finally { setSavingLot(false) }
@@ -304,7 +304,7 @@ export default function Besoins() {
     // réel — comme une dépense — et n'est plus supprimable depuis ici.
     const decaissements = depenseDepensesTous.filter((d) => d.id === b.depenseId || (d.source === 'besoin' && d.besoinId === b.id))
     if (decaissements.some((d) => d.statut !== 'en_attente')) {
-      toast.error('Cette demande a déjà été approuvée — elle est désormais un engagement réel dans E-DÉPENSES, impossible de la supprimer ici.')
+      toast.error('Cette demande a déjà été approuvée : elle est désormais un engagement réel dans E-DÉPENSES, impossible de la supprimer ici.')
       return
     }
     const confirmMsg = decaissements.length
@@ -347,7 +347,7 @@ export default function Besoins() {
     const b = besoins.find((x) => x.id === observationEdit.id)
     if (b?.demandeParUid && b.demandeParUid !== user?.uid) {
       await notify({
-        type: 'info', title: `💬 Réponse à votre besoin — ${b.titre}`,
+        type: 'info', title: `💬 Réponse à votre besoin : ${b.titre}`,
         body: valeur, module: 'projet', forUsers: [b.demandeParUid], link: '/projet/besoins'
       }).catch(() => {})
     }
@@ -371,7 +371,7 @@ export default function Besoins() {
       categorie: catLabel(b.categorie),
       montant: Number(b.montant) || 0,
       date: todayStr(),
-      description: [projet?.nom, tache?.titre, b.titre].filter(Boolean).join(' — '),
+      description: [projet?.nom, tache?.titre, b.titre].filter(Boolean).join(' : '),
       noteOrigine: b.note || '',
       natureFlux: natureFluxProjet(projet),
       sourceFinancement: 'entreprise',
@@ -418,27 +418,27 @@ export default function Besoins() {
     await updateItem('projet_besoins', b.id, {
       validation: 'valide', valideParText: user?.nom || user?.login || '—', valideLe: Date.now(), depenseId
     })
-    await audit('projet', 'besoin_valide', `${b.titre} — ${b.dejaPaye ? 'dépense déjà payée, décaissée directement' : 'approuvée, envoyée à décaisser'} (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
+    await audit('projet', 'besoin_valide', `${b.titre} : ${b.dejaPaye ? 'dépense déjà payée, décaissée directement' : 'approuvée, envoyée à décaisser'} (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
     const destinataires = destinatairesDecision(b)
     if (destinataires.length) {
-      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} — ${b.dejaPaye ? 'dépense déjà payée, enregistrée dans E-DÉPENSES' : 'approuvée, en attente de décaissement'}`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
+      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} : ${b.dejaPaye ? 'dépense déjà payée, enregistrée dans E-DÉPENSES' : 'approuvée, en attente de décaissement'}`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
     }
     await notify(b.dejaPaye ? {
-      type: 'info', title: '💸 Dépense déjà réglée — enregistrée',
-      body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA déjà payés par ${b.demandePar || '—'}, décaissée directement (besoin validé par ${user?.nom || '—'})`,
+      type: 'info', title: '💸 Dépense déjà réglée : enregistrée',
+      body: `${b.titre} : ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA déjà payés par ${b.demandePar || '—'}, décaissée directement (besoin validé par ${user?.nom || '—'})`,
       module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/liste'
     } : {
       type: 'demande', title: '💰 Décaissement à certifier',
-      body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA, déjà approuvé (besoin validé par ${user?.nom || '—'}) — reste à certifier pour décaisser`,
+      body: `${b.titre} : ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA, déjà approuvé (besoin validé par ${user?.nom || '—'}) : reste à certifier pour décaisser`,
       module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
     }).catch(() => {})
   }
   async function refuserBesoin(b, motif = '') {
     await updateItem('projet_besoins', b.id, { validation: 'refuse', motifRefus: motif, statut: 'annule', refuseParText: user?.nom || user?.login || '—', refuseLe: Date.now() })
-    await audit('projet', 'besoin_refuse', `${b.titre}${motif ? ' — ' + motif : ''}`)
+    await audit('projet', 'besoin_refuse', `${b.titre}${motif ? ' : ' + motif : ''}`)
     const destinataires = destinatairesDecision(b)
     if (destinataires.length) {
-      await notify({ type: 'refus', title: '❌ Besoin refusé', body: `${b.titre}${motif ? ' — ' + motif : ''}`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
+      await notify({ type: 'refus', title: '❌ Besoin refusé', body: `${b.titre}${motif ? ' : ' + motif : ''}`, module: 'projet', forUsers: destinataires, link: '/projet/besoins' }).catch(() => {})
     }
   }
   const demanderRefus = async (b) => {
@@ -486,7 +486,7 @@ export default function Besoins() {
         <div>
           <h2 className="text-lg font-extrabold">Besoins</h2>
           <p className="text-sm text-white/80">
-            {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} — matériaux, main d'œuvre, équipement
+            {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} : matériaux, main d'œuvre, équipement
           </p>
         </div>
       </div>
@@ -533,7 +533,7 @@ export default function Besoins() {
       {/* Récapitulatif type « devis quantitatif et estimatif » — par ouvrage (section),
           avec sous-totaux Matériaux / Main d'œuvre puis total par ouvrage et total général. */}
       {filtreProjet && devisProjet && devisProjet.sections.length > 0 && (
-        <Card title={`📄 Cadre du devis — ${projets.find((p) => p.id === filtreProjet)?.nom || ''}`}>
+        <Card title={`📄 Cadre du devis : ${projets.find((p) => p.id === filtreProjet)?.nom || ''}`}>
           <p className="mb-3 text-xs text-gray-500">
             Récapitulatif structuré par ouvrage, dans la logique d'un devis quantitatif et estimatif. Basé sur les besoins actifs de ce projet (hors refusés/annulés).
           </p>
@@ -634,7 +634,7 @@ export default function Besoins() {
                     <td className={`${cell} rounded-l-2xl border-l-[3px] px-4`} style={{ borderColor: accent }}>
                       <p className="whitespace-nowrap text-xs font-semibold text-gray-700">{b.createdAt ? formatDateShort(b.createdAt) : '—'}</p>
                       {projet && (
-                        <span className="mt-1 inline-block max-w-[140px] truncate whitespace-nowrap rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700" title={projet.lieu ? `${projet.nom} — ${projet.lieu}` : projet.nom}>
+                        <span className="mt-1 inline-block max-w-[140px] truncate whitespace-nowrap rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700" title={projet.lieu ? `${projet.nom} : ${projet.lieu}` : projet.nom}>
                           {projet.nom}
                         </span>
                       )}
@@ -721,15 +721,15 @@ export default function Besoins() {
             <FormGroup label="Projet" required>
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                 value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value, tacheId: '' }))}>
-                <option value="">— Sélectionner —</option>
+                <option value="">Sélectionner</option>
                 {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </select>
             </FormGroup>
             {form.projetId && (
-              <FormGroup label="Tâche" hint="Optionnel — rattacher ce besoin à une tâche précise du projet">
+              <FormGroup label="Tâche" hint="Optionnel : rattacher ce besoin à une tâche précise du projet">
                 <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   value={form.tacheId} onChange={(e) => setForm((f) => ({ ...f, tacheId: e.target.value }))}>
-                  <option value="">— Aucune tâche précise —</option>
+                  <option value="">Aucune tâche précise</option>
                   {tachesDuProjet.map((t) => <option key={t.id} value={t.id}>{t.titre}</option>)}
                 </select>
               </FormGroup>
@@ -739,7 +739,7 @@ export default function Besoins() {
                 placeholder="ex : Ciment, ouvriers supplémentaires, bétonnière…"
                 value={form.titre} onChange={(e) => setForm((f) => ({ ...f, titre: e.target.value }))} />
             </FormGroup>
-            <FormGroup label="Ouvrage / Section" hint="Optionnel — regroupe ce besoin dans le devis (ex : Cage d'escalier, Acrotère…)">
+            <FormGroup label="Ouvrage / Section" hint="Optionnel : regroupe ce besoin dans le devis (ex : Cage d'escalier, Acrotère…)">
               <ChampAutocomplete value={form.section} onChange={(v) => setForm((f) => ({ ...f, section: v }))}
                 suggestions={sectionsDuProjet} placeholder="ex : Cage d'escalier" accent="teal" />
             </FormGroup>
@@ -768,7 +768,7 @@ export default function Besoins() {
                 </select>
               </FormGroup>
               {form.categorie === 'financier' ? (
-                <FormGroup label="Montant demandé (FCFA)" required hint="Somme d'argent nécessaire — pas d'achat de matériel précis">
+                <FormGroup label="Montant demandé (FCFA)" required hint="Somme d'argent nécessaire : pas d'achat de matériel précis">
                   <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                     placeholder="ex : 50 000"
                     value={form.prixUnitaire} onChange={(e) => setForm((f) => ({ ...f, prixUnitaire: e.target.value, quantite: '1' }))} />
@@ -808,7 +808,7 @@ export default function Besoins() {
           </div>
 
           <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(13,148,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">👤 Bénéficiaire — qui reçoit les fonds</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">👤 Bénéficiaire : qui reçoit les fonds</p>
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Fournisseur / prestataire" required hint="À qui l'argent sera remis une fois décaissé">
                 <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
@@ -829,7 +829,7 @@ export default function Besoins() {
               <span>
                 <span className={`block text-xs font-semibold ${form.dejaPaye ? 'text-amber-800' : 'text-gray-700'}`}>💸 J'ai déjà payé cette dépense</span>
                 <span className="block text-[11px] text-gray-500">
-                  Achat urgent déjà réglé par le demandeur — une fois ce besoin validé, la dépense sera décaissée directement dans E-DÉPENSES, sans passer par le circuit d'autorisation.
+                  Achat urgent déjà réglé par le demandeur : une fois ce besoin validé, la dépense sera décaissée directement dans E-DÉPENSES, sans passer par le circuit d'autorisation.
                 </span>
               </span>
             </button>
@@ -900,7 +900,7 @@ export default function Besoins() {
                 <FormGroup label="Projet" required>
                   <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                     value={lot.projetId} onChange={(e) => setLot((l) => ({ ...l, projetId: e.target.value, tacheId: '' }))}>
-                    <option value="">— Sélectionner —</option>
+                    <option value="">Sélectionner</option>
                     {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
                   </select>
                 </FormGroup>
@@ -908,10 +908,10 @@ export default function Besoins() {
                   <ChampAutocomplete value={lot.section} onChange={(v) => setLot((l) => ({ ...l, section: v }))}
                     suggestions={sectionsDuLot} placeholder="ex : Cage d'escalier" accent="teal" />
                 </FormGroup>
-                <FormGroup label="Tâche" hint="Optionnel — s'applique à toutes les lignes">
+                <FormGroup label="Tâche" hint="Optionnel : s'applique à toutes les lignes">
                   <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                     value={lot.tacheId} onChange={(e) => setLot((l) => ({ ...l, tacheId: e.target.value }))}>
-                    <option value="">— Aucune tâche précise —</option>
+                    <option value="">Aucune tâche précise</option>
                     {tachesDuLot.map((t) => <option key={t.id} value={t.id}>{t.titre}</option>)}
                   </select>
                 </FormGroup>
@@ -1019,7 +1019,7 @@ export default function Besoins() {
                 </div>
                 <div className="rounded-xl bg-white p-3 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tâche liée</p>
-                  <p className="mt-0.5 font-bold text-gray-800">{tache?.titre || '— (aucune)'}</p>
+                  <p className="mt-0.5 font-bold text-gray-800">{tache?.titre || '(aucune)'}</p>
                 </div>
                 <div className="rounded-xl bg-white p-3 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ouvrage / Section</p>

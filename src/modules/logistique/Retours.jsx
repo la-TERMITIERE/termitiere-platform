@@ -128,16 +128,16 @@ export default function Retours() {
         if (e.etat !== 'OK') {
           await notify({
             type: 'warning',
-            title: `Retour matériel — ${e.etat}`,
-            body: `${e.qte} × ${l.materielNom} (${e.etat})${e.penalite > 0 ? ` — pénalité ${formatMoney(e.penalite)}` : ''} · prestation ${prestation.num}`,
+            title: `Retour matériel : ${e.etat}`,
+            body: `${e.qte} × ${l.materielNom} (${e.etat})${e.penalite > 0 ? ` : pénalité ${formatMoney(e.penalite)}` : ''} · prestation ${prestation.num}`,
             module: 'logistique',
             forRoles: APPROVER_ROLES,
             link: '/logistique/retours'
           })
         }
       }
-      await audit('logistique', 'RETOUR', `${n} retour(s) — prestation ${prestation.num}`)
-      toast.success(`${n} retour(s) enregistré(s) ✓ — visibles en lecture seule dans la saisie magasin`)
+      await audit('logistique', 'RETOUR', `${n} retour(s) : prestation ${prestation.num}`)
+      toast.success(`${n} retour(s) enregistré(s) ✓ : visibles en lecture seule dans la saisie magasin`)
       setPrestationId('')
       setEntrees({})
       setDraft({})
@@ -165,15 +165,15 @@ export default function Retours() {
       motif: (editRetour.motif || '').trim(),
       penalite: editRetour.etat === 'OK' ? 0 : (parseFloat(editRetour.penalite) || 0)
     })
-    await audit('logistique', 'RETOUR_MODIFIE', `${siteLabel(site)} — retour corrigé (${editRetour.qte} × ${editRetour.etat})`)
+    await audit('logistique', 'RETOUR_MODIFIE', `${siteLabel(site)} : retour corrigé (${editRetour.qte} × ${editRetour.etat})`)
     toast.success('Retour corrigé ✓')
     setEditRetour(null)
   }
   async function supprimerRetour(r) {
     if (!confirm(`Supprimer ce retour (${r.qte} × ${r.materielNom}, ${r.type}) ?\nLe stock de la saisie magasin sera recalculé automatiquement.`)) return
     await removeItem('logistique_retours', r.id)
-    await audit('logistique', 'RETOUR_DELETE', `${siteLabel(site)} — ${r.qte} × ${r.materielNom} (${r.type}) — prestation ${r.prestationNum || ''}`)
-    toast.success('Retour supprimé — stock recalculé')
+    await audit('logistique', 'RETOUR_DELETE', `${siteLabel(site)} : ${r.qte} × ${r.materielNom} (${r.type}) : prestation ${r.prestationNum || ''}`)
+    toast.success('Retour supprimé : stock recalculé')
   }
 
   return (
@@ -199,9 +199,9 @@ export default function Retours() {
       <Card title="Nouveau retour (par prestation)">
         <FormGroup label="Prestation liée" required>
           <Select value={prestationId} onChange={(e) => choisirPrestation(e.target.value)}>
-            <option value="">— Choisir une prestation à retourner —</option>
+            <option value="">Choisir une prestation à retourner</option>
             {prestationsNonRendues.map((p) => (
-              <option key={p.id} value={p.id}>{p.num} — {p.clientNom} ({formatDateShort(p.dateDebut)})</option>
+              <option key={p.id} value={p.id}>{p.num} : {p.clientNom} ({formatDateShort(p.dateDebut)})</option>
             ))}
           </Select>
         </FormGroup>
@@ -251,8 +251,8 @@ export default function Retours() {
                   {reste > 0 ? (
                     <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-12">
                       <Select className="col-span-2 md:col-span-3" value={d.etat} onChange={(e) => setDraftMat(l.materielId, { etat: e.target.value })}>
-                        <option value="none">— État —</option>
-                        <option value="OK">OK — bon état</option>
+                        <option value="none">État</option>
+                        <option value="OK">OK : bon état</option>
                         <option value="Cassé">Cassé</option>
                         <option value="Perdu">Perdu</option>
                       </Select>
@@ -360,7 +360,7 @@ export default function Retours() {
           <div className="space-y-3">
             <FormGroup label="État">
               <Select value={editRetour.etat} onChange={(e) => setEditRetour((d) => ({ ...d, etat: e.target.value }))}>
-                <option value="OK">OK — bon état</option>
+                <option value="OK">OK : bon état</option>
                 <option value="Cassé">Cassé</option>
                 <option value="Perdu">Perdu</option>
               </Select>
@@ -388,7 +388,7 @@ export default function Retours() {
   async function togglePaye(r) {
     const payee = !r.penalitePayee
     await updateItem('logistique_retours', r.id, { penalitePayee: payee })
-    await audit('logistique', 'PENALITE', `${r.materielNom} (${r.type}) — ${payee ? 'remboursée' : 'remise en attente'} · ${formatMoney(r.penalite || 0)}`)
+    await audit('logistique', 'PENALITE', `${r.materielNom} (${r.type}) : ${payee ? 'remboursée' : 'remise en attente'} · ${formatMoney(r.penalite || 0)}`)
     toast.success(payee ? 'Pénalité marquée remboursée ✓' : 'Pénalité remise en attente')
   }
 }

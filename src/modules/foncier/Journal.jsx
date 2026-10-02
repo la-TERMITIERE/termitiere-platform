@@ -67,7 +67,7 @@ function OngletJournal({ evenements }) {
       filename: `journal-foncier-${start}_${end}.xlsx`,
       sections: [{
         id: 'journal', name: 'Journal Foncier',
-        title: 'Journal d\'activité — Foncier',
+        title: 'Journal d\'activité : Foncier',
         subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} événement(s)`,
         columns: [
           { key: 'Date / Heure', label: 'Date / Heure', width: 20 },

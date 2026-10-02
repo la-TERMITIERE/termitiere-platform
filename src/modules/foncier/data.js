@@ -27,7 +27,7 @@ export const ACTEURS_ROLES = [
 export const PIECES_ACTEUR = [
   { id: 'cni', label: 'CNI / Passeport / Carte de séjour (copie légalisée)', requis: true },
   { id: 'acte_naissance', label: 'Acte de naissance (< 3 mois)', requis: true },
-  { id: 'nif', label: 'NIF — Numéro d\'Identification Fiscale', requis: true },
+  { id: 'nif', label: 'NIF : Numéro d\'Identification Fiscale', requis: true },
   { id: 'certificat_residence', label: 'Certificat de résidence', requis: false },
   { id: 'procuration', label: 'Procuration légalisée (si mandataire)', requis: false }
 ]
@@ -44,14 +44,14 @@ export const PARCELLE_CHAMPS = [
   { id: 'prefecture', label: 'Préfecture' },
   { id: 'commune', label: 'Commune' },
   { id: 'quartier', label: 'Quartier / Canton' },
-  { id: 'lot', label: 'Référence — Lot' },
-  { id: 'hectares', label: 'Référence — Hectare(s)' },
+  { id: 'lot', label: 'Référence : Lot' },
+  { id: 'hectares', label: 'Référence : Hectare(s)' },
   { id: 'superficie', label: 'Superficie (m²)' }
 ]
 
 // Plan visé : effectué ou non (facultatif).
 export const PLAN_VISE_OPTIONS = [
-  { id: '', label: '— Non renseigné —' },
+  { id: '', label: 'Non renseigné' },
   { id: 'effectue', label: 'Effectué' },
   { id: 'non_effectue', label: 'Non effectué' }
 ]
@@ -72,17 +72,17 @@ export const TYPES_DOSSIER = [
   {
     id: 'vente_cession',
     label: 'Cession / Vente de terrain',
-    description: 'Vente d\'un terrain — appréciation des documents du cédant puis accompagnement jusqu\'au titre foncier (3 catégories : terrain nu, levé parcellaire, acte notarié).'
+    description: 'Vente d\'un terrain : appréciation des documents du cédant puis accompagnement jusqu\'au titre foncier (3 catégories : terrain nu, levé parcellaire, acte notarié).'
   },
   {
     id: 'titre_en_cours',
-    label: 'Immatriculation — Titre en cours',
+    label: 'Immatriculation : Titre en cours',
     description: 'Procédure foncière standard & bornage : du levé topographique jusqu\'à la délivrance du titre foncier (GUF/OTR).'
   },
   {
     id: 'achat_titre',
     label: 'Achat terrain avec titre foncier',
-    description: 'Acquisition d\'un domaine disposant déjà d\'un titre foncier — vérification puis mutation au nom de l\'acquéreur.'
+    description: 'Acquisition d\'un domaine disposant déjà d\'un titre foncier : vérification puis mutation au nom de l\'acquéreur.'
   },
   {
     id: 'mutation',
@@ -91,7 +91,7 @@ export const TYPES_DOSSIER = [
   },
   {
     id: 'morcellement',
-    label: 'Titre global — Morcellement',
+    label: 'Titre global : Morcellement',
     description: 'Division d\'un titre foncier global en plusieurs titres individuels.'
   },
   {
@@ -107,17 +107,17 @@ export const TYPES_DOSSIER = [
   {
     id: 'lotissement',
     label: 'Lotissement',
-    description: 'Division/aménagement d\'un domaine en lots — autorisation préalable du Ministère de l\'Urbanisme (via Mairie/Préfecture).'
+    description: 'Division/aménagement d\'un domaine en lots : autorisation préalable du Ministère de l\'Urbanisme (via Mairie/Préfecture).'
   },
   {
     id: 'contrat_gestion',
-    label: 'Contrat de gestion — surface rurale',
+    label: 'Contrat de gestion : surface rurale',
     description: 'Gestion de surfaces rurales : localisation, lotissement, suivi contractuel avec propriétaires ou autorités compétentes.'
   },
   {
     id: 'morcellement_vente',
     label: 'Morcellement pour vente en lots',
-    description: 'Morcellement de grands domaines en vue de la vente de lots — prospection, viabilisation, commercialisation.'
+    description: 'Morcellement de grands domaines en vue de la vente de lots : prospection, viabilisation, commercialisation.'
   }
 ]
 
@@ -138,7 +138,7 @@ export const CESSION_CATEGORIES = [
   {
     id: 'terrain_nu',
     label: 'Terrain nu (sans dossier préalable)',
-    description: 'Terrain coutumier sans levé ni titre. Risque élevé — vérifications renforcées avant toute mission.',
+    description: 'Terrain coutumier sans levé ni titre. Risque élevé : vérifications renforcées avant toute mission.',
     docsCedant: [
       'Attestation de détention de droit coutumier',
       'Pièces d\'identité légalisées du/des cédant(s)',
@@ -160,7 +160,7 @@ export const CESSION_CATEGORIES = [
   {
     id: 'terrain_acte_notarie',
     label: 'Terrain avec acte notarié et consorts',
-    description: 'Terrain disposant d\'un acte notarié et/ou d\'un titre foncier — sécurité juridique la plus élevée.',
+    description: 'Terrain disposant d\'un acte notarié et/ou d\'un titre foncier : sécurité juridique la plus élevée.',
     docsCedant: [
       'Titre foncier (original) ou acte notarié',
       'Expédition + cadastres à jour',
@@ -198,7 +198,7 @@ export const COUTS_REFERENCE = [
   { id: 'bornage', label: 'Bornage contradictoire (géomètre assermenté)', montant: null, note: 'Selon superficie' },
   { id: 'valeur_venale', label: 'Frais de valeur vénale', montant: null },
   { id: 'acte_notarie', label: 'Honoraires notaire (acte)', montant: null },
-  { id: 'mutation_droit_fixe', label: 'Mutation — droit fixe', montant: 35000, note: 'Enregistrement + timbres + conservation' },
+  { id: 'mutation_droit_fixe', label: 'Mutation : droit fixe', montant: 35000, note: 'Enregistrement + timbres + conservation' },
   { id: 'plus_value', label: 'Taxe sur la plus-value', montant: null, note: '7 % si bien détenu < 5 ans' },
   { id: 'droits_donation', label: 'Droits de mutation (donation)', montant: null, note: 'Selon lien de parenté' },
   { id: 'autorisation_lotir', label: 'Autorisation de lotir (Ministère)', montant: null }
@@ -230,7 +230,7 @@ export const FRAIS_INSCRIPTION_LABEL = 'Inscription / ouverture du dossier'
 
 // Workflow A — Procédure foncière standard & bornage (immatriculation → titre).
 export const ETAPES_TITRE = [
-  { id: 'leve_topo', label: 'Initialisation — N° de levé topographique', ordre: 1, personnel: 'Géomètre' },
+  { id: 'leve_topo', label: 'Initialisation : N° de levé topographique', ordre: 1, personnel: 'Géomètre' },
   { id: 'avis_guf', label: 'Avis favorable du Guichet Foncier Unique (vérification charges/litiges)', ordre: 2, cout: 'avis_guf', personnel: 'GUF / OTR' },
   { id: 'depot_dossier', label: 'Dépôt et enregistrement du dossier (GUF / OTR)', ordre: 3, personnel: 'GUF / OTR' },
   { id: 'acte_notarie', label: 'Rédaction et validation de l\'acte notarié', ordre: 4, cout: 'acte_notarie', personnel: 'Notaire' },
@@ -238,7 +238,7 @@ export const ETAPES_TITRE = [
   { id: 'bornage', label: 'Bornage contradictoire (génération/saisie du N° de réquisition)', ordre: 6, cout: 'bornage', personnel: 'Géomètre assermenté' },
   { id: 'traitement_otr', label: 'Enregistrement initial et traitement du dossier à l\'OTR', ordre: 7, personnel: 'OTR' },
   { id: 'valeur_venale', label: 'Détermination et paiement des frais de valeur vénale', ordre: 8, cout: 'valeur_venale', personnel: 'OTR' },
-  { id: 'titre_obtenu', label: 'Établissement du titre foncier (Conservation) — expédition au notaire', ordre: 9, personnel: 'Conservateur foncier' }
+  { id: 'titre_obtenu', label: 'Établissement du titre foncier (Conservation) : expédition au notaire', ordre: 9, personnel: 'Conservateur foncier' }
 ]
 
 // Workflow B — Mutation de nom (transfert de propriété).
@@ -246,7 +246,7 @@ export const ETAPES_MUTATION = [
   { id: 'verif_cadastre', label: 'Vérification de la parcelle dans la base cadastrale', ordre: 1, personnel: 'Cadastre' },
   { id: 'infos_achat', label: 'Saisie des informations de l\'achat (acte de vente + expédition + cadastres)', ordre: 2, personnel: 'Notaire' },
   { id: 'demande_mutation', label: 'Demande de mutation adressée au Conservateur (avec pièces justificatives)', ordre: 3, personnel: 'Conservateur foncier' },
-  { id: 'depot_calcul', label: 'Dépôt au Cadastre — calcul (taxe sur la plus-value + frais d\'enregistrement)', ordre: 4, cout: 'mutation_droit_fixe', personnel: 'Cadastre / OTR' },
+  { id: 'depot_calcul', label: 'Dépôt au Cadastre : calcul (taxe sur la plus-value + frais d\'enregistrement)', ordre: 4, cout: 'mutation_droit_fixe', personnel: 'Cadastre / OTR' },
   { id: 'paiement_plus_value', label: 'Paiement effectif de la taxe sur la plus-value', ordre: 5, cout: 'plus_value', personnel: 'OTR' },
   { id: 'creation_titre', label: 'Création du titre muté', ordre: 6, personnel: 'Conservation foncière' },
   { id: 'signature_titre', label: 'Signature du titre', ordre: 7, personnel: 'Conservateur foncier' },
@@ -298,7 +298,7 @@ export const ETAPES_DONATION = [
 // Cession/vente — étapes : appréciation base, puis accompagnement jusqu'au titre.
 export const ETAPES_VENTE = [
   { id: 'collecte_docs_cedant', label: 'Collecte des documents essentiels du cédant', ordre: 1 },
-  { id: 'appreciation_base', label: 'Appréciation des documents — verdict de la base (approuvée / annulée)', ordre: 2, personnel: 'Direction / Base' },
+  { id: 'appreciation_base', label: 'Appréciation des documents : verdict de la base (approuvée / annulée)', ordre: 2, personnel: 'Direction / Base' },
   { id: 'enquete_terrain', label: 'Enquête terrain (réquisition, litige, TF tiers)', ordre: 3, personnel: 'Agent foncier' },
   { id: 'negociation_acte_vente', label: 'Acte de vente / protocole entre cédant et acquéreur', ordre: 4, personnel: 'Notaire' },
   { id: 'leve_bornage', label: 'Levé topographique / bornage', ordre: 5, cout: 'bornage', personnel: 'Géomètre' },

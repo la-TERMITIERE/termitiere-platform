@@ -121,7 +121,7 @@ export default function Devises() {
       {peutEditer && <Button variant="outline" onClick={() => setAddOpen(true)}><Plus size={15} /> Ajouter une devise</Button>}
 
       <p className="rounded-lg bg-indigo-50 px-4 py-3 text-xs text-indigo-800">
-        💡 <strong>Temps réel</strong> : dès qu'un taux change ici (édition ou actualisation en direct), tous les prix FCFA des voyages en cours se recalculent automatiquement — sauf les articles déjà <strong>achetés</strong>, dont le prix a été figé au taux du jour de l'achat.
+        💡 <strong>Temps réel</strong> : dès qu'un taux change ici (édition ou actualisation en direct), tous les prix FCFA des voyages en cours se recalculent automatiquement : sauf les articles déjà <strong>achetés</strong>, dont le prix a été figé au taux du jour de l'achat.
       </p>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} size="sm" title="Ajouter une devise"

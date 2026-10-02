@@ -10,7 +10,7 @@ import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useFoncierStore } from './store/referentielStore'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, peutVoirVoletsAdmin } from '../../core/roles'
 
 function AccesRefuseAdmin() {
   return (
@@ -33,8 +33,8 @@ export default function FoncierModule() {
       <Route path="dossiers" element={<Dossiers />} />
       <Route path="besoins" element={<SectorBesoins secteurId="foncier" />} />
       <Route path="partenaires" element={<Partenaires module="foncier" />} />
-      <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
-      <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
+      <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
+      <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
     </Routes>
   )
 }

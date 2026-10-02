@@ -90,7 +90,7 @@ export default function Dashboard() {
 
         <Card title="Dossiers récents">
           {!recents.length ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucun dossier — créez-en un dans l'onglet Dossiers</p>
+            <p className="py-8 text-center text-sm text-gray-400">Aucun dossier : créez-en un dans l'onglet Dossiers</p>
           ) : (
             <div className="space-y-2">
               {recents.map((d) => {
@@ -103,7 +103,7 @@ export default function Dashboard() {
                       <span className="font-mono text-xs text-gray-500">{d.num}</span>
                       <Badge tone={STATUTS_DOSSIER[d.statut]?.tone}>{STATUTS_DOSSIER[d.statut]?.label || d.statut}</Badge>
                     </div>
-                    <p className="font-semibold">{d.commune} — Lot {d.lot || '—'}</p>
+                    <p className="font-semibold">{d.commune} : Lot {d.lot || '—'}</p>
                     <p className="text-xs text-gray-500">{d.proprietaire}</p>
                     {d.type === 'vente_cession' && d.cession?.appreciation?.verdict && d.cession.appreciation.verdict !== 'en_attente' && (
                       <span className="mt-1 inline-block"><Badge tone={VERDICTS_APPRECIATION[d.cession.appreciation.verdict]?.tone}>{VERDICTS_APPRECIATION[d.cession.appreciation.verdict]?.label}</Badge></span>
@@ -142,7 +142,7 @@ export default function Dashboard() {
                 <button key={d.id} onClick={() => { setDossierSel(d); setDetail(null) }}
                   className="flex w-full items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2 text-left text-sm shadow-sm transition-colors hover:bg-emerald-50">
                   <div>
-                    <p className="font-semibold text-gray-900">{d.commune} — Lot {d.lot || '—'} <span className="font-mono text-xs text-gray-400">{d.num}</span></p>
+                    <p className="font-semibold text-gray-900">{d.commune} : Lot {d.lot || '—'} <span className="font-mono text-xs text-gray-400">{d.num}</span></p>
                     <p className="text-xs text-gray-500">{d.proprietaire}</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ export default function Dashboard() {
 
       {/* Détail d'un dossier : ses étapes */}
       <Modal open={!!dossierSel} onClose={() => setDossierSel(null)} size="lg"
-        title={dossierSel ? `${dossierSel.commune} — Lot ${dossierSel.lot || '—'}` : ''}
+        title={dossierSel ? `${dossierSel.commune} : Lot ${dossierSel.lot || '—'}` : ''}
         panelClassName="bg-gradient-to-br from-emerald-200/85 via-emerald-100/75 to-teal-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {dossierSel && (
           <div className="space-y-3">

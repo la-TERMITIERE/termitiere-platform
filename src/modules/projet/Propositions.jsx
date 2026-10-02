@@ -104,12 +104,12 @@ export default function Propositions() {
       statut, motifRejet: statut === 'rejetee' ? motif : '',
       decisionParText: user?.nom || user?.login || '—', decisionLe: Date.now()
     })
-    await audit('projet', 'proposition_' + statut, `${p.titre}${motif ? ' — ' + motif : ''}`)
+    await audit('projet', 'proposition_' + statut, `${p.titre}${motif ? ' : ' + motif : ''}`)
     if (p.demandeParUid && p.demandeParUid !== user?.uid) {
       await notify({
         type: statut === 'approuvee' ? 'success' : 'refus',
         title: statut === 'approuvee' ? '✅ Proposition approuvée' : '❌ Proposition rejetée',
-        body: `${p.titre}${motif ? ' — ' + motif : ''}`,
+        body: `${p.titre}${motif ? ' : ' + motif : ''}`,
         module: 'projet', forUsers: [p.demandeParUid], link: '/projet/propositions'
       }).catch(() => {})
     }
@@ -213,19 +213,19 @@ export default function Propositions() {
             <FormGroup label="Secteur" hint="Optionnel">
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 value={form.secteurId} onChange={(e) => setForm((f) => ({ ...f, secteurId: e.target.value }))}>
-                <option value="">— Non précisé —</option>
+                <option value="">Non précisé</option>
                 {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </FormGroup>
             <FormGroup label="Type de projet" hint="Optionnel">
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                <option value="">— Non précisé —</option>
+                <option value="">Non précisé</option>
                 {TYPES_PROJET.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
             </FormGroup>
           </div>
-          <FormGroup label="Budget estimatif (FCFA)" hint="Optionnel — une estimation approximative suffit">
+          <FormGroup label="Budget estimatif (FCFA)" hint="Optionnel : une estimation approximative suffit">
             <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="ex : 500 000"
               value={form.budgetEstime} onChange={(e) => setForm((f) => ({ ...f, budgetEstime: e.target.value }))} />

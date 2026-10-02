@@ -136,7 +136,7 @@ export default function Projets() {
         { id: `rev_${Date.now()}`, ancien, nouveau, motif: revMotif.trim(), date: Date.now(), auteur: user?.nom || user?.login || null }
       ]
       await setItem('projets', revision.id, { ...revision, budget: nouveau, revisionsBudget: revisions, updatedAt: Date.now() })
-      await audit('projet', 'projet_budget_revise', `${revision.nom} — ${formatMoney(ancien)} → ${formatMoney(nouveau)} (${revMotif.trim()})`)
+      await audit('projet', 'projet_budget_revise', `${revision.nom} : ${formatMoney(ancien)} → ${formatMoney(nouveau)} (${revMotif.trim()})`)
       setRevision(null)
       setDetail((d) => (d && d.id === revision.id ? { ...d, budget: nouveau, revisionsBudget: revisions } : d))
     } finally { setRevSaving(false) }
@@ -164,7 +164,7 @@ export default function Projets() {
         createdAt: Date.now()
       })
       const projetNom = projets.find((p) => p.id === versementForm.projetId)?.nom || ''
-      await audit('projet', 'projet_versement_client', `${montant.toLocaleString('fr-FR')} FCFA reçus — ${projetNom}`)
+      await audit('projet', 'projet_versement_client', `${montant.toLocaleString('fr-FR')} FCFA reçus : ${projetNom}`)
       setVersementForm(null)
     } finally { setVersSaving(false) }
   }
@@ -172,7 +172,7 @@ export default function Projets() {
   const supprimerVersementClient = async (v) => {
     if (!window.confirm(`Supprimer ce versement de ${formatMoney(v.montant)} ?`)) return
     await removeItem('projet_versements_client', v.id)
-    await audit('projet', 'projet_versement_client_supprime', `${formatMoney(v.montant)} — ${v.id}`)
+    await audit('projet', 'projet_versement_client_supprime', `${formatMoney(v.montant)} : ${v.id}`)
   }
 
   const nomConnecte = user?.nom || user?.login || ''
@@ -224,13 +224,13 @@ export default function Projets() {
 
   const demarrer = async (p) => {
     await setItem('projets', p.id, { ...p, statut: 'en_cours', dateDebut: p.dateDebut || Date.now(), updatedAt: Date.now() })
-    await audit('projet', 'projet_modifie', `${p.nom} — démarré`)
+    await audit('projet', 'projet_modifie', `${p.nom} : démarré`)
   }
 
   const terminer = async (p) => {
     if (!window.confirm(`Marquer "${p.nom}" comme terminé ?`)) return
     await setItem('projets', p.id, { ...p, statut: 'termine', updatedAt: Date.now() })
-    await audit('projet', 'projet_modifie', `${p.nom} — terminé`)
+    await audit('projet', 'projet_modifie', `${p.nom} : terminé`)
   }
 
   // ── Documents & commentaires du projet (directement depuis la fiche) ───────
@@ -263,7 +263,7 @@ export default function Projets() {
       await audit('projet', 'commentaire_ajoute', detail.nom)
       if (detail.responsableUid && detail.responsableUid !== user?.uid) {
         await notify({
-          type: 'info', title: `💬 Commentaire — ${detail.nom}`,
+          type: 'info', title: `💬 Commentaire : ${detail.nom}`,
           body: `${user?.nom || user?.login || 'Quelqu\'un'} : ${texte.slice(0, 140)}`,
           module: 'projet', forUsers: [detail.responsableUid], link: '/projet/projets/liste', state: { openProjetId: detail.id }
         }).catch(() => {})
@@ -612,7 +612,7 @@ export default function Projets() {
                       )}
                     </>
                   ) : (
-                    <p className="text-xs text-gray-500">Montant du contrat non renseigné — édite le projet pour le préciser. {recu > 0 && `Déjà reçu : ${formatMoney(recu)}.`}</p>
+                    <p className="text-xs text-gray-500">Montant du contrat non renseigné : édite le projet pour le préciser. {recu > 0 && `Déjà reçu : ${formatMoney(recu)}.`}</p>
                   )}
                   {versements.length > 0 && (
                     <div className="mt-3 space-y-1.5 border-t border-violet-100 pt-2">
@@ -684,7 +684,7 @@ export default function Projets() {
                       <div className="h-1.5 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="text-xs font-bold text-gray-500">
-                      {pct}% — {tachesDuProjet.filter(t => t.statut === 'terminee').length}/{tachesDuProjet.length} tâches
+                      {pct}% : {tachesDuProjet.filter(t => t.statut === 'terminee').length}/{tachesDuProjet.length} tâches
                     </span>
                   </div>
                 </div>
@@ -763,7 +763,7 @@ export default function Projets() {
       </Modal>
 
       {/* Révision du budget */}
-      <Modal open={!!revision} onClose={() => setRevision(null)} title={revision ? `Réviser le budget — ${revision.nom}` : 'Réviser le budget'}>
+      <Modal open={!!revision} onClose={() => setRevision(null)} title={revision ? `Réviser le budget : ${revision.nom}` : 'Réviser le budget'}>
         {revision && (
           <div className="space-y-3">
             <p className="text-sm text-gray-500">

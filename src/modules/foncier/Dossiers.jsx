@@ -158,14 +158,14 @@ export default function Dossiers() {
       const payload = { num, ...d, ...flat, etapes, agentNom: user.nom, dateOuverture: d.dateOuverture || todayStr(), updatedAt: Date.now() }
       payload.statut = statutAutoDossier({ ...payload })
       await addItem('foncier_dossiers', payload)
-      await audit('foncier', 'DOSSIER_CREATE', `${num} — ${d.parcelle.commune}`)
+      await audit('foncier', 'DOSSIER_CREATE', `${num} : ${d.parcelle.commune}`)
       toast.success(`Dossier ${num} créé ✓`)
     } else {
       const existing = dossiers.find((x) => x.id === modal.id)
       const etapes = existing?.type !== d.type ? initEtapesPour(d.type, customTypes) : existing.etapes
       const merged = { ...d, ...flat, etapes }
       await updateItem('foncier_dossiers', modal.id, { ...merged, statut: statutAutoDossier(merged), updatedAt: Date.now() })
-      await audit('foncier', 'DOSSIER_EDIT', `${d.num || ''} — ${d.parcelle.commune}`)
+      await audit('foncier', 'DOSSIER_EDIT', `${d.num || ''} : ${d.parcelle.commune}`)
       toast.success('Dossier mis à jour ✓')
     }
     setModal(null)
@@ -195,13 +195,13 @@ export default function Dossiers() {
     if (!d) return
     const cession = { ...(d.cession || {}), appreciation: { ...(d.cession?.appreciation || {}), ...appreciationPatch } }
     await patchDossier(dossierId, { cession })
-    await audit('foncier', 'APPRECIATION', `${d.num} — ${VERDICTS_APPRECIATION[cession.appreciation.verdict]?.label || ''}`)
+    await audit('foncier', 'APPRECIATION', `${d.num} : ${VERDICTS_APPRECIATION[cession.appreciation.verdict]?.label || ''}`)
   }
 
   async function ajouterPiece(piece) {
     if (!detailId) return
     await addItem('foncier_pieces', { dossierId: detailId, ...piece, addedAt: Date.now(), agentNom: user.nom })
-    await audit('foncier', 'PIECE_AJOUT', `${detail?.num || ''} — ${piece.nom}`)
+    await audit('foncier', 'PIECE_AJOUT', `${detail?.num || ''} : ${piece.nom}`)
   }
   async function supprimerPiece(piece) {
     if (!confirm(`Supprimer « ${piece.nom} » ?`)) return
@@ -211,7 +211,7 @@ export default function Dossiers() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-        Dossiers fonciers (Togo) : cession/vente, immatriculation, mutation, morcellement, donation, héritage, lotissement —
+        Dossiers fonciers (Togo) : cession/vente, immatriculation, mutation, morcellement, donation, héritage, lotissement :
         acteurs, parcelle, pièces jointes et suivi des étapes jusqu'au titre foncier.
       </div>
 
@@ -223,9 +223,9 @@ export default function Dossiers() {
         </Select>
         <div className="flex items-center gap-1">
           <span className="text-xs text-gray-500">Période&nbsp;:</span>
-          <Input type="date" className="w-auto text-xs" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} title="Date d'ouverture — début" />
+          <Input type="date" className="w-auto text-xs" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} title="Date d'ouverture : début" />
           <span className="text-xs text-gray-400">→</span>
-          <Input type="date" className="w-auto text-xs" value={dateFin} onChange={(e) => setDateFin(e.target.value)} title="Date d'ouverture — fin" />
+          <Input type="date" className="w-auto text-xs" value={dateFin} onChange={(e) => setDateFin(e.target.value)} title="Date d'ouverture : fin" />
           {(dateDebut || dateFin) && (
             <button onClick={() => { setDateDebut(''); setDateFin('') }} className="text-xs text-gray-400 underline hover:text-gray-600">effacer</button>
           )}
@@ -265,7 +265,7 @@ export default function Dossiers() {
                 <tr key={d.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-mono text-xs">{d.num}</td>
                   <td className="px-3 py-2 text-xs">{labelType(d.type)}</td>
-                  <td className="px-3 py-2"><strong>{d.commune}</strong>{d.lot && <span className="text-gray-500"> — Lot {d.lot}</span>}</td>
+                  <td className="px-3 py-2"><strong>{d.commune}</strong>{d.lot && <span className="text-gray-500"> : Lot {d.lot}</span>}</td>
                   <td className="px-3 py-2">{d.proprietaire}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
@@ -325,8 +325,8 @@ export default function Dossiers() {
                 <FormGroup label="Commune" required><Input value={modal.data.parcelle.commune} onChange={(e) => setParcelle({ commune: e.target.value })} placeholder="Ex : Golfe 4" /></FormGroup>
                 <FormGroup label="Préfecture"><Input value={modal.data.parcelle.prefecture} onChange={(e) => setParcelle({ prefecture: e.target.value })} /></FormGroup>
                 <FormGroup label="Quartier / Canton"><Input value={modal.data.parcelle.quartier} onChange={(e) => setParcelle({ quartier: e.target.value })} /></FormGroup>
-                <FormGroup label="Référence — Lot" hint="Facultatif"><Input value={modal.data.parcelle.lot} onChange={(e) => setParcelle({ lot: e.target.value })} placeholder="Ex : Lot 128" /></FormGroup>
-                <FormGroup label="Référence — Hectare(s)" hint="Facultatif"><Input value={modal.data.parcelle.hectares} onChange={(e) => setParcelle({ hectares: e.target.value })} placeholder="Ex : 2,5 ha" /></FormGroup>
+                <FormGroup label="Référence : Lot" hint="Facultatif"><Input value={modal.data.parcelle.lot} onChange={(e) => setParcelle({ lot: e.target.value })} placeholder="Ex : Lot 128" /></FormGroup>
+                <FormGroup label="Référence : Hectare(s)" hint="Facultatif"><Input value={modal.data.parcelle.hectares} onChange={(e) => setParcelle({ hectares: e.target.value })} placeholder="Ex : 2,5 ha" /></FormGroup>
                 <FormGroup label="Superficie (m²)"><Input value={modal.data.parcelle.superficie} onChange={(e) => setParcelle({ superficie: e.target.value })} /></FormGroup>
                 <FormGroup label="N° levé topographique"><Input value={modal.data.parcelle.numLeve} onChange={(e) => setParcelle({ numLeve: e.target.value })} /></FormGroup>
                 <FormGroup label="N° de réquisition"><Input value={modal.data.parcelle.numRequisition} onChange={(e) => setParcelle({ numRequisition: e.target.value })} /></FormGroup>
@@ -383,7 +383,7 @@ export default function Dossiers() {
 
       {/* ─────────── Modal détail ─────────── */}
       <Modal open={!!detail} onClose={() => setDetailId(null)} size="xl"
-        title={detail ? `Dossier ${detail.num} — ${detail.commune || ''}` : ''}
+        title={detail ? `Dossier ${detail.num} : ${detail.commune || ''}` : ''}
         footer={<Button onClick={() => setDetailId(null)}>Fermer</Button>}
         panelClassName="bg-gradient-to-br from-emerald-200/85 via-emerald-100/75 to-teal-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (
@@ -510,7 +510,7 @@ export default function Dossiers() {
 
             {detail.type === 'titre_en_cours' && progressionDossier(detail.etapes) === 100 && (
               <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
-                <ChevronRight size={14} className="inline" /> Titre obtenu — vous pouvez lancer un <strong>morcellement</strong> ou une <strong>mutation</strong> via un nouveau dossier.
+                <ChevronRight size={14} className="inline" /> Titre obtenu : vous pouvez lancer un <strong>morcellement</strong> ou une <strong>mutation</strong> via un nouveau dossier.
               </div>
             )}
           </div>
@@ -633,7 +633,7 @@ function RecapFrais({ dossier }) {
         <span className="ml-auto text-lg font-extrabold text-emerald-700">{formatMoney(total)}</span>
       </div>
       <p className="text-[11px] text-gray-500">
-        Total engagé à ce stade — dossier avancé à {pct}%{pct < 100 ? ' (frais susceptibles d\'augmenter)' : ''}.
+        Total engagé à ce stade : dossier avancé à {pct}%{pct < 100 ? ' (frais susceptibles d\'augmenter)' : ''}.
       </p>
 
       {/* Répartition par nature de dépense */}
@@ -694,7 +694,7 @@ function CessionForm({ cession, setCession }) {
 
   return (
     <section className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-      <p className="mb-2 text-xs font-bold uppercase text-amber-800">Cession / Vente — appréciation de la base</p>
+      <p className="mb-2 text-xs font-bold uppercase text-amber-800">Cession / Vente : appréciation de la base</p>
       <FormGroup label="Catégorie de terrain">
         <Select value={cession.categorie} onChange={(e) => setCession({ categorie: e.target.value })}>
           {CESSION_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}

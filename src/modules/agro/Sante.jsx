@@ -129,7 +129,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
       await updateItem('agro_vaccins', stockItem.id, { quantite: Math.max(0, (stockItem.quantite || 0) - qteUtil) })
     }
 
-    await audit('agro', 'VACCIN', `${labelOf(form.type)} — ${esp?.nom} (${produitNom}) sur ${fiche.nombreAnimaux} animal(aux)`, {
+    await audit('agro', 'VACCIN', `${labelOf(form.type)} : ${esp?.nom} (${produitNom}) sur ${fiche.nombreAnimaux} animal(aux)`, {
       Type: labelOf(form.type), Espèce: esp?.nom, Produit: produitNom, Dosage: form.dosage,
       'Nb animaux': fiche.nombreAnimaux, 'Numéros animaux': fiche.animauxIds || '—',
       Vétérinaire: form.veterinaire || '—', 'Stock décrémenté': stockItem ? `${qteUtil} ${stockItem.unite || ''}` : '—',
@@ -137,7 +137,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
     })
 
     if (form.prochainRdv) {
-      await audit('agro', 'RDV', `Suivi programmé le ${form.prochainRdv} — ${esp?.nom} (${produitNom})`, {
+      await audit('agro', 'RDV', `Suivi programmé le ${form.prochainRdv} : ${esp?.nom} (${produitNom})`, {
         'Date RDV': form.prochainRdv, Espèce: esp?.nom, Note: form.rdvNote || '—', 'Programmé par': user.nom
       })
     }
@@ -145,8 +145,8 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
     // Notification immédiate à la GE et au PAU (tout enregistrement doit les alerter).
     await notify({
       type: 'info',
-      title: `Intervention sanitaire — ${user.nom}`,
-      body: `${labelOf(form.type)} · ${esp?.nom || ''} (${produitNom}) — ${fiche.nombreAnimaux} animal(aux)`,
+      title: `Intervention sanitaire : ${user.nom}`,
+      body: `${labelOf(form.type)} · ${esp?.nom || ''} (${produitNom}) : ${fiche.nombreAnimaux} animal(aux)`,
       module: 'agro', forRoles: ['ge', 'pau'], excludeUid: user.uid, link: '/agro/sante'
     })
 
@@ -157,7 +157,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
   async function supprimer(f) {
     if (!confirm('Supprimer cette intervention ?')) return
     await removeItem('agro_sante', f.id)
-    await audit('agro', 'VACCIN', `Intervention supprimée — ${f.especeNom} (${f.produit})`)
+    await audit('agro', 'VACCIN', `Intervention supprimée : ${f.especeNom} (${f.produit})`)
     toast.success('Supprimée')
   }
 
@@ -268,7 +268,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Produit du stock" hint="Décrémente le stock automatiquement">
                 <Select value={form.produitStockId} onChange={(e) => setForm((f) => ({ ...f, produitStockId: e.target.value }))}>
-                  <option value="">— Saisie libre ci-contre —</option>
+                  <option value="">Saisie libre ci-contre</option>
                   {stock.map((s) => <option key={s.id} value={s.id}>{s.nom} ({s.quantite ?? 0} {s.unite || ''})</option>)}
                 </Select>
               </FormGroup>
@@ -333,10 +333,10 @@ function StockVaccins({ stock, user }) {
     }
     if (form.id) {
       await updateItem('agro_vaccins', form.id, data)
-      await audit('agro', 'STOCK_VACCIN', `Stock modifié — ${data.nom} : ${data.quantite} ${data.unite}`, data)
+      await audit('agro', 'STOCK_VACCIN', `Stock modifié : ${data.nom} : ${data.quantite} ${data.unite}`, data)
     } else {
       await addItem('agro_vaccins', { ...data, creeParNom: user.nom })
-      await audit('agro', 'STOCK_VACCIN', `Produit ajouté au stock — ${data.nom} : ${data.quantite} ${data.unite}`, data)
+      await audit('agro', 'STOCK_VACCIN', `Produit ajouté au stock : ${data.nom} : ${data.quantite} ${data.unite}`, data)
     }
     toast.success('Stock enregistré ✓')
     setOpen(false)
@@ -345,7 +345,7 @@ function StockVaccins({ stock, user }) {
   async function supprimer(s) {
     if (!confirm(`Supprimer « ${s.nom} » du stock ?`)) return
     await removeItem('agro_vaccins', s.id)
-    await audit('agro', 'STOCK_VACCIN', `Produit retiré du stock — ${s.nom}`)
+    await audit('agro', 'STOCK_VACCIN', `Produit retiré du stock : ${s.nom}`)
     toast.success('Supprimé')
   }
 
@@ -418,14 +418,14 @@ function RendezVous({ fiches, user }) {
 
   async function marquerFait(r) {
     await updateItem('agro_sante', r.id, { rdvFait: true })
-    await audit('agro', 'RDV_FAIT', `Rendez-vous clôturé — ${r.especeNom} (${r.produit}) du ${r.prochainRdv}`)
+    await audit('agro', 'RDV_FAIT', `Rendez-vous clôturé : ${r.especeNom} (${r.produit}) du ${r.prochainRdv}`)
     toast.success('Rendez-vous clôturé ✓')
   }
 
   const Item = ({ r, retard }) => (
     <Card key={r.id} className="flex items-start justify-between gap-3">
       <div>
-        <p className="font-bold text-gray-800">📅 {formatDateShort(r.prochainRdv)} — {r.especeNom}</p>
+        <p className="font-bold text-gray-800">📅 {formatDateShort(r.prochainRdv)} : {r.especeNom}</p>
         <p className="text-xs text-gray-500">{labelOf(r.type)} · {r.produit}{r.animauxIds ? ` · N° ${r.animauxIds}` : ''}</p>
         {r.rdvNote && <p className="mt-1 text-xs italic text-gray-600">« {r.rdvNote} »</p>}
         <p className="mt-1 text-xs text-gray-400">Programmé par {r.creeParNom || '—'}</p>
@@ -459,7 +459,7 @@ function RendezVous({ fiches, user }) {
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-gray-400">Clôturés ({faits.length})</summary>
           <div className="mt-2 space-y-1">
             {faits.map((r) => (
-              <p key={r.id} className="text-sm text-gray-500">✔️ {formatDateShort(r.prochainRdv)} — {r.especeNom} ({r.produit})</p>
+              <p key={r.id} className="text-sm text-gray-500">✔️ {formatDateShort(r.prochainRdv)} : {r.especeNom} ({r.produit})</p>
             ))}
           </div>
         </details>
@@ -539,7 +539,7 @@ function useRappelsRDV(fiches) {
         await notify({
           type: 'rappel',
           title: '📅 Rappel : rendez-vous santé',
-          body: `${f.especeNom} — ${f.produit} prévu le ${formatDateShort(f.prochainRdv)}${f.rdvNote ? ` (${f.rdvNote})` : ''}`,
+          body: `${f.especeNom} : ${f.produit} prévu le ${formatDateShort(f.prochainRdv)}${f.rdvNote ? ` (${f.rdvNote})` : ''}`,
           module: 'agro',
           forUsers: f.creeParLogin ? [f.creeParLogin] : [],
           link: '/agro/sante'

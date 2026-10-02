@@ -62,7 +62,7 @@ const COLLECTIONS_IDENTITE = new Set(['users', 'users_secret'])
  * @returns {Promise<{collection: string, removed: number}[]>}
  */
 export async function reinitialiserApplication({ keepUserId, onProgress }) {
-  if (!keepUserId) throw new Error('keepUserId requis — impossible de réinitialiser sans savoir quel compte préserver.')
+  if (!keepUserId) throw new Error('keepUserId requis : impossible de réinitialiser sans savoir quel compte préserver.')
   const total = COLLECTIONS_A_REINITIALISER.length
   const resultats = []
 

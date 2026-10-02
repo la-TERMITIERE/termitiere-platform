@@ -167,7 +167,7 @@ export default function Dashboard() {
       if (c.derniereAlerteRetardDate === auj) continue
       notify({
         type: 'alerte',
-        title: `🔔 Coach en retard — MAXI-GYM ${siteLabel(site)}`,
+        title: `🔔 Coach en retard : MAXI-GYM ${siteLabel(site)}`,
         body: `${c.nom} n'a pas encore pointé son arrivée, prévue à ${c.creneau.heure} (${minutesRetard(c)} min de retard).`,
         module: 'gym', site, forRoles: ROLES.map((r) => r.value), link: `/gym/${site}/coachs`
       }).catch(() => {})
@@ -421,14 +421,14 @@ export default function Dashboard() {
       if (dejaAlerte) continue
       notify({
         type: 'alerte',
-        title: `🔔 Abonné à relancer — MAXI-GYM ${siteLabel(site)}`,
+        title: `🔔 Abonné à relancer : MAXI-GYM ${siteLabel(site)}`,
         body: `${ab.clientNom} n'est pas venu depuis ${ab.jours} jours alors que son abonnement est toujours actif.`,
         module: 'gym', site, forRoles: ROLES.map((r) => r.value), link: `/gym/${site}`
       }).catch(() => {})
       if (client.telephone) {
         sendWhatsApp([client.telephone], {
           title: '👋 MAXI-GYM',
-          body: `Bonjour ${ab.clientNom}, ça fait ${ab.jours} jours qu'on ne vous a pas vu à MAXI-GYM ! Votre abonnement est toujours actif — on vous attend pour votre prochaine séance. 💪`
+          body: `Bonjour ${ab.clientNom}, ça fait ${ab.jours} jours qu'on ne vous a pas vu à MAXI-GYM ! Votre abonnement est toujours actif : on vous attend pour votre prochaine séance. 💪`
         })
       }
       updateItem('gym_clients', client.id, { derniereRelanceLe: Date.now() })
@@ -588,7 +588,7 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => { dismissRenouvellement(a.id, a.joursRestants); setDismissTick((t) => t + 1) }}
-                    title={a.joursRestants <= 3 ? 'Fermer — reviendra dans 3h' : 'Fermer — reviendra demain'}
+                    title={a.joursRestants <= 3 ? 'Fermer : reviendra dans 3h' : 'Fermer : reviendra demain'}
                     className="relative shrink-0 rounded-full p-1.5 text-amber-300 hover:bg-amber-50 hover:text-amber-600">
                     <X size={14} />
                   </button>
@@ -637,7 +637,7 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => handleDismissInactif(cle)}
-                    title="Fermer — reviendra demain"
+                    title="Fermer : reviendra demain"
                     className="shrink-0 rounded-full p-1.5 text-red-400 hover:bg-red-200 hover:text-red-700">
                     <X size={14} />
                   </button>

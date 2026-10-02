@@ -241,7 +241,7 @@ export default function Pilotage() {
       <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-violet-700 to-violet-900 p-4 text-white shadow-lg">
         <Boxes size={22} />
         <div>
-          <h2 className="text-base font-extrabold">Pilotage &amp; Analyse — Briqueterie</h2>
+          <h2 className="text-base font-extrabold">Pilotage &amp; Analyse : Briqueterie</h2>
           <p className="text-xs text-white/80">Indicateurs clés de performance · par type de brique · par période</p>
         </div>
         <div className="w-full sm:ml-auto sm:w-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white">
@@ -257,7 +257,7 @@ export default function Pilotage() {
           <ScopeTab key={t.id} active={scope === t.id} color={t.color} onClick={() => setScope(t.id)}>{t.nom}</ScopeTab>
         ))}
       </div>
-      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
+      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs : {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
       {/* KPI décisionnels avec variation vs période précédente */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
@@ -287,7 +287,7 @@ export default function Pilotage() {
       {comparable && <p className="-mt-3 text-[11px] text-gray-400">▲▼ variation vs période précédente équivalente ({formatDateShort(prevStart)} → {formatDateShort(prevEnd)})</p>}
 
       {/* Hero BI : CA par sous-période, actuel vs précédent */}
-      <Card title="Chiffre d'affaires par sous-période — actuel vs précédent">
+      <Card title="Chiffre d'affaires par sous-période : actuel vs précédent">
         <div className="h-64">
           {caTrend.cur.some((v) => v > 0) || (caTrend.prev || []).some((v) => v > 0) ? (
             <Bar data={{
@@ -329,7 +329,7 @@ export default function Pilotage() {
       </div>
 
       {/* Détail par type */}
-      <Card title="Détail par type de brique — période">
+      <Card title="Détail par type de brique : période">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -384,7 +384,7 @@ export default function Pilotage() {
           </div>
         </Card>
 
-        <Card title="Ventes par profession — qui achète le plus">
+        <Card title="Ventes par profession : qui achète le plus">
           {parProfession.length ? (
             <>
               <div className="h-48">
@@ -417,7 +417,7 @@ export default function Pilotage() {
       </div>
 
       {/* Matières premières : arrivages, consommation, stock */}
-      <Card title="Matières premières — arrivages, consommation, stock">
+      <Card title="Matières premières : arrivages, consommation, stock">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -440,7 +440,7 @@ export default function Pilotage() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-gray-400">Coût matières achetées sur la période : <strong>{formatMoney(mat.cout)}</strong> — marge brute indicative : CA − coût matières.</p>
+        <p className="mt-2 text-xs text-gray-400">Coût matières achetées sur la période : <strong>{formatMoney(mat.cout)}</strong> : marge brute indicative : CA − coût matières.</p>
       </Card>
 
       <PilotageModal id={modal} onClose={() => setModal(null)} scopeLabel={scopeLabel}
@@ -534,7 +534,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
     )
   }
   return (
-    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}
+    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} : ${scopeLabel}`}
       panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
       <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>

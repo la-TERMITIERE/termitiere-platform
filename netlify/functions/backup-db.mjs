@@ -107,7 +107,7 @@ async function alerter(etape, message) {
   if (!RESEND_API_KEY || !destinataires().length) return
   try {
     await envoyerMail({
-      subject: `🚨 ÉCHEC de la sauvegarde La Termitière — ${new Date().toISOString().slice(0, 10)}`,
+      subject: `🚨 ÉCHEC de la sauvegarde La Termitière : ${new Date().toISOString().slice(0, 10)}`,
       text: [
         'La sauvegarde automatique de la base a ÉCHOUÉ. Aucune copie n\'a été produite cette nuit.',
         '',
@@ -152,7 +152,7 @@ export default async () => {
       throw new Error(
         `Firebase REST ${res.status}` +
         (!token && (res.status === 401 || res.status === 403)
-          ? ' — la base est verrouillée et FIREBASE_SERVICE_ACCOUNT n\'est pas configuré dans Netlify.'
+          ? ' : la base est verrouillée et FIREBASE_SERVICE_ACCOUNT n\'est pas configuré dans Netlify.'
           : '')
       )
     }
@@ -180,7 +180,7 @@ export default async () => {
   // 3) Envoi par e-mail avec la sauvegarde en pièce jointe (Resend).
   try {
     await envoyerMail({
-      subject: `Sauvegarde La Termitière — ${date}`,
+      subject: `Sauvegarde La Termitière : ${date}`,
       text: [
         'Sauvegarde automatique de la base de données (namespace tp/).',
         '',
@@ -189,7 +189,7 @@ export default async () => {
         `Taille        : ${sizeKo} Ko`,
         `Fichier joint : ${filename}`,
         `Lecture       : ${mode}`,
-        `Chiffrement   : ${chiffree ? 'AES-256-GCM (BACKUP_PASSPHRASE)' : 'AUCUN — archive en clair'}`,
+        `Chiffrement   : ${chiffree ? 'AES-256-GCM (BACKUP_PASSPHRASE)' : 'AUCUN : archive en clair'}`,
         '',
         chiffree
           ? 'Pour déchiffrer :  node scripts/dechiffrer-sauvegarde.mjs ' + filename
@@ -206,7 +206,7 @@ export default async () => {
     return new Response(`Envoi e-mail échoué : ${e.message}`, { status: 502 })
   }
 
-  console.info(`[backup-db] OK — ${filename} (${sizeKo} Ko, ${collections} collections, lecture ${mode}) envoyé à ${TO}`)
+  console.info(`[backup-db] OK : ${filename} (${sizeKo} Ko, ${collections} collections, lecture ${mode}) envoyé à ${TO}`)
   return new Response(`Sauvegarde envoyée : ${filename} (${sizeKo} Ko).`, { status: 200 })
 }
 

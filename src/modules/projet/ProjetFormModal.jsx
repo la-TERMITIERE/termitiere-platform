@@ -157,7 +157,7 @@ function ChampResponsable({ value, onChange, users }) {
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
           {!suggestions.length ? (
-            <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur trouvé — votre saisie sera utilisée.</p>
+            <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur trouvé : votre saisie sera utilisée.</p>
           ) : (
             <ul className="max-h-48 overflow-y-auto py-1">
               {suggestions.map((u) => {
@@ -277,8 +277,8 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
         ].filter(Boolean))]
         await notify({
           type: 'info',
-          title: `📁 Nouveau projet — ${form.nom}`,
-          body: `${form.nom} (${num})${form.responsable ? ` — responsable : ${form.responsable}` : ''}.`,
+          title: `📁 Nouveau projet : ${form.nom}`,
+          body: `${form.nom} (${num})${form.responsable ? ` : responsable : ${form.responsable}` : ''}.`,
           module: 'projet', forRoles: FULL_ACCESS_ROLES, forUsers: destinatairesProjet, excludeUid: user?.uid,
           link: '/projet/projets/liste', state: { openProjetId: projetId }
         }).catch(() => {})
@@ -296,7 +296,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
           enregistrePar: user?.nom || user?.login || null, enregistreParUid: user?.uid || null,
           createdAt: now
         })
-        await audit('projet', 'projet_versement_client', `${montantVerse.toLocaleString('fr-FR')} FCFA reçus — ${form.nom}`)
+        await audit('projet', 'projet_versement_client', `${montantVerse.toLocaleString('fr-FR')} FCFA reçus : ${form.nom}`)
       }
       onSaved?.(projetId)
       onClose?.()
@@ -315,7 +315,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Nom du projet *</label>
             <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-              placeholder="ex : Poulailler Kara — extension"
+              placeholder="ex : Poulailler Kara : extension"
               value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
           </div>
           <div>
@@ -337,7 +337,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
               <label className="mb-1 block text-xs font-medium text-gray-600">Secteur concerné</label>
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                 value={form.secteurId} onChange={(e) => setForm((f) => ({ ...f, secteurId: e.target.value }))}>
-                <option value="">— Auto (selon le type) —</option>
+                <option value="">Auto (selon le type)</option>
                 {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
@@ -375,7 +375,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
               users={users}
             />
             {form.responsable && !form.responsableUid && (
-              <p className="mt-1 text-[11px] text-amber-500">⚠ Nom libre — choisissez un compte dans la liste pour que ce projet soit visible par un chef de projet cloisonné.</p>
+              <p className="mt-1 text-[11px] text-amber-500">⚠ Nom libre : choisissez un compte dans la liste pour que ce projet soit visible par un chef de projet cloisonné.</p>
             )}
           </div>
           <div>
@@ -470,7 +470,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
             <p className="mt-1 text-[11px] text-gray-400">
               {form.pourClient
                 ? 'Les dépenses de ce projet seront classées en Exploitation dans E-DÉPENSES (charge courante, en face du revenu du client).'
-                : 'Projet pour l\'entreprise elle-même — les dépenses seront classées en Investissement dans E-DÉPENSES.'}
+                : 'Projet pour l\'entreprise elle-même : les dépenses seront classées en Investissement dans E-DÉPENSES.'}
             </p>
             {form.pourClient && (
               <div className="mt-2 grid grid-cols-2 gap-2">
@@ -495,7 +495,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
             {form.pourClient ? (
               <>
                 <input type="number" min="0"
-                  placeholder="Somme convenue avec le client — laisser vide si pas encore chiffrée"
+                  placeholder="Somme convenue avec le client : laisser vide si pas encore chiffrée"
                   className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${form.montantContrat !== '' && !contratValide ? 'border-red-300' : 'border-gray-200'}`}
                   value={form.montantContrat} onChange={(e) => setForm((f) => ({ ...f, montantContrat: e.target.value }))} />
                 {form.montantContrat !== '' && !contratValide
@@ -517,7 +517,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
                 <p className="mt-1 text-[11px] text-gray-400">
                   {editingProjet
                     ? "Renseigne un montant pour enregistrer un nouveau versement reçu du client, en plus de ceux déjà reçus. Laisse à 0 (ou vide) si rien de nouveau."
-                    : "Le client peut déposer une partie ou la totalité de la somme dès la création du projet — laisse à 0 (ou vide) s'il n'a encore rien versé."}
+                    : "Le client peut déposer une partie ou la totalité de la somme dès la création du projet : laisse à 0 (ou vide) s'il n'a encore rien versé."}
                 </p>
               </>
             ) : (
@@ -528,7 +528,7 @@ export default function ProjetFormModal({ open, onClose, editingProjet = null, s
                   value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
                 {form.budget !== '' && !budgetValide
                   ? <p className="mt-1 text-[11px] text-red-500">Le budget doit être supérieur à 0.</p>
-                  : <p className="mt-1 text-[11px] text-gray-400">Optionnel — peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
+                  : <p className="mt-1 text-[11px] text-gray-400">Optionnel : peut être établi plus tard. Les dépenses réelles se calculent automatiquement à partir des décaissements saisis dans l'onglet Dépenses.</p>}
               </>
             )}
           </div>

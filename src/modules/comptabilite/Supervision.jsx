@@ -65,7 +65,7 @@ export default function Supervision() {
       </Card>
 
       <Card title="Les faits que la plateforme émet">
-        <p className="mb-2 text-xs text-gray-500">Le catalogue comptable — un modèle d'écriture doit viser l'un d'eux.</p>
+        <p className="mb-2 text-xs text-gray-500">Le catalogue comptable : un modèle d'écriture doit viser l'un d'eux.</p>
         <div className="flex flex-wrap gap-2">
           {CATALOGUE_FAITS.map((f) => <Badge key={f.code} tone="neutral">{f.code}</Badge>)}
         </div>

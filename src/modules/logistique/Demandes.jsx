@@ -176,13 +176,13 @@ export default function Demandes() {
     await notify({
       type: 'demande',
       title: 'Autorisation de sortie matériel',
-      body: `${siteLabel(site)} — ${totalQte} pièce(s) · prestation ${p.num} — facture ${fac.num} — par ${user.nom}`,
+      body: `${siteLabel(site)} : ${totalQte} pièce(s) · prestation ${p.num} : facture ${fac.num} : par ${user.nom}`,
       module: 'logistique',
       forRoles: [...APPROVER_ROLES, 'secretaire'],
       excludeUid: user.uid,
       link: `/logistique/${site}/demandes`
     })
-    await audit('logistique', 'DEMANDE_SORTIE', `${siteLabel(site)} — ${num} — prestation ${p.num}`)
+    await audit('logistique', 'DEMANDE_SORTIE', `${siteLabel(site)} : ${num} : prestation ${p.num}`)
     toast.success('Autorisation soumise à la hiérarchie ✓')
     setCreateOpen(false)
   }
@@ -211,7 +211,7 @@ export default function Demandes() {
     if (statut === 'approuve_n1') {
       await notify({
         type: 'demande', title: 'Sortie matériel à certifier 🟡',
-        body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — approuvée par ${user.nom}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : approuvée par ${user.nom}`,
         module: 'logistique', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
       // Le demandeur doit savoir que sa demande est approuvée — sans cela il n'apprenait
@@ -219,32 +219,32 @@ export default function Demandes() {
       if (d.demandeur && d.demandeur !== user.login) {
         await notify({
           type: 'approuve', title: 'Sortie approuvée ✅',
-          body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — approuvée par ${user.nom}. En attente de certification.`,
+          body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : approuvée par ${user.nom}. En attente de certification.`,
           module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/demandes`
         })
       }
     } else if (statut === 'certifie') {
       await notify({
         type: 'success', title: 'Sortie autorisée · facture approuvée ✅',
-        body: `${siteLabel(site)} — prestation ${d.prestationNum} — facture ${d.factureNum} approuvée, ${totalQte} pièce(s) sorties le ${d.dateSortie}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum} : facture ${d.factureNum} approuvée, ${totalQte} pièce(s) sorties le ${d.dateSortie}`,
         module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/saisie`
       })
       await notify({
         type: 'info', title: `Sortie certifiée par ${user.nom} ✅`,
-        body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — demandée par ${d.demandeurNom}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : demandée par ${d.demandeurNom}`,
         module: 'logistique', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
     } else {
       await notify({
         type: 'refus', title: 'Autorisation refusée ⛔',
-        body: `${siteLabel(site)} — prestation ${d.prestationNum}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum}${commentaire.trim() ? ' : ' + commentaire.trim() : ''}`,
         module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/demandes`
       })
     }
     await audit('logistique',
       statut === 'refuse' ? 'AUTORISATION_REFUS' : statut === 'certifie' ? 'CERTIFICATION' : 'AUTORISATION_OK',
-      `${siteLabel(site)} — ${d.num}`)
-    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓ — facture approuvée & stock décrémenté' : statut === 'approuve_n1' ? 'Approuvé — en attente de certification' : 'Demande refusée')
+      `${siteLabel(site)} : ${d.num}`)
+    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓ : facture approuvée & stock décrémenté' : statut === 'approuve_n1' ? 'Approuvé : en attente de certification' : 'Demande refusée')
     setDecision(null)
     setCommentaire('')
   }
@@ -263,7 +263,7 @@ export default function Demandes() {
     if (!confirm(`Supprimer l'autorisation ${d.num} ?\nLa facture ${d.factureNum || ''} (brouillon) redevient disponible.`)) return
     await run(async () => {
       await removeItem('logistique_demandes', d.id)
-      await audit('logistique', 'DEMANDE_SUPPRESSION', `${siteLabel(site)} — ${d.num}`)
+      await audit('logistique', 'DEMANDE_SUPPRESSION', `${siteLabel(site)} : ${d.num}`)
     }, 'Autorisation supprimée')
     setDecision(null)
   }
@@ -286,10 +286,10 @@ export default function Demandes() {
       })
       await notify({
         type: 'demande', title: 'Demande de correctif 🔄',
-        body: `${siteLabel(site)} — autorisation ${d.num} · prestation ${d.prestationNum || ''} : quantités à corriger${motif.trim() ? ' — ' + motif.trim() : ''}`,
+        body: `${siteLabel(site)} : autorisation ${d.num} · prestation ${d.prestationNum || ''} : quantités à corriger${motif.trim() ? ' : ' + motif.trim() : ''}`,
         module: 'logistique', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
-      await audit('logistique', 'CORRECTIF_DEMANDE', `${siteLabel(site)} — ${d.num}`)
+      await audit('logistique', 'CORRECTIF_DEMANDE', `${siteLabel(site)} : ${d.num}`)
     }, '🔄 Correctif envoyé à la hiérarchie')
     setRelance(null)
   }
@@ -342,11 +342,11 @@ export default function Demandes() {
       await notify({
         type: accepte ? 'success' : 'refus',
         title: accepte ? 'Correctif appliqué ✅' : 'Correctif refusé ⛔',
-        body: `${siteLabel(site)} — autorisation ${d.num} : ${accepte ? 'quantités corrigées, stock et facture réajustés' : 'les quantités certifiées restent inchangées'}`,
+        body: `${siteLabel(site)} : autorisation ${d.num} : ${accepte ? 'quantités corrigées, stock et facture réajustés' : 'les quantités certifiées restent inchangées'}`,
         module: 'logistique', forUsers: [c.par || d.demandeur], excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
-      await audit('logistique', accepte ? 'CORRECTIF_APPLIQUE' : 'CORRECTIF_REFUSE', `${siteLabel(site)} — ${d.num}`)
-    }, accepte ? '✅ Correctif appliqué — stock et facture réajustés' : 'Correctif refusé')
+      await audit('logistique', accepte ? 'CORRECTIF_APPLIQUE' : 'CORRECTIF_REFUSE', `${siteLabel(site)} : ${d.num}`)
+    }, accepte ? '✅ Correctif appliqué : stock et facture réajustés' : 'Correctif refusé')
     setDecision(null)
     setCommentaire('')
   }
@@ -494,7 +494,7 @@ export default function Demandes() {
         footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}>Soumettre</Button></>}>
         <FormGroup label="Facture liée (brouillon)" required>
           <Select value={form.factureId} onChange={(e) => choisirFacture(e.target.value)}>
-            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} — {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
+            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} : {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
           </Select>
         </FormGroup>
         {formPresta && (
@@ -641,7 +641,7 @@ export default function Demandes() {
                   </table>
                   </div>
                 ) : (
-                  <p className="px-3 py-3 text-sm text-gray-400">Facture introuvable — impossible d'afficher le détail.</p>
+                  <p className="px-3 py-3 text-sm text-gray-400">Facture introuvable : impossible d'afficher le détail.</p>
                 )}
               </div>
 
@@ -654,7 +654,7 @@ export default function Demandes() {
                   )}
                   {d.correctif && !correctifEnCours(d) && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} — demandé par {d.correctif.parNom}
+                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} : demandé par {d.correctif.parNom}
                       {d.correctif.traitePar ? `, tranché par ${d.correctif.traitePar}` : ''}
                       {d.correctif.motif ? ` · « ${d.correctif.motif} »` : ''}
                     </p>

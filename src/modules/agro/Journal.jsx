@@ -98,7 +98,7 @@ function OngletJournal({ evenements }) {
       filename: `journal-maxi-agro-${start}_${end}.xlsx`,
       sections: [{
         id: 'journal', name: 'Journal MAXI-AGRO',
-        title: 'Journal d\'activité — MAXI-AGRO',
+        title: 'Journal d\'activité : MAXI-AGRO',
         subtitle: `Période : du ${formatDateShort(start)} au ${formatDateShort(end)} · ${lignes.length} événement(s)`,
         columns: [
           { key: 'Date / Heure', label: 'Date / Heure', width: 20 },

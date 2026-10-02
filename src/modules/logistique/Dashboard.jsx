@@ -201,7 +201,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <StatCard glass title="Stock total" value={formatNumber(stockTotal)} sub="pièces — cliquer" icon={Boxes} accent="#0284c7"
+        <StatCard glass title="Stock total" value={formatNumber(stockTotal)} sub="pièces : cliquer" icon={Boxes} accent="#0284c7"
           onClick={() => setDetail({ titre: 'Stock par catégorie', render: detailStock })} />
         <StatCard glass title="Valeur stock" value={formatMoney(valeurStock)} sub="au coût d'achat · cliquer" icon={Boxes} accent="#7c3aed"
           onClick={() => setDetail({ titre: 'Valeur du stock', render: (
@@ -215,7 +215,7 @@ export default function Dashboard() {
             </table>
           ) })} />
         <StatCard glass title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) approuvée(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
-          onClick={() => setDetail({ titre: 'Factures approuvées (CA) — période', render: (
+          onClick={() => setDetail({ titre: 'Factures approuvées (CA) : période', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
@@ -253,7 +253,7 @@ export default function Dashboard() {
         <StatCard glass title="Casse / perte (période)" value={formatNumber(cassePerte.pieces)}
           sub={`${cassePerte.rows.length} retour(s) · ${cassePerte.impayees.length} pénalité(s) impayée(s)`}
           icon={PackageX} accent={cassePerte.pieces ? '#dc2626' : '#64748b'}
-          onClick={() => setDetail({ titre: `Casse / perte — ${scopeLabel} (période)`, render: (
+          onClick={() => setDetail({ titre: `Casse / perte : ${scopeLabel} (période)`, render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Matériel</th><th className="px-3 py-2">Prestation</th><th className="px-3 py-2 text-center">Qté</th><th className="px-3 py-2">État</th><th className="px-3 py-2 text-right">Pénalité</th><th className="px-3 py-2 text-center">Remb.</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
@@ -271,7 +271,7 @@ export default function Dashboard() {
           <div className="h-64">
             {parCat.length
               ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
-              : <p className="py-16 text-center text-sm text-gray-400">Aucun stock enregistré — commencez par la saisie magasin</p>}
+              : <p className="py-16 text-center text-sm text-gray-400">Aucun stock enregistré : commencez par la saisie magasin</p>}
           </div>
         </Card>
         <Card title={`Flux de la période (${formatDateShort(start)} → ${formatDateShort(end)})`}>

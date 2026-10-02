@@ -228,11 +228,11 @@ export default function Dashboard() {
             </div>
           ) })} />
         <StatCard title="Prêtes à vendre" value={formatNumber(stockPret)} icon={Package} accent="#16a34a"
-          sub="par type — cliquer" onClick={() => setDetail({ titre: 'Briques prêtes à vendre', render: tableStock('pret') })} />
+          sub="par type : cliquer" onClick={() => setDetail({ titre: 'Briques prêtes à vendre', render: tableStock('pret') })} />
         <StatCard title="Briques vendues" value={formatNumber(briquesVendues)} icon={ShoppingCart} accent="#ca8a04"
           variation={comparable ? briquesVendues - briquesVenduesPrec : undefined}
           variationLabel={`${ventesDuMois.length} vente(s) · ${formatMoney(ventesMontant)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Briques vendues — par catégorie', render: (
+          onClick={() => setDetail({ titre: 'Briques vendues : par catégorie', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
@@ -260,7 +260,7 @@ export default function Dashboard() {
           ) })} />
         <StatCard title="CA période" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
           variation={comparable ? caMois - caMoisPrec : undefined} variationLabel={`période préc. : ${formatMoney(caMoisPrec)} · cliquer`}
-          onClick={() => setDetail({ titre: 'Chiffre d’affaires — par client & catégorie', render: (
+          onClick={() => setDetail({ titre: 'Chiffre d’affaires : par client & catégorie', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
@@ -328,7 +328,7 @@ export default function Dashboard() {
           <div className="h-64">
             {parType.length
               ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
-              : <p className="py-16 text-center text-sm text-gray-400">Aucun stock — commencez par une production</p>}
+              : <p className="py-16 text-center text-sm text-gray-400">Aucun stock : commencez par une production</p>}
           </div>
         </Card>
         <Card title="Vue d'ensemble">
