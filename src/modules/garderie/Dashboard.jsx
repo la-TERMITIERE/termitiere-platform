@@ -256,13 +256,26 @@ export default function Dashboard() {
     <div className="space-y-5">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
-        {/* Logo garderie dans un cercle avec bordure blanche fixe (pas d'animation) */}
+        {/* Logo garderie — anneau tournant. Le logo porte déjà sa propre bordure
+            blanche FIXE (box-shadow ci-dessous) : un halo animé posé juste dessus
+            (faible inset) s'y fondait et devenait invisible. L'anneau animé est donc
+            poussé bien plus loin du badge (inset -9) pour se détacher clairement de
+            cette bordure fixe et apparaître sur la bande colorée, où le blanc tranche net. */}
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
+          <style>{`
+            @keyframes garderie-ring-spin { to { transform: rotate(360deg); } }
+          `}</style>
+          <div style={{
+            position: 'absolute', inset: -8, borderRadius: '50%',
+            border: '3px solid transparent',
+            borderTopColor: '#ffffff', borderRightColor: 'rgba(255,255,255,0.55)',
+            animation: 'garderie-ring-spin 1.6s linear infinite'
+          }} />
           <img src="/garderie-logo.png" alt="Garderie La Termitière"
             style={{
-              width: 64, height: 64, borderRadius: '50%',
+              position: 'relative', width: 64, height: 64, borderRadius: '50%',
               objectFit: 'cover', background: 'white', padding: 4,
-              boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55',
+              boxShadow: '0 0 0 3px #ffffff',
               display: 'block'
             }} />
         </div>
@@ -279,7 +292,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('enfants')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#E8390E1a', color: '#E8390E' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: 'linear-gradient(135deg, #E8390E, #E8390Ecc)', boxShadow: '0 6px 14px -4px #E8390E66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
             <Baby size={24} />
           </div>
           <div className="min-w-0 flex-1">
@@ -293,7 +307,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('presences')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#F5A8001a', color: '#F5A800' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: 'linear-gradient(135deg, #F5A800, #F5A800cc)', boxShadow: '0 6px 14px -4px #F5A80066, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
             <UserCheck size={24} />
           </div>
           <div className="min-w-0 flex-1">
@@ -307,7 +322,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('impayes')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#E8390E1a', color: '#E8390E' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: 'linear-gradient(135deg, #E8390E, #E8390Ecc)', boxShadow: '0 6px 14px -4px #E8390E66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
             <CreditCard size={24} />
           </div>
           <div className="min-w-0 flex-1">
@@ -321,7 +337,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('incidents')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: incidentsAccent + '1a', color: incidentsAccent }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: `linear-gradient(135deg, ${incidentsAccent}, ${incidentsAccent}cc)`, boxShadow: `0 6px 14px -4px ${incidentsAccent}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)` }}>
             {alarmsActives.length > 0 ? <ShieldAlert size={24} /> : <AlertTriangle size={24} />}
           </div>
           <div className="min-w-0 flex-1">

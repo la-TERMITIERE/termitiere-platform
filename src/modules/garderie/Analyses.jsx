@@ -19,8 +19,8 @@ function StatTile({ icon: Icon, label, value, sub, color = '#E8390E', onClick })
   return (
     <Comp onClick={onClick}
       className={`card flex items-center gap-4 p-4 text-left transition-all duration-200 ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_20px_40px_-16px_rgba(26,26,26,0.25)]' : 'hover:shadow-md'}`}>
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.5),inset_0_-2px_3px_0_rgba(0,0,0,0.06)]"
-        style={{ background: `linear-gradient(135deg, ${color}26 0%, ${color}14 100%)`, color }}>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+        style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)`, boxShadow: `0 6px 14px -4px ${color}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)` }}>
         <Icon size={22} />
       </div>
       <div className="min-w-0 flex-1">
@@ -332,8 +332,8 @@ export default function Analyses() {
                 { Icon: TrendingUp, label: 'Taux recouvrement', value: `${annuel.tauxRecovMoyen}%`, sub: 'Encaissé ÷ Attendu · moy. annuelle', color: '#dc2626' }
               ].map((c) => (
                 <div key={c.label} className="card flex items-center gap-4 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.5),inset_0_-2px_3px_0_rgba(0,0,0,0.06)]"
-                    style={{ background: `linear-gradient(135deg, ${c.color}26 0%, ${c.color}14 100%)`, color: c.color }}>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+                    style={{ background: `linear-gradient(135deg, ${c.color}, ${c.color}cc)`, boxShadow: `0 6px 14px -4px ${c.color}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)` }}>
                     <c.Icon size={22} />
                   </div>
                   <div className="min-w-0 flex-1">

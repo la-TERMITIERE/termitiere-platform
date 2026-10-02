@@ -411,10 +411,10 @@ function OngletStatistiques() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title="Tâches au total"  value={global.total}                icon={ListChecks}   accent={COULEUR} />
-        <StatCard title="Effectuées"       value={global.faites}               icon={CheckCircle2} accent="#16a34a" />
-        <StatCard title="En attente"       value={global.restantes}            icon={Circle}       accent="#d97706" />
-        <StatCard title="Taux de réalisation" value={`${global.taux}%`} sub={`${global.faites}/${global.total}`}
+        <StatCard glass title="Tâches au total"  value={global.total}                icon={ListChecks}   accent={COULEUR} />
+        <StatCard glass title="Effectuées"       value={global.faites}               icon={CheckCircle2} accent="#16a34a" />
+        <StatCard glass title="En attente"       value={global.restantes}            icon={Circle}       accent="#d97706" />
+        <StatCard glass title="Taux de réalisation" value={`${global.taux}%`} sub={`${global.faites}/${global.total}`}
           icon={TrendingUp} accent={global.taux >= 70 ? '#16a34a' : global.taux >= 40 ? '#d97706' : '#dc2626'} />
       </div>
 
