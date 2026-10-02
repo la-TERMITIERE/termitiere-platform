@@ -1,6 +1,6 @@
 // Prestations / Location de matériel — quantité × tarif unitaire = montant par catégorie.
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Eye, Trash2, CheckCircle2, Coins, Save, Wallet, AlertTriangle } from 'lucide-react'
+import { Plus, Eye, Trash2, Pencil, CheckCircle2, Coins, Save, Wallet, AlertTriangle, ClipboardList } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -17,7 +17,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, addDays, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { isApproverRole, isReadOnlyRole, logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
+import { isApproverRole, isReadOnlyRole, isFullAccessRole, logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
@@ -147,6 +147,7 @@ export default function Prestations() {
 
   function openCreate() {
     setForm({
+      id: null, // null = création ; sinon édition du brouillon de cet id
       type: 'prestation', // 'prestation' (avec dépenses internes) ou 'location' (simple)
       clientId: clients[0]?.id || '',
       clientNom: clients[0]?.nom || '',
@@ -159,6 +160,34 @@ export default function Prestations() {
       frais: [], // frais supplémentaires FACTURÉS au client : { label, montant } (transport, lieu…)
       depenses: [], // dépenses INTERNES liées à la prestation (frais de mission…) — hors CA
       statut: 'brouillon'
+    })
+    setOpen(true)
+  }
+
+  // Modification d'un brouillon existant (corriger un doublon, une erreur de
+  // saisie…) — réutilise la même modale que la création, pré-remplie. Réservée
+  // aux brouillons non approuvés (au-delà, la prestation est déjà engagée vers
+  // la facturation/le stock).
+  function openEdit(p) {
+    setForm({
+      id: p.id,
+      num: p.num,
+      type: p.type || 'prestation',
+      clientId: p.clientId || clients.find((c) => c.nom === p.clientNom)?.id || '',
+      clientNom: p.clientNom || '',
+      evenement: p.evenement && !evenements.includes(p.evenement) ? '__autre__' : (p.evenement || evenements[0] || ''),
+      evenementAutre: p.evenement && !evenements.includes(p.evenement) ? p.evenement : '',
+      dateDebut: p.dateDebut || todayStr(),
+      dateFin: p.dateFin || todayStr(),
+      lieu: p.lieu || '',
+      lignes: (p.lignes || []).map((l) => ({
+        materielId: l.autre ? '__autre__' : l.materielId,
+        qte: l.qte, nbJours: l.nbJours, tarif: l.tarifUnitaire,
+        nomAutre: l.autre ? l.materielNom : undefined
+      })),
+      frais: p.frais || [],
+      depenses: p.depenses || [],
+      statut: p.statut
     })
     setOpen(true)
   }
@@ -249,7 +278,6 @@ export default function Prestations() {
     if (!form.lignes.length) return toast.error('Ajoutez au moins une ligne')
     const client = clients.find((c) => c.id === form.clientId)
     const evenement = (form.evenement === '__autre__' ? form.evenementAutre : form.evenement || '').trim()
-    const num = genNumero(`PREST-${site.toUpperCase()}`, prestations.length)
     const lignes = form.lignes.map((l) => {
       const qte = parseInt(l.qte) || 0
       const jours = parseInt(l.nbJours) || 1
@@ -278,16 +306,28 @@ export default function Prestations() {
     if (evenement && !evenements.includes(evenement)) {
       try { await saveEvenements([...evenements, evenement]) } catch { /* non bloquant */ }
     }
-    await addItem('logistique_prestations', {
-      num, date: todayStr(), site, type: form.type || 'prestation',
-      clientId: form.clientId, clientNom: client?.nom || form.clientNom,
-      evenement,
-      dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
-      lignes, frais, depenses, total, statut: 'brouillon',
-      agentId: user.uid, agentNom: user.nom
-    })
-    await audit('logistique', 'PRESTATION', `${siteLabel(site)} — ${num} — ${formatMoney(total)}`)
-    toast.success('Prestation enregistrée ✓ — en attente d\'approbation, facturable dès à présent')
+    if (form.id) {
+      // Édition d'un brouillon existant (corriger un doublon, une erreur…).
+      await updateItem('logistique_prestations', form.id, {
+        type: form.type || 'prestation', clientId: form.clientId, clientNom: client?.nom || form.clientNom,
+        evenement, dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
+        lignes, frais, depenses, total
+      })
+      await audit('logistique', 'PRESTATION_MODIFIEE', `${siteLabel(site)} — ${form.num || form.id} — ${formatMoney(total)}`)
+      toast.success('Prestation modifiée ✓')
+    } else {
+      const num = genNumero(`PREST-${site.toUpperCase()}`, prestations.length)
+      await addItem('logistique_prestations', {
+        num, date: todayStr(), site, type: form.type || 'prestation',
+        clientId: form.clientId, clientNom: client?.nom || form.clientNom,
+        evenement,
+        dateDebut: form.dateDebut, dateFin: form.dateFin, lieu: form.lieu,
+        lignes, frais, depenses, total, statut: 'brouillon',
+        agentId: user.uid, agentNom: user.nom
+      })
+      await audit('logistique', 'PRESTATION', `${siteLabel(site)} — ${num} — ${formatMoney(total)}`)
+      toast.success('Prestation enregistrée ✓ — en attente d\'approbation, facturable dès à présent')
+    }
     setOpen(false)
   }
 
@@ -311,7 +351,33 @@ export default function Prestations() {
 
   return (
     <div className="space-y-4">
-      {!isReadOnlyRole(role) && <div className="flex justify-end"><Button onClick={openCreate}><Plus size={16} /> Nouvelle prestation</Button></div>}
+      {/* Bandeau héro — même recette que les autres volets (logo rond, titre, filtre
+          de période en glassmorphism directement sur la bande). */}
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <ClipboardList size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Prestations</h2>
+          <p className="text-sm text-white/80">{liste.length} prestation(s) · {siteLabel(site)}</p>
+        </div>
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        {!isReadOnlyRole(role) && (
+          <button onClick={openCreate}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <Plus size={14} /> Nouvelle prestation
+          </button>
+        )}
+      </div>
 
       {/* Rappel : prestations dont la période est passée depuis plus de
           SEUIL_RELANCE_JOURS jours mais jamais facturées — sans ça, elles ne se
@@ -335,29 +401,27 @@ export default function Prestations() {
           l'onglet Facturation. */}
       {estAdministration && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
+          <StatCard glass
             title={`Valeur brute des prestations${filtreStatut ? ` (${STATUTS[filtreStatut]?.label.toLowerCase()})` : ''}`}
             value={formatMoney(cumulPrestations)}
             sub={`${liste.length} prestation${liste.length > 1 ? 's' : ''} · site ${siteLabel(site)}${filtrePeriodeActif ? ' · période filtrée' : ''}${filtreClient.trim() ? ' · client filtré' : ''} · hors facturation`}
             icon={Wallet} accent={COULEUR_MODULE.logistique} />
         </div>
       )}
-      <div className="flex flex-wrap items-end gap-2">
-        <FiltrePeriode mode={modePeriode} onModeChange={setModePeriode}
-          valeurJour={filtreJour} onJourChange={setFiltreJour}
-          valeurMois={filtreMois} onMoisChange={setFiltreMois}
-          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
-          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
-          valeurFin={filtreFin} onFinChange={setFiltreFin} />
-        <div>
+
+      {/* Filtres secondaires (statut, client) — glassmorphism léger (teinte + reflet),
+          même recette que Facturation. */}
+      <div className="relative flex flex-wrap items-end gap-2 overflow-hidden rounded-2xl border border-red-100/50 bg-gradient-to-br from-red-50/40 via-white/70 to-white/70 p-2.5 shadow-sm backdrop-blur-md">
+        <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
+        <div className="relative">
           <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
           <input value={filtreClient} onChange={(e) => setFiltreClient(e.target.value)} placeholder="Rechercher un client…"
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
+        <div className="relative flex flex-wrap gap-1 rounded-xl border border-white/60 bg-white/50 p-1 backdrop-blur-sm">
           {[['', 'Tous'], ...Object.entries(STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
             <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}>
               {l}
             </button>
           ))}
@@ -389,6 +453,9 @@ export default function Prestations() {
                 )}
                 <button onClick={() => setDetail(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" title="Voir les détails"><Eye size={16} /></button>
                 {!isReadOnlyRole(role) && r.statut === 'brouillon' && !r.approuvee && (
+                  <button onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" title="Modifier le brouillon"><Pencil size={16} /></button>
+                )}
+                {isFullAccessRole(role) && r.statut === 'brouillon' && !r.approuvee && (
                   <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50" title="Supprimer le brouillon"><Trash2 size={16} /></button>
                 )}
               </div>
@@ -399,7 +466,7 @@ export default function Prestations() {
         />
       </Card>
 
-      <Modal open={open} onClose={() => setOpen(false)} size="lg" title="Nouvelle prestation / location"
+      <Modal open={open} onClose={() => setOpen(false)} size="lg" title={form?.id ? 'Modifier la prestation / location' : 'Nouvelle prestation / location'}
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
         {form && (
           <div className="space-y-4">

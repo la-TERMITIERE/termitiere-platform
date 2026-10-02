@@ -9,9 +9,11 @@
 // Chaque entrée est tracée (collection logistique_retours) et alimente, en lecture
 // seule, la colonne « Retours » de la saisie magasin.
 import { useMemo, useState } from 'react'
-import { RotateCcw, Check, Plus, X } from 'lucide-react'
+import { RotateCcw, Check, Plus, X, Pencil, Trash2 } from 'lucide-react'
+import { COULEUR_MODULE } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
+import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
@@ -19,13 +21,13 @@ import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useLogistiqueStore } from './store/referentielStore'
-import { addItem, updateItem } from '../../core/db'
+import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
-import { APPROVER_ROLES, isReadOnlyRole } from '../../core/roles'
+import { APPROVER_ROLES, isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { todayStr, genNumero, formatDateShort, formatMoney } from '../../utils/formatters'
-import { useSite, matchSite } from './site/useSite'
+import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const DRAFT_VIDE = { etat: 'none', qte: '', motif: '', penalite: '' }
 
@@ -48,6 +50,7 @@ export default function Retours() {
   // Brouillon de l'entrée en cours de saisie, par matériel : { materielId: { etat, qte, motif, penalite } }
   const [draft, setDraft] = useState({})
   const [saving, setSaving] = useState(false)
+  const [editRetour, setEditRetour] = useState(null) // entrée de l'historique en cours de correction
 
   // Quantité déjà retournée (enregistrée en base) pour un (prestation, matériel).
   const renduPour = (presId, matId) => retours
@@ -147,15 +150,50 @@ export default function Retours() {
 
   const totalEntrees = lignes.reduce((s, l) => s + (entrees[l.materielId]?.length || 0), 0)
 
+  // Correction d'une entrée de l'historique (mauvais état/quantité/motif saisi) —
+  // le stock (colonne « Retours » de la saisie magasin, cf. renduPour ci-dessus)
+  // est recalculé EN DIRECT à partir de cette collection : modifier/supprimer une
+  // entrée suffit à corriger le stock, sans autre manipulation.
+  function ouvrirEditionRetour(r) {
+    setEditRetour({ id: r.id, etat: r.type, qte: r.qte, motif: r.motif || '', penalite: r.penalite || 0 })
+  }
+  async function modifierRetour() {
+    if (!editRetour) return
+    await updateItem('logistique_retours', editRetour.id, {
+      type: editRetour.etat,
+      qte: Math.max(1, parseInt(editRetour.qte) || 1),
+      motif: (editRetour.motif || '').trim(),
+      penalite: editRetour.etat === 'OK' ? 0 : (parseFloat(editRetour.penalite) || 0)
+    })
+    await audit('logistique', 'RETOUR_MODIFIE', `${siteLabel(site)} — retour corrigé (${editRetour.qte} × ${editRetour.etat})`)
+    toast.success('Retour corrigé ✓')
+    setEditRetour(null)
+  }
+  async function supprimerRetour(r) {
+    if (!confirm(`Supprimer ce retour (${r.qte} × ${r.materielNom}, ${r.type}) ?\nLe stock de la saisie magasin sera recalculé automatiquement.`)) return
+    await removeItem('logistique_retours', r.id)
+    await audit('logistique', 'RETOUR_DELETE', `${siteLabel(site)} — ${r.qte} × ${r.materielNom} (${r.type}) — prestation ${r.prestationNum || ''}`)
+    toast.success('Retour supprimé — stock recalculé')
+  }
+
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        Le retour se fait <strong>par prestation</strong> : choisissez la prestation, la liste du matériel pris s'affiche.
-        Pour chaque matériel, <strong>ajoutez les retours un à un</strong> : vous pouvez enregistrer plusieurs entrées
-        (par ex. <strong>3 perdus</strong>, puis <strong>2 cassés</strong>, puis <strong>le reste OK</strong>) sans avoir à saisir un total unique.
-        <strong> OK</strong> réintègre le stock ; <strong>Cassé / Perdu</strong> demandent une quantité, un motif et une <strong>pénalité</strong> à rembourser (suivi des pertes).
-        Les <strong>retours partiels</strong> restent gérés d'un passage à l'autre : on ne voit chaque fois que le <strong>restant</strong> à rendre.
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <RotateCcw size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Retours</h2>
+          <p className="text-sm text-white/80">{retours.length} retour(s) · {siteLabel(site)}</p>
+        </div>
       </div>
+      <p className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        Par <strong>prestation</strong> : choisissez-la, puis ajoutez les retours un à un par matériel (ex. 3 perdus, 2 cassés, le reste OK). <strong>OK</strong> réintègre le stock ; <strong>Cassé / Perdu</strong> demandent quantité, motif et <strong>pénalité</strong>. Le <strong>restant</strong> à rendre se met à jour automatiquement d'un passage à l'autre.
+      </p>
 
       {!lectureSeule && (
       <Card title="Nouveau retour (par prestation)">
@@ -271,6 +309,7 @@ export default function Retours() {
               <th className="px-3 py-2 text-center">Remboursée ?</th>
               <th className="px-3 py-2">Motif</th>
               <th className="px-3 py-2">Agent</th>
+              <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -298,12 +337,50 @@ export default function Retours() {
                 </td>
                 <td className="px-3 py-2 text-gray-500">{r.motif || '—'}</td>
                 <td className="px-3 py-2 text-xs">{r.agentNom}</td>
+                <td className="px-3 py-2">
+                  <div className="flex justify-end gap-1">
+                    {!isReadOnlyRole(role) && (
+                      <button onClick={() => ouvrirEditionRetour(r)} title="Corriger ce retour" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={14} /></button>
+                    )}
+                    {isFullAccessRole(role) && (
+                      <button onClick={() => supprimerRetour(r)} title="Supprimer ce retour" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                    )}
+                  </div>
+                </td>
               </tr>
             )})}
           </tbody>
         </table>
         {!retours.length && <p className="py-10 text-center text-gray-400">Aucun retour enregistré.</p>}
       </Card>
+
+      <Modal open={!!editRetour} onClose={() => setEditRetour(null)} title="Corriger ce retour"
+        footer={<><Button variant="ghost" onClick={() => setEditRetour(null)}>Annuler</Button><Button onClick={modifierRetour}>Enregistrer</Button></>}>
+        {editRetour && (
+          <div className="space-y-3">
+            <FormGroup label="État">
+              <Select value={editRetour.etat} onChange={(e) => setEditRetour((d) => ({ ...d, etat: e.target.value }))}>
+                <option value="OK">OK — bon état</option>
+                <option value="Cassé">Cassé</option>
+                <option value="Perdu">Perdu</option>
+              </Select>
+            </FormGroup>
+            <FormGroup label="Quantité">
+              <Input type="number" min="1" value={editRetour.qte} onChange={(e) => setEditRetour((d) => ({ ...d, qte: e.target.value }))} />
+            </FormGroup>
+            {editRetour.etat !== 'OK' && (
+              <>
+                <FormGroup label="Motif">
+                  <Input value={editRetour.motif} onChange={(e) => setEditRetour((d) => ({ ...d, motif: e.target.value }))} />
+                </FormGroup>
+                <FormGroup label="Pénalité (FCFA)">
+                  <Input type="number" min="0" value={editRetour.penalite} onChange={(e) => setEditRetour((d) => ({ ...d, penalite: e.target.value }))} />
+                </FormGroup>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 

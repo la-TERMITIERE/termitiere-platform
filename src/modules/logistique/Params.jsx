@@ -1,6 +1,6 @@
 // Paramètres Logistique — export/import JSON + export multi-sections + réinitialisation.
 import { useRef, useState } from 'react'
-import { FileSpreadsheet, Trash2, AlertTriangle, Download, Upload } from 'lucide-react'
+import { FileSpreadsheet, Trash2, AlertTriangle, Download, Upload, Settings } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -14,6 +14,7 @@ import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { useSite, matchSite, siteLabel } from './site/useSite'
+import { COULEUR_MODULE } from '../../utils/color'
 
 // Collections logistique sauvegardées/restaurées par l'export/import JSON.
 const JSON_COLS = ['logistique_inventaires', 'logistique_factures', 'logistique_prestations', 'logistique_demandes', 'logistique_retours', 'logistique_clients']
@@ -204,6 +205,19 @@ export default function Params() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Settings size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Paramètres</h2>
+          <p className="text-sm text-white/80">Sauvegarde, export et réinitialisation : MAXI LOGISTIQUE</p>
+        </div>
+      </div>
       <Card title="Sauvegarde / Restauration (JSON)">
         <p className="mb-3 text-sm text-gray-500">
           Téléchargez une sauvegarde complète des données logistique (saisies, factures, prestations,

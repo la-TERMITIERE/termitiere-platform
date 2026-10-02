@@ -9,8 +9,8 @@ import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useLogistiqueStore } from './store/referentielStore'
-import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
-import { formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
+import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
 import { catColor, CAT_MATERIEL } from './data'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -35,7 +35,31 @@ export default function Dashboard() {
 
   const [detail, setDetail] = useState(null) // { titre, render }
   const [scope, setScope] = useState(TOUTES) // filtre catégorie (comme Maxi Agro)
-  const { start, end, node: periodNode } = usePeriodSelect('mois')
+  // Filtre de période — même format Jour/Mois/Année/Plage que le reste de la
+  // plateforme, posé en glassmorphism dans le bandeau héro.
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const { start, end } = useMemo(() => {
+    const auj = todayStr()
+    if (modePeriode === 'jour') {
+      const j = filtreJour || auj
+      return { start: j, end: j }
+    }
+    if (modePeriode === 'annee') {
+      const an = filtreAnnee || auj.slice(0, 4)
+      return { start: `${an}-01-01`, end: an === auj.slice(0, 4) ? auj : `${an}-12-31` }
+    }
+    if (modePeriode === 'plage') {
+      return { start: filtreDebut || auj, end: filtreFin || auj }
+    }
+    const mois = filtreMois || auj.slice(0, 7)
+    const finMois = new Date(Number(mois.slice(0, 4)), Number(mois.slice(5, 7)), 0).toISOString().slice(0, 10)
+    return { start: `${mois}-01`, end: mois === auj.slice(0, 7) ? auj : finMois }
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
   const dansPeriode = (d) => (d || '') >= start && (d || '') <= end
@@ -134,11 +158,24 @@ export default function Dashboard() {
       <div className="relative flex flex-wrap items-center gap-3 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(188,60,49,0.35),0_8px_20px_-8px_rgba(188,60,49,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.85) 0%, rgba(26,26,26,0.8) 100%)' }}>
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
+          {/* Anneau tournant — le logo avait un halo flou statique blanc (box-shadow)
+              qui se confondait avec le balayage animé, le rendant invisible. Le halo
+              statique est retiré (l'anneau animé en tient lieu) et l'anneau reste
+              proche du badge (inset -8) pour un rendu net sur la bande colorée. */}
+          <style>{`
+            @keyframes logistique-ring-spin { to { transform: rotate(360deg); } }
+          `}</style>
+          <div style={{
+            position: 'absolute', inset: -8, borderRadius: '50%',
+            border: '3px solid transparent',
+            borderTopColor: '#ffffff', borderRightColor: 'rgba(255,255,255,0.55)',
+            animation: 'logistique-ring-spin 1.6s linear infinite'
+          }} />
           <img src="/logo_maxi_logistique.png" alt="Maxi Logistique"
             style={{
-              width: 64, height: 64, borderRadius: '50%',
+              position: 'relative', width: 64, height: 64, borderRadius: '50%',
               objectFit: 'cover', background: 'white', padding: 4,
-              boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55',
+              boxShadow: '0 0 0 3px #ffffff',
               display: 'block'
             }} />
         </div>
@@ -146,9 +183,12 @@ export default function Dashboard() {
           <h2 className="text-lg font-extrabold">Maxi Logistique · {siteLabel(site)}</h2>
           <p className="text-sm text-white/80">Matériel · Location · Prestations · Autorisations</p>
         </div>
-        <div className="ml-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white [&_label]:font-bold">
-          {periodNode}
-        </div>
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       {/* Filtre par catégorie (comme Maxi Agro) */}
@@ -161,9 +201,9 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <StatCard title="Stock total" value={formatNumber(stockTotal)} sub="pièces — cliquer" icon={Boxes} accent="#0284c7"
+        <StatCard glass title="Stock total" value={formatNumber(stockTotal)} sub="pièces — cliquer" icon={Boxes} accent="#0284c7"
           onClick={() => setDetail({ titre: 'Stock par catégorie', render: detailStock })} />
-        <StatCard title="Valeur stock" value={formatMoney(valeurStock)} sub="au coût d'achat · cliquer" icon={Boxes} accent="#7c3aed"
+        <StatCard glass title="Valeur stock" value={formatMoney(valeurStock)} sub="au coût d'achat · cliquer" icon={Boxes} accent="#7c3aed"
           onClick={() => setDetail({ titre: 'Valeur du stock', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Article</th><th className="px-3 py-2 text-right">Stock</th><th className="px-3 py-2 text-right">Valeur</th></tr></thead>
@@ -174,7 +214,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) approuvée(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
+        <StatCard glass title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) approuvée(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
           onClick={() => setDetail({ titre: 'Factures approuvées (CA) — période', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
@@ -186,7 +226,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard title="Autorisations" value={demandesActives.length} sub="à traiter · cliquer" icon={Send} accent={demandesActives.length ? '#d97706' : '#64748b'}
+        <StatCard glass title="Autorisations" value={demandesActives.length} sub="à traiter · cliquer" icon={Send} accent={demandesActives.length ? '#d97706' : '#64748b'}
           onClick={() => setDetail({ titre: 'Autorisations à traiter', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">N°</th><th className="px-3 py-2">Matériel</th><th className="px-3 py-2 text-center">Qté</th><th className="px-3 py-2">Statut</th></tr></thead>
@@ -198,7 +238,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard title="Prestations actives" value={prestationsActivesList.length} sub="en cours · cliquer" icon={RotateCcw} accent="#ea580c"
+        <StatCard glass title="Prestations actives" value={prestationsActivesList.length} sub="en cours · cliquer" icon={RotateCcw} accent="#ea580c"
           onClick={() => setDetail({ titre: 'Prestations actives', render: (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">Client</th><th className="px-3 py-2">Statut</th></tr></thead>
@@ -210,7 +250,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard title="Casse / perte (période)" value={formatNumber(cassePerte.pieces)}
+        <StatCard glass title="Casse / perte (période)" value={formatNumber(cassePerte.pieces)}
           sub={`${cassePerte.rows.length} retour(s) · ${cassePerte.impayees.length} pénalité(s) impayée(s)`}
           icon={PackageX} accent={cassePerte.pieces ? '#dc2626' : '#64748b'}
           onClick={() => setDetail({ titre: `Casse / perte — ${scopeLabel} (période)`, render: (

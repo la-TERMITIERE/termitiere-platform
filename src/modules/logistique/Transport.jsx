@@ -14,8 +14,9 @@
 // modifier ou supprimer un trajet à tout stade ; l'auteur et les approbateurs ne le
 // peuvent que tant que la sortie n'est pas autorisée.
 import { useMemo, useState } from 'react'
-import { Truck, Plus, Trash2, Pencil, X, MapPin, Fuel, CheckCircle2, Eye, Flag, ShieldCheck, Clock } from 'lucide-react'
+import { Truck, Plus, Trash2, Pencil, X, MapPin, Fuel, CheckCircle2, Eye, Flag, ShieldCheck, Clock, Coins, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
@@ -23,13 +24,13 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { isReadOnlyRole, isApproverRole, canViewFinance, isFullAccessRole, logistiqueVoitMontants, logistiqueVoitValidateur } from '../../core/roles'
 import { genId, genNumero, todayStr, nowHM, formatMoney, formatDateShort } from '../../utils/formatters'
-import { glassModalProps, COULEUR_MODULE, shadeHex } from '../../utils/color'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const COULEUR = COULEUR_MODULE.logistique
@@ -63,7 +64,32 @@ export default function Transport() {
   const voitValidateur = logistiqueVoitValidateur(role)
   const estAdministration = canViewFinance(role)
   const { data: allTransports } = useCollection('logistique_transports')
-  const { start, end, node: periodNode } = usePeriodSelect('mois')
+  // Filtre de période — même format Jour/Mois/Année/Plage que le reste de la
+  // plateforme, posé en glassmorphism sur la bande (utile seulement à l'onglet
+  // « Tous les trajets »).
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const { start, end } = useMemo(() => {
+    const auj = todayStr()
+    if (modePeriode === 'jour') {
+      const j = filtreJour || auj
+      return { start: j, end: j }
+    }
+    if (modePeriode === 'annee') {
+      const an = filtreAnnee || auj.slice(0, 4)
+      return { start: `${an}-01-01`, end: an === auj.slice(0, 4) ? auj : `${an}-12-31` }
+    }
+    if (modePeriode === 'plage') {
+      return { start: filtreDebut || auj, end: filtreFin || auj }
+    }
+    const mois = filtreMois || auj.slice(0, 7)
+    const finMois = new Date(Number(mois.slice(0, 4)), Number(mois.slice(5, 7)), 0).toISOString().slice(0, 10)
+    return { start: `${mois}-01`, end: mois === auj.slice(0, 7) ? auj : finMois }
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   // Cloisonnement par site (sous-application Lomé / Kara) — même principe que
   // Prestations.jsx/Factures.jsx.
@@ -285,20 +311,33 @@ export default function Transport() {
 
   return (
     <div className="space-y-5">
-      {/* En-tête + période — même recette que Briqueterie (bandeau dégradé), teintée
-          à la couleur de MAXI LOGISTIQUE. Le sélecteur de période ne sert qu'à
-          l'onglet « Tous les trajets ». */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl p-4 text-white shadow-lg"
-        style={{ background: `linear-gradient(to right, ${COULEUR}, ${shadeHex(COULEUR, -30)})` }}>
-        <Truck size={22} className="shrink-0" />
+      {/* Bandeau héro — même recette que les autres volets (logo rond, titre, filtre
+          de période et action directement en glassmorphism sur la bande). */}
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Truck size={28} color="white" />
+        </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-extrabold leading-tight">Transport — MAXI LOGISTIQUE ({siteLabel(site)})</h2>
-          <p className="text-xs text-white/80">Sortie de camion sous autorisation · suivi départ → arrivée · recette, dépenses, marge</p>
+          <h2 className="text-lg font-extrabold">Transport</h2>
+          <p className="text-sm text-white/80">{transports.length} trajet(s) · {siteLabel(site)}</p>
         </div>
         {onglet === 'tous' && (
-          <div className="w-full sm:ml-auto sm:w-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white">
-            {periodNode}
-          </div>
+          <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+            valeurJour={filtreJour} onJourChange={setFiltreJour}
+            valeurMois={filtreMois} onMoisChange={setFiltreMois}
+            avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+            avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+            valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        )}
+        {peutSaisir && (
+          <button onClick={() => { setModal({ data: vide(), isNew: true }); setDep({ label: '', montant: '' }) }}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <Plus size={14} /> Nouveau trajet
+          </button>
         )}
       </div>
 
@@ -306,22 +345,13 @@ export default function Transport() {
           l'administration comme les autres KPI financiers de Logistique. */}
       {onglet === 'tous' && estAdministration && voitMontants && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="card p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Recette (période)</p>
-            <p className="text-lg font-extrabold sm:text-xl" style={{ color: COULEUR }}>{formatMoney(cumul.recette)}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Dépenses (période)</p>
-            <p className="text-lg font-extrabold text-amber-700 sm:text-xl">{formatMoney(cumul.depenses)}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Marge bénéficiaire</p>
-            <p className={`text-lg font-extrabold sm:text-xl ${cumul.marge >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatMoney(cumul.marge)}</p>
-          </div>
+          <StatCard glass title="Recette (période)" value={formatMoney(cumul.recette)} icon={Coins} accent={COULEUR} />
+          <StatCard glass title="Dépenses (période)" value={formatMoney(cumul.depenses)} icon={Fuel} accent="#d97706" />
+          <StatCard glass title="Marge bénéficiaire" value={formatMoney(cumul.marge)} icon={Wallet} accent={cumul.marge >= 0 ? '#16a34a' : '#dc2626'} />
         </div>
       )}
 
-      {/* Onglets + bouton de création */}
+      {/* Onglets */}
       <div className="flex flex-wrap items-center gap-2">
         {ongletsDef.map(([k, label, count]) => (
           <button key={k} onClick={() => setOnglet(k)}
@@ -330,11 +360,6 @@ export default function Transport() {
             {label}{count != null && count > 0 ? ` (${count})` : ''}
           </button>
         ))}
-        {peutSaisir && (
-          <Button className="w-full sm:ml-auto sm:w-auto" style={{ backgroundColor: COULEUR }} onClick={() => { setModal({ data: vide(), isNew: true }); setDep({ label: '', montant: '' }) }}>
-            <Plus size={16} /> Nouveau trajet
-          </Button>
-        )}
       </div>
 
       {onglet === 'attente' && (

@@ -1,7 +1,8 @@
 // Saisie magasin — EF Initial · Achats · Sorties (autorisées) · Retours · EF Final.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Save, Send, CheckCircle2, Plus, Trash2, Lock } from 'lucide-react'
+import { Save, Send, CheckCircle2, Plus, Trash2, Lock, ClipboardList } from 'lucide-react'
+import { COULEUR_MODULE } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -17,7 +18,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateTime, genId } from '../../utils/formatters'
 import { CAT_MATERIEL, catColor } from './data'
-import { useSite, matchSite } from './site/useSite'
+import { useSite, matchSite, siteLabel } from './site/useSite'
 import {
   previousInventoryDate, getInventaire, autoSorties, agregerMateriel, sommeMouvements,
   mouvementsDepuisSaisie, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent,
@@ -202,9 +203,38 @@ export default function SaisieMagasin() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <ClipboardList size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Saisie magasin</h2>
+          <p className="text-sm text-white/80">{siteLabel(site)}</p>
+        </div>
+        {peutEnregistrer && (
+          <button onClick={() => setAddModal(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <Plus size={14} /> Matériel
+          </button>
+        )}
+        <Link to={`/logistique/${site}/demandes`}
+          className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+          <Send size={14} /> Demander une sortie
+        </Link>
+        {peutEnregistrer && (
+          <button onClick={save} disabled={saving}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60">
+            <Save size={14} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        )}
+      </div>
       {!peutEnregistrer && (
         <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          👁️ Mode consultation — seuls les agents peuvent effectuer des saisies magasin
+          👁️ Mode consultation : seuls les agents peuvent effectuer des saisies magasin
         </div>
       )}
       {peutEditerInit && !peutSaisir && (
@@ -228,11 +258,6 @@ export default function SaisieMagasin() {
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Agent</label>
           <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
-        </div>
-        <div className="ml-auto flex gap-2">
-          {peutEnregistrer && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un matériel</Button>}
-          <Link to={`/logistique/${site}/demandes`}><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>
-          {peutEnregistrer && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
         </div>
       </div>
 
