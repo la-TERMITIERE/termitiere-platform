@@ -18,8 +18,9 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
 import { ROLES } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
+import { SEXES, indexSexeClients, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
 import ClientDetailModal from './ClientDetailModal'
+import { SexeDonut } from './SexeUI'
 import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { useGymParams } from './useGymParams'
@@ -279,6 +280,11 @@ export default function Dashboard() {
   })
   const totalSeancesMois = useMemo(() => seancesMois.reduce((s, x) => s + (Number(x.montant) || 0), 0), [seancesMois])
   const totalAbonnementsMois = useMemo(() => abonnementsMois.reduce((s, x) => s + (Number(x.montant) || 0), 0), [abonnementsMois])
+  // Proportion femmes / hommes sur la période (personnes distinctes) — mini donut.
+  const sexeStats = useMemo(
+    () => statsSexe([seancesMois, abonnementsMois], indexSexeClients(clients)),
+    [seancesMois, abonnementsMois, clients]
+  )
   const seancesParCategorie = useMemo(() => parCategorieFn(seancesMois, totalSeancesMois), [seancesMois, totalSeancesMois])
   const abonnementsParCategorie = useMemo(() => parCategorieFn(abonnementsMois, totalAbonnementsMois), [abonnementsMois, totalAbonnementsMois])
 
@@ -291,6 +297,10 @@ export default function Dashboard() {
     return [...s, ...a].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)).slice(0, 20)
   }, [seances, abonnements])
 
+  // Dégradé vertical (clair → couleur pleine) par barre, calculé sur le canvas —
+  // plus esthétique qu'un aplat uni, tout en gardant la couleur propre à chaque
+  // catégorie (cf. COULEUR_BARRE). `chartArea` n'existe qu'une fois le premier
+  // rendu fait ; on retombe sur la couleur pleine avant ça (évite un crash).
   // Dégradé vertical (clair → couleur pleine) par barre, calculé sur le canvas —
   // plus esthétique qu'un aplat uni, tout en gardant la couleur propre à chaque
   // catégorie (cf. COULEUR_BARRE). `chartArea` n'existe qu'une fois le premier
@@ -731,7 +741,7 @@ export default function Dashboard() {
 
       {/* Bento : deux diagrammes EN BANDE classés (séances / abonnements), jamais
           mélangés — chaque catégorie garde sa couleur (cf. COULEUR_BARRE) dans les deux. */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card title="🎫 Séances par catégorie" className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/50 via-white to-white">
           {totalSeancesMois === 0 ? (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
@@ -758,6 +768,34 @@ export default function Dashboard() {
           ) : (
             <div style={{ height: 220 }}>
               <Bar data={barData(abonnementsParCategorie)} options={barOptions} />
+            </div>
+          )}
+        </Card>
+
+        {/* Mini donut femmes / hommes — aperçu rapide ; le détail est dans Pilotage & Analyses. */}
+        <Card title="⚥ Femmes / Hommes" className="overflow-hidden border-pink-100/60 bg-gradient-to-br from-pink-50/40 via-white to-sky-50/40">
+          {sexeStats.connus === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-pink-100/70 text-pink-300">
+                <Users size={22} />
+              </span>
+              <p className="text-sm text-gray-400">Sexe non renseigné sur cette période.</p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-4 py-2">
+              <SexeDonut stats={sexeStats} mini />
+              <div className="space-y-1.5">
+                {SEXES.map((sx) => (
+                  <p key={sx.id} className="flex items-center gap-2 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs text-white" style={{ background: sx.couleur }}>{sx.symbole}</span>
+                    <strong className="text-gray-800">{sx.id === 'F' ? sexeStats.pctF : sexeStats.pctH}%</strong>
+                    <span className="text-xs text-gray-400">{sexeStats[sx.id].personnes}</span>
+                  </p>
+                ))}
+                {sexeStats.inconnu.personnes > 0 && (
+                  <p className="text-[10px] text-gray-400">+{sexeStats.inconnu.personnes} non précisé{sexeStats.inconnu.personnes > 1 ? 's' : ''}</p>
+                )}
+              </div>
             </div>
           )}
         </Card>

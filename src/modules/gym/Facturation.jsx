@@ -21,9 +21,10 @@ import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { imprimerTicketSeance } from './printTicket'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { genererRapportMultiPDF } from '../../utils/exportPDF'
-import { categorieLabel } from './data'
+import { categorieLabel, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo } from './data'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useSite, matchSite } from './site/useSite'
+import { SexeFiltre, SexeBadge } from './SexeUI'
 
 const COULEUR = '#E8850F'
 
@@ -31,6 +32,10 @@ export default function Facturation() {
   const site = useSite()
   const { data: allFactures } = useCollection('gym_factures')
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
+  const { data: allClients } = useCollection('gym_clients')
+  const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
+  const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
+  const [filtreSexe, setFiltreSexe] = useState('')
   const { generateFacturePDF } = usePDF('gym')
   const { role } = useAuth()
   const peutSupprimer = isFullAccessRole(role)
@@ -52,7 +57,9 @@ export default function Facturation() {
   const [saving, setSaving] = useState(false)
 
   const toutes = useMemo(() => [...factures].sort((a, b) => (a.date < b.date ? 1 : -1)), [factures])
-  const liste = useMemo(() => {
+  // Période d'abord ; le tri par sexe s'applique ensuite (`liste`). `listePeriode`
+  // sert à compter les « non précisé » sur la période affichée.
+  const listePeriode = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((f) => (f.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((f) => (f.date || '').startsWith(filtreAnnee))
     if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
@@ -61,6 +68,8 @@ export default function Facturation() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((f) => f.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe), [listePeriode, filtreSexe, idxSexe])
+  const nbInconnus = useMemo(() => listePeriode.filter((f) => !sexeDe(f, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
   // Cumuls détaillés — séances / abonnements / les deux combinés (3 KPI distincts,
   // visibles de TOUS les rôles y compris l'agent : décision explicite, contrairement
@@ -113,6 +122,7 @@ export default function Facturation() {
       'N°': f.numero,
       'Date': formatDateShort(f.date),
       'Client': f.clientNom || '—',
+      'Sexe': sexeInfo(sexeDe(f, idxSexe))?.label || '—',
       'Description': f.description || '—',
       'Montant': Number(f.montant) || 0
     }))
@@ -124,6 +134,7 @@ export default function Facturation() {
         { key: 'N°', label: 'N°', width: 14 },
         { key: 'Date', label: 'Date', width: 12 },
         { key: 'Client', label: 'Client', width: 22 },
+        { key: 'Sexe', label: 'Sexe', width: 10 },
         { key: 'Description', label: 'Description', width: 34 },
         { key: 'Montant', label: 'Montant', width: 16, type: 'money' }
       ],
@@ -168,9 +179,9 @@ export default function Facturation() {
       nom,
       sousTitre: `${sousListe.length} ${nom.toLowerCase()}${sousListe.length > 1 ? 's' : ''} · ${formatMoney(totalSection)} au total`,
       synthese: syntheseParCategorie(sousListe, nom),
-      colonnes: ['N°', 'Date', 'Client', 'Description', 'Montant (FCFA)'],
-      lignes: sousListe.map((f) => [f.numero, formatDateShort(f.date), f.clientNom || '—', f.description || '—', (Number(f.montant) || 0).toLocaleString('fr-FR')]),
-      totalRow: ['', '', '', 'TOTAL', totalSection.toLocaleString('fr-FR')]
+      colonnes: ['N°', 'Date', 'Client', 'Sexe', 'Description', 'Montant (FCFA)'],
+      lignes: sousListe.map((f) => [f.numero, formatDateShort(f.date), f.clientNom || '—', sexeInfo(sexeDe(f, idxSexe))?.label || '—', f.description || '—', (Number(f.montant) || 0).toLocaleString('fr-FR')]),
+      totalRow: ['', '', '', '', 'TOTAL', totalSection.toLocaleString('fr-FR')]
     }
   }
 
@@ -209,6 +220,7 @@ export default function Facturation() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <SexeFiltre value={filtreSexe} onChange={setFiltreSexe} inconnus={nbInconnus} />
         {canExportGym(role) && (
           <button onClick={() => setExportOpen(true)}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -248,6 +260,7 @@ export default function Facturation() {
             { key: 'numero', label: 'N°', render: (r) => <span className="font-mono text-xs">{r.numero}</span> },
             { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
             { key: 'clientNom', label: 'Client' },
+            { key: 'sexe', label: 'Sexe', align: 'center', render: (r) => <SexeBadge sexe={sexeDe(r, idxSexe)} /> },
             { key: 'sourceType', label: 'Origine', render: (r) => <Badge tone="info">{r.sourceType === 'abonnement' ? 'Abonnement' : 'Séance'}</Badge> },
             { key: 'description', label: 'Description', render: (r) => r.description || '—' },
             { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.montant)}</strong> },

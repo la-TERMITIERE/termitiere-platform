@@ -2,14 +2,15 @@
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Minus, Lightbulb, CreditCard, Wallet, Coins, Ticket, Flame, User, Calendar, PieChart } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Lightbulb, CreditCard, Wallet, Coins, Ticket, Flame, User, Calendar, PieChart, Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, todayStr } from '../../utils/formatters'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, derniersMoisGym, croissanceGym } from './data'
+import { CATEGORIES_GYM, categorieLabel, categorieTone, derniersMoisGym, croissanceGym, SEXES, indexSexeClients, statsSexe } from './data'
+import { SexeDonut } from './SexeUI'
 import ClientDetailModal from './ClientDetailModal'
 import { avatarGradient } from '../../utils/color'
 import { useSite, matchSite } from './site/useSite'
@@ -95,6 +96,16 @@ export default function Pilotage() {
       return { ...c, nb: lignes.length, montant, pct: totalPeriode > 0 ? Math.round((montant / totalPeriode) * 100) : 0 }
     }).sort((a, b) => b.montant - a.montant)
   }, [toutes, mois6])
+
+  // Proportion femmes / hommes sur les 6 mois affichés — personnes distinctes (une
+  // cliente venue 10 fois compte pour 1), avec le détail séances / abonnements / CA.
+  const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
+  const sexeStats = useMemo(() => {
+    const dansFenetre = (x) => mois6.some((m) => (x.date || '').startsWith(m.prefixe))
+    const s6 = seances.filter(dansFenetre)
+    const a6 = abonnements.filter(dansFenetre)
+    return { tout: statsSexe([s6, a6], idxSexe), seances: statsSexe([s6], idxSexe), abonnements: statsSexe([a6], idxSexe) }
+  }, [seances, abonnements, mois6, idxSexe])
 
   // Dégradé vertical (clair → couleur pleine) par barre — même recette que le
   // Dashboard, plus esthétique qu'un aplat uni. `chartArea` n'existe qu'une fois le
@@ -347,6 +358,49 @@ export default function Pilotage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </Card>
+
+      <Card title="⚥ Proportion femmes / hommes (6 derniers mois)"
+        className="overflow-hidden border-pink-100/60 bg-gradient-to-br from-pink-50/40 via-white to-sky-50/40">
+        {sexeStats.tout.connus === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-8 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-pink-100/70 text-pink-300">
+              <Users size={22} />
+            </span>
+            <p className="text-sm text-gray-400">Le sexe n'est pas encore renseigné : il se saisit à l'enregistrement d'une séance ou d'un abonnement, ou sur la fiche client.</p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <SexeDonut stats={sexeStats.tout} />
+            <div className="min-w-[240px] flex-1 space-y-2.5">
+              {SEXES.map((sx) => {
+                const pct = sx.id === 'F' ? sexeStats.tout.pctF : sexeStats.tout.pctH
+                return (
+                  <div key={sx.id} className="overflow-hidden rounded-xl border-l-4 bg-white/70 p-3 shadow-sm backdrop-blur-sm" style={{ borderColor: sx.couleur }}>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 font-bold text-gray-800">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full text-sm text-white" style={{ background: sx.couleur }}>{sx.symbole}</span>
+                        {sx.court}
+                      </span>
+                      <span className="text-xl font-extrabold" style={{ color: sx.couleur }}>{pct}%</span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      <strong className="text-gray-700">{sexeStats.tout[sx.id].personnes}</strong> personne{sexeStats.tout[sx.id].personnes > 1 ? 's' : ''} ·{' '}
+                      {sexeStats.seances[sx.id].nb} séance{sexeStats.seances[sx.id].nb > 1 ? 's' : ''} ·{' '}
+                      {sexeStats.abonnements[sx.id].nb} abonnement{sexeStats.abonnements[sx.id].nb > 1 ? 's' : ''} ·{' '}
+                      <strong className="text-gray-700">{formatMoney(sexeStats.tout[sx.id].montant)}</strong>
+                    </p>
+                  </div>
+                )
+              })}
+              {sexeStats.tout.inconnu.personnes > 0 && (
+                <p className="text-[11px] text-gray-400">
+                  {sexeStats.tout.inconnu.personnes} personne{sexeStats.tout.inconnu.personnes > 1 ? 's' : ''} sans sexe renseigné ne figure{sexeStats.tout.inconnu.personnes > 1 ? 'nt' : ''} pas dans le graphique (à compléter sur la fiche client).
+                </p>
+              )}
+            </div>
           </div>
         )}
       </Card>

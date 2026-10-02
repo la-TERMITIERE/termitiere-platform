@@ -13,7 +13,8 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { isFullAccessRole, isReadOnlyRole } from '../../core/roles'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
-import { categorieLabel, categorieTone, QR_CARNET_ACTIF } from './data'
+import { categorieLabel, categorieTone, sexeInfo, QR_CARNET_ACTIF } from './data'
+import { SexeBoutons } from './SexeUI'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import CalendrierPresences from './CalendrierPresences'
 import QrCarnetModal from './QrCarnetModal'
@@ -61,7 +62,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
     setSaving(true)
     try {
       await updateItem('gym_clients', client.id, {
-        nom: edit.nom.trim(), telephone: edit.telephone.trim(), notes: edit.notes.trim(),
+        nom: edit.nom.trim(), telephone: edit.telephone.trim(), notes: edit.notes.trim(), sexe: edit.sexe || '',
         partenaire: !!edit.partenaire,
         partenaireStructure: edit.partenaire ? edit.partenaireStructure.trim() : ''
       })
@@ -92,7 +93,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
           </Button>
         )}
         {!lectureSeule && client && !edit && (
-          <Button variant="outline" onClick={() => setEdit({ nom: client.nom, telephone: client.telephone || '', notes: client.notes || '', partenaire: !!client.partenaire, partenaireStructure: client.partenaireStructure || '' })}>
+          <Button variant="outline" onClick={() => setEdit({ nom: client.nom, sexe: client.sexe || '', telephone: client.telephone || '', notes: client.notes || '', partenaire: !!client.partenaire, partenaireStructure: client.partenaireStructure || '' })}>
             <Pencil size={14} /> Modifier
           </Button>
         )}
@@ -104,6 +105,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
       ) : edit ? (
         <div className="space-y-3">
           <FormGroup label="Nom" required><Input value={edit.nom} onChange={(e) => setEdit((f) => ({ ...f, nom: e.target.value }))} /></FormGroup>
+          <FormGroup label="⚥ Sexe" hint="Sert à suivre la proportion de femmes et d'hommes dans la salle"><SexeBoutons value={edit.sexe} onChange={(v) => setEdit((f) => ({ ...f, sexe: v }))} /></FormGroup>
           <FormGroup label="Téléphone" hint="Optionnel"><Input value={edit.telephone} onChange={(e) => setEdit((f) => ({ ...f, telephone: e.target.value }))} placeholder="ex : 22890000000" /></FormGroup>
           <FormGroup label="Notes" hint="Optionnel"><Input value={edit.notes} onChange={(e) => setEdit((f) => ({ ...f, notes: e.target.value }))} /></FormGroup>
 
@@ -137,7 +139,7 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
             </div>
           )}
           <div className="rounded-xl bg-gray-50 p-3">
-            <p className="text-sm text-gray-600">📞 {client.telephone || 'Non renseigné'}</p>
+            <p className="text-sm text-gray-600">📞 {client.telephone || 'Non renseigné'}{sexeInfo(client.sexe) && <span className="ml-2 font-semibold" style={{ color: sexeInfo(client.sexe).couleur }}>{sexeInfo(client.sexe).symbole} {sexeInfo(client.sexe).label}</span>}</p>
             {client.notes && <p className="mt-1 text-xs text-gray-500">📝 {client.notes}</p>}
             <p className="mt-2 text-sm font-bold text-gray-800">{formatMoney(total)} au total — {historique.length} passage{historique.length > 1 ? 's' : ''}</p>
           </div>

@@ -19,13 +19,14 @@ import { isFullAccessRole, canExportGym } from '../../core/roles'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_SEANCE, categorieLabel, categorieTone, categorieDesc, finValiditeSeance, seanceValide, genQrToken, QR_CARNET_ACTIF } from './data'
+import { CATEGORIES_SEANCE, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo, categorieLabel, categorieTone, categorieDesc, finValiditeSeance, seanceValide, genQrToken, QR_CARNET_ACTIF } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import { imprimerTicketSeance } from './printTicket'
 import ClientDetailModal from './ClientDetailModal'
 import QrCarnetModal from './QrCarnetModal'
 import { useSite, matchSite } from './site/useSite'
+import { SexeBoutons, SexeFiltre, SexeBadge } from './SexeUI'
 
 const COULEUR = '#E8850F'
 const COULEUR2 = '#A6342A'
@@ -63,6 +64,8 @@ export default function Seances() {
   const tarifs = { simple: params.tarifSeanceSimple, vip: params.tarifSeanceVip }
 
   const [modal, setModal] = useState(null)
+  const [filtreSexe, setFiltreSexe] = useState('')
+  const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [saving, setSaving] = useState(false)
   const [suggClient, setSuggClient] = useState(false)
   const [clientDetail, setClientDetail] = useState(null)
@@ -85,11 +88,13 @@ export default function Seances() {
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin] = useState('')
 
-  const vide = () => ({ id: null, date: todayStr(), clientNom: '', telephone: '', categorie: CATEGORIES_SEANCE[0].id, montant: String(tarifs[CATEGORIES_SEANCE[0].id] || ''), notes: '', imprimer: true, partenaire: false, partenaireStructure: '' })
-  const remplir = (s) => ({ id: s.id, date: s.date, clientNom: s.clientNom, telephone: '', categorie: s.categorie, montant: String(s.montant), notes: s.notes || '', partenaire: !!s.partenaire, partenaireStructure: s.partenaireStructure || '' })
+  const vide = () => ({ id: null, date: todayStr(), clientNom: '', telephone: '', sexe: '', categorie: CATEGORIES_SEANCE[0].id, montant: String(tarifs[CATEGORIES_SEANCE[0].id] || ''), notes: '', imprimer: true, partenaire: false, partenaireStructure: '' })
+  const remplir = (s) => ({ id: s.id, date: s.date, clientNom: s.clientNom, sexe: sexeDe(s, idxSexe), telephone: '', categorie: s.categorie, montant: String(s.montant), notes: s.notes || '', partenaire: !!s.partenaire, partenaireStructure: s.partenaireStructure || '' })
 
   const toutes = useMemo(() => [...seances].sort((a, b) => (a.date < b.date ? 1 : -1)), [seances])
-  const liste = useMemo(() => {
+  // Période d'abord ; le tri par sexe s'applique ensuite (`liste`). `listePeriode`
+  // sert à compter les « non précisé » sur la période affichée.
+  const listePeriode = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((s) => (s.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((s) => (s.date || '').startsWith(filtreAnnee))
     if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
@@ -98,6 +103,8 @@ export default function Seances() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((s) => s.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe), [listePeriode, filtreSexe, idxSexe])
+  const nbInconnus = useMemo(() => listePeriode.filter((s) => !sexeDe(s, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
   // Export Excel — reprend exactement la liste affichée (`liste`), donc le
@@ -106,6 +113,7 @@ export default function Seances() {
     const rows = liste.map((s) => ({
       Date: formatDateShort(s.date),
       Client: s.clientNom + (s.partenaire ? ` (partenaire${s.partenaireStructure ? ` — ${s.partenaireStructure}` : ''})` : ''),
+      Sexe: sexeInfo(sexeDe(s, idxSexe))?.label || '—',
       Catégorie: categorieLabel(s.categorie),
       Montant: Number(s.montant) || 0,
       Notes: s.notes || '—',
@@ -120,6 +128,7 @@ export default function Seances() {
         columns: [
           { key: 'Date', label: 'Date', width: 14 },
           { key: 'Client', label: 'Client', width: 28 },
+          { key: 'Sexe', label: 'Sexe', width: 10 },
           { key: 'Catégorie', label: 'Catégorie', width: 16 },
           { key: 'Montant', label: 'Montant', width: 16, type: 'money' },
           { key: 'Notes', label: 'Notes', width: 30 },
@@ -134,6 +143,7 @@ export default function Seances() {
   async function enregistrer() {
     const d = modal
     if (!d.clientNom.trim()) return toast.error('Nom du client requis')
+    if (!d.id && !d.sexe) return toast.error('Précisez le sexe du client (Femme ou Homme)')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     if (d.partenaire && !d.partenaireStructure.trim()) return toast.error('Indiquez la structure du partenaire (ex. CIMTOGO)')
     setSaving(true)
@@ -145,15 +155,19 @@ export default function Seances() {
       if (d.id) {
         const { coachId, coachNom } = coachDuJour(d.date)
         await updateItem('gym_seances', d.id, {
-          date: d.date, clientNom, categorie: d.categorie, montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom
+          date: d.date, clientNom, categorie: d.categorie, montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom,
+          ...(d.sexe ? { sexe: d.sexe } : {})
         })
+        const ficheEdit = clients.find((c) => (c.nom || '').trim().toLowerCase() === clientNom.toLowerCase())
+        if (d.sexe && ficheEdit && ficheEdit.sexe !== d.sexe) await updateItem('gym_clients', ficheEdit.id, { sexe: d.sexe })
         // La facture déjà générée à la création garde sinon l'ancien montant — le
         // Dashboard/Facturation (sommes des `gym_factures`) resterait alors désynchronisé.
         const factureLiee = factures.find((f) => f.sourceType === 'seance' && f.sourceId === d.id)
         if (factureLiee) {
           await updateItem('gym_factures', factureLiee.id, {
             date: d.date, clientNom, categorie: d.categorie,
-            description: `Séance ${categorieLabel(d.categorie)}`, montant: Number(d.montant)
+            description: `Séance ${categorieLabel(d.categorie)}`, montant: Number(d.montant),
+            ...(d.sexe ? { sexe: d.sexe } : {})
           })
         }
         await audit('gym', 'SEANCE_MODIFIEE', `${clientNom} — ${categorieLabel(d.categorie)} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
@@ -178,12 +192,15 @@ export default function Seances() {
       if (!client) {
         const qrToken = genQrToken()
         const nouveauClientId = await addItem('gym_clients', {
-          nom: clientNom, telephone: telephoneSaisi, notes: '', site, qrToken, createdAt: Date.now(),
+          nom: clientNom, telephone: telephoneSaisi, sexe: d.sexe, notes: '', site, qrToken, createdAt: Date.now(),
           partenaire: estPartenaire, partenaireStructure: estPartenaire ? partenaireStructure : ''
         })
         nouveauClient = { id: nouveauClientId, nom: clientNom, qrToken }
-      } else if (telephoneSaisi && !client.telephone) {
-        await updateItem('gym_clients', client.id, { telephone: telephoneSaisi })
+      } else if ((telephoneSaisi && !client.telephone) || client.sexe !== d.sexe) {
+        await updateItem('gym_clients', client.id, {
+          ...(telephoneSaisi && !client.telephone ? { telephone: telephoneSaisi } : {}),
+          ...(client.sexe !== d.sexe ? { sexe: d.sexe } : {})
+        })
       }
       // Coché ici sur un client existant pas encore marqué (ou structure différente) :
       // on met à jour sa fiche pour que ce soit automatique la prochaine fois.
@@ -193,7 +210,7 @@ export default function Seances() {
 
       const { coachId, coachNom } = coachDuJour(d.date)
       const id = await addItem('gym_seances', {
-        date: d.date, clientNom, categorie: d.categorie, montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
+        date: d.date, clientNom, sexe: d.sexe, categorie: d.categorie, montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
         partenaire: estPartenaire, partenaireStructure, regleParPartenaire: false,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
@@ -216,7 +233,7 @@ export default function Seances() {
         const facture = await genererFactureGym({
           factures, sourceType: 'seance', sourceId: id, clientNom, clientTelephone: telephone,
           categorie: d.categorie, description: `Séance ${categorieLabel(d.categorie)}`, montant: d.montant,
-          user, site, date: d.date, imprime: d.imprimer
+          user, site, date: d.date, sexe: d.sexe, imprime: d.imprimer
         })
         if (d.imprimer) imprimerTicketSeance(facture)
         toast.success(d.imprimer ? 'Séance enregistrée — reçu imprimé ✓' : 'Séance enregistrée ✓')
@@ -235,7 +252,7 @@ export default function Seances() {
     const facture = await genererFactureGym({
       factures, sourceType: 'seance', sourceId: s.id, clientNom: s.clientNom, clientTelephone: client?.telephone,
       categorie: s.categorie, description: `Séance ${categorieLabel(s.categorie)}`, montant: s.montant,
-      user, site, date: s.date
+      user, site, date: s.date, sexe: sexeDe(s, idxSexe)
     })
     imprimerTicketSeance(facture)
     toast.success('Facture générée ✓')
@@ -270,6 +287,7 @@ export default function Seances() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <SexeFiltre value={filtreSexe} onChange={setFiltreSexe} inconnus={nbInconnus} />
         {canExportGym(role) && (
           <button onClick={exportXLSX}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -294,6 +312,7 @@ export default function Seances() {
                 )}
               </div>
             ) },
+            { key: 'sexe', label: 'Sexe', align: 'center', render: (r) => <SexeBadge sexe={sexeDe(r, idxSexe)} /> },
             { key: 'categorie', label: 'Catégorie', render: (r) => <Badge tone={categorieTone(r.categorie)}>{categorieLabel(r.categorie)}</Badge> },
             { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.montant)}</strong> },
             { key: 'validite', label: 'Validité', render: (r) => {
@@ -377,7 +396,7 @@ export default function Seances() {
                     onChange={(e) => {
                       const nom = e.target.value
                       const fiche = clients.find((c) => (c.nom || '').trim().toLowerCase() === nom.trim().toLowerCase())
-                      setModal((f) => ({ ...f, clientNom: nom, ...(fiche ? { partenaire: !!fiche.partenaire, partenaireStructure: fiche.partenaireStructure || f.partenaireStructure } : {}) }))
+                      setModal((f) => ({ ...f, clientNom: nom, ...(fiche ? { partenaire: !!fiche.partenaire, partenaireStructure: fiche.partenaireStructure || f.partenaireStructure, sexe: fiche.sexe || f.sexe } : {}) }))
                       setSuggClient(true)
                     }}
                     onFocus={() => setSuggClient(true)}
@@ -390,7 +409,7 @@ export default function Seances() {
                       <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
                         {suggestions.map((c) => (
                           <button key={c.id} type="button"
-                            onMouseDown={() => { setModal((f) => ({ ...f, clientNom: c.nom, telephone: c.telephone || f.telephone, partenaire: !!c.partenaire, partenaireStructure: c.partenaireStructure || f.partenaireStructure })); setSuggClient(false) }}
+                            onMouseDown={() => { setModal((f) => ({ ...f, clientNom: c.nom, telephone: c.telephone || f.telephone, sexe: c.sexe || f.sexe, partenaire: !!c.partenaire, partenaireStructure: c.partenaireStructure || f.partenaireStructure })); setSuggClient(false) }}
                             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-orange-50">
                             <span className="font-semibold text-gray-700">{c.nom}</span>
                             {c.partenaire && <span className="rounded-full bg-sky-100 px-1.5 text-[10px] font-bold text-sky-700">🤝 {c.partenaireStructure || 'partenaire'}</span>}
@@ -401,6 +420,9 @@ export default function Seances() {
                     ) : null
                   })()}
                 </div>
+              </FormGroup>
+              <FormGroup label="⚥ Sexe" required={!modal.id} hint="Sert à suivre la proportion de femmes et d'hommes dans la salle">
+                <SexeBoutons value={modal.sexe} onChange={(v) => setModal((f) => ({ ...f, sexe: v }))} />
               </FormGroup>
               {!modal.id && (
                 <FormGroup label="📱 Téléphone (WhatsApp)" hint="Optionnel — pour la confirmation WhatsApp automatique">
