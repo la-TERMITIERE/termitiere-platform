@@ -22,7 +22,7 @@ import RecettesDepenses from '../depense/RecettesDepenses'
 import Banque from './Banque'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage, isFullAccessRole, peutVoirBanque } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole, peutVoirBanque, peutVoirVoletsAdmin } from '../../core/roles'
 
 function AccesRefuse() {
   return (
@@ -89,8 +89,8 @@ function SiteApp() {
         <Route path="clients-partenaires" element={canViewPilotage(role) ? <PartenairesClients /> : <AccesRefuse />} />
         <Route path="coachs" element={<Coachs />} />
         <Route path="partenaires" element={<Partenaires module="gym" />} />
-        <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
-        <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
+        <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
+        <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
         <Route path="*" element={<Navigate to="." replace />} />
       </Routes>
     </SiteProvider>

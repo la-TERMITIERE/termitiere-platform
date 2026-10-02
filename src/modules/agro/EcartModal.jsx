@@ -30,7 +30,7 @@ export default function EcartModal({ facture, onClose, onSubmit, busy }) {
 
   return (
     <Modal open={!!facture} onClose={onClose} size="lg"
-      title={facture ? `Ajuster l'écart — ${facture.numero}` : ''}
+      title={facture ? `Ajuster l'écart : ${facture.numero}` : ''}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={submit} loading={busy}><Check size={15} /> Appliquer & réajuster le stock</Button></>}>
       {facture && (
         <div className="space-y-3">

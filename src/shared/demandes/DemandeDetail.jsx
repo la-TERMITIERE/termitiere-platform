@@ -38,7 +38,7 @@ export default function DemandeDetail({
       {/* Ce qui va sortir */}
       <div>
         <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-500">
-          Ce qui va sortir — {formatNumber(totalQte)} pièce(s)
+          Ce qui va sortir : {formatNumber(totalQte)} pièce(s)
         </p>
 
         {/* Téléphone : cartes empilées */}
@@ -100,7 +100,7 @@ export default function DemandeDetail({
 
       {alerte && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-          ⚠️ Stock insuffisant sur au moins un article — vérifiez avant d'autoriser la sortie.
+          ⚠️ Stock insuffisant sur au moins un article : vérifiez avant d'autoriser la sortie.
         </p>
       )}
 

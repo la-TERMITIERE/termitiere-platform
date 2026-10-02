@@ -6,7 +6,7 @@ import { formatDate } from './formatters'
 const ENTREPRISE = {
   nom: 'LA TERMITIÈRE',
   devise: 'TOUJOURS DANS L\'ACTION',
-  adresse: 'Agoe Daliko, Lomé — Togo',
+  adresse: 'Agoe Daliko, Lomé : Togo',
   tel: '00228 96 09 49 49',
   email: 'latermitiere2021@gmail.com'
 }

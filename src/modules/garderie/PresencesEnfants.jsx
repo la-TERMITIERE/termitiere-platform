@@ -248,11 +248,11 @@ export default function PresencesEnfants() {
 
   async function marquerArrivee(enfant) {
     const existing = getPresence(enfant.id)
-    if (existing?.heureArrivee) return toast.info('Arrivée déjà enregistrée — cliquez sur "corriger"')
+    if (existing?.heureArrivee) return toast.info('Arrivée déjà enregistrée : cliquez sur "corriger"')
     const heure = heureNow()
     await enregistrer(enfant, { statut: 'present', heureArrivee: heure })
     audit('garderie', 'PRESENCE_ARRIVEE', `${enfant.prenom} ${enfant.nom}`, { date: dateFiltre, heure })
-    notify({ type: 'info', title: `✅ Arrivée — ${enfant.prenom} ${enfant.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/presences' })
+    notify({ type: 'info', title: `✅ Arrivée : ${enfant.prenom} ${enfant.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/presences' })
     toast.success(`Arrivée de ${enfant.prenom} à ${heure} ✓`)
   }
 
@@ -325,7 +325,7 @@ export default function PresencesEnfants() {
     exportRapportExcel({ theme: 'garderie',
       filename: `presences-enfants-${dateFiltre}.xlsx`,
       sections: [{ id: 'presences', name: 'Présences',
-        title: `Feuille de présences enfants — ${formatDateShort(dateFiltre)}`,
+        title: `Feuille de présences enfants : ${formatDateShort(dateFiltre)}`,
         subtitle: `${stats.presents} présent(s) · ${stats.absents} absent(s) · ${stats.excuses} excusé(s) · ${stats.nonPointes} non pointé(s)`,
         columns: [
           { key: 'Prénom Nom', label: 'Enfant', width: 22 },

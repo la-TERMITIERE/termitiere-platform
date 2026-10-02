@@ -76,7 +76,7 @@ export default function MonCompte() {
       // authentifié → updatePassword autorisé). Best-effort, non bloquant.
       if (changePass && isFirebaseConfigured && auth?.currentUser) {
         try { await updatePassword(auth.currentUser, passNouveau) }
-        catch (e) { console.warn('[moncompte] Firebase Auth — màj mot de passe :', e?.code || e?.message) }
+        catch (e) { console.warn('[moncompte] Firebase Auth : màj mot de passe :', e?.code || e?.message) }
       }
 
       updateSession({ nom: nom.trim() })

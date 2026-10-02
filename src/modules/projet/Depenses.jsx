@@ -163,7 +163,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
       if (projet?.responsableUid && projet.responsableUid !== user?.uid) {
         await notify({
           type: 'info',
-          title: `💬 Commentaire — ${projet.nom}`,
+          title: `💬 Commentaire : ${projet.nom}`,
           body: `${user?.nom || user?.login || 'Quelqu\'un'} : ${texte.slice(0, 140)}`,
           module: 'projet', forUsers: [projet.responsableUid], link: '/projet/depenses'
         }).catch(() => {})
@@ -253,7 +253,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
         secteurId: 'projet', projetId: remboursement.projetId || null, projetNom: projetLabel,
         enregistrePar: user?.nom || user?.login || '—', createdAt: Date.now()
       })
-      await audit('projet', 'PAU_REMBOURSEMENT', `${formatMoney(montant)} remboursés au PAU${projetLabel ? ' — ' + projetLabel : ''}${remboursement.motif ? ' — ' + remboursement.motif.trim() : ''}`)
+      await audit('projet', 'PAU_REMBOURSEMENT', `${formatMoney(montant)} remboursés au PAU${projetLabel ? ' : ' + projetLabel : ''}${remboursement.motif ? ' : ' + remboursement.motif.trim() : ''}`)
       toast.success('Remboursement enregistré ✓')
       setRemboursement(null)
     } finally {
@@ -332,7 +332,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
       date: todayStr(),
       montant: String(g.reste),
       categorie: 'sous_traitance',
-      description: `Solde — ${g.tache.titre}`,
+      description: `Solde : ${g.tache.titre}`,
       fournisseur: g.tache.prestataireNom || '',
       prestataireMetier: g.tache.prestataireMetier || '',
       prestataireTelephone: g.tache.prestataireTelephone || '',
@@ -361,8 +361,8 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
 
   const handleSave = async () => {
     if (!form.montant || !form.projetId) return
-    if (!form.description || !form.description.trim()) return toast.error('Description requise — précisez le motif de la dépense')
-    if (!form.fournisseur || !form.fournisseur.trim()) return toast.error('Bénéficiaire requis — identifiez qui reçoit la somme')
+    if (!form.description || !form.description.trim()) return toast.error('Description requise : précisez le motif de la dépense')
+    if (!form.fournisseur || !form.fournisseur.trim()) return toast.error('Bénéficiaire requis : identifiez qui reçoit la somme')
     setSaving(true)
     try {
       const now = Date.now()
@@ -393,7 +393,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
           await updateItem('projets', form.projetId, { depenses: totalProjet, updatedAt: now })
         }
         const projet2 = projets.find((p) => p.id === form.projetId)
-        await audit('projet', 'depense_ajoutee', `${Number(form.montant).toLocaleString('fr-FR')} FCFA — ${projet2?.nom || form.projetId}`)
+        await audit('projet', 'depense_ajoutee', `${Number(form.montant).toLocaleString('fr-FR')} FCFA : ${projet2?.nom || form.projetId}`)
       }
       setModal(false)
     } finally { setSaving(false) }
@@ -443,7 +443,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
     doc.setFontSize(14)
     doc.text('Relevé des dépenses', 14, 14)
     doc.setFontSize(9)
-    doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')} — Total : ${formatMoney(totalFiltre)}`, 14, 21)
+    doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')} : Total : ${formatMoney(totalFiltre)}`, 14, 21)
     autoTable(doc, {
       startY: 26,
       head: [['Date', 'Projet', 'Tâche', 'Catégorie', 'Description', 'Prestataire', 'Métier', 'Téléphone', 'Type', 'Montant (FCFA)']],
@@ -605,7 +605,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                         )}
                         {d.depuisBesoin && (
                           <Badge tone={(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).tone}>
-                            🔗 Besoin validé — {(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).label}
+                            🔗 Besoin validé : {(STATUTS_DECAISSEMENT[d.statutDecaissement] || STATUTS_DECAISSEMENT.decaissee).label}
                           </Badge>
                         )}
                       </div>
@@ -699,7 +699,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="col-span-2"><span className="text-gray-500">Projet : </span><span className="font-semibold">{projet?.nom || '—'}</span></div>
-                <div className="col-span-2"><span className="text-gray-500">Tâche liée : </span><span className="font-semibold">{tache?.titre || '— (dépense générale)'}</span></div>
+                <div className="col-span-2"><span className="text-gray-500">Tâche liée : </span><span className="font-semibold">{tache?.titre || '(dépense générale)'}</span></div>
                 <div><span className="text-gray-500">Prestataire : </span><span className="font-semibold">{d.fournisseur || '—'}</span></div>
                 <div><span className="text-gray-500">Téléphone : </span><span className="font-semibold">{d.prestataireTelephone || '—'}</span></div>
                 <div><span className="text-gray-500">Métier : </span><span className="font-semibold">{metierLabel || '—'}</span></div>
@@ -739,7 +739,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
 
       {/* Détail des apports du PAU — liste des dépenses financées par le PAU + dette
           nette (apporté − remboursé) + bouton Rembourser, clic sur une ligne → détail complet */}
-      <Modal open={pauListe} onClose={() => setPauListe(false)} title="Apports du PAU — dette & détail"
+      <Modal open={pauListe} onClose={() => setPauListe(false)} title="Apports du PAU : dette & détail"
         panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <div className="space-y-3">
           <div className="rounded-xl bg-white/80 px-3.5 py-3 shadow-sm">
@@ -826,7 +826,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
               <label className="mb-1 block text-sm font-semibold text-gray-700">Projet concerné <span className="text-gray-400">(optionnel)</span></label>
               <select value={remboursement.projetId} onChange={(e) => setRemboursement((r) => ({ ...r, projetId: e.target.value }))}
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300">
-                <option value="">— Non précisé —</option>
+                <option value="">Non précisé</option>
                 {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </select>
             </div>
@@ -849,7 +849,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
           <Modal
             open={!!noteDepId}
             onClose={() => { setNoteDepId(null); setNoteTexte('') }}
-            title={dep ? `Commentaires — ${dep.description || catLabel(dep.categorie)}` : 'Commentaires'}
+            title={dep ? `Commentaires : ${dep.description || catLabel(dep.categorie)}` : 'Commentaires'}
             panelClassName="bg-gradient-to-br from-teal-200/85 via-teal-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200"
           >
             {dep && (
@@ -861,7 +861,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                   </p>
                 )}
                 {!nsListe.length
-                  ? <p className="mb-3 text-xs text-gray-400 italic">Aucun commentaire — soyez le premier à commenter.</p>
+                  ? <p className="mb-3 text-xs text-gray-400 italic">Aucun commentaire : soyez le premier à commenter.</p>
                   : <div className="mb-3 space-y-2">
                       {nsListe.map((n) => (
                         <div key={n.id} className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2">
@@ -906,7 +906,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
             <label className="mb-1 block text-xs font-medium text-gray-600">Projet *</label>
             <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               value={form.projetId} onChange={(e) => setForm((f) => ({ ...f, projetId: e.target.value, tacheId: '' }))}>
-              <option value="">— Sélectionner —</option>
+              <option value="">Sélectionner</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </div>
@@ -928,11 +928,11 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                       prestataireTelephone:  f.prestataireTelephone  || tache?.prestataireTelephone  || ''
                     }))
                   }}>
-                  <option value="">— Aucune (dépense générale du projet) —</option>
+                  <option value="">Aucune (dépense générale du projet)</option>
                   {tachesDuProjet.map((t) => <option key={t.id} value={t.id}>{t.titre}</option>)}
                 </select>
                 {!tachesDuProjet.length && (
-                  <p className="mt-1 text-[11px] text-gray-400">Aucune tâche pour ce projet — créez-en une dans l'onglet Tâches.</p>
+                  <p className="mt-1 text-[11px] text-gray-400">Aucune tâche pour ce projet : créez-en une dans l'onglet Tâches.</p>
                 )}
               </div>
             )
@@ -973,7 +973,7 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
                 }} />
               {tacheSolde && form.montant !== '' && Number(form.montant) < tacheSolde.reste && (
                 <p className="mt-1 text-[11px] text-amber-600">
-                  Versement partiel — il restera {formatMoney(tacheSolde.reste - Number(form.montant))} après cet enregistrement.
+                  Versement partiel : il restera {formatMoney(tacheSolde.reste - Number(form.montant))} après cet enregistrement.
                 </p>
               )}
             </div>
@@ -995,14 +995,14 @@ export default function Depenses({ secteurSeul = null, secteurExclu = null }) {
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
               Source de financement
-              <span className="ml-1 font-normal text-gray-400">— qui paie cette dépense ?</span>
+              <span className="ml-1 font-normal text-gray-400">: qui paie cette dépense ?</span>
             </label>
             {secteurSeul === 'bat' ? (
               // Le BTP (chantiers) est intégralement financé par le PAU — pas de choix à
               // faire, ni de risque d'oubli de le cocher : c'est fixé pour toutes les
               // dépenses de ce secteur (cf. `handleSave` qui l'impose aussi côté sauvegarde).
               <div className="flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800">
-                <HandCoins size={14} /> Apport du PAU — tout le BTP est financé par le PAU
+                <HandCoins size={14} /> Apport du PAU : tout le BTP est financé par le PAU
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">

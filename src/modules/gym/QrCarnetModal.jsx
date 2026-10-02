@@ -33,7 +33,7 @@ export default function QrCarnetModal({ client, onClose }) {
   }, [client])
 
   return (
-    <Modal open={!!client} onClose={onClose} title={client ? `QR carnet — ${client.nom}` : ''}
+    <Modal open={!!client} onClose={onClose} title={client ? `QR carnet : ${client.nom}` : ''}
       {...glassModalProps(COULEUR_MODULE.gym)}
       footer={<Button variant="outline" onClick={onClose}>Fermer</Button>}>
       {client && (
@@ -48,7 +48,7 @@ export default function QrCarnetModal({ client, onClose }) {
             <p>
               Faites scanner ce code par l'appareil photo du téléphone de <strong>{client.nom}</strong>, puis proposez-lui
               d'ajouter la page à son écran d'accueil (« Ajouter à l'écran d'accueil » / partager → « Sur l'écran d'accueil »)
-              pour y revenir comme une application — nommée <strong>« MAXI GYM Carnet-présence »</strong>.
+              pour y revenir comme une application : nommée <strong>« MAXI GYM Carnet-présence »</strong>.
             </p>
           </div>
         </div>

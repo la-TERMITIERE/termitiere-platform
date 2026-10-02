@@ -57,7 +57,7 @@ export default function CorrectifModal({
       <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
         Cette autorisation est <strong>certifiée</strong> : elle ne peut plus être supprimée. Corrigez
         {modifiable ? <> l'<strong>article</strong>, la <strong>quantité</strong></> : <> la <strong>quantité</strong></>}
-        {prixField ? <> et le <strong>prix unitaire</strong></> : null} —
+        {prixField ? <> et le <strong>prix unitaire</strong></> : null} :
         après validation de la hiérarchie, ce qui était sorti <strong>revient au stock</strong> et ce qui est corrigé en est décompté.
       </p>
 
@@ -151,7 +151,7 @@ export default function CorrectifModal({
       </div>
 
       <FormGroup label="Motif du correctif" required className="mt-3"
-        hint="Expliquez l'erreur — la hiérarchie voit ce message avec la demande.">
+        hint="Expliquez l'erreur : la hiérarchie voit ce message avec la demande.">
         <Input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex. : 300 « 12 creux » commandés, « 10 creux » saisis par erreur" />
       </FormGroup>
     </Modal>

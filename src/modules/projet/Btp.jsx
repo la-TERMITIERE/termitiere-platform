@@ -80,7 +80,7 @@ function ProjetsAmbigus({ projets }) {
         updateItem('projets', p.id, { secteurId: secteurConnu, updatedAt: Date.now() })
           .then(() => {
             const secteur = SECTEURS.find((s) => s.id === secteurConnu)
-            audit('projet', 'projet_modifie', `${p.nom} — secteur corrigé automatiquement en ${secteur?.label || secteurConnu} (confirmé par la direction)`)
+            audit('projet', 'projet_modifie', `${p.nom} : secteur corrigé automatiquement en ${secteur?.label || secteurConnu} (confirmé par la direction)`)
             toast.success(`« ${p.nom} » reclassé en ${secteur?.label || secteurConnu} ✓`)
           })
       }
@@ -93,7 +93,7 @@ function ProjetsAmbigus({ projets }) {
     try {
       await updateItem('projets', p.id, { secteurId, updatedAt: Date.now() })
       const secteur = SECTEURS.find((s) => s.id === secteurId)
-      await audit('projet', 'projet_modifie', `${p.nom} — secteur reclassé explicitement en ${secteur?.label || secteurId}`)
+      await audit('projet', 'projet_modifie', `${p.nom} : secteur reclassé explicitement en ${secteur?.label || secteurId}`)
       toast.success(`« ${p.nom} » reclassé en ${secteur?.label || secteurId} ✓`)
     } finally {
       setEnregistrement(null)
@@ -110,9 +110,9 @@ function ProjetsAmbigus({ projets }) {
       </div>
       <p className="mb-3 text-xs text-amber-700">
         Trois cas signalés ici : un secteur jamais fixé explicitement (déduit automatiquement du type,
-        potentiellement faux), un projet classé BTP dont le TYPE n'a rien de BTP (ex. agricole/élevage) —
+        potentiellement faux), un projet classé BTP dont le TYPE n'a rien de BTP (ex. agricole/élevage),
         qui révèle un secteur mal renseigné À LA MAIN, comme les dépenses MAXI-AGRO qui remontaient à tort
-        dans les dépenses BTP — ou l'inverse : un TYPE clairement BTP (construction/aménagement) classé
+        dans les dépenses BTP : ou l'inverse : un TYPE clairement BTP (construction/aménagement) classé
         dans un autre secteur, qui le rend invisible du volet Chantiers ci-dessous. Choisis le bon secteur
         pour chacun.
       </p>
@@ -126,9 +126,9 @@ function ProjetsAmbigus({ projets }) {
                 <p className="text-[11px] text-gray-400">
                   Type : {type?.label || p.type || '—'} · actuellement classé dans <strong>{secteur?.label}</strong>
                   {raison === 'type_incoherent'
-                    ? <span className="ml-1 font-semibold text-red-500">— incohérent avec ce type</span>
+                    ? <span className="ml-1 font-semibold text-red-500">: incohérent avec ce type</span>
                     : raison === 'type_btp_secteur_autre'
-                      ? <span className="ml-1 font-semibold text-red-500">— type BTP mais absent du volet Chantiers</span>
+                      ? <span className="ml-1 font-semibold text-red-500">: type BTP mais absent du volet Chantiers</span>
                       : <span className="ml-1">(déduit par défaut, jamais fixé)</span>}
                 </p>
               </div>
@@ -138,7 +138,7 @@ function ProjetsAmbigus({ projets }) {
                 onChange={(e) => reclasser(p, e.target.value)}
                 className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
               >
-                <option value="" disabled>— Choisir le vrai secteur —</option>
+                <option value="" disabled>Choisir le vrai secteur</option>
                 {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
@@ -199,7 +199,7 @@ export default function Btp() {
           <HardHat size={26} />
         </div>
         <div>
-          <h2 className="text-lg font-extrabold">BTP — Bâtiment & Travaux Publics</h2>
+          <h2 className="text-lg font-extrabold">BTP : Bâtiment & Travaux Publics</h2>
           <p className="text-sm text-white/80">Chantiers, tâches et dépenses réunis au même endroit : réservé à l'administration</p>
         </div>
       </div>

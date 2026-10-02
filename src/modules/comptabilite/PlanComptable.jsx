@@ -117,7 +117,7 @@ export default function PlanComptable() {
               <input value={modal.label} onChange={(e) => setModal({ ...modal, label: e.target.value })} placeholder="ex. Achats de carburant" className="input-base" /></div>
             <div><label className="mb-1 block text-sm font-semibold text-gray-600 dark:text-gray-300">Type de compte</label>
               <select value={modal.type} onChange={(e) => setModal({ ...modal, type: e.target.value })} className="input-base">
-                {Object.entries(TYPES_COMPTE).map(([k, v]) => <option key={k} value={k}>{k} — {v.label}</option>)}
+                {Object.entries(TYPES_COMPTE).map(([k, v]) => <option key={k} value={k}>{k} : {v.label}</option>)}
               </select></div>
           </div>
         )}

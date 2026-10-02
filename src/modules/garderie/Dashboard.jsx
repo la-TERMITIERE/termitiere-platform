@@ -256,20 +256,33 @@ export default function Dashboard() {
     <div className="space-y-5">
       <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,57,14,0.35),0_8px_20px_-8px_rgba(232,57,14,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.85) 0%, rgba(245,168,0,0.8) 100%)' }}>
-        {/* Logo garderie dans un cercle avec bordure blanche fixe (pas d'animation) */}
+        {/* Logo garderie — anneau tournant. Le logo porte déjà sa propre bordure
+            blanche FIXE (box-shadow ci-dessous) : un halo animé posé juste dessus
+            (faible inset) s'y fondait et devenait invisible. L'anneau animé est donc
+            poussé bien plus loin du badge (inset -9) pour se détacher clairement de
+            cette bordure fixe et apparaître sur la bande colorée, où le blanc tranche net. */}
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
+          <style>{`
+            @keyframes garderie-ring-spin { to { transform: rotate(360deg); } }
+          `}</style>
+          <div style={{
+            position: 'absolute', inset: -8, borderRadius: '50%',
+            border: '3px solid transparent',
+            borderTopColor: '#ffffff', borderRightColor: 'rgba(255,255,255,0.55)',
+            animation: 'garderie-ring-spin 1.6s linear infinite'
+          }} />
           <img src="/garderie-logo.png" alt="Garderie La Termitière"
             style={{
-              width: 64, height: 64, borderRadius: '50%',
+              position: 'relative', width: 64, height: 64, borderRadius: '50%',
               objectFit: 'cover', background: 'white', padding: 4,
-              boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55',
+              boxShadow: '0 0 0 3px #ffffff',
               display: 'block'
             }} />
         </div>
         <div>
           <h2 className="text-lg font-extrabold drop-shadow">{params.nom}</h2>
           <p className="text-sm text-orange-50/90">
-            Enfants · Personnel · Présences · Paiements · Incidents — {formatDateShort(today)}
+            Enfants · Personnel · Présences · Paiements · Incidents : {formatDateShort(today)}
           </p>
         </div>
       </div>
@@ -279,7 +292,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('enfants')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#E8390E1a', color: '#E8390E' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: 'linear-gradient(135deg, #E8390E, #E8390Ecc)', boxShadow: '0 6px 14px -4px #E8390E66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
             <Baby size={24} />
           </div>
           <div className="min-w-0 flex-1">
@@ -293,7 +307,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('presences')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#F5A8001a', color: '#F5A800' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: 'linear-gradient(135deg, #F5A800, #F5A800cc)', boxShadow: '0 6px 14px -4px #F5A80066, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
             <UserCheck size={24} />
           </div>
           <div className="min-w-0 flex-1">
@@ -307,7 +322,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('impayes')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: '#E8390E1a', color: '#E8390E' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: 'linear-gradient(135deg, #E8390E, #E8390Ecc)', boxShadow: '0 6px 14px -4px #E8390E66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
             <CreditCard size={24} />
           </div>
           <div className="min-w-0 flex-1">
@@ -321,7 +337,8 @@ export default function Dashboard() {
         <button
           onClick={() => setModal('incidents')}
           className="card group flex w-full items-center gap-4 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: incidentsAccent + '1a', color: incidentsAccent }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: `linear-gradient(135deg, ${incidentsAccent}, ${incidentsAccent}cc)`, boxShadow: `0 6px 14px -4px ${incidentsAccent}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)` }}>
             {alarmsActives.length > 0 ? <ShieldAlert size={24} /> : <AlertTriangle size={24} />}
           </div>
           <div className="min-w-0 flex-1">
@@ -369,7 +386,7 @@ export default function Dashboard() {
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsPartielsNonSoldes.map((e) => (
                   <span key={e.id} className="rounded-full border border-amber-400 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                    {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
+                    {e.prenom} {e.nom} : reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
                   </span>
                 ))}
               </div>
@@ -393,11 +410,11 @@ export default function Dashboard() {
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsMaternelleNonSoldes.map((e) => (
                   <span key={e.id} className="rounded-full border border-emerald-400 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                    {e.prenom} {e.nom} — reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
+                    {e.prenom} {e.nom} : reste {Number(e.reste).toLocaleString('fr-FR')} FCFA
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-emerald-600 mt-1">Frais de scolarité annuels — 2ᵉ tranche attendue 6 mois après le 1er versement · Cliquez pour accéder aux paiements</p>
+              <p className="text-xs text-emerald-600 mt-1">Frais de scolarité annuels : 2ᵉ tranche attendue 6 mois après le 1er versement · Cliquez pour accéder aux paiements</p>
             </div>
           </div>
         </button>
@@ -417,7 +434,7 @@ export default function Dashboard() {
               <div className="mt-1 flex flex-wrap gap-2">
                 {enfantsAbsentsRepetes.map((e) => (
                   <span key={e.id} className="rounded-full border border-orange-400 bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
-                    {e.prenom} {e.nom} — {e.joursAbsents}j consécutifs
+                    {e.prenom} {e.nom} : {e.joursAbsents}j consécutifs
                   </span>
                 ))}
               </div>
@@ -573,7 +590,7 @@ export default function Dashboard() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Personnel du jour */}
         <div className="rounded-3xl border border-white/50 bg-white/40 p-4 shadow-[0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 md:p-5">
-          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Personnel — pointage du jour</h3>
+          <h3 className="mb-3 text-base font-bold text-[#1A1A1A]">Personnel : pointage du jour</h3>
           {personnelAujourdhui.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">Aucun membre du personnel actif.</p>
           ) : (
@@ -715,7 +732,7 @@ export default function Dashboard() {
       <Modal
         open={modal === 'presences'}
         onClose={() => setModal(null)}
-        title={`Présences du jour — ${formatDateShort(today)}`}
+        title={`Présences du jour : ${formatDateShort(today)}`}
         size="lg"
         panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >
@@ -753,7 +770,7 @@ export default function Dashboard() {
       <Modal
         open={modal === 'impayes'}
         onClose={() => setModal(null)}
-        title={`💰 Enfants non à jour — ${enfantsNonPayes.length} concerné(s)`}
+        title={`💰 Enfants non à jour : ${enfantsNonPayes.length} concerné(s)`}
         size="md"
         panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
       >

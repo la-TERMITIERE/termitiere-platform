@@ -239,7 +239,7 @@ export default function Galerie() {
               className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}
             >
-              <option value="">— Voir toute la galerie —</option>
+              <option value="">Voir toute la galerie</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </div>
@@ -250,7 +250,7 @@ export default function Galerie() {
                 <label className="mb-1 block text-xs font-medium text-gray-600">Légende (optionnel)</label>
                 <input
                   className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  placeholder="Ex : Coulage dalle RDC — 30 juin 2026"
+                  placeholder="Ex : Coulage dalle RDC : 30 juin 2026"
                   value={legende} onChange={(e) => setLegende(e.target.value)}
                 />
               </div>
@@ -279,7 +279,7 @@ export default function Galerie() {
       {toutesImages.length > 0 && (
         <p className="text-xs text-gray-400">
           {toutesImages.length} photo{toutesImages.length > 1 ? 's' : ''}
-          {filtreProjet && projetActif ? ` — ${projetActif.nom}` : ' — tous les projets'}
+          {filtreProjet && projetActif ? ` : ${projetActif.nom}` : ' : tous les projets'}
         </p>
       )}
 
@@ -306,7 +306,7 @@ export default function Galerie() {
             <Card>
               <div className="flex flex-col items-center gap-2 py-12 text-gray-400">
                 <ImageIcon size={36} className="opacity-30" />
-                <p className="text-sm">Aucune photo — sélectionnez un projet et ajoutez des photos d'avancement</p>
+                <p className="text-sm">Aucune photo : sélectionnez un projet et ajoutez des photos d'avancement</p>
               </div>
             </Card>
           )}
@@ -324,7 +324,7 @@ export default function Galerie() {
           <Card>
             <div className="flex flex-col items-center gap-2 py-12 text-gray-400">
               <ImageIcon size={36} className="opacity-30" />
-              <p className="text-sm">Aucune photo pour ce projet — ajoutez-en via les boutons ci-dessus</p>
+              <p className="text-sm">Aucune photo pour ce projet : ajoutez-en via les boutons ci-dessus</p>
             </div>
           </Card>
         )

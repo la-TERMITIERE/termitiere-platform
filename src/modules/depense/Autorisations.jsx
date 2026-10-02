@@ -120,7 +120,7 @@ export default function Autorisations() {
       })
       await removeItem('depense_depenses', d.id)
       await audit('depense', 'DECAISSEMENT_SUPPRIME',
-        `${secteur?.label || d.secteurId} — ${formatMoney(Number(d.montant) || 0)}${d.categorie ? ` · ${d.categorie}` : ''}${d.description ? ` — ${d.description}` : ''} · Statut : ${d.statut || '—'} · Motif : ${motif}`,
+        `${secteur?.label || d.secteurId} : ${formatMoney(Number(d.montant) || 0)}${d.categorie ? ` · ${d.categorie}` : ''}${d.description ? ` : ${d.description}` : ''} · Statut : ${d.statut || '—'} · Motif : ${motif}`,
         { secteurId: d.secteurId, montant: Number(d.montant) || 0, categorie: d.categorie || null, date: d.date || null, statut: d.statut || null, motifSuppression: motif }
       )
     }, 'Dépense supprimée')
@@ -132,22 +132,22 @@ export default function Autorisations() {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     await run(async () => {
       await updateItem('depense_depenses', d.id, { statut: 'approuvee', approuveePar: user?.nom || '—', approuveeLe: Date.now(), approbationCommentaire: texte || '' })
-      await audit('depense', 'DECAISSEMENT_APPROUVE', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
+      await audit('depense', 'DECAISSEMENT_APPROUVE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
       const dest = destinataires(d)
       if (dest.length) {
-        await notify({ type: 'info', title: '☑️ Décaissement approuvé', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA — ${secteur?.label || d.secteurId} — en attente de certification`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
+        await notify({ type: 'info', title: '☑️ Décaissement approuvé', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId} : en attente de certification`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
       }
-    }, '✅ Décaissement approuvé — en attente de certification')
+    }, '✅ Décaissement approuvé : en attente de certification')
   }
 
   async function refuser(d, motif) {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     await run(async () => {
       await updateItem('depense_depenses', d.id, { statut: 'refusee', refusMotif: motif || '', refuseePar: user?.nom || '—', refuseeLe: Date.now() })
-      await audit('depense', 'DECAISSEMENT_REFUSE', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, { motif })
+      await audit('depense', 'DECAISSEMENT_REFUSE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, { motif })
       const dest = destinataires(d)
       if (dest.length) {
-        await notify({ type: 'refus', title: '❌ Décaissement refusé', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA — ${secteur?.label || d.secteurId}${motif ? ' — ' + motif : ''}`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
+        await notify({ type: 'refus', title: '❌ Décaissement refusé', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId}${motif ? ' : ' + motif : ''}`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
       }
     }, 'Décaissement refusé')
   }
@@ -156,14 +156,14 @@ export default function Autorisations() {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     await run(async () => {
       await updateItem('depense_depenses', d.id, { statut: 'decaissee', certifieePar: user?.nom || '—', certifieeLe: Date.now(), certificationCommentaire: texte || '' })
-      await audit('depense', 'DECAISSEMENT_CERTIFIE', `${secteur?.label || d.secteurId} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
+      await audit('depense', 'DECAISSEMENT_CERTIFIE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
       const dest = destinataires(d)
       if (dest.length) {
-        await notify({ type: 'success', title: '💸 Décaissement certifié', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA — ${secteur?.label || d.secteurId} — argent décaissé`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
+        await notify({ type: 'success', title: '💸 Décaissement certifié', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId} : argent décaissé`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
       }
       await notifierBeneficiaire(d, secteur?.label || d.secteurId)
       await alerterSiDepassement(d, secteur)
-    }, '✅ Décaissement certifié — argent décaissé')
+    }, '✅ Décaissement certifié : argent décaissé')
   }
 
   async function confirmerAction() {
@@ -197,7 +197,7 @@ export default function Autorisations() {
     const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
     await notify({
       type: statut.key === 'depasse' ? 'danger' : 'warning',
-      title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
+      title: statut.key === 'depasse' ? `🔴 Budget dépassé : ${libelle}` : `🟠 Budget en alerte : ${libelle}`,
       body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
       module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
     })
@@ -352,10 +352,10 @@ export default function Autorisations() {
               )}
               {/* Messages explicites : l'utilisateur comprend pourquoi il ne peut pas agir. */}
               {estMienne(d) && ['en_attente', 'approuvee'].includes(d.statut) && (
-                <p className="flex items-center gap-1 text-xs text-amber-600"><Clock size={13} /> Votre propre demande — elle doit être validée par quelqu'un d'autre</p>
+                <p className="flex items-center gap-1 text-xs text-amber-600"><Clock size={13} /> Votre propre demande : elle doit être validée par quelqu'un d'autre</p>
               )}
               {d.statut === 'approuvee' && peutCertifier && !estMienne(d) && approuveeParMoi(d) && (
-                <p className="flex items-center gap-1 text-xs text-amber-600"><Stamp size={13} /> Vous avez déjà approuvé — la certification revient à un autre décideur</p>
+                <p className="flex items-center gap-1 text-xs text-amber-600"><Stamp size={13} /> Vous avez déjà approuvé : la certification revient à un autre décideur</p>
               )}
               {d.statut === 'en_attente' && !peutApprouver && !estMienne(d) && (
                 <p className="flex items-center gap-1 text-xs text-gray-500"><Clock size={13} /> En attente d'un responsable habilité à approuver</p>
@@ -390,7 +390,7 @@ export default function Autorisations() {
         {actionModal && (
           <>
             <p className="mb-3 text-sm text-gray-600">
-              {Number(actionModal.d.montant).toLocaleString('fr-FR')} FCFA — {SECTEURS.find((s) => s.id === actionModal.d.secteurId)?.label || actionModal.d.secteurId}
+              {Number(actionModal.d.montant).toLocaleString('fr-FR')} FCFA : {SECTEURS.find((s) => s.id === actionModal.d.secteurId)?.label || actionModal.d.secteurId}
             </p>
             <FormGroup label={infoModal.label} required={infoModal.requis}>
               <textarea
@@ -439,7 +439,7 @@ export default function Autorisations() {
               <p className="text-sm text-gray-600">
                 {engagee
                   ? <>Cette dépense est déjà <span className="font-semibold text-red-600">{STATUTS_DECAISSEMENT[toDelete.statut]?.label || toDelete.statut}</span> : la supprimer retire aussi la trace de cet argent sorti. </>
-                  : <>Elle n'est pas encore approuvée — aucun engagement réel n'est perdu. </>}
+                  : <>Elle n'est pas encore approuvée : aucun engagement réel n'est perdu. </>}
                 Action <span className="font-semibold text-red-600">irréversible</span>. Le motif sera enregistré dans le <span className="font-semibold">Journal et Historique</span>.
               </p>
 

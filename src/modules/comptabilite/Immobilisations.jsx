@@ -123,7 +123,7 @@ export default function Immobilisations() {
           <div className="space-y-3">
             <Champ label="Désignation du bien">
               <input value={modal.libelle} onChange={(e) => setModal({ ...modal, libelle: e.target.value })}
-                placeholder="ex. Camion Isuzu — MAXI LOGISTIQUE" className="input-base" />
+                placeholder="ex. Camion Isuzu : MAXI LOGISTIQUE" className="input-base" />
             </Champ>
             <div className="grid grid-cols-2 gap-3">
               <Champ label="Catégorie">
@@ -149,7 +149,7 @@ export default function Immobilisations() {
             </div>
             {modal.valeur && (
               <p className="text-xs text-gray-500">
-                Compte SYSCOHADA : <span className="font-mono font-semibold">{getCategorieImmo(modal.categorie)?.compte}</span> — {getCategorieImmo(modal.categorie)?.methode !== 'aucune' ? 'amortissable' : 'non amortissable (terrain)'}.
+                Compte SYSCOHADA : <span className="font-mono font-semibold">{getCategorieImmo(modal.categorie)?.compte}</span> : {getCategorieImmo(modal.categorie)?.methode !== 'aucune' ? 'amortissable' : 'non amortissable (terrain)'}.
               </p>
             )}
           </div>
@@ -166,7 +166,7 @@ export default function Immobilisations() {
               <Info label="VNC actuelle" value={formatMoney(detail.amort.vnc)} />
             </div>
             {!detail.amort.amortissable ? (
-              <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-white/5">Bien non amortissable (ex. terrain) — pas de plan d'amortissement.</p>
+              <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-white/5">Bien non amortissable (ex. terrain) : pas de plan d'amortissement.</p>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/10">
                 <table className="w-full text-sm">

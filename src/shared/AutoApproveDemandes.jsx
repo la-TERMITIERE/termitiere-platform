@@ -58,11 +58,11 @@ export default function AutoApproveDemandes() {
         })
         // Décompte immédiat de la sortie (comptabilisée comme sortie/vente).
         await appliquerDemandeAuStock({ ...d, statut: 'certifie' })
-        await audit('agro', 'CERTIFICATION', `${d.num} — ${d.qte} × ${d.articleNom} (auto 10 min)`)
+        await audit('agro', 'CERTIFICATION', `${d.num} : ${d.qte} × ${d.articleNom} (auto 10 min)`)
         await notify({
           type: 'approuve',
           title: 'Demande certifiée automatiquement ✅',
-          body: `${d.qte} × ${d.articleNom} — délai de 10 min dépassé, sortie décomptée`,
+          body: `${d.qte} × ${d.articleNom} : délai de 10 min dépassé, sortie décomptée`,
           module: 'agro',
           forUsers: [d.demandeur],
           link: '/agro/demandes'

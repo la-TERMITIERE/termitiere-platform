@@ -3,7 +3,7 @@
 // « Classique » n'existe que pour les abonnements (durée et tarif libres) — pas de
 // séance classique (cf. CATEGORIES_SEANCE, sous-ensemble utilisé par Seances.jsx).
 export const CATEGORIES_GYM = [
-  { id: 'simple',    label: 'Simple',    tone: 'neutral', desc: 'Accès salle — sans tapis roulant ni escalator' },
+  { id: 'simple',    label: 'Simple',    tone: 'neutral', desc: 'Accès salle : sans tapis roulant ni escalator' },
   { id: 'classique', label: 'Classique', tone: 'info',    desc: 'Durée et tarif définis à la saisie (abonnement uniquement)' },
   { id: 'vip',       label: 'VIP',       tone: 'warning', desc: 'Accès complet, avec tapis roulant et escalator' }
 ]
@@ -186,4 +186,43 @@ export function statutPointage(heureProgrammee, heureArrivee) {
   const [hp, mp] = heureProgrammee.split(':').map(Number)
   const [ha, ma] = heureArrivee.split(':').map(Number)
   return (ha * 60 + ma) - (hp * 60 + mp) > TOLERANCE_RETARD_MIN ? 'retard' : 'a_lheure'
+}
+
+// ── Sexe des clients (proportion femmes / hommes dans la salle) ──────────────────
+// Saisi sur les séances/abonnements (boutons Femme / Homme) et mémorisé sur la fiche
+// client. La fiche fait foi (corriger la fiche corrige donc tout l'historique) ; le
+// sexe porté par l'enregistrement sert de repli si la fiche a été supprimée.
+export const SEXES = [
+  { id: 'F', label: 'Femme', court: 'Femmes', symbole: '♀', couleur: '#ec4899' },
+  { id: 'H', label: 'Homme', court: 'Hommes', symbole: '♂', couleur: '#0ea5e9' }
+]
+export const sexeInfo = (id) => SEXES.find((s) => s.id === id) || null
+const cleNom = (nom) => (nom || '').trim().toLowerCase()
+// Index nom (minuscule) → sexe, construit à partir des fiches clients.
+export function indexSexeClients(clients) {
+  const m = new Map()
+  for (const c of clients) if (c.sexe) m.set(cleNom(c.nom), c.sexe)
+  return m
+}
+export const sexeDe = (enreg, idx) => idx.get(cleNom(enreg.clientNom)) || enreg.sexe || ''
+export const filtrerParSexe = (liste, filtre, idx) => (filtre ? liste.filter((x) => (sexeDe(x, idx) || 'inconnu') === filtre) : liste)
+// Statistiques par sexe : nombre de personnes DISTINCTES, d'enregistrements et montant.
+export function statsSexe(listes, idx) {
+  const vide = () => ({ noms: new Set(), nb: 0, montant: 0 })
+  const acc = { F: vide(), H: vide(), inconnu: vide() }
+  for (const liste of listes) {
+    for (const x of liste) {
+      const k = sexeDe(x, idx) || 'inconnu'
+      acc[k].noms.add(cleNom(x.clientNom))
+      acc[k].nb += 1
+      acc[k].montant += Number(x.montant) || 0
+    }
+  }
+  const out = {}
+  for (const k of Object.keys(acc)) out[k] = { personnes: acc[k].noms.size, nb: acc[k].nb, montant: acc[k].montant }
+  const connus = out.F.personnes + out.H.personnes
+  out.connus = connus
+  out.pctF = connus > 0 ? Math.round((out.F.personnes / connus) * 100) : 0
+  out.pctH = connus > 0 ? 100 - out.pctF : 0
+  return out
 }

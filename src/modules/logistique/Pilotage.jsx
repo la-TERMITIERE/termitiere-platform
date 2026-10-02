@@ -10,12 +10,12 @@ import {
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { useCollection } from '../../hooks/useFirestore'
 import { useLogistiqueStore } from './store/referentielStore'
-import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { estActif } from '../../shared/workflow'
-import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort, addDays, todayStr } from '../../utils/formatters'
 import { CAT_MATERIEL, catColor, labelColor } from './data'
 import { analyserPrestations, nbJoursInclus } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -37,7 +37,31 @@ export default function Pilotage() {
   const demandes = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
   const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
 
-  const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
+  // Filtre de période — même format Jour/Mois/Année/Plage que le reste de la
+  // plateforme, posé en glassmorphism dans le bandeau héro.
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
+  const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
+  const { start, end } = useMemo(() => {
+    const auj = todayStr()
+    if (modePeriode === 'jour') {
+      const j = filtreJour || auj
+      return { start: j, end: j }
+    }
+    if (modePeriode === 'annee') {
+      const an = filtreAnnee || auj.slice(0, 4)
+      return { start: `${an}-01-01`, end: an === auj.slice(0, 4) ? auj : `${an}-12-31` }
+    }
+    if (modePeriode === 'plage') {
+      return { start: filtreDebut || auj, end: filtreFin || auj }
+    }
+    const mois = filtreMois || auj.slice(0, 7)
+    const finMois = new Date(Number(mois.slice(0, 4)), Number(mois.slice(5, 7)), 0).toISOString().slice(0, 10)
+    return { start: `${mois}-01`, end: mois === auj.slice(0, 7) ? auj : finMois }
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const [scope, setScope] = useState(TOUTES)
   const [modal, setModal] = useState(null)
   const [detail, setDetail] = useState(null) // drill-down analyse (élément / événement / client)
@@ -46,7 +70,9 @@ export default function Pilotage() {
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
 
   // Période précédente de MÊME durée — socle des indicateurs de tendance décisionnels.
-  const comparable = preset !== 'all'
+  // Chaque mode (jour/mois/année/plage) a toujours une période précédente bien
+  // définie (plus de preset « Tout l'historique »), la comparaison reste pertinente.
+  const comparable = true
   const dayCount = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
   const prevEnd = addDays(start, -1)
   const prevStart = addDays(prevEnd, -(dayCount - 1))
@@ -287,15 +313,24 @@ export default function Pilotage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-[#BC3C31] to-[#6B1A10] p-4 text-white shadow-lg">
-        <Boxes size={22} />
-        <div>
-          <h2 className="text-base font-extrabold">Pilotage &amp; Analyse — Maxi Logistique · {siteLabel(site)}</h2>
-          <p className="text-xs text-white/80">Indicateurs clés de performance · par catégorie · par période</p>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Boxes size={28} color="white" />
         </div>
-        <div className="w-full sm:ml-auto sm:w-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white">
-          {periodNode}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Pilotage & Analyse</h2>
+          <p className="text-sm text-white/80">Indicateurs clés : MAXI LOGISTIQUE {siteLabel(site)}</p>
         </div>
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour}
+          valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
+          valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -305,7 +340,7 @@ export default function Pilotage() {
           <ScopeTab key={c} active={scope === c} color={catColor(c)} onClick={() => setScope(c)}>{c}</ScopeTab>
         ))}
       </div>
-      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
+      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs : {scopeLabel} · {formatDateShort(start)} → {formatDateShort(end)}</p>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => {
@@ -315,9 +350,14 @@ export default function Pilotage() {
           const chip = k.delta != null ? `${positive ? '+' : ''}${k.delta.toFixed(1)} %` : (k.deltaPP != null ? `${positive ? '+' : ''}${k.deltaPP.toFixed(1)} pt` : null)
           return (
           <button key={k.id} type="button" onClick={() => setModal(k.id)}
-            className="card group p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg">
-            <div className="mb-2 flex items-center justify-between gap-1">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: k.color + '18', color: k.color }}><k.icon size={18} /></div>
+            className="card group relative overflow-hidden p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            style={{ background: `linear-gradient(135deg, ${k.color}1f 0%, #ffffffcc 70%)` }}>
+            <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/80 via-white/20 to-transparent" />
+            <div className="relative mb-2 flex items-center justify-between gap-1">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white"
+                style={{ background: `linear-gradient(135deg, ${k.color}, ${k.color}cc)`, boxShadow: `0 6px 14px -4px ${k.color}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)` }}>
+                <k.icon size={18} />
+              </div>
               {chip && (
                 <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                   {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{chip}
@@ -325,16 +365,16 @@ export default function Pilotage() {
               )}
             </div>
             {/* Montant TOUJOURS entièrement visible (passe à la ligne au besoin). */}
-            <p className="truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
-            <p className="break-words text-base font-extrabold leading-tight text-gray-900 sm:text-lg" title={String(k.value)}>{k.value}</p>
-            {k.sub && <p className="mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
+            <p className="relative truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
+            <p className="relative break-words text-base font-extrabold leading-tight text-gray-900 sm:text-lg" title={String(k.value)}>{k.value}</p>
+            {k.sub && <p className="relative mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
           </button>
         )})}
       </div>
       {comparable && <p className="-mt-3 text-[11px] text-gray-400">▲▼ variation vs période précédente équivalente ({formatDateShort(prevStart)} → {formatDateShort(prevEnd)})</p>}
 
       {/* Hero BI : CA par sous-période, actuel vs précédent (momentum & saisonnalité) */}
-      <Card title="Chiffre d'affaires par sous-période — actuel vs précédent">
+      <Card title="Chiffre d'affaires par sous-période : actuel vs précédent">
         <div className="h-64">
           {caTrend.cur.some((v) => v > 0) || (caTrend.prev || []).some((v) => v > 0) ? (
             <Bar data={{
@@ -362,7 +402,7 @@ export default function Pilotage() {
       </Card>
 
       {/* Tendance des casses / pertes — actuel vs précédent (pièces) */}
-      <Card title="Casse / perte par sous-période — actuel vs précédent">
+      <Card title="Casse / perte par sous-période : actuel vs précédent">
         <div className="h-56">
           {caTrend.casseCur.some((v) => v > 0) || (caTrend.cassePrev || []).some((v) => v > 0) ? (
             <Bar data={{
@@ -411,11 +451,11 @@ export default function Pilotage() {
       </div>
 
       {!analyse.parElement.length ? (
-        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune prestation sur la période — élargissez la plage.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune prestation sur la période : élargissez la plage.</p></Card>
       ) : (
         <>
           {/* Tendances colorées par catégorie — le plus sollicité */}
-          <Card title="Tendances par catégorie — le plus sollicité">
+          <Card title="Tendances par catégorie : le plus sollicité">
             <div className="grid gap-3 sm:grid-cols-2">
               {analyse.parCategorie.map((c) => {
                 const color = catColor(c.cat)
@@ -447,7 +487,7 @@ export default function Pilotage() {
           </Card>
 
           {/* Classement des éléments — triable par sollicitation ou par CA */}
-          <Card title="Analyse par élément — sollicitations, quantités, CA">
+          <Card title="Analyse par élément : sollicitations, quantités, CA">
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-xs font-semibold text-gray-400">Trier par :</span>
               <button onClick={() => setElementSort('count')} type="button"
@@ -652,7 +692,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
     )
   }
   return (
-    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} — ${scopeLabel}`}
+    <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} : ${scopeLabel}`}
       panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
       <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>

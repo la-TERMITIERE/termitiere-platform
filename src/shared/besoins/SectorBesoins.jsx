@@ -156,8 +156,8 @@ export default function SectorBesoins({ secteurId }) {
     const demandeurTel = user?.telephone ? ` · ☎ ${user.telephone}` : ''
     await notify({
       type: 'demande',
-      title: `📦 Nouveau besoin à valider — ${secteur.label}`,
-      body: `${titre} — en attente de validation · ✍️ ${user?.nom || user?.login || '—'}${demandeurTel}`,
+      title: `📦 Nouveau besoin à valider : ${secteur.label}`,
+      body: `${titre} : en attente de validation · ✍️ ${user?.nom || user?.login || '—'}${demandeurTel}`,
       module: secteurId, forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: `/${secteurId}/besoins`
     }).catch(() => {})
   }
@@ -199,7 +199,7 @@ export default function SectorBesoins({ secteurId }) {
     if (!peutSupprimer) return
     const decaissements = depenseDepensesTous.filter((d) => d.id === b.depenseId || (d.source === 'besoin' && d.besoinId === b.id))
     if (decaissements.some((d) => d.statut !== 'en_attente')) {
-      toast.error('Cette demande a déjà été approuvée — elle est désormais un engagement réel dans E-DÉPENSES, impossible de la supprimer ici.')
+      toast.error('Cette demande a déjà été approuvée : elle est désormais un engagement réel dans E-DÉPENSES, impossible de la supprimer ici.')
       return
     }
     const confirmMsg = decaissements.length
@@ -239,7 +239,7 @@ export default function SectorBesoins({ secteurId }) {
     const b = besoins.find((x) => x.id === observationEdit.id)
     if (b?.demandeParUid && b.demandeParUid !== user?.uid) {
       await notify({
-        type: 'info', title: `💬 Réponse à votre besoin — ${b.titre}`,
+        type: 'info', title: `💬 Réponse à votre besoin : ${b.titre}`,
         body: valeur, module: secteurId, forUsers: [b.demandeParUid], link: `/${secteurId}/besoins`
       }).catch(() => {})
     }
@@ -259,7 +259,7 @@ export default function SectorBesoins({ secteurId }) {
       categorie: catLabel(b.categorie),
       montant: Number(b.montant) || 0,
       date: todayStr(),
-      description: [secteur.label, b.titre].filter(Boolean).join(' — '),
+      description: [secteur.label, b.titre].filter(Boolean).join(' : '),
       noteOrigine: b.note || '',
       natureFlux: 'exploitation',
       sourceFinancement: 'entreprise',
@@ -279,23 +279,23 @@ export default function SectorBesoins({ secteurId }) {
     await updateItem('sector_besoins', b.id, {
       validation: 'valide', valideParText: user?.nom || user?.login || '—', valideLe: Date.now(), depenseId
     })
-    await audit(secteurId, 'besoin_valide', `${b.titre} — demande de décaissement créée (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
+    await audit(secteurId, 'besoin_valide', `${b.titre} : demande de décaissement créée (${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA)`)
     const destinataires = destinatairesDecision(b)
     if (destinataires.length) {
-      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} — envoyé en autorisation de décaissement`, module: secteurId, forUsers: destinataires, link: `/${secteurId}/besoins` }).catch(() => {})
+      await notify({ type: 'success', title: '✅ Besoin validé', body: `${b.titre} : envoyé en autorisation de décaissement`, module: secteurId, forUsers: destinataires, link: `/${secteurId}/besoins` }).catch(() => {})
     }
     await notify({
       type: 'demande', title: '💰 Décaissement à traiter',
-      body: `${b.titre} — ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA (besoin validé par ${user?.nom || '—'})`,
+      body: `${b.titre} : ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA (besoin validé par ${user?.nom || '—'})`,
       module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
     }).catch(() => {})
   }
   async function refuserBesoin(b, motif = '') {
     await updateItem('sector_besoins', b.id, { validation: 'refuse', motifRefus: motif, statut: 'annule', refuseParText: user?.nom || user?.login || '—', refuseLe: Date.now() })
-    await audit(secteurId, 'besoin_refuse', `${b.titre}${motif ? ' — ' + motif : ''}`)
+    await audit(secteurId, 'besoin_refuse', `${b.titre}${motif ? ' : ' + motif : ''}`)
     const destinataires = destinatairesDecision(b)
     if (destinataires.length) {
-      await notify({ type: 'refus', title: '❌ Besoin refusé', body: `${b.titre}${motif ? ' — ' + motif : ''}`, module: secteurId, forUsers: destinataires, link: `/${secteurId}/besoins` }).catch(() => {})
+      await notify({ type: 'refus', title: '❌ Besoin refusé', body: `${b.titre}${motif ? ' : ' + motif : ''}`, module: secteurId, forUsers: destinataires, link: `/${secteurId}/besoins` }).catch(() => {})
     }
   }
   const demanderRefus = async (b) => {
@@ -340,9 +340,9 @@ export default function SectorBesoins({ secteurId }) {
           <PackagePlus size={28} color="white" />
         </div>
         <div>
-          <h2 className="text-lg font-extrabold">Besoins — {secteur.label}</h2>
+          <h2 className="text-lg font-extrabold">Besoins : {secteur.label}</h2>
           <p className="text-sm text-white/80">
-            {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} — matériaux, main d'œuvre, équipement
+            {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} : matériaux, main d'œuvre, équipement
           </p>
         </div>
       </div>
@@ -517,7 +517,7 @@ export default function SectorBesoins({ secteurId }) {
                 </select>
               </FormGroup>
               {form.categorie === 'financier' ? (
-                <FormGroup label="Montant demandé (FCFA)" required hint="Somme d'argent nécessaire — pas d'achat de matériel précis">
+                <FormGroup label="Montant demandé (FCFA)" required hint="Somme d'argent nécessaire : pas d'achat de matériel précis">
                   <input type="number" min="0" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                     placeholder="ex : 50 000"
                     value={form.prixUnitaire} onChange={(e) => setForm((f) => ({ ...f, prixUnitaire: e.target.value, quantite: '1' }))} />

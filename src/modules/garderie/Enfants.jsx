@@ -24,6 +24,17 @@ import { useGarderieStore } from './store/garderieStore'
 import { toggleScolariteClass } from './pastilles'
 import ModePaiementBoutons from './ModePaiementBoutons'
 
+// Groupe d'âge proposé à partir de l'âge, BORNÉ au programme choisi à l'inscription :
+// si l'âge suggère un groupe de l'autre programme (ex. 2 ans 10 mois → « Bambin »
+// alors que la gérante inscrit en maternelle), on retient la section la plus proche
+// DU PROGRAMME CHOISI au lieu de basculer silencieusement l'enfant dans l'autre.
+function groupeDansProgramme(groupe, programme) {
+  if (!groupe || !programme) return groupe
+  const permis = GROUPES_PAR_PROGRAMME[programme]
+  if (!permis || permis.includes(groupe)) return groupe
+  return programme === 'maternelle' ? permis[0] : permis[permis.length - 1]
+}
+
 const emptyJournalier = () => ({
   nom: '', prenom: '', ageApprox: '',
   parentNom: '', parentContact: '',
@@ -83,6 +94,10 @@ export default function Enfants() {
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Basculement garderie → maternelle : enfant concerné + section d'accueil choisie.
+  const [bascule, setBascule] = useState(null)
+  const [basculeGroupe, setBasculeGroupe] = useState('petite_section')
+  const [basculeSaving, setBasculeSaving] = useState(false)
   const deletedEnfantIds    = useGarderieStore((s) => s.deletedEnfantIds)
   const markEnfantDeleted   = useGarderieStore((s) => s.markEnfantDeleted)
   const unmarkEnfantDeleted = useGarderieStore((s) => s.unmarkEnfantDeleted)
@@ -110,9 +125,42 @@ export default function Enfants() {
       // Échec réel : on démasque et on prévient, au lieu de prétendre que la
       // suppression a marché alors que l'enfant est toujours en base.
       unmarkEnfantDeleted(target.id)
-      toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} — réessayez.`)
+      toast.error(`Échec de la suppression de ${target.prenom} ${target.nom} : réessayez.`)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  // Un enfant de la garderie (0-2 ans) qui atteint l'âge de la maternelle change de
+  // programme SANS être réinscrit : même fiche, mêmes parents, historique de
+  // présences/paiements conservé. La maternelle étant facturée à l'année scolaire,
+  // l'abonnement passe en « annuel » (et un éventuel court séjour est clos). La fiche
+  // garde la trace du passage (date + programme/groupe d'origine).
+  function ouvrirBascule(e) {
+    setBasculeGroupe('petite_section')
+    setBascule(e)
+  }
+  async function confirmerBascule() {
+    if (!bascule || basculeSaving) return
+    const e = bascule
+    setBasculeSaving(true)
+    try {
+      const patch = {
+        programme: 'maternelle', groupe: basculeGroupe, typeAbonnement: 'annuel',
+        dureeSemaines: '', finSejourAlarme: false,
+        basculeMaternelleLe: todayStr(),
+        basculeDepuis: { programme: e.programme || programmeDuGroupe(e.groupe), groupe: e.groupe || '', typeAbonnement: e.typeAbonnement || 'mensuel' }
+      }
+      await updateItem('garderie_enfants', e.id, patch)
+      audit('garderie', 'ENFANT_BASCULE_MATERNELLE', `${e.prenom} ${e.nom}`, { de: e.groupe, vers: basculeGroupe })
+      notify({ type: 'info', title: '🎓 Passage en maternelle', body: `${e.prenom} ${e.nom} passe de la garderie à la maternelle (${GROUPES_AGE.find((g) => g.id === basculeGroupe)?.label}).`, module: 'garderie', forRoles: ['ge', 'gerante_garderie'], excludeUid: user.uid, link: '/garderie/enfants' })
+      toast.success(`${e.prenom} ${e.nom} est maintenant en maternelle ✓`)
+      setDetail((d) => (d && d.id === e.id ? { ...d, ...patch } : d))
+      setBascule(null)
+    } catch (err) {
+      toast.error(`Échec du basculement : ${err.message || 'réessayez.'}`)
+    } finally {
+      setBasculeSaving(false)
     }
   }
 
@@ -243,7 +291,7 @@ export default function Enfants() {
             type: 'inscription', mois: moisP, annee: anneeP,
             montantDu: montantInscription, montantPaye: montantInscription, montantCuisine: 0,
             modePaiement: paiementInscription.modePaiement, statut: 'paye',
-            date: d.dateInscription || todayStr(), notes: "Frais d'inscription — saisis à l'inscription"
+            date: d.dateInscription || todayStr(), notes: "Frais d'inscription : saisis à l'inscription"
           })
           audit('garderie', 'PAIEMENT_CREATE', enfantNomComplet, { type: 'inscription', montant: montantInscription })
           recap.push(`inscription ${formatMoney(montantInscription)}`)
@@ -261,16 +309,16 @@ export default function Enfants() {
             montantDu: montantDuTotal, montantPaye: montantVerse, montantCuisine,
             modePaiement: paiementInscription.modePaiement, statut,
             date: d.dateInscription || todayStr(),
-            notes: `Scolarité — ${parTranche ? 'paiement par tranche' : 'payée en totalité'} (saisie à l'inscription)`
+            notes: `Scolarité : ${parTranche ? 'paiement par tranche' : 'payée en totalité'} (saisie à l'inscription)`
           })
           audit('garderie', 'PAIEMENT_CREATE', enfantNomComplet, { type: 'mensuel', montant: montantVerse })
           recap.push(`scolarité ${formatMoney(montantVerse)}${parTranche ? ' (tranche)' : ''}`)
         }
 
         if (recap.length > 0) {
-          notify({ type: 'info', title: `💰 Paiement(s) reçu(s) — ${enfantNomComplet}`, body: recap.join(' · '), module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+          notify({ type: 'info', title: `💰 Paiement(s) reçu(s) : ${enfantNomComplet}`, body: recap.join(' · '), module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
         }
-        toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓${recap.length ? ' — paiement(s) enregistré(s)' : ''}`)
+        toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓${recap.length ? ' : paiement(s) enregistré(s)' : ''}`)
       } else {
         await setItem('garderie_enfants', modal.id, { ...d, id: modal.id })
         audit('garderie', 'ENFANT_EDIT', `${d.prenom} ${d.nom}`)
@@ -409,8 +457,8 @@ export default function Enfants() {
             notes: ''
           })
           audit('garderie', 'JOURNALIER_PAIEMENT', `${d.prenom} ${d.nom}`, { montant })
-          notify({ type: 'info', title: `💰 Paiement journalier — ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
-          toast.success(`${d.prenom} ${d.nom} enregistré(e) — paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
+          notify({ type: 'info', title: `💰 Paiement journalier : ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+          toast.success(`${d.prenom} ${d.nom} enregistré(e) : paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
         } else {
           toast.success(`${d.prenom} ${d.nom} enregistré(e) ✓`)
         }
@@ -679,7 +727,7 @@ export default function Enfants() {
           tout leur historique (présences, paiements). */}
       {enfants.filter((e) => e.statut === 'supprime' && !deletedEnfantIds.has(e.id)).length > 0 && (
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800 flex items-center justify-between">
-          <p>⚠️ {enfants.filter((e) => e.statut === 'supprime').length} enfant(s) en suppression incomplète — masqués mais encore présents en base.</p>
+          <p>⚠️ {enfants.filter((e) => e.statut === 'supprime').length} enfant(s) en suppression incomplète : masqués mais encore présents en base.</p>
           <button
             onClick={async () => {
               const aNettoyer = enfants.filter((e) => e.statut === 'supprime')
@@ -687,7 +735,7 @@ export default function Enfants() {
               for (const e of aNettoyer) {
                 try { await removeItem('garderie_enfants', e.id) } catch { echecs++ }
               }
-              if (echecs) toast.error(`${aNettoyer.length - echecs} nettoyé(s), ${echecs} échec(s) — réessayez.`)
+              if (echecs) toast.error(`${aNettoyer.length - echecs} nettoyé(s), ${echecs} échec(s) : réessayez.`)
               else toast.success(`${aNettoyer.length} enfant(s) nettoyé(s) ✓`)
             }}
             className="ml-3 rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold text-white hover:bg-orange-600 shrink-0">
@@ -781,7 +829,7 @@ export default function Enfants() {
                     return (
                       <span className={`font-semibold ${joursRestants !== null && joursRestants <= 7 ? 'text-red-600' : 'text-orange-600'}`}>
                         Court séjour{joursRestants !== null && (
-                          joursRestants < 0 ? ' — terminé' : ` — fin dans ${joursRestants}j`
+                          joursRestants < 0 ? ' : terminé' : ` : fin dans ${joursRestants}j`
                         )}
                       </span>
                     )
@@ -796,6 +844,9 @@ export default function Enfants() {
                     <button onClick={() => setDetail(e)} title="Voir la fiche" className="rounded p-1 hover:bg-gray-100"><Eye size={14} /></button>
                     {!lectureSeule && (
                       <>
+                        {e.statut === 'actif' && (e.programme || programmeDuGroupe(e.groupe)) === 'garderie' && (
+                          <button onClick={() => ouvrirBascule(e)} title="Basculer en maternelle" className="rounded p-1 text-green-600 hover:bg-green-50"><GraduationCap size={14} /></button>
+                        )}
                         <button onClick={() => openEdit(e)} title="Modifier la fiche" className="rounded p-1 text-orange-600 hover:bg-orange-50"><FilePen size={14} /></button>
                         <button onClick={() => setToDelete(e)} title="Supprimer" className="rounded p-1 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
                       </>
@@ -816,9 +867,9 @@ export default function Enfants() {
         <p className="mb-4 text-sm text-gray-500">Choisissez le type d'inscription pour cet enfant :</p>
         <div className="space-y-2.5">
           {[
-            { type: 'maternelle', icon: GraduationCap, label: 'Maternelle', sub: 'Enfant inscrit — 3 à 6 ans', color: '#16a34a', tint: 'bg-green-50 border-green-200 hover:border-green-400' },
-            { type: 'garderie',   icon: Baby,           label: 'Garderie',   sub: 'Enfant inscrit — 0 à 2 ans', color: '#3b82f6', tint: 'bg-blue-50 border-blue-200 hover:border-blue-400' },
-            { type: 'journalier', icon: DoorOpen,       label: 'Enfant journalier', sub: "Non inscrit officiellement — dépôt d'une seule journée", color: '#E8390E', tint: 'bg-orange-50 border-orange-200 hover:border-orange-400' }
+            { type: 'maternelle', icon: GraduationCap, label: 'Maternelle', sub: 'Enfant inscrit : 3 à 6 ans', color: '#16a34a', tint: 'bg-green-50 border-green-200 hover:border-green-400' },
+            { type: 'garderie',   icon: Baby,           label: 'Garderie',   sub: 'Enfant inscrit : 0 à 2 ans', color: '#3b82f6', tint: 'bg-blue-50 border-blue-200 hover:border-blue-400' },
+            { type: 'journalier', icon: DoorOpen,       label: 'Enfant journalier', sub: "Non inscrit officiellement : dépôt d'une seule journée", color: '#E8390E', tint: 'bg-orange-50 border-orange-200 hover:border-orange-400' }
           ].map((o) => (
             <button key={o.type} onClick={() => choisirTypeInscription(o.type)}
               className={`group flex w-full items-center gap-3.5 rounded-2xl border-2 px-4 py-3.5 text-left shadow-[0_10px_24px_-14px_rgba(26,26,26,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(26,26,26,0.26)] ${o.tint}`}>
@@ -867,7 +918,7 @@ export default function Enfants() {
 
             {joModal.isNew && journaliersConnus.length > 0 && (
               <div className="rounded-2xl border border-teal-200 border-l-4 border-l-teal-400 bg-teal-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
-                <FormGroup label="🔍 Déjà venu(e) ? Rechercher son nom" hint="Sélectionnez pour remplir automatiquement âge, parent et contact — tout reste modifiable ensuite.">
+                <FormGroup label="🔍 Déjà venu(e) ? Rechercher son nom" hint="Sélectionnez pour remplir automatiquement âge, parent et contact : tout reste modifiable ensuite.">
                   <ChampAutocomplete
                     value={joRecherche}
                     onChange={setJoRecherche}
@@ -947,7 +998,7 @@ export default function Enfants() {
                   </FormGroup>
                 </div>
                 <p className="mt-2 text-[11px] text-green-600">
-                  Laissez vide si le paiement se fera plus tard — vous pourrez toujours l'enregistrer dans <strong>Paiements → Journaliers</strong>.
+                  Laissez vide si le paiement se fera plus tard : vous pourrez toujours l'enregistrer dans <strong>Paiements → Journaliers</strong>.
                 </p>
               </div>
             ) : (
@@ -1063,8 +1114,11 @@ export default function Enfants() {
                 </FormGroup>
                 <FormGroup label="Date de naissance">
                   <Input type="date" value={modal.data.dateNaissance} onChange={(e) => {
-                    const g = groupeRecommande(e.target.value)
-                    const prog = g ? programmeDuGroupe(g) : ''
+                    const gAge = groupeRecommande(e.target.value)
+                    // Le programme choisi à l'inscription reste prioritaire : l'âge ne
+                    // fait que proposer une section DANS ce programme.
+                    const prog = modal.data.programme || (gAge ? programmeDuGroupe(gAge) : '')
+                    const g = groupeDansProgramme(gAge, prog)
                     set('dateNaissance', e.target.value)
                     set('groupe', g)
                     set('programme', prog)
@@ -1091,9 +1145,10 @@ export default function Enfants() {
                       if (val) set('dateNaissance', '')
                       // Déduit le groupe d'âge du texte saisi (« 2 ans », « 18 mois »…) —
                       // n'écrase rien si le texte n'est pas reconnaissable.
-                      const g = groupeDepuisAgeTexte(val)
-                      if (g) {
-                        const prog = programmeDuGroupe(g)
+                      const gAge = groupeDepuisAgeTexte(val)
+                      if (gAge) {
+                        const prog = modal.data.programme || programmeDuGroupe(gAge)
+                        const g = groupeDansProgramme(gAge, prog)
                         set('groupe', g)
                         set('programme', prog)
                         if (prog === 'maternelle') set('typeAbonnement', 'annuel')
@@ -1136,6 +1191,13 @@ export default function Enfants() {
                       ? '✓ Rempli automatiquement (âge saisi).'
                       : 'À choisir manuellement.')
                   + (modal.data.programme === 'maternelle' ? ' 📅 Maternelle = année scolaire complète.' : '')
+                  // L'âge ne décide plus du programme : on prévient s'il est atypique.
+                  + (modal.data.programme && (() => {
+                    const gAge = modal.data.dateNaissance ? groupeRecommande(modal.data.dateNaissance) : groupeDepuisAgeTexte(modal.data.ageSaisi)
+                    return gAge && programmeDuGroupe(gAge) !== modal.data.programme
+                      ? ` ⚠ L'âge correspondrait plutôt à « ${GROUPES_AGE.find((x) => x.id === gAge)?.label} » : le programme ${modal.data.programme === 'maternelle' ? 'Maternelle' : 'Garderie'} choisi est conservé.`
+                      : ''
+                  })())
                 }>
                   <Select value={modal.data.groupe} onChange={(e) => {
                     const g = e.target.value
@@ -1146,7 +1208,7 @@ export default function Enfants() {
                     // mensuel/court séjour possible pour ce programme.
                     if (prog === 'maternelle') set('typeAbonnement', 'annuel')
                   }}>
-                    <option value="">— Choisir —</option>
+                    <option value="">Choisir</option>
                     {GROUPES_AGE
                       .filter((g) => !modal.data.programme || GROUPES_PAR_PROGRAMME[modal.data.programme].includes(g.id))
                       .map((g) => <option key={g.id} value={g.id}>{g.label} ({g.desc})</option>)}
@@ -1221,7 +1283,7 @@ export default function Enfants() {
             {modal.isNew && (
               <div className="rounded-2xl border border-green-200 border-l-4 border-l-green-400 bg-green-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
                 <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-green-700">
-                  💰 Paiements <span className="font-medium normal-case text-green-500">(optionnel — si le parent règle maintenant)</span>
+                  💰 Paiements <span className="font-medium normal-case text-green-500">(optionnel : si le parent règle maintenant)</span>
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1323,6 +1385,33 @@ export default function Enfants() {
         )}
       </Modal>
 
+      {/* Basculement garderie → maternelle */}
+      <Modal open={!!bascule} onClose={() => !basculeSaving && setBascule(null)} size="sm"
+        {...glassModalProps('#16a34a')} title="Basculer en maternelle"
+        footer={<>
+          <Button variant="outline" onClick={() => setBascule(null)} disabled={basculeSaving}>Annuler</Button>
+          <Button onClick={confirmerBascule} loading={basculeSaving}><GraduationCap size={16} /> Confirmer le passage</Button>
+        </>}>
+        {bascule && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700">
+              <strong>{bascule.prenom} {bascule.nom}</strong> quitte la garderie pour la maternelle. Sa fiche, ses parents et son historique (présences, paiements) sont conservés.
+            </p>
+            <FormGroup label="Section d'accueil" required>
+              <Select value={basculeGroupe} onChange={(ev) => setBasculeGroupe(ev.target.value)}>
+                {GROUPES_PAR_PROGRAMME.maternelle.map((id) => {
+                  const g = GROUPES_AGE.find((x) => x.id === id)
+                  return <option key={id} value={id}>{g?.label} ({g?.desc})</option>
+                })}
+              </Select>
+            </FormGroup>
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+              📅 La maternelle est facturée à l'année scolaire : l'abonnement passe en <strong>Annuel</strong>. Pensez à enregistrer les frais de scolarité dans l'onglet Paiements.
+            </p>
+          </div>
+        )}
+      </Modal>
+
       {/* Modal détail */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg"
         panelClassName="bg-gradient-to-br from-orange-200/85 via-orange-100/75 to-amber-300/75 backdrop-blur-2xl backdrop-saturate-200"
@@ -1396,7 +1485,7 @@ export default function Enfants() {
                   <div>
                     <span className="font-semibold text-gray-500">Abonnement :</span>{' '}
                     {detail.typeAbonnement === 'court_sejour'
-                      ? `Court séjour (${detail.dureeSemaines} sem.) — jusqu'au ${formatDateShort(dateFinCourtSejour(detail.dateInscription, detail.dureeSemaines))}`
+                      ? `Court séjour (${detail.dureeSemaines} sem.) : jusqu'au ${formatDateShort(dateFinCourtSejour(detail.dateInscription, detail.dureeSemaines))}`
                       : detail.typeAbonnement === 'annuel' ? 'Annuel' : 'Mensuel'}
                   </div>
                   {detail.typeAbonnement === 'court_sejour' && (() => {
@@ -1417,6 +1506,18 @@ export default function Enfants() {
                     ) : null
                   })()}
                   <div><span className="font-semibold text-gray-500">Adresse :</span> {detail.adresse || '—'}</div>
+                  {detail.basculeMaternelleLe && (
+                    <p className="rounded-lg bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
+                      🎓 En maternelle depuis le {formatDateShort(detail.basculeMaternelleLe)}
+                      {detail.basculeDepuis?.groupe ? ` (ex-${GROUPES_AGE.find((g) => g.id === detail.basculeDepuis.groupe)?.label || 'garderie'})` : ''}
+                    </p>
+                  )}
+                  {!lectureSeule && detail.statut === 'actif' && (detail.programme || programmeDuGroupe(detail.groupe)) === 'garderie' && (
+                    <button onClick={() => ouvrirBascule(detail)}
+                      className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-700">
+                      <GraduationCap size={14} /> Basculer en maternelle
+                    </button>
+                  )}
                 </div>
               </Card>
               <Card title="👪 Parent / Tuteur">

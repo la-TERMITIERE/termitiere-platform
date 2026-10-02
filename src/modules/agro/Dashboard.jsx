@@ -383,7 +383,7 @@ export default function Dashboard() {
               <span key={t.id} className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                 t.fait ? 'bg-green-100 text-green-700 line-through' : t.enRetard ? 'bg-red-100 text-red-700' : 'bg-white text-teal-700'
               }`}>
-                {t.heure ? `${t.heure} — ` : ''}{t.titre}
+                {t.heure ? `${t.heure} : ` : ''}{t.titre}
               </span>
             ))}
           </span>
@@ -395,7 +395,7 @@ export default function Dashboard() {
       {saisieDuJour ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           <CheckCircle2 size={18} className="shrink-0 text-green-600" />
-          <span><strong>Saisie du jour enregistrée</strong> — par {saisieDuJour.agentNom || '—'}{saisieDuJour.savedAt ? ` · ${formatDateTime(saisieDuJour.savedAt)}` : ''}</span>
+          <span><strong>Saisie du jour enregistrée</strong> : par {saisieDuJour.agentNom || '—'}{saisieDuJour.savedAt ? ` · ${formatDateTime(saisieDuJour.savedAt)}` : ''}</span>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
@@ -431,7 +431,7 @@ export default function Dashboard() {
 
       {/* Indicateurs du périmètre */}
       <div>
-        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs — {scopeLabel}</p>
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs : {scopeLabel}</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Indic title="Effectif en stock" value={formatNumber(ind.effectif)} icon={Boxes} color="#2563eb" sub={`${especesScope.length} espèce(s)`} />
           <Indic title="Naissances" value={formatNumber(ind.naiss)} icon={Egg} color="#16a34a" sub={`${naissancesDetail.length} enregistrement(s)`} delta={ind.naiss - indPrec.naiss} onClick={() => setModalKey('naissances')} />
@@ -455,9 +455,9 @@ export default function Dashboard() {
         <button onClick={() => setModalKey('morbidite')} className="card lg:col-span-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité — {scopeLabel}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité : {scopeLabel}</p>
               <p className="text-3xl font-extrabold text-amber-600">{ind.morbidite.toFixed(1)} %</p>
-              <p className="mt-0.5 text-[11px] text-gray-400">{ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes — courbe & prévision</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">{ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes : courbe & prévision</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Stethoscope size={22} /></div>
           </div>
@@ -467,7 +467,7 @@ export default function Dashboard() {
               : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
           </div>
         </button>
-        <Card title={repartition.parEspece ? `Répartition par espèce — ${scopeLabel}` : 'Répartition par catégorie'}>
+        <Card title={repartition.parEspece ? `Répartition par espèce : ${scopeLabel}` : 'Répartition par catégorie'}>
           <div className="h-72">
             {repartition.rows.some((r) => r.total > 0)
               ? <Doughnut data={repartition.data} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} />
@@ -477,13 +477,13 @@ export default function Dashboard() {
       </div>
 
       {/* Naissances · Décès · Ventes au fil de la période */}
-      <Card title={`Naissances · Décès · Ventes — ${scopeLabel}`}>
+      <Card title={`Naissances · Décès · Ventes : ${scopeLabel}`}>
         <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
           <span className="font-semibold text-green-600">🐣 {formatNumber(ind.naiss)} naissance(s)</span>
           <span className="font-semibold text-red-600">💀 {formatNumber(ind.dec)} décès</span>
           <span className="font-semibold text-teal-600">🛒 {formatNumber(ventes.courant)} vendue(s)</span>
           {showFinance && <span className="font-semibold text-purple-600">💰 {formatMoney(ca.courant)}</span>}
-          <span className="text-gray-400">— barres : têtes (axe gauche) · courbe : volume vendu (axe droit)</span>
+          <span className="text-gray-400">barres : têtes (axe gauche) · courbe : volume vendu (axe droit)</span>
         </div>
         <div className="h-72">
           {!ndvChart.vide
@@ -504,7 +504,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Courbe de croissance : par catégorie (vue « Toutes ») ou par espèce (catégorie sélectionnée) */}
-      <Card title={scope === TOUTES ? 'Courbe de croissance par catégorie' : `Courbe de croissance par espèce — ${scopeLabel}`}>
+      <Card title={scope === TOUTES ? 'Courbe de croissance par catégorie' : `Courbe de croissance par espèce : ${scopeLabel}`}>
         <p className="mb-2 text-[11px] text-gray-400">
           {scope === TOUTES
             ? "Évolution de l'effectif total de chaque catégorie au fil des saisies. Cliquez une catégorie ci-dessus pour voir le détail espèce par espèce."
@@ -523,7 +523,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Ventes — bête vendue & montant (mouvements/flux des animaux). 0 si aucune vente. */}
-      <Card title={`Ventes — bête vendue & montant — ${scopeLabel}`}>
+      <Card title={`Ventes : bête vendue & montant : ${scopeLabel}`}>
         <p className="mb-2 text-[11px] text-gray-400">Ventes certifiées de la période : quelle bête, quelle quantité{showFinance ? ' et pour quel montant' : ''}.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -545,7 +545,7 @@ export default function Dashboard() {
                 </tr>
               ))}
               {!ventesBetes.length && (
-                <tr><td colSpan={2 + (scope === TOUTES ? 1 : 0) + (showFinance ? 1 : 0)} className="px-3 py-6 text-center text-gray-400">Aucune vente sur la période — <strong className="text-gray-600">0</strong></td></tr>
+                <tr><td colSpan={2 + (scope === TOUTES ? 1 : 0) + (showFinance ? 1 : 0)} className="px-3 py-6 text-center text-gray-400">Aucune vente sur la période : <strong className="text-gray-600">0</strong></td></tr>
               )}
             </tbody>
             {ventesBetes.length > 0 && (
@@ -562,7 +562,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Détail par espèce du périmètre */}
-      <Card title={`Détail par espèce — ${scopeLabel}`}>
+      <Card title={`Détail par espèce : ${scopeLabel}`}>
         {especeRows.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Aucune espèce.</p>
         ) : (
@@ -598,49 +598,49 @@ export default function Dashboard() {
       </Card>
 
       {/* ─────── Modales détaillées (scope courant) ─────── */}
-      <Modal open={modalKey === 'naissances'} onClose={() => setModalKey(null)} size="lg" title={`Naissances — ${scopeLabel}`}
+      <Modal open={modalKey === 'naissances'} onClose={() => setModalKey(null)} size="lg" title={`Naissances : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
-          <strong>{formatNumber(ind.naiss)}</strong> naissance(s) sur la période — période préc. : {formatNumber(indPrec.naiss)}
+          <strong>{formatNumber(ind.naiss)}</strong> naissance(s) sur la période : période préc. : {formatNumber(indPrec.naiss)}
         </p>
         <p className="my-2 text-xs italic text-gray-400">Détail des naissances saisies, de la plus récente à la plus ancienne.</p>
         <DetailTable rows={naissancesDetail} cols={['Date', 'Espèce', 'Nés', 'Agent']} render={(n) => [formatDateShort(n.date), n.espece, n.qte, n.agent]} empty="Aucune naissance sur la période." />
       </Modal>
 
-      <Modal open={modalKey === 'deces'} onClose={() => setModalKey(null)} size="lg" title={`Décès — ${scopeLabel}`}
+      <Modal open={modalKey === 'deces'} onClose={() => setModalKey(null)} size="lg" title={`Décès : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
-          <strong>{formatNumber(ind.dec)}</strong> décès sur la période — période préc. : {formatNumber(indPrec.dec)}
+          <strong>{formatNumber(ind.dec)}</strong> décès sur la période : période préc. : {formatNumber(indPrec.dec)}
         </p>
         <p className="my-2 text-xs italic text-gray-400">Détail des décès saisis, avec leur motif quand il a été renseigné.</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
       </Modal>
 
-      <Modal open={modalKey === 'mortalite'} onClose={() => setModalKey(null)} size="lg" title={`Mortalité — ${scopeLabel}`}
+      <Modal open={modalKey === 'mortalite'} onClose={() => setModalKey(null)} size="lg" title={`Mortalité : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Taux : <strong>{ind.mortalite.toFixed(1)} %</strong> — {ind.dec} décès / {formatNumber(ind.base)} têtes (effectif initial)</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Taux : <strong>{ind.mortalite.toFixed(1)} %</strong> : {ind.dec} décès / {formatNumber(ind.base)} têtes (effectif initial)</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Effectif initial) × 100</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
       </Modal>
 
-      <Modal open={modalKey === 'letalite'} onClose={() => setModalKey(null)} size="lg" title={`Létalité — ${scopeLabel}`}
+      <Modal open={modalKey === 'letalite'} onClose={() => setModalKey(null)} size="lg" title={`Létalité : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900">Taux : <strong>{ind.letalite.toFixed(1)} %</strong> — {ind.dec} décès / {ind.casMaladie} cas de maladie (malades + décès)</p>
-        <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Cas de maladie) × 100 — part des animaux tombés malades qui n'ont pas survécu (≠ mortalité, rapportée à tout l'effectif).</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900">Taux : <strong>{ind.letalite.toFixed(1)} %</strong> : {ind.dec} décès / {ind.casMaladie} cas de maladie (malades + décès)</p>
+        <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Cas de maladie) × 100 : part des animaux tombés malades qui n'ont pas survécu (≠ mortalité, rapportée à tout l'effectif).</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
       </Modal>
 
-      <Modal open={modalKey === 'croissance'} onClose={() => setModalKey(null)} size="lg" title={`Croissance & naissances — ${scopeLabel}`}
+      <Modal open={modalKey === 'croissance'} onClose={() => setModalKey(null)} size="lg" title={`Croissance & naissances : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Taux : <strong>{ind.croissance.toFixed(1)} %</strong> — {ind.naiss} naissance(s)</p>
+        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Taux : <strong>{ind.croissance.toFixed(1)} %</strong> : {ind.naiss} naissance(s)</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : ((Naissances − Décès) / Effectif initial) × 100</p>
         <DetailTable rows={naissancesDetail} cols={['Date', 'Espèce', 'Nés', 'Agent']} render={(n) => [formatDateShort(n.date), n.espece, n.qte, n.agent]} empty="Aucune naissance sur la période." />
       </Modal>
 
-      <Modal open={modalKey === 'morbidite'} onClose={() => setModalKey(null)} size="lg" title={`Morbidité — ${scopeLabel}`}
+      <Modal open={modalKey === 'morbidite'} onClose={() => setModalKey(null)} size="lg" title={`Morbidité : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Taux : <strong>{ind.morbidite.toFixed(1)} %</strong> — {ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes</p>
-        <p className="my-2 text-xs italic text-gray-400">Formule : (Malades / Effectif) × 100 — prévision : tendance + moyenne mobile (7 jours)</p>
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Taux : <strong>{ind.morbidite.toFixed(1)} %</strong> : {ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes</p>
+        <p className="my-2 text-xs italic text-gray-400">Formule : (Malades / Effectif) × 100 : prévision : tendance + moyenne mobile (7 jours)</p>
         {morbiditePrevision.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {morbiditePrevision.map((v, i) => <span key={i} className="rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">J+{i + 1} : {v.toFixed(1)} %</span>)}
@@ -648,16 +648,16 @@ export default function Dashboard() {
         )}
       </Modal>
 
-      <Modal open={modalKey === 'ventes'} onClose={() => setModalKey(null)} size="lg" title={`Ventes (volume) — ${scopeLabel}`}
+      <Modal open={modalKey === 'ventes'} onClose={() => setModalKey(null)} size="lg" title={`Ventes (volume) : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
-        <p className="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">{formatNumber(ventes.courant)} unité(s) vendue(s) — période préc. : {formatNumber(ventes.precedent)}</p>
+        <p className="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">{formatNumber(ventes.courant)} unité(s) vendue(s) : période préc. : {formatNumber(ventes.precedent)}</p>
         <DetailTable rows={ventes.liste} cols={['Date', 'Article', 'Catégorie', 'Qté', 'Source']} render={(v) => [formatDateShort(v.date), v.article, v.cat, v.qte, v.source === 'demande' ? 'Demande/Facture' : 'Saisie']} empty="Aucune vente sur la période." />
       </Modal>
 
       {showFinance && (
-        <Modal open={modalKey === 'ca'} onClose={() => setModalKey(null)} size="lg" title={`Chiffre d'affaires — ${scopeLabel}`}
+        <Modal open={modalKey === 'ca'} onClose={() => setModalKey(null)} size="lg" title={`Chiffre d'affaires : ${scopeLabel}`}
           panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
-          <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{formatMoney(ca.courant)} — période préc. : {formatMoney(ca.precedent)}</p>
+          <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{formatMoney(ca.courant)} : période préc. : {formatMoney(ca.precedent)}</p>
           <p className="my-2 text-xs italic text-gray-400">CA = factures <strong>certifiées</strong> uniquement{scope !== TOUTES ? ' (montant des lignes de cette catégorie)' : ''}.</p>
           <DetailTable rows={ca.liste} cols={['Date', 'N°', 'Client', 'Montant']} render={(f) => [formatDateShort(f.date), f.numero || '—', f.client?.nom || '—', formatMoney(scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((s, l) => s + (l.total || 0), 0))]} empty="Aucune facture certifiée sur la période." />
         </Modal>
@@ -695,7 +695,7 @@ function Indic({ title, value, icon: Icon, color, sub, delta, money, invert, onC
           </span>
         )}
       </div>
-      {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}{onClick ? ' — détails' : ''}</p>}
+      {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}{onClick ? ' : détails' : ''}</p>}
     </button>
   )
 }

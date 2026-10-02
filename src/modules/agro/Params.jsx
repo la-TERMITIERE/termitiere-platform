@@ -137,7 +137,7 @@ function DonneesTab() {
         const rows = await getAll(c)
         for (const row of rows) { await removeItem(c, row.id); n++ }
       }
-      await audit('agro', 'RESET', `Réinitialisation totale des données — ${n} enregistrement(s) supprimé(s)`)
+      await audit('agro', 'RESET', `Réinitialisation totale des données : ${n} enregistrement(s) supprimé(s)`)
       toast.success('Toutes les données ont été réinitialisées ✓ (tout est à zéro)')
     } catch (e) {
       toast.error('Erreur : ' + e.message)
@@ -299,7 +299,7 @@ function DonneesTab() {
         const factures = await readCol('agro_factures')
         sections.push({
           id: 'factures', name: 'Factures', title: 'Historique des factures',
-          subtitle: `Exporté le ${new Date().toLocaleDateString('fr-FR')} — ${factures.length} facture(s)`,
+          subtitle: `Exporté le ${new Date().toLocaleDateString('fr-FR')} : ${factures.length} facture(s)`,
           columns: [
             { key: 'numero', label: 'N° Facture', width: 20 },
             { key: 'date', label: 'Date', width: 14 },
@@ -386,7 +386,7 @@ function DonneesTab() {
       <Modal
         open={exportOpen}
         onClose={() => setExportOpen(false)}
-        title="Export Excel — Choisir les sections"
+        title="Export Excel : Choisir les sections"
         footer={
           <>
             <Button variant="ghost" onClick={() => setExportOpen(false)}>Annuler</Button>

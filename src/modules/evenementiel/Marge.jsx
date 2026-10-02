@@ -104,7 +104,7 @@ export default function Marge() {
       filename: `marge-briqueterie-${start}_${end}.xlsx`,
       sections: [
         {
-          id: 'marge', name: 'Recette-Bénéfice', title: 'Marge bénéficiaire — Briqueterie',
+          id: 'marge', name: 'Recette-Bénéfice', title: 'Marge bénéficiaire : Briqueterie',
           subtitle: `Période : ${formatDateShort(start)} → ${formatDateShort(end)} · Sac de ciment : ${formatMoney(prixSacCiment)}`,
           columns: [
             { key: 'date', label: 'Date', width: 12 },
@@ -148,7 +148,7 @@ export default function Marge() {
       <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-violet-700 to-violet-900 p-4 text-white shadow-lg">
         <Scale size={22} />
         <div>
-          <h2 className="text-base font-extrabold">Marge &amp; Bénéfice — Briqueterie</h2>
+          <h2 className="text-base font-extrabold">Marge &amp; Bénéfice : Briqueterie</h2>
           <p className="text-xs text-white/80">Recette − valeur du matériel (prix du sac ÷ rendement) = bénéfice</p>
         </div>
         <div className="w-full sm:ml-auto sm:w-auto [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white">
@@ -196,7 +196,7 @@ export default function Marge() {
       </div>
 
       {/* Détail par vente */}
-      <Card title="Détail des ventes — recette, matériel, bénéfice" className="overflow-x-auto p-0">
+      <Card title="Détail des ventes : recette, matériel, bénéfice" className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>

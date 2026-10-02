@@ -30,7 +30,7 @@ export function planEffectif(comptesPersonnalises = []) {
 
 export function libelleCompte(plan, num) {
   const c = plan.find((x) => x.num === String(num))
-  return c ? `${c.num} — ${c.label}` : String(num || '')
+  return c ? `${c.num} : ${c.label}` : String(num || '')
 }
 
 // ── Équilibre d'une écriture ──────────────────────────────────────────────────

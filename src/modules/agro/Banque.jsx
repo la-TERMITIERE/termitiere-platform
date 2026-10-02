@@ -5,6 +5,6 @@ import { COULEUR_MODULE } from '../../utils/color'
 export default function Banque() {
   return (
     <CompteBancaire moduleId="agro" color={COULEUR_MODULE.agro}
-      titre="Compte bancaire — MAXI-AGRO" secteurLabel="MAXI-AGRO" />
+      titre="Compte bancaire : MAXI-AGRO" secteurLabel="MAXI-AGRO" />
   )
 }

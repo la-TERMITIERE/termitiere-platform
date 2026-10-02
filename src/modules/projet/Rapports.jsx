@@ -125,7 +125,7 @@ async function telechargerPDF(projets, taches, depenses, commentaires) {
   doc.setFillColor(...TEAL_C)
   doc.rect(0, 0, W, 28, 'F')
   doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold')
-  doc.text('RAPPORT GLOBAL — E-G.Pro', M, 12)
+  doc.text('RAPPORT GLOBAL : E-G.Pro', M, 12)
   doc.setFontSize(9); doc.setFont('helvetica','normal')
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, M, 20)
   y = 36
@@ -448,7 +448,7 @@ export default function Rapports() {
       {/* Ligne 1 : Avancement + Statuts */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Card title={<Titre label="Avancement par projet (%)" formule="Pour chaque projet : Tâches terminées ÷ Total tâches × 100. Vert = 100%, Teal ≥ 50%, Orange < 50%." description="Voir où en est chaque projet — identifier ceux qui avancent bien et ceux qui stagnent." />}>
+          <Card title={<Titre label="Avancement par projet (%)" formule="Pour chaque projet : Tâches terminées ÷ Total tâches × 100. Vert = 100%, Teal ≥ 50%, Orange < 50%." description="Voir où en est chaque projet : identifier ceux qui avancent bien et ceux qui stagnent." />}>
             {!projets.length ? (
               <p className="py-8 text-center text-sm text-gray-400">Aucun projet</p>
             ) : (
@@ -494,7 +494,7 @@ export default function Rapports() {
       </div>
 
       {/* Ligne 3 : Productivité tâches */}
-      <Card title={<Titre label="Productivité — tâches créées vs terminées" formule="Créées : tâches dont la date de création est dans le mois. Terminées : tâches dont le statut est passé à 'Terminée' dans le mois. Un écart croissant indique un retard d'exécution." description="Voir si les équipes terminent les tâches au même rythme qu'elles en reçoivent — un écart qui se creuse est un signal d'alerte." />}>
+      <Card title={<Titre label="Productivité : tâches créées vs terminées" formule="Créées : tâches dont la date de création est dans le mois. Terminées : tâches dont le statut est passé à 'Terminée' dans le mois. Un écart croissant indique un retard d'exécution." description="Voir si les équipes terminent les tâches au même rythme qu'elles en reçoivent : un écart qui se creuse est un signal d'alerte." />}>
         <div style={{ height: 220 }}>
           <Line data={productiviteData} options={lineOpts()} />
         </div>
@@ -502,19 +502,19 @@ export default function Rapports() {
 
       {/* Ligne 4 : Budget prévu vs réel */}
       {budgetData.labels.length > 0 && (
-        <Card title={<Titre label="Suivi budgétaire — prévu vs dépenses réelles" formule="Budget prévu : valeur saisie dans le projet. Dépenses réelles : somme des dépenses enregistrées dans le module Dépenses. Écart = Budget − Dépenses." description="Comparer ce qui était prévu avec ce qui a été réellement dépensé — détecter les projets qui dépassent leur enveloppe." />}>
+        <Card title={<Titre label="Suivi budgétaire : prévu vs dépenses réelles" formule="Budget prévu : valeur saisie dans le projet. Dépenses réelles : somme des dépenses enregistrées dans le module Dépenses. Écart = Budget − Dépenses." description="Comparer ce qui était prévu avec ce qui a été réellement dépensé : détecter les projets qui dépassent leur enveloppe." />}>
           <div style={{ height: 260 }}>
             <Bar data={budgetData} options={barOpts()} />
           </div>
           <p className="mt-2 text-center text-[10px] text-gray-400">
-            Renseignez le budget prévu de chaque projet pour l'inclure ici — les dépenses réelles se calculent automatiquement à partir des décaissements enregistrés dans l'onglet Dépenses.
+            Renseignez le budget prévu de chaque projet pour l'inclure ici : les dépenses réelles se calculent automatiquement à partir des décaissements enregistrés dans l'onglet Dépenses.
           </p>
         </Card>
       )}
 
       {/* Tableau détail budgets */}
       {budgetTableau.length > 0 && (
-        <Card title={<Titre label="Détail budgets par projet" formule="Écart = Budget prévu − Dépenses réelles (vert si positif, rouge si négatif). Consommé = Dépenses ÷ Budget × 100." description="Vue détaillée projet par projet — voir d'un coup d'œil quels projets sont sous contrôle et lesquels ont dépassé." />}>
+        <Card title={<Titre label="Détail budgets par projet" formule="Écart = Budget prévu − Dépenses réelles (vert si positif, rouge si négatif). Consommé = Dépenses ÷ Budget × 100." description="Vue détaillée projet par projet : voir d'un coup d'œil quels projets sont sous contrôle et lesquels ont dépassé." />}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

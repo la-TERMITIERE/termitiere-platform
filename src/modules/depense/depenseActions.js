@@ -43,7 +43,7 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses, seuil
   const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
   await notify({
     type: statut.key === 'depasse' ? 'danger' : 'warning',
-    title: statut.key === 'depasse' ? `🔴 Budget dépassé — ${libelle}` : `🟠 Budget en alerte — ${libelle}`,
+    title: statut.key === 'depasse' ? `🔴 Budget dépassé : ${libelle}` : `🟠 Budget en alerte : ${libelle}`,
     body: `${pct}% du budget consommé (${depenseTotal.toLocaleString('fr-FR')} / ${alloue.toLocaleString('fr-FR')} FCFA)`,
     module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid, link: '/depense'
   })
@@ -67,13 +67,13 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
   // chaque écran E-DÉPENSES).
   const depenseFinale = { ...d, id, montant, statut: statutInitial, origineSaisie: 'e_depenses', enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
   await setItem('depense_depenses', id, depenseFinale)
-  await audit('depense', 'DEPENSE_CREATE', `${libelle} — ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}`, { secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison })
+  await audit('depense', 'DEPENSE_CREATE', `${libelle} : ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}`, { secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison })
   if (statutInitial === 'en_attente') {
     // Demande d'autorisation → alerte le PAU (et le super admin) dans sa cloche + push.
     await notify({
       type: 'warning',
-      title: `💰 Demande de décaissement — ${libelle}`,
-      body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · ${raison}. En attente de votre autorisation.`,
+      title: `💰 Demande de décaissement : ${libelle}`,
+      body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` : ${d.description}` : ''} · ${raison}. En attente de votre autorisation.`,
       module: 'depense', forRoles: ['pau', 'super_admin'], excludeUid: user?.uid, link: '/depense/autorisations'
     })
     // Confirme aussi à la personne qui a saisi la dépense que sa demande est bien
@@ -82,7 +82,7 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
       await notify({
         type: 'info',
         title: '⏳ Dépense envoyée en demande d\'autorisation',
-        body: `${montant.toLocaleString('fr-FR')} FCFA · ${libelle} — ${raison}. En attente de la décision du PAU.`,
+        body: `${montant.toLocaleString('fr-FR')} FCFA · ${libelle} : ${raison}. En attente de la décision du PAU.`,
         module: 'depense', forUsers: [user.uid], link: '/depense/autorisations'
       })
     }
@@ -92,8 +92,8 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
     // remonter à l'administration, quel que soit son montant.
     await notify({
       type: 'info',
-      title: `💸 Dépense effectuée — ${libelle}`,
-      body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` — ${d.description}` : ''} · par ${user?.nom || user?.login || '—'}.`,
+      title: `💸 Dépense effectuée : ${libelle}`,
+      body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` : ${d.description}` : ''} · par ${user?.nom || user?.login || '—'}.`,
       module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
       link: '/depense/liste', state: { openDepenseId: id }
     }).catch(() => {})

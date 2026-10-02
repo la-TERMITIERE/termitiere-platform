@@ -1,6 +1,6 @@
 // Paramètres Logistique — export/import JSON + export multi-sections + réinitialisation.
 import { useRef, useState } from 'react'
-import { FileSpreadsheet, Trash2, AlertTriangle, Download, Upload } from 'lucide-react'
+import { FileSpreadsheet, Trash2, AlertTriangle, Download, Upload, Settings } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -14,6 +14,7 @@ import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { useSite, matchSite, siteLabel } from './site/useSite'
+import { COULEUR_MODULE } from '../../utils/color'
 
 // Collections logistique sauvegardées/restaurées par l'export/import JSON.
 const JSON_COLS = ['logistique_inventaires', 'logistique_factures', 'logistique_prestations', 'logistique_demandes', 'logistique_retours', 'logistique_clients']
@@ -93,8 +94,8 @@ export default function Params() {
         }
         for (const m of data.materiel || []) { if (m && m.id) { await saveMateriel(m); n++ } }
         if (n === 0) return toast.error('Aucune donnée logistique reconnue dans ce fichier')
-        await audit('logistique', 'IMPORT', `Import JSON — ${n} enregistrement(s) restauré(s)`)
-        toast.success(`Import réussi ✓ — ${n} enregistrement(s) restauré(s)`)
+        await audit('logistique', 'IMPORT', `Import JSON : ${n} enregistrement(s) restauré(s)`)
+        toast.success(`Import réussi ✓ : ${n} enregistrement(s) restauré(s)`)
       } catch (err) { toast.error('Fichier invalide') }
       finally { if (fileRef.current) fileRef.current.value = '' }
     }
@@ -114,7 +115,7 @@ export default function Params() {
       if (exportChoix.has('inventaires')) {
         sections.push({
           id: 'inventaires', name: 'Saisies magasin',
-          title: 'Saisies magasin — Logistique',
+          title: 'Saisies magasin : Logistique',
           subtitle: `Exporté le ${formatDateShort(todayStr())} · ${inventaires.length} saisie(s)`,
           columns: [
             { key: 'date', label: 'Date', width: 14 },
@@ -127,7 +128,7 @@ export default function Params() {
       if (exportChoix.has('factures')) {
         sections.push({
           id: 'factures', name: 'Factures',
-          title: 'Factures — Logistique',
+          title: 'Factures : Logistique',
           subtitle: `${factures.length} facture(s)`,
           columns: [
             { key: 'num', label: 'N° Facture', width: 16 },
@@ -142,7 +143,7 @@ export default function Params() {
       if (exportChoix.has('prestations')) {
         sections.push({
           id: 'prestations', name: 'Prestations',
-          title: 'Prestations — Logistique',
+          title: 'Prestations : Logistique',
           subtitle: `${prestations.length} prestation(s)`,
           columns: [
             { key: 'num', label: 'N°', width: 14 },
@@ -157,7 +158,7 @@ export default function Params() {
       if (exportChoix.has('demandes')) {
         sections.push({
           id: 'demandes', name: 'Autorisations',
-          title: 'Autorisations de sortie — Logistique',
+          title: 'Autorisations de sortie : Logistique',
           subtitle: `${demandes.length} demande(s)`,
           columns: [
             { key: 'num', label: 'N°', width: 14 },
@@ -190,7 +191,7 @@ export default function Params() {
           : demandes
         for (const item of data) await removeItem(col.id, item.id)
       }
-      await audit('logistique', 'RESET', `Réinitialisation des données logistique — ${siteLabel(site)}`)
+      await audit('logistique', 'RESET', `Réinitialisation des données logistique : ${siteLabel(site)}`)
       toast.success(`Données logistique (${siteLabel(site)}) réinitialisées ✓`)
       setResetOpen(false)
     } catch (e) {
@@ -204,6 +205,19 @@ export default function Params() {
 
   return (
     <div className="space-y-4">
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Settings size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Paramètres</h2>
+          <p className="text-sm text-white/80">Sauvegarde, export et réinitialisation : MAXI LOGISTIQUE</p>
+        </div>
+      </div>
       <Card title="Sauvegarde / Restauration (JSON)">
         <p className="mb-3 text-sm text-gray-500">
           Téléchargez une sauvegarde complète des données logistique (saisies, factures, prestations,
@@ -237,11 +251,11 @@ export default function Params() {
       </Card>
 
       {isAdmin && (
-        <Card title={`Réinitialisation des données — ${siteLabel(site)}`} className="border-red-200">
+        <Card title={`Réinitialisation des données : ${siteLabel(site)}`} className="border-red-200">
           <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>
-              <p className="font-semibold text-red-900">Zone dangereuse — réservée au super administrateur / direction</p>
+              <p className="font-semibold text-red-900">Zone dangereuse : réservée au super administrateur / direction</p>
               <p className="mt-1 text-sm text-red-700">
                 Cette action supprime définitivement les saisies magasin, factures, prestations, autorisations de sortie
                 et retours du site <strong>{siteLabel(site)}</strong> uniquement. L'autre site, les paramètres et le

@@ -155,7 +155,7 @@ export default function ChargeTravail() {
                     <Badge tone={statut.tone}>{statut.label}</Badge>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
-                    <span className="flex items-center gap-1"><FolderKanban size={11} /> {t.projetNom}{t.projetLieu ? ` — ${t.projetLieu}` : ''}</span>
+                    <span className="flex items-center gap-1"><FolderKanban size={11} /> {t.projetNom}{t.projetLieu ? ` : ${t.projetLieu}` : ''}</span>
                     {t.secteur && (
                       <span className="rounded-full px-1.5 py-0.5 font-bold" style={{ background: t.secteur.color + '1a', color: t.secteur.color }}>
                         {t.secteur.label}

@@ -117,7 +117,7 @@ export function ecrituresDepuisBulletins(bulletins = []) {
       const cnssSal = Number(b.cnssSalarie) || 0
       const cnssEmp = Number(b.cnssEmployeur) || 0
       const its = Number(b.its) || 0
-      const libelle = `Paie ${b.mois || ''} — ${b.employeNom || ''}`.trim()
+      const libelle = `Paie ${b.mois || ''} : ${b.employeNom || ''}`.trim()
       const lignes = [
         { compte: '641000', libelle, debit: brut, credit: 0 },
         { compte: '421000', libelle, debit: 0, credit: net },

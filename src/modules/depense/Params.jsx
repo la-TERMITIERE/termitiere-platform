@@ -121,7 +121,7 @@ function SectionSeuils() {
   return (
     <Card title={<span className="flex items-center gap-2"><BellRing size={15} className="text-slate-500" />Seuils d'alerte budgétaire</span>}>
       <p className="mb-4 text-xs text-gray-500">
-        À partir de quel taux de consommation du budget alloué un secteur passe « Attention » puis « Dépassé » — sur le tableau de bord, les listes et les notifications.
+        À partir de quel taux de consommation du budget alloué un secteur passe « Attention » puis « Dépassé » : sur le tableau de bord, les listes et les notifications.
       </p>
       <div className="flex flex-wrap gap-3">
         <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 p-4 backdrop-blur-sm">
@@ -271,7 +271,7 @@ export default function Params() {
         filename: `depenses-${todayStr()}.xlsx`,
         sections: [{
           id: 'depenses', name: 'Dépenses',
-          title: 'Suivi des dépenses — La Termitière',
+          title: 'Suivi des dépenses : La Termitière',
           subtitle: `Exporté le ${formatDateShort(todayStr())} · ${depenses.length} dépense(s)`,
           columns: [
             { key: 'Date', label: 'Date', width: 14 },
@@ -404,14 +404,14 @@ export default function Params() {
       </Modal>
 
       {estSuperAdmin && (
-        <Card title="⚠️ Zone de danger — application entière" className="border-red-200">
+        <Card title="⚠️ Zone de danger : application entière" className="border-red-200">
           <div className="flex items-start gap-3 rounded-2xl border border-red-200/60 bg-red-50/60 p-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>
               <p className="font-semibold text-red-900">Réinitialiser toute l'application</p>
               <p className="mt-1 text-sm text-red-700">
                 Supprime définitivement les données de <strong>tous les secteurs et modules</strong> ({COLLECTIONS_A_REINITIALISER.length} collections :
-                dépenses, recettes, stocks, comptes utilisateurs, journal d'audit…) — pas seulement E-DÉPENSES. Seul votre propre compte est conservé.
+                dépenses, recettes, stocks, comptes utilisateurs, journal d'audit…) : pas seulement E-DÉPENSES. Seul votre propre compte est conservé.
                 Cette action est irréversible.
               </p>
               <Button variant="danger" size="sm" className="mt-3" onClick={() => setResetAppOpen(true)}>
@@ -485,7 +485,7 @@ export default function Params() {
 
         {etapeResetApp === 'suppression' && (
           <div className="space-y-3 py-4 text-center">
-            <p className="text-sm font-semibold text-gray-700">Réinitialisation en cours — ne fermez pas cette fenêtre…</p>
+            <p className="text-sm font-semibold text-gray-700">Réinitialisation en cours : ne fermez pas cette fenêtre…</p>
             {progressionResetApp && (
               <>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
@@ -495,7 +495,7 @@ export default function Params() {
                   />
                 </div>
                 <p className="text-xs text-gray-500">
-                  {progressionResetApp.index} / {progressionResetApp.total} collections traitées — {progressionResetApp.collection}
+                  {progressionResetApp.index} / {progressionResetApp.total} collections traitées : {progressionResetApp.collection}
                 </p>
               </>
             )}

@@ -175,7 +175,7 @@ export default function Factures() {
         await addItem('evenementiel_factures', payload)
         // Vente facturée : passe en « chargée / partie ».
         if (modal.venteId) await updateItem('evenementiel_ventes', modal.venteId, { statut: 'chargee' })
-        await audit('evenementiel', 'FACTURE', `${payload.numero} — ${formatMoney(totalTTC)}`)
+        await audit('evenementiel', 'FACTURE', `${payload.numero} : ${formatMoney(totalTTC)}`)
         toast.success('Facture créée ✓')
       }
       setModal(null)
@@ -211,8 +211,8 @@ export default function Factures() {
       filename: `factures-briqueterie-${todayStr()}.xlsx`,
       sections: [{
         name: 'Factures Briqueterie',
-        title: 'Facturation — Briqueterie',
-        subtitle: `${liste.length} facture(s)${filtrePeriodeActif ? ' — période filtrée' : ''}${recherche ? ` — recherche : « ${recherche} »` : ''}`,
+        title: 'Facturation : Briqueterie',
+        subtitle: `${liste.length} facture(s)${filtrePeriodeActif ? ' : période filtrée' : ''}${recherche ? ` : recherche : « ${recherche} »` : ''}`,
         columns: [
           { key: 'N°', label: 'N°', width: 14 },
           { key: 'Date', label: 'Date', width: 12 },
@@ -344,9 +344,9 @@ export default function Factures() {
               <div className="mb-3 rounded-lg border border-violet-100 bg-violet-50 p-3">
                 <FormGroup label="Facturer une vente approuvée" hint="Sélectionnez une vente autorisée : le client et les lignes seront pré-remplis.">
                   <Select value={modal.venteId || ''} onChange={(e) => pickVente(e.target.value)}>
-                    <option value="">— Nouvelle facture libre —</option>
+                    <option value="">Nouvelle facture libre</option>
                     {ventesAFacturer.map((v) => (
-                      <option key={v.id} value={v.id}>{v.num} — {v.clientNom} ({formatMoney(v.total || 0)})</option>
+                      <option key={v.id} value={v.id}>{v.num} : {v.clientNom} ({formatMoney(v.total || 0)})</option>
                     ))}
                   </Select>
                 </FormGroup>
@@ -388,7 +388,7 @@ export default function Factures() {
                   <p className="text-lg font-extrabold text-primary-dark">TOTAL TTC : {formatMoney(totaux.totalTTC)}</p>
                 </div>
                 <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Vente déjà approuvée — les informations ne sont pas modifiables. Cliquez sur <strong>Enregistrer</strong> pour émettre la facture, puis imprimez-la.
+                  Vente déjà approuvée : les informations ne sont pas modifiables. Cliquez sur <strong>Enregistrer</strong> pour émettre la facture, puis imprimez-la.
                 </p>
               </>
             ) : (
@@ -420,7 +420,7 @@ export default function Factures() {
                         <tr key={i}>
                           <td className="px-2 py-1.5">
                             <Select value={l.articleId} onChange={(e) => pickArticle(i, e.target.value)}>
-                              <option value="">— Choisir / libre —</option>
+                              <option value="">Choisir / libre</option>
                               {briques.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
                             </Select>
                             {!l.articleId && (

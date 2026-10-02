@@ -42,7 +42,7 @@ export function imprimerTicketSeance({ numero, date, clientNom, description, mon
 
   const corps = [
     `<b>${centrer('MAXI-GYM')}</b>`,
-    centrer(`Salle de sport — ${siteLabel(site || 'lome')}`),
+    centrer(`Salle de sport : ${siteLabel(site || 'lome')}`),
     ligneSep(),
     `Ticket: ${numero}`,
     `Caissier: ${enregistrePar || '—'}`,

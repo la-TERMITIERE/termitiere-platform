@@ -135,7 +135,7 @@ function SectionConservation() {
   return (
     <Card title={<span className="flex items-center gap-2"><Archive size={15} className="text-slate-500" />Conservation des données</span>}>
       <p className="mb-4 text-xs text-gray-500">
-        Supprime automatiquement les dépenses des projets déjà <strong>terminés ou annulés</strong> depuis plus de X années — n'affecte jamais un projet encore actif.
+        Supprime automatiquement les dépenses des projets déjà <strong>terminés ou annulés</strong> depuis plus de X années : n'affecte jamais un projet encore actif.
       </p>
       <div className="rounded-2xl border border-slate-200/60 bg-slate-50/70 p-4 backdrop-blur-sm">
         <p className="text-sm font-semibold text-slate-700">Purge des dépenses des projets clôturés</p>

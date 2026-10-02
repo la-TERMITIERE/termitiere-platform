@@ -144,14 +144,14 @@ export default function Demandes() {
     await notify({
       type: 'demande',
       title: 'Autorisation sortie briques',
-      body: `${totalQte} brique(s) — ${resume} — vente ${vte.num} — par ${user.nom}`,
+      body: `${totalQte} brique(s) : ${resume} : vente ${vte.num} : par ${user.nom}`,
       module: 'evenementiel',
       forRoles: [...APPROVER_ROLES, 'secretaire'],
       excludeUid: user.uid,
       link: '/evenementiel/demandes'
     })
     await audit('evenementiel', 'DEMANDE_SORTIE', num)
-    toast.success('Demande soumise — approbation puis certification requises')
+    toast.success('Demande soumise : approbation puis certification requises')
     setCreateOpen(false)
   }
 
@@ -184,30 +184,30 @@ export default function Demandes() {
         })
         await notify({
           type: 'success', title: 'Location matériel autorisée ✅',
-          body: `${d.materielNom} — ${d.nombreJours} jour(s) — ${formatMoney(d.prixTotal)} — locataire ${d.locataireNom}`,
+          body: `${d.materielNom} : ${d.nombreJours} jour(s) : ${formatMoney(d.prixTotal)} : locataire ${d.locataireNom}`,
           module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/materiel'
         })
         await notify({
           type: 'info', title: `Location autorisée par ${user.nom} ✅`,
-          body: `${d.materielNom} — demandée par ${d.demandeurNom}`,
+          body: `${d.materielNom} : demandée par ${d.demandeurNom}`,
           module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
         })
       } else if (statut === 'approuve_n1') {
         await notify({
           type: 'demande', title: 'Location matériel à certifier 🟡',
-          body: `${d.materielNom} — approuvée par ${user.nom}`,
+          body: `${d.materielNom} : approuvée par ${user.nom}`,
           module: 'evenementiel', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
         })
       } else { // refuse
         await notify({
           type: 'refus', title: 'Demande de location refusée ⛔',
-          body: `${d.materielNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+          body: `${d.materielNom}${commentaire.trim() ? ' : ' + commentaire.trim() : ''}`,
           module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/demandes'
         })
       }
       await audit('evenementiel',
         statut === 'refuse' ? 'LOCATION_REFUS' : statut === 'certifie' ? 'LOCATION_CERTIFICATION' : 'LOCATION_APPROBATION', d.num)
-      toast.success(statut === 'certifie' ? 'Location certifiée ✓' : statut === 'approuve_n1' ? 'Approuvé — en attente de certification' : 'Demande refusée')
+      toast.success(statut === 'certifie' ? 'Location certifiée ✓' : statut === 'approuve_n1' ? 'Approuvé : en attente de certification' : 'Demande refusée')
       setDecision(null)
       setCommentaire('')
       return
@@ -227,31 +227,31 @@ export default function Demandes() {
       }
       await notify({
         type: 'success', title: 'Sortie briques autorisée ✅',
-        body: `${d.qte} × ${d.briqueNom} — chargement ${d.dateSortie}`,
+        body: `${d.qte} × ${d.briqueNom} : chargement ${d.dateSortie}`,
         module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/stock'
       })
       await notify({
         type: 'info', title: `Sortie autorisée par ${user.nom} ✅`,
-        body: `${d.qte} × ${d.briqueNom} — demandée par ${d.demandeurNom}`,
+        body: `${d.qte} × ${d.briqueNom} : demandée par ${d.demandeurNom}`,
         module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
       })
     } else if (statut === 'approuve_n1') {
       await notify({
         type: 'demande', title: 'Sortie briques à certifier 🟡',
-        body: `${d.qte} × ${d.briqueNom} — approuvée par ${user.nom}`,
+        body: `${d.qte} × ${d.briqueNom} : approuvée par ${user.nom}`,
         module: 'evenementiel', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
       })
     } else { // refuse
       await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })
       await notify({
         type: 'refus', title: 'Demande refusée ⛔',
-        body: `${d.qte} × ${d.briqueNom}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+        body: `${d.qte} × ${d.briqueNom}${commentaire.trim() ? ' : ' + commentaire.trim() : ''}`,
         module: 'evenementiel', forUsers: [d.demandeur], link: '/evenementiel/demandes'
       })
     }
     await audit('evenementiel',
       statut === 'refuse' ? 'AUTORISATION_REFUS' : statut === 'certifie' ? 'CERTIFICATION' : 'AUTORISATION_OK', d.num)
-    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓' : statut === 'approuve_n1' ? 'Approuvé — en attente de certification' : 'Demande refusée')
+    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓' : statut === 'approuve_n1' ? 'Approuvé : en attente de certification' : 'Demande refusée')
     setDecision(null)
     setCommentaire('')
   }
@@ -274,7 +274,7 @@ export default function Demandes() {
       await removeItem('evenementiel_demandes', d.id)
       if (d.venteId) await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })
       await audit('evenementiel', 'DEMANDE_SUPPRESSION', d.num)
-    }, 'Autorisation supprimée — la vente repasse en brouillon')
+    }, 'Autorisation supprimée : la vente repasse en brouillon')
     setDecision(null)
   }
 
@@ -293,7 +293,7 @@ export default function Demandes() {
       })
       await notify({
         type: 'demande', title: 'Demande de correctif 🔄',
-        body: `Autorisation ${d.num} — ${d.clientNom || ''} : quantités à corriger${motif.trim() ? ' — ' + motif.trim() : ''}`,
+        body: `Autorisation ${d.num} : ${d.clientNom || ''} : quantités à corriger${motif.trim() ? ' : ' + motif.trim() : ''}`,
         module: 'evenementiel', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
       })
       await audit('evenementiel', 'CORRECTIF_DEMANDE', d.num)
@@ -364,11 +364,11 @@ export default function Demandes() {
       await notify({
         type: accepte ? 'success' : 'refus',
         title: accepte ? 'Correctif appliqué ✅' : 'Correctif refusé ⛔',
-        body: `Autorisation ${d.num} — ${accepte ? `quantités corrigées (${sommeQte(c.lignes)} brique(s)) et stock réajusté` : 'les quantités certifiées restent inchangées'}`,
+        body: `Autorisation ${d.num} : ${accepte ? `quantités corrigées (${sommeQte(c.lignes)} brique(s)) et stock réajusté` : 'les quantités certifiées restent inchangées'}`,
         module: 'evenementiel', forUsers: [c.par || d.demandeur], excludeUid: user.uid, link: '/evenementiel/demandes'
       })
       await audit('evenementiel', accepte ? 'CORRECTIF_APPLIQUE' : 'CORRECTIF_REFUSE', d.num)
-    }, accepte ? '✅ Correctif appliqué — stock réajusté' : 'Correctif refusé')
+    }, accepte ? '✅ Correctif appliqué : stock réajusté' : 'Correctif refusé')
     setDecision(null)
     setCommentaire('')
   }
@@ -409,7 +409,7 @@ export default function Demandes() {
         <Shield size={16} className="mr-1 inline" />
         {ongletDemande === 'sortie'
           ? <>Toute sortie de briques exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) avant le chargement.</>
-          : <>Toute location de matériel exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) — se demande depuis <strong>Matériel & Matériaux</strong>, bouton « Louer » sur le matériel concerné.</>}
+          : <>Toute location de matériel exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) : se demande depuis <strong>Matériel & Matériaux</strong>, bouton « Louer » sur le matériel concerné.</>}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -536,7 +536,7 @@ export default function Demandes() {
             const v = ventes.find((x) => x.id === e.target.value)
             setForm((s) => ({ ...s, venteId: e.target.value, venteNum: v?.num, dateSortie: v?.dateChargement || todayStr() }))
           }}>
-            {ventesBrouillon.map((v) => <option key={v.id} value={v.id}>{v.num} — {v.clientNom} ({formatMoney(v.total)})</option>)}
+            {ventesBrouillon.map((v) => <option key={v.id} value={v.id}>{v.num} : {v.clientNom} ({formatMoney(v.total)})</option>)}
           </Select>
         </FormGroup>
 
@@ -632,7 +632,7 @@ export default function Demandes() {
                 client={estLocation ? `${d.locataireNom}${d.locataireContact ? ' · ☎ ' + d.locataireContact : ''} (locataire)` : d.clientNom}
                 motif={d.message}
                 sortieLabel={estLocation ? 'Début de location' : 'Chargement prévu'}
-                sortieValue={estLocation ? (d.dateDebut ? `${formatDateShort(d.dateDebut)} — ${d.nombreJours} jour(s)` : null) : (d.dateSortie ? formatDateShort(d.dateSortie) : null)}
+                sortieValue={estLocation ? (d.dateDebut ? `${formatDateShort(d.dateDebut)} : ${d.nombreJours} jour(s)` : null) : (d.dateSortie ? formatDateShort(d.dateSortie) : null)}
                 items={items}
                 montant={montant}
                 statutNode={<Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>}
@@ -650,7 +650,7 @@ export default function Demandes() {
                   )}
                   {!estLocation && d.correctif && !correctifEnCours(d) && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} — demandé par {d.correctif.parNom}
+                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} : demandé par {d.correctif.parNom}
                       {d.correctif.traitePar ? `, tranché par ${d.correctif.traitePar}` : ''}
                       {d.correctif.motif ? ` · « ${d.correctif.motif} »` : ''}
                     </p>

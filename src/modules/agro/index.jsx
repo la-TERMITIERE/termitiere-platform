@@ -20,7 +20,7 @@ import Partenaires from '../../shared/partenaires/Partenaires'
 import Banque from './Banque'
 import { useAgroStore } from './store/agroStore'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage, isFullAccessRole, peutVoirBanque } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole, peutVoirBanque, peutVoirVoletsAdmin } from '../../core/roles'
 
 // Garde d'accès : Pilotage & Analyses réservé à la hiérarchie (pas les agents).
 function AccesRefuse() {
@@ -66,8 +66,8 @@ export default function AgroModule() {
       <Route path="besoins" element={<SectorBesoins secteurId="agro" />} />
       <Route path="partenaires" element={<Partenaires module="agro" />} />
       <Route path="banque" element={peutVoirBanque(role) ? <Banque /> : <AccesRefuseAdmin />} />
-      <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
-      <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
+      <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
+      <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
     </Routes>
     </>
   )

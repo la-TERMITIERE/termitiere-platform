@@ -218,10 +218,10 @@ export const useAuthStore = create((set, get) => ({
       onAuthStateChanged(auth, (fbUser) => {
         if (fbUser) return // session Firebase valide : rien à faire
         if (!localStorage.getItem(DEMO_SESSION_KEY)) return // déjà déconnecté
-        console.warn('[auth] session locale sans session Firebase — reconnexion requise')
+        console.warn('[auth] session locale sans session Firebase : reconnexion requise')
         localStorage.removeItem(DEMO_SESSION_KEY)
         _unsubOwnProfile?.(); _unsubOwnProfile = null
-        set({ user: null, role: null, modules: [], ready: true, error: 'Votre session a expiré — reconnectez-vous.' })
+        set({ user: null, role: null, modules: [], ready: true, error: 'Votre session a expiré : reconnectez-vous.' })
       })
     }
     try {
@@ -274,7 +274,7 @@ export const useAuthStore = create((set, get) => ({
         }).catch(() => {})
         return true
       } catch (e) {
-        set({ isLoading: false, error: 'Connexion impossible — vérifiez le réseau' })
+        set({ isLoading: false, error: 'Connexion impossible : vérifiez le réseau' })
         return false
       }
     }
@@ -384,7 +384,7 @@ export const useAuthStore = create((set, get) => ({
         // …puis on crée le compte Firebase Auth pour les prochaines fois (migration).
         if (auth) {
           try { await createUserWithEmailAndPassword(auth, email, pass); authed = true }
-          catch (e2) { console.warn('[auth] Firebase Auth — migration différée :', e2?.code || e2?.message) }
+          catch (e2) { console.warn('[auth] Firebase Auth : migration différée :', e2?.code || e2?.message) }
         }
       }
 
@@ -401,7 +401,7 @@ export const useAuthStore = create((set, get) => ({
       }).catch(() => {})
       return true
     } catch (e) {
-      set({ isLoading: false, error: 'Connexion impossible — vérifiez le réseau' })
+      set({ isLoading: false, error: 'Connexion impossible : vérifiez le réseau' })
       return false
     }
   },

@@ -278,7 +278,7 @@ export default function Materiel() {
     }
 
     await updateItem('evenementiel_materiels', materiel.id, { quantite: calculerStock(mouvements), mouvements, updatedAt: Date.now() })
-    await audit('evenementiel', edit ? 'materiel_mouvement_corrige' : (type === 'entree' ? 'materiel_entree' : 'materiel_sortie'), `${materiel.nom} — ${qte} ${materiel.unite || ''}`)
+    await audit('evenementiel', edit ? 'materiel_mouvement_corrige' : (type === 'entree' ? 'materiel_entree' : 'materiel_sortie'), `${materiel.nom} : ${qte} ${materiel.unite || ''}`)
     setMouvement(null)
   }
 
@@ -287,7 +287,7 @@ export default function Materiel() {
     if (!window.confirm('Supprimer ce mouvement ? Le stock sera recalculé automatiquement.')) return
     const mouvements = (materiel.mouvements || []).filter((x) => x.id !== mv.id)
     await updateItem('evenementiel_materiels', materiel.id, { quantite: calculerStock(mouvements), mouvements, updatedAt: Date.now() })
-    await audit('evenementiel', 'materiel_mouvement_supprime', `${materiel.nom} — ${mv.quantite} ${materiel.unite || ''}`)
+    await audit('evenementiel', 'materiel_mouvement_supprime', `${materiel.nom} : ${mv.quantite} ${materiel.unite || ''}`)
   }
 
   // Pour les consommables en vrac dont la quantité restante ne peut pas être estimée
@@ -333,12 +333,12 @@ export default function Materiel() {
         message: motif.trim(), statut: 'en_attente'
       })
       await notify({
-        type: 'demande', title: 'Location matériel — autorisation requise',
-        body: `${materiel.nom} — ${nombreJours} jour(s) — ${formatMoney(Number(prixTotal))} — locataire ${locataireNom.trim()} — par ${user?.nom || user?.login}`,
+        type: 'demande', title: 'Location matériel : autorisation requise',
+        body: `${materiel.nom} : ${nombreJours} jour(s) : ${formatMoney(Number(prixTotal))} : locataire ${locataireNom.trim()} : par ${user?.nom || user?.login}`,
         module: 'evenementiel', forRoles: [...APPROVER_ROLES, 'secretaire'], excludeUid: user?.uid, link: '/evenementiel/demandes'
       })
-      await audit('evenementiel', 'LOCATION_DEMANDE', `${num} — ${materiel.nom}`)
-      toast.success('Demande de location soumise — approbation puis certification requises ✓')
+      await audit('evenementiel', 'LOCATION_DEMANDE', `${num} : ${materiel.nom}`)
+      toast.success('Demande de location soumise : approbation puis certification requises ✓')
       setLocationModal(null)
     } finally {
       setLocationSaving(false)
@@ -377,7 +377,7 @@ export default function Materiel() {
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
           <Download size={18} className="shrink-0 text-violet-600" />
           <p className="min-w-0 flex-1 text-sm text-violet-800">
-            <strong>{matieresAImporter.length} matière(s)</strong> disponible(s) dans Stock briques ({matieresAImporter.map((m) => m.nom).join(', ')}) — récupérer leur stock actuel comme point de départ ici.
+            <strong>{matieresAImporter.length} matière(s)</strong> disponible(s) dans Stock briques ({matieresAImporter.map((m) => m.nom).join(', ')}) : récupérer leur stock actuel comme point de départ ici.
           </p>
           <Button size="sm" onClick={importerDepuisStockBriques} loading={importing}>
             <Download size={14} className="mr-1" /> Importer depuis Stock briques
@@ -539,10 +539,10 @@ export default function Materiel() {
                   <p className="mb-1.5 text-xs font-bold uppercase text-amber-700">🔑 Location en cours</p>
                   <div className="space-y-0.5 text-sm text-amber-900">
                     <p>Locataire : <b>{d.locationEnCours.locataireNom}</b>{d.locationEnCours.locataireContact ? ` · ☎ ${d.locationEnCours.locataireContact}` : ''}</p>
-                    <p>Du {formatDateShort(d.locationEnCours.dateDebut)} — {d.locationEnCours.nombreJours} jour(s) — {formatMoney(d.locationEnCours.prixTotal)}</p>
+                    <p>Du {formatDateShort(d.locationEnCours.dateDebut)} : {d.locationEnCours.nombreJours} jour(s) : {formatMoney(d.locationEnCours.prixTotal)}</p>
                   </div>
                   <Button size="sm" variant="outline" className="mt-2" onClick={() => marquerRetourLocation(d)}>
-                    <RotateCcw size={13} /> Marquer le retour — remettre sur site
+                    <RotateCcw size={13} /> Marquer le retour : remettre sur site
                   </Button>
                 </div>
               )}
@@ -566,7 +566,7 @@ export default function Materiel() {
                       <div key={mv.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
                         <div className="min-w-0">
                           <span className={mv.type === 'entree' ? 'font-semibold text-green-600' : 'font-semibold text-red-500'}>
-                            {mv.type === 'entree' ? '+ ' : '− '}{mv.quantite} {d.unite || ''} {mv.note ? `— ${mv.note}` : ''}
+                            {mv.type === 'entree' ? '+ ' : '− '}{mv.quantite} {d.unite || ''} {mv.note ? `: ${mv.note}` : ''}
                           </span>
                           <span className="ml-1 text-gray-400">· {formatDateShort(mv.date)} · {mv.auteur || '—'}</span>
                         </div>
@@ -661,7 +661,7 @@ export default function Materiel() {
                 />
               </FormGroup>
               {!editing && (
-                <FormGroup label="Quantité initiale" required hint="Stock de départ — mettre 0 si aucun stock pour l'instant">
+                <FormGroup label="Quantité initiale" required hint="Stock de départ : mettre 0 si aucun stock pour l'instant">
                   <input type="number" min="0" step="any" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
                     placeholder="0"
                     value={form.quantiteInitiale} onChange={(e) => setForm((f) => ({ ...f, quantiteInitiale: e.target.value }))} />
@@ -697,8 +697,8 @@ export default function Materiel() {
       <Modal open={!!mouvement} onClose={() => setMouvement(null)}
         title={
           mouvement?.edit
-            ? `Corriger ce mouvement — ${mouvement?.materiel.nom}`
-            : mouvement?.type === 'entree' ? `Entrée de stock — ${mouvement?.materiel.nom}` : `Sortie de stock — ${mouvement?.materiel.nom}`
+            ? `Corriger ce mouvement : ${mouvement?.materiel.nom}`
+            : mouvement?.type === 'entree' ? `Entrée de stock : ${mouvement?.materiel.nom}` : `Sortie de stock : ${mouvement?.materiel.nom}`
         }>
         {mouvement && (
           <div className="space-y-3">
@@ -729,7 +729,7 @@ export default function Materiel() {
       {/* Demande de location — soumise pour autorisation (approbation puis
           certification), traitée dans Demandes.jsx → onglet « Location matériel ». */}
       <Modal open={!!locationModal} onClose={() => setLocationModal(null)}
-        title={locationModal ? `Louer — ${locationModal.materiel.nom}` : ''}
+        title={locationModal ? `Louer : ${locationModal.materiel.nom}` : ''}
         footer={<>
           <Button variant="ghost" onClick={() => setLocationModal(null)} disabled={locationSaving}>Annuler</Button>
           <Button onClick={soumettreLocation} loading={locationSaving}>Soumettre la demande</Button>

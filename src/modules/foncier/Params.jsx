@@ -45,7 +45,7 @@ export default function Params() {
         filename: `dossiers-foncier-${todayStr()}.xlsx`,
         sections: [{
           id: 'dossiers', name: 'Dossiers fonciers',
-          title: 'Portefeuille foncier — La Termitière',
+          title: 'Portefeuille foncier : La Termitière',
           subtitle: `Exporté le ${formatDateShort(todayStr())} · ${dossiers.length} dossier(s)`,
           columns: [
             { key: 'Référence', label: 'Référence', width: 16 },

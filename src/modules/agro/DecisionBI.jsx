@@ -331,7 +331,7 @@ export default function DecisionBI({
       {alertes.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4">
           <p className="mb-2 flex items-center gap-2 text-sm font-bold text-amber-900">
-            <AlertTriangle size={18} /> Points d'attention — décision requise
+            <AlertTriangle size={18} /> Points d'attention : décision requise
           </p>
           <div className="flex flex-wrap gap-2">
             {alertes.map((a, i) => (
@@ -351,7 +351,7 @@ export default function DecisionBI({
           <ScopeTab key={c} active={scope === c} color={catColor(c)} onClick={() => setScope(c)}>{c}</ScopeTab>
         ))}
       </div>
-      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs — {scopeLabel}</p>
+      <p className="-mt-3 text-xs font-semibold text-gray-500">Indicateurs : {scopeLabel}</p>
 
       {/* Grille KPI principale */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
@@ -392,7 +392,7 @@ export default function DecisionBI({
       </div>
 
       {/* Ventes — bête vendue & montant (mouvements/flux des animaux). 0 si aucune vente. */}
-      <Card title="Ventes — bête vendue & montant (factures certifiées)">
+      <Card title="Ventes : bête vendue & montant (factures certifiées)">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -413,7 +413,7 @@ export default function DecisionBI({
                 </tr>
               ))}
               {!ventesBetes.length && (
-                <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400">Aucune vente sur la période — <strong className="text-gray-600">0</strong></td></tr>
+                <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400">Aucune vente sur la période : <strong className="text-gray-600">0</strong></td></tr>
               )}
             </tbody>
             {ventesBetes.length > 0 && (
@@ -451,7 +451,7 @@ export default function DecisionBI({
 
       {/* Tableaux décisionnels */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title={`Effectifs par catégorie — période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
+        <Card title={`Effectifs par catégorie : période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
           <p className="mb-2 text-xs text-gray-400">Cliquez une catégorie pour voir son détail par espèce sur la période.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -483,7 +483,7 @@ export default function DecisionBI({
           </div>
         </Card>
 
-        <Card title="Stocks aliments — état critique en premier">
+        <Card title="Stocks aliments : état critique en premier">
           <div className="max-h-64 overflow-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
@@ -560,7 +560,7 @@ export default function DecisionBI({
       </div>
 
       {/* Apporteurs d'affaires — à primer */}
-      <Card title="Apporteurs d'affaires — CA généré (à primer)">
+      <Card title="Apporteurs d'affaires : CA généré (à primer)">
         {topApporteurs.length ? (
           <div className="space-y-2">
             {topApporteurs.map((a, i) => (
@@ -632,7 +632,7 @@ function CategoriePeriodeModal({ cat, onClose, especes, invPeriode, dernier, sta
   }, [cat, especes, invPeriode, dernier])
 
   return (
-    <Modal open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} — détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}
+    <Modal open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} : détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}
       panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
       {data && (
         data.lignes.length === 0 ? (
@@ -746,7 +746,7 @@ function EvolutionCategorieCard({ cat, especes, evolutionDetail }) {
   const aDesDonnees = evolutionDetail.labels.length > 0 && espCat.length > 0
 
   return (
-    <Card title={`${cat} — évolution`}>
+    <Card title={`${cat} : évolution`}>
       <div className="mb-2 flex flex-wrap gap-1">
         {METRICS_EVO.map((m) => (
           <button
@@ -775,8 +775,8 @@ function KpiDetailModal({ id, onClose, data }) {
     ca: 'Factures de la période',
     achats: 'Détail des achats',
     ventes: 'Détail des ventes',
-    naiss: 'Détail des naissances — période',
-    dec: 'Détail des décès avec motifs — période',
+    naiss: 'Détail des naissances : période',
+    dec: 'Détail des décès avec motifs : période',
     saisies: 'Saisies enregistrées sur la période',
     demandes: 'Demandes de sortie EN ATTENTE',
     sante: 'Interventions santé'
@@ -817,7 +817,7 @@ function KpiDetailModal({ id, onClose, data }) {
     content = (
       <div className="space-y-3">
         <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">
-          <strong>{data.totauxAnim?.naiss || 0}</strong> naissances — Taux de croissance : <strong>{data.tauxCroissance} %</strong>
+          <strong>{data.totauxAnim?.naiss || 0}</strong> naissances : Taux de croissance : <strong>{data.tauxCroissance} %</strong>
           <span className="ml-2 text-xs text-green-600">(formule : ((Naissances − Décès) / EF initial) × 100)</span>
         </p>
         {(data.naissancesDetail || []).length === 0 ? (
@@ -846,8 +846,8 @@ function KpiDetailModal({ id, onClose, data }) {
     content = (
       <div className="space-y-3">
         <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">
-          <strong>{data.totauxAnim?.dec || 0}</strong> décès — Taux de mortalité : <strong>{data.tauxMortalite} %</strong>
-          <span className="ml-2 text-xs text-red-600">(formule : (Décès / EF initial) × 100 — EF initial : {formatNumber(data.baseEffectif)} têtes)</span>
+          <strong>{data.totauxAnim?.dec || 0}</strong> décès : Taux de mortalité : <strong>{data.tauxMortalite} %</strong>
+          <span className="ml-2 text-xs text-red-600">(formule : (Décès / EF initial) × 100 : EF initial : {formatNumber(data.baseEffectif)} têtes)</span>
         </p>
         {(data.decesDetail || []).length === 0 ? (
           <p className="py-6 text-center text-gray-400">Aucun décès enregistré.</p>

@@ -46,7 +46,7 @@ function messageErreurEcriture(e) {
   return "Refusé par les règles de la base. Deux causes possibles : "
     + "(1) les règles de sécurité n'ont pas encore été déployées "
     + "(firebase deploy --only database) ; "
-    + "(2) la variable FIREBASE_SERVICE_ACCOUNT n'est pas configurée côté serveur — "
+    + "(2) la variable FIREBASE_SERVICE_ACCOUNT n'est pas configurée côté serveur : "
     + "sans elle la connexion bascule sur un circuit de repli où votre identité ne "
     + "correspond plus à votre profil, et aucune action d'administration n'est autorisée."
 }
@@ -117,7 +117,7 @@ export const useUsersStore = create((set, get) => ({
     } catch (e) {
       throw new Error(messageErreurEcriture(e))
     }
-    await audit('portail', existed ? 'USER_EDIT' : 'USER_CREATE', `${u.login} — ${u.role}`)
+    await audit('portail', existed ? 'USER_EDIT' : 'USER_CREATE', `${u.login} : ${u.role}`)
     await get().load()
   },
 
@@ -137,7 +137,7 @@ export const useUsersStore = create((set, get) => ({
       // Comptes hérités : le secret a pu être enregistré sous la clé du login.
       try { await removeItem('users_secret', safeKey(u.login)) } catch (e) { /* ignore */ }
     }
-    await audit('portail', 'USER_DELETE', `${u.login} — ${u.nom || ''}`)
+    await audit('portail', 'USER_DELETE', `${u.login} : ${u.nom || ''}`)
     await get().load()
   }
 }))

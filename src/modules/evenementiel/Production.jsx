@@ -121,7 +121,7 @@ export default function Production() {
             const nouveau = (c.appatam || 0) + delta
             if (nouveau < 0) {
               const b = briques.find((x) => x.id === id)
-              echec = `Impossible : « ${b?.nom || id} » n'a plus que ${c.appatam || 0} en appatam — une partie a déjà été déplacée vers le séchage.`
+              echec = `Impossible : « ${b?.nom || id} » n'a plus que ${c.appatam || 0} en appatam : une partie a déjà été déplacée vers le séchage.`
               return undefined
             }
             briquesStock[id] = { ...c, appatam: nouveau }
@@ -140,7 +140,7 @@ export default function Production() {
         // Date changée : on retire intégralement l'ANCIEN jour puis on ajoute au NOUVEAU.
         await updateAtomic('evenementiel_inventaires', vAvant.date, (cur) => {
           echec = null
-          if (!cur) { echec = "Stock introuvable pour l'ancienne date — rien à retirer."; return undefined }
+          if (!cur) { echec = "Stock introuvable pour l'ancienne date : rien à retirer."; return undefined }
           const briquesStock = { ...(cur.briques || {}) }
           for (const l of (vAvant.lignes || [])) {
             const dispo = briquesStock[l.briqueId]?.appatam || 0
@@ -179,8 +179,8 @@ export default function Production() {
       await updateItem('evenementiel_productions', form.id, {
         date: form.date, duree: form.duree, machine: form.machine, lignes, totalBriques, caillasses, notes: form.notes
       })
-      await audit('evenementiel', 'PRODUCTION_EDIT', `${vAvant.num} — ${formatNumber(totalBriques)} briques (stock réajusté)`)
-      toast.success('Production modifiée ✓ — stock réajusté')
+      await audit('evenementiel', 'PRODUCTION_EDIT', `${vAvant.num} : ${formatNumber(totalBriques)} briques (stock réajusté)`)
+      toast.success('Production modifiée ✓ : stock réajusté')
     } else {
       // ── Création ──────────────────────────────────────────────────────────
       const num = genNumero('PROD', productions.length)
@@ -219,8 +219,8 @@ export default function Production() {
         }
       })
 
-      await audit('evenementiel', 'PRODUCTION', `${num} — ${formatNumber(totalBriques)} briques`)
-      toast.success(`Production ${num} enregistrée ✓ — briques placées en appatam`)
+      await audit('evenementiel', 'PRODUCTION', `${num} : ${formatNumber(totalBriques)} briques`)
+      toast.success(`Production ${num} enregistrée ✓ : briques placées en appatam`)
     }
     setOpen(false)
   }
@@ -236,13 +236,13 @@ export default function Production() {
     let echec = null
     await updateAtomic('evenementiel_inventaires', p.date, (cur) => {
       echec = null
-      if (!cur) { echec = 'Stock introuvable pour cette date — rien à retirer.'; return undefined }
+      if (!cur) { echec = 'Stock introuvable pour cette date : rien à retirer.'; return undefined }
       const briquesStock = { ...(cur.briques || {}) }
       const caillassesQte = parseInt(p.caillasses) || 0
       for (const l of (p.lignes || [])) {
         const dispo = briquesStock[l.briqueId]?.appatam || 0
         if (dispo < l.qte) {
-          echec = `Impossible : « ${l.briqueNom} » n'a plus que ${dispo} en appatam (${l.qte} à retirer) — une partie a déjà été déplacée vers le séchage.`
+          echec = `Impossible : « ${l.briqueNom} » n'a plus que ${dispo} en appatam (${l.qte} à retirer) : une partie a déjà été déplacée vers le séchage.`
           return undefined
         }
       }
@@ -265,8 +265,8 @@ export default function Production() {
     })
     if (echec) { toast.error(echec); return }
     await removeItem('evenementiel_productions', p.id)
-    await audit('evenementiel', 'PRODUCTION_DELETE', `${p.num} — ${formatNumber(p.totalBriques)} briques retirées du stock`)
-    toast.success('Production supprimée — stock corrigé ✓')
+    await audit('evenementiel', 'PRODUCTION_DELETE', `${p.num} : ${formatNumber(p.totalBriques)} briques retirées du stock`)
+    toast.success('Production supprimée : stock corrigé ✓')
     if (detail?.id === p.id) setDetail(null)
   }
 
@@ -434,7 +434,7 @@ export default function Production() {
       {/* Détail d'une machine — cumul de toutes ses productions (tout historique
           confondu, indépendant du filtre de période de la liste principale). */}
       <Modal open={!!machineDetail} onClose={() => setMachineDetail(null)} size="lg"
-        title={machineDetail ? `Machine — ${machineDetail}` : ''}
+        title={machineDetail ? `Machine : ${machineDetail}` : ''}
         footer={<Button variant="ghost" onClick={() => setMachineDetail(null)}>Fermer</Button>}
         {...glassModalProps(COULEUR_MODULE.evenementiel)}>
         {machineDetail && (() => {

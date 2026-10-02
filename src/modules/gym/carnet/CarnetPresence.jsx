@@ -83,7 +83,7 @@ export default function CarnetPresence() {
         if (json.ok) { setDonnees(json); setEtat('ok') }
         else { setErreur(json.error || 'Lien invalide.'); setEtat('erreur') }
       })
-      .catch(() => { setErreur('Connexion impossible — réessayez.'); setEtat('erreur') })
+      .catch(() => { setErreur('Connexion impossible : réessayez.'); setEtat('erreur') })
   }, [token])
 
   async function pointerArrivee() {
@@ -140,7 +140,7 @@ export default function CarnetPresence() {
                 <div className="min-w-0">
                   <p className="truncate text-lg font-extrabold leading-tight">{donnees.nom}</p>
                   <p className="text-xs text-white/80">
-                    {donnees.abonnementActif ? `Abonnement actif — jusqu'au ${formatDateShort(donnees.abonnementDateFin)}` : 'Pas d\'abonnement actif'}
+                    {donnees.abonnementActif ? `Abonnement actif : jusqu'au ${formatDateShort(donnees.abonnementDateFin)}` : 'Pas d\'abonnement actif'}
                   </p>
                 </div>
               </div>

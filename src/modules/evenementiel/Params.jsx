@@ -79,7 +79,7 @@ export default function Params() {
         filename: `export-briqueterie-${todayStr()}.xlsx`,
         sections: [{
           id: 'productions', name: 'Productions',
-          title: 'Productions — Briqueterie',
+          title: 'Productions : Briqueterie',
           subtitle: `Exporté le ${formatDateShort(todayStr())} · ${productions.length} production(s)`,
           columns: [
             { key: 'Date', label: 'Date', width: 14 },
@@ -178,7 +178,7 @@ export default function Params() {
         </div>
       </Card>
 
-      <Card title="Marge — coût du matériel (ciment)">
+      <Card title="Marge : coût du matériel (ciment)">
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <FormGroup label="Prix d'un sac de ciment (FCFA)">
             <Input type="number" min="0" className="w-40" value={prixCiment} onChange={(e) => setPrixCiment(e.target.value)} />

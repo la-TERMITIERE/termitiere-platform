@@ -13,16 +13,16 @@ import { genNumero, todayStr } from '../../utils/formatters'
 // date de la séance/l'abonnement D'ORIGINE — à passer systématiquement par
 // l'appelant, sinon une séance backdatée (ex. saisie le 2 pour le 1er) se
 // retrouvait facturée à la date du jour de la saisie et non à la date choisie.
-export async function genererFactureGym({ factures, sourceType, sourceId, clientNom, clientTelephone, categorie, description, montant, user, site, date, generatePDF, imprime = true }) {
+export async function genererFactureGym({ factures, sourceType, sourceId, clientNom, clientTelephone, categorie, description, montant, user, site, date, sexe, generatePDF, imprime = true }) {
   const numero = genNumero('FACT-GYM', factures.length)
   const payload = {
     numero, date: date || todayStr(), sourceType, sourceId: sourceId || null, site: site || 'lome',
-    clientNom, clientTelephone: clientTelephone || '', categorie: categorie || '', description,
+    clientNom, sexe: sexe || '', clientTelephone: clientTelephone || '', categorie: categorie || '', description,
     montant: Number(montant) || 0, imprime: !!imprime,
     enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
   }
   await addItem('gym_factures', payload)
-  await audit('gym', 'FACTURE_CREATE', `${numero} — ${clientNom} — ${Number(montant).toLocaleString('fr-FR')} FCFA`)
+  await audit('gym', 'FACTURE_CREATE', `${numero} : ${clientNom} : ${Number(montant).toLocaleString('fr-FR')} FCFA`)
   if (generatePDF) {
     await generatePDF({
       numero, date: payload.date,

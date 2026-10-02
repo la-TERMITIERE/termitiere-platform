@@ -45,7 +45,7 @@ export default function Parametres() {
       const reg = await navigator.serviceWorker?.getRegistration()
       if (reg) {
         await reg.update()
-        toast.success('Vérification effectuée — une mise à jour s’appliquera automatiquement si disponible.')
+        toast.success('Vérification effectuée : une mise à jour s’appliquera automatiquement si disponible.')
       } else {
         toast.info('Aucune mise à jour automatique sur cet appareil.')
       }
@@ -128,7 +128,7 @@ export default function Parametres() {
         ) : (
           <div>
             <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-              Recevez les demandes d’autorisation, sorties et validations sur cet appareil — même application fermée.
+              Recevez les demandes d’autorisation, sorties et validations sur cet appareil : même application fermée.
             </p>
             <button onClick={activerNotifs} disabled={activation}
               className="rounded-lg bg-[#BC3C31] px-3.5 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60">
@@ -142,7 +142,7 @@ export default function Parametres() {
       <Card title="ℹ️ À propos">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <Info size={16} /> LA TERMITIÈRE — Plateforme
+            <Info size={16} /> LA TERMITIÈRE : Plateforme
           </div>
           <button onClick={verifierMaj} disabled={checking}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-60 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5">

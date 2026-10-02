@@ -26,7 +26,7 @@ export default function ProjetAutoDemarrage() {
     async function demarrer(p) {
       try {
         await setItem('projets', p.id, { ...p, statut: 'en_cours', updatedAt: Date.now() })
-        await audit('projet', 'projet_modifie', `${p.nom} — démarrage automatique (date de début atteinte)`)
+        await audit('projet', 'projet_modifie', `${p.nom} : démarrage automatique (date de début atteinte)`)
         const forUsers = p.responsableUid ? [p.responsableUid] : []
         await notify({
           type: 'info',

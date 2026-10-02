@@ -153,13 +153,13 @@ export default function Factures() {
         payload.createdByUid = user.uid || user.login || null
         payload.statut = 'brouillon'   // ← toute nouvelle facture démarre en brouillon
         await addItem('agro_factures', payload)
-        await audit('agro', 'FACTURE', `${payload.numero} (brouillon) — ${formatMoney(totalTTC)}`)
+        await audit('agro', 'FACTURE', `${payload.numero} (brouillon) : ${formatMoney(totalTTC)}`)
         // Notification immédiate à la GE et au PAU (tout enregistrement doit les alerter).
         const especesFacture = [...new Set(lignes.map((l) => l.article).filter(Boolean))].join(', ')
         await notify({
           type: 'info',
-          title: `Nouvelle facture — ${user.nom}`,
-          body: `${payload.numero} · ${payload.client?.nom || ''}${especesFacture ? ` — ${especesFacture}` : ''} · ${formatMoney(totalTTC)}`,
+          title: `Nouvelle facture : ${user.nom}`,
+          body: `${payload.numero} · ${payload.client?.nom || ''}${especesFacture ? ` : ${especesFacture}` : ''} · ${formatMoney(totalTTC)}`,
           module: 'agro', forRoles: ['ge', 'pau'], excludeUid: user.uid || user.login, link: '/agro/factures'
         })
         toast.success('Brouillon créé ✓')
@@ -172,7 +172,7 @@ export default function Factures() {
 
   // Supprimable tant que la sortie n'a pas été approuvée : le stock est intact.
   async function supprimer(f) {
-    if (!confirm(`Supprimer la facture ${f.numero} ?\nAucun stock n'a encore bougé — l'action est définitive.`)) return
+    if (!confirm(`Supprimer la facture ${f.numero} ?\nAucun stock n'a encore bougé : l'action est définitive.`)) return
     await removeItem('agro_factures', f.id)
     await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`)
     toast.success('Facture supprimée')
@@ -192,7 +192,7 @@ export default function Factures() {
   }
   async function approuverSortie(f) {
     if (!confirm(`Approuver la sortie de stock de la facture ${f.numero} ? Le stock sera décompté.`)) return
-    run(() => wfApprouver(f, user), '✅ Sortie approuvée — stock décompté')
+    run(() => wfApprouver(f, user), '✅ Sortie approuvée : stock décompté')
   }
   async function refuserSortie(f) {
     const motif = prompt(`Refuser la sortie de la facture ${f.numero} ?\nMotif (optionnel) :`)
@@ -202,7 +202,7 @@ export default function Factures() {
   async function certifier(f) {
     const { totalTTC } = calcTotaux(lignesEffectives(f), f.remise, f.tva)
     if (!confirm(`Certifier la facture ${f.numero} pour ${formatMoney(totalTTC)} ? Elle deviendra définitive et imprimable.`)) return
-    run(() => wfCertifier(f, user), '✅ Facture certifiée — CA enregistré, impression disponible')
+    run(() => wfCertifier(f, user), '✅ Facture certifiée : CA enregistré, impression disponible')
   }
   async function signalerEcart(f) {
     const motif = prompt(`Signaler un écart sur la facture ${f.numero}\n(ex : reliquats retournés, pertes au marché)\nMessage à la hiérarchie :`)
@@ -210,7 +210,7 @@ export default function Factures() {
     run(() => wfSignaler(f, user, motif), '📝 Demande de modification envoyée à la hiérarchie')
   }
   async function appliquerAjustement(f, ajustements) {
-    await run(() => wfAjuster(f, user, ajustements), '✅ Quantités réelles ajustées — stock réajusté')
+    await run(() => wfAjuster(f, user, ajustements), '✅ Quantités réelles ajustées : stock réajusté')
     setEcart(null)
   }
   async function rouvrir(f) {
@@ -283,8 +283,8 @@ export default function Factures() {
       filename: `factures-maxi-agro-${todayStr()}.xlsx`,
       sections: [{
         name: 'Factures MAXI-AGRO',
-        title: 'Factures — MAXI-AGRO',
-        subtitle: `${liste.length} facture(s)${filtre !== 'tous' ? ` — ${filtres.find(([v]) => v === filtre)?.[1]}` : ''}${recherche ? ` — recherche : « ${recherche} »` : ''}`,
+        title: 'Factures : MAXI-AGRO',
+        subtitle: `${liste.length} facture(s)${filtre !== 'tous' ? ` : ${filtres.find(([v]) => v === filtre)?.[1]}` : ''}${recherche ? ` : recherche : « ${recherche} »` : ''}`,
         columns: [
           { key: 'N°', label: 'N°', width: 14 },
           { key: 'Date', label: 'Date', width: 12 },
@@ -447,7 +447,7 @@ export default function Factures() {
                     <tr key={i}>
                       <td className="px-2 py-1.5">
                         <Select value={l.articleId} onChange={(e) => pickArticle(i, e.target.value)}>
-                          <option value="">— Choisir —</option>
+                          <option value="">Choisir</option>
                           {tousArticles.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
                         </Select>
                       </td>
@@ -528,7 +528,7 @@ export default function Factures() {
               )}
               {detail.correctif && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  {CORRECTIF_STATUTS[detail.correctif.statut]?.label} — demandé par {detail.correctif.parNom}
+                  {CORRECTIF_STATUTS[detail.correctif.statut]?.label} : demandé par {detail.correctif.parNom}
                   {detail.correctif.traitePar ? `, tranché par ${detail.correctif.traitePar}` : ''}
                   {detail.correctif.motif ? ` · « ${detail.correctif.motif} »` : ''}
                 </p>

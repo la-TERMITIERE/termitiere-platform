@@ -16,8 +16,11 @@ import Patrimoine from './Patrimoine'
 import PlanComptable from './PlanComptable'
 import ModelesPlans from './ModelesPlans'
 import Params from './Params'
+import { useAuth } from '../../hooks/useAuth'
+import { peutVoirVoletsAdmin } from '../../core/roles'
 
 export default function ComptabiliteModule() {
+  const role = useAuth((s) => s.role)
   return (
     <Routes>
       <Route index element={<Dashboard />} />
@@ -36,7 +39,7 @@ export default function ComptabiliteModule() {
       <Route path="patrimoine" element={<Patrimoine />} />
       <Route path="plan" element={<PlanComptable />} />
       <Route path="modeles-plans" element={<ModelesPlans />} />
-      <Route path="params" element={<Params />} />
+      <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <Navigate to="/comptabilite" replace />} />
     </Routes>
   )
 }

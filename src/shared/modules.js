@@ -253,7 +253,7 @@ export const MODULE_NAV = {
     { label: 'Immobilier / Patrimoine', to: '/comptabilite/patrimoine',     icon: Landmark },
     { label: 'Plan Comptable',         to: '/comptabilite/plan',            icon: BookOpen },
     { label: 'Modèles de Plans',       to: '/comptabilite/modeles-plans',   icon: FileText },
-    { label: 'Paramètres',             to: '/comptabilite/params',          icon: Settings }
+    { label: 'Paramètres',             to: '/comptabilite/params',          icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
   gym: [
     { label: 'Dashboard', to: '/gym', icon: LayoutDashboard, end: true },
@@ -329,7 +329,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard',                    to: '/depense',              icon: LayoutDashboard, end: true },
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet, badgeKey: 'depenseDepenses' },
     { label: 'Budget',                       to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
-    { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: [...ADMIN_VOLETS_ROLES, 'secretaire'] },
+    { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: [...FULL_ACCESS_ROLES, 'secretaire'] },
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: ANALYSES_DEPENSE_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },

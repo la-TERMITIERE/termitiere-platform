@@ -31,7 +31,7 @@ export default function TachesRoutinieresGarderie() {
       collectionPrefix="garderie_routine"
       seedTaches={SEED_TACHES}
       color={COULEUR_MODULE.garderie}
-      titre="Tâches Routinières — Garderie"
+      titre="Tâches Routinières : Garderie"
       description="Tâches définies en réunion du 03 août par la direction (DR-DS), à vérifier chaque jour par les tatas et la gérante."
     />
   )

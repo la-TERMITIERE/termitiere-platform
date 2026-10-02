@@ -17,7 +17,7 @@ export default function Params() {
       <Card title="Référentiel">
         <div className="grid gap-3 sm:grid-cols-2">
           <Item label="Norme comptable" value="SYSCOHADA révisé (OHADA)" />
-          <Item label="Devise" value="Franc CFA — XOF (BCEAO)" />
+          <Item label="Devise" value="Franc CFA : XOF (BCEAO)" />
           <Item label="Comptes au plan par défaut" value={`${PLAN_COMPTABLE_DEFAUT.length} comptes`} />
           <Item label="Taux de TVA" value={TAUX_TVA.map((t) => t.label).join(' · ')} />
         </div>
@@ -25,7 +25,7 @@ export default function Params() {
 
       <Card title="Journaux disponibles">
         <div className="flex flex-wrap gap-2">
-          {JOURNAUX.map((j) => <Badge key={j.code} tone={j.tone}>{j.code} — {j.label}</Badge>)}
+          {JOURNAUX.map((j) => <Badge key={j.code} tone={j.tone}>{j.code} : {j.label}</Badge>)}
         </div>
       </Card>
 
@@ -44,8 +44,8 @@ export default function Params() {
         <div className="flex gap-3 text-sm text-gray-600 dark:text-gray-300">
           <Info size={18} className="mt-0.5 shrink-0 text-sky-500" />
           <div className="space-y-1">
-            <p className="font-semibold text-gray-800 dark:text-gray-100">Prochaine étape — passerelles automatiques</p>
-            <p>Les achats/dépenses saisis dans les autres modules (MAXI-AGRO, LOGISTIQUE, BRIQUETERIE, E-DÉPENSES, E-VOYAGE…) seront convertis automatiquement en écritures comptables (journal Achats/Caisse/Banque) selon le plan comptable ci-dessus — sur le modèle des passerelles déjà en place dans E-DÉPENSES.</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-100">Prochaine étape : passerelles automatiques</p>
+            <p>Les achats/dépenses saisis dans les autres modules (MAXI-AGRO, LOGISTIQUE, BRIQUETERIE, E-DÉPENSES, E-VOYAGE…) seront convertis automatiquement en écritures comptables (journal Achats/Caisse/Banque) selon le plan comptable ci-dessus : sur le modèle des passerelles déjà en place dans E-DÉPENSES.</p>
           </div>
         </div>
       </Card>

@@ -37,7 +37,7 @@ export default function EtatSalaires() {
       filename: `etat-salaires-${mois}.xlsx`,
       sections: [
         {
-          name: 'Bulletins', title: `Bulletins de paie — ${moisLabel}`, subtitle: 'Détail par employé · devise XOF',
+          name: 'Bulletins', title: `Bulletins de paie : ${moisLabel}`, subtitle: 'Détail par employé · devise XOF',
           columns: [
             { key: 'employeNom', label: 'Employé', width: 24 },
             { key: 'poste', label: 'Poste', width: 20 },
@@ -51,7 +51,7 @@ export default function EtatSalaires() {
           totals: { __label: 'TOTAL', brutTotal: totaux.brut, net: totaux.net }
         },
         {
-          name: 'Par département', title: `Masse salariale par département — ${moisLabel}`, subtitle: 'Synthèse',
+          name: 'Par département', title: `Masse salariale par département : ${moisLabel}`, subtitle: 'Synthèse',
           columns: [
             { key: 'dept', label: 'Département', width: 24 },
             { key: 'effectif', label: 'Effectif', type: 'number', width: 12 },
@@ -90,7 +90,7 @@ export default function EtatSalaires() {
 
       <Card className="!p-0 overflow-hidden">
         <div className="border-b border-gray-100 px-4 py-3 dark:border-white/10">
-          <p className="font-bold text-gray-800 dark:text-gray-100">Répartition par département — {moisLabel}</p>
+          <p className="font-bold text-gray-800 dark:text-gray-100">Répartition par département : {moisLabel}</p>
         </div>
         <table className="w-full text-sm">
           <thead>

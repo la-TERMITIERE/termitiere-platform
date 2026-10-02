@@ -48,7 +48,7 @@ export default function Prestataires() {
 
   const supprimer = async (p) => {
     if (!peutSupprimer) return
-    if (!window.confirm(`Retirer "${p.nom}" de l'annuaire ?\n\nL'historique des tâches et dépenses déjà enregistrées n'est PAS supprimé — seule la fiche de l'annuaire disparaît. Le prestataire réapparaîtra automatiquement si son nom est de nouveau saisi.`)) return
+    if (!window.confirm(`Retirer "${p.nom}" de l'annuaire ?\n\nL'historique des tâches et dépenses déjà enregistrées n'est PAS supprimé : seule la fiche de l'annuaire disparaît. Le prestataire réapparaîtra automatiquement si son nom est de nouveau saisi.`)) return
     await setItem('projet_prestataires_masques', safeKey(p.nom.toLowerCase()), { nom: p.nom, masqueLe: Date.now() })
     if (selection?.nom === p.nom) setSelection(null)
   }
@@ -75,7 +75,7 @@ export default function Prestataires() {
       </div>
 
       <p className="text-xs text-gray-400">
-        Cet annuaire se construit automatiquement à partir des tâches et dépenses saisies — aucune fiche à créer à part.
+        Cet annuaire se construit automatiquement à partir des tâches et dépenses saisies : aucune fiche à créer à part.
       </p>
 
       {!liste.length ? (

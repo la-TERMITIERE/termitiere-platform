@@ -30,11 +30,11 @@ export default function CoachFormModal({ coachModal, setCoachModal, site }) {
     try {
       if (d.id) {
         await updateItem('gym_coachs', d.id, { nom: d.nom.trim(), horaires: d.horaires })
-        await audit('gym', 'COACH_MODIFIE', `${d.nom.trim()} — ${siteLabel(site)}`)
+        await audit('gym', 'COACH_MODIFIE', `${d.nom.trim()} : ${siteLabel(site)}`)
         toast.success('Coach modifié ✓')
       } else {
         await addItem('gym_coachs', { nom: d.nom.trim(), site, horaires: d.horaires })
-        await audit('gym', 'COACH_CREATE', `${d.nom.trim()} — ${siteLabel(site)}`)
+        await audit('gym', 'COACH_CREATE', `${d.nom.trim()} : ${siteLabel(site)}`)
         toast.success('Coach ajouté ✓')
       }
       setCoachModal(null)

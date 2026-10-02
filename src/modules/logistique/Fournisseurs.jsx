@@ -1,6 +1,6 @@
 // Fournisseurs — CRUD + note qualité + alerte inactivité (>30 j).
 import { useState } from 'react'
-import { Plus, Trash2, Star, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Star, AlertTriangle, Truck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -9,10 +9,11 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, addDays, todayStr } from '../../utils/formatters'
+import { COULEUR_MODULE } from '../../utils/color'
 
 const empty = () => ({ nom: '', contact: '', adresse: '', specialite: '', delaiMoyen: 0, note: 5, derniereCommande: '' })
 
@@ -34,7 +35,25 @@ export default function Fournisseurs() {
 
   return (
     <div className="space-y-4">
-      {!lectureSeule && <div className="flex justify-end"><Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Ajouter un fournisseur</Button></div>}
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Truck size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Fournisseurs</h2>
+          <p className="text-sm text-white/80">{fournisseurs.length} fournisseur(s)</p>
+        </div>
+        {!lectureSeule && (
+          <button onClick={() => setModal({ data: empty(), id: null })}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <Plus size={14} /> Ajouter
+          </button>
+        )}
+      </div>
       <Card className="p-0">
         <Table
           columns={[
@@ -47,7 +66,9 @@ export default function Fournisseurs() {
             { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
                 <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
-                <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                {isFullAccessRole(role) && (
+                  <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                )}
               </div>
             ) }
           ]}

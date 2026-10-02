@@ -186,7 +186,7 @@ export default function Dashboard() {
                               className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-white/70">
                               <span className="min-w-0 truncate text-gray-600">
                                 <span className="font-semibold text-gray-700">{d.tacheTitre}</span>
-                                <span className="text-gray-400"> — {d.projetNom}</span>
+                                <span className="text-gray-400"> : {d.projetNom}</span>
                               </span>
                               <span className="shrink-0 font-bold text-sky-700">{d.reste.toLocaleString('fr-FR')} FCFA</span>
                             </div>
@@ -214,7 +214,7 @@ export default function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</span>
-                        <span className="text-xs font-semibold text-gray-600">— {a.projetNom}</span>
+                        <span className="text-xs font-semibold text-gray-600">: {a.projetNom}</span>
                         {responsable && (
                           <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Resp. : {responsable}</span>
                         )}
@@ -236,7 +236,7 @@ export default function Dashboard() {
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <Card title="Projets récents">
           {!recents.length ? (
-            <p className="py-8 text-center text-sm text-gray-400">Aucun projet — créez-en un dans l'onglet Projets</p>
+            <p className="py-8 text-center text-sm text-gray-400">Aucun projet : créez-en un dans l'onglet Projets</p>
           ) : (
             <div className="space-y-2">
               {recents.map((p) => {

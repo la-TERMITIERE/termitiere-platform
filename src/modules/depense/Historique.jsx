@@ -237,7 +237,7 @@ export default function Historique() {
                           <span>→ 👤 <span className="font-semibold text-gray-500">{d.beneficiaireNom}</span>{d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}</span>
                         )}
                         {d._supprimee && (
-                          <span className="font-semibold text-red-500">🗑️ Supprimée par {d.supprimeePar || '—'}{d.supprimeeLe ? ` le ${formatDateShort(new Date(d.supprimeeLe).toISOString().slice(0, 10))}` : ''} — Motif : « {d.motifSuppression || '—'} »</span>
+                          <span className="font-semibold text-red-500">🗑️ Supprimée par {d.supprimeePar || '—'}{d.supprimeeLe ? ` le ${formatDateShort(new Date(d.supprimeeLe).toISOString().slice(0, 10))}` : ''} : Motif : « {d.motifSuppression || '—'} »</span>
                         )}
                       </div>
                     </td>
@@ -298,7 +298,7 @@ function FriseHistorique({ d, secteur }) {
         sousTitre={`Par ${d.enregistrePar || '—'} le ${formatDateTime(d.createdAt)}${d.recurrente ? ' · 🔁 récurrente' : ''}`} />
 
       {!d.imprevue ? (
-        <Etape actif tone="green" titre="2. Comptée directement" sousTitre="Dépense prévue/budgétée — aucune autorisation requise" />
+        <Etape actif tone="green" titre="2. Comptée directement" sousTitre="Dépense prévue/budgétée : aucune autorisation requise" />
       ) : (
         <>
           <Etape actif={d.statut !== undefined} tone={d.statut === 'en_attente' ? 'amber' : 'gray'}
@@ -323,7 +323,7 @@ function FriseHistorique({ d, secteur }) {
           titre={!d.beneficiaireUid ? 'Bénéficiaire externe' : d.recuConfirme ? '✅ Réception confirmée' : '💸 En attente de confirmation'}
           sousTitre={
             `${d.beneficiaireNom}${d.beneficiaireFonction ? ` (${d.beneficiaireFonction})` : ''}` +
-            (d.beneficiaireUid ? (d.recuConfirme ? ` — a confirmé le ${formatDateTime(d.recuConfirmeLe)}` : '') : ' — pas de notification (aucun compte)')
+            (d.beneficiaireUid ? (d.recuConfirme ? ` : a confirmé le ${formatDateTime(d.recuConfirmeLe)}` : '') : ' : pas de notification (aucun compte)')
           } />
       )}
 

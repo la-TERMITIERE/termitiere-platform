@@ -143,7 +143,7 @@ export default function Analyses() {
 
       {vue === 'tableaux' && (
         <div className="space-y-4">
-          <Card title="Animaux par espèce — période" className="p-0">
+          <Card title="Animaux par espèce : période" className="p-0">
             <Table
               columns={[
                 { key: 'nom', label: 'Espèce' },
@@ -176,7 +176,7 @@ export default function Analyses() {
               empty="Aucun aliment."
             />
           </Card>
-          <Card title="Clients — CA période" className="p-0">
+          <Card title="Clients : CA période" className="p-0">
             <Table
               columns={[
                 { key: 'nom', label: 'Client' },

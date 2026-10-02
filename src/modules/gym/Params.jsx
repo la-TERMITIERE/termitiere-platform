@@ -81,7 +81,7 @@ export default function Params() {
   async function supprimerCoach(c) {
     if (!window.confirm(`Retirer le coach « ${c.nom} » ? Son historique de pointage reste conservé.`)) return
     await removeItem('gym_coachs', c.id)
-    await audit('gym', 'COACH_DELETE', `${c.nom} — ${siteLabel(site)}`)
+    await audit('gym', 'COACH_DELETE', `${c.nom} : ${siteLabel(site)}`)
     toast.success('Coach retiré')
   }
   const nbJoursProgrammes = (c) => Object.values(c.horaires || {}).filter((h) => h?.actif).length
@@ -104,7 +104,7 @@ export default function Params() {
       // journal), on ne veut pas faire croire à l'utilisateur que la suppression
       // elle-même a échoué alors que les données sont bel et bien parties.
       try {
-        await audit('gym', 'RESET_TOTAL', `Réinitialisation de MAXI-GYM ${siteLabel(site)} par ${user?.nom || user?.login || '—'} — ${compte} enregistrement(s) supprimé(s)`)
+        await audit('gym', 'RESET_TOTAL', `Réinitialisation de MAXI-GYM ${siteLabel(site)} par ${user?.nom || user?.login || '—'} : ${compte} enregistrement(s) supprimé(s)`)
       } catch (e) {
         console.warn('[gym] audit RESET_TOTAL non enregistré :', e)
       }
@@ -115,7 +115,7 @@ export default function Params() {
       // Firebase) arrêtait la boucle sans aucun message — impression que « rien
       // ne se passe » alors qu'une suppression a en réalité échoué en coulisse.
       console.error('[gym] réinitialisation MAXI-GYM échouée :', e)
-      toast.error(e?.message || 'La réinitialisation a échoué — voir la console pour le détail.')
+      toast.error(e?.message || 'La réinitialisation a échoué : voir la console pour le détail.')
     } finally {
       setResetting(false)
     }
@@ -156,7 +156,7 @@ export default function Params() {
       </div>
 
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
-        Ces réglages sont propres à <strong>{siteLabel(site)}</strong> — l'autre salle a les siens, indépendants.
+        Ces réglages sont propres à <strong>{siteLabel(site)}</strong> : l'autre salle a les siens, indépendants.
       </div>
 
       <Card title={titreSection(Ticket, 'Tarifs des séances (FCFA)')}
@@ -170,7 +170,7 @@ export default function Params() {
             <ChampUnite unite="FCFA" min="0" value={form.tarifSeanceVip} onChange={set('tarifSeanceVip')} />
           </FormGroup>
         </div>
-        <p className="mt-1 text-[11px] text-gray-400">Le Classique n'a pas de tarif fixe — prix libre à la saisie.</p>
+        <p className="mt-1 text-[11px] text-gray-400">Le Classique n'a pas de tarif fixe : prix libre à la saisie.</p>
       </Card>
 
       <Card title={titreSection(CreditCard, 'Tarifs des abonnements (FCFA)')}
@@ -201,7 +201,7 @@ export default function Params() {
           <FormGroup label="Validité d'une séance (heures)">
             <ChampUnite unite="heures" min="1" value={form.validiteSeanceHeures} onChange={set('validiteSeanceHeures')} />
           </FormGroup>
-          <FormGroup label="Durée minimale — Abonnement Classique (jours)"
+          <FormGroup label="Durée minimale : Abonnement Classique (jours)"
             hint={form.tarifAbonnementClassique != null ? 'Sans effet ici : Classique est à prix/durée fixe pour cette salle.' : undefined}>
             <ChampUnite unite="jours" min="1" value={form.dureeClassiqueMinJours} onChange={set('dureeClassiqueMinJours')} disabled={form.tarifAbonnementClassique != null} />
           </FormGroup>
@@ -224,7 +224,7 @@ export default function Params() {
         className={CARD_ACCENT_CLASS}
         style={cardAccentStyle(COULEUR)}>
         <p className="mb-3 text-xs text-gray-500">
-          Planning hebdomadaire par coach — jours de présence et heure d'arrivée prévue. Le pointage réel se fait depuis le volet « Coachs ».
+          Planning hebdomadaire par coach : jours de présence et heure d'arrivée prévue. Le pointage réel se fait depuis le volet « Coachs ».
         </p>
         <div className="space-y-2">
           {coachs.map((c) => (
@@ -258,10 +258,10 @@ export default function Params() {
       <Card className="border-2 border-red-200 bg-red-50/60">
         <div className="mb-3 flex items-center gap-2">
           <AlertTriangle size={18} className="text-red-600" />
-          <h3 className="text-base font-extrabold text-red-800">Zone de danger — Réinitialiser MAXI-GYM {siteLabel(site)}</h3>
+          <h3 className="text-base font-extrabold text-red-800">Zone de danger : Réinitialiser MAXI-GYM {siteLabel(site)}</h3>
         </div>
         <p className="mb-3 text-sm text-red-800">
-          Supprime <strong>définitivement et sans possibilité de retour</strong> les données de la salle <strong>{siteLabel(site)}</strong> uniquement — l'autre salle n'est pas affectée, de même que les forfaits personnalisés, communs aux deux salles :
+          Supprime <strong>définitivement et sans possibilité de retour</strong> les données de la salle <strong>{siteLabel(site)}</strong> uniquement : l'autre salle n'est pas affectée, de même que les forfaits personnalisés, communs aux deux salles :
         </p>
         <ul className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-red-700">
           {COLLECTIONS_A_VIDER.map((c) => (

@@ -4,9 +4,10 @@
 //   • la facture passe « approuvée » → elle compte alors dans le chiffre d'affaires ;
 //   • le matériel loué est décompté du stock magasin (sorties auto, cf. logic.autoSorties).
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, RotateCcw, Eye, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Eye, CheckCircle2, Send } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
+import { COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -32,7 +33,13 @@ import {
 import { useLogistiqueStore } from './store/referentielStore'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
-const STATUTS = STATUTS_DEMANDE
+// Étend l'énumération PARTAGÉE (shared/workflow.js, utilisée aussi par Agro et
+// Briqueterie) avec un statut propre à MAXI LOGISTIQUE, UNIQUEMENT pour l'affichage
+// ici — ne touche pas STATUTS_DEMANDE lui-même : une demande certifiée passe à
+// « annulee » quand sa facture est annulée (doublon/erreur, cf. Factures.jsx), ce
+// qui l'exclut déjà naturellement du stock/CA (estCertifie/estActif ne reconnaissent
+// que les clés du modèle partagé).
+const STATUTS = { ...STATUTS_DEMANDE, annulee: { label: '🚫 Annulée (facture corrigée)', short: 'Annulée', tone: 'neutral' } }
 // Clés identifiant un matériel dans les lignes d'une demande / facture / prestation.
 const CLES = { key: 'materielId', nom: 'materielNom' }
 
@@ -169,13 +176,13 @@ export default function Demandes() {
     await notify({
       type: 'demande',
       title: 'Autorisation de sortie matériel',
-      body: `${siteLabel(site)} — ${totalQte} pièce(s) · prestation ${p.num} — facture ${fac.num} — par ${user.nom}`,
+      body: `${siteLabel(site)} : ${totalQte} pièce(s) · prestation ${p.num} : facture ${fac.num} : par ${user.nom}`,
       module: 'logistique',
       forRoles: [...APPROVER_ROLES, 'secretaire'],
       excludeUid: user.uid,
       link: `/logistique/${site}/demandes`
     })
-    await audit('logistique', 'DEMANDE_SORTIE', `${siteLabel(site)} — ${num} — prestation ${p.num}`)
+    await audit('logistique', 'DEMANDE_SORTIE', `${siteLabel(site)} : ${num} : prestation ${p.num}`)
     toast.success('Autorisation soumise à la hiérarchie ✓')
     setCreateOpen(false)
   }
@@ -204,7 +211,7 @@ export default function Demandes() {
     if (statut === 'approuve_n1') {
       await notify({
         type: 'demande', title: 'Sortie matériel à certifier 🟡',
-        body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — approuvée par ${user.nom}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : approuvée par ${user.nom}`,
         module: 'logistique', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
       // Le demandeur doit savoir que sa demande est approuvée — sans cela il n'apprenait
@@ -212,32 +219,32 @@ export default function Demandes() {
       if (d.demandeur && d.demandeur !== user.login) {
         await notify({
           type: 'approuve', title: 'Sortie approuvée ✅',
-          body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — approuvée par ${user.nom}. En attente de certification.`,
+          body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : approuvée par ${user.nom}. En attente de certification.`,
           module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/demandes`
         })
       }
     } else if (statut === 'certifie') {
       await notify({
         type: 'success', title: 'Sortie autorisée · facture approuvée ✅',
-        body: `${siteLabel(site)} — prestation ${d.prestationNum} — facture ${d.factureNum} approuvée, ${totalQte} pièce(s) sorties le ${d.dateSortie}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum} : facture ${d.factureNum} approuvée, ${totalQte} pièce(s) sorties le ${d.dateSortie}`,
         module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/saisie`
       })
       await notify({
         type: 'info', title: `Sortie certifiée par ${user.nom} ✅`,
-        body: `${siteLabel(site)} — prestation ${d.prestationNum} (${totalQte} pièce(s)) — demandée par ${d.demandeurNom}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : demandée par ${d.demandeurNom}`,
         module: 'logistique', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
     } else {
       await notify({
         type: 'refus', title: 'Autorisation refusée ⛔',
-        body: `${siteLabel(site)} — prestation ${d.prestationNum}${commentaire.trim() ? ' — ' + commentaire.trim() : ''}`,
+        body: `${siteLabel(site)} : prestation ${d.prestationNum}${commentaire.trim() ? ' : ' + commentaire.trim() : ''}`,
         module: 'logistique', forUsers: [d.demandeur], link: `/logistique/${site}/demandes`
       })
     }
     await audit('logistique',
       statut === 'refuse' ? 'AUTORISATION_REFUS' : statut === 'certifie' ? 'CERTIFICATION' : 'AUTORISATION_OK',
-      `${siteLabel(site)} — ${d.num}`)
-    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓ — facture approuvée & stock décrémenté' : statut === 'approuve_n1' ? 'Approuvé — en attente de certification' : 'Demande refusée')
+      `${siteLabel(site)} : ${d.num}`)
+    toast.success(statut === 'certifie' ? 'Sortie certifiée ✓ : facture approuvée & stock décrémenté' : statut === 'approuve_n1' ? 'Approuvé : en attente de certification' : 'Demande refusée')
     setDecision(null)
     setCommentaire('')
   }
@@ -256,7 +263,7 @@ export default function Demandes() {
     if (!confirm(`Supprimer l'autorisation ${d.num} ?\nLa facture ${d.factureNum || ''} (brouillon) redevient disponible.`)) return
     await run(async () => {
       await removeItem('logistique_demandes', d.id)
-      await audit('logistique', 'DEMANDE_SUPPRESSION', `${siteLabel(site)} — ${d.num}`)
+      await audit('logistique', 'DEMANDE_SUPPRESSION', `${siteLabel(site)} : ${d.num}`)
     }, 'Autorisation supprimée')
     setDecision(null)
   }
@@ -279,10 +286,10 @@ export default function Demandes() {
       })
       await notify({
         type: 'demande', title: 'Demande de correctif 🔄',
-        body: `${siteLabel(site)} — autorisation ${d.num} · prestation ${d.prestationNum || ''} : quantités à corriger${motif.trim() ? ' — ' + motif.trim() : ''}`,
+        body: `${siteLabel(site)} : autorisation ${d.num} · prestation ${d.prestationNum || ''} : quantités à corriger${motif.trim() ? ' : ' + motif.trim() : ''}`,
         module: 'logistique', forRoles: APPROVER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
-      await audit('logistique', 'CORRECTIF_DEMANDE', `${siteLabel(site)} — ${d.num}`)
+      await audit('logistique', 'CORRECTIF_DEMANDE', `${siteLabel(site)} : ${d.num}`)
     }, '🔄 Correctif envoyé à la hiérarchie')
     setRelance(null)
   }
@@ -335,34 +342,61 @@ export default function Demandes() {
       await notify({
         type: accepte ? 'success' : 'refus',
         title: accepte ? 'Correctif appliqué ✅' : 'Correctif refusé ⛔',
-        body: `${siteLabel(site)} — autorisation ${d.num} : ${accepte ? 'quantités corrigées, stock et facture réajustés' : 'les quantités certifiées restent inchangées'}`,
+        body: `${siteLabel(site)} : autorisation ${d.num} : ${accepte ? 'quantités corrigées, stock et facture réajustés' : 'les quantités certifiées restent inchangées'}`,
         module: 'logistique', forUsers: [c.par || d.demandeur], excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
-      await audit('logistique', accepte ? 'CORRECTIF_APPLIQUE' : 'CORRECTIF_REFUSE', `${siteLabel(site)} — ${d.num}`)
-    }, accepte ? '✅ Correctif appliqué — stock et facture réajustés' : 'Correctif refusé')
+      await audit('logistique', accepte ? 'CORRECTIF_APPLIQUE' : 'CORRECTIF_REFUSE', `${siteLabel(site)} : ${d.num}`)
+    }, accepte ? '✅ Correctif appliqué : stock et facture réajustés' : 'Correctif refusé')
     setDecision(null)
     setCommentaire('')
   }
 
   return (
     <div className="space-y-4">
+      {/* Bandeau héro — même recette que les autres volets (logo rond, titre, action
+          en glassmorphism directement sur la bande). */}
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.9) 0%, rgba(26,26,26,0.85) 100%)' }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COULEUR_MODULE.logistique, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+        }}>
+          <Send size={28} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-extrabold">Autorisations de sortie</h2>
+          <p className="text-sm text-white/80">{liste.length} autorisation(s) · {siteLabel(site)}</p>
+        </div>
+        {!lectureSeule && (
+          <button onClick={openCreate} disabled={!facturesDispo.length}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50">
+            <Plus size={14} /> Nouvelle autorisation
+          </button>
+        )}
+      </div>
+
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
         Chaque sortie de matériel exige une <strong>facture (brouillon)</strong>, puis une <strong>approbation</strong> (gérant) suivie d'une <strong>certification</strong> (Direction / GE).
         À la certification, la <strong>facture est approuvée</strong> (chiffre d'affaires) et le <strong>stock est décrémenté</strong>.
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Filtre de statut — glassmorphism léger (teinte + reflet), même recette que
+          Facturation/Prestations. */}
+      <div className="relative flex flex-wrap items-center gap-1 overflow-hidden rounded-2xl border border-red-100/50 bg-gradient-to-br from-red-50/40 via-white/70 to-white/70 p-1.5 shadow-sm backdrop-blur-md">
+        <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
         {['en_attente', 'approuve_n1', 'correctif', 'certifie', 'refuse', 'tous'].map((f) => (
-          <button key={f} onClick={() => setFiltre(f)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filtre === f ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'}`}>
+          <button key={f} onClick={() => setFiltre(f)}
+            className={`relative rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${filtre === f ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}>
             {f === 'tous' ? 'Toutes' : f === 'correctif' ? `${CORRECTIF_STATUTS.demande.short}${nbCorrectifs ? ` (${nbCorrectifs})` : ''}` : STATUTS[f]?.short || f}
           </button>
         ))}
-        {!lectureSeule && (
-          <Button className="ml-auto" onClick={openCreate} disabled={!facturesDispo.length}>
-            <Plus size={16} /> Autorisation de sortie
-          </Button>
-        )}
       </div>
+
+      {!lectureSeule && !facturesDispo.length && (
+        <div className="rounded-lg bg-sky-50 px-4 py-2 text-xs text-sky-700">
+          Aucune facture en attente d'autorisation. Émettez d'abord une facture (onglet Facturation).
+        </div>
+      )}
 
       {!lectureSeule && !facturesDispo.length && (
         <div className="rounded-lg bg-sky-50 px-4 py-2 text-xs text-sky-700">
@@ -460,7 +494,7 @@ export default function Demandes() {
         footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}>Soumettre</Button></>}>
         <FormGroup label="Facture liée (brouillon)" required>
           <Select value={form.factureId} onChange={(e) => choisirFacture(e.target.value)}>
-            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} — {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
+            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} : {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
           </Select>
         </FormGroup>
         {formPresta && (
@@ -607,7 +641,7 @@ export default function Demandes() {
                   </table>
                   </div>
                 ) : (
-                  <p className="px-3 py-3 text-sm text-gray-400">Facture introuvable — impossible d'afficher le détail.</p>
+                  <p className="px-3 py-3 text-sm text-gray-400">Facture introuvable : impossible d'afficher le détail.</p>
                 )}
               </div>
 
@@ -620,7 +654,7 @@ export default function Demandes() {
                   )}
                   {d.correctif && !correctifEnCours(d) && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} — demandé par {d.correctif.parNom}
+                      {CORRECTIF_STATUTS[d.correctif.statut]?.label} : demandé par {d.correctif.parNom}
                       {d.correctif.traitePar ? `, tranché par ${d.correctif.traitePar}` : ''}
                       {d.correctif.motif ? ` · « ${d.correctif.motif} »` : ''}
                     </p>

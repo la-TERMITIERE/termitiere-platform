@@ -20,13 +20,14 @@ import { isFullAccessRole, canExportGym } from '../../core/roles'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
+import { CATEGORIES_GYM, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import ClientDetailModal from './ClientDetailModal'
 import QrCarnetModal from './QrCarnetModal'
 import CalendrierPresences from './CalendrierPresences'
 import { useSite, matchSite } from './site/useSite'
+import { SexeBoutons, SexeFiltre, SexeBadge } from './SexeUI'
 
 const COULEUR = '#A6342A'
 const COULEUR2 = '#E8850F'
@@ -88,6 +89,8 @@ export default function Abonnements() {
   const tarifs = { simple: params.tarifAbonnementSimple, classique: params.tarifAbonnementClassique, vip: params.tarifAbonnementVip }
 
   const [modal, setModal] = useState(null)
+  const [filtreSexe, setFiltreSexe] = useState('')
+  const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [saving, setSaving] = useState(false)
   const [suggClient, setSuggClient] = useState(false)
   const [clientDetail, setClientDetail] = useState(null)
@@ -109,7 +112,7 @@ export default function Abonnements() {
     const dureeJours = dureeJoursInitiale(categorie, date, classiqueFixe, dureeMin)
     return {
       id: null, date, dateDebut: date, dateDebutManuelle: false,
-      clientNom: '', telephone: '', categorie, dureeJours,
+      clientNom: '', telephone: '', sexe: '', categorie, dureeJours,
       dateFin: dateFinAbonnement(date, dureeJours), dateFinManuelle: false,
       montant: String(tarifs[categorie] || ''), notes: ''
     }
@@ -121,7 +124,7 @@ export default function Abonnements() {
     const dateDebut = a.dateDebut || a.date // abonnements antérieurs : début = souscription
     return {
       id: a.id, date: a.date, dateDebut, dateDebutManuelle: dateDebut !== a.date,
-      clientNom: a.clientNom, telephone: '', categorie: a.categorie,
+      clientNom: a.clientNom, sexe: sexeDe(a, idxSexe), telephone: '', categorie: a.categorie,
       dureeJours: a.dureeJours != null ? String(a.dureeJours) : String(Math.max(1, Math.round((new Date(a.dateFin) - new Date(dateDebut)) / 86400000))),
       dateFin: a.dateFin, dateFinManuelle: true,
       montant: String(a.montant), notes: a.notes || ''
@@ -129,7 +132,9 @@ export default function Abonnements() {
   }
 
   const toutes = useMemo(() => [...abonnements].sort((a, b) => (a.date < b.date ? 1 : -1)), [abonnements])
-  const liste = useMemo(() => {
+  // Période d'abord ; le tri par sexe s'applique ensuite (`liste`). `listePeriode`
+  // sert à compter les « non précisé » sur la période affichée.
+  const listePeriode = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((a) => (a.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((a) => (a.date || '').startsWith(filtreAnnee))
     if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
@@ -138,6 +143,8 @@ export default function Abonnements() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((a) => a.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe), [listePeriode, filtreSexe, idxSexe])
+  const nbInconnus = useMemo(() => listePeriode.filter((a) => !sexeDe(a, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
   // Export Excel — reprend exactement la liste affichée (`liste`), donc le
@@ -149,6 +156,7 @@ export default function Abonnements() {
         'Souscrit le': formatDateShort(a.date),
         'Début': formatDateShort(a.dateDebut || a.date),
         Client: a.clientNom,
+        Sexe: sexeInfo(sexeDe(a, idxSexe))?.label || '—',
         Catégorie: categorieLabel(a.categorie),
         Fin: a.dateFin ? formatDateShort(a.dateFin) : '—',
         Statut: st.label,
@@ -161,12 +169,13 @@ export default function Abonnements() {
       filename: `abonnements-maxi-gym-${todayStr()}.xlsx`,
       sections: [{
         name: 'Abonnements',
-        title: 'Abonnements — MAXI-GYM',
+        title: 'Abonnements : MAXI-GYM',
         subtitle: `${liste.length} abonnement(s) · ${formatMoney(total)} au total`,
         columns: [
           { key: 'Souscrit le', label: 'Souscrit le', width: 14 },
           { key: 'Début', label: 'Début', width: 14 },
           { key: 'Client', label: 'Client', width: 24 },
+          { key: 'Sexe', label: 'Sexe', width: 10 },
           { key: 'Catégorie', label: 'Catégorie', width: 16 },
           { key: 'Fin', label: 'Fin', width: 14 },
           { key: 'Statut', label: 'Statut', width: 14 },
@@ -194,6 +203,7 @@ export default function Abonnements() {
   async function enregistrer() {
     const d = modal
     if (!d.clientNom.trim()) return toast.error('Nom du client requis')
+    if (!d.id && !d.sexe) return toast.error('Précisez le sexe du client (Femme ou Homme)')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     // Le prix reste modifiable (ex. tarif négocié, majoration) mais ne peut pas descendre
     // sous le tarif de référence de Paramètres — plancher, pas prix imposé. Un Classique
@@ -218,18 +228,22 @@ export default function Abonnements() {
         await updateItem('gym_abonnements', d.id, {
           date: d.date, dateDebut, dateFin, clientNom, categorie: d.categorie,
           dureeJours: d.dureeJours ? Number(d.dureeJours) : null,
-          montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom
+          montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom,
+          ...(d.sexe ? { sexe: d.sexe } : {})
         })
+        const ficheEdit = clients.find((c) => (c.nom || '').trim().toLowerCase() === clientNom.toLowerCase())
+        if (d.sexe && ficheEdit && ficheEdit.sexe !== d.sexe) await updateItem('gym_clients', ficheEdit.id, { sexe: d.sexe })
         // La facture déjà générée à la création garde sinon l'ancien montant — le
         // Dashboard/Facturation (sommes des `gym_factures`) resterait alors désynchronisé.
         const factureLiee = factures.find((f) => f.sourceType === 'abonnement' && f.sourceId === d.id)
         if (factureLiee) {
           await updateItem('gym_factures', factureLiee.id, {
             date: d.date, clientNom, categorie: d.categorie,
-            description: `Abonnement ${categorieLabel(d.categorie)} — jusqu'au ${dateFin}`, montant: Number(d.montant)
+            description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: Number(d.montant),
+            ...(d.sexe ? { sexe: d.sexe } : {})
           })
         }
-        await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} — ${categorieLabel(d.categorie)} — ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+        await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
         toast.success('Abonnement modifié ✓')
         setModal(null)
         return
@@ -237,12 +251,12 @@ export default function Abonnements() {
 
       const { coachId, coachNom } = coachDuJour(d.date)
       const id = await addItem('gym_abonnements', {
-        date: d.date, dateDebut, dateFin, clientNom, categorie: d.categorie,
+        date: d.date, dateDebut, dateFin, clientNom, sexe: d.sexe, categorie: d.categorie,
         dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
         montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
-      await audit('gym', 'ABONNEMENT_CREATE', `${clientNom} — ${categorieLabel(d.categorie)} — ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} — ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+      await audit('gym', 'ABONNEMENT_CREATE', `${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
       // Le répertoire Clients se construit uniquement à partir des séances/abonnements
       // réellement enregistrés — pas d'ajout manuel possible (cf. Clients.jsx). La
       // fiche est rattachée à la salle : le même nom peut donc exister des deux côtés,
@@ -252,10 +266,13 @@ export default function Abonnements() {
       let nouveauClient = null
       if (!client) {
         const qrToken = genQrToken()
-        const nouveauClientId = await addItem('gym_clients', { nom: clientNom, telephone: telephoneSaisi, notes: '', site, qrToken, createdAt: Date.now() })
+        const nouveauClientId = await addItem('gym_clients', { nom: clientNom, telephone: telephoneSaisi, sexe: d.sexe, notes: '', site, qrToken, createdAt: Date.now() })
         nouveauClient = { id: nouveauClientId, nom: clientNom, qrToken }
-      } else if (telephoneSaisi && !client.telephone) {
-        await updateItem('gym_clients', client.id, { telephone: telephoneSaisi })
+      } else if ((telephoneSaisi && !client.telephone) || client.sexe !== d.sexe) {
+        await updateItem('gym_clients', client.id, {
+          ...(telephoneSaisi && !client.telephone ? { telephone: telephoneSaisi } : {}),
+          ...(client.sexe !== d.sexe ? { sexe: d.sexe } : {})
+        })
       }
       const telephone = telephoneSaisi || client?.telephone
       if (telephone) {
@@ -271,8 +288,8 @@ export default function Abonnements() {
       // son propre bouton de téléchargement) — plus besoin de case à cocher.
       await genererFactureGym({
         factures, sourceType: 'abonnement', sourceId: id, clientNom, clientTelephone: telephone,
-        categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} — jusqu'au ${dateFin}`, montant: d.montant,
-        user, site, date: d.date
+        categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: d.montant,
+        user, site, date: d.date, sexe: d.sexe
       })
       toast.success('Abonnement enregistré ✓')
       setModal(null)
@@ -288,8 +305,8 @@ export default function Abonnements() {
     const client = clients.find((c) => (c.nom || '').trim().toLowerCase() === (a.clientNom || '').trim().toLowerCase())
     await genererFactureGym({
       factures, sourceType: 'abonnement', sourceId: a.id, clientNom: a.clientNom, clientTelephone: client?.telephone,
-      categorie: a.categorie, description: `Abonnement ${categorieLabel(a.categorie)} — jusqu'au ${a.dateFin}`, montant: a.montant,
-      user, site, date: a.date
+      categorie: a.categorie, description: `Abonnement ${categorieLabel(a.categorie)} : jusqu'au ${a.dateFin}`, montant: a.montant,
+      user, site, date: a.date, sexe: sexeDe(a, idxSexe)
     })
     toast.success('Facture générée ✓')
   }
@@ -297,7 +314,7 @@ export default function Abonnements() {
   async function supprimer(a) {
     if (!confirm(`Supprimer l'abonnement de ${a.clientNom} (${categorieLabel(a.categorie)}) ?`)) return
     await removeItem('gym_abonnements', a.id)
-    await audit('gym', 'ABONNEMENT_DELETE', `${a.clientNom} — ${categorieLabel(a.categorie)} — ${Number(a.montant).toLocaleString('fr-FR')} FCFA`)
+    await audit('gym', 'ABONNEMENT_DELETE', `${a.clientNom} : ${categorieLabel(a.categorie)} : ${Number(a.montant).toLocaleString('fr-FR')} FCFA`)
     toast.success('Abonnement supprimé')
   }
 
@@ -319,7 +336,7 @@ export default function Abonnements() {
         clientNom: a.clientNom, abonnementId: a.id, date, createdAt: Date.now(), site,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null
       })
-      await audit('gym', 'PRESENCE_POINTEE', `${a.clientNom} — arrivée pointée (${formatDateShort(date)})`)
+      await audit('gym', 'PRESENCE_POINTEE', `${a.clientNom} : arrivée pointée (${formatDateShort(date)})`)
       const client = clients.find((c) => (c.nom || '').trim().toLowerCase() === (a.clientNom || '').trim().toLowerCase())
       if (client?.telephone && date === todayStr()) {
         sendWhatsApp([client.telephone], {
@@ -346,7 +363,7 @@ export default function Abonnements() {
     setPointageBusy(a.id)
     try {
       await removeItem('gym_presences', presence.id)
-      await audit('gym', 'PRESENCE_ANNULEE', `${a.clientNom} — pointage du ${formatDateShort(date)} annulé`)
+      await audit('gym', 'PRESENCE_ANNULEE', `${a.clientNom} : pointage du ${formatDateShort(date)} annulé`)
       toast.success('Pointage annulé ✓')
       setDateSelectionnee(null)
     } finally {
@@ -375,6 +392,7 @@ export default function Abonnements() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <SexeFiltre value={filtreSexe} onChange={setFiltreSexe} inconnus={nbInconnus} />
         {canExportGym(role) && (
           <button onClick={exportXLSX}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -396,6 +414,7 @@ export default function Abonnements() {
               return <span className={deb > todayStr() ? 'font-semibold text-sky-600' : ''}>{formatDateShort(deb)}</span>
             } },
             { key: 'clientNom', label: 'Client' },
+            { key: 'sexe', label: 'Sexe', align: 'center', render: (r) => <SexeBadge sexe={sexeDe(r, idxSexe)} /> },
             { key: 'categorie', label: 'Catégorie', render: (r) => <Badge tone={categorieTone(r.categorie)}>{categorieLabel(r.categorie)}</Badge> },
             { key: 'dateFin', label: 'Fin', render: (r) => r.dateFin ? formatDateShort(r.dateFin) : '—' },
             { key: 'statut', label: 'Statut', render: (r) => {
@@ -422,7 +441,7 @@ export default function Abonnements() {
                       <CheckCircle2 size={15} /> Pointer
                     </button>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); setDateSelectionnee(null); setCalendrierClient(r) }} title="Voir le calendrier de présence — et corriger un pointage oublié"
+                  <button onClick={(e) => { e.stopPropagation(); setDateSelectionnee(null); setCalendrierClient(r) }} title="Voir le calendrier de présence : et corriger un pointage oublié"
                     className="rounded p-1.5 text-sky-600 hover:bg-sky-50"><CalendarDays size={16} /></button>
                   {!dejaFacturee && (
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
@@ -456,7 +475,7 @@ export default function Abonnements() {
               <div className="min-w-0">
                 <p className="truncate text-lg font-extrabold leading-tight">{modal.clientNom || (modal.id ? 'Modifier l\'abonnement' : 'Nouvel abonnement')}</p>
                 <p className="text-sm text-white/80">
-                  {modal.categorie === 'classique' && !classiqueFixe ? 'Durée libre — définie à la saisie' : 'Durée par défaut — 1 mois calendaire, modifiable'}
+                  {modal.categorie === 'classique' && !classiqueFixe ? 'Durée libre : définie à la saisie' : 'Durée par défaut : 1 mois calendaire, modifiable'}
                 </p>
               </div>
             </div>
@@ -468,7 +487,12 @@ export default function Abonnements() {
                 <div className="relative">
                   <User size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <Input value={modal.clientNom} className="pl-8"
-                    onChange={(e) => { setModal((f) => ({ ...f, clientNom: e.target.value })); setSuggClient(true) }}
+                    onChange={(e) => {
+                      const nom = e.target.value
+                      const fiche = clients.find((c) => (c.nom || '').trim().toLowerCase() === nom.trim().toLowerCase())
+                      setModal((f) => ({ ...f, clientNom: nom, ...(fiche?.sexe ? { sexe: fiche.sexe } : {}) }))
+                      setSuggClient(true)
+                    }}
                     onFocus={() => setSuggClient(true)}
                     onBlur={() => setTimeout(() => setSuggClient(false), 150)}
                     placeholder="Nom du client" autoComplete="off" />
@@ -479,7 +503,7 @@ export default function Abonnements() {
                       <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
                         {suggestions.map((c) => (
                           <button key={c.id} type="button"
-                            onMouseDown={() => { setModal((f) => ({ ...f, clientNom: c.nom, telephone: c.telephone || f.telephone })); setSuggClient(false) }}
+                            onMouseDown={() => { setModal((f) => ({ ...f, clientNom: c.nom, telephone: c.telephone || f.telephone, sexe: c.sexe || f.sexe })); setSuggClient(false) }}
                             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-red-50">
                             <span className="font-semibold text-gray-700">{c.nom}</span>
                             {c.telephone && <span className="text-xs text-gray-400">· {c.telephone}</span>}
@@ -490,8 +514,11 @@ export default function Abonnements() {
                   })()}
                 </div>
               </FormGroup>
+              <FormGroup label="⚥ Sexe" required={!modal.id} hint="Sert à suivre la proportion de femmes et d'hommes dans la salle">
+                <SexeBoutons value={modal.sexe} onChange={(v) => setModal((f) => ({ ...f, sexe: v }))} />
+              </FormGroup>
               {!modal.id && (
-                <FormGroup label="📱 Téléphone (WhatsApp)" hint="Optionnel — pour la confirmation WhatsApp automatique">
+                <FormGroup label="📱 Téléphone (WhatsApp)" hint="Optionnel : pour la confirmation WhatsApp automatique">
                   <div className="relative">
                     <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-green-500" />
                     <Input className="pl-8" value={modal.telephone} onChange={(e) => setModal((f) => ({ ...f, telephone: e.target.value }))} placeholder="ex : 22890000000" />
@@ -533,7 +560,7 @@ export default function Abonnements() {
                   mois prochain). C'est ELLE qui détermine la date de fin et le statut. */}
               <FormGroup label="▶️ Début de l'abonnement" required
                 hint={modal.dateDebutManuelle
-                  ? "Le client commence à cette date — l'abonnement reste « À venir » jusque-là."
+                  ? "Le client commence à cette date : l'abonnement reste « À venir » jusque-là."
                   : 'Par défaut le jour de la souscription. Changez-le pour un démarrage différé.'}>
                 <div className="flex items-center gap-2">
                   <Input type="date" value={modal.dateDebut || modal.date} min={modal.date}
@@ -547,7 +574,7 @@ export default function Abonnements() {
                 </div>
                 {(modal.dateDebut || modal.date) > todayStr() && (
                   <p className="mt-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
-                    ⏳ Démarrage différé — l'abonnement sera « À venir » puis « Actif » le {formatDateShort(modal.dateDebut || modal.date)}.
+                    ⏳ Démarrage différé : l'abonnement sera « À venir » puis « Actif » le {formatDateShort(modal.dateDebut || modal.date)}.
                   </p>
                 )}
               </FormGroup>
@@ -562,7 +589,7 @@ export default function Abonnements() {
                   <FormGroup label="⏳ Durée (jours)" required={libre}
                     hint={libre
                       ? `Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. Ex : 7 = une semaine, 14 = deux semaines, 30 = un mois…`
-                      : "Pré-remplie sur l'équivalent d'un mois calendaire — modifiable pour un abonnement plus court ou plus long."}>
+                      : "Pré-remplie sur l'équivalent d'un mois calendaire : modifiable pour un abonnement plus court ou plus long."}>
                     <Input type="number" min={libre ? dureeMin : 1} value={modal.dureeJours}
                       onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }))}
                       placeholder={libre ? `ex : ${dureeMin}` : 'ex : 30'} />
@@ -571,7 +598,7 @@ export default function Abonnements() {
               })()}
 
               <FormGroup label="🏁 Date de fin" required
-                hint={modal.dateFinManuelle ? 'Corrigée manuellement — recalculer pour revenir à la valeur automatique.' : 'Calculée automatiquement — modifiable si besoin de corriger.'}>
+                hint={modal.dateFinManuelle ? 'Corrigée manuellement : recalculer pour revenir à la valeur automatique.' : 'Calculée automatiquement : modifiable si besoin de corriger.'}>
                 <div className="flex items-center gap-2">
                   <Input type="date" value={modal.dateFin}
                     onChange={(e) => setModal((f) => ({ ...f, dateFin: e.target.value, dateFinManuelle: true }))} />
@@ -593,7 +620,7 @@ export default function Abonnements() {
                 const tarifPlancher = (modal.categorie === 'classique' && !classiqueFixe) ? null : tarifs[modal.categorie]
                 return (
                   <FormGroup label="💰 Montant (FCFA)" required
-                    hint={tarifPlancher > 0 ? `Minimum ${formatMoney(tarifPlancher)} pour cette catégorie — modifiable au-delà.` : undefined}>
+                    hint={tarifPlancher > 0 ? `Minimum ${formatMoney(tarifPlancher)} pour cette catégorie : modifiable au-delà.` : undefined}>
                     <Input type="number" min={tarifPlancher || 0} value={modal.montant} placeholder="ex : 15000"
                       onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} />
                   </FormGroup>
@@ -624,7 +651,7 @@ export default function Abonnements() {
             </div>
 
             {!modal.id && (
-              <p className="text-[11px] text-gray-400">🧾 Une facture sera générée automatiquement — téléchargeable depuis le volet Facturation.</p>
+              <p className="text-[11px] text-gray-400">🧾 Une facture sera générée automatiquement : téléchargeable depuis le volet Facturation.</p>
             )}
           </div>
         )}
@@ -639,7 +666,7 @@ export default function Abonnements() {
           actif : cliquer sur un jour passé (ou aujourd'hui) le sélectionne, puis
           « Pointer » l'enregistre — sert à corriger un oubli de pointage. */}
       <Modal open={!!calendrierClient} onClose={() => { setCalendrierClient(null); setDateSelectionnee(null) }}
-        title={calendrierClient ? `Calendrier — ${calendrierClient.clientNom}` : ''}
+        title={calendrierClient ? `Calendrier : ${calendrierClient.clientNom}` : ''}
         {...glassModalProps(COULEUR_MODULE.gym)}
         footer={<>
           <Button variant="outline" onClick={() => { setCalendrierClient(null); setDateSelectionnee(null) }}>Fermer</Button>
@@ -653,16 +680,16 @@ export default function Abonnements() {
               return peutSupprimer ? (
                 <Button variant="danger" onClick={() => annulerPointage(calendrierClient, dateSelectionnee)}
                   loading={pointageBusy === calendrierClient.id}>
-                  <Trash2 size={15} /> Annuler le pointage{dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
+                  <Trash2 size={15} /> Annuler le pointage{dateSelectionnee !== todayStr() ? ` : ${formatDateShort(dateSelectionnee)}` : ''}
                 </Button>
               ) : (
-                <span className="text-xs text-gray-400">Pointé — l'annulation est réservée à l'administration</span>
+                <span className="text-xs text-gray-400">Pointé : l'annulation est réservée à l'administration</span>
               )
             }
             return (
               <Button onClick={() => pointerArrivee(calendrierClient, dateSelectionnee)}
                 disabled={!dateSelectionnee} loading={pointageBusy === calendrierClient.id}>
-                <CheckCircle2 size={15} /> Pointer{dateSelectionnee && dateSelectionnee !== todayStr() ? ` — ${formatDateShort(dateSelectionnee)}` : ''}
+                <CheckCircle2 size={15} /> Pointer{dateSelectionnee && dateSelectionnee !== todayStr() ? ` : ${formatDateShort(dateSelectionnee)}` : ''}
               </Button>
             )
           })()}
@@ -680,7 +707,7 @@ export default function Abonnements() {
               {interactif && (
                 <p className="mt-2 text-center text-[11px] text-gray-400">
                   {dateSelectionnee
-                    ? `Jour sélectionné : ${formatDateShort(dateSelectionnee)} — pointe une arrivée oubliée, ou annule un pointage fait par erreur.`
+                    ? `Jour sélectionné : ${formatDateShort(dateSelectionnee)} : pointe une arrivée oubliée, ou annule un pointage fait par erreur.`
                     : "Clique sur un jour (passé ou aujourd'hui) pour pointer une arrivée oubliée, ou annuler un pointage par erreur."}
                 </p>
               )}

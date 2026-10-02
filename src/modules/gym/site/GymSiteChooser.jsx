@@ -72,7 +72,7 @@ export default function GymSiteChooser() {
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-sm"><Scale size={18} /></span>
           <div className="min-w-0 flex-1">
             <p className="font-bold text-indigo-900">Comparer les deux salles</p>
-            <p className="text-xs text-indigo-600">Séances, abonnements, encaissement et objectifs — Lomé vs Kara, côte à côte</p>
+            <p className="text-xs text-indigo-600">Séances, abonnements, encaissement et objectifs : Lomé vs Kara, côte à côte</p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-indigo-400 transition-transform group-hover:translate-x-1" />
         </Link>

@@ -107,7 +107,7 @@ export default function Ecritures() {
           <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
             <ScrollText className="text-orange-600" /> Écritures & journaux
           </h1>
-          <p className="text-sm text-gray-500">{ecritures.length} écritures — livre-journal en partie double</p>
+          <p className="text-sm text-gray-500">{ecritures.length} écritures : livre-journal en partie double</p>
         </div>
         <Button onClick={ouvrirNouvelle}><Plus size={16} /> Nouvelle écriture</Button>
       </header>
@@ -145,7 +145,7 @@ export default function Ecritures() {
                     : <Badge tone={STATUTS_ECRITURE[ec.statut]?.tone || 'warning'}>{STATUTS_ECRITURE[ec.statut]?.label || 'Brouillon'}</Badge>}
                   {!eq && <Badge tone="danger"><AlertTriangle size={12} /> Déséquilibrée</Badge>}
                   {ec.source === 'auto' ? (
-                    <span title="Générée depuis un autre module — non modifiable ici" className="p-1.5 text-gray-300"><Lock size={15} /></span>
+                    <span title="Générée depuis un autre module : non modifiable ici" className="p-1.5 text-gray-300"><Lock size={15} /></span>
                   ) : (
                     <>
                       {ec.statut !== 'validee' && (
@@ -214,19 +214,19 @@ export default function Ecritures() {
               <Champ label="Journal">
                 <select value={modal.journal} onChange={(e) => setModal({ ...modal, journal: e.target.value })}
                   className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm dark:border-white/10 dark:bg-white/5">
-                  {JOURNAUX.map((j) => <option key={j.code} value={j.code}>{j.code} — {j.label}</option>)}
+                  {JOURNAUX.map((j) => <option key={j.code} value={j.code}>{j.code} : {j.label}</option>)}
                 </select>
               </Champ>
               <Champ label="Libellé de la pièce" className="col-span-2 sm:col-span-3">
                 <input value={modal.libelle} onChange={(e) => setModal({ ...modal, libelle: e.target.value })}
-                  placeholder="ex. Achat carburant motos — MAXI LOGISTIQUE"
+                  placeholder="ex. Achat carburant motos : MAXI LOGISTIQUE"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
               </Champ>
             </div>
 
             {/* Sélecteur de compte (datalist partagée) */}
             <datalist id="plan-comptes">
-              {plan.map((c) => <option key={c.num} value={c.num}>{c.num} — {c.label}</option>)}
+              {plan.map((c) => <option key={c.num} value={c.num}>{c.num} : {c.label}</option>)}
             </datalist>
 
             <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/10">
@@ -256,7 +256,7 @@ export default function Ecritures() {
                       <td className="px-2 py-1.5">
                         <select value={l.axe || ''} onChange={(e) => setLigne(i, 'axe', e.target.value)}
                           className="w-32 rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5">
-                          <option value="">— Axe…</option>
+                          <option value="">Axe…</option>
                           {(centres || []).map((ce) => <option key={ce.id} value={ce.code || ce.libelle}>{ce.libelle}</option>)}
                         </select>
                       </td>

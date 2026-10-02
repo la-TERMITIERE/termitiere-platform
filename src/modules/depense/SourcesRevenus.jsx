@@ -184,7 +184,7 @@ export default function SourcesRevenus() {
       sections: [{
         name: 'Sources de revenus',
         title: 'Sources de revenus',
-        subtitle: `${liste.length} entrée(s)${filtreSecteur ? ` — secteur : ${SECTEURS.find((s) => s.id === filtreSecteur)?.label}` : ''}${filtreType ? ` — source : ${SOURCES[filtreType]?.label}` : ''}${filtrePeriodeActif ? ` — période : ${periodeLabel}` : ''}`,
+        subtitle: `${liste.length} entrée(s)${filtreSecteur ? ` : secteur : ${SECTEURS.find((s) => s.id === filtreSecteur)?.label}` : ''}${filtreType ? ` : source : ${SOURCES[filtreType]?.label}` : ''}${filtrePeriodeActif ? ` : période : ${periodeLabel}` : ''}`,
         columns: [
           { key: 'Date', label: 'Date', width: 12 },
           { key: 'Secteur', label: 'Secteur', width: 18 },

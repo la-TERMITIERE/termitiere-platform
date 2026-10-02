@@ -72,7 +72,7 @@ function Bilan({ bilan }) {
     <div className="space-y-3">
       <div className={`flex items-center gap-2 rounded-lg p-3 text-sm ${equilibre ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
         <CheckCircle2 size={16} />
-        {equilibre ? "Le Bilan est parfaitement équilibré. L'Actif correspond au Passif & Capitaux propres." : 'Écart de bilan détecté — vérifiez les écritures.'}
+        {equilibre ? "Le Bilan est parfaitement équilibré. L'Actif correspond au Passif & Capitaux propres." : 'Écart de bilan détecté : vérifiez les écritures.'}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <PosteBloc titre="ACTIF (Assets)" sousTitre="Emplois et ressources détenues par l'organisation." colonne="Net (XOF)"

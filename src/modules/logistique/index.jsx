@@ -26,7 +26,7 @@ import AutoCarryForwardLogistique from './AutoCarryForwardLogistique'
 import { Lock } from 'lucide-react'
 import { SiteProvider, isSite, allowedSitesFor } from './site/useSite'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage, isFullAccessRole, peutVoirBanque } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole, peutVoirBanque, peutVoirVoletsAdmin } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 
 function AccesRefuse() {
@@ -97,8 +97,8 @@ function SiteApp() {
         <Route path="clients" element={<Clients />} />
         <Route path="fournisseurs" element={<Fournisseurs />} />
         <Route path="partenaires" element={<Partenaires module="logistique" />} />
-        <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
-        <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
+        <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
+        <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
         <Route path="*" element={<Navigate to="." replace />} />
       </Routes>
     </SiteProvider>

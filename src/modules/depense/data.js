@@ -111,7 +111,7 @@ export const sourceFinancementDefaut = 'entreprise'
 //   ou refusee à n'importe quelle étape.
 export const STATUTS_DECAISSEMENT = {
   en_attente: { label: 'En attente d\'approbation', tone: 'warning' },
-  approuvee:  { label: 'Approuvée — à décaisser', tone: 'info' },
+  approuvee:  { label: 'Approuvée : à décaisser', tone: 'info' },
   decaissee:  { label: 'Décaissée', tone: 'success' },
   refusee:    { label: 'Refusée', tone: 'danger' }
 }

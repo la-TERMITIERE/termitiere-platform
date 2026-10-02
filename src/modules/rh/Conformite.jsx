@@ -48,7 +48,7 @@ export default function Conformite() {
       <Card className="!p-0 overflow-hidden">
         <div className="border-b border-gray-100 px-4 py-3 dark:border-white/10"><p className="font-bold text-gray-800 dark:text-gray-100">Alertes RH</p></div>
         {alertes.length === 0 ? (
-          <div className="flex items-center gap-2 px-4 py-8 text-sm text-green-600"><CheckCircle2 size={18} /> Aucune alerte — tout est à jour.</div>
+          <div className="flex items-center gap-2 px-4 py-8 text-sm text-green-600"><CheckCircle2 size={18} /> Aucune alerte : tout est à jour.</div>
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-white/10">
             {alertes.map((a, i) => (
@@ -56,7 +56,7 @@ export default function Conformite() {
                 <a.icon size={18} className={a.gravite === 'danger' ? 'text-red-500' : 'text-amber-500'} />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{a.type} <Badge tone={a.gravite}>{a.gravite === 'danger' ? 'Critique' : 'À surveiller'}</Badge></p>
-                  <p className="text-xs text-gray-500">{a.qui} — {a.detail}</p>
+                  <p className="text-xs text-gray-500">{a.qui} : {a.detail}</p>
                 </div>
               </li>
             ))}

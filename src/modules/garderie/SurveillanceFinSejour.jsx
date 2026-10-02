@@ -28,7 +28,7 @@ export default function SurveillanceFinSejour() {
         await audit('garderie', 'FIN_SEJOUR_ALARME', `${e.prenom} ${e.nom}`)
         await notify({
           type: 'alerte',
-          title: `⏰ Séjour terminé — ${e.prenom} ${e.nom}`,
+          title: `⏰ Séjour terminé : ${e.prenom} ${e.nom}`,
           body: `Le court séjour de ${e.dureeSemaines} semaine(s) (inscrit le ${e.dateInscription}) est arrivé à échéance.`,
           module: 'garderie',
           forRoles: ['ge', 'gerante_garderie'],

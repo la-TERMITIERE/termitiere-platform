@@ -51,11 +51,11 @@ export default function Forfaits() {
     classique: classiqueFixe ? {
       seance: 'Non proposée (abonnement uniquement)',
       abonnement: formatMoney(params.tarifAbonnementClassique) + ' / mois',
-      avantages: ['Réservé aux abonnements — pas de séance ponctuelle', 'Durée fixe — 1 mois calendaire', 'Tarif fixe']
+      avantages: ['Réservé aux abonnements : pas de séance ponctuelle', 'Durée fixe : 1 mois calendaire', 'Tarif fixe']
     } : {
       seance: 'Non proposée (abonnement uniquement)',
       abonnement: `Tarif et durée libres (min. ${params.dureeClassiqueMinJours} jours)`,
-      avantages: ['Réservé aux abonnements — pas de séance ponctuelle', 'Durée définie à la demande', `Minimum ${params.dureeClassiqueMinJours} jours (deux semaines)`, 'Tarif négocié à la souscription']
+      avantages: ['Réservé aux abonnements : pas de séance ponctuelle', 'Durée définie à la demande', `Minimum ${params.dureeClassiqueMinJours} jours (deux semaines)`, 'Tarif négocié à la souscription']
     },
     vip: {
       seance: formatMoney(params.tarifSeanceVip),
@@ -65,7 +65,7 @@ export default function Forfaits() {
       // purement informative ici (aucun suivi/contrôle logiciel du partage).
       avantages: [
         'Accès complet à la salle', 'Tapis roulant et escalator inclus',
-        ...(site === 'kara' ? ['🎫 Carte utilisable par 2 personnes — ce qui n\'est pas le cas pour les autres paliers'] : [])
+        ...(site === 'kara' ? ['🎫 Carte utilisable par 2 personnes : ce qui n\'est pas le cas pour les autres paliers'] : [])
       ]
     }
   }
@@ -230,7 +230,7 @@ export default function Forfaits() {
       </div>
 
       {/* Modification d'un forfait standard */}
-      <Modal open={!!editCat} onClose={() => setEditCat(null)} title={editCat ? `Modifier — ${CATEGORIES_GYM.find((c) => c.id === editCat)?.label}` : ''}
+      <Modal open={!!editCat} onClose={() => setEditCat(null)} title={editCat ? `Modifier : ${CATEGORIES_GYM.find((c) => c.id === editCat)?.label}` : ''}
         footer={<><Button variant="outline" onClick={() => setEditCat(null)} disabled={saving}>Annuler</Button><Button onClick={enregistrerEdit} loading={saving}>Enregistrer</Button></>}>
         {editForm && (
           <div className="space-y-3">
@@ -241,7 +241,7 @@ export default function Forfaits() {
                     onChange={(e) => setEditForm((f) => ({ ...f, tarifAbonnement: e.target.value }))} />
                 </FormGroup>
               ) : (
-                <FormGroup label="Durée minimum (jours)" required hint="Deux semaines minimum — pas d'offre d'une semaine.">
+                <FormGroup label="Durée minimum (jours)" required hint="Deux semaines minimum : pas d'offre d'une semaine.">
                   <Input type="number" min="1" value={editForm.dureeClassiqueMinJours}
                     onChange={(e) => setEditForm((f) => ({ ...f, dureeClassiqueMinJours: e.target.value }))} />
                 </FormGroup>

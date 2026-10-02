@@ -6,6 +6,6 @@ import { COULEUR_MODULE } from '../../utils/color'
 export default function Banque() {
   return (
     <CompteBancaire moduleId="gym" color={COULEUR_MODULE.gym}
-      titre="Compte bancaire — MAXI-GYM" secteurLabel="MAXI-GYM" />
+      titre="Compte bancaire : MAXI-GYM" secteurLabel="MAXI-GYM" />
   )
 }

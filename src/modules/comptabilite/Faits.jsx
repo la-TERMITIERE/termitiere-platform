@@ -12,13 +12,13 @@ export default function Faits() {
         <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
           <Repeat className="text-orange-600" /> Faits comptables
         </h1>
-        <p className="text-sm text-gray-500">Ce qui peut donner naissance à une écriture — et sous quel nom vous le désignez.</p>
+        <p className="text-sm text-gray-500">Ce qui peut donner naissance à une écriture : et sous quel nom vous le désignez.</p>
       </header>
 
       <Card>
         <div className="flex gap-3 text-sm text-gray-600 dark:text-gray-300">
           <Info size={18} className="mt-0.5 shrink-0 text-sky-500" />
-          <p>Un fait ne produit une écriture que si un <b>modèle actif</b> le vise, dans « Automatisation d'écriture ». Déclarer un fait ne suffit pas — c'est le premier maillon, pas le dernier.</p>
+          <p>Un fait ne produit une écriture que si un <b>modèle actif</b> le vise, dans « Automatisation d'écriture ». Déclarer un fait ne suffit pas : c'est le premier maillon, pas le dernier.</p>
         </div>
       </Card>
 

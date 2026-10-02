@@ -39,7 +39,7 @@ export default function Dashboard() {
           <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
             <Scale className="text-orange-600" /> Comptabilité
           </h1>
-          <p className="text-sm text-gray-500">Exercice {exercice} — partie double (SYSCOHADA)</p>
+          <p className="text-sm text-gray-500">Exercice {exercice} : partie double (SYSCOHADA)</p>
         </div>
         <Badge tone={bal.equilibree ? 'success' : 'danger'}>
           {bal.equilibree ? <><CheckCircle2 size={13} /> Balance équilibrée</> : <><AlertTriangle size={13} /> Balance déséquilibrée</>}

@@ -250,7 +250,7 @@ export default function Analyses() {
         )}
       </div>
 
-      <Card title={restreintAgent ? 'Tendance sur 6 mois — dépenses (tous secteurs)' : 'Tendance sur 6 mois — revenus vs dépenses (tous secteurs)'}>
+      <Card title={restreintAgent ? 'Tendance sur 6 mois : dépenses (tous secteurs)' : 'Tendance sur 6 mois : revenus vs dépenses (tous secteurs)'}>
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
           {!restreintAgent && (
             <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#059669' }} /> Revenus réellement encaissés/facturés</span>
@@ -269,7 +269,7 @@ export default function Analyses() {
             Rentabilité : compare le revenu de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Les secteurs sans facturation propre ce mois-là affichent un revenu à 0.
           </div>
 
-          <Card title={`Revenu vs dépense par secteur — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+          <Card title={`Revenu vs dépense par secteur : ${MOIS_LABELS[mois - 1]} ${annee}`}>
             <div style={{ height: 320 }}>
               <Bar data={barDataRentab} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
             </div>
@@ -277,7 +277,7 @@ export default function Analyses() {
         </>
       )}
 
-      <Card title={restreintAgent ? `Dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}` : `Budget vs dépenses par secteur — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+      <Card title={restreintAgent ? `Dépenses par secteur : ${MOIS_LABELS[mois - 1]} ${annee}` : `Budget vs dépenses par secteur : ${MOIS_LABELS[mois - 1]} ${annee}`}>
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
           {!restreintAgent && (
             <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#94a3b8' }} /> Budget alloué (cible)</span>
@@ -290,7 +290,7 @@ export default function Analyses() {
         </div>
       </Card>
 
-      <Card title={`Répartition des dépenses par catégorie — ${MOIS_LABELS[mois - 1]} ${annee}`}>
+      <Card title={`Répartition des dépenses par catégorie : ${MOIS_LABELS[mois - 1]} ${annee}`}>
         {parCategorie.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">Aucune dépense enregistrée ce mois.</p>
         ) : (
@@ -359,7 +359,7 @@ export default function Analyses() {
 
       {!restreintAgent && (
         <p className="text-center text-xs text-gray-400">
-          Pour la tendance de la marge sur 6 mois, voir <strong>Flux de trésorerie</strong> — le solde d'exploitation et le solde global y équivalent exactement à la marge courante et à la marge totale ci-dessus.
+          Pour la tendance de la marge sur 6 mois, voir <strong>Flux de trésorerie</strong> : le solde d'exploitation et le solde global y équivalent exactement à la marge courante et à la marge totale ci-dessus.
         </p>
       )}
     </div>

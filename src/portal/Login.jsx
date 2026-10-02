@@ -131,7 +131,7 @@ export default function Login() {
         </form>
 
         <p className="mt-4 text-center text-xs text-gray-400">
-          Agoe Daliko, Lomé — Togo · 00228 96 09 49 49
+          Agoe Daliko, Lomé : Togo · 00228 96 09 49 49
         </p>
       </div>
     </div>

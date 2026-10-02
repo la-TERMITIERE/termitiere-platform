@@ -12,7 +12,7 @@ import Journal from './Journal'
 import Params from './Params'
 import Partenaires from '../../shared/partenaires/Partenaires'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole, canViewFinance, canViewAnalysesDepense, depenseRoleEffectif } from '../../core/roles'
+import { isFullAccessRole, canViewFinance, canViewAnalysesDepense, depenseRoleEffectif, peutVoirVoletsAdmin } from '../../core/roles'
 
 function AccesRefuseAdmin() {
   return (
@@ -59,8 +59,8 @@ export default function DepenseModule() {
       {/* « Compte bancaire » retiré d'ici — éclaté par secteur dans MAXI-AGRO,
           MAXI LOGISTIQUE, MAXI-GYM et E-GARDERIE (cf. shared/banque/CompteBancaire.jsx). */}
       <Route path="partenaires" element={<Partenaires module="depense" />} />
-      <Route path="journal" element={isFullAccessRole(role) ? <Journal /> : <AccesRefuseAdmin />} />
-      <Route path="params" element={isFullAccessRole(role) ? <Params /> : <AccesRefuseAdmin />} />
+      <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
+      <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
     </Routes>
   )
 }

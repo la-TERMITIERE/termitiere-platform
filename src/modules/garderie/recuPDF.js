@@ -9,7 +9,7 @@ const GRIS   = [90, 90, 90]
 const GARDERIE = {
   nom: 'Garderie La Termitière',
   devise: 'Là où vos enfants grandissent heureux',
-  adresse: 'Agoe Daliko, Lomé — Togo',
+  adresse: 'Agoe Daliko, Lomé : Togo',
   tel: '00228 96 09 49 49',
   email: 'latermitiere2021@gmail.com'
 }

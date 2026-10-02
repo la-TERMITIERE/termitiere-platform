@@ -288,7 +288,7 @@ export default function Cantine() {
     setSaving(true)
     try {
       await setItem('garderie_menus', menuId, { ...d, date: dateFiltre, programme: mode, id: menuId })
-      audit('garderie', 'MENU_SAVE', `${formatDateShort(dateFiltre)} — ${mode === 'maternelle' ? 'Maternelle' : 'Garderie'}`)
+      audit('garderie', 'MENU_SAVE', `${formatDateShort(dateFiltre)} : ${mode === 'maternelle' ? 'Maternelle' : 'Garderie'}`)
       toast.success('Menu enregistré ✓')
       setMenuModal(null)
     } finally {
@@ -526,7 +526,7 @@ export default function Cantine() {
                     <Plus size={16} /> {mode === 'maternelle' ? 'Saisir les récréations du jour' : 'Saisir le menu du jour'}
                   </Button>
                 ) : (
-                  <p className="text-xs text-gray-400 italic">🔒 Garderie fermée — saisie impossible après {params.heureFermeture || '18:00'}</p>
+                  <p className="text-xs text-gray-400 italic">🔒 Garderie fermée : saisie impossible après {params.heureFermeture || '18:00'}</p>
                 )}
               </div>
             </Card>
@@ -564,7 +564,7 @@ export default function Cantine() {
               <div>
                 <p className="text-sm font-bold text-green-800">Tous les enfants ont mangé le menu du jour ?</p>
                 <p className="text-xs text-green-600">
-                  {repasMenuActuel(menuDuJour, mode)?.label} — {repasMenuActuel(menuDuJour, mode)?.desc || 'Menu non renseigné'}
+                  {repasMenuActuel(menuDuJour, mode)?.label} : {repasMenuActuel(menuDuJour, mode)?.desc || 'Menu non renseigné'}
                 </p>
               </div>
               {garderieOuverte ? (
@@ -632,7 +632,7 @@ export default function Cantine() {
                         <div className="flex flex-col items-center gap-1">
                           <button onClick={() => garderieOuverte && cocherRepas(e, 'menu')}
                             disabled={!garderieOuverte}
-                            title={!garderieOuverte ? 'Garderie fermée — saisie impossible' : ''}
+                            title={!garderieOuverte ? 'Garderie fermée : saisie impossible' : ''}
                             className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
                               isMenu ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700'
                             } ${!garderieOuverte ? 'opacity-40 cursor-not-allowed' : ''}`}>
@@ -652,7 +652,7 @@ export default function Cantine() {
                         <div className="flex flex-col items-center gap-1">
                           <button
                             disabled={!garderieOuverte}
-                            title={!garderieOuverte ? 'Garderie fermée — saisie impossible' : ''}
+                            title={!garderieOuverte ? 'Garderie fermée : saisie impossible' : ''}
                             onClick={() => garderieOuverte && (isSpecial
                               ? setSaisiSpecial((prev) => ({ ...prev, [ref]: r.repasDesc || '' }))
                               : cocherRepas(e, 'special'))
@@ -698,7 +698,7 @@ export default function Cantine() {
                       <td className="px-3 py-3 text-center">
                         <button onClick={() => garderieOuverte && cocherRepas(e, 'apporte')}
                           disabled={!garderieOuverte}
-                          title={!garderieOuverte ? 'Garderie fermée — saisie impossible' : "L'enfant a apporté son propre repas"}
+                          title={!garderieOuverte ? 'Garderie fermée : saisie impossible' : "L'enfant a apporté son propre repas"}
                           className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
                             isApporte ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'
                           } ${!garderieOuverte ? 'opacity-40 cursor-not-allowed' : ''}`}>
@@ -718,7 +718,7 @@ export default function Cantine() {
       {onglet === 'nourrissons' && (
         <div className="space-y-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            <p className="font-semibold mb-0.5">🍼 Suivi nutritionnel — Enfants de moins de 6 mois</p>
+            <p className="font-semibold mb-0.5">🍼 Suivi nutritionnel : Enfants de moins de 6 mois</p>
             <p>Ces enfants sont encore en alimentation <strong>exclusivement liquide</strong> (lait). Enregistrez chaque biberon donné dans la journée : heure, type de lait, quantité et observation.</p>
           </div>
 
@@ -801,7 +801,7 @@ export default function Cantine() {
                           <p className="text-[10px] text-green-600 mt-0.5">⏱ Prochain biberon vers {prochainH}</p>
                         )}
                         {prochainH && !prochainAvantFermeture && !rappelActif && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">✓ Prochain biberon après la fermeture — pas nécessaire</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">✓ Prochain biberon après la fermeture : pas nécessaire</p>
                         )}
                         {e.allergies && <p className="text-xs text-orange-500 mt-0.5">⚠ {e.allergies}</p>}
                       </div>
@@ -851,7 +851,7 @@ export default function Cantine() {
                       </button>
                     ) : (
                       <p className="text-center text-xs text-gray-400 italic py-2">
-                        🔒 Garderie fermée — saisie impossible après {params.heureFermeture || '18:00'}
+                        🔒 Garderie fermée : saisie impossible après {params.heureFermeture || '18:00'}
                       </p>
                     )}
                   </Card>

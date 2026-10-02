@@ -168,7 +168,7 @@ export default function TachesExplorer() {
           )}
         </div>
         <EnTete icon={ListChecks} accent={secteurActuel?.color || '#0d9488'}
-          titre={`${secteurActuel?.label || secteurId} — Catégories de tâches`}
+          titre={`${secteurActuel?.label || secteurId} : Catégories de tâches`}
           sousTitre="Toutes les tâches de ce secteur, groupées par catégorie (tous projets confondus)" />
         {categories.length === 0 ? (
           <p className="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
@@ -186,7 +186,7 @@ export default function TachesExplorer() {
                 <option value="" disabled>▾ Choisir une catégorie de tâches…</option>
                 {categories.map((c) => (
                   <option key={c.phase} value={c.phase}>
-                    {emojiCategorie(c.phase)} {c.phase === NON_CLASSEES ? 'Non classées' : c.phase} — {c.count} tâche{c.count > 1 ? 's' : ''}
+                    {emojiCategorie(c.phase)} {c.phase === NON_CLASSEES ? 'Non classées' : c.phase} : {c.count} tâche{c.count > 1 ? 's' : ''}
                   </option>
                 ))}
               </select>

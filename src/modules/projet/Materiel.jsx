@@ -318,7 +318,7 @@ export default function Materiel() {
     }
 
     await updateItem('projet_materiels', materiel.id, { quantite: calculerStock(mouvements), mouvements, updatedAt: Date.now() })
-    await audit('projet', edit ? 'materiel_mouvement_corrige' : (type === 'entree' ? 'materiel_entree' : 'materiel_sortie'), `${materiel.nom} — ${qte} ${materiel.unite || ''}`)
+    await audit('projet', edit ? 'materiel_mouvement_corrige' : (type === 'entree' ? 'materiel_entree' : 'materiel_sortie'), `${materiel.nom} : ${qte} ${materiel.unite || ''}`)
     setMouvement(null)
   }
 
@@ -327,7 +327,7 @@ export default function Materiel() {
     if (!window.confirm('Supprimer ce mouvement ? Le stock sera recalculé automatiquement.')) return
     const mouvements = (materiel.mouvements || []).filter((x) => x.id !== mv.id)
     await updateItem('projet_materiels', materiel.id, { quantite: calculerStock(mouvements), mouvements, updatedAt: Date.now() })
-    await audit('projet', 'materiel_mouvement_supprime', `${materiel.nom} — ${mv.quantite} ${materiel.unite || ''}`)
+    await audit('projet', 'materiel_mouvement_supprime', `${materiel.nom} : ${mv.quantite} ${materiel.unite || ''}`)
   }
 
   // Pour les consommables en vrac (sable, gravier…) dont la quantité restante ne peut
@@ -456,7 +456,7 @@ export default function Materiel() {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold">Matériel non classé</h3>
-                  <p className="text-sm text-white/85">{materielsDuMagasinActif.length} élément(s) — modifiez chacun pour lui choisir un magasin</p>
+                  <p className="text-sm text-white/85">{materielsDuMagasinActif.length} élément(s) : modifiez chacun pour lui choisir un magasin</p>
                 </div>
               </div>
             ) : magasinCourant && (
@@ -467,7 +467,7 @@ export default function Materiel() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-base font-extrabold">{magasinCourant.nom}</h3>
-                  <p className="text-sm text-white/85">{projetDeMagasin(magasinCourant)?.nom || 'Sans projet — dépôt général'} · {materielsDuMagasinActif.length} matériel(s)</p>
+                  <p className="text-sm text-white/85">{projetDeMagasin(magasinCourant)?.nom || 'Sans projet : dépôt général'} · {materielsDuMagasinActif.length} matériel(s)</p>
                 </div>
                 <button onClick={() => { setMagasinProjetId(magasinCourant.projetId || SANS_PROJET); openEditMagasin(magasinCourant); setModalMagasins(true) }}
                   className="shrink-0 rounded-full border border-white/40 bg-white/15 p-2 text-white backdrop-blur-sm transition-colors hover:bg-white/25" title="Modifier ce magasin">
@@ -652,7 +652,7 @@ export default function Materiel() {
                       <div key={mv.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
                         <div className="min-w-0">
                           <span className={mv.type === 'entree' ? 'font-semibold text-green-600' : 'font-semibold text-red-500'}>
-                            {mv.type === 'entree' ? '+ ' : '− '}{mv.quantite} {d.unite || ''} {mv.note ? `— ${mv.note}` : ''}
+                            {mv.type === 'entree' ? '+ ' : '− '}{mv.quantite} {d.unite || ''} {mv.note ? `: ${mv.note}` : ''}
                           </span>
                           <span className="ml-1 text-gray-400">· {formatDateShort(mv.date)} · {mv.auteur || '—'}</span>
                         </div>
@@ -719,8 +719,8 @@ export default function Materiel() {
             <FormGroup label="Projet" required hint="Ou « Aucun projet » pour du matériel d'un dépôt général de l'entreprise.">
               <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                 value={form.projetId} onChange={(e) => { setForm((f) => ({ ...f, projetId: e.target.value, magasinId: '' })); setNouveauMagasinNom('') }}>
-                <option value="">— Sélectionner —</option>
-                <option value={SANS_PROJET}>— Aucun projet (dépôt général) —</option>
+                <option value="">Sélectionner</option>
+                <option value={SANS_PROJET}>Aucun projet (dépôt général)</option>
                 {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </select>
             </FormGroup>
@@ -730,12 +730,12 @@ export default function Materiel() {
               ) : magasinsDuProjet(form.projetId).length > 0 ? (
                 <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                   value={form.magasinId} onChange={(e) => setForm((f) => ({ ...f, magasinId: e.target.value }))}>
-                  <option value="">— Sélectionner —</option>
+                  <option value="">Sélectionner</option>
                   {magasinsDuProjet(form.projetId).map((mg) => <option key={mg.id} value={mg.id}>{mg.nom}</option>)}
                 </select>
               ) : (
                 <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-                  <p className="text-xs font-semibold text-amber-700">Aucun magasin pour ce projet — créez-en un d'abord.</p>
+                  <p className="text-xs font-semibold text-amber-700">Aucun magasin pour ce projet : créez-en un d'abord.</p>
                   <div className="flex gap-2">
                     <input className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                       placeholder="ex : Dépôt chantier, Container A…"
@@ -778,7 +778,7 @@ export default function Materiel() {
                 />
               </FormGroup>
               {!editing && (
-                <FormGroup label="Quantité initiale" required hint="Stock de départ — mettre 0 si aucun stock pour l'instant">
+                <FormGroup label="Quantité initiale" required hint="Stock de départ : mettre 0 si aucun stock pour l'instant">
                   <input type="number" min="0" step="any" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                     placeholder="0"
                     value={form.quantiteInitiale} onChange={(e) => setForm((f) => ({ ...f, quantiteInitiale: e.target.value }))} />
@@ -814,8 +814,8 @@ export default function Materiel() {
       <Modal open={!!mouvement} onClose={() => setMouvement(null)}
         title={
           mouvement?.edit
-            ? `Corriger ce mouvement — ${mouvement?.materiel.nom}`
-            : mouvement?.type === 'entree' ? `Entrée de stock — ${mouvement?.materiel.nom}` : `Sortie de stock — ${mouvement?.materiel.nom}`
+            ? `Corriger ce mouvement : ${mouvement?.materiel.nom}`
+            : mouvement?.type === 'entree' ? `Entrée de stock : ${mouvement?.materiel.nom}` : `Sortie de stock : ${mouvement?.materiel.nom}`
         }>
         {mouvement && (
           <div className="space-y-3">
@@ -851,8 +851,8 @@ export default function Materiel() {
             <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
               value={magasinProjetId}
               onChange={(e) => { setMagasinProjetId(e.target.value); setFormMagasin({ ...VIDE_MAGASIN, projetId: e.target.value }); setEditingMagasin(null) }}>
-              <option value="">— Sélectionner —</option>
-              <option value={SANS_PROJET}>— Aucun projet (dépôt général) —</option>
+              <option value="">Sélectionner</option>
+              <option value={SANS_PROJET}>Aucun projet (dépôt général)</option>
               {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
           </FormGroup>
