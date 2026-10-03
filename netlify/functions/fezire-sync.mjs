@@ -23,7 +23,7 @@
 //   FEZIRE_CLIENT_ID      (obligatoire) identifiant client émis par Connect
 //   FEZIRE_CLIENT_SECRET  (obligatoire) secret émis par Connect (affiché UNE fois)
 //   FEZIRE_SYNC_SECRET    (obligatoire) phrase secrète protégeant cette fonction
-//   FEZIRE_SCOPE          (optionnel)   autorisations demandées, séparées par des espaces
+//   FEZIRE_SCOPE          (optionnel)   autorisations demandées, séparées par des espaces (défaut openid)
 //   FEZIRE_BASE_URL       (optionnel)   défaut https://demo.fezire.com
 // Aucune de ces valeurs ne doit apparaître dans le code ni côté navigateur.
 
@@ -47,8 +47,11 @@ function secretValide(fourni) {
 async function jetonFezire() {
   const { FEZIRE_CLIENT_ID: id, FEZIRE_CLIENT_SECRET: secret, FEZIRE_SCOPE: scope } = process.env
   if (!id || !secret) throw new Error('FEZIRE_CLIENT_ID / FEZIRE_CLIENT_SECRET non configurés dans Netlify')
-  const corps = new URLSearchParams({ grant_type: 'client_credentials', client_id: id, client_secret: secret })
-  if (scope) corps.set('scope', scope)
+  // FEZIRE exige un scope ; le client Connect n'offre que des scopes OIDC
+  // (openid, profile, email, address, phone, offline_access) → `openid` par défaut.
+  const corps = new URLSearchParams({
+    grant_type: 'client_credentials', client_id: id, client_secret: secret, scope: scope || 'openid'
+  })
   const r = await fetch(`${BASE}/api/identity/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
