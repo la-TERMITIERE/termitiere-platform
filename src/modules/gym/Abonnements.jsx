@@ -74,9 +74,9 @@ export default function Abonnements() {
   // laisse l'abonnement sans coach plutôt que de deviner). Sert au suivi de
   // performance par coach (cf. Coachs.jsx), au-delà de la simple corrélation par jour.
   function coachDuJour(date) {
-    const idsUniques = [...new Set(pointagesCoach.filter((p) => p.date === date).map((p) => p.coachId))]
+    const idsUniques = [...new Set(pointagesCoach.filter((p) => p.date === date && p.statut !== 'absent').map((p) => p.coachId))]
     if (idsUniques.length !== 1) return { coachId: null, coachNom: null }
-    const p = pointagesCoach.find((x) => x.date === date && x.coachId === idsUniques[0])
+    const p = pointagesCoach.find((x) => x.date === date && x.statut !== 'absent' && x.coachId === idsUniques[0])
     return { coachId: p.coachId, coachNom: p.coachNom }
   }
   const peutSupprimer = isFullAccessRole(role)
