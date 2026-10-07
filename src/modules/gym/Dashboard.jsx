@@ -16,10 +16,13 @@ import { useAuth } from '../../hooks/useAuth'
 import { updateItem } from '../../core/db'
 import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
-import { ROLES } from '../../core/roles'
+import { ROLES, isReadOnlyRole } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
+import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
 import ClientDetailModal from './ClientDetailModal'
+import CoachAbsentModal from './CoachAbsentModal'
+import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
+import { pointerAbonne } from './pointerAbonne'
 import { SexeDonut, SexeBadge } from './SexeUI'
 import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -98,7 +101,8 @@ function salutation() {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const peutPointer = !isReadOnlyRole(role)
 
   // Horloge en direct affichée dans le bandeau — mise à jour chaque minute (pas
   // besoin de la seconde près pour ce simple repère visuel).
@@ -145,6 +149,10 @@ export default function Dashboard() {
   // Minutes de retard d'un coach pas encore pointé, par rapport à son heure prévue
   // (négatif tant que l'heure n'est pas encore passée). Se recalcule tout seul via
   // `heureActuelle` (tick 60s du bandeau) — pas besoin de minuteur dédié.
+  async function pointerUnCoach(c) {
+    setPointingCoach(c.id)
+    try { await pointerCoach({ coach: c, creneau: c.creneau, site, date: aujStr, user }) } finally { setPointingCoach(null) }
+  }
   const SEUIL_RETARD_COACH_MIN = 20
   function minutesRetard(c) {
     const [h, m] = c.creneau.heure.split(':').map(Number)
@@ -175,6 +183,9 @@ export default function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachsEnRetard])
+  const [absentCible, setAbsentCible] = useState(null)   // coach à marquer absent (modale du motif)
+  const [pointingCoach, setPointingCoach] = useState(null) // id du coach en cours de pointage
+  const [pointingAbonne, setPointingAbonne] = useState(null) // nom de l'abonné en cours de pointage
   const [detailModal, setDetailModal] = useState(null) // null | 'seances' | 'abonnements' | 'total' | 'clients'
   const [clientDetail, setClientDetail] = useState(null) // nom du client dont on affiche la fiche complète
   // Force une réévaluation immédiate des rappels fermés (cf. dismissRenouvellement)
@@ -372,11 +383,22 @@ export default function Dashboard() {
       if (modeFideles === 'abonnements') return { ...c, sexe, nb: c.jours.size, montant: c.montantA, libelle: (n) => `${n} jour${n > 1 ? 's' : ''} présent${n > 1 ? 's' : ''}` }
       return { ...c, sexe, nb: c.nbS + c.nbA, montant: c.montantS + c.montantA, libelle: (n) => `${n} passage${n > 1 ? 's' : ''}` }
     })
-    return lignes
+    const nomCle = (n) => (n || '').trim().toLowerCase()
+    const dejaPointeAuj = new Set(presences.filter((pr) => pr.date === aujStr).map((pr) => nomCle(pr.clientNom)))
+    const avecPointage = lignes.map((c) => {
+      const actifs = abonnements.filter((a) => nomCle(a.clientNom) === c.cle && abonnementActif(a.dateFin, a.dateDebut))
+      const ab = actifs.sort((x, y) => ((x.dateFin || '') < (y.dateFin || '') ? 1 : -1))[0]
+      // Pas d'abonnement actif : on explique pourquoi il n'y a pas de bouton « Pointer »
+      // (abonnement expiré / à venir, ou aucun abonnement : séances ponctuelles seulement).
+      const tous = abonnements.filter((a) => nomCle(a.clientNom) === c.cle).sort((x, y) => ((x.dateFin || '') < (y.dateFin || '') ? 1 : -1))
+      const raison = ab ? null : tous.length ? statutAbonnement(tous[0].dateDebut, tous[0].dateFin).label : 'Sans abonnement'
+      return { ...c, abonnementActifId: ab?.id || null, pointeAuj: dejaPointeAuj.has(c.cle), raisonSansBouton: raison }
+    })
+    return avecPointage
       .filter((c) => (modeFideles === 'seances' ? c.nbS > 0 : modeFideles === 'abonnements' ? c.nbA > 0 : true))
       .sort((a, b) => b.nb - a.nb || (modeFideles === 'abonnements' ? b.nbA - a.nbA : 0))
       .slice(0, 10)
-  }, [seances, abonnements, presences, clients, modeFideles])
+  }, [seances, abonnements, presences, clients, modeFideles, aujStr])
 
   // Abonnements arrivant à échéance dans les 7 prochains jours — pour relancer les
   // clients avant l'expiration plutôt que de les perdre silencieusement.
@@ -540,28 +562,48 @@ export default function Dashboard() {
           </div>
           <div className="relative flex flex-1 flex-wrap gap-2">
             {coachsAujourdhui.map((c) => {
-              const arrive = !!c.pointage
+              const absent = !!c.pointage && estAbsent(c.pointage)
+              const arrive = !!c.pointage && !absent
               const pointageRetard = arrive && c.pointage.statut === 'retard'
               // Pas encore pointé ET au-delà du seuil de retard (cf. coachsEnRetard) :
-              // état ROUGE, plus visible que le simple « Prévu » ambre — c'est l'alerte.
-              const absent = !arrive && coachsEnRetard.some((x) => x.id === c.id)
+              // état ROUGE, plus visible que le simple « Prévu » ambre : c'est l'alerte.
+              const enRetard = !c.pointage && coachsEnRetard.some((x) => x.id === c.id)
+              // « Marquer absent » : seulement tant que le coach n'a PAS pointé et que son heure est dépassée.
+              const peutMarquerAbsent = !c.pointage && minutesRetard(c) > 0
               return (
-                <div key={c.id} className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 shadow-sm backdrop-blur-sm ${
-                  absent ? 'border-red-300 bg-red-50/90' : 'border-white/70 bg-white/80'
+                <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded-2xl border py-1 pl-1 pr-2 shadow-sm backdrop-blur-sm ${
+                  absent ? 'border-gray-300 bg-gray-100/90' : enRetard ? 'border-red-300 bg-red-50/90' : 'border-white/70 bg-white/80'
                 }`}>
-                  <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white"
-                    style={{ background: avatarGradient(c.nom) }}>
-                    {(c.nom || '?').trim().charAt(0).toUpperCase() || '?'}
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${
-                      absent ? 'bg-red-500' : arrive ? (pointageRetard ? 'bg-amber-500' : 'bg-green-500') : 'animate-pulse bg-amber-400'
-                    }`} />
-                  </span>
-                  <span className="text-sm font-semibold text-gray-700">{c.nom}</span>
-                  <span className={`text-xs font-semibold ${
-                    absent ? 'text-red-600' : arrive ? (pointageRetard ? 'text-amber-600' : 'text-green-600') : 'text-gray-400'
-                  }`}>
-                    · {absent ? `${minutesRetard(c)} min de retard` : arrive ? `Arrivé ${c.pointage.heureArrivee}` : `Prévu ${c.creneau.heure}`}
-                  </span>
+                  <button type="button" onClick={() => navigate(`/gym/${site}/coachs?coach=${c.id}`)} title="Voir la fiche du coach"
+                    className="flex items-center gap-2 rounded-full text-left">
+                    <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white"
+                      style={{ background: avatarGradient(c.nom) }}>
+                      {(c.nom || '?').trim().charAt(0).toUpperCase() || '?'}
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${
+                        absent ? 'bg-gray-500' : enRetard ? 'bg-red-500' : arrive ? (pointageRetard ? 'bg-amber-500' : 'bg-green-500') : 'animate-pulse bg-amber-400'
+                      }`} />
+                    </span>
+                    <span className="text-sm font-semibold text-gray-700">{c.nom}</span>
+                    <span className={`text-xs font-semibold ${
+                      absent ? 'text-gray-600' : enRetard ? 'text-red-600' : arrive ? (pointageRetard ? 'text-amber-600' : 'text-green-600') : 'text-gray-400'
+                    }`}>
+                      · {absent ? `Absent : ${c.pointage.motif || '—'}` : enRetard ? `${minutesRetard(c)} min de retard` : arrive ? `Arrivé ${c.pointage.heureArrivee}` : `Prévu ${c.creneau.heure}`}
+                    </span>
+                  </button>
+                  {peutPointer && !c.pointage && (
+                    <>
+                      <button type="button" disabled={pointingCoach === c.id} onClick={() => pointerUnCoach(c)}
+                        className="rounded-full bg-green-500 px-3 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
+                        {pointingCoach === c.id ? '…' : 'Pointer'}
+                      </button>
+                      {peutMarquerAbsent && (
+                        <button type="button" onClick={() => setAbsentCible(c)}
+                          className="rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-red-600">
+                          Absent
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )
             })}
@@ -736,8 +778,8 @@ export default function Dashboard() {
                 {(voirTousClients ? clientsFideles : clientsFideles.slice(0, LIMITE_CLIENTS)).map((c, i) => {
                   const podium = RANG_PODIUM[i]
                   return (
-                    <button key={c.nom} onClick={() => setClientDetail(c.nom)}
-                      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-left shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${podium ? `${podium.bg} ${podium.ring}` : 'border border-white/60 bg-white/65'}`}>
+                    <div key={c.nom} role="button" tabIndex={0} onClick={() => setClientDetail(c.nom)} onKeyDown={(e) => { if (e.key === 'Enter') setClientDetail(c.nom) }}
+                      className={`group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-left shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${podium ? `${podium.bg} ${podium.ring}` : 'border border-white/60 bg-white/65'}`}>
                       <div className="relative shrink-0">
                         <span className="flex h-9 w-9 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(c.nom), boxShadow: OMBRE_3D }}>
                           <User size={16} />
@@ -760,10 +802,33 @@ export default function Dashboard() {
                           {modeFideles === 'tous' && c.nbS > 0 && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">🎫 {c.nbS} séance{c.nbS > 1 ? 's' : ''}</span>}
                         </p>
                       </div>
-                      <span className="flex shrink-0 items-center gap-1 text-sm font-bold" style={{ color: COULEUR }}>
-                        <Flame size={14} /> {c.libelle(c.nb)}
-                      </span>
-                    </button>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="flex items-center gap-1 text-sm font-bold" style={{ color: COULEUR }}>
+                          <Flame size={14} /> {c.libelle(c.nb)}
+                        </span>
+                        {/* Pointage direct d'un abonné actif : même action que « Pointer » dans Abonnements. */}
+                        {!c.abonnementActifId && modeFideles !== 'seances' && c.raisonSansBouton && c.raisonSansBouton !== 'Sans abonnement' && (
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500" title="Le pointage n'est possible que pour un abonnement actif">
+                            {c.raisonSansBouton}
+                          </span>
+                        )}
+                        {c.abonnementActifId && (c.pointeAuj ? (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">✓ Pointé</span>
+                        ) : peutPointer && (
+                          <button type="button" disabled={pointingAbonne === c.nom}
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              setPointingAbonne(c.nom)
+                              try {
+                                await pointerAbonne({ clientNom: c.nom, abonnementId: c.abonnementActifId, presences, site, user, client: clients.find((x) => (x.nom || '').trim().toLowerCase() === c.cle) })
+                              } finally { setPointingAbonne(null) }
+                            }}
+                            className="rounded-full bg-green-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
+                            {pointingAbonne === c.nom ? '…' : 'Pointer'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )
                 })}
               </div>
@@ -929,6 +994,9 @@ export default function Dashboard() {
           )
         })()}
       </Modal>
+
+      <CoachAbsentModal coach={absentCible} creneau={absentCible?.creneau} onClose={() => setAbsentCible(null)}
+        onConfirm={(motif) => marquerCoachAbsent({ coach: absentCible, creneau: absentCible.creneau, motif, site, date: aujStr, user })} />
 
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
         clients={clients} seances={seances} abonnements={abonnements} presences={presences} />

@@ -1,7 +1,8 @@
 // MAXI-GYM — Coachs : pointage de l'arrivée (vs planning programmé en Paramètres)
 // + performance comparée (fréquentation clients les jours où chaque coach est présent).
 import { useEffect, useMemo, useState } from 'react'
-import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard, FileText } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard, FileText, UserX, ChevronRight } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Table from '../../shared/ui/Table'
@@ -10,13 +11,13 @@ import StatCard from '../../shared/ui/StatCard'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem } from '../../core/db'
-import { audit } from '../../core/audit'
-import { toast } from '../../core/notifications'
 import { isReadOnlyRole, canExportGym } from '../../core/roles'
 import { genererRapportMultiPDF } from '../../utils/exportPDF'
-import { todayStr, formatDateShort, nowHM } from '../../utils/formatters'
-import { creneauCoach, statutPointage, horairesVides, JOURS_SEMAINE } from './data'
+import { todayStr, formatDateShort } from '../../utils/formatters'
+import { creneauCoach, horairesVides, JOURS_SEMAINE } from './data'
+import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
+import CoachAbsentModal from './CoachAbsentModal'
+import CoachDetailModal from './CoachDetailModal'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import CoachFormModal from './CoachFormModal'
 import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle } from './uiHelpers'
@@ -56,10 +57,30 @@ export default function Coachs() {
   // doit basculer sur le planning et les pointages du nouveau jour (sinon l'équipe
   // et les arrivées de la veille restent affichées comme « aujourd'hui »).
   const [aujourdhui, setAujourdhui] = useState(todayStr())
+  const [maintenant, setMaintenant] = useState(() => new Date())
   useEffect(() => {
-    const id = setInterval(() => setAujourdhui(todayStr()), 60000)
+    const id = setInterval(() => { setAujourdhui(todayStr()); setMaintenant(new Date()) }, 60000)
     return () => clearInterval(id)
   }, [])
+  // Fiche détail / calendrier d'un coach, et fenêtre « Marquer absent ».
+  const [fiche, setFiche] = useState(null) // { id, vue: 'details' | 'calendrier' }
+  const [absentCible, setAbsentCible] = useState(null) // coach (avec creneau) à marquer absent
+  const ficheCoach = fiche ? coachs.find((c) => c.id === fiche.id) || null : null
+  // Lien direct depuis le Dashboard : /gym/:site/coachs?coach=ID ouvre la fiche du coach.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const id = searchParams.get('coach')
+    if (id && coachs.some((c) => c.id === id)) {
+      setFiche({ id, vue: 'details' })
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, coachs, setSearchParams])
+  // Minutes de retard d'un coach programmé aujourd'hui (positif = heure prévue dépassée).
+  const minutesRetard = (c) => {
+    const [h, m] = c.creneau.heure.split(':').map(Number)
+    const prevu = new Date(maintenant); prevu.setHours(h, m, 0, 0)
+    return Math.floor((maintenant - prevu) / 60000)
+  }
   const equipeDuJour = useMemo(
     () => coachs.map((c) => ({ ...c, creneau: creneauCoach(c, aujourdhui) })).sort((a, b) => (b.creneau ? 1 : 0) - (a.creneau ? 1 : 0)),
     [coachs, aujourdhui]
@@ -67,20 +88,9 @@ export default function Coachs() {
   const pointageDuJour = (coachId) => pointages.find((p) => p.coachId === coachId && p.date === aujourdhui)
 
   async function pointerArrivee(c) {
-    const creneau = c.creneau
-    if (!creneau) return
     setPointing(c.id)
-    try {
-      const heureArrivee = nowHM()
-      const statut = statutPointage(creneau.heure, heureArrivee)
-      await addItem('gym_pointages_coach', {
-        coachId: c.id, coachNom: c.nom, site, date: aujourdhui,
-        heureProgrammee: creneau.heure, heureArrivee, statut,
-        par: user?.nom || user?.login || '—'
-      })
-      await audit('gym', 'COACH_POINTAGE', `${c.nom} : arrivé à ${heureArrivee} (prévu ${creneau.heure}) : ${siteLabel(site)}`)
-      toast.success(`${c.nom} pointé à ${heureArrivee} ✓`)
-    } finally { setPointing(null) }
+    // Jour de repos : pointage « exceptionnel » (pas d'heure prévue, jamais compté en retard).
+    try { await pointerCoach({ coach: c, creneau: c.creneau || { heure: '' }, site, date: aujourdhui, user }) } finally { setPointing(null) }
   }
 
   // Performance : jours (uniques) où chaque coach a été réellement pointé présent —
@@ -91,7 +101,7 @@ export default function Coachs() {
   // donc des chiffres réels, plus une corrélation « toute la salle, ce jour-là ».
   const performance = useMemo(() => {
     const joursParCoach = new Map()
-    pointages.forEach((p) => {
+    pointages.filter((p) => !estAbsent(p)).forEach((p) => {
       if (!joursParCoach.has(p.coachId)) joursParCoach.set(p.coachId, { nom: p.coachNom, jours: new Set() })
       joursParCoach.get(p.coachId).jours.add(p.date)
     })
@@ -139,10 +149,11 @@ export default function Coachs() {
     const parCoach = new Map()
     historique.forEach((p) => parCoach.set(p.coachNom, (parCoach.get(p.coachNom) || 0) + 1))
     const retards = historique.filter((p) => p.statut === 'retard').length
+    const nbAbsences = historique.filter(estAbsent).length
     const detailCoach = [...parCoach.entries()].sort((a, b) => b[1] - a[1]).map(([nom, n]) => `${nom} (${n})`).join(' · ')
     const synthese = historique.length === 0
       ? 'Aucun pointage enregistré sur la période sélectionnée.'
-      : `${historique.length} pointage(s) enregistré(s) sur la période pour ${parCoach.size} coach(s) : ${siteLabel(site)}. Répartition : ${detailCoach}. ${retards} pointage(s) en retard sur le total, soit ${Math.round((retards / historique.length) * 100)} %.`
+      : `${historique.length} pointage(s) enregistré(s) sur la période pour ${parCoach.size} coach(s) : ${siteLabel(site)}. Répartition : ${detailCoach}. ${retards} pointage(s) en retard sur le total, soit ${Math.round((retards / historique.length) * 100)} %. ${nbAbsences} absence(s) enregistrée(s).`
     await genererRapportMultiPDF({
       titre: 'RAPPORT DES POINTAGES COACHS',
       module: 'gym',
@@ -153,7 +164,7 @@ export default function Coachs() {
         colonnes: ['Date', 'Coach', 'Programmé', 'Arrivée réelle', 'Statut', 'Pointé par'],
         lignes: historique.map((p) => [
           formatDateShort(p.date), p.coachNom, p.heureProgrammee || '—', p.heureArrivee || '—',
-          p.statut === 'retard' ? 'En retard' : 'À l\'heure', p.par || '—'
+          estAbsent(p) ? `Absent : ${p.motif || '—'}` : p.statut === 'retard' ? 'En retard' : 'À l\'heure', p.par || '—'
         ])
       }],
       fichier: `coachs-maxi-gym-pointages-${todayStr()}.pdf`
@@ -193,7 +204,8 @@ export default function Coachs() {
       <Card title={titreSection(CalendarDays, "Aujourd'hui")} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
         <div className="space-y-2">
           {equipeDuJour.map((c) => {
-            const p = c.creneau ? pointageDuJour(c.id) : null
+            const p = pointageDuJour(c.id)
+            const retardMin = c.creneau && !p ? minutesRetard(c) : 0
             return (
               <div key={c.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border border-l-4 px-3 py-2.5 ${c.creneau ? 'border-gray-200 bg-orange-50/40' : 'border-gray-100 bg-gray-50/60'}`}
                 style={{ borderLeftColor: c.creneau ? COULEUR : '#d1d5db' }}>
@@ -208,18 +220,35 @@ export default function Coachs() {
                     </p>
                   </div>
                 </div>
-                {!c.creneau ? (
-                  <Badge tone="neutral" className="border border-dashed border-gray-300 opacity-80"><Bed size={11} className="mr-1 inline" /> Repos</Badge>
+                {!c.creneau && !p ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="neutral" className="border border-dashed border-gray-300 opacity-80"><Bed size={11} className="mr-1 inline" /> Repos</Badge>
+                    {peutSaisir && (
+                      <Button size="sm" variant="outline" loading={pointing === c.id} onClick={() => pointerArrivee(c)} className="rounded-full px-3">
+                        <Clock3 size={14} /> Pointer quand même
+                      </Button>
+                    )}
+                  </div>
+                ) : p && estAbsent(p) ? (
+                  <Badge tone="danger"><UserX size={11} className="mr-1 inline" /> Absent : {p.motif || '—'}</Badge>
                 ) : p ? (
                   <Badge tone={p.statut === 'retard' ? 'warning' : 'success'}>
                     <CheckCircle2 size={11} className="mr-1 inline" /> Arrivé à {p.heureArrivee}{p.statut === 'retard' ? ' (retard)' : ''}
                   </Badge>
                 ) : peutSaisir ? (
-                  <Button size="sm" loading={pointing === c.id} onClick={() => pointerArrivee(c)}
-                    className="rounded-full px-4 shadow-[0_6px_16px_-4px_rgba(232,133,15,0.55)] hover:shadow-[0_8px_20px_-4px_rgba(232,133,15,0.7)]"
-                    style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
-                    <Clock3 size={14} /> Pointer l'arrivée
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" loading={pointing === c.id} onClick={() => pointerArrivee(c)}
+                      className="rounded-full px-4 shadow-[0_6px_16px_-4px_rgba(232,133,15,0.55)] hover:shadow-[0_8px_20px_-4px_rgba(232,133,15,0.7)]"
+                      style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
+                      <Clock3 size={14} /> Pointer l'arrivée
+                    </Button>
+                    {/* « Marquer absent » : uniquement si le coach n'a pas pointé ET que son heure est dépassée. */}
+                    {retardMin > 0 && (
+                      <Button size="sm" variant="danger" onClick={() => setAbsentCible(c)} className="rounded-full px-4">
+                        <UserX size={14} /> Marquer absent
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   <Badge tone="info"><Clock3 size={11} className="mr-1 inline" /> Pas encore pointé</Badge>
                 )}
@@ -237,19 +266,22 @@ export default function Coachs() {
         <div className="space-y-2">
           {coachs.map((c) => (
             <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-l-4 border-gray-200 bg-orange-50/40 px-3 py-2.5" style={{ borderLeftColor: COULEUR }}>
-              <div className="flex min-w-0 items-center gap-2.5">
+              <button type="button" onClick={() => setFiche({ id: c.id, vue: 'details' })} title="Voir la fiche du coach"
+                className="group flex min-w-0 flex-1 items-center gap-2.5 text-left">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
                   <UserCog size={14} />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-800">{c.nom}</p>
+                  <p className="flex items-center gap-1 font-semibold text-gray-800">{c.nom} <ChevronRight size={14} className="text-gray-300 transition-colors group-hover:text-gray-500" /></p>
                   <p className="text-xs text-gray-500">
                     {nbJoursProgrammes(c) > 0
                       ? JOURS_SEMAINE.filter((j) => c.horaires?.[j.id]?.actif).map((j) => `${j.label.slice(0, 3)} ${c.horaires[j.id].heure}`).join(' · ')
                       : 'Aucun jour programmé'}
                   </p>
                 </div>
-              </div>
+              </button>
+              <button onClick={() => setFiche({ id: c.id, vue: 'calendrier' })} title="Calendrier : jours d'arrivée et heures pointées"
+                className="shrink-0 rounded-lg p-1.5 text-sky-600 hover:bg-sky-50"><CalendarDays size={16} /></button>
               {peutSaisir && (
                 <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires } })}
                   className="shrink-0 rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
@@ -308,8 +340,10 @@ export default function Coachs() {
             { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
             { key: 'coachNom', label: 'Coach' },
             { key: 'heureProgrammee', label: 'Programmé' },
-            { key: 'heureArrivee', label: 'Arrivée réelle' },
-            { key: 'statut', label: 'Statut', render: (r) => <Badge tone={r.statut === 'retard' ? 'warning' : 'success'}>{r.statut === 'retard' ? 'En retard' : 'À l\'heure'}</Badge> },
+            { key: 'heureArrivee', label: 'Arrivée réelle', render: (r) => (estAbsent(r) ? '—' : r.heureArrivee) },
+            { key: 'statut', label: 'Statut', render: (r) => (estAbsent(r)
+              ? <div><Badge tone="danger">Absent</Badge>{r.motif && <p className="mt-0.5 text-[11px] text-gray-500">{r.motif}</p>}</div>
+              : <Badge tone={r.statut === 'retard' ? 'warning' : 'success'}>{r.statut === 'retard' ? 'En retard' : 'À l\'heure'}</Badge>) },
             { key: 'par', label: 'Pointé par' }
           ]}
           rows={historique}
@@ -318,6 +352,10 @@ export default function Coachs() {
       </Card>
 
       <CoachFormModal coachModal={coachModal} setCoachModal={setCoachModal} site={site} />
+      <CoachDetailModal coach={ficheCoach} vue={fiche?.vue} onClose={() => setFiche(null)}
+        pointages={pointages} seances={seances} abonnements={abonnements} />
+      <CoachAbsentModal coach={absentCible} creneau={absentCible?.creneau} onClose={() => setAbsentCible(null)}
+        onConfirm={(motif) => marquerCoachAbsent({ coach: absentCible, creneau: absentCible.creneau, motif, site, date: aujourdhui, user })} />
     </div>
   )
 }
