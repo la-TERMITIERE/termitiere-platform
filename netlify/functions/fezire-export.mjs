@@ -12,6 +12,8 @@
 //   GET /api/fezire/v1/<ressource>?page=1&per_page=100&since=AAAA-MM-JJ
 //   <ressource> : categories | products | warehouses | stocks | stock-movements |
 //                 customers | orders | invoices | payments   (ou le code FEZIRE : PRODUCT…)
+//   Côté Connect, l'adresse de base de la connexion est `<site>/api/fezire/v1` : sa
+//   convention REST standard y ajoute le nom de la ressource (vérifié le 8 oct. 2026).
 //   Réponse : { data: [...], meta: { ressource, total, page, per_page, pages } }
 //
 // AUTHENTIFICATION : la clé que FEZIRE nous présente (« clé fournie par la
@@ -264,7 +266,15 @@ const RESSOURCES = {
   'stock-movements': 'STOCK_MOVEMENT', customers: 'CUSTOMER', orders: 'ORDER',
   invoices: 'INVOICE', payments: 'PAYMENT'
 }
-const CODES = Object.fromEntries(Object.entries(RESSOURCES).map(([k, v]) => [v, k]))
+// Connect appelle « <adresse de base>/<ressource> » selon sa convention REST standard
+// (vérifié : /categories). On tolère les variantes d'écriture : casse, tirets ou
+// soulignés, singulier/pluriel (stock-movements, stock_movements, STOCK_MOVEMENT, product…).
+const cle = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '').replace(/(ies|s)$/, (m) => (m === 'ies' ? 'y' : ''))
+const PAR_CLE = Object.fromEntries([
+  ...Object.entries(RESSOURCES).map(([k, v]) => [cle(k), v]),
+  ...Object.values(RESSOURCES).map((v) => [cle(v), v])
+])
+export const codeRessource = (brut) => PAR_CLE[cle(brut)] || null
 
 // Collections RTDB nécessaires par ressource (on ne lit que le strict utile).
 const BESOINS = {
@@ -301,7 +311,7 @@ export const handler = async (event) => {
   // redirection. Le paramètre reste accepté pour l'appel direct de la fonction.
   const duChemin = /\/api\/fezire\/v1\/([^/?#]+)/.exec(event.path || '')?.[1]
   const brut = decodeURIComponent(duChemin || q.ressource || '').trim()
-  const code = RESSOURCES[brut.toLowerCase()] || (CODES[brut.toUpperCase()] ? brut.toUpperCase() : null)
+  const code = codeRessource(brut)
   if (!code) {
     return json(404, { error: `Ressource inconnue : « ${brut} »`, ressources: Object.keys(RESSOURCES) })
   }
