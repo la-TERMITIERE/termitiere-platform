@@ -111,3 +111,45 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
   to   { opacity: 1; transform: translateY(0); }
 }
 .toast-enter { animation: toast-in 0.22s ease-out; }
+
+/* Filtres posés SUR le bandeau coloré d'un volet : champs, listes et pastilles passent en
+   « verre » blanc translucide (même rendu que le filtre de période et la recherche du
+   bandeau). S'applique à tout ce qui est dans un conteneur `.band-filtres` ; le conteneur
+   lui-même est « display: contents » : ses enfants rejoignent directement la bande. */
+.band-filtres { display: contents; }
+.band-filtres input:not([type="checkbox"]):not([type="radio"]),
+.band-filtres select,
+.band-filtres .input-base {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 1rem !important;
+  color: #fff !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  backdrop-filter: blur(6px);
+  box-shadow: none !important;
+}
+.band-filtres input::placeholder { color: rgba(255, 255, 255, 0.7); }
+.band-filtres select option { color: #1f2937; background: #fff; }
+.band-filtres svg.lucide-search { color: rgba(255, 255, 255, 0.8) !important; }
+.band-filtres span.text-gray-500, .band-filtres span.text-gray-400, .band-filtres label { color: rgba(255, 255, 255, 0.85) !important; }
+.band-filtres .btn-glass {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #fff !important;
+  border-radius: 1rem !important;
+  backdrop-filter: blur(6px);
+}
+.band-filtres .btn-glass:hover { background: rgba(255, 255, 255, 0.3) !important; }
+
+/* Pastilles de filtre (statuts, validation…) posées sur le bandeau : conteneur verre blanc,
+   pastille active = blanc plein. `.band-pills` pour un groupe de pastilles ; les boutons
+   « rounded-full » isolés (ex. statuts d'autorisations) reçoivent le même traitement. */
+.band-pills { background: rgba(255, 255, 255, 0.15) !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; backdrop-filter: blur(6px); }
+.band-pills button { color: rgba(255, 255, 255, 0.85) !important; background: transparent !important; border-radius: 0.75rem; }
+.band-pills button:hover { background: rgba(255, 255, 255, 0.2) !important; }
+.band-pills button[class*="text-white"], .band-pills button[class*="bg-primary"], .band-pills button[class*="bg-secondary"] { background: #fff !important; color: #1f2937 !important; }
+.band-filtres button[class*="rounded-full"] { color: rgba(255, 255, 255, 0.9) !important; background: rgba(255, 255, 255, 0.15) !important; border: 1px solid rgba(255, 255, 255, 0.3); }
+.band-filtres button[class*="rounded-full"][class*="text-white"], .band-filtres button[class*="rounded-full"][class*="bg-secondary"] { background: #fff !important; color: #1f2937 !important; }
+
+.band-filtres .champ-glass input:not([type="checkbox"]):not([type="radio"]) { background: transparent !important; border: 0 !important; border-radius: 0 !important; backdrop-filter: none !important; font-size: 0.75rem; }

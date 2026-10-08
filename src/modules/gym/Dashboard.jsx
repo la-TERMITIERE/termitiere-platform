@@ -21,6 +21,7 @@ import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/for
 import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
 import ClientDetailModal from './ClientDetailModal'
 import CoachAbsentModal from './CoachAbsentModal'
+import { CoachBoutonsStyles, BoutonPointerMini, BoutonAbsentMini } from './CoachBoutons'
 import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
 import { pointerAbonne } from './pointerAbonne'
 import { SexeDonut, SexeBadge } from './SexeUI'
@@ -528,6 +529,7 @@ export default function Dashboard() {
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
+      <CoachBoutonsStyles />
       {coachsAujourdhui.length > 0 && (
         <div className="relative flex flex-wrap items-center gap-3 overflow-hidden rounded-2xl border border-white/60 p-3 shadow-[0_16px_36px_-18px_rgba(26,26,26,0.22)] backdrop-blur-xl backdrop-saturate-150"
           style={{ background: `linear-gradient(135deg, ${teinterHex('#ffffff', 0.55)}, ${teinterHex(COULEUR, 0.14)})` }}>
@@ -592,16 +594,8 @@ export default function Dashboard() {
                   </button>
                   {peutPointer && !c.pointage && (
                     <>
-                      <button type="button" disabled={pointingCoach === c.id} onClick={() => pointerUnCoach(c)}
-                        className="rounded-full bg-green-500 px-3 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
-                        {pointingCoach === c.id ? '…' : 'Pointer'}
-                      </button>
-                      {peutMarquerAbsent && (
-                        <button type="button" onClick={() => setAbsentCible(c)}
-                          className="rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-red-600">
-                          Absent
-                        </button>
-                      )}
+                      <BoutonPointerMini loading={pointingCoach === c.id} onClick={() => pointerUnCoach(c)} />
+                      {peutMarquerAbsent && <BoutonAbsentMini onClick={() => setAbsentCible(c)} />}
                     </>
                   )}
                 </div>
@@ -815,17 +809,14 @@ export default function Dashboard() {
                         {c.abonnementActifId && (c.pointeAuj ? (
                           <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">✓ Pointé</span>
                         ) : peutPointer && (
-                          <button type="button" disabled={pointingAbonne === c.nom}
+                          <BoutonPointerMini loading={pointingAbonne === c.nom} title="Pointer l'arrivée de l'abonné"
                             onClick={async (e) => {
                               e.stopPropagation()
                               setPointingAbonne(c.nom)
                               try {
                                 await pointerAbonne({ clientNom: c.nom, abonnementId: c.abonnementActifId, presences, site, user, client: clients.find((x) => (x.nom || '').trim().toLowerCase() === c.cle) })
                               } finally { setPointingAbonne(null) }
-                            }}
-                            className="rounded-full bg-green-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
-                            {pointingAbonne === c.nom ? '…' : 'Pointer'}
-                          </button>
+                            }} />
                         ))}
                       </div>
                     </div>

@@ -33,7 +33,7 @@ export default function Employes() {
     <div className="space-y-4">
       <div className="flex justify-end"><Button style={{ background: '#ea580c' }} onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Ajouter un employé</Button></div>
       <Card className="p-0">
-        <Table
+        <Table searchBy={['nom', 'prenom', 'matricule']}
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'poste', label: 'Poste' },

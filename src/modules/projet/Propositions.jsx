@@ -123,19 +123,17 @@ export default function Propositions() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.88) 0%, rgba(26,26,26,0.88) 100%)' }}>
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
           <Lightbulb size={26} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Propositions de projets</h2>
           <p className="text-sm text-white/80">Ouvert à tout le monde : suggère un projet, l'administration décide.</p>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+        <div className="band-filtres">
+        <div className="band-pills flex flex-wrap gap-1 rounded-2xl p-1">
           {[['', `Toutes (${propositions.length})`], ...Object.entries(STATUTS).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
             <button key={v || 'toutes'} onClick={() => setFiltreStatut(v)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
@@ -143,8 +141,10 @@ export default function Propositions() {
             </button>
           ))}
         </div>
-        <Button onClick={openCreate} size="sm" className="ml-auto"><Plus size={14} className="mr-1" />Nouvelle proposition</Button>
+        <Button onClick={openCreate} size="sm" className="btn-glass ml-auto"><Plus size={14} className="mr-1" />Nouvelle proposition</Button>
+        </div>
       </div>
+
 
       {!liste.length ? (
         <Card>

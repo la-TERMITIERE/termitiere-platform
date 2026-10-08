@@ -17,6 +17,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Plus, Pencil, Trash2, PackagePlus, Play, CheckCircle2, XCircle, Check, X, Paperclip, Eye, MessageSquarePlus } from 'lucide-react'
 import Card from '../ui/Card'
+import ChampRecherche, { correspond } from '../ui/ChampRecherche'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import Modal from '../ui/Modal'
@@ -107,6 +108,7 @@ export default function SectorBesoins({ secteurId }) {
   const estAdmin = FULL_ACCESS_ROLES.includes(role)
   useEffect(() => { marquerVoletVu(user?.uid, badgeKey) }, [user?.uid, badgeKey])
 
+  const [recherche, setRecherche] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreValidation, setFiltreValidation] = useState('')
   const [modal, setModal]     = useState(false)
@@ -120,6 +122,7 @@ export default function SectorBesoins({ secteurId }) {
     besoins
       .filter((b) => !filtreStatut || b.statut === filtreStatut)
       .filter((b) => !filtreValidation || validationDe(b) === filtreValidation)
+      .filter((b) => correspond(recherche, b.titre, b.demandePar))
       // Masque les besoins validés depuis plus de 24h — la dépense générée reste
       // consultable dans E-DÉPENSES, source de vérité.
       .filter((b) => !(validationDe(b) === 'valide' && b.valideLe && Date.now() - b.valideLe > VALIDE_MASQUE_APRES_MS))
@@ -128,7 +131,7 @@ export default function SectorBesoins({ secteurId }) {
         if (ordre[a.statut] !== ordre[b.statut]) return (ordre[a.statut] ?? 0) - (ordre[b.statut] ?? 0)
         return (b.createdAt || 0) - (a.createdAt || 0)
       }),
-  [besoins, filtreStatut, filtreValidation])
+  [besoins, filtreStatut, filtreValidation, recherche])
 
   const compteur = (st) => besoins.filter((b) => b.statut === st).length
   const compteurValidation = (v) => besoins.filter((b) => validationDe(b) === v).length
@@ -331,7 +334,7 @@ export default function SectorBesoins({ secteurId }) {
   return (
     <div className="space-y-4">
       {/* En-tête — thème couleur du secteur */}
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: `linear-gradient(135deg, rgba(${rgb},0.9) 0%, rgba(${rgb},0.6) 100%)` }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -339,17 +342,14 @@ export default function SectorBesoins({ secteurId }) {
         }}>
           <PackagePlus size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Besoins : {secteur.label}</h2>
           <p className="text-sm text-white/80">
             {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} : matériaux, main d'œuvre, équipement
           </p>
         </div>
-      </div>
-
-      {/* Filtres + compteurs */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
+        <div className="band-filtres">
+        <div className="band-pills flex flex-wrap gap-1 rounded-2xl p-1">
           {[['', `Tous (${besoins.length})`], ...Object.entries(STATUTS_BESOIN).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
             <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'text-white' : 'text-gray-600 hover:bg-white'}`}
@@ -358,7 +358,7 @@ export default function SectorBesoins({ secteurId }) {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
+        <div className="band-pills flex flex-wrap gap-1 rounded-2xl p-1">
           {[['', 'Validation : toutes'], ['en_attente', `⏳ ${compteurValidation('en_attente')}`], ['valide', `✅ ${compteurValidation('valide')}`], ['refuse', `❌ ${compteurValidation('refuse')}`]].map(([v, l]) => (
             <button key={v || 'toutes'} onClick={() => setFiltreValidation(v)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreValidation === v ? 'text-white' : 'text-gray-600 hover:bg-white'}`}
@@ -378,11 +378,14 @@ export default function SectorBesoins({ secteurId }) {
               </Button>
             </>
           )}
-          <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouveau besoin</Button>
+          <Button onClick={openCreate} size="sm" className="btn-glass"><Plus size={14} className="mr-1" />Nouveau besoin</Button>
+        </div>
         </div>
       </div>
 
+
       {/* Liste */}
+      <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un besoin ou un demandeur…" />
       {!liste.length ? (
         <Card>
           <div className="flex flex-col items-center gap-2 py-10 text-gray-400">

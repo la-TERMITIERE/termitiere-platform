@@ -98,7 +98,7 @@ export default function Partenaires({ module, suggestions }) {
       )}
 
       <Card className="p-0">
-        <Table
+        <Table searchBy={['nom', 'contact', 'type']}
           columns={[
             { key: 'nom', label: 'Nom', render: (r) => <span className="font-semibold">{r.nom}</span> },
             { key: 'type', label: 'Type / spécificité', render: (r) => r.type ? <Badge tone="neutral">{r.type}</Badge> : <span className="text-xs text-gray-400">—</span> },

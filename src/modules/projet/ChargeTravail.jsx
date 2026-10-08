@@ -3,6 +3,7 @@
 // coup d'œil les surcharges (beaucoup de tâches, retards, priorités urgentes) sans
 // avoir à ouvrir chaque projet un par un. Vue d'ensemble en lecture seule — la
 // modification d'une tâche se fait toujours depuis Tâches/Projets.
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
 import { Users, ListChecks, AlertTriangle, Flame, FolderKanban } from 'lucide-react'
 import Badge from '../../shared/ui/Badge'
@@ -22,6 +23,7 @@ export default function ChargeTravail() {
   const { data: tachesTous }  = useCollection('projet_taches')
 
   const [filtreSecteur, setFiltreSecteur] = useState('')
+  const [recherche, setRecherche] = useState('')
   const [personneOuverte, setPersonneOuverte] = useState(null)
 
   const tachesActives = useMemo(
@@ -74,9 +76,7 @@ export default function ChargeTravail() {
           <h2 className="text-lg font-extrabold">Charge de travail</h2>
           <p className="text-sm text-white/80">Qui porte quoi, tous secteurs confondus : tâches actives par personne, pour repérer les surcharges.</p>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
+        <div className="band-filtres">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
           <select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}
@@ -85,11 +85,14 @@ export default function ChargeTravail() {
             {SECTEURS_PROJET.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
+        <div><label className="mb-1 block text-xs font-semibold text-gray-600">Personne</label><ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher une personne…" /></div>
         <span className="ml-auto text-xs text-gray-400">
           {totalPersonnes} personne{totalPersonnes > 1 ? 's' : ''} · {totalActives} tâche{totalActives > 1 ? 's' : ''} active{totalActives > 1 ? 's' : ''}
           {totalRetard > 0 && <span className="text-red-500"> · {totalRetard} en retard</span>}
         </span>
+        </div>
       </div>
+
 
       {parPersonne.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
@@ -97,7 +100,7 @@ export default function ChargeTravail() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {parPersonne.map((g) => {
+          {parPersonne.filter((g) => correspond(recherche, g.nom)).map((g) => {
             const surcharge = g.nbRetard > 0 || g.nbActives >= 8
             return (
               <button key={g.nom} onClick={() => setPersonneOuverte(g)}

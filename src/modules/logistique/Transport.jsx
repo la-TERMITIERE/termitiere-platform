@@ -16,6 +16,7 @@
 import { useMemo, useState } from 'react'
 import { Truck, Plus, Trash2, Pencil, X, MapPin, Fuel, CheckCircle2, Eye, Flag, ShieldCheck, Clock, Coins, Wallet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -67,6 +68,7 @@ export default function Transport() {
   // Filtre de période — même format Jour/Mois/Année/Plage que le reste de la
   // plateforme, posé en glassmorphism sur la bande (utile seulement à l'onglet
   // « Tous les trajets »).
+  const [recherche, setRecherche] = useState('')
   const [modePeriode, setModePeriode] = useState('mois')
   const [filtreJour, setFiltreJour] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
@@ -325,6 +327,7 @@ export default function Transport() {
           <h2 className="text-lg font-extrabold">Transport</h2>
           <p className="text-sm text-white/80">{transports.length} trajet(s) · {siteLabel(site)}</p>
         </div>
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un chauffeur…" />
         {onglet === 'tous' && (
           <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
             valeurJour={filtreJour} onJourChange={setFiltreJour}
@@ -393,7 +396,7 @@ export default function Transport() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {liste.map((t) => {
+            {liste.filter((t) => correspond(recherche, t.chauffeur, t.plaque, t.clientNom, t.agentNom)).map((t) => {
               const d = totalDep(t.depenses)
               const m = margeDe(t)
               const st = statutTrajet(t)

@@ -6,6 +6,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Plus, Pencil, Trash2, PackagePlus, Play, CheckCircle2, XCircle, Check, X, Layers, Paperclip, Eye, MessageSquarePlus } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -124,6 +125,7 @@ export default function Besoins() {
   const projets = useMemo(() => [...projetsVisibles(projetsTous, user, role)].sort(parCreationDesc), [projetsTous, user, role])
   const besoins = useMemo(() => scopeParProjets(besoinsTous, projets), [besoinsTous, projets])
 
+  const [recherche, setRecherche] = useState('')
   const [filtreProjet, setFiltreProjet] = useState('')
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreValidation, setFiltreValidation] = useState('')
@@ -141,6 +143,7 @@ export default function Besoins() {
       .filter((b) => !filtreProjet || b.projetId === filtreProjet)
       .filter((b) => !filtreStatut || b.statut === filtreStatut)
       .filter((b) => !filtreValidation || validationDe(b) === filtreValidation)
+      .filter((b) => correspond(recherche, b.titre, b.demandePar, b.fournisseur, b.section))
       // Masque les besoins validés depuis plus de 24h (cf. VALIDE_MASQUE_APRES_MS) —
       // la dépense générée reste consultable dans E-DÉPENSES, source de vérité.
       .filter((b) => !(validationDe(b) === 'valide' && b.valideLe && Date.now() - b.valideLe > VALIDE_MASQUE_APRES_MS))
@@ -149,7 +152,7 @@ export default function Besoins() {
         if (ordre[a.statut] !== ordre[b.statut]) return (ordre[a.statut] ?? 0) - (ordre[b.statut] ?? 0)
         return (b.createdAt || 0) - (a.createdAt || 0)
       }),
-  [besoins, filtreProjet, filtreStatut, filtreValidation])
+  [besoins, filtreProjet, filtreStatut, filtreValidation, recherche])
 
   const compteur = (st) => besoins.filter((b) => b.statut === st).length
   const compteurValidation = (v) => besoins.filter((b) => validationDe(b) === v).length
@@ -475,7 +478,7 @@ export default function Besoins() {
   return (
     <div className="space-y-4">
       {/* En-tête */}
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),0_8px_20px_-8px_rgba(13,148,136,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(13,148,136,0.35),0_8px_20px_-8px_rgba(13,148,136,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,84,80,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -483,22 +486,19 @@ export default function Besoins() {
         }}>
           <PackagePlus size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Besoins</h2>
           <p className="text-sm text-white/80">
             {enAttente > 0 ? `${enAttente} besoin(s) à traiter` : 'Tout est pris en charge'} : matériaux, main d'œuvre, équipement
           </p>
         </div>
-      </div>
-
-      {/* Filtres + compteurs */}
-      <div className="flex flex-wrap items-center gap-2">
+        <div className="band-filtres">
         <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
           value={filtreProjet} onChange={(e) => setFiltreProjet(e.target.value)}>
           <option value="">Tous les projets</option>
           {projets.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
         </select>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
+        <div className="band-pills flex flex-wrap gap-1 rounded-2xl p-1">
           {[['', `Tous (${besoins.length})`], ...Object.entries(STATUTS_BESOIN).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
             <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-white'}`}>
@@ -506,7 +506,7 @@ export default function Besoins() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
+        <div className="band-pills flex flex-wrap gap-1 rounded-2xl p-1">
           {[['', 'Validation : toutes'], ['en_attente', `⏳ ${compteurValidation('en_attente')}`], ['valide', `✅ ${compteurValidation('valide')}`], ['refuse', `❌ ${compteurValidation('refuse')}`]].map(([v, l]) => (
             <button key={v || 'toutes'} onClick={() => setFiltreValidation(v)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreValidation === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-white'}`}>
@@ -525,10 +525,12 @@ export default function Besoins() {
               </Button>
             </>
           )}
-          <Button size="sm" variant="outline" onClick={openLot}><Layers size={14} className="mr-1" />Ajout multiple</Button>
-          <Button onClick={openCreate} size="sm"><Plus size={14} className="mr-1" />Nouveau besoin</Button>
+          <Button size="sm" variant="outline" onClick={openLot} className="btn-glass"><Layers size={14} className="mr-1" />Ajout multiple</Button>
+          <Button onClick={openCreate} size="sm" className="btn-glass"><Plus size={14} className="mr-1" />Nouveau besoin</Button>
+        </div>
         </div>
       </div>
+
 
       {/* Récapitulatif type « devis quantitatif et estimatif » — par ouvrage (section),
           avec sous-totaux Matériaux / Main d'œuvre puis total par ouvrage et total général. */}
@@ -598,6 +600,7 @@ export default function Besoins() {
           moins fréquentes (Prendre en charge/Satisfait/Annuler, Observation du PAU)
           restent disponibles dans la fenêtre de détail, qui n'est plus en lecture
           seule — rien de ce qu'offrait la carte n'a été retiré. */}
+      <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un besoin, un demandeur, un fournisseur…" />
       {!liste.length ? (
         <Card>
           <div className="flex flex-col items-center gap-2 py-10 text-gray-400">

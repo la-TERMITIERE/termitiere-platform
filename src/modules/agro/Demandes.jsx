@@ -5,6 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Plus, Check, X, BadgeCheck, AlertTriangle, Package, FileText, Timer, Trash2, RotateCcw } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
@@ -53,6 +54,7 @@ export default function Demandes() {
     ...aliments.map((a) => ({ ...a, type: 'aliment' }))
   ], [especes, aliments])
 
+  const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('sortie_demandee')
   const [createOpen, setCreateOpen] = useState(false)
   const [pick, setPick] = useState('')
@@ -76,6 +78,7 @@ export default function Demandes() {
   const filtrees = useMemo(
     () => enCircuit
       .filter((f) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(f) : factureStatut(f) === filtre))
+      .filter((f) => correspond(recherche, f.client?.nom, f.numero))
       .sort((a, b) => (a.date < b.date ? 1 : -1)),
     [enCircuit, filtre]
   )
@@ -175,6 +178,7 @@ export default function Demandes() {
             </button>
           ))}
         </div>
+        <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
         {isAgent && <Button className="ml-auto" onClick={() => { setPick(brouillons[0]?.id || ''); setCreateOpen(true) }}><Plus size={16} /> Nouvelle demande de sortie</Button>}
       </div>
 

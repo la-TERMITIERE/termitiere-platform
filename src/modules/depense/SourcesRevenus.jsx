@@ -217,21 +217,7 @@ export default function SourcesRevenus() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
-      </div>
-
-      {/* KPI par secteur — une carte par secteur générateur de revenu réellement présent
-          dans les données (un nouveau secteur ajoute automatiquement sa carte). Somme du
-          jour par défaut, ou du mois choisi dans le filtre ci-dessous. */}
-      {kpiParSecteur.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {kpiParSecteur.map(({ secteur, montant }) => (
-            <StatCard key={secteur.id} title={secteur.label} value={formatMoney(montant)}
-              sub={periodeLabel} icon={iconeSecteur(secteur.id)} accent={secteur.color} />
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-end gap-3">
+        <div className="band-filtres">
         <div className="min-w-[160px]">
           <label className="mb-1 block text-xs font-semibold text-gray-600">Recherche</label>
           <div className="relative">
@@ -255,9 +241,23 @@ export default function SourcesRevenus() {
         </div>
         <span className="ml-auto text-xs text-gray-400">{liste.length} entrée(s) · {formatMoney(total)}</span>
         {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
+          <Button variant="outline" onClick={exportXLSX} className="btn-glass"><FileSpreadsheet size={16} /> Export Excel</Button>
         )}
+        </div>
       </div>
+
+      {/* KPI par secteur — une carte par secteur générateur de revenu réellement présent
+          dans les données (un nouveau secteur ajoute automatiquement sa carte). Somme du
+          jour par défaut, ou du mois choisi dans le filtre ci-dessous. */}
+      {kpiParSecteur.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {kpiParSecteur.map(({ secteur, montant }) => (
+            <StatCard key={secteur.id} title={secteur.label} value={formatMoney(montant)}
+              sub={periodeLabel} icon={iconeSecteur(secteur.id)} accent={secteur.color} />
+          ))}
+        </div>
+      )}
+
 
       {liste.length === 0 ? (
         <Card>

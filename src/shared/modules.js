@@ -140,14 +140,14 @@ export const MODULE_NAV = {
     { label: 'Compte bancaire', to: '/agro/banque', icon: Landmark, roles: BANQUE_ROLES },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
-    { label: 'Dépense', to: '/agro/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire'] },
+    { label: 'Dépense', to: '/agro/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire', 'agent'] },
     { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
     { label: 'Demandes de sortie', to: '/agro/demandes', icon: Send, badgeKey: 'agroDemandes' },
     // Ouvert à tout le monde, volontairement sans `roles` — n'importe qui doit pouvoir
     // signaler un besoin ; seule l'administration valide/refuse (dans l'écran lui-même).
     { label: 'Besoins', to: '/agro/besoins', icon: PackagePlus, badgeKey: 'agroBesoins' },
-    { label: 'Partenaires', to: '/agro/partenaires', icon: Handshake, perm: 'partenaires' },
+    { label: 'Partenaires', to: '/agro/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] },
     { label: 'Journal et Historique', to: '/agro/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/agro/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
@@ -163,7 +163,7 @@ export const MODULE_NAV = {
     { label: 'Prestations / Location', to: '/logistique/prestations', icon: BadgeDollarSign },
     { label: 'Transport', to: '/logistique/transport', icon: Truck },
     { label: 'Pilotage & Analyses', to: '/logistique/pilotage', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
-    { label: 'Dépense', to: '/logistique/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire'] },
+    { label: 'Dépense', to: '/logistique/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire', 'agent'] },
     { label: 'Facturation', to: '/logistique/factures', icon: FileText },
     { label: 'Autorisations sortie', to: '/logistique/demandes', icon: Send, badgeKey: 'logistiqueDemandes' },
     { label: 'Besoins', to: '/logistique/besoins', icon: PackagePlus, badgeKey: 'logistiqueBesoins' },
@@ -171,7 +171,7 @@ export const MODULE_NAV = {
     { label: 'Référentiel matériel', to: '/logistique/referentiel', icon: Boxes },
     { label: 'Clients', to: '/logistique/clients', icon: UserCircle },
     { label: 'Fournisseurs', to: '/logistique/fournisseurs', icon: Factory },
-    { label: 'Partenaires', to: '/logistique/partenaires', icon: Handshake, perm: 'partenaires' },
+    { label: 'Partenaires', to: '/logistique/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] },
     { label: 'Journal et Historique', to: '/logistique/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/logistique/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
@@ -195,13 +195,13 @@ export const MODULE_NAV = {
     // des données reste réservée à l'administration (garde interne à l'écran).
     { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: [...ADMIN_VOLETS_ROLES, 'secretaire', 'agent'] },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle },
-    { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires' }
+    { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] }
   ],
   foncier: [
     { label: 'Dashboard', to: '/foncier', icon: LayoutDashboard, end: true },
     { label: 'Dossiers fonciers', to: '/foncier/dossiers', icon: FileText },
     { label: 'Besoins', to: '/foncier/besoins', icon: PackagePlus, badgeKey: 'foncierBesoins' },
-    { label: 'Partenaires', to: '/foncier/partenaires', icon: Handshake, perm: 'partenaires' },
+    { label: 'Partenaires', to: '/foncier/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] },
     { label: 'Journal et Historique', to: '/foncier/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/foncier/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
@@ -269,9 +269,9 @@ export const MODULE_NAV = {
     { label: 'Clients partenaires', to: '/gym/clients-partenaires', icon: HandCoins, roles: FINANCE_VIEW_ROLES },
     { label: 'Coachs', to: '/gym/coachs', icon: UserCog },
     { label: 'Pilotage & Analyses', to: '/gym/pilotage', icon: TrendingUp, roles: [...FINANCE_VIEW_ROLES, 'agent'] },
-    { label: 'Dépense', to: '/gym/finances', icon: Scale, roles: FINANCE_VIEW_ROLES },
+    { label: 'Dépense', to: '/gym/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'agent'] },
     { label: 'Besoins', to: '/gym/besoins', icon: PackagePlus, badgeKey: 'gymBesoins' },
-    { label: 'Partenaires', to: '/gym/partenaires', icon: Handshake, perm: 'partenaires' },
+    { label: 'Partenaires', to: '/gym/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] },
     { label: 'Journal et Historique', to: '/gym/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/gym/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
@@ -320,8 +320,8 @@ export const MODULE_NAV = {
     { label: 'Tâches',             to: '/garderie/taches',    icon: ListChecks },
     { label: 'Besoins',            to: '/garderie/besoins',   icon: PackagePlus,     badgeKey: 'garderieBesoins' },
     { label: 'Analyse & Pilotage', to: '/garderie/analyses',  icon: BarChart2,       roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire'] },
-    { label: 'Dépense', to: '/garderie/finances', icon: Scale,          roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire','secretaire'] },
-    { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires' },
+    { label: 'Dépense', to: '/garderie/finances', icon: Scale,          roles: [...FULL_ACCESS_ROLES,'gerant','gerante_garderie','superviseur','partenaire','secretaire','agent'] },
+    { label: 'Partenaires',        to: '/garderie/partenaires', icon: Handshake,     perm: 'partenaires', roles: ['agent'] },
     { label: 'Journal et Historique', to: '/garderie/journal', icon: BookOpen,       roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres',         to: '/garderie/params',    icon: Settings,        roles: ADMIN_VOLETS_ROLES }
   ],
@@ -333,7 +333,7 @@ export const MODULE_NAV = {
     { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: ANALYSES_DEPENSE_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
-    { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires' },
+    { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires', roles: ['agent'] },
     { label: 'Journal et Historique',        to: '/depense/journal',      icon: BookOpen,        roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres',                   to: '/depense/params',       icon: Settings,        roles: ADMIN_VOLETS_ROLES }
   ]

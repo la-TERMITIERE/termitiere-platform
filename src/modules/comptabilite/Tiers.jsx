@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Users, Plus, Pencil, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -15,6 +16,7 @@ const vide = (type) => ({ type, nom: '', compte: TYPES_TIERS[type].compte, telep
 
 export default function Tiers() {
   const { tiers, loading } = useCompta()
+  const [recherche, setRecherche] = useState('')
   const [tab, setTab] = useState('client')
   const [modal, setModal] = useState(null)
 
@@ -64,6 +66,7 @@ export default function Tiers() {
           <p className="font-bold text-gray-800 dark:text-gray-100">{estClient ? 'Registre des Créances Clients' : 'Registre des Dettes Fournisseurs'}</p>
           <p className="text-xs text-gray-500">{estClient ? 'Suivi des factures de ventes et relances clients.' : 'Suivi des factures d\'achats et échéances de paiement.'}</p>
         </div>
+        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un tiers par nom…" /></div>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-white/5">
@@ -73,7 +76,7 @@ export default function Tiers() {
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-white/10">
             {liste.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">{estClient ? 'Aucun client répertorié.' : 'Aucun fournisseur répertorié.'}</td></tr>}
-            {liste.map((t) => (
+            {liste.filter((t) => correspond(recherche, t.nom, t.telephone, t.email)).map((t) => (
               <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                 <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{t.nom}{t.ville ? <span className="text-xs text-gray-400"> · {t.ville}</span> : ''}</td>
                 <td className="px-3 py-2 font-mono text-xs">{t.compte}</td>

@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react'
 import { Truck, Plus, Trash2, Pencil, X, MapPin, Clock, Fuel } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -37,6 +38,7 @@ export default function Transport() {
   const { data: transports } = useCollection('evenementiel_transports')
   const { start, end, node: periodNode } = usePeriodSelect('mois')
 
+  const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)   // { data, isNew, id }
   const [dep, setDep] = useState({ label: '', montant: '' }) // brouillon de dépense
   const [toDelete, setToDelete] = useState(null)
@@ -147,6 +149,7 @@ export default function Transport() {
       )}
 
       {/* Tableau des trajets de la période */}
+      <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un chauffeur, une plaque, un client…" />
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -163,7 +166,7 @@ export default function Transport() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {liste.map((t) => {
+            {liste.filter((t) => correspond(recherche, t.chauffeur, t.plaque, t.clientNom, t.agentNom)).map((t) => {
               const d = totalDep(t.depenses)
               const m = margeDe(t)
               return (

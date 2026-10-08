@@ -1,4 +1,5 @@
 // Fournisseurs — CRUD + note qualité + alerte inactivité (>30 j).
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useState } from 'react'
 import { Plus, Trash2, Star, AlertTriangle, Truck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -21,6 +22,7 @@ export default function Fournisseurs() {
   const { data: fournisseurs } = useCollection('logistique_fournisseurs')
   const role = useAuth((s) => s.role)
   const lectureSeule = isReadOnlyRole(role)
+  const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
 
   async function save() {
@@ -47,6 +49,7 @@ export default function Fournisseurs() {
           <h2 className="text-lg font-extrabold">Fournisseurs</h2>
           <p className="text-sm text-white/80">{fournisseurs.length} fournisseur(s)</p>
         </div>
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un fournisseur…" />
         {!lectureSeule && (
           <button onClick={() => setModal({ data: empty(), id: null })}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -55,7 +58,7 @@ export default function Fournisseurs() {
         )}
       </div>
       <Card className="p-0">
-        <Table
+        <Table searchBy={['nom', 'contact', 'telephone']} searchQuery={recherche}
           columns={[
             { key: 'nom', label: 'Nom', render: (r) => <span className="flex items-center gap-2">{r.nom}{inactif(r) && <AlertTriangle size={14} className="text-amber-500" title="Inactif > 30 j" />}</span> },
             { key: 'specialite', label: 'Spécialité' },

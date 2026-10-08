@@ -265,6 +265,16 @@ export default function Factures() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <div className="band-filtres">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
+          <Input placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        </div>
+        {canExportExcel(role) && (
+          <Button variant="outline" onClick={exportXLSX} className="btn-glass"><FileSpreadsheet size={16} /> Export Excel</Button>
+        )}
+        {peutFacturer() && <Button className="btn-glass ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
+        </div>
       </div>
 
       {estAdministration && (
@@ -277,16 +287,6 @@ export default function Factures() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
-          <Input placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-        </div>
-        {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
-        )}
-        {peutFacturer() && <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
-      </div>
 
       <Card className="p-0">
         <Table stickyHeader columns={columns} rows={liste} empty="Aucune facture." />

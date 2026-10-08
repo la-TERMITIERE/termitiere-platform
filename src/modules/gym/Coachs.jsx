@@ -1,5 +1,6 @@
 // MAXI-GYM — Coachs : pointage de l'arrivée (vs planning programmé en Paramètres)
 // + performance comparée (fréquentation clients les jours où chaque coach est présent).
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { UserCog, CheckCircle2, Clock3, Bed, Pencil, Plus, CalendarDays, BarChart3, History, Ticket, CreditCard, FileText, UserX, ChevronRight } from 'lucide-react'
@@ -18,6 +19,7 @@ import { creneauCoach, horairesVides, JOURS_SEMAINE } from './data'
 import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
 import CoachAbsentModal from './CoachAbsentModal'
 import CoachDetailModal from './CoachDetailModal'
+import { CoachBoutonsStyles, BoutonPointer, BoutonPointerRepos, BoutonAbsent, IndicateurRepos } from './CoachBoutons'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import CoachFormModal from './CoachFormModal'
 import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle } from './uiHelpers'
@@ -47,6 +49,7 @@ export default function Coachs() {
   const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
 
   const [pointing, setPointing] = useState(null) // id du coach en cours de pointage
+  const [recherche, setRecherche] = useState('')
   // Ajout/modification du planning — ouvert à tous ici (agents inclus). La
   // SUPPRESSION reste réservée à l'administration, depuis Paramètres (les agents
   // n'y ont pas accès) : pas de bouton retirer sur ce volet.
@@ -132,7 +135,7 @@ export default function Coachs() {
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin] = useState('')
   const toutes = useMemo(() => [...pointages].sort((a, b) => (a.date < b.date ? 1 : -1)), [pointages])
-  const historique = useMemo(() => {
+  const historiqueSansRecherche = useMemo(() => {
     if (modePeriode === 'mois' && filtreMois) return toutes.filter((p) => (p.date || '').startsWith(filtreMois))
     if (modePeriode === 'annee' && filtreAnnee) return toutes.filter((p) => (p.date || '').startsWith(filtreAnnee))
     if (modePeriode === 'plage' && (filtreDebut || filtreFin)) {
@@ -141,6 +144,7 @@ export default function Coachs() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((p) => p.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  const historique = useMemo(() => historiqueSansRecherche.filter((p) => correspond(recherche, p.coachNom)), [historiqueSansRecherche, recherche])
 
   // Export PDF — reprend exactement `historique` (donc le filtre de période actif),
   // avec une synthèse littéraire (répartition par coach + taux de retard) au
@@ -193,6 +197,7 @@ export default function Coachs() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un coach…" />
         {canExportGym(role) && (
           <button onClick={exportPDFDoc}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -202,6 +207,7 @@ export default function Coachs() {
       </div>
 
       <Card title={titreSection(CalendarDays, "Aujourd'hui")} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+        <CoachBoutonsStyles />
         <div className="space-y-2">
           {equipeDuJour.map((c) => {
             const p = pointageDuJour(c.id)
@@ -222,11 +228,9 @@ export default function Coachs() {
                 </div>
                 {!c.creneau && !p ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="neutral" className="border border-dashed border-gray-300 opacity-80"><Bed size={11} className="mr-1 inline" /> Repos</Badge>
+                    <IndicateurRepos />
                     {peutSaisir && (
-                      <Button size="sm" variant="outline" loading={pointing === c.id} onClick={() => pointerArrivee(c)} className="rounded-full px-3">
-                        <Clock3 size={14} /> Pointer quand même
-                      </Button>
+                      <BoutonPointerRepos loading={pointing === c.id} onClick={() => pointerArrivee(c)} />
                     )}
                   </div>
                 ) : p && estAbsent(p) ? (
@@ -237,16 +241,10 @@ export default function Coachs() {
                   </Badge>
                 ) : peutSaisir ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button size="sm" loading={pointing === c.id} onClick={() => pointerArrivee(c)}
-                      className="rounded-full px-4 shadow-[0_6px_16px_-4px_rgba(232,133,15,0.55)] hover:shadow-[0_8px_20px_-4px_rgba(232,133,15,0.7)]"
-                      style={{ background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR2})` }}>
-                      <Clock3 size={14} /> Pointer l'arrivée
-                    </Button>
+                    <BoutonPointer loading={pointing === c.id} onClick={() => pointerArrivee(c)} />
                     {/* « Marquer absent » : uniquement si le coach n'a pas pointé ET que son heure est dépassée. */}
                     {retardMin > 0 && (
-                      <Button size="sm" variant="danger" onClick={() => setAbsentCible(c)} className="rounded-full px-4">
-                        <UserX size={14} /> Marquer absent
-                      </Button>
+                      <BoutonAbsent onClick={() => setAbsentCible(c)} />
                     )}
                   </div>
                 ) : (

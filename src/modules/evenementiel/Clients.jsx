@@ -53,7 +53,7 @@ export default function Clients() {
 
       {!lectureSeule && <div className="flex justify-end"><Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Nouveau client</Button></div>}
       <Card className="p-0">
-        <Table
+        <Table searchBy={['nom', 'contact', 'telephone']}
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'profession', label: 'Profession', render: (r) => r.profession || '—' },

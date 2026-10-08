@@ -9,6 +9,7 @@
 // d'origine, la catégorie et le statut de son abonnement, pour confirmer qu'il
 // est bien abonné avant de le laisser entrer. Les KPI (Dashboard/Pilotage), eux,
 // restent strictement par salle — ce cloisonnement n'est levé qu'ici.
+import ChampRecherche from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
 import { Users, Eye, EyeOff, Search, Trash2, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -130,7 +131,7 @@ export default function Clients() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
         style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, #A6342Ae6 100%)` }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -138,42 +139,35 @@ export default function Clients() {
         }}>
           <Users size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Clients</h2>
           <p className="text-sm text-white/80">Répertoire des deux salles : cliquer une ligne pour voir la fiche</p>
         </div>
-      </div>
-
-      <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        Les clients apparaissent automatiquement ici dès qu'une séance ou un abonnement est enregistré à leur nom : pas d'ajout manuel. Ce répertoire <strong>affiche les deux salles ensemble</strong> (contrairement au reste du module) : un abonné de Lomé peut se présenter à Kara pendant un séjour, et inversement : utilisez le filtre par salle et la recherche par nom pour vérifier sa salle d'origine et si son abonnement est bien valide. En revanche, chaque salle garde sa propre clientèle : le <strong>total dépensé, la dernière visite et le statut d'abonnement sont comptés salle par salle</strong> : l'activité de Lomé n'est jamais mêlée à celle de Kara. Un client sans passage depuis {SEUIL_INACTIVITE_JOURS} jours (deux mois) sort de la liste par défaut.
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un nom…" className="w-56 pl-8" />
-        </div>
-        <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
+        <div className="flex gap-1 rounded-2xl border border-white/30 bg-white/15 p-1 backdrop-blur-sm">
           <button onClick={() => setFiltreSite('')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${!filtreSite ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-colors ${!filtreSite ? 'bg-white text-orange-700' : 'text-white/80 hover:bg-white/20'}`}>
             Toutes les salles
           </button>
           {SITES.map((s) => (
             <button key={s.id} onClick={() => setFiltreSite(s.id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${filtreSite === s.id ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              style={filtreSite === s.id ? { background: s.accent } : undefined}>
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-colors ${filtreSite === s.id ? 'bg-white text-orange-700' : 'text-white/80 hover:bg-white/20'}`}>
               {s.emoji} {s.label}
             </button>
           ))}
         </div>
         {nbInactifs > 0 && (
           <button onClick={() => setAfficherInactifs((v) => !v)}
-            className="ml-auto flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
             {afficherInactifs ? <EyeOff size={14} /> : <Eye size={14} />}
-            {afficherInactifs ? 'Masquer les clients inactifs (+2 mois)' : `Afficher aussi ${nbInactifs} client(s) inactif(s) depuis 2 mois ou plus`}
+            {afficherInactifs ? 'Masquer les inactifs (+2 mois)' : `+ ${nbInactifs} inactif(s) depuis 2 mois`}
           </button>
         )}
       </div>
+
+      <p className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        Un client apparaît dès sa première séance ou son premier abonnement (pas d'ajout manuel). Répertoire des <strong>deux salles</strong> : filtrez par salle, les totaux et statuts sont comptés salle par salle. Sans passage depuis 60 jours, il est masqué par défaut.
+      </p>
 
       <Card className="p-0">
         <Table

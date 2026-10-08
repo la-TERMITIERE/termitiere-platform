@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react'
 import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
@@ -72,6 +73,7 @@ export default function Autorisations() {
   // d'approbation n'a encore statué (sinon c'est un engagement réel, cf. refuser).
   const peutSupprimer = FULL_ACCESS_ROLES.includes(role)
 
+  const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('en_attente')
   const [busy, setBusy] = useState(false)
   const [actionModal, setActionModal] = useState(null) // { d, type: 'approuver' | 'refuser' | 'certifier' }
@@ -83,8 +85,9 @@ export default function Autorisations() {
   const compteur = (st) => depenses.filter((d) => d.statut === st).length
   const filtrees = useMemo(() => {
     const rows = filtre === 'tous' ? depenses.filter((d) => d.statut) : depenses.filter((d) => d.statut === filtre)
-    return rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-  }, [depenses, filtre])
+    return rows.filter((d) => correspond(recherche, d.description, d.beneficiaire, d.enregistrePar, d.approuveePar, d.categorie))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+  }, [depenses, filtre, recherche])
 
   const run = async (fn, okMsg) => {
     setBusy(true)
@@ -228,6 +231,7 @@ export default function Autorisations() {
         ))}
       </div>
 
+<ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un bénéficiaire, un libellé…" />
       {filtrees.length === 0 ? (
         <Card><p className="py-8 text-center text-sm text-gray-400">Aucune demande dans cet état.</p></Card>
       ) : (

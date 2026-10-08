@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
@@ -19,6 +20,9 @@ export default function CrudList({
   const { data } = useCollection(collection)
   const { data: employes } = useCollection('rh_employes')
   const [modal, setModal] = useState(null)
+  const [recherche, setRecherche] = useState('')
+  // Recherche par nom : tous les textes de la ligne (employé, titre, nom…).
+  const lignes = data.filter((row) => correspond(recherche, ...Object.values(row).filter((v) => typeof v === 'string')))
 
   async function save() {
     const out = {}
@@ -52,6 +56,7 @@ export default function CrudList({
       {extraHeader}
 
       <Card className="!p-0 overflow-hidden">
+        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher par nom…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -61,8 +66,8 @@ export default function CrudList({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
-              {data.length === 0 && <tr><td colSpan={colonnes.length + 1} className="px-3 py-8 text-center text-gray-400">{emptyText}</td></tr>}
-              {data.map((row) => (
+              {lignes.length === 0 && <tr><td colSpan={colonnes.length + 1} className="px-3 py-8 text-center text-gray-400">{emptyText}</td></tr>}
+              {lignes.map((row) => (
                 <tr key={row.id} className="group hover:bg-gray-50 dark:hover:bg-white/5">
                   {colonnes.map((c) => <td key={c.key} className={`px-3 py-2 ${c.align === 'right' ? 'text-right' : ''} ${c.strong ? 'font-medium text-gray-800 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300'}`}>{renderCell(c, row)}</td>)}
                   <td className="px-2 py-2"><div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100">
