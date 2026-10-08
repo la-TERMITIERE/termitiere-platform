@@ -377,6 +377,21 @@ export default function Prestations() {
             <Plus size={14} /> Nouvelle prestation
           </button>
         )}
+        <div className="band-filtres">
+        <div className="relative">
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
+          <input value={filtreClient} onChange={(e) => setFiltreClient(e.target.value)} placeholder="Rechercher un client…"
+            className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+        <div className="band-pills relative flex flex-wrap gap-1 rounded-2xl p-1">
+          {[['', 'Tous'], ...Object.entries(STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
+            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        </div>
       </div>
 
       {/* Rappel : prestations dont la période est passée depuis plus de
@@ -409,24 +424,6 @@ export default function Prestations() {
         </div>
       )}
 
-      {/* Filtres secondaires (statut, client) — glassmorphism léger (teinte + reflet),
-          même recette que Facturation. */}
-      <div className="relative flex flex-wrap items-end gap-2 overflow-hidden rounded-2xl border border-red-100/50 bg-gradient-to-br from-red-50/40 via-white/70 to-white/70 p-2.5 shadow-sm backdrop-blur-md">
-        <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
-        <div className="relative">
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
-          <input value={filtreClient} onChange={(e) => setFiltreClient(e.target.value)} placeholder="Rechercher un client…"
-            className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
-        <div className="relative flex flex-wrap gap-1 rounded-xl border border-white/60 bg-white/50 p-1 backdrop-blur-sm">
-          {[['', 'Tous'], ...Object.entries(STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
-            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
       <Card className="p-0">
         <Table
           stickyHeader

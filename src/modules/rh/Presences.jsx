@@ -1,6 +1,7 @@
 // Présences & Congés — grille de saisie quotidienne par employé.
 import { useMemo, useState } from 'react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Badge from '../../shared/ui/Badge'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -14,6 +15,7 @@ export default function Presences() {
   const { data: employes } = useCollection('rh_employes')
   const { data: presences } = useCollection('rh_presences')
   const [date, setDate] = useState(todayStr())
+  const [recherche, setRecherche] = useState('')
 
   // Statut d'un employé à la date sélectionnée
   const statutOf = useMemo(() => {
@@ -36,12 +38,13 @@ export default function Presences() {
         <div><label className="mb-1 block text-xs font-semibold text-gray-600">Date</label><Input type="date" className="w-auto" value={date} onChange={(e) => setDate(e.target.value)} /></div>
       </div>
 
+      <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
       <Card className="p-0">
         {employes.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">Ajoutez d'abord des employés.</p>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {employes.map((emp) => {
+            {employes.filter((emp) => correspond(recherche, emp.nom, emp.prenom)).map((emp) => {
               const cur = statutOf[emp.id]?.statut
               return (
                 <li key={emp.id} className="flex items-center justify-between gap-3 px-3 py-2.5">

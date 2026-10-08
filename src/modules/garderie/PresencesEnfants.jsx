@@ -417,6 +417,27 @@ export default function PresencesEnfants() {
             </div>
           )}
         </div>
+        <div className="band-filtres">
+        <div className="relative min-w-[160px] flex-1 sm:flex-none">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input className="w-full rounded-xl border border-gray-200/80 bg-white/80 py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            placeholder="Rechercher un enfant…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        </div>
+        <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)} className="w-auto !bg-white/80">
+          <option value="">Tous les groupes</option>
+          {GROUPES_AGE.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+        </Select>
+        {modePeriode === 'jour' && (
+          <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className="w-auto !bg-white/80">
+            <option value="">Tous les statuts</option>
+            <option value="present">Présents</option>
+            <option value="absent">Absents</option>
+            <option value="excuse">Excusés</option>
+            <option value="non_pointe">Non pointés</option>
+          </Select>
+        )}
+        <Button variant="outline" onClick={exportXLSX} className="btn-glass ml-auto shrink-0"><FileSpreadsheet size={15} /> Export</Button>
+        </div>
       </div>
 
       {/* KPI — bande unique glassmorphism, tous les indicateurs alignés */}
@@ -449,30 +470,6 @@ export default function PresencesEnfants() {
         </div>
       </div>
 
-      {/* Filtres + export — une seule bande glassmorphism compacte, tout aligné,
-          dégradé subtil entre la couleur du module (orange) et le blanc */}
-      <div className="relative flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 p-2.5 shadow-[0_10px_24px_-12px_rgba(26,26,26,0.2),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.16) 0%, rgba(245,168,0,0.08) 35%, rgba(255,255,255,0.65) 75%)' }}>
-        <div className="relative min-w-[160px] flex-1 sm:flex-none">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input className="w-full rounded-xl border border-gray-200/80 bg-white/80 py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-            placeholder="Rechercher un enfant…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-        </div>
-        <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)} className="w-auto !bg-white/80">
-          <option value="">Tous les groupes</option>
-          {GROUPES_AGE.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-        </Select>
-        {modePeriode === 'jour' && (
-          <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className="w-auto !bg-white/80">
-            <option value="">Tous les statuts</option>
-            <option value="present">Présents</option>
-            <option value="absent">Absents</option>
-            <option value="excuse">Excusés</option>
-            <option value="non_pointe">Non pointés</option>
-          </Select>
-        )}
-        <Button variant="outline" onClick={exportXLSX} className="ml-auto shrink-0"><FileSpreadsheet size={15} /> Export</Button>
-      </div>
 
       {modePeriode === 'jour' && isToday && (
         <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-2 text-sm text-orange-800">

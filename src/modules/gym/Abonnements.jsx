@@ -1,5 +1,6 @@
 // MAXI-GYM — Abonnements : liste complète + ajout d'un abonnement.
 // Simple / VIP : durée fixe 1 mois, tarif fixe. Classique : durée ET tarif libres.
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
 import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -90,6 +91,7 @@ export default function Abonnements() {
 
   const [modal, setModal] = useState(null)
   const [filtreSexe, setFiltreSexe] = useState('')
+  const [recherche, setRecherche] = useState('')
   const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [saving, setSaving] = useState(false)
   const [suggClient, setSuggClient] = useState(false)
@@ -143,7 +145,7 @@ export default function Abonnements() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((a) => a.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
-  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe), [listePeriode, filtreSexe, idxSexe])
+  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe).filter((a) => correspond(recherche, a.clientNom)), [listePeriode, filtreSexe, idxSexe, recherche])
   const nbInconnus = useMemo(() => listePeriode.filter((a) => !sexeDe(a, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
@@ -392,6 +394,7 @@ export default function Abonnements() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
         <SexeFiltre value={filtreSexe} onChange={setFiltreSexe} inconnus={nbInconnus} />
         {canExportGym(role) && (
           <button onClick={exportXLSX}

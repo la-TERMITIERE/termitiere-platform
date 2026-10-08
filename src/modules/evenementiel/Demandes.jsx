@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react'
 import { Plus, Shield, Trash2, RotateCcw, Eye, KeyRound } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
@@ -58,10 +59,11 @@ export default function Demandes() {
   // Onglet 'sortie' (briques) ou 'location' (matériel) — même workflow, données
   // affichées différentes. La création d'une location se fait depuis Materiel.jsx,
   // pas ici (contextuelle au matériel choisi).
+  const [recherche, setRecherche] = useState('')
   const [ongletDemande, setOngletDemande] = useState('sortie')
   const typeDe = (d) => d.type || 'sortie'
 
-  const [filtre, setFiltre] = useState('en_attente')
+  const [filtre, setFiltre] = useState('tous') // plus de pastilles de statut : toutes les demandes s'affichent
   // Filtre de période — bandeau (glassmorphism). Vide par défaut = tout l'historique
   // (ne doit jamais masquer une demande en_attente faute d'avoir choisi une période).
   const [modePeriode, setModePeriode] = useState('mois')
@@ -97,8 +99,9 @@ export default function Demandes() {
     [...demandesOnglet]
       .filter((d) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(d) : normaliserStatut(d.statut) === filtre))
       .filter((d) => dansPeriode(d.date))
+      .filter((d) => correspond(recherche, d.clientNom, d.demandeurNom, d.venteNum, d.num))
       .sort((a, b) => (a.date < b.date ? 1 : -1)),
-  [demandesOnglet, filtre, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  [demandesOnglet, filtre, recherche, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
 
   const stockDe = (briqueId) => dernierStockBriques(inventaires, briqueId, briqueId === 'caillasses' ? 'caillasses' : 'pret')
 
@@ -395,11 +398,19 @@ export default function Demandes() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <div className="band-filtres">
+<ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client, un demandeur…" />
+        {!lectureSeule && ongletDemande === 'sortie' && (
+          <Button className="btn-glass ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
+            <Plus size={16} /> Demander une autorisation
+          </Button>
+        )}
+        </div>
       </div>
 
       {/* Deux onglets, même écran, même workflow — cf. en-tête du fichier. */}
       <PillTabs active={ongletDemande} accent={COULEUR_MODULE.evenementiel}
-        onChange={(id) => { setOngletDemande(id); setFiltre('en_attente') }}
+        onChange={(id) => { setOngletDemande(id); setFiltre('tous') }}
         tabs={[
           { id: 'sortie', label: '📦 Sortie briques', accent: '#7c3aed' },
           { id: 'location', label: `🔑 Location matériel${nbLocationEnAttente ? ` (${nbLocationEnAttente})` : ''}`, accent: '#0891b2' }
@@ -412,18 +423,6 @@ export default function Demandes() {
           : <>Toute location de matériel exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) : se demande depuis <strong>Matériel & Matériaux</strong>, bouton « Louer » sur le matériel concerné.</>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {(ongletDemande === 'sortie' ? ['en_attente', 'approuve_n1', 'correctif', 'certifie', 'refuse', 'tous'] : ['en_attente', 'approuve_n1', 'certifie', 'refuse', 'tous']).map((f) => (
-          <button key={f} onClick={() => setFiltre(f)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filtre === f ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'}`}>
-            {f === 'tous' ? 'Toutes' : f === 'correctif' ? `${CORRECTIF_STATUTS.demande.short}${nbCorrectifs ? ` (${nbCorrectifs})` : ''}` : STATUTS[f]?.short || f}
-          </button>
-        ))}
-        {!lectureSeule && ongletDemande === 'sortie' && (
-          <Button className="ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
-            <Plus size={16} /> Demander une autorisation
-          </Button>
-        )}
-      </div>
 
       <Card className="p-0">
        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>

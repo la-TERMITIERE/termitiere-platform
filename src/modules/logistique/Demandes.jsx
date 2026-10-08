@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import { Plus, Trash2, RotateCcw, Eye, CheckCircle2, Send } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import { COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
@@ -75,6 +76,7 @@ export default function Demandes() {
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
   const inventaires = useMemo(() => allInventaires.filter((i) => matchSite(i, site)), [allInventaires, site])
 
+  const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('en_attente')
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null)
@@ -133,8 +135,9 @@ export default function Demandes() {
   const filtrees = useMemo(() =>
     [...liste]
       .filter((d) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(d) : normaliserStatut(d.statut) === filtre))
+      .filter((d) => correspond(recherche, d.clientNom, d.demandeurNom, d.prestationNum, d.num))
       .sort((a, b) => (a.date < b.date ? 1 : -1)),
-  [liste, filtre])
+  [liste, filtre, recherche])
 
   const prestationDeFacture = (factureId) => {
     const f = factures.find((x) => x.id === factureId)
@@ -367,6 +370,7 @@ export default function Demandes() {
           <h2 className="text-lg font-extrabold">Autorisations de sortie</h2>
           <p className="text-sm text-white/80">{liste.length} autorisation(s) · {siteLabel(site)}</p>
         </div>
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
         {!lectureSeule && (
           <button onClick={openCreate} disabled={!facturesDispo.length}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50">

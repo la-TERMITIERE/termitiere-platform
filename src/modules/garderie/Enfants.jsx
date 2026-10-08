@@ -579,6 +579,33 @@ export default function Enfants() {
             )}
           </div>
         )}
+        <div className="band-filtres">
+        <div className="relative min-w-[150px] flex-1 sm:flex-none">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            className="w-full rounded-xl border border-gray-200/80 bg-white/80 py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            placeholder="Rechercher un enfant…"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+          />
+        </div>
+        <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)} className="w-auto !bg-white/80">
+          <option value="">Tous les groupes</option>
+          {(filtreProgramme ? GROUPES_AGE.filter((g) => GROUPES_PAR_PROGRAMME[filtreProgramme].includes(g.id)) : GROUPES_AGE)
+            .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+        </Select>
+        <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className="w-auto !bg-white/80">
+          <option value="">Tous les statuts</option>
+          {Object.entries(STATUTS_ENFANT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </Select>
+
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-gray-500 whitespace-nowrap">{liste.length} enfant(s)</span>
+          {!lectureSeule && (
+            <Button onClick={openCreate} className="btn-glass shrink-0"><Plus size={16} /> Inscrire un enfant</Button>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* Onglets — un volet par catégorie, chacun avec sa couleur et son
@@ -744,37 +771,6 @@ export default function Enfants() {
         </div>
       )}
 
-      {/* Filtres + inscription — une seule bande glassmorphism, dégradé subtil
-          entre la couleur du module (orange) et le blanc (même design que
-          Présences enfants). */}
-      <div className="relative flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 p-2.5 shadow-[0_10px_24px_-12px_rgba(26,26,26,0.2),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(232,57,14,0.16) 0%, rgba(245,168,0,0.08) 35%, rgba(255,255,255,0.65) 75%)' }}>
-        <div className="relative min-w-[150px] flex-1 sm:flex-none">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            className="w-full rounded-xl border border-gray-200/80 bg-white/80 py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-            placeholder="Rechercher un enfant…"
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-          />
-        </div>
-        <Select value={filtreGroupe} onChange={(e) => setFiltreGroupe(e.target.value)} className="w-auto !bg-white/80">
-          <option value="">Tous les groupes</option>
-          {(filtreProgramme ? GROUPES_AGE.filter((g) => GROUPES_PAR_PROGRAMME[filtreProgramme].includes(g.id)) : GROUPES_AGE)
-            .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-        </Select>
-        <Select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className="w-auto !bg-white/80">
-          <option value="">Tous les statuts</option>
-          {Object.entries(STATUTS_ENFANT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </Select>
-
-        <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-gray-500 whitespace-nowrap">{liste.length} enfant(s)</span>
-          {!lectureSeule && (
-            <Button onClick={openCreate} className="shrink-0"><Plus size={16} /> Inscrire un enfant</Button>
-          )}
-        </div>
-      </div>
 
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-sm">

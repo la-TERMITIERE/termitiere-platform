@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { FileText, Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
@@ -16,6 +17,7 @@ const vide = () => ({ employeId: '', type: 'cdi', dateDebut: todayStr(), dateFin
 export default function Contrats() {
   const { data: contrats } = useCollection(COL.contrats)
   const { data: employes } = useCollection(COL.employes)
+  const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
   const today = todayStr()
   const dans30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
@@ -63,6 +65,7 @@ export default function Contrats() {
       )}
 
       <Card className="!p-0 overflow-hidden">
+        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -74,7 +77,7 @@ export default function Contrats() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
               {enrichis.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Aucun contrat enregistré.</td></tr>}
-              {enrichis.map((c) => (
+              {enrichis.filter((c) => correspond(recherche, c.employeNom, empNom(c.employeId))).map((c) => (
                 <tr key={c.id} className="group hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{c.employeNom || empNom(c.employeId)}</td>
                   <td className="px-3 py-2"><Badge tone="info">{TYPES_CONTRAT[c.type]?.label || c.type}</Badge></td>

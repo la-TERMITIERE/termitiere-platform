@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -17,6 +18,7 @@ export default function Paie() {
   const { data: config } = useCollection(COL.config)
   const paieConfig = config.find((c) => c.id === 'paie') || PAIE_CONFIG_DEFAUT
 
+  const [recherche, setRecherche] = useState('')
   const [mois, setMois] = useState(todayStr().slice(0, 7))
   const actifs = useMemo(() => employes.filter((e) => (e.statut || 'actif') === 'actif'), [employes])
   const bulletinsMois = useMemo(() => bulletins.filter((b) => b.mois === mois), [bulletins, mois])
@@ -90,6 +92,7 @@ export default function Paie() {
           <p className="font-bold text-gray-800 dark:text-gray-100">Bulletins de {moisLabel(mois)}</p>
           <p className="text-xs text-gray-500">{bulletinsMois.length} bulletin(s) · {actifs.length} employé(s) actif(s)</p>
         </div>
+        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -102,7 +105,7 @@ export default function Paie() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
               {bulletinsMois.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">Aucun bulletin. Cliquez « Générer la paie ».</td></tr>}
-              {bulletinsMois.map((b) => (
+              {bulletinsMois.filter((b) => correspond(recherche, b.employeNom)).map((b) => (
                 <tr key={b.id} className="group hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{b.employeNom}</td>
                   <td className="px-3 py-2 text-gray-500">{b.poste || '—'}</td>

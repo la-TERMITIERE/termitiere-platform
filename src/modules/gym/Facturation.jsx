@@ -1,4 +1,5 @@
 // MAXI-GYM — Facturation : liste des factures générées (depuis Séances/Abonnements).
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
 import { Receipt, FileDown, FileSpreadsheet, FileText, Pencil, Trash2, Printer, Wallet, Ticket, CreditCard, Check } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -36,6 +37,7 @@ export default function Facturation() {
   const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
   const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [filtreSexe, setFiltreSexe] = useState('')
+  const [recherche, setRecherche] = useState('')
   const { generateFacturePDF } = usePDF('gym')
   const { role } = useAuth()
   const peutSupprimer = isFullAccessRole(role)
@@ -68,7 +70,7 @@ export default function Facturation() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((f) => f.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
-  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe), [listePeriode, filtreSexe, idxSexe])
+  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe).filter((f) => correspond(recherche, f.clientNom, f.numero)), [listePeriode, filtreSexe, idxSexe, recherche])
   const nbInconnus = useMemo(() => listePeriode.filter((f) => !sexeDe(f, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
   // Cumuls détaillés — séances / abonnements / les deux combinés (3 KPI distincts,
@@ -229,6 +231,7 @@ export default function Facturation() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
         <SexeFiltre value={filtreSexe} onChange={setFiltreSexe} inconnus={nbInconnus} />
         {canExportGym(role) && (
           <button onClick={() => setExportOpen(true)}

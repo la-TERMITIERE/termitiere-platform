@@ -162,7 +162,7 @@ export default function Utilisateurs() {
       )}
 
       <Card className="p-0">
-        <Table
+        <Table searchBy={['nom', 'login', 'email']}
           columns={[
             { key: 'nom', label: 'Utilisateur', render: (r) => (
               <div className="flex items-center gap-2.5">

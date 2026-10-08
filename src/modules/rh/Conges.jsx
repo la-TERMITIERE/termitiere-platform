@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { CalendarDays, Plus, Check, X } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -22,6 +23,7 @@ const nbJours = (d1, d2) => {
 export default function Conges() {
   const { data: conges } = useCollection(COL.conges)
   const { data: employes } = useCollection(COL.employes)
+  const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
 
   const empNom = (id) => employes.find((e) => e.id === id)?.nom || '—'
@@ -70,6 +72,7 @@ export default function Conges() {
 
       <Card className="!p-0 overflow-hidden">
         <div className="border-b border-gray-100 px-4 py-3 dark:border-white/10"><p className="font-bold text-gray-800 dark:text-gray-100">Demandes de congé</p></div>
+        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -81,7 +84,7 @@ export default function Conges() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
               {conges.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Aucune demande.</td></tr>}
-              {conges.map((c) => (
+              {conges.filter((c) => correspond(recherche, c.employeNom, empNom(c.employeId))).map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{c.employeNom || empNom(c.employeId)}</td>
                   <td className="px-3 py-2"><Badge tone={TYPES_CONGE[c.type]?.tone || 'neutral'}>{TYPES_CONGE[c.type]?.label || c.type}</Badge></td>

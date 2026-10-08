@@ -82,7 +82,7 @@ function SiteApp() {
         <Route path="seances" element={<Seances />} />
         <Route path="abonnements" element={<Abonnements />} />
         <Route path="pilotage" element={canViewPilotage(role) || role === 'agent' ? <Pilotage /> : <AccesRefuse />} />
-        <Route path="finances" element={canViewPilotage(role) ? <RecettesDepenses secteurId="gym" masquerRevenu /> : <AccesRefuse />} />
+        <Route path="finances" element={canViewPilotage(role) || role === 'agent' ? <RecettesDepenses secteurId="gym" masquerRevenu /> : <AccesRefuse />} />
         <Route path="besoins" element={<SectorBesoins secteurId="gym" />} />
         <Route path="facturation" element={<Facturation />} />
         <Route path="clients" element={<Clients />} />

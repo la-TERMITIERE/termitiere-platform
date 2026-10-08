@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { RotateCcw, Check, Plus, X, Pencil, Trash2 } from 'lucide-react'
 import { COULEUR_MODULE } from '../../utils/color'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -44,6 +45,7 @@ export default function Retours() {
   const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
 
+  const [recherche, setRecherche] = useState('')
   const [prestationId, setPrestationId] = useState('')
   // Retours AJOUTÉS, prêts à enregistrer : { materielId: [ { etat, qte, motif, penalite } ] }
   const [entrees, setEntrees] = useState({})
@@ -190,6 +192,7 @@ export default function Retours() {
           <h2 className="text-lg font-extrabold">Retours</h2>
           <p className="text-sm text-white/80">{retours.length} retour(s) · {siteLabel(site)}</p>
         </div>
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
       </div>
       <p className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Par <strong>prestation</strong> : choisissez-la, puis ajoutez les retours un à un par matériel (ex. 3 perdus, 2 cassés, le reste OK). <strong>OK</strong> réintègre le stock ; <strong>Cassé / Perdu</strong> demandent quantité, motif et <strong>pénalité</strong>. Le <strong>restant</strong> à rendre se met à jour automatiquement d'un passage à l'autre.
@@ -313,7 +316,7 @@ export default function Retours() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {[...retours].sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => {
+            {[...retours].filter((r) => correspond(recherche, r.clientNom, r.prestationNum, r.agentNom)).sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => {
               const casse = r.type !== 'OK'
               return (
               <tr key={r.id}>

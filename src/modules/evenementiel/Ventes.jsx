@@ -10,6 +10,7 @@ import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import StatCard from '../../shared/ui/StatCard'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
+import ChampRecherche from '../../shared/ui/ChampRecherche'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -284,6 +285,15 @@ export default function Ventes() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <ChampRecherche variant="glass" value={filtreClient} onChange={setFiltreClient} placeholder="Rechercher un client…" />
+        <div className="flex flex-wrap gap-1 rounded-2xl border border-white/30 bg-white/15 p-1 backdrop-blur-sm">
+          {[['', 'Tous'], ...Object.entries(STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
+            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-colors ${filtreStatut === v ? 'bg-white text-violet-700' : 'text-white/80 hover:bg-white/20'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -301,28 +311,33 @@ export default function Ventes() {
         </div>
       )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2.5">
+        <style>{`
+          @keyframes vente-balayage { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+          @keyframes vente-envol { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(3px, -3px) rotate(-8deg); } }
+        `}</style>
         {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
+          <button type="button" onClick={exportXLSX}
+            className="flex items-center gap-2 rounded-2xl border border-violet-200/80 bg-white/60 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-[0_10px_22px_-12px_rgba(124,58,237,0.45),inset_0_1px_0_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-[0_14px_26px_-12px_rgba(124,58,237,0.55)]">
+            <FileSpreadsheet size={16} /> Export Excel
+          </button>
         )}
-        <Link to="/evenementiel/demandes"><Button variant="outline"><Send size={16} /> Autorisations</Button></Link>
-        {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Nouvelle vente</Button>}
-      </div>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
-          <input value={filtreClient} onChange={(e) => setFiltreClient(e.target.value)} placeholder="Rechercher un client…"
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
-          {[['', 'Tous'], ...Object.entries(STATUTS).map(([k, v]) => [k, v.label])].map(([v, l]) => (
-            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-secondary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
+        {/* Autorisations : dégradé violet, balayage lumineux lent + avion qui s'envole doucement. */}
+        <Link to="/evenementiel/demandes"
+          className="group relative flex items-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(124,58,237,0.7),inset_0_1px_0_0_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(124,58,237,0.85)]"
+          style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)' }}>
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+            style={{ animation: 'vente-balayage 3.2s ease-in-out infinite' }} />
+          <Send size={16} className="relative" style={{ animation: 'vente-envol 2.4s ease-in-out infinite' }} />
+          <span className="relative">Autorisations</span>
+        </Link>
+        {!lectureSeule && (
+          <button type="button" onClick={openCreate}
+            className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(188,60,49,0.7),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(188,60,49,0.85)]"
+            style={{ background: 'linear-gradient(135deg, #d9594b 0%, #bc3c31 100%)' }}>
+            <Plus size={16} /> Nouvelle vente
+          </button>
+        )}
       </div>
 
       <Card className="p-0">

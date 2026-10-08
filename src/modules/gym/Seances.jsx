@@ -1,4 +1,5 @@
 // MAXI-GYM — Séances : liste complète + ajout d'une séance ponctuelle.
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useEffect, useMemo, useState } from 'react'
 import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -65,6 +66,7 @@ export default function Seances() {
 
   const [modal, setModal] = useState(null)
   const [filtreSexe, setFiltreSexe] = useState('')
+  const [recherche, setRecherche] = useState('')
   const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [saving, setSaving] = useState(false)
   const [suggClient, setSuggClient] = useState(false)
@@ -103,7 +105,7 @@ export default function Seances() {
     if (modePeriode === 'jour' && filtreJour) return toutes.filter((s) => s.date === filtreJour)
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
-  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe), [listePeriode, filtreSexe, idxSexe])
+  const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe).filter((s) => correspond(recherche, s.clientNom, s.partenaireStructure)), [listePeriode, filtreSexe, idxSexe, recherche])
   const nbInconnus = useMemo(() => listePeriode.filter((s) => !sexeDe(s, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
@@ -287,6 +289,7 @@ export default function Seances() {
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
         <SexeFiltre value={filtreSexe} onChange={setFiltreSexe} inconnus={nbInconnus} />
         {canExportGym(role) && (
           <button onClick={exportXLSX}

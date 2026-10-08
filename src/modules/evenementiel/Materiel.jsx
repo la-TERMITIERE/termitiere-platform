@@ -347,7 +347,7 @@ export default function Materiel() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -355,9 +355,29 @@ export default function Materiel() {
         }}>
           <Wrench size={28} color="white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Matériel & Matériaux</h2>
           <p className="text-sm text-white/80">{compteur('sur_site')} matériel(s) sur site : outillage, véhicules, gros équipement, consommables</p>
+        </div>
+        <div className="band-filtres">
+        {onglet === 'materiels' && (
+          <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
+            value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
+            <option value="">Toutes catégories</option>
+            {CATEGORIES_MATERIEL.filter((c) => CATEGORIES_MATERIELS_ONGLET.includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        )}
+        <div className="band-pills flex flex-wrap gap-1 rounded-2xl p-1">
+          {[['', `Tous (${materielsOnglet.length})`], ...Object.entries(STATUTS_MATERIEL).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
+            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-white'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <Button onClick={openCreate} size="sm" className="btn-glass ml-auto">
+          <Plus size={14} className="mr-1" />{onglet === 'materiaux' ? 'Ajouter un matériau' : 'Ajouter un matériel'}
+        </Button>
         </div>
       </div>
 
@@ -398,27 +418,6 @@ export default function Materiel() {
         </div>
       )}
 
-      {/* Filtres */}
-      <div className="flex flex-wrap items-center gap-2">
-        {onglet === 'materiels' && (
-          <select className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm focus:outline-none"
-            value={filtreCategorie} onChange={(e) => setFiltreCateg(e.target.value)}>
-            <option value="">Toutes catégories</option>
-            {CATEGORIES_MATERIEL.filter((c) => CATEGORIES_MATERIELS_ONGLET.includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-        )}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/50 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
-          {[['', `Tous (${materielsOnglet.length})`], ...Object.entries(STATUTS_MATERIEL).map(([k, v]) => [k, `${v.label} (${compteur(k)})`])].map(([v, l]) => (
-            <button key={v || 'tous'} onClick={() => setFiltreStatut(v)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filtreStatut === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-white'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <Button onClick={openCreate} size="sm" className="ml-auto">
-          <Plus size={14} className="mr-1" />{onglet === 'materiaux' ? 'Ajouter un matériau' : 'Ajouter un matériel'}
-        </Button>
-      </div>
 
       {/* Liste */}
       {!liste.length ? (

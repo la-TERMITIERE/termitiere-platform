@@ -2,10 +2,30 @@
 // - `stickyHeader` : l'en-tête reste visible au défilement vertical (téléphone/petit écran).
 // - une colonne `sticky: true` reste visible au défilement HORIZONTAL (gauche→droite) ;
 //   fournir `width` (ex. '110px') sur chaque colonne figée pour caler les décalages.
+import { useMemo, useState } from 'react'
+import ChampRecherche from './ChampRecherche'
+
+// - `searchBy` (optionnel) : active une barre de RECHERCHE PAR NOM au-dessus du tableau.
+//   Tableau de clés (ex. ['clientNom', 'nom']) ou fonction (row) => texte à comparer ;
+//   insensible à la casse et aux accents. Sans `searchBy`, rien ne change.
+const norm = (v) => String(v ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+
 export default function Table({
-  columns, rows, rowKey = 'id', empty = 'Aucune donnée', onRowClick,
-  stickyHeader = false, maxHeight = 'calc(100vh - 16rem)'
+  columns, rows: rowsProp, rowKey = 'id', empty = 'Aucune donnée', onRowClick,
+  stickyHeader = false, maxHeight = 'calc(100vh - 16rem)',
+  searchBy, searchPlaceholder = 'Rechercher par nom…', searchQuery
 }) {
+  const [qInterne, setQ] = useState('')
+  // `searchQuery` fourni : la page possède le champ (sur son bandeau) ; sinon barre intégrée.
+  const externe = searchQuery !== undefined
+  const q = externe ? searchQuery : qInterne
+  const rows = useMemo(() => {
+    const t = norm(q.trim())
+    if (!searchBy || !t) return rowsProp
+    const texte = typeof searchBy === 'function' ? searchBy : (r) => searchBy.map((k) => r[k]).join(' ')
+    return rowsProp.filter((r) => norm(texte(r)).includes(t))
+  }, [rowsProp, q, searchBy])
+  const emptyAffiche = searchBy && q.trim() && rows.length === 0 ? `Aucun résultat pour « ${q.trim()} »` : empty
   // Décalage gauche cumulé des colonnes figées (dans l'ordre d'apparition).
   let acc = 0
   const stickyLeft = columns.map((c) => {
@@ -17,7 +37,7 @@ export default function Table({
 
   const alignCls = (a) => (a === 'center' ? 'text-center' : a === 'right' ? 'text-right' : '')
 
-  return (
+  const tableau = (
     <div className={`overflow-auto rounded-lg border border-gray-100 dark:border-white/10 ${stickyHeader ? '' : ''}`}
       style={stickyHeader ? { maxHeight } : undefined}>
       <table className="w-full text-sm">
@@ -39,7 +59,7 @@ export default function Table({
           {rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-3 py-8 text-center text-gray-400 dark:text-gray-500">
-                {empty}
+                {emptyAffiche}
               </td>
             </tr>
           ) : (
@@ -61,6 +81,13 @@ export default function Table({
           )}
         </tbody>
       </table>
+    </div>
+  )
+  if (!searchBy || externe) return tableau
+  return (
+    <div>
+      <div className="p-2.5"><ChampRecherche value={q} onChange={setQ} placeholder={searchPlaceholder} /></div>
+      {tableau}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plane, Plus, Eye, Trash2, MapPin, CalendarDays } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
@@ -33,6 +34,7 @@ export default function Voyages() {
   const { data: users } = useCollection('users')
   const devises = useVoyageStore((s) => s.devises)
 
+  const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -90,8 +92,9 @@ export default function Voyages() {
         {peutSaisir && <Button style={{ backgroundColor: '#4f46e5' }} onClick={() => setModal({ data: vide() })}><Plus size={16} /> Nouveau voyage</Button>}
       </div>
 
+<ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un voyageur, un pays…" />
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {liste.map((v) => {
+        {liste.filter((v) => correspond(recherche, v.voyageurNom, v.pays)).map((v) => {
           const st = STATUTS_VOYAGE[v.statut] || STATUTS_VOYAGE.en_cours
           return (
             <Card key={v.id} className="p-4">

@@ -331,18 +331,18 @@ export default function StockBriques() {
           avecAnnee valeurAnnee={filtreAnneeCasses} onAnneeChange={setFiltreAnneeCasses}
           avecPlage valeurDebut={filtreDebutCasses} onDebutChange={setFiltreDebutCasses}
           valeurFin={filtreFinCasses} onFinChange={setFiltreFinCasses} />
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
+        <div className="band-filtres">
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
           <input type="date" className="input-base w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div className="ml-auto flex gap-2">
-          {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)}><Plus size={16} /> Ajouter un type</Button>}
-          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
+          {peutSaisir && <Button variant="outline" onClick={() => setAddModal(true)} className="btn-glass"><Plus size={16} /> Ajouter un type</Button>}
+          {peutSaisir && <Button onClick={save} loading={saving} className="btn-glass"><Save size={16} /> Enregistrer</Button>}
+        </div>
         </div>
       </div>
+
 
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <strong>Séchage :</strong> 5 à 6 jours recommandés avant chargement pour limiter les casses.

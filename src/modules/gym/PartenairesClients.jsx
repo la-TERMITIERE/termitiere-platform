@@ -277,7 +277,7 @@ export default function PartenairesClients() {
             {g.aRegler.length === 0 ? (
               <p className="px-4 py-4 text-center text-sm text-gray-400">Aucune séance en attente de règlement.</p>
             ) : (
-              <Table
+              <Table searchBy={['clientNom']}
                 columns={[
                   { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
                   { key: 'clientNom', label: 'Client' },
@@ -297,7 +297,7 @@ export default function PartenairesClients() {
         <div className="border-b border-gray-100 px-4 py-3">
           <p className="text-sm font-bold text-gray-700">Historique des règlements</p>
         </div>
-        <Table
+        <Table searchBy={['structure']}
           columns={[
             { key: 'createdAt', label: 'Date règlement', render: (r) => formatDateShort(new Date(r.createdAt).toISOString().slice(0, 10)) },
             { key: 'structure', label: 'Structure' },

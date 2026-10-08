@@ -1,4 +1,5 @@
 // Clients logistique & événementiel.
+import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useState } from 'react'
 import { Plus, Trash2, Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -20,6 +21,7 @@ export default function Clients() {
   const { data: clients } = useCollection('logistique_clients')
   const role = useAuth((s) => s.role)
   const lectureSeule = isReadOnlyRole(role)
+  const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
 
   async function save() {
@@ -45,6 +47,7 @@ export default function Clients() {
           <h2 className="text-lg font-extrabold">Clients</h2>
           <p className="text-sm text-white/80">{clients.length} client(s)</p>
         </div>
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
         {!lectureSeule && (
           <button onClick={() => setModal({ data: empty(), id: null })}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -53,7 +56,7 @@ export default function Clients() {
         )}
       </div>
       <Card className="p-0">
-        <Table
+        <Table searchBy={['nom', 'contact', 'telephone']} searchQuery={recherche}
           columns={[
             { key: 'nom', label: 'Nom' },
             { key: 'telephone', label: 'Téléphone' },

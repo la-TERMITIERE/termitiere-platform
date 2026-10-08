@@ -44,6 +44,8 @@ const ESSENTIELS = {
   voyage: ['/voyage/voyages']
 }
 
+const GRAIN_VERRE = 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27120%27 height=%27120%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.9%27 numOctaves=%272%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23n)%27/%3E%3C/svg%3E")'
+
 export default function MobileBottomNav({ onOpenMenu }) {
   const location = useLocation()
   const { user, role } = useAuth()
@@ -135,14 +137,17 @@ export default function MobileBottomNav({ onOpenMenu }) {
 
   return (
     <nav
-      className="fixed inset-x-3 bottom-3 z-40 overflow-hidden rounded-[28px] border border-white/60 bg-white/45 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.4),inset_0_1.5px_0_0_rgba(255,255,255,0.95),inset_0_-1px_0_0_rgba(0,0,0,0.05)] backdrop-blur-2xl backdrop-saturate-200 md:hidden dark:border-white/10 dark:bg-neutral-900/40"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="fixed inset-x-3 bottom-3 z-40 overflow-hidden rounded-[28px] border border-white/70 bg-white/30 ring-1 ring-inset ring-white/50 backdrop-blur-3xl backdrop-saturate-200 md:hidden dark:border-white/10 dark:bg-neutral-900/40"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)', boxShadow: `0 18px 40px -16px rgba(26,26,26,0.45), 0 10px 28px -14px ${accentColor}88, inset 0 1.5px 0 0 rgba(255,255,255,0.95), inset 0 -1px 0 0 rgba(0,0,0,0.06)` }}
     >
       {/* Reflet diagonal (sheen) — signature visuelle du verre : une bande claire
           qui traverse la barre en diagonale, comme un reflet sur une surface
           vitrée. Rend le matériau "verre" reconnaissable même quand le fond
           scrollé derrière est clair/uni (le flou seul n'y suffit pas). */}
       <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-10 h-20 -rotate-6 bg-gradient-to-b from-white/80 via-white/20 to-transparent dark:from-white/15 dark:via-white/5" />
+      {/* Verre GIVRÉ : fin grain (bruit) + liseré lumineux en haut, par-dessus le flou. */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-[0.3] mix-blend-soft-light" style={{ backgroundImage: GRAIN_VERRE }} />
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
       {/* Dégradé d'ambiance — concentré vers la fin (le bord droit) de la barre,
           teinté de la couleur du module en cours (celle aussi reprise par la
           pastille active) : la barre « prend la couleur » du module ouvert. */}
@@ -160,7 +165,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
             className="pointer-events-none absolute inset-y-1.5 rounded-2xl border transition-all duration-300 ease-out"
             style={{
               left: pill.left, width: pill.width, opacity: pill.visible ? 1 : 0,
-              background: teinterHex(accentColor, 0.14), borderColor: teinterHex(accentColor, 0.35)
+              background: `linear-gradient(135deg, ${teinterHex(accentColor, 0.26)}, ${teinterHex(accentColor, 0.1)})`, borderColor: teinterHex(accentColor, 0.45), boxShadow: `0 6px 14px -6px ${accentColor}88, inset 0 1px 0 rgba(255,255,255,0.85)`, backdropFilter: 'blur(8px)'
             }}
           />
           {items.map((item) => (
