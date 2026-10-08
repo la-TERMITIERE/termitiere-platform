@@ -24,6 +24,7 @@
 //   FEZIRE_INBOUND_KEY       (obligatoire) clé que FEZIRE présente à chaque appel
 //   FIREBASE_SERVICE_ACCOUNT (recommandé)  lecture authentifiée de la base (cf. backup-db)
 //   FIREBASE_DB_URL          (optionnel)   défaut = base de production max-agro-83baf
+//   FEZIRE_MOUVEMENTS_DEPUIS (optionnel)   date de départ des mouvements de stock (défaut 2026-10-09)
 import crypto from 'node:crypto'
 
 const DB_URL = process.env.FIREBASE_DB_URL || 'https://max-agro-83baf-default-rtdb.firebaseio.com'
@@ -31,6 +32,11 @@ const ROOT = 'tp' // namespace Termitière (cf. src/core/db.firebase.js)
 const DEVISE = 'XOF'
 const PAYS = 'TG'
 const ENTREPOT_AGRO = 'agro-ferme'
+// Les niveaux de stock (STOCK) envoient l'état ACTUEL, qui intègre déjà tout l'historique.
+// Rejouer les mouvements antérieurs dans FEZIRE fausserait donc les quantités (constaté
+// lors du premier import du 8 oct. 2026) : seuls les mouvements datés à partir de ce
+// jour partent. Réglable par FEZIRE_MOUVEMENTS_DEPUIS (AAAA-MM-JJ).
+const MOUVEMENTS_DEPUIS = process.env.FEZIRE_MOUVEMENTS_DEPUIS || '2026-10-09'
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -184,7 +190,10 @@ export function mouvements(inventaires, demandes) {
       moved_at: iso(d.dateSortie || d.date)
     })
   }
-  return out.sort((a, b) => String(a.moved_at).localeCompare(String(b.moved_at)))
+  const depuis = new Date(MOUVEMENTS_DEPUIS)
+  return out
+    .filter((m) => !m.moved_at || new Date(m.moved_at) >= depuis)
+    .sort((a, b) => String(a.moved_at).localeCompare(String(b.moved_at)))
 }
 
 export function clients(factures) {
@@ -221,8 +230,34 @@ function totaux(f) {
   return { total: Math.round(apresRemise + taxe), tax_total: Math.round(taxe) }
 }
 
-export function commandes(factures) {
+// Une ligne n'est envoyée que si son article existe au référentiel (donc a été importé
+// comme produit) : FEZIRE refuse toute commande dont une ligne ne désigne pas un
+// produit connu (« Chaque ligne doit désigner un produit externe »). Une commande
+// sans aucune ligne valable n'est pas envoyée.
+function lignesCommande(f, articles) {
+  return lignesEffectives(f)
+    .map((l, i) => ({ l, i }))
+    .filter(({ l }) => l.articleId && articles.has(l.articleId))
+    .map(({ l, i }) => ({
+      external_id: `agro-cmd-${f.id}-l${i + 1}`,
+      product_id: idProduit(l.articleId),
+      sku: skuProduit(l.articleId),
+      label: l.article || '',
+      quantity: entier(l.qte),
+      unit_price: nombre(l.prixUnit ?? l.prix),
+      total: nombre(l.total) || entier(l.qte) * nombre(l.prixUnit ?? l.prix)
+    }))
+}
+
+const articlesConnus = (referentiel) => new Set(
+  referentiel.filter((r) => r.type === 'espece' || r.type === 'aliment').map((r) => r.id)
+)
+
+export function commandes(factures, referentiel) {
+  const articles = articlesConnus(referentiel)
   return factures.filter((f) => statutFacture(f) !== 'brouillon').map((f) => {
+    const lines = lignesCommande(f, articles)
+    if (!lines.length) return null
     const { total, tax_total } = totaux(f)
     return {
       external_id: `agro-cmd-${f.id}`,
@@ -231,24 +266,17 @@ export function commandes(factures) {
       currency: DEVISE, total, tax_total,
       status: STATUT_COMMANDE[statutFacture(f)] || 'pending',
       ordered_at: iso(f.date),
-      lines: lignesEffectives(f).filter((l) => l.articleId || entier(l.qte)).map((l, i) => ({
-        external_id: `agro-cmd-${f.id}-l${i + 1}`,
-        product_id: l.articleId ? idProduit(l.articleId) : null,
-        sku: l.articleId ? skuProduit(l.articleId) : null,
-        label: l.article || '',
-        quantity: entier(l.qte),
-        unit_price: nombre(l.prixUnit ?? l.prix),
-        total: nombre(l.total) || entier(l.qte) * nombre(l.prixUnit ?? l.prix)
-      }))
+      lines
     }
-  })
+  }).filter(Boolean)
 }
 
 // Seules les factures CERTIFIÉES sont des factures définitives.
-export function factures(facturesAgro) {
+export function factures(facturesAgro, referentiel) {
+  const articles = articlesConnus(referentiel)
   return facturesAgro.filter((f) => statutFacture(f) === 'certifiee').map((f) => ({
     external_id: `agro-fac-${f.id}`,
-    order_id: `agro-cmd-${f.id}`,
+    order_id: lignesCommande(f, articles).length ? `agro-cmd-${f.id}` : null,
     customer_id: f.client?.nom ? idClient(f.client) : null,
     number: f.numero || f.id,
     total: totaux(f).total,
@@ -280,7 +308,7 @@ export const codeRessource = (brut) => PAR_CLE[cle(brut)] || null
 const BESOINS = {
   CATEGORY: ['agro_referentiel'], PRODUCT: ['agro_referentiel'], WAREHOUSE: [],
   STOCK: ['agro_inventaires'], STOCK_MOVEMENT: ['agro_inventaires', 'agro_demandes'],
-  CUSTOMER: ['agro_factures'], ORDER: ['agro_factures'], INVOICE: ['agro_factures'], PAYMENT: []
+  CUSTOMER: ['agro_factures'], ORDER: ['agro_factures', 'agro_referentiel'], INVOICE: ['agro_factures', 'agro_referentiel'], PAYMENT: []
 }
 
 export function construire(code, d) {
@@ -291,8 +319,8 @@ export function construire(code, d) {
     case 'STOCK': return stocks(d.agro_inventaires)
     case 'STOCK_MOVEMENT': return mouvements(d.agro_inventaires, d.agro_demandes)
     case 'CUSTOMER': return clients(d.agro_factures)
-    case 'ORDER': return commandes(d.agro_factures)
-    case 'INVOICE': return factures(d.agro_factures)
+    case 'ORDER': return commandes(d.agro_factures, d.agro_referentiel)
+    case 'INVOICE': return factures(d.agro_factures, d.agro_referentiel)
     case 'PAYMENT': return [] // Maxi Agro ne suit pas encore les encaissements
     default: return null
   }
