@@ -296,7 +296,11 @@ export const handler = async (event) => {
   if (!cleValide(event.headers)) return json(401, { error: 'Clé invalide ou absente' })
 
   const q = event.queryStringParameters || {}
-  const brut = String(q.ressource || '').trim()
+  // La ressource vient du chemin (/api/fezire/v1/<ressource>) : quand l'appel porte
+  // ses propres paramètres (?page=…), Netlify ne transmet pas le `?ressource=` de la
+  // redirection. Le paramètre reste accepté pour l'appel direct de la fonction.
+  const duChemin = /\/api\/fezire\/v1\/([^/?#]+)/.exec(event.path || '')?.[1]
+  const brut = decodeURIComponent(duChemin || q.ressource || '').trim()
   const code = RESSOURCES[brut.toLowerCase()] || (CODES[brut.toUpperCase()] ? brut.toUpperCase() : null)
   if (!code) {
     return json(404, { error: `Ressource inconnue : « ${brut} »`, ressources: Object.keys(RESSOURCES) })
