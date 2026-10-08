@@ -9,6 +9,14 @@
 [functions]
   node_bundler = "esbuild"
 
+# Liaison FEZIRE : Fezire Connect lit nos données ici (cf. docs/FEZIRE_CONNECT.md).
+# Doit précéder la règle générique « /* » ci-dessous (la première règle qui correspond l'emporte).
+[[redirects]]
+  from = "/api/fezire/v1/:ressource"
+  to = "/.netlify/functions/fezire-export?ressource=:ressource"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
