@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PackageX, X, ChevronRight } from 'lucide-react'
 import { icone3D } from '../../utils/color'
+import { lienAvecIds } from '../../shared/ui/FiltreIds'
 import { retoursEnRetard } from './retoursEnRetard'
 import { matchSite } from './site/useSite'
 
@@ -48,7 +49,7 @@ export default function RetardsRetoursAlerte({ prestations, retours, demandes = 
             ))}
             {retards.length > 4 && <span className="text-[11px] font-semibold text-gray-500">+ {retards.length - 4} autre(s)</span>}
           </div>
-          <Link to={`/logistique/${site}/retours`} className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-700 hover:underline">
+          <Link to={lienAvecIds(`/logistique/${site}/retours`, retards.map((x) => x.p.id))} className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-700 hover:underline">
             Voir les retours <ChevronRight size={13} />
           </Link>
         </div>

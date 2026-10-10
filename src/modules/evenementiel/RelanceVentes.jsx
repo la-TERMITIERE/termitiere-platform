@@ -10,6 +10,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { claimOnce } from '../../core/db'
 import { notify } from '../../core/notify'
 import { icone3D } from '../../utils/color'
+import { lienAvecIds } from '../../shared/ui/FiltreIds'
 import { todayStr, formatMoney } from '../../utils/formatters'
 
 export function ventesAFacturer(ventes, factures, aujourdhui = todayStr()) {
@@ -38,7 +39,7 @@ export default function RelanceVentesAFacturer() {
           module: 'evenementiel',
           forUsers: v.agentId ? [v.agentId] : [],
           forRoles: v.agentId ? [] : ['agent'],
-          link: '/evenementiel/ventes'
+          link: `/evenementiel/ventes?ids=${v.id}`
         })
       } catch { /* best effort */ }
     }
@@ -95,7 +96,7 @@ export function AlerteVentesAFacturer({ ventes, factures }) {
             ))}
             {liste.length > 4 && <span className="text-[11px] font-semibold text-gray-500">+ {liste.length - 4} autre(s)</span>}
           </div>
-          <Link to="/evenementiel/ventes" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:underline">
+          <Link to={lienAvecIds('/evenementiel/ventes', liste.map((x) => x.v.id))} className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:underline">
             Voir les ventes <ChevronRight size={13} />
           </Link>
         </div>

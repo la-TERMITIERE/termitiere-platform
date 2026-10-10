@@ -9,6 +9,7 @@ import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import RetardsRetoursAlerte from './RetardsRetoursAlerte'
+import { PrestationsAFacturerAlerte, FacturesBrouillonAlerte } from './AlertesAgent'
 import { StockCategorieCard, FluxPeriodeCard } from './GraphiquesDashboard'
 import { MaterielDehorsCard, DernieresPrestationsCard, MeilleursClientsCard, CaMensuelCard, materielDehors, meilleursClients, caParMois } from './CartesDashboard'
 import { logistiqueVoitMontants, peutVoirCaMensuel } from '../../core/roles'
@@ -24,6 +25,7 @@ const TOUTES = '__TOUTES__'
 export default function Dashboard() {
   const materiel = useLogistiqueStore((s) => s.materiel)
   const role = useAuth((s) => s.role)
+  const uid = useAuth((s) => s.user?.uid)
   const site = useSite()
   const { data: allInventaires } = useCollection('logistique_inventaires')
   const { data: allPrestations } = useCollection('logistique_prestations')
@@ -193,7 +195,10 @@ export default function Dashboard() {
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
       {/* Retours en retard : alerte fermable pour les rôles autres qu'agent (les agents reçoivent une notification). */}
-      {role !== 'agent' && <RetardsRetoursAlerte prestations={prestations} retours={retours} demandes={demandes} site={site} />}
+      {/* Agent : seulement ses prestations (ou celles sans agent enregistré) ; les autres rôles voient tout. */}
+      <RetardsRetoursAlerte prestations={role === 'agent' ? prestations.filter((p) => !p.agentId || p.agentId === uid) : prestations} retours={retours} demandes={demandes} site={site} />
+      {role === 'agent' && <PrestationsAFacturerAlerte prestations={prestations} site={site} uid={uid} voitMontants={logistiqueVoitMontants(role)} />}
+      {role === 'agent' && <FacturesBrouillonAlerte factures={factures} demandes={demandes} site={site} uid={uid} />}
 
       {/* Filtre par catégorie (comme Maxi Agro) */}
       <div className="flex flex-wrap items-center gap-1.5">

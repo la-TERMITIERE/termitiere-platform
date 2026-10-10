@@ -1,5 +1,6 @@
 // Facturation logistique — émission obligatoire avant demande d'autorisation de sortie.
 import { useMemo, useState } from 'react'
+import BandeauFiltreIds, { useFiltreIds } from '../../shared/ui/FiltreIds'
 import { FileText, FileSpreadsheet, Plus, Trash2, Pencil, Eye, Wallet, AlertTriangle, ShieldCheck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -103,8 +104,11 @@ export default function Factures() {
   const [filtreClient, setFiltreClient] = useState('')
   const [filtreValideur, setFiltreValideur] = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+  const filtreIds = useFiltreIds()
   const liste = useMemo(() => {
     let rows = [...factures]
+    // Lien d'une alerte : uniquement les dossiers concernés, sans tenir compte des autres filtres.
+    if (filtreIds.ids) return rows.filter((x) => filtreIds.ids.has(x.id)).sort((a, b) => (a.date < b.date ? 1 : -1))
     if (modePeriode === 'mois' && filtreMois) {
       rows = rows.filter((f) => (f.date || '').startsWith(filtreMois))
     } else if (modePeriode === 'annee' && filtreAnnee) {
@@ -121,7 +125,7 @@ export default function Factures() {
       rows = rows.filter((f) => (f.clientNom || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient, filtreValideur])
+  }, [factures, filtreIds.ids, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient, filtreValideur])
 
   // Cumul de facturation — somme de la liste actuellement filtrée (période, statut,
   // client ci-dessus) : par défaut (aucun filtre de statut) il mélange brouillon +
@@ -360,6 +364,7 @@ export default function Factures() {
         </div>
       )}
 
+      <BandeauFiltreIds filtre={filtreIds} total={liste.length} accent={COULEUR_MODULE.logistique} libelle="facture" />
       <Card className="p-0">
         <Table
           stickyHeader

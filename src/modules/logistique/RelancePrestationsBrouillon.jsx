@@ -36,7 +36,7 @@ export default function RelancePrestationsBrouillon() {
           body: `${siteLabel(p.site)} : ${p.clientNom || ''} : la prestation ${p.num} est enregistrée mais pas encore facturée (rappel ${rang}/${MAX_RAPPELS}). Ouvrez-la et cliquez sur l'avion rouge « Facturer et demander la sortie ».`,
           module: 'logistique',
           forUsers: [p.agentId],
-          link: `/logistique/${p.site || 'lome'}/prestations`
+          link: `/logistique/${p.site || 'lome'}/prestations?ids=${p.id}`
         })
       } catch { /* best effort */ }
     }

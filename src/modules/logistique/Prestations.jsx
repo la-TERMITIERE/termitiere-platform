@@ -1,5 +1,6 @@
 // Prestations / Location de matériel — quantité × tarif unitaire = montant par catégorie.
 import { useEffect, useMemo, useState } from 'react'
+import BandeauFiltreIds, { useFiltreIds } from '../../shared/ui/FiltreIds'
 import { Plus, Eye, Trash2, Pencil, CheckCircle2, Coins, Save, Wallet, AlertTriangle, ClipboardList, Boxes, Receipt, Sparkles, CalendarRange, Layers, UserRound, Send, Ban } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
@@ -138,8 +139,11 @@ export default function Prestations() {
   const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreClient, setFiltreClient] = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+  const filtreIds = useFiltreIds()
   const liste = useMemo(() => {
     let rows = [...prestations]
+    // Lien d'une alerte : uniquement les dossiers concernés, sans tenir compte des autres filtres.
+    if (filtreIds.ids) return rows.filter((x) => filtreIds.ids.has(x.id)).sort((a, b) => (a.date < b.date ? 1 : -1))
     if (modePeriode === 'mois' && filtreMois) {
       rows = rows.filter((p) => (p.date || '').startsWith(filtreMois))
     } else if (modePeriode === 'annee' && filtreAnnee) {
@@ -155,7 +159,7 @@ export default function Prestations() {
       rows = rows.filter((p) => (p.clientNom || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [prestations, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
+  }, [prestations, filtreIds.ids, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
 
   // Cumul des prestations — somme de la liste actuellement filtrée (période, statut,
   // client ci-dessus), comme le KPI équivalent de Facturation (`cumulFacturation`) :
@@ -556,6 +560,7 @@ export default function Prestations() {
         )}
       </div>
 
+      <BandeauFiltreIds filtre={filtreIds} total={liste.length} accent={COULEUR_MODULE.logistique} libelle="prestation" />
       <Card className="p-0">
         <Table
           stickyHeader

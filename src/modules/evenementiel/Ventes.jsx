@@ -1,5 +1,6 @@
 // Ventes briques — création de commandes, liées aux autorisations de sortie.
 import { useMemo, useState } from 'react'
+import BandeauFiltreIds, { useFiltreIds } from '../../shared/ui/FiltreIds'
 import { Plus, Send, Trash2, Eye, Pencil, ShoppingCart, Wallet, FileSpreadsheet, AlertTriangle, Receipt, Boxes, CalendarDays, UserRound, Info, Ban } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Card from '../../shared/ui/Card'
@@ -116,8 +117,11 @@ export default function Ventes() {
   const [filtreClient, setFiltreClient] = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
 
+  const filtreIds = useFiltreIds()
   const liste = useMemo(() => {
     let rows = [...ventes]
+    // Lien d'une alerte : uniquement les dossiers concernés, sans tenir compte des autres filtres.
+    if (filtreIds.ids) return rows.filter((x) => filtreIds.ids.has(x.id)).sort((a, b) => (a.date < b.date ? 1 : -1))
     if (modePeriode === 'mois' && filtreMois) {
       rows = rows.filter((v) => (v.date || '').startsWith(filtreMois))
     } else if (modePeriode === 'annee' && filtreAnnee) {
@@ -133,7 +137,7 @@ export default function Ventes() {
       rows = rows.filter((v) => (v.clientNom || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [ventes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
+  }, [ventes, filtreIds.ids, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
 
   // Cumul des ventes — réservé à l'administration, recalculé selon les filtres
   // ci-dessus (période, statut, client) : sans filtre de statut, il mélange donc
@@ -437,6 +441,7 @@ export default function Ventes() {
         )}
       </div>
 
+      <BandeauFiltreIds filtre={filtreIds} total={liste.length} accent={COULEUR_MODULE.evenementiel} libelle="vente" />
       <Card className="p-0">
         <Table
           stickyHeader
