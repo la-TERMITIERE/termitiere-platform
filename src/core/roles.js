@@ -99,6 +99,10 @@ export const peutVoirBanque = (r) => BANQUE_ROLES.includes(r)
 export const BTP_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
 export const peutVoirBtp = (r) => BTP_ROLES.includes(r)
 
+// Graphique « Chiffre d'affaires par mois » du Dashboard Logistique : PAU, Assistant PAU, GE et Info seulement.
+export const CA_MENSUEL_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
+export const peutVoirCaMensuel = (r) => CA_MENSUEL_ROLES.includes(r)
+
 // Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
 //   - superviseur : interne, voit TOUS les modules ;
 //   - partenaire  : externe, voit UNIQUEMENT ses modules attribués (sectorisé).
