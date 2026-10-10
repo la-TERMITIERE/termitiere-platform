@@ -37,7 +37,7 @@ export default function RelanceFacturesBrouillon() {
           body: `${siteLabel(f.site)} : ${f.clientNom || ''} : l'autorisation de sortie n'a pas encore été soumise (rappel ${prochainRang}/${MAX_RAPPELS}).`,
           module: 'logistique',
           forUsers: [f.agentId],
-          link: `/logistique/${f.site || 'lome'}/factures`
+          link: `/logistique/${f.site || 'lome'}/factures?ids=${f.id}`
         })
       } catch (e) { /* best effort — un autre client réessaiera au prochain tick */ }
       traitees.current.add(cle)

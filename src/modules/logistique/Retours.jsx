@@ -8,7 +8,8 @@
 //   - Cassé / Perdu → quantité + motif + pénalité (ne réintègre pas → perte)
 // Chaque entrée est tracée (collection logistique_retours) et alimente, en lecture
 // seule, la colonne « Retours » de la saisie magasin.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import BandeauFiltreIds, { useFiltreIds } from '../../shared/ui/FiltreIds'
 import { RotateCcw, Check, Plus, X, Pencil, Trash2, Package, Undo2, CheckCheck, Info } from 'lucide-react'
 import { COULEUR_MODULE, icone3D } from '../../utils/color'
 import Card from '../../shared/ui/Card'
@@ -49,6 +50,7 @@ export default function Retours() {
   // Cloisonnement par site (sous-application Lomé / Kara).
   const retours = useMemo(() => allRetours.filter((r) => matchSite(r, site)), [allRetours, site])
   const prestations = useMemo(() => allPrestations.filter((p) => matchSite(p, site)), [allPrestations, site])
+  const filtreIds = useFiltreIds() // lien d'une alerte : ids des prestations concernées
 
   const [recherche, setRecherche] = useState('')
   const [prestationId, setPrestationId] = useState('')
@@ -59,6 +61,8 @@ export default function Retours() {
   const [saving, setSaving] = useState(false)
   const [detailRetour, setDetailRetour] = useState(null)
   const [editRetour, setEditRetour] = useState(null) // entrée de l'historique en cours de correction
+  // Une seule prestation concernée par l'alerte : elle est déjà choisie.
+  useEffect(() => { if (filtreIds.ids && filtreIds.ids.size === 1) setPrestationId([...filtreIds.ids][0]) }, [filtreIds.ids])
 
   // Quantité déjà retournée (enregistrée en base) pour un (prestation, matériel).
   const renduPour = (presId, matId) => retours
@@ -76,8 +80,8 @@ export default function Retours() {
 
   // Prestations avec au moins un matériel pas encore entièrement rendu.
   const prestationsNonRendues = useMemo(
-    () => prestations.filter((p) => lignesRestantes(p).some((l) => l.restant > 0)),
-    [prestations, retours]
+    () => prestations.filter((p) => (!filtreIds.ids || filtreIds.ids.has(p.id)) && lignesRestantes(p).some((l) => l.restant > 0)),
+    [prestations, retours, filtreIds.ids]
   )
 
   const prestation = prestations.find((p) => p.id === prestationId)
@@ -221,6 +225,7 @@ export default function Retours() {
         <span>Choisissez la <strong>prestation</strong>, puis ajoutez les retours par matériel : <strong>OK</strong> réintègre le stock, <strong>Cassé / Perdu</strong> demandent motif et pénalité.</span>
       </div>
 
+      <BandeauFiltreIds filtre={filtreIds} total={prestationsNonRendues.length} accent={COULEUR_MODULE.logistique} libelle="prestation" />
       {!lectureSeule && (
       <Card className="!p-3 md:!p-4">
         <style>{`
@@ -362,7 +367,7 @@ export default function Retours() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {[...retours].filter((r) => correspond(recherche, r.clientNom, r.prestationNum, r.agentNom)).sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => {
+            {[...retours].filter((r) => (!filtreIds.ids || filtreIds.ids.has(r.prestationId)) && correspond(recherche, r.clientNom, r.prestationNum, r.agentNom)).sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => {
               const casse = r.type !== 'OK'
               return (
               <tr key={r.id} onClick={() => setDetailRetour(r)} className="cursor-pointer">

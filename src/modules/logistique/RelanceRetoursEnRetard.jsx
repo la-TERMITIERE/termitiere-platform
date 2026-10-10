@@ -37,7 +37,7 @@ export default function RelanceRetoursEnRetard() {
           body: `${siteLabel(p.site)} : ${p.clientNom || ''} : ${restant} pièce(s) pas encore rendue(s) depuis ${jours} jour(s) (prestation ${p.num}).`,
           module: 'logistique',
           forUsers: [p.agentId],
-          link: `/logistique/${p.site || 'lome'}/retours`
+          link: `/logistique/${p.site || 'lome'}/retours?ids=${p.id}`
         })
       } catch { /* best effort */ }
     }

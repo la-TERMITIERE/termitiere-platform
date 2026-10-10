@@ -16,6 +16,7 @@ import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { AlerteVentesAFacturer } from './RelanceVentes'
+import AlerteVentesBrouillon from './AlerteVentesBrouillon'
 import { useBriqueterieStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { formatMoney, formatNumber, formatDateShort, addDays, todayStr } from '../../utils/formatters'
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const { data: demandes } = useCollection('evenementiel_demandes')
   const { data: materiels } = useCollection('evenementiel_materiels')
   const role = useAuth((s) => s.role)
+  const uid = useAuth((s) => s.user?.uid)
 
   const [detail, setDetail] = useState(null) // { titre, render }
   const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
@@ -237,7 +239,9 @@ export default function Dashboard() {
         </div>
       </div>
       {/* Ventes autorisées à facturer : alerte fermable pour les rôles autres qu'agent (les agents reçoivent une notification). */}
-      {role !== 'agent' && <AlerteVentesAFacturer ventes={ventes} factures={factures} />}
+      {/* Agent : seulement ses ventes (ou celles sans agent enregistré) ; les autres rôles voient tout. */}
+      <AlerteVentesAFacturer ventes={role === 'agent' ? ventes.filter((v) => !v.agentId || v.agentId === uid) : ventes} factures={factures} />
+      {role === 'agent' && <AlerteVentesBrouillon ventes={ventes} uid={uid} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         <StatCard title="Production période" value={formatNumber(prodMois)} icon={Factory} accent="#475569"

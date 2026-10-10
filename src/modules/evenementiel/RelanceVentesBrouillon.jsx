@@ -34,7 +34,7 @@ export default function RelanceVentesBrouillon() {
           body: `${v.clientNom || ''} : la vente ${v.num} est enregistrée mais l'autorisation de sortie n'est pas demandée (rappel ${rang}/${MAX_RAPPELS}). Ouvrez-la et cliquez sur l'avion violet « Demander l'autorisation ».`,
           module: 'evenementiel',
           forUsers: [v.agentId],
-          link: '/evenementiel/ventes'
+          link: `/evenementiel/ventes?ids=${v.id}`
         })
       } catch { /* best effort */ }
     }
