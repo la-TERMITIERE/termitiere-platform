@@ -1,11 +1,12 @@
 // Stock briques — appatam → séchage → prêtes · caillasses.
 // + Stock des matières premières (ciment, gravier, sable) : arrivages & consommation.
 import { useEffect, useRef, useState } from 'react'
-import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus, Boxes, History } from 'lucide-react'
+import { Save, AlertTriangle, Plus, PackagePlus, PackageMinus, Boxes, History, Sun, CheckCircle2, Hammer, Info } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
-import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
+import HistoriqueBriqueModal from './HistoriqueBriqueModal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -56,6 +57,7 @@ export default function StockBriques() {
   const [arrivage, setArrivage] = useState(null)   // { matiereId, qte, cout, label }
   const [consoModal, setConsoModal] = useState(null) // { matiereId, qte, label } — consommation saisie à la main
   const [matDetail, setMatDetail] = useState(null) // matière sélectionnée pour l'historique
+  const [histBrique, setHistBrique] = useState(null) // catégorie dont on consulte l'historique complet
 
   // Filtre de période — Jour / Mois / Année / Plage personnalisée — sur l'historique des casses.
   const [modePeriodeCasses, setModePeriodeCasses] = useState('mois')
@@ -310,17 +312,17 @@ export default function StockBriques() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),0_8px_20px_-8px_rgba(71,85,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(138,155,179,0.92) 0%, rgba(100,116,139,0.9) 40%, rgba(51,65,85,0.88) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+          background: '#475569', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
         }}>
           <Boxes size={28} color="white" />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Stock briques</h2>
-          <p className="text-sm text-white/80">Appatam → séchage → prêtes à vendre · matières premières</p>
+          <p className="text-sm text-white/80">Appatam → séchage → prêtes à vendre · caillasses</p>
         </div>
         {/* Filtre de période de l'historique des casses (plus bas), remonté dans le
             bandeau (glassmorphism) — le sélecteur « Date » ci-dessous reste distinct :
@@ -344,13 +346,16 @@ export default function StockBriques() {
       </div>
 
 
-      <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>Séchage :</strong> 5 à 6 jours recommandés avant chargement pour limiter les casses.
-        Les <strong>caillasses</strong> (briques cassées) sont vendues séparément.
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 to-white/70 px-4 py-3 text-sm text-amber-900 shadow-[0_10px_22px_-16px_rgba(217,119,6,0.55),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#D97706')}><Sun size={16} /></span>
+        <span>
+          <strong>Séchage :</strong> 5 à 6 jours avant chargement pour limiter les casses. Les <strong>caillasses</strong> (briques cassées) sont vendues séparément.
+          <span className="mt-0.5 block text-xs text-amber-700">Cliquez sur une catégorie pour voir tout son historique.</span>
+        </span>
       </div>
 
       <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
+        <div className="table-verre overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
@@ -359,7 +364,7 @@ export default function StockBriques() {
                   <th key={e.id} className="px-2 py-2 text-center" style={{ color: e.color }}>{e.label.split(' ')[0]}</th>
                 ))}
                 <th className="px-2 py-2 text-right text-amber-700">Coût brut prod.</th>
-                <th className="px-2 py-2 text-right text-violet-700">Valeur stock</th>
+                <th className="px-2 py-2 text-right text-slate-700">Valeur stock</th>
                 <th className="px-2 py-2">Actions</th>
               </tr>
             </thead>
@@ -368,27 +373,37 @@ export default function StockBriques() {
                 const d = stock[b.id] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
                 return (
                   <tr key={b.id}>
-                    <td className="px-3 py-2 font-semibold">{b.nom}</td>
-                    <EtatCell value={d.appatam} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#7c3aed" onChange={(v) => setEtat(b.id, 'appatam', v)} />
+                    <td className="px-3 py-2">
+                      <button type="button" onClick={() => setHistBrique(b)} title="Voir l'historique de cette catégorie"
+                        className="group flex items-center gap-2.5 text-left font-semibold transition-transform hover:translate-x-0.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:rotate-6" style={icone3D(b.id === 'caillasses' ? '#4B5563' : '#475569')}>
+                          {b.id === 'caillasses' ? <Hammer size={15} /> : <Boxes size={15} />}
+                        </span>
+                        <span>{b.nom}</span>
+                        <History size={13} className="text-gray-300 transition-colors group-hover:text-slate-500" />
+                      </button>
+                    </td>
+                    <EtatCell value={d.appatam} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#0284c7" onChange={(v) => setEtat(b.id, 'appatam', v)} />
                     <EtatCell value={d.sechage} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#b45309" onChange={(v) => setEtat(b.id, 'sechage', v)} />
                     <EtatCell value={d.pret} editable={peutSaisir && b.id !== 'caillasses'} disabled={b.id === 'caillasses'} color="#15803d" onChange={(v) => setEtat(b.id, 'pret', v)} />
                     {/* Caillasses : compteur par type en lecture seule (alimenté par la
                         casse) ; la ligne « caillasses » reste éditable (stock vendable). */}
                     <EtatCell value={d.caillasses} editable={peutSaisir && b.id === 'caillasses'} disabled={false} color="#4b5563" onChange={(v) => setEtat(b.id, 'caillasses', v)} />
                     <td className="px-2 py-2 text-right font-semibold text-amber-700">{formatMoney(evalOf[b.id]?.cout || 0)}</td>
-                    <td className="px-2 py-2 text-right font-bold text-violet-700">{formatMoney(evalOf[b.id]?.valeur || 0)}</td>
+                    <td className="px-2 py-2 text-right font-bold text-slate-700">{formatMoney(evalOf[b.id]?.valeur || 0)}</td>
                     <td className="px-2 py-2">
                       {b.id !== 'caillasses' && peutSaisir && TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
-                        <button key={t.to} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: t.to, qte: 1, dateSechage: '' })}
-                          className="mr-1 mb-1 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold hover:bg-violet-100">
-                          {t.from}→{t.to}
-                        </button>
+                        <BoutonEtat key={t.to} couleur={t.to === 'sechage' ? '#B45309' : '#15803D'} icone={t.to === 'sechage' ? Sun : CheckCircle2}
+                          titre={`${ETAT_LABEL[t.from]} vers ${ETAT_LABEL[t.to]}`}
+                          onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: t.to, qte: 1, dateSechage: '' })}>
+                          {ETAT_LABEL[t.to]}
+                        </BoutonEtat>
                       ))}
                       {b.id !== 'caillasses' && peutSaisir && CASSE_TRANSITIONS.filter((t) => (d[t.from] || 0) > 0).map((t) => (
-                        <button key={'casse-' + t.from} onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: 'caillasses', qte: 1, dateSechage: '', motif: '' })}
-                          className="mr-1 mb-1 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-amber-100">
-                          {t.from}→caillasses
-                        </button>
+                        <BoutonEtat key={'casse-' + t.from} couleur="#DC2626" icone={Hammer} titre={`Casse depuis l'état ${ETAT_LABEL[t.from].toLowerCase()}`}
+                          onClick={() => setTransferModal({ briqueId: b.id, briqueNom: b.nom, from: t.from, to: 'caillasses', qte: 1, dateSechage: '', motif: '' })}>
+                          Casse ({ETAT_LABEL[t.from].toLowerCase()})
+                        </BoutonEtat>
                       ))}
                     </td>
                   </tr>
@@ -399,7 +414,7 @@ export default function StockBriques() {
               <tr>
                 <td className="px-3 py-2" colSpan={1 + ETATS_BRIQUE.length}>TOTAL</td>
                 <td className="px-2 py-2 text-right text-amber-700">{formatMoney(totalCout)}</td>
-                <td className="px-2 py-2 text-right text-violet-700">{formatMoney(totalValeur)}</td>
+                <td className="px-2 py-2 text-right text-slate-700">{formatMoney(totalValeur)}</td>
                 <td className="px-2 py-2" />
               </tr>
             </tfoot>
@@ -414,7 +429,7 @@ export default function StockBriques() {
       {/* ── Historique des casses : d'où viennent les caillasses et pourquoi ── */}
       <Card className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3">
-          <History size={16} className="text-gray-400" />
+          <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#DC2626')}><Hammer size={14} /></span>
           <h3 className="font-bold text-gray-800">Historique des casses</h3>
           <span className="text-xs text-gray-400">{casses.length} casse(s) · période choisie dans le bandeau ci-dessus</span>
         </div>
@@ -459,66 +474,8 @@ export default function StockBriques() {
         )}
       </Card>
 
-      {/* ── Stock des matières premières (ciment, gravier, sable) ── */}
-      <Card className="overflow-hidden p-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
-          <div>
-            <h3 className="font-bold text-gray-800">Stock matières premières</h3>
-            <p className="text-xs text-gray-500">Arrivages à la livraison · consommation saisie à la main</p>
-          </div>
-          {peutSaisir && (
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => setConsoModal({ matiereId: matieres[0]?.id || '', qte: '', label: '' })}>
-                <PackageMinus size={15} /> Consommation
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setArrivage({ matiereId: matieres[0]?.id || '', qte: '', cout: '', label: '' })}>
-                <PackagePlus size={15} /> Arrivage
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-3 py-2 text-left">Matière</th>
-                <th className="px-3 py-2 text-center">Stock initial</th>
-                <th className="px-3 py-2 text-center text-green-700">Arrivages (+)</th>
-                <th className="px-3 py-2 text-center text-orange-700">Consommé (−)</th>
-                <th className="px-3 py-2 text-center">Stock actuel</th>
-                <th className="px-2 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {matieres.map((m) => {
-                const c = matStock[m.id] || { init: 0, entrees: [], consommations: [] }
-                const ent = sumQte(c.entrees)
-                const conso = sumQte(c.consommations)
-                const fin = matFin(m.id)
-                return (
-                  <tr key={m.id}>
-                    <td className="px-3 py-2 font-semibold">{m.nom} <span className="text-[10px] font-normal text-gray-400">({m.unite})</span></td>
-                    <td className="px-3 py-2 text-center">
-                      {peutSaisir
-                        ? <input type="number" min="0" step="0.1" value={c.init || 0} onChange={(e) => setMatInit(m.id, e.target.value)}
-                            className="w-20 rounded border border-gray-200 px-1 py-1 text-center text-sm font-bold focus:border-secondary focus:outline-none" />
-                        : <span className="font-bold">{formatNumber(c.init || 0)}</span>}
-                    </td>
-                    <td className="px-3 py-2 text-center font-bold text-green-700">{ent ? '+' + formatNumber(ent) : '—'}</td>
-                    <td className="px-3 py-2 text-center font-bold text-orange-700">{conso ? '−' + formatNumber(Math.round(conso * 10) / 10) : '—'}</td>
-                    <td className="px-3 py-2 text-center text-base font-extrabold" style={{ color: fin > 0 ? '#7c3aed' : '#9ca3af' }}>{formatNumber(Math.round(fin * 10) / 10)}</td>
-                    <td className="px-2 py-2 text-right">
-                      <button onClick={() => setMatDetail(m)} className="rounded bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-violet-100">détail</button>
-                    </td>
-                  </tr>
-                )
-              })}
-              {!matieres.length && <tr><td colSpan={6} className="py-4 text-center text-gray-400">Aucune matière définie.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <p className="px-4 py-2 text-[11px] text-gray-400">Le stock initial se reporte automatiquement du solde de la veille. Pensez à <strong>Enregistrer</strong> après un arrivage ou une correction.</p>
-      </Card>
+
+      <HistoriqueBriqueModal brique={histBrique} onClose={() => setHistBrique(null)} />
 
       <Modal open={!!transferModal} onClose={() => setTransferModal(null)} title={`Transfert : ${transferModal?.briqueNom}`}
         footer={<><Button variant="ghost" onClick={() => setTransferModal(null)}>Annuler</Button><Button onClick={executerTransfert}>Confirmer</Button></>}>
@@ -596,7 +553,7 @@ export default function StockBriques() {
                 <MatMini label="Initial" value={formatNumber(c.init || 0)} />
                 <MatMini label="Arrivages" value={'+' + formatNumber(sumQte(c.entrees))} color="#16a34a" />
                 <MatMini label="Consommé" value={'−' + formatNumber(Math.round(sumQte(c.consommations) * 10) / 10)} color="#ea580c" />
-                <MatMini label="Solde" value={formatNumber(Math.round(matFin(matDetail.id) * 10) / 10)} color="#7c3aed" />
+                <MatMini label="Solde" value={formatNumber(Math.round(matFin(matDetail.id) * 10) / 10)} color="#475569" />
               </div>
               <div>
                 <p className="mb-1 text-xs font-bold uppercase text-green-700">Arrivages</p>
@@ -619,6 +576,19 @@ export default function StockBriques() {
         })()}
       </Modal>
     </div>
+  )
+}
+
+const ETAT_LABEL = { appatam: 'Appatam', sechage: 'Séchage', pret: 'Prêtes', caillasses: 'Caillasses' }
+
+// Bouton de transfert d'état : pastille à icône, se remplit en relief au survol, la flèche avance.
+function BoutonEtat({ icone: Icone, couleur, titre, children, onClick }) {
+  return (
+    <button type="button" onClick={onClick} title={titre} className="btn-etat mb-1 mr-1 inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-[11px] font-bold" style={{ '--c': couleur }}>
+      <Icone size={12} />
+      <span aria-hidden="true" className="btn-etat-fleche">→</span>
+      {children}
+    </button>
   )
 }
 

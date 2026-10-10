@@ -8,6 +8,8 @@ import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import RetardsRetoursAlerte from './RetardsRetoursAlerte'
 import { useLogistiqueStore } from './store/referentielStore'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
@@ -19,6 +21,7 @@ const TOUTES = '__TOUTES__'
 
 export default function Dashboard() {
   const materiel = useLogistiqueStore((s) => s.materiel)
+  const role = useAuth((s) => s.role)
   const site = useSite()
   const { data: allInventaires } = useCollection('logistique_inventaires')
   const { data: allPrestations } = useCollection('logistique_prestations')
@@ -190,6 +193,8 @@ export default function Dashboard() {
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
+      {/* Retours en retard : alerte fermable pour les rôles autres qu'agent (les agents reçoivent une notification). */}
+      {role !== 'agent' && <RetardsRetoursAlerte prestations={prestations} retours={retours} demandes={demandes} site={site} />}
 
       {/* Filtre par catégorie (comme Maxi Agro) */}
       <div className="flex flex-wrap items-center gap-1.5">

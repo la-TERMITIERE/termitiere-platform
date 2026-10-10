@@ -1,11 +1,13 @@
 // Fournisseurs — CRUD + note qualité + alerte inactivité (>30 j).
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useState } from 'react'
-import { Plus, Trash2, Star, AlertTriangle, Truck } from 'lucide-react'
+import { Plus, Trash2, Star, AlertTriangle, Truck, Pencil, Phone, Clock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import AvatarNom from '../../shared/ui/AvatarNom'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useCollection } from '../../hooks/useFirestore'
@@ -52,7 +54,7 @@ export default function Fournisseurs() {
         <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un fournisseur…" />
         {!lectureSeule && (
           <button onClick={() => setModal({ data: empty(), id: null })}
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            className="btn-balaye flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
             <Plus size={14} /> Ajouter
           </button>
         )}
@@ -60,23 +62,39 @@ export default function Fournisseurs() {
       <Card className="p-0">
         <Table searchBy={['nom', 'contact', 'telephone']} searchQuery={recherche}
           columns={[
-            { key: 'nom', label: 'Nom', render: (r) => <span className="flex items-center gap-2">{r.nom}{inactif(r) && <AlertTriangle size={14} className="text-amber-500" title="Inactif > 30 j" />}</span> },
-            { key: 'specialite', label: 'Spécialité' },
-            { key: 'contact', label: 'Contact' },
-            { key: 'delaiMoyen', label: 'Délai (j)', align: 'center' },
-            { key: 'note', label: 'Qualité', align: 'center', render: (r) => <span className="inline-flex items-center gap-0.5 text-amber-500">{r.note}<Star size={13} fill="currentColor" /></span> },
+            { key: 'nom', label: 'Nom', render: (r) => (
+              <span className="flex items-center gap-2.5">
+                <AvatarNom nom={r.nom} accent={COULEUR_MODULE.logistique} />
+                <span className="font-semibold">{r.nom}</span>
+                {inactif(r) && <AlertTriangle size={14} className="animate-pulse text-amber-500" title="Inactif > 30 j" />}
+              </span>
+            ) },
+            { key: 'specialite', label: 'Spécialité', render: (r) => r.specialite
+              ? <span className="inline-flex rounded-full border border-red-100 bg-red-50/80 px-2.5 py-0.5 text-xs font-bold text-red-700">{r.specialite}</span>
+              : <span className="text-gray-300">:</span> },
+            { key: 'contact', label: 'Contact', render: (r) => r.contact
+              ? <span className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-2.5 py-0.5 text-xs font-semibold text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]"><Phone size={12} className="text-red-500" />{r.contact}</span>
+              : <span className="text-gray-300">:</span> },
+            { key: 'delaiMoyen', label: 'Délai (j)', align: 'center', render: (r) => (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700"><Clock size={12} />{r.delaiMoyen || 0} j</span>
+            ) },
+            { key: 'note', label: 'Qualité', align: 'center', render: (r) => (
+              <span className="inline-flex items-center gap-0.5" title={`${r.note}/5`}>
+                {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={13} className={i <= (r.note || 0) ? 'text-amber-400' : 'text-gray-300'} fill={i <= (r.note || 0) ? 'currentColor' : 'none'} />)}
+              </span>
+            ) },
             { key: 'derniereCommande', label: 'Dernière cmd', render: (r) => formatDateShort(r.derniereCommande) },
             { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
+                <ActionIcone icone={Pencil} tone="modifier" title="Modifier" onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} />
                 {isFullAccessRole(role) && (
-                  <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                  <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer" onClick={() => supprimer(r)} />
                 )}
               </div>
             ) }
           ]}
           rows={fournisseurs}
-          empty="Aucun fournisseur."
+          empty="Aucun fournisseur." emptyIcon={Truck}
         />
       </Card>
 

@@ -21,6 +21,8 @@ const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
 //  - forRoles : rôles destinataires, ex. ['admin','controleur']
 //  - forUsers : logins/uids destinataires précis, ex. ['agent']
 //  - excludeUid : ne pas notifier l'auteur de l'action
+//  Renvoie { id, destinataires } : `destinataires` = 0 signifie que personne n'a le rôle ET le
+//  module requis (l'appelant peut alors prévenir l'auteur).
 //  - link : route ouverte au clic, ex. '/agro/demandes'
 export async function notify({
   type = 'info', title, body = '', module = '',
@@ -30,7 +32,7 @@ export async function notify({
            // { site } : salle MAXI-GYM (lome/kara) — restreint les destinataires
            // à ceux qui ont accès à cette salle (cf. peutVoirNotifSiteGym).
 }) {
-  if (!title) return
+  if (!title) return { id: null, destinataires: 0 }
   const site = extra.site || null
   let id = null
   try {
@@ -44,6 +46,7 @@ export async function notify({
 
   // Résout forRoles en identifiants concrets pour le push (le ciblage par rôle
   // n'existe que côté cloche in-app ; le push a besoin d'abonnements précis).
+  let destinataires = 0 // nombre de personnes réellement visées (rôle + module), renvoyé à l'appelant
   try {
     let cibles = [...forUsers]
     // `users` ne sert qu'à résoudre forRoles → uids et, pour les notifications
@@ -65,6 +68,7 @@ export async function notify({
         .map((u) => u.uid))
     }
     cibles = [...new Set(cibles)].filter((c) => c && c !== excludeUid)
+    destinataires = cibles.length
     // `tag` = identifiant de la notification : la notification système affichée
     // par le service worker et celle affichée par l'onglet ouvert se remplacent
     // au lieu de se dédoubler.
@@ -88,4 +92,5 @@ export async function notify({
   } catch (e) {
     // Best-effort : le push/WhatsApp ne doit jamais faire échouer la notification.
   }
+  return { id, destinataires }
 }

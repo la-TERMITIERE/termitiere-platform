@@ -2,7 +2,7 @@
 // Calquée sur la facturation MAXI-AGRO — permet d'émettre des factures
 // directement depuis l'application (briques + lignes libres).
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Eye, Receipt, Wallet } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Eye, Receipt, Wallet, ShieldCheck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -11,6 +11,12 @@ import Table from '../../shared/ui/Table'
 import StatCard from '../../shared/ui/StatCard'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import FicheDetail from '../../shared/ui/FicheDetail'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import AvatarNom from '../../shared/ui/AvatarNom'
+import NumDoc from '../../shared/ui/NumDoc'
+import SignatureApprobation from '../../shared/ui/SignatureApprobation'
+import FactureHero from '../logistique/FactureHero'
+import { resoudreClientBriq } from './clientAuto'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -45,6 +51,7 @@ export default function Factures() {
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: clients } = useCollection('evenementiel_clients')
   const { data: ventes } = useCollection('evenementiel_ventes')
+  const { data: demandes } = useCollection('evenementiel_demandes')
   const briques = useBriqueterieStore((s) => s.briques)
 
   // Ventes approuvées (sortie certifiée) pas encore facturées : proposées à la facturation.
@@ -56,6 +63,8 @@ export default function Factures() {
   const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null) // { facture, editId }
   const [detail, setDetail] = useState(null) // facture consultée
+  const [filtreValideur, setFiltreValideur] = useState('')
+  const voitValidateur = isFullAccessRole(role) // administration et Info : voient qui a validé
 
   // Filtre de période (Jour / Mois / Plage) — même composant et même comportement
   // que la Facturation MAXI LOGISTIQUE, pour que le tri se présente identiquement.
@@ -66,6 +75,25 @@ export default function Factures() {
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin]     = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
+
+  const validationParVente = useMemo(() => {
+    const m = {}
+    demandes.forEach((d) => {
+      if (!d.venteId) return
+      const par = d.certifiePar || d.approuveN1Par
+      if (!par) return
+      const le = d.certifiePar ? d.certifieLe : d.approuveN1Le
+      m[d.venteId] = { par, le: String(le || '').slice(0, 10) }
+    })
+    return m
+  }, [demandes])
+  const validationDe = (f) => (f.venteId && validationParVente[f.venteId]) || null
+
+  const validateurs = useMemo(() => {
+    const n = {}
+    factures.forEach((f) => { const v = f.venteId && validationParVente[f.venteId]; if (v) n[v.par] = (n[v.par] || 0) + 1 })
+    return Object.entries(n).sort((a, b) => b[1] - a[1]).map(([nom, nb]) => ({ nom, nb }))
+  }, [factures, validationParVente])
 
   const liste = useMemo(() => {
     let rows = [...factures].filter((f) => (f.client?.nom || '').toLowerCase().includes(recherche.toLowerCase()))
@@ -78,8 +106,9 @@ export default function Factures() {
     } else if (modePeriode === 'jour' && filtreJour) {
       rows = rows.filter((f) => f.date === filtreJour)
     }
+    if (filtreValideur) rows = rows.filter((f) => validationDe(f)?.par === filtreValideur)
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, recherche, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  }, [factures, recherche, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreValideur, validationParVente])
 
   // Cumul de facturation — réservé à l'administration, recalculé selon les filtres
   // ci-dessus (période + recherche client) déjà appliqués à `liste`.
@@ -90,7 +119,7 @@ export default function Factures() {
     const map = {}
     clients.forEach((c) => {
       const nom = (c.nom || '').trim()
-      if (nom && !map[nom]) map[nom] = { nom, tel: c.tel || '', email: c.email || '', adresse: c.adresse || '', _date: '' }
+      if (nom && !map[nom]) map[nom] = { nom, tel: c.telephone || c.tel || '', email: c.email || '', adresse: c.adresse || '', _date: '' }
     })
     factures.forEach((f) => {
       const nom = (f.client?.nom || '').trim()
@@ -125,7 +154,7 @@ export default function Factures() {
       venteId: v.id,
       facture: {
         ...m.facture,
-        client: { nom: v.clientNom || cli?.nom || '', tel: cli?.tel || '', email: cli?.email || '', adresse: cli?.adresse || '' },
+        client: { nom: v.clientNom || cli?.nom || '', tel: cli?.telephone || cli?.tel || '', email: cli?.email || '', adresse: cli?.adresse || '' },
         lignes: (v.lignes || []).map((l) => ({
           articleId: l.briqueId, article: l.briqueNom,
           qte: l.qte, prixUnit: l.prixUnitaire, total: (parseInt(l.qte) || 0) * (parseFloat(l.prixUnitaire) || 0)
@@ -166,6 +195,8 @@ export default function Factures() {
     const { totalHT, totalTTC } = calcTotaux(fClean)
     const payload = { ...fClean, totalHT, totalTTC, venteId: modal.venteId || null }
     try {
+      // Client retrouvé ou créé automatiquement dans le volet Clients (plus d'ajout préalable).
+      await resoudreClientBriq({ clients, nom: f.client.nom, telephone: f.client.tel, adresse: f.client.adresse })
       if (modal.editId) {
         await updateItem('evenementiel_factures', modal.editId, payload)
         await audit('evenementiel', 'FACTURE_EDIT', `${f.numero}`)
@@ -227,18 +258,27 @@ export default function Factures() {
   }
 
   const columns = [
-    { key: 'numero', label: 'N°', sticky: true, width: '110px' },
+    { key: 'numero', label: 'N°', sticky: true, width: '96px', render: (r) => <NumDoc num={r.numero} /> },
     { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
-    { key: 'client', label: 'Client', render: (r) => r.client?.nom },
-    { key: 'totalTTC', label: 'Total TTC', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> },
+    { key: 'client', label: 'Client', render: (r) => (
+      <span className="flex items-center gap-2">
+        <AvatarNom nom={r.client?.nom} size={26} accent={COULEUR_MODULE.evenementiel} className="hidden sm:inline-flex" />
+        <span className="font-semibold">{r.client?.nom}</span>
+      </span>
+    ) },
+    { key: 'totalTTC', label: 'Total TTC', align: 'right', render: (r) => <strong className="whitespace-nowrap">{formatMoney(r.totalTTC)}</strong> },
+    ...(voitValidateur ? [{ key: 'validation', label: 'Validée par', render: (r) => {
+      const v = validationDe(r)
+      return v ? <SignatureApprobation par={v.par} le={v.le ? formatDateShort(v.le) : ''} /> : <span className="text-gray-300">:</span>
+    } }] : []),
     {
       key: 'actions', label: '', align: 'right',
       render: (r) => (
         <div className="flex justify-end gap-1">
-          <button title="Voir le détail" onClick={() => setDetail(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-          <button title="PDF" onClick={() => generateFacturePDF(r)} className="rounded p-1.5 text-secondary hover:bg-sky-50"><FileDown size={16} /></button>
-          {peutFacturer() && <button title="Modifier" onClick={() => openEdit(r)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
-          {peutSupprimer && <button title="Supprimer" onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
+          <ActionIcone icone={Eye} tone="voir" title="Voir le détail" onClick={() => setDetail(r)} />
+          <ActionIcone icone={FileDown} tone="#475569" title="PDF" onClick={() => generateFacturePDF(r)} />
+          {peutFacturer() && <ActionIcone icone={Pencil} tone="modifier" title="Modifier" onClick={() => openEdit(r)} />}
+          {peutSupprimer && <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer" onClick={() => supprimer(r)} />}
         </div>
       )
     }
@@ -246,11 +286,11 @@ export default function Factures() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),0_8px_20px_-8px_rgba(71,85,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(138,155,179,0.92) 0%, rgba(100,116,139,0.9) 40%, rgba(51,65,85,0.88) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+          background: '#475569', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
         }}>
           <Receipt size={28} color="white" />
         </div>
@@ -270,6 +310,18 @@ export default function Factures() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Client</label>
           <Input placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
         </div>
+        {voitValidateur && validateurs.length > 0 && (
+          <div className="champ-glass relative flex items-center gap-2 rounded-2xl border border-white/30 bg-white/15 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><ShieldCheck size={14} /></span>
+            <div className="leading-tight">
+              <span className="block text-[9px] font-bold uppercase tracking-wide text-white/70">Validé par</span>
+              <select value={filtreValideur} onChange={(e) => setFiltreValideur(e.target.value)} className="max-w-[10rem] text-xs font-bold text-white focus:outline-none">
+                <option value="">Tous</option>
+                {validateurs.map((v) => <option key={v.nom} value={v.nom}>{v.nom} ({v.nb})</option>)}
+              </select>
+            </div>
+          </div>
+        )}
         {canExportExcel(role) && (
           <Button variant="outline" onClick={exportXLSX} className="btn-glass"><FileSpreadsheet size={16} /> Export Excel</Button>
         )}
@@ -289,7 +341,7 @@ export default function Factures() {
 
 
       <Card className="p-0">
-        <Table stickyHeader columns={columns} rows={liste} empty="Aucune facture." />
+        <Table stickyHeader columns={columns} rows={liste} onRowClick={(r) => setDetail(r)} emptyIcon={Receipt} empty="Aucune facture." />
       </Card>
 
       {/* Consultation d'une facture — lecture seule */}
@@ -302,10 +354,13 @@ export default function Factures() {
         {detail && (() => {
           const t = calcTotaux(detail)
           const vente = ventes.find((v) => v.id === detail.venteId)
+          const validation = validationDe(detail)
           return (
             <FicheDetail
+              hero={<FactureHero num={detail.numero} client={detail.client?.nom} approuvee={!!validation} total={t.totalTTC} voitMontants={estAdministration}
+                accent={COULEUR_MODULE.evenementiel} libelleOk="Validée" libelleKo="Émise" />}
               entetes={[
-                { label: 'Client', value: detail.client?.nom || '—' },
+                { label: 'Validée par', value: voitValidateur && validation ? `${validation.par}${validation.le ? ' · ' + formatDateShort(validation.le) : ''}` : null },
                 { label: 'Date', value: formatDateShort(detail.date) },
                 { label: 'Téléphone', value: detail.client?.tel },
                 { label: 'Adresse', value: detail.client?.adresse },
@@ -335,13 +390,14 @@ export default function Factures() {
         open={!!modal}
         onClose={() => setModal(null)}
         size="xl"
+        {...glassModalProps(COULEUR_MODULE.evenementiel)}
         title={modal?.editId ? 'Modifier la facture' : 'Nouvelle facture'}
         footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}
       >
         {modal && (
           <>
             {!modal.editId && (
-              <div className="mb-3 rounded-lg border border-violet-100 bg-violet-50 p-3">
+              <div className="mb-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
                 <FormGroup label="Facturer une vente approuvée" hint="Sélectionnez une vente autorisée : le client et les lignes seront pré-remplis.">
                   <Select value={modal.venteId || ''} onChange={(e) => pickVente(e.target.value)}>
                     <option value="">Nouvelle facture libre</option>

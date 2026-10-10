@@ -6,7 +6,7 @@
 // (livraison) augmente le stock, chaque sortie (utilisation) le diminue. Le
 // stock actuel = somme des entrées − somme des sorties (jamais négatif).
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban, Warehouse, ChevronRight, ArrowLeft } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban, Warehouse, ChevronRight, ArrowLeft, FileSpreadsheet } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -18,7 +18,9 @@ import { addItem, setItem, removeItem, updateItem } from '../../core/db'
 import { useAuth } from '../../hooks/useAuth'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { formatDateShort, formatDateTime } from '../../utils/formatters'
+import { formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
+import { canExportExcel } from '../../core/roles'
+import { exportRapportExcel } from '../../utils/excelReport'
 import { marquerVoletVu } from './vues'
 import { projetsVisibles, scopeParProjetsOuGlobal, parCreationDesc } from './logic'
 
@@ -224,6 +226,84 @@ export default function Materiel() {
   // Global, tous magasins confondus (bandeau d'en-tête).
   const compteurGlobal = (statut) => materiels.filter((m) => m.statut === statut).length
   const catLabel = (id) => CATEGORIES_MATERIEL.find((c) => c.id === id)?.label || id
+
+  // Export Excel d'un magasin : TOUS ses matériels et matériaux avec leurs mouvements.
+  //  - « Récapitulatif » : une ligne par matériel (stock initial, entrées, sorties, stock actuel) ;
+  //  - « Mouvements par matériel » : pour chaque matériel, dans l'ordre chronologique, chaque entrée
+  //    et chaque sortie avec le stock après le mouvement, puis une ligne de total.
+  // Le stock initial est le mouvement « Stock initial » créé à l'ajout du matériel.
+  function exporterMateriauxExcel(portee) {
+    const items = [...(portee === 'tous' ? materiels : materielsDuMagasinActif)]
+      .sort((a, b) => (nomMagasin(a.magasinId) || '').localeCompare(nomMagasin(b.magasinId) || '') || (a.nom || '').localeCompare(b.nom || ''))
+    const estInitial = (mv) => mv.type === 'entree' && (mv.note || '').trim().toLowerCase() === 'stock initial'
+    const chrono = (m) => [...(m.mouvements || [])].sort((x, y) => (x.date || 0) - (y.date || 0))
+    const qte = (mv) => Number(mv.quantite) || 0
+
+    const recap = items.map((m) => {
+      const mv = m.mouvements || []
+      const initial = mv.filter(estInitial).reduce((t, x) => t + qte(x), 0)
+      const entrees = mv.filter((x) => x.type === 'entree' && !estInitial(x)).reduce((t, x) => t + qte(x), 0)
+      const sorties = calculerSorties(mv)
+      const dernier = mv.reduce((d, x) => Math.max(d, x.date || 0), 0)
+      return {
+        'Matériel': m.nom || '', 'Catégorie': catLabel(m.categorie), 'Unité': m.unite || '',
+        'Statut': STATUTS_MATERIEL[m.statut]?.label || m.statut || '', 'État': ETATS_MATERIEL[m.etat]?.label || '',
+        'Stock initial': initial, 'Entrées': entrees, 'Sorties': sorties, 'Stock actuel': calculerStock(mv),
+        'Mouvements': mv.length, 'Dernier mouvement': dernier ? formatDateShort(dernier) : ''
+      }
+    })
+
+    const detail = []
+    items.forEach((m) => {
+      let solde = 0
+      let totalEntrees = 0
+      let totalSorties = 0
+      chrono(m).forEach((mv) => {
+        const initial = estInitial(mv)
+        const entree = mv.type === 'entree'
+        solde += entree ? qte(mv) : -qte(mv)
+        if (entree) totalEntrees += qte(mv); else totalSorties += qte(mv)
+        detail.push({
+          'Matériel': m.nom || '', 'Date': mv.date ? formatDateShort(mv.date) : '',
+          'Mouvement': initial ? 'Stock initial' : entree ? 'Entrée' : 'Sortie',
+          'Entrée': entree ? qte(mv) : '', 'Sortie': entree ? '' : qte(mv), 'Stock après': Math.max(0, solde),
+          'Unité': m.unite || '', 'Note': mv.note || '', 'Auteur': mv.auteur || ''
+        })
+      })
+      detail.push({
+        'Matériel': `TOTAL ${m.nom || ''}`, 'Date': '', 'Mouvement': 'Total',
+        'Entrée': totalEntrees, 'Sortie': totalSorties, 'Stock après': calculerStock(m.mouvements || []),
+        'Unité': m.unite || '', 'Note': '', 'Auteur': ''
+      })
+    })
+
+    const nomPortee = portee === 'tous' ? 'Tous les magasins' : (magasinCourant?.nom || 'Matériel non classé')
+    const slug = (portee === 'tous' ? 'tous-les-magasins' : (magasinCourant?.nom || 'non-classe')).toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    const col = (labels, largeurs) => labels.map((k, i) => ({ key: k, label: k, width: largeurs[i] }))
+    exportRapportExcel({
+      filename: `materiel-${slug}-${todayStr()}.xlsx`,
+      sections: [
+        {
+          name: 'Récapitulatif', title: `Matériel & Matériaux : ${nomPortee}`,
+          subtitle: `${recap.length} matériel(s) : stock initial, entrées, sorties et stock actuel`,
+          columns: col(['Matériel', 'Catégorie', 'Unité', 'Statut', 'État', 'Stock initial', 'Entrées', 'Sorties', 'Stock actuel', 'Mouvements', 'Dernier mouvement'], [30, 26, 10, 12, 14, 13, 11, 11, 13, 12, 18]),
+          rows: recap
+        },
+        {
+          name: 'Mouvements par matériel', title: `Mouvements de chaque matériel : ${nomPortee}`,
+          subtitle: 'Ordre chronologique, avec le stock après chaque mouvement',
+          columns: col(['Matériel', 'Date', 'Mouvement', 'Entrée', 'Sortie', 'Stock après', 'Unité', 'Note', 'Auteur'], [30, 12, 14, 10, 10, 12, 10, 34, 18]),
+          rows: detail
+        }
+      ]
+    })
+  }
+  const boutonExcel = (portee, classe = '') => canExportExcel(role) && (
+    <button type="button" onClick={() => exporterMateriauxExcel(portee)} title="Récapitule tous les matériaux et tous leurs mouvements"
+      className={`btn-balaye flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 ${classe}`}>
+      <FileSpreadsheet size={14} /> Export Excel
+    </button>
+  )
 
   const openCreate = () => {
     // Ouvert depuis un magasin précis : reprend son projet (ou SANS_PROJET s'il est
@@ -458,6 +538,7 @@ export default function Materiel() {
                   <h3 className="text-base font-extrabold">Matériel non classé</h3>
                   <p className="text-sm text-white/85">{materielsDuMagasinActif.length} élément(s) : modifiez chacun pour lui choisir un magasin</p>
                 </div>
+                {boutonExcel(SANS_MAGASIN, 'ml-auto')}
               </div>
             ) : magasinCourant && (
               <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_20px_40px_-16px_rgba(14,116,144,0.4),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
@@ -469,6 +550,7 @@ export default function Materiel() {
                   <h3 className="truncate text-base font-extrabold">{magasinCourant.nom}</h3>
                   <p className="text-sm text-white/85">{projetDeMagasin(magasinCourant)?.nom || 'Sans projet : dépôt général'} · {materielsDuMagasinActif.length} matériel(s)</p>
                 </div>
+                {boutonExcel(magasinActif)}
                 <button onClick={() => { setMagasinProjetId(magasinCourant.projetId || SANS_PROJET); openEditMagasin(magasinCourant); setModalMagasins(true) }}
                   className="shrink-0 rounded-full border border-white/40 bg-white/15 p-2 text-white backdrop-blur-sm transition-colors hover:bg-white/25" title="Modifier ce magasin">
                   <Pencil size={14} />

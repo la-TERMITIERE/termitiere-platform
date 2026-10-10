@@ -17,7 +17,7 @@
 // certification) que les sorties de briques — cf. Demandes.jsx, onglet « Location
 // matériel », même workflow partagé (src/shared/workflow.js), mêmes rôles approbateurs.
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban, Boxes, Download, KeyRound } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wrench, CheckCircle2, AlertTriangle, XCircle, RotateCcw, PlusCircle, MinusCircle, Ban, Boxes, Download, KeyRound, PackagePlus } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -347,11 +347,11 @@ export default function Materiel() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),0_8px_20px_-8px_rgba(71,85,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(138,155,179,0.92) 0%, rgba(100,116,139,0.9) 40%, rgba(51,65,85,0.88) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+          background: '#475569', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
         }}>
           <Wrench size={28} color="white" />
         </div>
@@ -375,28 +375,43 @@ export default function Materiel() {
             </button>
           ))}
         </div>
-        <Button onClick={openCreate} size="sm" className="btn-glass ml-auto">
-          <Plus size={14} className="mr-1" />{onglet === 'materiaux' ? 'Ajouter un matériau' : 'Ajouter un matériel'}
-        </Button>
         </div>
       </div>
 
       {/* Deux fenêtres : Matériaux (consommables, avec KPI de stock) et Matériels
           (outillage/véhicules/gros équipement, suivi d'état). */}
-      <PillTabs active={onglet} accent={COULEUR_MODULE.evenementiel}
-        onChange={(id) => { setOnglet(id); setFiltreCateg('') }}
-        tabs={[
-          { id: 'materiaux', label: '📦 Matériaux', accent: '#7c3aed' },
-          { id: 'materiels', label: '🔧 Matériels', accent: '#ea580c' }
-        ]} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <style>{`
+          @keyframes mat-balayage { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+          @keyframes mat-saute { 0%, 100% { transform: translateY(0) rotate(0deg); } 30% { transform: translateY(-3px) rotate(-8deg); } 60% { transform: translateY(0) rotate(6deg); } }
+          @keyframes mat-plus { 0%, 65%, 100% { transform: rotate(0deg) scale(1); } 80% { transform: rotate(90deg) scale(1.25); } 92% { transform: rotate(90deg) scale(1); } }
+        `}</style>
+        <PillTabs active={onglet} accent={COULEUR_MODULE.evenementiel}
+          onChange={(id) => { setOnglet(id); setFiltreCateg('') }}
+          tabs={[
+            { id: 'materiaux', label: '📦 Matériaux', accent: '#475569' },
+            { id: 'materiels', label: '🔧 Matériels', accent: '#ea580c' }
+          ]} />
+        {/* Ajouter : le colis saute doucement, le « + » pivote de temps en temps, un reflet traverse. */}
+        <button type="button" onClick={openCreate}
+          className="group relative flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(71,85,105,0.7),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(71,85,105,0.85)]"
+          style={{ background: 'linear-gradient(135deg, #8a9bb3 0%, #64748b 45%, #334155 100%)' }}>
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent" style={{ animation: 'mat-balayage 3.2s ease-in-out infinite' }} />
+          <span className="relative flex h-6 w-6 items-center justify-center">
+            {onglet === 'materiaux' ? <PackagePlus size={18} style={{ animation: 'mat-saute 2.6s ease-in-out infinite' }} /> : <Wrench size={17} style={{ animation: 'mat-saute 2.6s ease-in-out infinite' }} />}
+            <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-white text-slate-700 shadow"><Plus size={11} strokeWidth={3.4} style={{ animation: 'mat-plus 4s ease-in-out infinite' }} /></span>
+          </span>
+          <span className="relative">{onglet === 'materiaux' ? 'Ajouter un matériau' : 'Ajouter un matériel'}</span>
+        </button>
+      </div>
 
       {/* Import ponctuel du stock actuel de Stock briques (ciment, sable, gravillon…) —
           disparaît une fois toutes les matières importées ; les deux stocks évoluent
           ensuite chacun de leur côté (cf. en-tête du fichier). */}
       {onglet === 'materiaux' && matieresAImporter.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
-          <Download size={18} className="shrink-0 text-violet-600" />
-          <p className="min-w-0 flex-1 text-sm text-violet-800">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <Download size={18} className="shrink-0 text-slate-600" />
+          <p className="min-w-0 flex-1 text-sm text-slate-800">
             <strong>{matieresAImporter.length} matière(s)</strong> disponible(s) dans Stock briques ({matieresAImporter.map((m) => m.nom).join(', ')}) : récupérer leur stock actuel comme point de départ ici.
           </p>
           <Button size="sm" onClick={importerDepuisStockBriques} loading={importing}>
@@ -412,7 +427,7 @@ export default function Materiel() {
           {kpisStock.map((m) => (
             <StatCard key={m.id} title={m.nom} value={`${m.stock} ${m.unite || ''}`}
               sub={m.stock <= 0 ? '⚠ Épuisé' : 'En stock'}
-              icon={Boxes} accent={m.stock <= 0 ? '#dc2626' : '#7c3aed'}
+              icon={Boxes} accent={m.stock <= 0 ? '#dc2626' : '#475569'}
               valueColor={m.stock <= 0 ? '#dc2626' : undefined} />
           ))}
         </div>
@@ -440,7 +455,7 @@ export default function Materiel() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-bold text-gray-800">{m.nom}</p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">{catLabel(m.categorie)}</span>
+                      <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">{catLabel(m.categorie)}</span>
                       <Badge tone={st.tone}>{st.label}</Badge>
                       <Badge tone={et.tone}>{et.label}</Badge>
                     </div>
@@ -449,7 +464,7 @@ export default function Materiel() {
                   {/* Stock */}
                   <div className="shrink-0 text-right">
                     <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">En stock</p>
-                    <p className="text-lg font-extrabold text-violet-700 leading-tight">
+                    <p className="text-lg font-extrabold text-slate-700 leading-tight">
                       {stock} <span className="text-xs font-semibold text-gray-500">{m.unite || 'unité(s)'}</span>
                     </p>
                   </div>
@@ -476,7 +491,7 @@ export default function Materiel() {
 
                   {/* Modifier / Supprimer */}
                   <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => openEdit(m)} className="rounded-lg border border-violet-200 bg-violet-50 p-1.5 text-violet-600 transition-colors hover:border-violet-300 hover:bg-violet-100"><Pencil size={14} /></button>
+                    <button onClick={() => openEdit(m)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100"><Pencil size={14} /></button>
                     {peutSupprimer && (
                       <button onClick={() => handleDelete(m)} className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"><Trash2 size={14} /></button>
                     )}
@@ -490,7 +505,7 @@ export default function Materiel() {
 
       {/* Détail matériel/matériau */}
       <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail"
-        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        panelClassName="bg-gradient-to-br from-slate-200/85 via-slate-100/75 to-slate-300/75 backdrop-blur-2xl backdrop-saturate-200">
         {detail && (() => {
           // Version à jour (les mouvements/statut/état ajoutés depuis la fiche doivent
           // apparaître immédiatement sans fermer la modale).
@@ -504,8 +519,8 @@ export default function Materiel() {
           return (
             <div className="space-y-4">
               {/* En-tête glassmorphism — nom bien visible */}
-              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-                style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.92) 0%, rgba(76,29,149,0.88) 100%)' }}>
+              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+                style={{ background: 'linear-gradient(135deg, rgba(71,85,105,0.92) 0%, rgba(30,41,59,0.88) 100%)' }}>
                 <p className="font-mono text-xs text-white/70">{catLabel(d.categorie)}</p>
                 <p className="mt-0.5 text-lg font-extrabold leading-snug">{d.nom}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -547,8 +562,8 @@ export default function Materiel() {
               )}
 
               {/* Suivi du stock */}
-              <div className="rounded-2xl border border-violet-100/70 bg-violet-50/60 p-3.5 shadow-sm backdrop-blur-sm">
-                <p className="mb-2 text-xs font-bold uppercase text-violet-700">Suivi du stock</p>
+              <div className="rounded-2xl border border-slate-100/70 bg-slate-50/60 p-3.5 shadow-sm backdrop-blur-sm">
+                <p className="mb-2 text-xs font-bold uppercase text-slate-700">Suivi du stock</p>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                   <span className="text-gray-500">Reçu : <b className="text-gray-700">{entre} {d.unite || 'unité(s)'}</b></span>
                   <span className="text-gray-500">Sorti : <b className="text-amber-600">{sorti} {d.unite || 'unité(s)'}</b></span>
@@ -571,7 +586,7 @@ export default function Materiel() {
                         </div>
                         <span className="flex shrink-0 items-center gap-1">
                           <button onClick={() => ouvrirEditionMouvement(d, mv)} title="Corriger ce mouvement"
-                            className="rounded border border-violet-200 bg-violet-50 p-0.5 text-violet-600 hover:bg-violet-100"><Pencil size={11} /></button>
+                            className="rounded border border-slate-200 bg-slate-50 p-0.5 text-slate-600 hover:bg-slate-100"><Pencil size={11} /></button>
                           {peutSupprimer && (
                             <button onClick={() => supprimerMouvement(d, mv)} title="Supprimer ce mouvement"
                               className="rounded border border-red-200 bg-red-50 p-0.5 text-red-600 hover:bg-red-100"><Trash2 size={11} /></button>
@@ -625,28 +640,28 @@ export default function Materiel() {
 
       {/* Modal création/édition */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Modifier le matériel' : 'Ajouter du matériel'}
-        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-200/75 backdrop-blur-2xl backdrop-saturate-200">
+        panelClassName="bg-gradient-to-br from-slate-200/85 via-slate-100/75 to-slate-200/75 backdrop-blur-2xl backdrop-saturate-200">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(124,58,237,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">📋 Informations</p>
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(71,85,105,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-700">📋 Informations</p>
             <FormGroup label="Matériel" required>
-              <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              <input className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 placeholder="ex : Brouette, groupe électrogène, camion…"
                 value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
             </FormGroup>
           </div>
 
-          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(124,58,237,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">📦 Détails & stock</p>
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 space-y-3 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(71,85,105,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-700">📦 Détails & stock</p>
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Catégorie">
-                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                   value={form.categorie} onChange={(e) => setForm((f) => ({ ...f, categorie: e.target.value }))}>
                   {CATEGORIES_MATERIEL.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </FormGroup>
               <FormGroup label="État">
-                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                <select className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                   value={form.etat} onChange={(e) => setForm((f) => ({ ...f, etat: e.target.value }))}>
                   {Object.entries(ETATS_MATERIEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
@@ -661,13 +676,13 @@ export default function Materiel() {
               </FormGroup>
               {!editing && (
                 <FormGroup label="Quantité initiale" required hint="Stock de départ : mettre 0 si aucun stock pour l'instant">
-                  <input type="number" min="0" step="any" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  <input type="number" min="0" step="any" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                     placeholder="0"
                     value={form.quantiteInitiale} onChange={(e) => setForm((f) => ({ ...f, quantiteInitiale: e.target.value }))} />
                 </FormGroup>
               )}
               <FormGroup label="Arrivé le" hint="Optionnel">
-                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                <input type="date" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                   value={form.dateEntree} onChange={(e) => setForm((f) => ({ ...f, dateEntree: e.target.value }))} />
               </FormGroup>
             </div>
@@ -676,9 +691,9 @@ export default function Materiel() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(124,58,237,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
+          <div className="rounded-2xl border border-white/55 bg-white/60 p-4 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(71,85,105,0.35),inset_0_1px_0_0_rgba(255,255,255,0.55)]">
             <FormGroup label="Note" hint="Optionnel">
-              <textarea rows={2} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+              <textarea rows={2} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
                 value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
             </FormGroup>
           </div>
@@ -706,12 +721,12 @@ export default function Materiel() {
             </p>
             <FormGroup label={mouvement.type === 'entree' ? 'Quantité livrée' : 'Quantité utilisée'} required>
               <input type="number" min="0" step="any" autoFocus
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 placeholder="0"
                 value={mvtQte} onChange={(e) => setMvtQte(e.target.value)} />
             </FormGroup>
             <FormGroup label="Note" hint="Optionnel">
-              <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 placeholder={mouvement.type === 'entree' ? 'ex : Achat station-service' : 'ex : Ravitaillement camion'}
                 value={mvtNote} onChange={(e) => setMvtNote(e.target.value)} />
             </FormGroup>
@@ -756,7 +771,7 @@ export default function Materiel() {
               </FormGroup>
             </div>
             <FormGroup label="Motif / précisions" hint="Optionnel">
-              <textarea rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+              <textarea rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
                 value={locationModal.motif} onChange={(e) => setLocationModal((l) => ({ ...l, motif: e.target.value }))} placeholder="ex : chantier client, usage prévu…" />
             </FormGroup>
           </div>

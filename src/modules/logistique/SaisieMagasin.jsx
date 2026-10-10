@@ -1,8 +1,8 @@
 // Saisie magasin — EF Initial · Achats · Sorties (autorisées) · Retours · EF Final.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Save, Send, CheckCircle2, Plus, Trash2, Lock, ClipboardList } from 'lucide-react'
-import { COULEUR_MODULE } from '../../utils/color'
+import { Save, Send, CheckCircle2, Plus, Trash2, Lock, ClipboardList, Boxes, CalendarDays, UserRound } from 'lucide-react'
+import { COULEUR_MODULE, icone3D } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -215,19 +215,32 @@ export default function SaisieMagasin() {
           <h2 className="text-lg font-extrabold">Saisie magasin</h2>
           <p className="text-sm text-white/80">{siteLabel(site)}</p>
         </div>
+        <div className="band-filtres">
+          <div className="champ-glass relative flex items-center gap-2 rounded-2xl border border-white/30 bg-white/15 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><CalendarDays size={14} /></span>
+            <div className="leading-tight">
+              <span className="block text-[9px] font-bold uppercase tracking-wide text-white/70">Date</span>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                className="bg-transparent text-xs font-bold text-white focus:outline-none" />
+            </div>
+          </div>
+          <div className="champ-glass relative flex items-center gap-2 rounded-2xl border border-white/30 bg-white/15 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><UserRound size={14} /></span>
+            <div className="leading-tight">
+              <span className="block text-[9px] font-bold uppercase tracking-wide text-white/70">Agent</span>
+              <input value={user?.nom || ''} readOnly className="w-28 bg-transparent text-xs font-bold text-white focus:outline-none" />
+            </div>
+          </div>
+        </div>
         {peutEnregistrer && (
           <button onClick={() => setAddModal(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            className="btn-balaye flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
             <Plus size={14} /> Matériel
           </button>
         )}
-        <Link to={`/logistique/${site}/demandes`}
-          className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
-          <Send size={14} /> Demander une sortie
-        </Link>
         {peutEnregistrer && (
           <button onClick={save} disabled={saving}
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60">
+            className="btn-balaye flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60">
             <Save size={14} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         )}
@@ -238,8 +251,9 @@ export default function SaisieMagasin() {
         </div>
       )}
       {peutEditerInit && !peutSaisir && (
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          🛠️ Mode administrateur : vous pouvez renseigner les <strong>stocks initiaux de départ</strong> (colonne « Stock Initial ») pour caler l'appli sur le stock physique, puis <strong>Enregistrer</strong>.
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-white/70 px-4 py-3 text-sm text-emerald-800 shadow-[0_10px_22px_-16px_rgba(5,150,105,0.5),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md">
+          <span className="text-lg leading-none">🛠️</span>
+          <span>Mode administrateur : vous pouvez renseigner les <strong>stocks initiaux de départ</strong> (colonne « Stock Initial ») pour caler l'appli sur le stock physique, puis <strong>Enregistrer</strong>.</span>
         </div>
       )}
       {!peutSaisir && peutEditerInit && (
@@ -250,17 +264,6 @@ export default function SaisieMagasin() {
           💾 Brouillon enregistré automatiquement à {formatDateTime(draftSavedAt)} : vos données sont en sécurité même sans clic sur « Enregistrer ».
         </div>
       )}
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
-          <input type="date" className="input-base w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Agent</label>
-          <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
-        </div>
-      </div>
-
       {dejaSaisi && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
           <CheckCircle2 size={16} />
@@ -268,8 +271,23 @@ export default function SaisieMagasin() {
         </div>
       )}
 
+      <div className="flex justify-end">
+        <style>{`
+          @keyframes sm-balayage { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+          @keyframes sm-envol { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(3px, -3px) rotate(-8deg); } }
+        `}</style>
+        <Link to={`/logistique/${site}/demandes`}
+          className="group relative flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(188,60,49,0.7),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(188,60,49,0.85)]"
+          style={{ background: 'linear-gradient(135deg, #d9594b 0%, #bc3c31 100%)' }}>
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+            style={{ animation: 'sm-balayage 3.2s ease-in-out infinite' }} />
+          <Send size={16} className="relative" style={{ animation: 'sm-envol 2.4s ease-in-out infinite' }} />
+          <span className="relative">Demander une sortie</span>
+        </Link>
+      </div>
+
       <Card className="overflow-hidden p-0">
-        <div className="max-h-[calc(100vh-14rem)] overflow-auto">
+        <div className="table-verre max-h-[calc(100vh-14rem)] overflow-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
               <tr>
@@ -285,7 +303,12 @@ export default function SaisieMagasin() {
               {cats.map((cat) => (
                 <Fragment key={cat}>
                   <tr>
-                    <td colSpan={6} className="sticky left-0 px-3 py-1.5 text-xs font-bold uppercase text-white" style={{ background: catColor(cat) }}>{cat}</td>
+                    <td colSpan={6} className="sticky left-0 px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide text-white"
+                      style={{ background: `linear-gradient(90deg, ${catColor(cat)}, ${catColor(cat)}b3)`, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)' }}>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/25"><Boxes size={12} /></span>{cat}
+                      </span>
+                    </td>
                   </tr>
                   {materiel.filter((m) => m.cat === cat).map((m) => {
                     const d = stock[m.id] || { init: 0, entrees: [], sorties: [], retours: [] }
@@ -300,14 +323,14 @@ export default function SaisieMagasin() {
                         <td className="px-2 py-1.5 text-center">
                           <input type="number" min="0" value={d.init ?? 0} readOnly={!peutEditerInit}
                             onChange={(e) => setInit(m.id, e.target.value)}
-                            className={`w-16 rounded border px-1 py-1 text-center text-sm ${peutEditerInit ? '' : 'num-readonly cursor-not-allowed'}`} />
+                            className={`w-16 rounded-xl border border-gray-200 bg-white/80 px-1 py-1 text-center text-sm shadow-inner ${peutEditerInit ? '' : 'num-readonly cursor-not-allowed'}`} />
                         </td>
                         <MvtCell total={totEnt} tone="green" onClick={() => setMvtModal({ id: m.id, dir: 'entree', nom: m.nom, unite: m.unite })} />
                         <MvtCell total={sommeMouvements(d.sorties)} tone="amber" sub={autoSor > 0 ? `+${autoSor} auto` : null}
                           onClick={() => setMvtModal({ id: m.id, dir: 'sortie', nom: m.nom, unite: m.unite })} />
                         <MvtCell total={totRet} tone="sky" sub="🔒 via Retour matériel"
                           onClick={() => setRetourDetail({ nom: m.nom, lignes: d.retours || [] })} />
-                        <td className="px-2 py-1.5 text-center font-bold text-secondary">{fin}</td>
+                        <td className="px-2 py-1.5 text-center"><span className="inline-flex min-w-[2.5rem] justify-center rounded-xl px-2 py-1 text-sm font-extrabold text-white" style={icone3D(fin > 0 ? '#BC3C31' : '#9CA3AF')}>{fin}</span></td>
                       </tr>
                     )
                   })}
@@ -421,12 +444,14 @@ function AddMaterielModal({ open, existingCats = [], onClose, onSave }) {
 }
 
 function MvtCell({ total, tone, onClick, sub }) {
-  const colors = { green: 'text-green-700', amber: 'text-amber-700', sky: 'text-sky-700' }
+  const colors = { green: '#15803d', amber: '#b45309', sky: '#0369a1' }
+  const c = colors[tone]
   return (
     <td className="px-2 py-1.5 text-center">
       <button type="button" onClick={onClick}
-        className="mx-auto flex min-w-[4rem] flex-col items-center rounded-lg border border-gray-200 px-2 py-1 hover:border-secondary hover:bg-sky-50">
-        <span className={`font-bold ${colors[tone]}`}>{total}</span>
+        className="mx-auto flex min-w-[4rem] flex-col items-center rounded-xl border px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-all hover:-translate-y-0.5 hover:shadow-md"
+        style={{ background: `${c}14`, borderColor: `${c}40`, color: c }}>
+        <span className="font-extrabold">{total}</span>
         {sub && <span className="text-[9px] text-gray-400">{sub}</span>}
       </button>
     </td>

@@ -350,13 +350,13 @@ export default function Pilotage() {
           const chip = k.delta != null ? `${positive ? '+' : ''}${k.delta.toFixed(1)} %` : (k.deltaPP != null ? `${positive ? '+' : ''}${k.deltaPP.toFixed(1)} pt` : null)
           return (
           <button key={k.id} type="button" onClick={() => setModal(k.id)}
-            className="card group relative overflow-hidden p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            className="card group relative overflow-hidden p-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg"
             style={{ background: `linear-gradient(135deg, ${k.color}1f 0%, #ffffffcc 70%)` }}>
             <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/80 via-white/20 to-transparent" />
-            <div className="relative mb-2 flex items-center justify-between gap-1">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white"
+            <div className="relative mb-1 flex items-center justify-between gap-1">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
                 style={{ background: `linear-gradient(135deg, ${k.color}, ${k.color}cc)`, boxShadow: `0 6px 14px -4px ${k.color}66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)` }}>
-                <k.icon size={18} />
+                <k.icon size={14} />
               </div>
               {chip && (
                 <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${good ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
@@ -366,7 +366,7 @@ export default function Pilotage() {
             </div>
             {/* Montant TOUJOURS entièrement visible (passe à la ligne au besoin). */}
             <p className="relative truncate text-[10px] font-bold uppercase tracking-wide text-gray-500" title={k.title}>{k.title}</p>
-            <p className="relative break-words text-base font-extrabold leading-tight text-gray-900 sm:text-lg" title={String(k.value)}>{k.value}</p>
+            <p className="relative break-words text-sm font-extrabold leading-tight text-gray-900 sm:text-base" title={String(k.value)}>{k.value}</p>
             {k.sub && <p className="relative mt-0.5 truncate text-[10px] text-gray-400" title={k.sub}>{k.sub}</p>}
           </button>
         )})}

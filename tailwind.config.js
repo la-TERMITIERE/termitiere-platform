@@ -11,7 +11,7 @@ export default {
         charcoal: { DEFAULT: '#2E2E2E', dark: '#1A1A1A', light: '#4A4A4A' },
         agro: '#BC3C31',
         logistique: '#0369a1',
-        evenementiel: '#7c3aed',
+        evenementiel: '#475569',
         rh: '#ea580c',
         ovins: '#0284c7',
         bovins: '#7c3aed',

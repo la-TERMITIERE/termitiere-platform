@@ -139,7 +139,7 @@ export default function GlobalDashboard() {
             value={formatNumber(prodMois)}
             sub={autorisationsBriq ? `⚠ ${autorisationsBriq} autorisation(s)` : 'Briques produites ce mois'}
             icon={BrickWall}
-            accent="#7c3aed"
+            accent="#475569"
           />
         )}
         {hasModule('foncier') && (

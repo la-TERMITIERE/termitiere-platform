@@ -9,8 +9,8 @@
 // Chaque entrée est tracée (collection logistique_retours) et alimente, en lecture
 // seule, la colonne « Retours » de la saisie magasin.
 import { useMemo, useState } from 'react'
-import { RotateCcw, Check, Plus, X, Pencil, Trash2 } from 'lucide-react'
-import { COULEUR_MODULE } from '../../utils/color'
+import { RotateCcw, Check, Plus, X, Pencil, Trash2, Package, Undo2, CheckCheck, Info } from 'lucide-react'
+import { COULEUR_MODULE, icone3D } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
@@ -19,6 +19,11 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import Badge from '../../shared/ui/Badge'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import NumDoc from '../../shared/ui/NumDoc'
+import RetourDetailModal from './RetourDetailModal'
+import { synchroniserCloture } from './clotureRetours'
+import EtatVide from '../../shared/ui/EtatVide'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useLogistiqueStore } from './store/referentielStore'
@@ -52,6 +57,7 @@ export default function Retours() {
   // Brouillon de l'entrée en cours de saisie, par matériel : { materielId: { etat, qte, motif, penalite } }
   const [draft, setDraft] = useState({})
   const [saving, setSaving] = useState(false)
+  const [detailRetour, setDetailRetour] = useState(null)
   const [editRetour, setEditRetour] = useState(null) // entrée de l'historique en cours de correction
 
   // Quantité déjà retournée (enregistrée en base) pour un (prestation, matériel).
@@ -104,6 +110,19 @@ export default function Retours() {
     setEntrees((m) => ({ ...m, [l.materielId]: [...(m[l.materielId] || []), entree] }))
     setDraftMat(l.materielId, DRAFT_VIDE)
   }
+  // Un clic : tout ce qui reste à rendre est enregistré comme rendu en bon état (à vérifier puis enregistrer).
+  function toutRenduOK() {
+    setEntrees((m) => {
+      const next = { ...m }
+      lignes.forEach((l) => {
+        const reparti = (m[l.materielId] || []).reduce((s, e) => s + (parseInt(e.qte) || 0), 0)
+        const reste = Math.max(0, l.restant - reparti)
+        if (reste > 0) next[l.materielId] = [...(m[l.materielId] || []), { etat: 'OK', qte: reste, motif: '', penalite: 0 }]
+      })
+      return next
+    })
+    toast.info('Tout le restant est marqué rendu en bon état : vérifiez puis enregistrez.')
+  }
   function retirerEntree(matId, idx) {
     setEntrees((m) => ({ ...m, [matId]: (m[matId] || []).filter((_, i) => i !== idx) }))
   }
@@ -139,6 +158,7 @@ export default function Retours() {
         }
       }
       await audit('logistique', 'RETOUR', `${n} retour(s) : prestation ${prestation.num}`)
+      await synchroniserCloture(prestation.id) // tout rendu en bon état : la prestation passe à « Terminée »
       toast.success(`${n} retour(s) enregistré(s) ✓ : visibles en lecture seule dans la saisie magasin`)
       setPrestationId('')
       setEntrees({})
@@ -157,7 +177,7 @@ export default function Retours() {
   // est recalculé EN DIRECT à partir de cette collection : modifier/supprimer une
   // entrée suffit à corriger le stock, sans autre manipulation.
   function ouvrirEditionRetour(r) {
-    setEditRetour({ id: r.id, etat: r.type, qte: r.qte, motif: r.motif || '', penalite: r.penalite || 0 })
+    setEditRetour({ id: r.id, prestationId: r.prestationId, etat: r.type, qte: r.qte, motif: r.motif || '', penalite: r.penalite || 0 })
   }
   async function modifierRetour() {
     if (!editRetour) return
@@ -168,12 +188,14 @@ export default function Retours() {
       penalite: editRetour.etat === 'OK' ? 0 : (parseFloat(editRetour.penalite) || 0)
     })
     await audit('logistique', 'RETOUR_MODIFIE', `${siteLabel(site)} : retour corrigé (${editRetour.qte} × ${editRetour.etat})`)
+    await synchroniserCloture(editRetour.prestationId)
     toast.success('Retour corrigé ✓')
     setEditRetour(null)
   }
   async function supprimerRetour(r) {
     if (!confirm(`Supprimer ce retour (${r.qte} × ${r.materielNom}, ${r.type}) ?\nLe stock de la saisie magasin sera recalculé automatiquement.`)) return
     await removeItem('logistique_retours', r.id)
+    await synchroniserCloture(r.prestationId)
     await audit('logistique', 'RETOUR_DELETE', `${siteLabel(site)} : ${r.qte} × ${r.materielNom} (${r.type}) : prestation ${r.prestationNum || ''}`)
     toast.success('Retour supprimé : stock recalculé')
   }
@@ -194,20 +216,36 @@ export default function Retours() {
         </div>
         <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
       </div>
-      <p className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        Par <strong>prestation</strong> : choisissez-la, puis ajoutez les retours un à un par matériel (ex. 3 perdus, 2 cassés, le reste OK). <strong>OK</strong> réintègre le stock ; <strong>Cassé / Perdu</strong> demandent quantité, motif et <strong>pénalité</strong>. Le <strong>restant</strong> à rendre se met à jour automatiquement d'un passage à l'autre.
-      </p>
+      <div className="flex items-center gap-2.5 rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 to-white/70 px-3 py-2 text-xs text-sky-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={icone3D('#0EA5E9')}><Info size={14} /></span>
+        <span>Choisissez la <strong>prestation</strong>, puis ajoutez les retours par matériel : <strong>OK</strong> réintègre le stock, <strong>Cassé / Perdu</strong> demandent motif et pénalité.</span>
+      </div>
 
       {!lectureSeule && (
-      <Card title="Nouveau retour (par prestation)">
-        <FormGroup label="Prestation liée" required>
-          <Select value={prestationId} onChange={(e) => choisirPrestation(e.target.value)}>
-            <option value="">Choisir une prestation à retourner</option>
-            {prestationsNonRendues.map((p) => (
-              <option key={p.id} value={p.id}>{p.num} : {p.clientNom} ({formatDateShort(p.dateDebut)})</option>
-            ))}
-          </Select>
-        </FormGroup>
+      <Card className="!p-3 md:!p-4">
+        <style>{`
+          @keyframes ret-tourne { to { transform: rotate(-360deg); } }
+          @keyframes ret-pop { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+        `}</style>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={icone3D(COULEUR_MODULE.logistique)}>
+            <RotateCcw size={18} style={{ animation: 'ret-tourne 7s linear infinite' }} />
+          </span>
+          <div className="min-w-0 flex-1 basis-60">
+            <p className="mb-0.5 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">Nouveau retour par prestation <span className="text-red-500">*</span></p>
+            <Select className="!py-1.5" value={prestationId} onChange={(e) => choisirPrestation(e.target.value)}>
+              <option value="">Choisir une prestation à retourner</option>
+              {prestationsNonRendues.map((p) => (
+                <option key={p.id} value={p.id}>{p.num} : {p.clientNom} ({formatDateShort(p.dateDebut)})</option>
+              ))}
+            </Select>
+          </div>
+          {prestation && lignes.length > 0 && (
+            <span key={prestation.id} className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/75 px-3 py-1 text-xs font-bold text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]" style={{ animation: 'ret-pop 0.35s ease-out' }}>
+              <Package size={13} className="text-red-500" />{lignes.reduce((t, l) => t + l.restant, 0)} pièce(s) à rendre
+            </span>
+          )}
+        </div>
 
         {prestation && lignes.length === 0 && (
           <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">✅ Tout le matériel de cette prestation a déjà été retourné.</p>
@@ -215,7 +253,14 @@ export default function Retours() {
 
         {lignes.length > 0 && (
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase text-gray-500">Matériel à retourner</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase text-gray-500">Matériel à retourner</p>
+              <button type="button" onClick={toutRenduOK}
+                className="btn-balaye inline-flex items-center gap-1.5 rounded-2xl px-3 py-1.5 text-xs font-bold text-white shadow-[0_10px_18px_-8px_rgba(5,150,105,0.8),inset_0_1px_0_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>
+                <CheckCheck size={14} /> Tout rendu en bon état
+              </button>
+            </div>
             {lignes.map((l) => {
               const liste = entrees[l.materielId] || []
               const reste = resteAffecter(l)
@@ -300,6 +345,7 @@ export default function Retours() {
       )}
 
       <Card title="Historique des retours" className="overflow-x-auto p-0">
+        <div className="table-verre overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
@@ -319,11 +365,11 @@ export default function Retours() {
             {[...retours].filter((r) => correspond(recherche, r.clientNom, r.prestationNum, r.agentNom)).sort((a, b) => (a.date < b.date ? 1 : -1)).map((r) => {
               const casse = r.type !== 'OK'
               return (
-              <tr key={r.id}>
+              <tr key={r.id} onClick={() => setDetailRetour(r)} className="cursor-pointer">
                 <td className="px-3 py-2 font-mono text-xs">{formatDateShort(r.date)}</td>
-                <td className="px-3 py-2 text-xs text-gray-500">{r.prestationNum || '—'}</td>
-                <td className="px-3 py-2 font-semibold">{r.materielNom}</td>
-                <td className="px-3 py-2 text-center">{r.qte}</td>
+                <td className="px-3 py-2"><NumDoc num={r.prestationNum} /></td>
+                <td className="px-3 py-2"><span className="flex items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(r.type === 'OK' ? '#16A34A' : '#DC2626')}><Package size={12} /></span><span className="font-semibold">{r.materielNom}</span></span></td>
+                <td className="px-3 py-2 text-center"><span className="inline-flex min-w-[2rem] justify-center rounded-xl bg-white/80 px-2 py-0.5 text-xs font-extrabold text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_3px_6px_-3px_rgba(0,0,0,0.25)]">{r.qte}</span></td>
                 <td className="px-3 py-2"><Badge tone={r.type === 'OK' ? 'success' : 'danger'}>{r.type}</Badge></td>
                 <td className="px-3 py-2 text-right font-semibold">{casse && r.penalite > 0 ? formatMoney(r.penalite) : '—'}</td>
                 <td className="px-3 py-2 text-center">
@@ -331,7 +377,7 @@ export default function Retours() {
                     lectureSeule ? (
                       <Badge tone={r.penalitePayee ? 'success' : 'warning'}>{r.penalitePayee ? 'Payée' : 'En attente'}</Badge>
                     ) : (
-                      <button onClick={() => togglePaye(r)}
+                      <button onClick={(e) => { e.stopPropagation(); togglePaye(r) }}
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${r.penalitePayee ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}>
                         {r.penalitePayee ? <><Check size={12} /> Payée</> : 'À encaisser'}
                       </button>
@@ -343,10 +389,10 @@ export default function Retours() {
                 <td className="px-3 py-2">
                   <div className="flex justify-end gap-1">
                     {!isReadOnlyRole(role) && (
-                      <button onClick={() => ouvrirEditionRetour(r)} title="Corriger ce retour" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={14} /></button>
+                      <ActionIcone icone={Pencil} tone="modifier" title="Corriger ce retour" size={14} onClick={() => ouvrirEditionRetour(r)} />
                     )}
                     {isFullAccessRole(role) && (
-                      <button onClick={() => supprimerRetour(r)} title="Supprimer ce retour" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                      <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer ce retour" size={14} onClick={() => supprimerRetour(r)} />
                     )}
                   </div>
                 </td>
@@ -354,8 +400,11 @@ export default function Retours() {
             )})}
           </tbody>
         </table>
-        {!retours.length && <p className="py-10 text-center text-gray-400">Aucun retour enregistré.</p>}
+        </div>
+        {!retours.length && <EtatVide icone={Undo2} texte="Aucun retour enregistré" accent={COULEUR_MODULE.logistique} />}
       </Card>
+
+      <RetourDetailModal retour={detailRetour} onClose={() => setDetailRetour(null)} />
 
       <Modal open={!!editRetour} onClose={() => setEditRetour(null)} title="Corriger ce retour"
         footer={<><Button variant="ghost" onClick={() => setEditRetour(null)}>Annuler</Button><Button onClick={modifierRetour}>Enregistrer</Button></>}>

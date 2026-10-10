@@ -18,7 +18,7 @@ import { estActif } from '../../shared/workflow'
 import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
 
 const TOUTES = '__TOUTES__'
-const PALETTE = ['#7c3aed', '#6366f1', '#0284c7', '#0d9488', '#16a34a', '#ca8a04', '#db2777', '#ea580c', '#0891b2', '#4f46e5']
+const PALETTE = ['#475569', '#6366f1', '#0284c7', '#0d9488', '#16a34a', '#ca8a04', '#db2777', '#ea580c', '#0891b2', '#4f46e5']
 
 export default function Pilotage() {
   const briques = useBriqueterieStore((s) => s.briques)
@@ -195,7 +195,7 @@ export default function Pilotage() {
   const prodVentesChart = {
     labels: rowsScope.map((t) => t.nom),
     datasets: [
-      { label: 'Production', data: rowsScope.map((t) => t.prod), backgroundColor: '#7c3aed' },
+      { label: 'Production', data: rowsScope.map((t) => t.prod), backgroundColor: '#475569' },
       { label: 'Ventes', data: rowsScope.map((t) => t.ventes), backgroundColor: '#16a34a' }
     ]
   }
@@ -229,17 +229,17 @@ export default function Pilotage() {
   const caDelta = pct(caTotal, caPrev)
 
   const kpis = [
-    { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#7c3aed' },
+    { id: 'ca', title: 'Chiffre d\'affaires', value: formatMoney(caTotal), delta: pct(caTotal, caPrev), up: true, sub: comparable ? `préc. ${formatMoney(caPrev)}` : `${nbFactures} facture(s)`, icon: BadgeDollarSign, color: '#475569' },
     { id: 'ventesTot', title: 'Briques vendues', value: formatNumber(briquesVenduesP), delta: pct(briquesVenduesP, briquesVenduesPrev), up: true, sub: `${ventesP.length} vente(s) · ${formatMoney(ventesMontant)}`, icon: ShoppingCart, color: '#15803d' },
     { id: 'ecoul', title: 'Taux d\'écoulement', value: `${tauxEcoulement.toFixed(0)} %`, deltaPP: comparable ? (tauxEcoulement - ecoulPrev) : null, up: true, sub: 'ventes ÷ production', icon: Percent, color: '#0d9488' },
-    { id: 'prodTot', title: 'Production totale', value: formatNumber(prodTotal), delta: pct(prodTotal, prodPrev), up: true, sub: 'briques produites', icon: Factory, color: '#7c3aed' },
+    { id: 'prodTot', title: 'Production totale', value: formatNumber(prodTotal), delta: pct(prodTotal, prodPrev), up: true, sub: 'briques produites', icon: Factory, color: '#475569' },
     { id: 'clients', title: 'Clients servis', value: formatNumber(clientsServis.length), delta: pct(clientsServis.length, nbClientsPrev), up: true, sub: `${formatNumber(nbFactures)} facture(s)`, icon: Users, color: '#0891b2' }
   ]
 
   return (
     <div className="space-y-5">
       {/* En-tête */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-violet-700 to-violet-900 p-4 text-white shadow-lg">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-4 text-white shadow-lg">
         <Boxes size={22} />
         <div>
           <h2 className="text-base font-extrabold">Pilotage &amp; Analyse : Briqueterie</h2>
@@ -281,8 +281,8 @@ export default function Pilotage() {
             <Bar data={{
               labels: caTrend.labels,
               datasets: [
-                { label: 'Période actuelle', data: caTrend.cur, backgroundColor: '#7c3aed', borderRadius: 4, maxBarThickness: 34 },
-                ...(caTrend.prev ? [{ label: 'Période précédente', data: caTrend.prev, backgroundColor: '#ddd0f5', borderRadius: 4, maxBarThickness: 34 }] : [])
+                { label: 'Période actuelle', data: caTrend.cur, backgroundColor: '#475569', borderRadius: 4, maxBarThickness: 34 },
+                ...(caTrend.prev ? [{ label: 'Période précédente', data: caTrend.prev, backgroundColor: '#cbd5e1', borderRadius: 4, maxBarThickness: 34 }] : [])
               ]
             }} options={{
               maintainAspectRatio: false,
@@ -335,7 +335,7 @@ export default function Pilotage() {
               {parType.map((t) => (
                 <tr key={t.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setScope(t.id)}>
                   <td className="px-3 py-1.5 font-semibold" style={{ color: t.color }}>{t.nom}</td>
-                  <td className="px-2 py-1.5 text-center text-violet-700">{formatNumber(t.prod)}</td>
+                  <td className="px-2 py-1.5 text-center text-slate-700">{formatNumber(t.prod)}</td>
                   <td className="px-2 py-1.5 text-center text-green-600">{formatNumber(t.ventes)}</td>
                   <td className="px-2 py-1.5 text-center font-bold">{formatNumber(t.pret)}</td>
                   <td className="px-2 py-1.5 text-center text-amber-600">{formatNumber(t.sechage)}</td>
@@ -359,7 +359,7 @@ export default function Pilotage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {clientsServis.map((c, i) => (
-                  <tr key={c.nom} className="hover:bg-violet-50/50">
+                  <tr key={c.nom} className="hover:bg-slate-50/50">
                     <td className="px-3 py-1.5 font-semibold">{i < 3 && ['🥇', '🥈', '🥉'][i]} {c.nom}</td>
                     <td className="px-3 py-1.5 text-xs text-gray-500">{c.profession || '—'}</td>
                     <td className="px-2 py-1.5 text-center">{formatNumber(c.nb)}</td>
@@ -421,7 +421,7 @@ export default function Pilotage() {
                     <td className="px-3 py-1.5 font-semibold">{m.nom} <span className="text-[10px] font-normal text-gray-400">({m.unite})</span></td>
                     <td className="px-3 py-1.5 text-center font-bold text-green-700">{ent ? '+' + formatNumber(Math.round(ent * 10) / 10) : '—'}</td>
                     <td className="px-3 py-1.5 text-center font-bold text-orange-700">{conso ? '−' + formatNumber(Math.round(conso * 10) / 10) : '—'}</td>
-                    <td className="px-3 py-1.5 text-center text-base font-extrabold text-violet-700">{formatNumber(Math.round(stock * 10) / 10)}</td>
+                    <td className="px-3 py-1.5 text-center text-base font-extrabold text-slate-700">{formatNumber(Math.round(stock * 10) / 10)}</td>
                   </tr>
                 )
               })}
@@ -507,7 +507,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
       <table className="w-full text-sm">
         <thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-2">Date</th><th className="p-2 text-center">Briques</th><th className="p-2 text-center">Caillasses</th></tr></thead>
         <tbody>{rows.map((p) => (
-          <tr key={p.id} className="border-t"><td className="p-2">{formatDateShort(p.date)}</td><td className="p-2 text-center font-bold text-violet-700">{formatNumber(p.totalBriques || 0)}</td><td className="p-2 text-center text-gray-500">{formatNumber(p.caillasses || 0)}</td></tr>
+          <tr key={p.id} className="border-t"><td className="p-2">{formatDateShort(p.date)}</td><td className="p-2 text-center font-bold text-slate-700">{formatNumber(p.totalBriques || 0)}</td><td className="p-2 text-center text-gray-500">{formatNumber(p.caillasses || 0)}</td></tr>
         ))}{!rows.length && <tr><td colSpan={3} className="p-4 text-center text-gray-400">Aucune production.</td></tr>}</tbody>
       </table>
     )
@@ -523,7 +523,7 @@ function PilotageModal({ id, onClose, scopeLabel, data }) {
   }
   return (
     <Modal open onClose={onClose} size="lg" title={`${titles[id] || 'Détail'} : ${scopeLabel}`}
-      panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+      panelClassName="bg-gradient-to-br from-slate-200/85 via-slate-100/75 to-slate-300/75 backdrop-blur-2xl backdrop-saturate-200">
       <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
     </Modal>
   )

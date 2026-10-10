@@ -1,16 +1,20 @@
 // Production briques — cycle 24h ou 48h, consommation matières auto, ajout stock appatam.
 import { useMemo, useState } from 'react'
-import { Factory, Plus, Eye, Pencil, Trash2, Cog, ChevronRight } from 'lucide-react'
+import { Factory, Plus, Eye, Pencil, Trash2, Cog, ChevronRight, Info, Clock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import NumDoc from '../../shared/ui/NumDoc'
+import FicheDetail from '../../shared/ui/FicheDetail'
+import { VenteHero } from './VenteUI'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
-import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
+import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
@@ -272,11 +276,11 @@ export default function Production() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),0_8px_20px_-8px_rgba(71,85,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(138,155,179,0.92) 0%, rgba(100,116,139,0.9) 40%, rgba(51,65,85,0.88) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+          background: '#475569', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
         }}>
           <Factory size={28} color="white" />
         </div>
@@ -293,13 +297,32 @@ export default function Production() {
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
 
-      <div className="rounded-lg bg-violet-50 px-4 py-3 text-sm text-violet-800">
-        Cycle de production <strong>24 h ou 48 h max</strong>. Les briques produites sont placées en <strong>appatam</strong>,
-        puis déplacées vers l'extérieur pour séchage (5 à 6 jours).
+      <div className="flex items-start gap-3 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/90 to-white/70 px-4 py-3 text-sm text-slate-900 shadow-[0_10px_22px_-16px_rgba(71,85,105,0.55),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#475569')}><Info size={16} /></span>
+        <span>
+          Cycle de <strong>24 h ou 48 h max</strong>. Les briques produites vont en <strong>appatam</strong>, puis à l'extérieur pour le séchage (5 à 6 jours).
+        </span>
       </div>
       {!lectureSeule && (
         <div className="flex justify-end">
-          <Button onClick={openCreate}><Plus size={16} /> Nouvelle production</Button>
+          <style>{`
+            @keyframes pr-balayage { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+            @keyframes pr-usine { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+            @keyframes pr-engrenage { to { transform: rotate(360deg); } }
+            @keyframes pr-fumee { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: translateY(-10px) scale(1.3); } }
+          `}</style>
+          {/* Nouvelle production : l'usine fume, un petit engrenage tourne, un reflet traverse le bouton. */}
+          <button type="button" onClick={openCreate}
+            className="group relative flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(71,85,105,0.7),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(71,85,105,0.85)]"
+            style={{ background: 'linear-gradient(135deg, #8a9bb3 0%, #64748b 45%, #334155 100%)' }}>
+            <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent" style={{ animation: 'pr-balayage 3.2s ease-in-out infinite' }} />
+            <span className="relative flex h-6 w-6 items-center justify-center">
+              <Factory size={19} style={{ animation: 'pr-usine 2.4s ease-in-out infinite' }} />
+              <span aria-hidden="true" className="absolute -top-1 left-1 h-1.5 w-1.5 rounded-full bg-white/90" style={{ animation: 'pr-fumee 2.4s ease-out infinite' }} />
+              <span className="absolute -bottom-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-white text-slate-700 shadow"><Cog size={11} style={{ animation: 'pr-engrenage 4s linear infinite' }} /></span>
+            </span>
+            <span className="relative">Nouvelle production</span>
+          </button>
         </div>
       )}
       <Card className="p-0">
@@ -307,86 +330,70 @@ export default function Production() {
           stickyHeader
           onRowClick={(r) => setDetail(r)}
           columns={[
-            { key: 'num', label: 'N°', sticky: true, width: '110px' },
-            { key: 'date', label: 'Date' },
-            { key: 'duree', label: 'Durée', render: (r) => `${r.duree}h` },
+            { key: 'num', label: 'N°', sticky: true, width: '110px', render: (r) => <NumDoc num={r.num} /> },
+            { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
+            { key: 'duree', label: 'Durée', render: (r) => <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700"><Clock size={11} />{r.duree} h</span> },
             { key: 'machine', label: 'Machine', render: (r) => r.machine ? (
               <button onClick={(e) => { e.stopPropagation(); setMachineDetail(r.machine) }}
                 title={`Voir le détail de ${r.machine}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 hover:border-violet-300 hover:bg-violet-100">
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-100">
                 <Cog size={13} /> {r.machine}
               </button>
             ) : '—' },
-            { key: 'totalBriques', label: 'Total briques', align: 'right', render: (r) => formatNumber(r.totalBriques) },
-            { key: 'caillasses', label: 'Caillasses', align: 'right' },
+            { key: 'totalBriques', label: 'Total briques', align: 'right', render: (r) => <span className="inline-block whitespace-nowrap rounded-xl px-2.5 py-1 text-xs font-extrabold text-white shadow-[0_6px_12px_-6px_rgba(71,85,105,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]" style={{ background: 'linear-gradient(135deg, #64748b, #334155)' }}>{formatNumber(r.totalBriques)}</span> },
+            { key: 'caillasses', label: 'Caillasses', align: 'right', render: (r) => (parseInt(r.caillasses) || 0) > 0 ? <span className="inline-block rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600">{formatNumber(r.caillasses)}</span> : <span className="text-gray-300">:</span> },
             { key: 'agentNom', label: 'Agent' },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => setDetail(r)} title="Voir le détail par catégorie" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                <ActionIcone icone={Eye} tone="voir" title="Voir le détail par catégorie" onClick={() => setDetail(r)} />
                 {!lectureSeule && (
-                  <button onClick={() => openEdit(r)} title="Modifier" className="rounded p-1.5 text-violet-600 hover:bg-violet-50"><Pencil size={16} /></button>
+                  <ActionIcone icone={Pencil} tone="modifier" title="Modifier" onClick={() => openEdit(r)} />
                 )}
                 {peutSupprimer && (
-                  <button onClick={() => supprimer(r)} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                  <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer" onClick={() => supprimer(r)} />
                 )}
               </div>
             ) }
           ]}
           rows={liste}
-          empty="Aucune production enregistrée."
+          emptyIcon={Factory} empty="Aucune production enregistrée."
         />
       </Card>
 
       {/* Détail d'une production : quantités produites PAR CATÉGORIE (pas juste le total). */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? `Production ${detail.num}` : ''}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" {...glassModalProps(COULEUR_MODULE.evenementiel)}
+        title={detail ? `Production ${detail.num}` : ''}
         footer={<>
-          <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>
           {!lectureSeule && detail && <Button variant="outline" onClick={() => { const d = detail; setDetail(null); openEdit(d) }}><Pencil size={15} /> Modifier</Button>}
           {peutSupprimer && detail && <Button variant="danger" onClick={() => supprimer(detail)}><Trash2 size={15} /> Supprimer</Button>}
-        </>}
-        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+          <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>
+        </>}>
         {detail && (
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/70 p-3 sm:grid-cols-4">
-              <div><p className="text-[10px] font-bold uppercase text-gray-400">Date</p><p className="font-semibold">{detail.date}</p></div>
-              <div><p className="text-[10px] font-bold uppercase text-gray-400">Cycle</p><p className="font-semibold">{detail.duree}h</p></div>
-              <div>
-                <p className="text-[10px] font-bold uppercase text-gray-400">Machine</p>
-                {detail.machine ? (
-                  <button onClick={() => { const m = detail.machine; setDetail(null); setMachineDetail(m) }}
-                    className="inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline">
-                    <Cog size={13} /> {detail.machine}
-                  </button>
-                ) : <p className="font-semibold">—</p>}
-              </div>
-              <div><p className="text-[10px] font-bold uppercase text-gray-400">Agent</p><p className="font-semibold">{detail.agentNom || '—'}</p></div>
-            </div>
-            <div className="overflow-hidden rounded-lg bg-white">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr><th className="px-3 py-2 text-left">Catégorie produite</th><th className="px-3 py-2 text-right">Quantité</th></tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(detail.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0).map((l, i) => (
-                    <tr key={i}><td className="px-3 py-2 font-semibold text-gray-800">{l.briqueNom}</td><td className="px-3 py-2 text-right font-extrabold text-violet-700">{formatNumber(l.qte)}</td></tr>
-                  ))}
-                  {(parseInt(detail.caillasses) || 0) > 0 && (
-                    <tr className="bg-gray-50/50"><td className="px-3 py-2 font-semibold text-gray-600">Caillasses (cassées)</td><td className="px-3 py-2 text-right font-bold text-gray-600">{formatNumber(detail.caillasses)}</td></tr>
-                  )}
-                  {!(detail.lignes || []).some((l) => (parseInt(l.qte) || 0) > 0) && (
-                    <tr><td colSpan={2} className="py-6 text-center text-gray-400">Aucune catégorie renseignée.</td></tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-gray-200 bg-violet-50/60">
-                    <td className="px-3 py-2 text-right text-xs font-bold uppercase text-gray-500">Total briques</td>
-                    <td className="px-3 py-2 text-right text-base font-extrabold text-violet-700">{formatNumber(detail.totalBriques || 0)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            {detail.notes && <p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-gray-600">📝 {detail.notes}</p>}
-          </div>
+          <FicheDetail
+            hero={<VenteHero sous="Production de briques" titre={detail.num}
+              pastilles={[{ label: `Cycle ${detail.duree} h`, tone: 'info' }, ...(detail.machine ? [{ label: detail.machine, tone: 'success' }] : [])]}
+              total={Number(detail.totalBriques) || 0} voitMontants formatTotal={(v) => `${formatNumber(v)} briques`} />}
+            entetes={[
+              { label: 'Date', value: formatDateShort(detail.date) },
+              { label: 'Machine', value: detail.machine ? (
+                <button type="button" onClick={() => { const m = detail.machine; setDetail(null); setMachineDetail(m) }} className="inline-flex items-center gap-1 text-slate-700 hover:underline">
+                  <Cog size={13} /> {detail.machine}
+                </button>
+              ) : null },
+              { label: 'Enregistrée par', value: detail.agentNom },
+              { label: 'Notes', value: detail.notes }
+            ]}
+            colonnes={[
+              { label: 'Catégorie produite', render: (l) => l.briqueNom },
+              { label: 'Quantité', align: 'right', render: (l) => formatNumber(l.qte) }
+            ]}
+            lignes={[
+              ...(detail.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0),
+              ...((parseInt(detail.caillasses) || 0) > 0 ? [{ briqueNom: 'Caillasses (cassées)', qte: detail.caillasses }] : [])
+            ]}
+            vide="Aucune catégorie renseignée."
+            pied={[{ label: 'Total briques', value: formatNumber(detail.totalBriques || 0), fort: true }]}
+          />
         )}
       </Modal>
 
@@ -443,8 +450,8 @@ export default function Production() {
           return (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/70 p-3 sm:grid-cols-4">
-                <div><p className="text-[10px] font-bold uppercase text-gray-400">Productions</p><p className="text-lg font-extrabold text-violet-700">{productionsDeMachine.length}</p></div>
-                <div><p className="text-[10px] font-bold uppercase text-gray-400">Total briques</p><p className="text-lg font-extrabold text-violet-700">{formatNumber(totalMachine)}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-gray-400">Productions</p><p className="text-lg font-extrabold text-slate-700">{productionsDeMachine.length}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-gray-400">Total briques</p><p className="text-lg font-extrabold text-slate-700">{formatNumber(totalMachine)}</p></div>
                 <div><p className="text-[10px] font-bold uppercase text-gray-400">Caillasses</p><p className="text-lg font-extrabold text-gray-600">{formatNumber(totalCaillassesMachine)}</p></div>
                 <div><p className="text-[10px] font-bold uppercase text-gray-400">Dernière utilisation</p><p className="font-semibold">{productionsDeMachine[0] ? formatDateShort(productionsDeMachine[0].date) : '—'}</p></div>
               </div>
@@ -458,7 +465,7 @@ export default function Production() {
                       <tr key={p.id} className="cursor-pointer hover:bg-gray-50" onClick={() => { setMachineDetail(null); setDetail(p) }}>
                         <td className="px-3 py-2 font-mono text-xs">{p.num}</td>
                         <td className="px-3 py-2">{formatDateShort(p.date)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-violet-700">{formatNumber(p.totalBriques)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-slate-700">{formatNumber(p.totalBriques)}</td>
                         <td className="px-3 py-2 text-xs text-gray-500">{p.agentNom || '—'}</td>
                         <td className="px-2 py-2 text-right text-gray-300"><ChevronRight size={14} /></td>
                       </tr>

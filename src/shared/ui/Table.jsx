@@ -2,8 +2,14 @@
 // - `stickyHeader` : l'en-tête reste visible au défilement vertical (téléphone/petit écran).
 // - une colonne `sticky: true` reste visible au défilement HORIZONTAL (gauche→droite) ;
 //   fournir `width` (ex. '110px') sur chaque colonne figée pour caler les décalages.
+// - style « verre » (`.table-verre`, cf. index.css) : teinté de la couleur du module courant.
+// - `emptyIcon` : icône 3D animée de l'état vide.
 import { useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import { Inbox, SearchX } from 'lucide-react'
 import ChampRecherche from './ChampRecherche'
+import EtatVide from './EtatVide'
+import { COULEUR_MODULE } from '../../utils/color'
 
 // - `searchBy` (optionnel) : active une barre de RECHERCHE PAR NOM au-dessus du tableau.
 //   Tableau de clés (ex. ['clientNom', 'nom']) ou fonction (row) => texte à comparer ;
@@ -13,8 +19,9 @@ const norm = (v) => String(v ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLo
 export default function Table({
   columns, rows: rowsProp, rowKey = 'id', empty = 'Aucune donnée', onRowClick,
   stickyHeader = false, maxHeight = 'calc(100vh - 16rem)',
-  searchBy, searchPlaceholder = 'Rechercher par nom…', searchQuery
+  searchBy, searchPlaceholder = 'Rechercher par nom…', searchQuery, emptyIcon = Inbox
 }) {
+  const accent = COULEUR_MODULE[useLocation().pathname.split('/')[1]] || '#BC3C31'
   const [qInterne, setQ] = useState('')
   // `searchQuery` fourni : la page possède le champ (sur son bandeau) ; sinon barre intégrée.
   const externe = searchQuery !== undefined
@@ -25,7 +32,8 @@ export default function Table({
     const texte = typeof searchBy === 'function' ? searchBy : (r) => searchBy.map((k) => r[k]).join(' ')
     return rowsProp.filter((r) => norm(texte(r)).includes(t))
   }, [rowsProp, q, searchBy])
-  const emptyAffiche = searchBy && q.trim() && rows.length === 0 ? `Aucun résultat pour « ${q.trim()} »` : empty
+  const recherche = !!(searchBy && q.trim() && rows.length === 0)
+  const emptyAffiche = recherche ? `Aucun résultat pour « ${q.trim()} »` : empty
   // Décalage gauche cumulé des colonnes figées (dans l'ordre d'apparition).
   let acc = 0
   const stickyLeft = columns.map((c) => {
@@ -38,14 +46,14 @@ export default function Table({
   const alignCls = (a) => (a === 'center' ? 'text-center' : a === 'right' ? 'text-right' : '')
 
   const tableau = (
-    <div className={`overflow-auto rounded-lg border border-gray-100 dark:border-white/10 ${stickyHeader ? '' : ''}`}
-      style={stickyHeader ? { maxHeight } : undefined}>
+    <div className="table-verre overflow-auto"
+      style={{ '--tv-accent': accent, ...(stickyHeader ? { maxHeight } : {}) }}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-white/5 dark:text-gray-400">
+          <tr className="text-left text-xs uppercase tracking-wide">
             {columns.map((c, i) => (
               <th key={c.key}
-                className={`bg-gray-50 px-3 py-2.5 font-semibold dark:bg-white/5 ${alignCls(c.align)} ${stickyHeader ? 'sticky top-0' : ''} ${c.sticky ? 'sticky' : ''}`}
+                className={`px-3 py-2.5 font-semibold ${alignCls(c.align)} ${stickyHeader ? 'sticky top-0' : ''} ${c.sticky ? 'sticky' : ''}`}
                 style={{
                   ...(c.sticky ? { left: stickyLeft[i], width: c.width } : {}),
                   zIndex: (stickyHeader && c.sticky) ? 30 : (c.sticky ? 20 : (stickyHeader ? 20 : undefined))
@@ -55,11 +63,11 @@ export default function Table({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 text-gray-800 dark:divide-white/10 dark:text-gray-200">
+        <tbody className="text-gray-800 dark:text-gray-200">
           {rows.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="px-3 py-8 text-center text-gray-400 dark:text-gray-500">
-                {emptyAffiche}
+            <tr className="tv-vide">
+              <td colSpan={columns.length}>
+                <EtatVide icone={recherche ? SearchX : emptyIcon} texte={emptyAffiche} accent={accent} />
               </td>
             </tr>
           ) : (
@@ -67,11 +75,11 @@ export default function Table({
               <tr
                 key={row[rowKey]}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`group hover:bg-gray-50 dark:hover:bg-white/5 ${onRowClick ? 'cursor-pointer' : ''}`}
+                className={`group ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 {columns.map((c, i) => (
                   <td key={c.key}
-                    className={`px-3 py-2.5 ${alignCls(c.align)} ${c.sticky ? 'sticky bg-white group-hover:bg-gray-50 dark:bg-[#1d2226] dark:group-hover:bg-white/5' : ''}`}
+                    className={`px-3 py-2.5 ${alignCls(c.align)} ${c.sticky ? 'sticky tv-sticky' : ''}`}
                     style={c.sticky ? { left: stickyLeft[i], width: c.width, zIndex: 10 } : undefined}>
                     {c.render ? c.render(row) : row[c.key]}
                   </td>
