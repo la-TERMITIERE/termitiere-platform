@@ -1,6 +1,6 @@
 // Facturation logistique — émission obligatoire avant demande d'autorisation de sortie.
 import { useMemo, useState } from 'react'
-import { FileText, FileSpreadsheet, Plus, Trash2, Pencil, Eye, Wallet, AlertTriangle } from 'lucide-react'
+import { FileText, FileSpreadsheet, Plus, Trash2, Pencil, Eye, Wallet, AlertTriangle, ShieldCheck } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -10,6 +10,11 @@ import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import FicheDetail from '../../shared/ui/FicheDetail'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import AvatarNom from '../../shared/ui/AvatarNom'
+import NumDoc from '../../shared/ui/NumDoc'
+import SignatureApprobation from '../../shared/ui/SignatureApprobation'
+import FactureHero from './FactureHero'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -28,6 +33,13 @@ import { useSite, matchSite, siteLabel } from './site/useSite'
 const F_STATUTS = {
   brouillon: { label: 'Brouillon', tone: 'neutral' },
   approuvee: { label: 'Approuvée', tone: 'success' }
+}
+
+// Nom de celui qui a validé : « Système (auto · 10 min) » devient « Système ».
+const nomValideur = (f) => {
+  const t = String(f.approuveePar || '')
+  const i = t.indexOf('(')
+  return (i > 0 ? t.slice(0, i) : t).trim()
 }
 
 export default function Factures() {
@@ -84,12 +96,12 @@ export default function Factures() {
   const [filtreAnnee, setFiltreAnnee] = useState('')
   const [filtreDebut, setFiltreDebut] = useState('')
   const [filtreFin, setFiltreFin]     = useState('')
-  // Par défaut sur « Approuvée » (pas « Tous ») : c'est la seule valeur qui
-  // représente le CA réellement acquis (facture passée par le circuit demande de
-  // sortie → certification) — « Tous » mélange brouillon (pas encore autorisé)
-  // et approuvée, ce qui gonflait le Cumul facturation affiché à l'ouverture.
-  const [filtreStatut, setFiltreStatut] = useState('approuvee')
+  // Par défaut sur « Tous » : une facture qu'un agent vient d'émettre est en brouillon et doit
+  // être visible tout de suite. Le cumul affiché mélange alors brouillons et factures approuvées ;
+  // pour le seul chiffre d'affaires acquis, choisir « Approuvée » dans la barre de statut.
+  const [filtreStatut, setFiltreStatut] = useState('')
   const [filtreClient, setFiltreClient] = useState('')
+  const [filtreValideur, setFiltreValideur] = useState('')
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
   const liste = useMemo(() => {
     let rows = [...factures]
@@ -103,12 +115,13 @@ export default function Factures() {
       rows = rows.filter((f) => f.date === filtreJour)
     }
     if (filtreStatut) rows = rows.filter((f) => f.statut === filtreStatut)
+    if (filtreValideur) rows = rows.filter((f) => nomValideur(f) === filtreValideur)
     if (filtreClient.trim()) {
       const q = filtreClient.trim().toLowerCase()
       rows = rows.filter((f) => (f.clientNom || '').toLowerCase().includes(q))
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [factures, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient])
+  }, [factures, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, filtreStatut, filtreClient, filtreValideur])
 
   // Cumul de facturation — somme de la liste actuellement filtrée (période, statut,
   // client ci-dessus) : par défaut (aucun filtre de statut) il mélange brouillon +
@@ -118,6 +131,13 @@ export default function Factures() {
   // Scopé au SITE courant (Lomé ou Kara, cf. `factures`) — c'est pourquoi ce cumul
   // ne correspond pas au total « MAXI LOGISTIQUE » d'E-DÉPENSES, qui additionne les
   // deux sites : ce n'est pas une incohérence, mais deux périmètres différents.
+  // Validateurs présents sur les factures du site (filtre réservé à l'administration et Info).
+  const validateurs = useMemo(() => {
+    const n = {}
+    factures.forEach((f) => { const v = nomValideur(f); if (v) n[v] = (n[v] || 0) + 1 })
+    return Object.entries(n).sort((a, b) => b[1] - a[1]).map(([nom, nb]) => ({ nom, nb }))
+  }, [factures])
+
   const cumulFacturation = useMemo(() => liste.reduce((s, f) => s + (Number(f.totalTTC) || 0), 0), [liste])
 
   // Export Excel — réservé à PAU/GE/Info (cf. canExportExcel) — reprend EXACTEMENT
@@ -169,6 +189,15 @@ export default function Factures() {
     await audit('logistique', 'FACTURE', `${siteLabel(site)} : ${num} : ${formatMoney(p.total)} (brouillon)`)
     toast.success(`Facture ${num} émise en brouillon ✓ : émettez l'autorisation de sortie liée`)
     setOpen(false)
+  }
+
+  // Fiche « fantôme » : enregistrement sans statut ni numéro (écriture sur une facture déjà supprimée).
+  // Aucun bouton ne la couvrait ; l'administration peut la retirer.
+  async function supprimerIncomplete(f) {
+    if (!confirm(`Supprimer cette fiche de facture incomplète${f.num ? ` (${f.num})` : ''} ?`)) return
+    await removeItem('logistique_factures', f.id)
+    await audit('logistique', 'FACTURE_DELETE', `${siteLabel(site)} : fiche incomplète ${f.num || f.id}`)
+    toast.success('Fiche supprimée')
   }
 
   // Une facture BROUILLON sans autorisation de sortie peut être retirée : la
@@ -283,6 +312,20 @@ export default function Factures() {
             </button>
           ))}
         </div>
+        {isFullAccessRole(role) && validateurs.length > 0 && (
+          <div className="band-filtres">
+            <div className="champ-glass relative flex items-center gap-2 rounded-2xl border border-white/30 bg-white/15 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><ShieldCheck size={14} /></span>
+              <div className="leading-tight">
+                <span className="block text-[9px] font-bold uppercase tracking-wide text-white/70">Validé par</span>
+                <select value={filtreValideur} onChange={(e) => setFiltreValideur(e.target.value)} className="max-w-[10rem] text-xs font-bold text-white focus:outline-none">
+                  <option value="">Tous</option>
+                  {validateurs.map((v) => <option key={v.nom} value={v.nom}>{v.nom} ({v.nb})</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
         {canExportExcel(role) && (
           <button onClick={exportXLSX}
             className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
@@ -321,12 +364,17 @@ export default function Factures() {
         <Table
           stickyHeader
           columns={[
-            { key: 'num', label: 'N° facture', sticky: true, width: '120px' },
+            { key: 'num', label: 'N° facture', sticky: true, width: '96px', render: (r) => <NumDoc num={r.num} /> },
             { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
-            { key: 'clientNom', label: 'Client' },
-            { key: 'prestationNum', label: 'Prestation' },
+            { key: 'clientNom', label: 'Client', render: (r) => (
+              <span className="flex items-center gap-2">
+                <AvatarNom nom={r.clientNom} size={26} accent={COULEUR_MODULE.logistique} className="hidden sm:inline-flex" />
+                <span className="font-semibold">{r.clientNom}</span>
+              </span>
+            ) },
+            { key: 'prestationNum', label: 'Prestation', render: (r) => <NumDoc num={r.prestationNum} /> },
             // Colonne « Montant » retirée pour la secrétaire (cf. voitMontants).
-            ...(voitMontants ? [{ key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.totalTTC)}</strong> }] : []),
+            ...(voitMontants ? [{ key: 'totalTTC', label: 'Montant', align: 'right', render: (r) => <strong className="whitespace-nowrap">{formatMoney(r.totalTTC)}</strong> }] : []),
             { key: 'statut', label: 'Statut', render: (r) => {
               const s = F_STATUTS[r.statut] || F_STATUTS.brouillon
               const auto = /syst/i.test(r.approuveePar || '')
@@ -334,34 +382,37 @@ export default function Factures() {
                 <div>
                   <Badge tone={s.tone}>{s.label}</Badge>
                   {voitValidateur && r.statut === 'approuvee' && r.approuveePar && (
-                    <p className="mt-0.5 text-[10px] text-gray-500">{auto ? '🤖' : '✅'} {r.approuveePar}{r.approuveeLe ? ` · ${formatDateShort(r.approuveeLe)}` : ''}</p>
+                    <SignatureApprobation par={r.approuveePar} le={r.approuveeLe ? formatDateShort(r.approuveeLe) : ''} auto={auto} />
                   )}
                 </div>
               )
             } },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setDetail(r)} title="Voir le détail" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                <ActionIcone icone={Eye} tone="voir" title="Voir le détail" onClick={() => setDetail(r)} />
+                {peutSupprimerFacture && !F_STATUTS[r.statut] && (
+                  <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer cette fiche incomplète" onClick={() => supprimerIncomplete(r)} />
+                )}
                 {r.statut === 'brouillon' && !facturesEngagees.has(r.id) && (
                   <>
                     {peutModifierFacture && (
-                      <button onClick={() => ouvrirEdition(r)} title="Modifier le brouillon" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                      <ActionIcone icone={Pencil} tone="modifier" title="Modifier le brouillon" onClick={() => ouvrirEdition(r)} />
                     )}
                     {peutSupprimerFacture && (
-                      <button onClick={() => supprimer(r)} title="Supprimer le brouillon" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                      <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer le brouillon" onClick={() => supprimer(r)} />
                     )}
                   </>
                 )}
                 {r.statut === 'approuvee' && peutModifierFacture && (
-                  <button onClick={() => ouvrirEdition(r)} title="Modifier la date de la facture" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                  <ActionIcone icone={Pencil} tone="modifier" title="Modifier la date de la facture" onClick={() => ouvrirEdition(r)} />
                 )}
                 {r.statut === 'approuvee' && peutSupprimerFacture && (
-                  <button onClick={() => setToAnnuler(r)} title="Annuler cette facture approuvée (doublon, erreur)" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                  <ActionIcone icone={Trash2} tone="supprimer" title="Annuler cette facture approuvée (doublon, erreur)" onClick={() => setToAnnuler(r)} />
                 )}
               </div>
             ) }
           ]}
-          rows={liste}
+          rows={liste} onRowClick={(r) => setDetail(r)} emptyIcon={FileText}
           empty={filtreStatut || filtrePeriodeActif || filtreClient.trim() ? 'Aucune facture pour ces filtres.' : 'Aucune facture.'}
         />
       </Card>
@@ -382,9 +433,8 @@ export default function Factures() {
           const totalFrais = (detail.frais || []).reduce((s, x) => s + (parseFloat(x.montant) || 0), 0)
           return (
             <FicheDetail
+              hero={<FactureHero num={detail.num} client={detail.clientNom} approuvee={detail.statut === 'approuvee'} total={Number(detail.totalTTC ?? detail.totalHT ?? 0)} voitMontants={voitMontants} />}
               entetes={[
-                { label: 'Client', value: detail.clientNom || '—' },
-                { label: 'Statut', value: (F_STATUTS[detail.statut] || F_STATUTS.brouillon).label },
                 { label: 'Prestation', value: detail.prestationNum },
                 { label: 'Événement', value: detail.evenement },
                 { label: 'Date de facture', value: formatDateShort(detail.date) },

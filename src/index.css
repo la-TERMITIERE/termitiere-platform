@@ -153,3 +153,165 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
 .band-filtres button[class*="rounded-full"][class*="text-white"], .band-filtres button[class*="rounded-full"][class*="bg-secondary"] { background: #fff !important; color: #1f2937 !important; }
 
 .band-filtres .champ-glass input:not([type="checkbox"]):not([type="radio"]) { background: transparent !important; border: 0 !important; border-radius: 0 !important; backdrop-filter: none !important; font-size: 0.75rem; }
+
+/* ── Fenêtres de saisie : verre + tuiles « bento » ───────────────────────────────────
+   `.modal-glass` est posé par Modal sur toutes les fenêtres. Chaque FormGroup y devient une
+   tuile de verre (grille de tuiles) ; `.tuile-verre` donne la même tuile à un bloc libre. */
+.tuile-verre, .modal-glass .fg-tuile {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 1.1rem;
+  padding: 0.75rem;
+  box-shadow: 0 10px 22px -16px rgba(26, 26, 26, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+}
+.tuile-verre { margin-bottom: 0; }
+html.dark .tuile-verre, html.dark .modal-glass .fg-tuile {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 22px -16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.modal-glass .fg-tuile > label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+html:not(.dark) .modal-glass .input-base:not(:disabled):not([readonly]),
+html:not(.dark) .modal-glass select:not(:disabled),
+html:not(.dark) .modal-glass textarea:not(:disabled):not([readonly]),
+html:not(.dark) .modal-glass input:not([type="checkbox"]):not([type="radio"]):not(:disabled):not([readonly]) {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(26, 26, 26, 0.1);
+  border-radius: 0.85rem;
+}
+
+/* Une tuile de verre (backdrop-filter) forme son propre empilement : sans cela, la tuile
+   suivante recouvrirait la liste de suggestions d'un champ (client…). La tuile active passe devant. */
+.modal-glass .fg-tuile, .tuile-verre { position: relative; }
+.modal-glass .fg-tuile:focus-within, .tuile-verre:focus-within { z-index: 30; }
+
+/* ── Tableaux en verre ─────────────────────────────────────────────────────────────────
+   `.table-verre` : conteneur d'un tableau (composant Table, ou tableau maison : ajouter la
+   classe sur le bloc qui défile). `--tv-accent` = couleur du module (posée par Table). */
+.table-verre {
+  --tv-a: var(--tv-accent, #BC3C31);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 30px -20px rgba(26, 26, 26, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.table-verre thead th {
+  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--tv-a) 7%, #ffffff) 100%);
+  color: color-mix(in srgb, var(--tv-a) 72%, #1a1a1a);
+  letter-spacing: 0.06em;
+  border-bottom: 2px solid color-mix(in srgb, var(--tv-a) 22%, transparent);
+  box-shadow: 0 6px 10px -10px color-mix(in srgb, var(--tv-a) 60%, transparent);
+}
+.table-verre tbody tr { transition: background-color 0.2s ease, box-shadow 0.2s ease; animation: tv-entree 0.45s ease-out backwards; }
+.table-verre tbody tr:hover { background-color: color-mix(in srgb, var(--tv-a) 6%, transparent); box-shadow: inset 3px 0 0 var(--tv-a); }
+.table-verre tbody tr + tr td { border-top: 1px solid color-mix(in srgb, var(--tv-a) 9%, #f3f4f6); }
+.table-verre tbody tr:nth-child(2) { animation-delay: 0.04s; }
+.table-verre tbody tr:nth-child(3) { animation-delay: 0.08s; }
+.table-verre tbody tr:nth-child(4) { animation-delay: 0.12s; }
+.table-verre tbody tr:nth-child(5) { animation-delay: 0.16s; }
+.table-verre tbody tr:nth-child(6) { animation-delay: 0.2s; }
+.table-verre tbody tr:nth-child(7) { animation-delay: 0.24s; }
+.table-verre tbody tr:nth-child(8) { animation-delay: 0.28s; }
+.table-verre tbody tr:nth-child(n+9) { animation-delay: 0.32s; }
+.table-verre tbody tr.tv-vide, .table-verre tbody tr.tv-vide:hover { background: transparent; box-shadow: none; }
+.table-verre .tv-sticky { background: #ffffff; }
+.table-verre tbody tr:hover .tv-sticky { background: color-mix(in srgb, var(--tv-a) 6%, #ffffff); }
+html.dark .table-verre { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.1); box-shadow: none; }
+html.dark .table-verre thead th { background: #1d2226; color: #e5e7eb; border-bottom-color: rgba(255, 255, 255, 0.12); box-shadow: none; }
+html.dark .table-verre .tv-sticky { background: #1d2226; }
+html.dark .table-verre tbody tr:hover .tv-sticky { background: #262c31; }
+html.dark .table-verre tbody tr + tr td { border-top-color: rgba(255, 255, 255, 0.08); }
+@keyframes tv-entree { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Bouton d'action de ligne (voir / modifier / supprimer…) : tuile de verre, relief 3D au survol. */
+.act-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; border-radius: 0.8rem; color: var(--c);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid color-mix(in srgb, var(--c) 28%, #ffffff);
+  box-shadow: 0 6px 12px -8px color-mix(in srgb, var(--c) 75%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.act-ico:hover:not(:disabled) {
+  color: #fff; transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 70%, #000000));
+  box-shadow: 0 10px 16px -8px color-mix(in srgb, var(--c) 85%, transparent), inset 0 2px 2px rgba(255, 255, 255, 0.5), inset 0 -3px 5px rgba(0, 0, 0, 0.2);
+}
+.act-ico:hover:not(:disabled) .act-ico-svg { animation: act-agite 0.5s ease-in-out; }
+.act-ico:disabled { opacity: 0.5; cursor: not-allowed; }
+@keyframes act-agite { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
+
+/* État vide : icône 3D flottante + halo qui pulse. */
+.ev-flotte { animation: ev-flotte 3.2s ease-in-out infinite; }
+.ev-halo { opacity: 0.25; animation: ev-halo 3.2s ease-in-out infinite; filter: blur(10px); }
+@keyframes ev-flotte { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-6px) rotate(-3deg); } }
+@keyframes ev-halo { 0%, 100% { transform: scale(0.9); opacity: 0.18; } 50% { transform: scale(1.25); opacity: 0.38; } }
+
+/* Bouton de bandeau (verre blanc) : un reflet le traverse de temps en temps. */
+.btn-balaye { position: relative; overflow: hidden; }
+.btn-balaye::after {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: translateX(-160%) skewX(-18deg); animation: btn-balaye 4.8s ease-in-out infinite;
+}
+.btn-balaye:hover svg { animation: act-agite 0.5s ease-in-out; }
+@keyframes btn-balaye { 0% { transform: translateX(-160%) skewX(-18deg); } 55%, 100% { transform: translateX(380%) skewX(-18deg); } }
+.band-filtres input[type="date"], .band-filtres input[type="time"], .band-filtres input[type="month"] { color-scheme: dark; }
+
+/* Facture animée (en-tête d'une fiche facture) : lignes qui s'écrivent, pièces qui montent, tampon. */
+.fa-feuille { animation: fa-flotte 3.4s ease-in-out infinite; }
+.fa-ligne { transform-origin: left center; animation: fa-ecrit 4.2s ease-in-out infinite; animation-delay: var(--d, 0s); }
+.fa-tampon { animation: fa-tampon 4.2s ease-in-out infinite; }
+.fa-piece { animation: fa-piece 2.6s ease-out infinite; animation-delay: var(--d, 0s); opacity: 0; }
+.fa-lueur { animation: fa-lueur 4s ease-in-out infinite; }
+@keyframes fa-flotte { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-5px) rotate(1.5deg); } }
+@keyframes fa-ecrit { 0% { transform: scaleX(0); } 22%, 85% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+@keyframes fa-tampon { 0%, 52% { opacity: 0; transform: scale(2.4) rotate(-28deg); } 62% { opacity: 1; transform: scale(0.9) rotate(-12deg); } 68%, 86% { opacity: 1; transform: scale(1) rotate(-12deg); } 100% { opacity: 0; transform: scale(1) rotate(-12deg); } }
+@keyframes fa-piece { 0% { opacity: 0; transform: translateY(10px) scale(0.6); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px) scale(1.1) rotate(20deg); } }
+@keyframes fa-lueur { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.7; } }
+
+/* Tableaux maison (balise <table> dans une carte) de tous les modules : même verre que `.table-verre`
+   (en-tête teinté, survol lumineux, lignes qui apparaissent), teinte = module courant (AppShell). */
+.card table { --tv-a: var(--tv-accent, #BC3C31); }
+.card table thead th {
+  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--tv-a) 7%, #ffffff) 100%);
+  color: color-mix(in srgb, var(--tv-a) 72%, #1a1a1a);
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid color-mix(in srgb, var(--tv-a) 22%, transparent);
+}
+.card table tbody tr { transition: background-color 0.2s ease, box-shadow 0.2s ease; animation: tv-entree 0.4s ease-out backwards; }
+.card table tbody tr:hover { background-color: color-mix(in srgb, var(--tv-a) 6%, transparent); box-shadow: inset 3px 0 0 var(--tv-a); }
+.card table tbody tr:nth-child(2) { animation-delay: 0.04s; }
+.card table tbody tr:nth-child(3) { animation-delay: 0.08s; }
+.card table tbody tr:nth-child(4) { animation-delay: 0.12s; }
+.card table tbody tr:nth-child(n+5) { animation-delay: 0.16s; }
+html.dark .card table thead th { background: #1d2226; color: #e5e7eb; border-bottom-color: rgba(255, 255, 255, 0.12); }
+
+/* Signature d'approbation : robot qui flotte + halo qui pulse (approbation automatique). */
+.sig-flotte { animation: sig-flotte 2.6s ease-in-out infinite; }
+.sig-halo { opacity: 0.3; filter: blur(6px); animation: sig-halo 2.6s ease-in-out infinite; }
+@keyframes sig-flotte { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-2px) rotate(3deg); } }
+@keyframes sig-halo { 0%, 100% { transform: scale(0.9); opacity: 0.2; } 50% { transform: scale(1.35); opacity: 0.45; } }
+.band-filtres .champ-glass select { background: transparent !important; border: 0 !important; border-radius: 0 !important; padding: 0 0.25rem 0 0 !important; box-shadow: none !important; }
+
+/* Les agents ne voient jamais de bouton de suppression (règle générale) : les corbeilles des
+   lignes de tableau sont masquées pour eux. Les écrans masquent déjà les leurs ; ceci couvre les
+   oublis, et db.js refuse de toute façon la suppression d'un agent. */
+html[data-role="agent"] td button:has(.lucide-trash2),
+html[data-role="agent"] td button:has(.lucide-trash) { display: none !important; }
+
+/* Bouton de transfert d'état (stock briques) : pastille colorée, plein relief 3D au survol. */
+.btn-etat {
+  color: var(--c); background: rgba(255, 255, 255, 0.85);
+  border-color: color-mix(in srgb, var(--c) 30%, #ffffff);
+  box-shadow: 0 5px 10px -7px color-mix(in srgb, var(--c) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.btn-etat:hover {
+  color: #fff; transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 70%, #000000));
+}
+.btn-etat-fleche { display: inline-block; transition: transform 0.2s ease; }
+.btn-etat:hover .btn-etat-fleche { transform: translateX(3px); }

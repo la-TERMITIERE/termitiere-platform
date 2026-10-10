@@ -8,6 +8,7 @@
 import * as firebaseImpl from './db.firebase'
 import * as supabaseImpl from './db.supabase'
 import { isReadOnlyRole } from './roles'
+import { demanderMotif, SuppressionAnnulee } from './motifSuppression'
 
 const useSupabase = import.meta.env.VITE_USE_SUPABASE === 'true'
 const impl = useSupabase ? supabaseImpl : firebaseImpl
@@ -59,7 +60,42 @@ export const ts = impl.ts
 export const addItem = protegerEcriture('addItem', impl.addItem)
 export const setItem = protegerEcriture('setItem', impl.setItem)
 export const updateItem = protegerEcriture('updateItem', impl.updateItem)
-export const removeItem = protegerEcriture('removeItem', impl.removeItem)
+// ── MOTIF OBLIGATOIRE DE SUPPRESSION ─────────────────────────────────────────
+// Toute suppression passe ici : une fenêtre demande le motif (impossible de supprimer sans),
+// puis le motif est tracé dans le Journal (« SUPPRESSION »). Exceptions : données purement
+// techniques (abonnements push, secrets d'utilisateurs, notifications, corbeille) et les
+// suppressions automatiques ou de masse qui passent `{ sansMotif: true }` (purges, remise à zéro).
+// `{ motif }` : motif déjà recueilli par l'appelant (aucune question posée).
+const COLLECTIONS_TECHNIQUES = new Set(['push_subs', 'users_secret', 'notifications', 'depense_depenses_supprimees'])
+const supprimerSansMotif = protegerEcriture('removeItem', impl.removeItem)
+const libelleDe = (rec, id) => {
+  if (!rec) return id
+  if (rec.num && rec.clientNom) return `${rec.num} : ${rec.clientNom}`
+  return rec.num || rec.nom || rec.libelle || rec.titre || rec.intitule || rec.designation || rec.clientNom || id
+}
+
+export async function removeItem(collection, id, options = {}) {
+  const role = _lireRole()
+  if (options.sansMotif || COLLECTIONS_TECHNIQUES.has(collection) || (role && isReadOnlyRole(role))) {
+    return supprimerSansMotif(collection, id)
+  }
+  // Règle générale : un agent ne supprime JAMAIS (aucun bouton ne lui est montré ; ce refus couvre
+  // les écrans qui l'auraient oublié). Les données techniques ci-dessus restent permises.
+  if (role === 'agent') {
+    const err = new Error(`Les agents ne peuvent pas supprimer : demandez à l'administration.`)
+    err.code = 'SUPPRESSION_INTERDITE'
+    throw err
+  }
+  let libelle = id
+  try { libelle = libelleDe(await impl.getOne(collection, id), id) } catch { /* sans libellé */ }
+  const motif = options.motif || (await demanderMotif({ collection, id, libelle }))
+  if (!motif) throw new SuppressionAnnulee()
+  const resultat = await supprimerSansMotif(collection, id)
+  import('./audit')
+    .then(({ audit }) => audit(String(collection).split('_')[0], 'SUPPRESSION', `${libelle} (${collection}) : motif : ${motif}`, { collection, id, libelle, motif }))
+    .catch(() => {})
+  return resultat
+}
 export const claimOnce = protegerEcriture('claimOnce', impl.claimOnce)
 export const updateAtomic = protegerEcriture('updateAtomic', impl.updateAtomic)
 

@@ -137,7 +137,7 @@ export default function Marge() {
   }
 
   const kpis = [
-    { title: 'Recette totale', value: formatMoney(totaux.recette), icon: BadgeDollarSign, color: '#7c3aed' },
+    { title: 'Recette totale', value: formatMoney(totaux.recette), icon: BadgeDollarSign, color: '#475569' },
     { title: 'Valeur du matériel', value: formatMoney(totaux.valeurMateriel), icon: Package, color: '#ca8a04' },
     { title: 'Bénéfice', value: formatMoney(totaux.benefice), icon: TrendingUp, color: '#16a34a' },
     { title: 'Marge', value: `${margePct.toFixed(1)} %`, icon: Scale, color: '#0891b2' }
@@ -146,7 +146,7 @@ export default function Marge() {
   return (
     <div className="space-y-5">
       {/* En-tête + période */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-violet-700 to-violet-900 p-4 text-white shadow-lg">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-4 text-white shadow-lg">
         <Scale size={22} />
         <div>
           <h2 className="text-base font-extrabold">Marge &amp; Bénéfice : Briqueterie</h2>
@@ -209,12 +209,12 @@ export default function Marge() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {lignes.map((l, i) => (
-              <tr key={i} className="hover:bg-violet-50/40">
+              <tr key={i} className="hover:bg-slate-50/40">
                 <td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(l.date)}</td>
                 <td className="px-3 py-1.5 font-semibold">{l.nom}</td>
                 <td className="px-2 py-1.5 text-right">{formatMoney(Math.round(l.pu))}</td>
                 <td className="px-2 py-1.5 text-center">{formatNumber(l.qte)}</td>
-                <td className="px-3 py-1.5 text-right font-semibold text-violet-700">{formatMoney(Math.round(l.recette))}</td>
+                <td className="px-3 py-1.5 text-right font-semibold text-slate-700">{formatMoney(Math.round(l.recette))}</td>
                 <td className="px-3 py-1.5 text-right text-amber-700">{formatMoney(Math.round(l.valeurMateriel))}</td>
                 <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(Math.round(l.benefice))}</td>
                 <td className="px-3 py-1.5 text-xs text-gray-500">{l.client}</td>
@@ -227,7 +227,7 @@ export default function Marge() {
               <tr>
                 <td className="px-3 py-2" colSpan={3}>TOTAL GÉNÉRAL</td>
                 <td className="px-2 py-2 text-center">{formatNumber(totaux.qte)}</td>
-                <td className="px-3 py-2 text-right text-violet-700">{formatMoney(Math.round(totaux.recette))}</td>
+                <td className="px-3 py-2 text-right text-slate-700">{formatMoney(Math.round(totaux.recette))}</td>
                 <td className="px-3 py-2 text-right text-amber-700">{formatMoney(Math.round(totaux.valeurMateriel))}</td>
                 <td className="px-3 py-2 text-right text-green-700">{formatMoney(Math.round(totaux.benefice))}</td>
                 <td className="px-3 py-2" />
@@ -254,7 +254,7 @@ export default function Marge() {
               <tr key={t.id}>
                 <td className="px-3 py-1.5 font-semibold">{t.nom}</td>
                 <td className="px-3 py-1.5 text-center">{formatNumber(t.qte)}</td>
-                <td className="px-3 py-1.5 text-right text-violet-700">{formatMoney(Math.round(t.recette))}</td>
+                <td className="px-3 py-1.5 text-right text-slate-700">{formatMoney(Math.round(t.recette))}</td>
                 <td className="px-3 py-1.5 text-right text-amber-700">{formatMoney(Math.round(t.valeurMateriel))}</td>
                 <td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(Math.round(t.benefice))}</td>
               </tr>

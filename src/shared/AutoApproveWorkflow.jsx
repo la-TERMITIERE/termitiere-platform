@@ -9,7 +9,7 @@
 import { useEffect, useRef } from 'react'
 import { useCollection } from '../hooks/useFirestore'
 import { useAuth } from '../hooks/useAuth'
-import { updateItem, setItem, getAll, ts } from '../core/db'
+import { updateItem, setItem, getAll, getOne, ts } from '../core/db'
 import { audit } from '../core/audit'
 import { notify } from '../core/notify'
 import { pushToUsers } from '../core/push'
@@ -42,8 +42,9 @@ function createdMs(d) {
 // Effets métier de la certification, par module (mêmes écritures que la décision manuelle).
 async function effetsCertification(module, d, horodate) {
   if (module === 'logistique') {
-    if (d.factureId) await updateItem('logistique_factures', d.factureId, { statut: 'approuvee', approuveePar: AUTEUR, approuveeLe: horodate })
-    if (d.prestationId) await updateItem('logistique_prestations', d.prestationId, { approuvee: true, approuveePar: AUTEUR, approuveeLe: horodate })
+    // Jamais d'écriture sur un document supprimé entre-temps (cela recréait une fiche fantôme vide).
+    if (d.factureId && await getOne('logistique_factures', d.factureId)) await updateItem('logistique_factures', d.factureId, { statut: 'approuvee', approuveePar: AUTEUR, approuveeLe: horodate })
+    if (d.prestationId && await getOne('logistique_prestations', d.prestationId)) await updateItem('logistique_prestations', d.prestationId, { approuvee: true, approuveePar: AUTEUR, approuveeLe: horodate })
     // (Le stock logistique est recalculé à partir des demandes CERTIFIÉES —
     //  autoSorties — donc l'auto-certification le décrémente sans écriture ici.)
   } else if (module === 'evenementiel') {

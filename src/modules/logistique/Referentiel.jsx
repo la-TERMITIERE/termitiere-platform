@@ -1,10 +1,12 @@
 // Référentiel matériel — catalogue, coût d'achat, tarif location, unité.
 import { useState } from 'react'
-import { Plus, Trash2, Package } from 'lucide-react'
+import { Plus, Trash2, Package, Pencil, Boxes } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import { iconeEvenement } from './PrestationFormUI'
 import Badge from '../../shared/ui/Badge'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -14,8 +16,10 @@ import { useAuth } from '../../hooks/useAuth'
 import { isReadOnlyRole, isFullAccessRole } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { genId, formatMoney } from '../../utils/formatters'
-import { CAT_MATERIEL } from './data'
-import { COULEUR_MODULE } from '../../utils/color'
+import { CAT_MATERIEL, catColor } from './data'
+import { COULEUR_MODULE, icone3D } from '../../utils/color'
+
+const IcoEv = ({ ev }) => { const I = iconeEvenement(ev); return <I size={13} /> }
 
 export default function Referentiel() {
   const { materiel, saveMateriel, removeMateriel, evenements, saveEvenements } = useLogistiqueStore()
@@ -71,7 +75,7 @@ export default function Referentiel() {
         </div>
         {!lectureSeule && (
           <button onClick={openNew}
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            className="btn-balaye flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
             <Plus size={14} /> Ajouter
           </button>
         )}
@@ -80,22 +84,33 @@ export default function Referentiel() {
       <Card className="p-0">
         <Table
           columns={[
-            { key: 'nom', label: 'Matériel' },
-            { key: 'cat', label: 'Catégorie', render: (r) => <Badge tone="neutral">{r.cat}</Badge> },
-            { key: 'unite', label: 'Unité' },
-            { key: 'coutAchat', label: 'Coût achat', align: 'right', render: (r) => formatMoney(r.coutAchat) },
-            { key: 'tarifLocation', label: 'Tarif location', align: 'right', render: (r) => formatMoney(r.tarifLocation) },
+            { key: 'nom', label: 'Matériel', render: (r) => (
+              <span className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D(catColor(r.cat))}><Package size={15} /></span>
+                <span className="font-semibold">{r.nom}</span>
+              </span>
+            ) },
+            { key: 'cat', label: 'Catégorie', render: (r) => (
+              <span className="inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide"
+                style={{ background: `${catColor(r.cat)}1a`, color: catColor(r.cat), border: `1px solid ${catColor(r.cat)}40` }}>{r.cat}</span>
+            ) },
+            { key: 'unite', label: 'Unité', render: (r) => <span className="rounded-lg bg-gray-100/80 px-2 py-0.5 text-xs font-semibold text-gray-600">{r.unite}</span> },
+            { key: 'coutAchat', label: 'Coût achat', align: 'right', render: (r) => <span className="whitespace-nowrap text-gray-600">{formatMoney(r.coutAchat)}</span> },
+            { key: 'tarifLocation', label: 'Tarif location', align: 'right', render: (r) => (
+              <span className="inline-block whitespace-nowrap rounded-xl px-2.5 py-1 text-xs font-extrabold text-white shadow-[0_6px_12px_-6px_rgba(188,60,49,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]"
+                style={{ background: 'linear-gradient(135deg, #d9594b, #bc3c31)' }}>{formatMoney(r.tarifLocation)}</span>
+            ) },
             { key: 'actions', label: '', align: 'right', render: (r) => lectureSeule ? null : (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setModal({ ...r, isNew: false })} className="rounded p-1.5 hover:bg-gray-100">✏️</button>
+                <ActionIcone icone={Pencil} tone="modifier" title="Modifier" onClick={() => setModal({ ...r, isNew: false })} />
                 {isFullAccessRole(role) && (
-                  <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeMateriel(r.id) }} className="text-red-500"><Trash2 size={16} /></button>
+                  <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer" onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) removeMateriel(r.id) }} />
                 )}
               </div>
             ) }
           ]}
           rows={materiel}
-          empty="Aucun matériel."
+          empty="Aucun matériel." emptyIcon={Boxes}
         />
       </Card>
 
@@ -103,7 +118,8 @@ export default function Referentiel() {
         <p className="mb-3 text-sm text-gray-500">Liste proposée lors de la saisie d'une prestation (mariage, funérailles…). Sert aux statistiques « quel événement sollicite le plus » dans le Pilotage.</p>
         <div className="mb-3 flex flex-wrap gap-2">
           {evenements.map((ev) => (
-            <span key={ev} className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+            <span key={ev} className="inline-flex items-center gap-2 rounded-2xl border border-white/80 bg-white/65 py-1 pl-1.5 pr-3 text-sm font-semibold text-gray-700 shadow-[0_6px_14px_-10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-sm">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D(COULEUR_MODULE.logistique)}><IcoEv ev={ev} /></span>
               {ev}
               {isFullAccessRole(role) && <button onClick={() => removeEvenement(ev)} className="text-gray-400 hover:text-red-500" title="Retirer"><Trash2 size={13} /></button>}
             </span>

@@ -37,7 +37,7 @@ export const MATERIEL = [
 export const CAT_COLORS = {
   'TENTES & STRUCTURES': '#0284c7',
   'TABLES': '#7c3aed',
-  'CHAISES': '#9333ea',
+  'CHAISES': '#0d9488',
   'TABLES & CHAISES': '#7c3aed',
   'SONORISATION': '#ea580c',
   'ÉCLAIRAGE': '#ca8a04',
@@ -46,7 +46,7 @@ export const CAT_COLORS = {
   'AUTRES': '#64748b'
 }
 
-const EXTRA = ['#0891b2', '#4f46e5', '#0d9488', '#be123c']
+const EXTRA = ['#0891b2', '#4f46e5', '#65a30d', '#be123c']
 
 export function catColor(cat) {
   if (CAT_COLORS[cat]) return CAT_COLORS[cat]

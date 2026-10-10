@@ -2,11 +2,11 @@
 import { Loader2 } from 'lucide-react'
 
 const VARIANTS = {
-  primary: 'bg-primary hover:bg-primary-dark text-white',
-  secondary: 'bg-secondary hover:bg-secondary-dark text-white',
-  success: 'bg-green-600 hover:bg-green-700 text-white',
-  danger: 'bg-red-600 hover:bg-red-700 text-white',
-  warning: 'bg-amber-600 hover:bg-amber-700 text-white',
+  primary: 'bg-primary hover:bg-primary-dark text-white bg-gradient-to-b from-white/20 to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
+  secondary: 'bg-secondary hover:bg-secondary-dark text-white bg-gradient-to-b from-white/20 to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
+  success: 'bg-green-600 hover:bg-green-700 text-white bg-gradient-to-b from-white/20 to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
+  danger: 'bg-red-600 hover:bg-red-700 text-white bg-gradient-to-b from-white/20 to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
+  warning: 'bg-amber-600 hover:bg-amber-700 text-white bg-gradient-to-b from-white/20 to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
   ghost: 'bg-transparent hover:bg-gray-100 text-gray-700 dark:hover:bg-white/10 dark:text-gray-300',
   outline: 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 dark:bg-[#1d2226] dark:border-white/15 dark:hover:bg-white/10 dark:text-gray-300'
 }

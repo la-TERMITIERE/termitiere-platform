@@ -13,12 +13,15 @@ const ACCENTS = {
   amber:  { ring: 'focus:ring-amber-400',  hoverText: 'hover:text-amber-600',  hoverBg: 'hover:bg-amber-50' },
   green:  { ring: 'focus:ring-green-400',  hoverText: 'hover:text-green-600',  hoverBg: 'hover:bg-green-50' },
   violet: { ring: 'focus:ring-violet-400', hoverText: 'hover:text-violet-600', hoverBg: 'hover:bg-violet-50' },
+  slate:  { ring: 'focus:ring-slate-400',  hoverText: 'hover:text-slate-600',  hoverBg: 'hover:bg-slate-50' },
   orange: { ring: 'focus:ring-orange-400', hoverText: 'hover:text-orange-600', hoverBg: 'hover:bg-orange-50' }
 }
 
+const norm = (v) => String(v ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+
 export default function ChampAutocomplete({
   value, onChange, suggestions = [], placeholder = '', className, maxSuggestions = 8,
-  getLabel = (s) => s, onSelect, emptyLabel = 'Aucune suggestion : votre saisie sera utilisée.',
+  getLabel = (s) => s, getDetail, onSelect, emptyLabel = 'Aucune suggestion : votre saisie sera utilisée.',
   accent = 'teal', autoFocus = false
 }) {
   const [open, setOpen] = useState(false)
@@ -32,8 +35,8 @@ export default function ChampAutocomplete({
   }, [])
 
   const filtrees = useMemo(() => {
-    const q = (value || '').trim().toLowerCase()
-    const liste = q ? suggestions.filter((s) => getLabel(s).toLowerCase().includes(q)) : suggestions
+    const q = norm((value || '').trim())
+    const liste = q ? suggestions.filter((s) => norm(getLabel(s)).includes(q)) : suggestions
     return liste.slice(0, maxSuggestions)
   }, [suggestions, value, maxSuggestions, getLabel])
 
@@ -62,15 +65,16 @@ export default function ChampAutocomplete({
         )}
       </div>
       {open && suggestions.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-2xl border border-white/80 bg-white/90 shadow-[0_18px_36px_-14px_rgba(0,0,0,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1d2226]/95">
           {!filtrees.length
             ? <p className="px-3 py-2 text-xs text-gray-400">{emptyLabel}</p>
             : <ul className="max-h-64 overflow-y-auto py-1">
                 {filtrees.map((s, i) => (
                   <li key={getLabel(s) + i}
-                    className={`cursor-pointer px-3 py-2 text-sm text-gray-700 ${a.hoverBg}`}
+                    className={`flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 ${a.hoverBg}`}
                     onMouseDown={(e) => { e.preventDefault(); choisir(s) }}>
-                    {getLabel(s)}
+                    <span className="min-w-0 truncate">{getLabel(s)}</span>
+                    {getDetail?.(s) && <span className="shrink-0 text-[11px] text-gray-400">{getDetail(s)}</span>}
                   </li>
                 ))}
               </ul>

@@ -75,7 +75,7 @@ export async function reinitialiserApplication({ keepUserId, onProgress }) {
         ? lignes.filter((l) => l.id !== keepUserId)
         : lignes
       for (const ligne of aSupprimer) {
-        await removeItem(collection, ligne.id)
+        await removeItem(collection, ligne.id, { sansMotif: true })
         removed++
       }
     } catch (e) {

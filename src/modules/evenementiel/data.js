@@ -51,7 +51,7 @@ export const DUREE_SECHAGE_JOURS = 5
 export const DUREE_PRODUCTION_OPTIONS = [24, 48]
 
 export const ETATS_BRIQUE = [
-  { id: 'appatam', label: 'Appatam (production)', color: '#7c3aed' },
+  { id: 'appatam', label: 'Appatam (production)', color: '#0284c7' },
   { id: 'sechage', label: 'En séchage (extérieur)', color: '#ca8a04' },
   { id: 'pret', label: 'Prêtes à vendre', color: '#16a34a' },
   { id: 'caillasses', label: 'Caillasses', color: '#64748b' }

@@ -2,17 +2,32 @@
 // Cartes cliquables (détail) + écarts vs mois précédent mis en avant.
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut } from 'react-chartjs-2'
-import { ShoppingCart, Factory, Package, Send, AlertTriangle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { StockDonutCard, VueEnsembleCard } from './GraphiquesDashboard'
+import { icone3D } from '../../utils/color'
+import { ShoppingCart, Factory, Package, Send, AlertTriangle, Wrench, ChevronRight, Trophy } from 'lucide-react'
+import AvatarNom from '../../shared/ui/AvatarNom'
+import NumDoc from '../../shared/ui/NumDoc'
+import EtatVide from '../../shared/ui/EtatVide'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import { AlerteVentesAFacturer } from './RelanceVentes'
 import { useBriqueterieStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
-import { formatMoney, formatNumber, formatDateShort, addDays } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort, addDays, todayStr } from '../../utils/formatters'
 import { stockBriqueTotal, coutMatiereBrique } from './logic'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
+
+// Podium : médaille + fond dégradé pour les 3 premiers, comme le classement des clients fréquents de MAXI-GYM.
+const RANG_PODIUM = [
+  { medaille: '🥇', bg: 'bg-gradient-to-r from-amber-50 to-yellow-50', ring: 'ring-1 ring-amber-200' },
+  { medaille: '🥈', bg: 'bg-gradient-to-r from-slate-100 to-gray-50', ring: 'ring-1 ring-slate-200' },
+  { medaille: '🥉', bg: 'bg-gradient-to-r from-orange-50 to-amber-50', ring: 'ring-1 ring-orange-200' }
+]
 
 export default function Dashboard() {
   const briques = useBriqueterieStore((s) => s.briques)
@@ -22,6 +37,8 @@ export default function Dashboard() {
   const { data: factures } = useCollection('evenementiel_factures')
   const { data: ventes } = useCollection('evenementiel_ventes')
   const { data: demandes } = useCollection('evenementiel_demandes')
+  const { data: materiels } = useCollection('evenementiel_materiels')
+  const role = useAuth((s) => s.role)
 
   const [detail, setDetail] = useState(null) // { titre, render }
   const { start, end, preset, node: periodNode } = usePeriodSelect('mois')
@@ -62,6 +79,19 @@ export default function Dashboard() {
   const ventesMontant = ventesDuMois.reduce((s, v) => s + (v.total || 0), 0)
   const nbVentesPrec = ventes.filter((v) => inPrev(v.date)).length
   const demandesActives = demandes.filter((d) => estActif(d.statut))
+  // Meilleurs clients de la période : classés par montant acheté (ventes non annulées).
+  const meilleursClients = useMemo(() => {
+    const m = {}
+    ventesDuMois.filter((v) => v.statut !== 'annulee').forEach((v) => {
+      const nom = (v.clientNom || '').trim()
+      if (!nom) return
+      const e = m[nom.toLowerCase()] || (m[nom.toLowerCase()] = { nom, achats: 0, briques: 0, montant: 0 })
+      e.achats += 1
+      e.briques += (v.lignes || []).reduce((t, l) => t + (parseInt(l.qte) || 0), 0)
+      e.montant += v.total || 0
+    })
+    return Object.values(m).sort((a, b) => b.montant - a.montant).slice(0, 5)
+  }, [ventesDuMois])
 
   // Total de BRIQUES vendues sur la période (somme des quantités des lignes) +
   // répartition par catégorie de brique (comme « Prêt à vendre »).
@@ -110,26 +140,26 @@ export default function Dashboard() {
   const tableEvalStock = (
     <div className="overflow-hidden rounded-2xl border border-gray-100">
       <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+        <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
           <tr><th className="px-4 py-3 text-left">Type</th><th className="px-4 py-3 text-right">Qté en stock</th><th className="px-4 py-3 text-right">Coût brut prod.</th><th className="px-4 py-3 text-right">Valeur stock</th></tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
           {parTypeEval.map((p, i) => (
-            <tr key={p.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+            <tr key={p.id} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
               <td className="px-4 py-2.5 font-semibold text-gray-800">{p.nom}</td>
               <td className="px-4 py-2.5 text-right font-bold text-gray-700">{formatNumber(p.qte)}</td>
               <td className="px-4 py-2.5 text-right font-semibold text-amber-700">{formatMoney(Math.round(p.cout))}</td>
-              <td className="px-4 py-2.5 text-right font-extrabold text-violet-700">{formatMoney(Math.round(p.valeur))}</td>
+              <td className="px-4 py-2.5 text-right font-extrabold text-slate-700">{formatMoney(Math.round(p.valeur))}</td>
             </tr>
           ))}
           {!parTypeEval.length && <tr><td colSpan={4} className="bg-white py-8 text-center text-sm text-gray-400">Aucun stock.</td></tr>}
         </tbody>
         {parTypeEval.length > 0 && (
           <tfoot>
-            <tr className="border-t border-gray-200 bg-violet-50/60">
+            <tr className="border-t border-gray-200 bg-slate-50/60">
               <td className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500" colSpan={2}>Total</td>
               <td className="px-4 py-3 text-right font-extrabold text-amber-700">{formatMoney(Math.round(coutBrutStock))}</td>
-              <td className="px-4 py-3 text-right font-extrabold text-violet-700">{formatMoney(Math.round(valeurStock))}</td>
+              <td className="px-4 py-3 text-right font-extrabold text-slate-700">{formatMoney(Math.round(valeurStock))}</td>
             </tr>
           </tfoot>
         )}
@@ -139,7 +169,7 @@ export default function Dashboard() {
 
   // Couleurs cardinales bien distinctes (rouge, orange, vert, bleu, jaune…) —
   // remplacent l'ancienne palette « tout en violet » où les parts se confondaient.
-  const CARDINALES = ['#dc2626', '#ea580c', '#16a34a', '#0284c7', '#ca8a04', '#7c3aed', '#0d9488', '#db2777', '#4f46e5', '#65a30d']
+  const CARDINALES = ['#dc2626', '#ea580c', '#16a34a', '#0284c7', '#ca8a04', '#475569', '#0d9488', '#db2777', '#4f46e5', '#65a30d']
   const repartition = {
     labels: parType.map((p) => p.nom),
     datasets: [{ data: parType.map((p) => p.stock), backgroundColor: parType.map((_, i) => CARDINALES[i % CARDINALES.length]) }]
@@ -147,21 +177,21 @@ export default function Dashboard() {
 
   const fluxMois = {
     labels: ['Production', 'Prêtes', 'En séchage', 'Caillasses'],
-    datasets: [{ data: [prodMois, stockPret, stockSechage, caillasses], backgroundColor: ['#7c3aed', '#16a34a', '#ca8a04', '#64748b'] }]
+    datasets: [{ data: [prodMois, stockPret, stockSechage, caillasses], backgroundColor: ['#475569', '#16a34a', '#ca8a04', '#64748b'] }]
   }
 
   // Tableaux de détail réutilisables.
   const tableStock = (champ) => (
     <div className="overflow-hidden rounded-2xl border border-gray-100">
       <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+        <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
           <tr><th className="px-4 py-3 text-left">Type</th><th className="px-4 py-3 text-right">Quantité</th></tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
           {parType.filter((p) => p[champ] > 0).map((p, i) => (
-            <tr key={p.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+            <tr key={p.id} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
               <td className="px-4 py-2.5 font-semibold text-gray-800">{p.nom}</td>
-              <td className="px-4 py-2.5 text-right text-base font-extrabold text-violet-700">{formatNumber(p[champ])}</td>
+              <td className="px-4 py-2.5 text-right text-base font-extrabold text-slate-700">{formatNumber(p[champ])}</td>
             </tr>
           ))}
           {!parType.some((p) => p[champ] > 0) && <tr><td colSpan={2} className="bg-white py-8 text-center text-sm text-gray-400">Aucun stock.</td></tr>}
@@ -170,14 +200,30 @@ export default function Dashboard() {
     </div>
   )
 
+  // Matériel en location : fin prévue = début + durée ; en retard si cette date est passée.
+  const aujourdhui = todayStr()
+  const locationsEnCours = materiels
+    .filter((m) => m.statut === 'loue' && m.locationEnCours)
+    .map((m) => {
+      const l = m.locationEnCours
+      const fin = addDays(l.dateDebut, Math.max(1, Number(l.nombreJours) || 1) - 1)
+      const retard = fin < aujourdhui ? Math.round((new Date(aujourdhui) - new Date(fin)) / 86400000) : 0
+      return { m, l, fin, retard }
+    })
+    .sort((a, b) => b.retard - a.retard)
+  const nbLocationsRetard = locationsEnCours.filter((x) => x.retard > 0).length
+  // Dernières ventes : les 5 plus récentes.
+  const STATUTS_VENTE = { brouillon: ['Brouillon', 'neutral'], en_attente: ['Autorisation requise', 'warning'], autorisee: ['Autorisée', 'success'], chargee: ['Chargée / Partie', 'info'], annulee: ['Annulée', 'danger'] }
+  const dernieresVentes = [...ventes].sort((a, b) => ((b.createdAt || 0) - (a.createdAt || 0)) || ((b.date || '') < (a.date || '') ? -1 : 1)).slice(0, 5)
+
   return (
     <div className="space-y-5">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),0_8px_20px_-8px_rgba(71,85,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(138,155,179,0.92) 0%, rgba(100,116,139,0.9) 40%, rgba(51,65,85,0.88) 100%)' }}>
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
+            background: '#475569', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55'
           }}>
             <span style={{ color: 'white', fontWeight: 800, fontSize: 20, letterSpacing: '-0.5px' }}>BR</span>
           </div>
@@ -190,24 +236,26 @@ export default function Dashboard() {
           {periodNode}
         </div>
       </div>
+      {/* Ventes autorisées à facturer : alerte fermable pour les rôles autres qu'agent (les agents reçoivent une notification). */}
+      {role !== 'agent' && <AlerteVentesAFacturer ventes={ventes} factures={factures} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-        <StatCard title="Production période" value={formatNumber(prodMois)} icon={Factory} accent="#7c3aed"
+        <StatCard title="Production période" value={formatNumber(prodMois)} icon={Factory} accent="#475569"
           variation={comparable ? prodMois - prodMoisPrec : undefined} variationLabel={`période préc. : ${formatNumber(prodMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Production de la période', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
-                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
                   <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Détail par catégorie</th><th className="px-4 py-3 text-right">Total</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {[...prodDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((p, i) => (
-                    <tr key={p.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                    <tr key={p.id} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
                       <td className="whitespace-nowrap px-4 py-2.5 align-top font-mono text-xs text-gray-500">{formatDateShort(p.date)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap gap-1.5">
                           {(p.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0).map((l, k) => (
-                            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
                               {l.briqueNom} <span className="font-extrabold">{formatNumber(l.qte)}</span>
                             </span>
                           ))}
@@ -219,7 +267,7 @@ export default function Dashboard() {
                           {!(p.lignes || []).some((l) => (parseInt(l.qte) || 0) > 0) && <span className="text-xs text-gray-400">—</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-right align-top text-base font-extrabold text-violet-700">{formatNumber(p.totalBriques || 0)}</td>
+                      <td className="px-4 py-2.5 text-right align-top text-base font-extrabold text-slate-700">{formatNumber(p.totalBriques || 0)}</td>
                     </tr>
                   ))}
                   {!prodDuMois.length && <tr><td colSpan={3} className="bg-white py-8 text-center text-sm text-gray-400">Aucune production sur la période.</td></tr>}
@@ -235,12 +283,12 @@ export default function Dashboard() {
           onClick={() => setDetail({ titre: 'Briques vendues : par catégorie', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
-                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
                   <tr><th className="px-4 py-3 text-left">Catégorie</th><th className="px-4 py-3 text-right">Quantité vendue</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {ventesParCategorie.map((c, i) => (
-                    <tr key={c.nom} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                    <tr key={c.nom} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
                       <td className="px-4 py-2.5 font-semibold text-gray-800">{c.nom}</td>
                       <td className="px-4 py-2.5 text-right text-base font-extrabold text-amber-700">{formatNumber(c.qte)}</td>
                     </tr>
@@ -249,7 +297,7 @@ export default function Dashboard() {
                 </tbody>
                 {ventesParCategorie.length > 0 && (
                   <tfoot>
-                    <tr className="border-t border-gray-200 bg-violet-50/60">
+                    <tr className="border-t border-gray-200 bg-slate-50/60">
                       <td className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total briques</td>
                       <td className="px-4 py-3 text-right text-base font-extrabold text-amber-700">{formatNumber(briquesVendues)}</td>
                     </tr>
@@ -263,7 +311,7 @@ export default function Dashboard() {
           onClick={() => setDetail({ titre: 'Chiffre d’affaires : par client & catégorie', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
-                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
                   <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-left">Briques achetées (catégorie × qté)</th><th className="px-4 py-3 text-center">Total briques</th><th className="px-4 py-3 text-right">Total TTC</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -271,13 +319,13 @@ export default function Dashboard() {
                     const lignes = (f.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0)
                     const totalBr = lignes.reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
                     return (
-                    <tr key={f.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                    <tr key={f.id} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
                       <td className="whitespace-nowrap px-4 py-2.5 align-top font-mono text-xs text-gray-500">{formatDateShort(f.date)}</td>
                       <td className="px-4 py-2.5 align-top font-semibold text-gray-800">{f.client?.nom || '—'}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap gap-1.5">
                           {lignes.map((l, k) => (
-                            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
                               {l.article || l.articleId || '—'} <span className="font-extrabold">{formatNumber(l.qte)}</span>
                             </span>
                           ))}
@@ -298,12 +346,12 @@ export default function Dashboard() {
           onClick={() => setDetail({ titre: 'Autorisations à traiter', render: (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <table className="w-full text-sm">
-                <thead className="border-b border-gray-100 bg-violet-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
                   <tr><th className="px-4 py-3 text-left">N°</th><th className="px-4 py-3 text-left">Brique</th><th className="px-4 py-3 text-center">Qté</th><th className="px-4 py-3 text-left">Statut</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {demandesActives.map((d, i) => { const sn = normaliserStatut(d.statut); return (
-                    <tr key={d.id} className={`transition-colors hover:bg-violet-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
+                    <tr key={d.id} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
                       <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{d.num}</td>
                       <td className="px-4 py-2.5 font-semibold text-gray-800">{d.briqueNom}</td>
                       <td className="px-4 py-2.5 text-center font-bold text-gray-800">{d.qte}</td>
@@ -315,24 +363,97 @@ export default function Dashboard() {
               </table>
             </div>
           ) })} />
-        <StatCard title="Valeur du stock" value={formatMoney(valeurStock)} icon={Package} accent="#7c3aed"
+        <StatCard title="Valeur du stock" value={formatMoney(valeurStock)} icon={Package} accent="#475569"
           sub="quantité en stock × prix unitaire · cliquer"
           onClick={() => setDetail({ titre: 'Valeur & coût du stock par catégorie', render: tableEvalStock })} />
         <StatCard title="Coût brut de production" value={formatMoney(coutBrutStock)} icon={Factory} accent="#b45309"
           sub="quantité × (prix du sac ÷ rendement) · cliquer"
           onClick={() => setDetail({ titre: 'Valeur & coût du stock par catégorie', render: tableEvalStock })} />
+        <StatCard title="Matériel en location" value={locationsEnCours.length} icon={Wrench} accent={nbLocationsRetard ? '#dc2626' : '#0891b2'}
+          sub={nbLocationsRetard ? `${nbLocationsRetard} en retard de retour · cliquer` : 'aucun retard · cliquer'}
+          onClick={() => setDetail({ titre: 'Matériel en location', render: (
+            <div className="space-y-2">
+              {locationsEnCours.length === 0 && <EtatVide icone={Wrench} texte="Aucun matériel en location" accent="#0891b2" className="!py-6" />}
+              {locationsEnCours.map(({ m, l, fin, retard }) => (
+                <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/80 bg-white/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                  <AvatarNom nom={l.locataireNom} size={30} accent={retard ? '#dc2626' : '#0891b2'} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-800">{m.nom}</p>
+                    <p className="truncate text-xs text-gray-500">{l.locataireNom}{l.locataireContact ? ` · ${l.locataireContact}` : ''}</p>
+                    <p className="text-[11px] text-gray-400">Du {formatDateShort(l.dateDebut)} au {formatDateShort(fin)} · {l.nombreJours} jour(s)</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <strong className="whitespace-nowrap text-sm">{formatMoney(l.prixTotal || 0)}</strong>
+                    {retard > 0
+                      ? <Badge tone="danger">{retard} j de retard</Badge>
+                      : <Badge tone="success">Dans les délais</Badge>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) })} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Stock par catégorie">
-          <div className="h-64">
-            {parType.length
-              ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
-              : <p className="py-16 text-center text-sm text-gray-400">Aucun stock : commencez par une production</p>}
+        <StockDonutCard parType={parType} couleurs={CARDINALES} />
+        <VueEnsembleCard prodMois={prodMois} stockPret={stockPret} stockSechage={stockSechage} caillasses={caillasses} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+      <Card title="Dernières ventes" action={<Link to="/evenementiel/ventes" className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:underline">Toutes les ventes <ChevronRight size={13} /></Link>}>
+        {dernieresVentes.length === 0 ? (
+          <EtatVide icone={ShoppingCart} texte="Aucune vente pour le moment" accent="#475569" className="!py-6" />
+        ) : (
+          <div className="space-y-1.5">
+            {dernieresVentes.map((v) => {
+              const [label, tone] = STATUTS_VENTE[v.statut] || [v.statut, 'neutral']
+              const nb = (v.lignes || []).reduce((t, l) => t + (parseInt(l.qte) || 0), 0)
+              return (
+                <Link key={v.id} to="/evenementiel/ventes" className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/80 bg-white/65 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] transition-all hover:-translate-y-0.5 hover:bg-white/90">
+                  <AvatarNom nom={v.clientNom} size={30} accent="#475569" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-gray-800">{v.clientNom}</span>
+                    <span className="block text-[11px] text-gray-400"><NumDoc num={v.num} className="!text-[11px]" /> · {formatNumber(nb)} brique(s) · {formatDateShort(v.date)}</span>
+                  </span>
+                  <span className="flex flex-col items-end gap-1">
+                    <strong className="whitespace-nowrap text-sm">{formatMoney(v.total || 0)}</strong>
+                    <Badge tone={tone}>{label}</Badge>
+                  </span>
+                </Link>
+              )
+            })}
           </div>
-        </Card>
-        <Card title="Vue d'ensemble">
-          <div className="h-64"><Bar data={fluxMois} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} /></div>
+        )}
+      </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#CA8A04')}><Trophy size={17} /></span>
+            <div>
+              <h3 className="text-base font-bold leading-tight text-gray-800">Meilleurs clients</h3>
+              <p className="text-[11px] text-gray-400">Classés par montant acheté sur la période</p>
+            </div>
+          </div>
+          {meilleursClients.length === 0 ? (
+            <EtatVide icone={Trophy} texte="Aucune vente sur cette période" accent="#CA8A04" className="!py-6" />
+          ) : (
+            <div className="space-y-1.5">
+              {meilleursClients.map((c, i) => {
+                const podium = RANG_PODIUM[i]
+                return (
+                  <div key={c.nom} className={`flex items-center gap-3 rounded-2xl px-3 py-2 ${podium ? `${podium.bg} ${podium.ring}` : 'border border-white/80 bg-white/65'}`}>
+                    <span className="w-8 shrink-0 text-center text-2xl leading-none">{podium ? podium.medaille : <span className="text-sm font-extrabold text-gray-400">{i + 1}</span>}</span>
+                    <AvatarNom nom={c.nom} size={28} accent="#475569" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-gray-800">{c.nom}</span>
+                      <span className="block text-[11px] text-gray-500">{c.achats} achat{c.achats > 1 ? 's' : ''} · {formatNumber(c.briques)} brique(s)</span>
+                    </span>
+                    <strong className="whitespace-nowrap text-sm text-gray-900">{formatMoney(c.montant)}</strong>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </Card>
       </div>
 
@@ -344,7 +465,7 @@ export default function Dashboard() {
       )}
 
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}
-        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200">
+        panelClassName="bg-gradient-to-br from-slate-200/85 via-slate-100/75 to-slate-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <div className="overflow-x-auto">{detail?.render}</div>
       </Modal>
     </div>

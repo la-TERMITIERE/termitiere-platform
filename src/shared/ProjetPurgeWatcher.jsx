@@ -55,7 +55,7 @@ export default function ProjetPurgeWatcher() {
       for (const d of aPurger) {
         if (annule) break
         dejaPurgees.current.add(d.id)
-        await removeItem('projet_depenses', d.id).catch(() => {})
+        await removeItem('projet_depenses', d.id, { sansMotif: true }).catch(() => {})
       }
       await audit('projet', 'depenses_purgees', `${aPurger.length} dépense(s) de projet(s) clôturé(s) depuis plus de ${annees} an(s) supprimée(s) automatiquement`).catch(() => {})
     }

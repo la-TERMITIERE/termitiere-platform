@@ -38,7 +38,7 @@ export const MODULES = [
     description: 'Production & vente de briques',
     icon: BrickWall,
     emoji: '🧱',
-    color: '#7c3aed',
+    color: '#475569',
     path: '/evenementiel',
     statut: 'actif'
   },
@@ -193,7 +193,7 @@ export const MODULE_NAV = {
     { label: 'Journal et Historique', to: '/evenementiel/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     // Paramètres ouverts aux agents (ajuster prix/tarifs/rendement) ; la réinitialisation
     // des données reste réservée à l'administration (garde interne à l'écran).
-    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: [...ADMIN_VOLETS_ROLES, 'secretaire', 'agent'] },
+    { label: 'Paramètres', to: '/evenementiel/params', icon: Settings, roles: [...ADMIN_VOLETS_ROLES, 'secretaire'] },
     { label: 'Clients', to: '/evenementiel/clients', icon: UserCircle },
     { label: 'Partenaires', to: '/evenementiel/partenaires', icon: Handshake, perm: 'partenaires', roles: ['agent'] }
   ],

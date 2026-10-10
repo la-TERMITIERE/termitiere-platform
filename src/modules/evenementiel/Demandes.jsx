@@ -6,18 +6,25 @@
 // (approbation puis certification, mêmes rôles) — distinguées par `type: 'location'`
 // (les demandes de sortie briques n'ont pas de `type`, traité comme 'sortie').
 import { useMemo, useState } from 'react'
-import { Plus, Shield, Trash2, RotateCcw, Eye, KeyRound } from 'lucide-react'
+import { Plus, Shield, Trash2, RotateCcw, Eye, KeyRound, Send, ShieldCheck, Info, Boxes, CalendarDays, AlertTriangle, ShoppingCart, UserRound } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import PillTabs from '../../shared/ui/PillTabs'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import AvatarNom from '../../shared/ui/AvatarNom'
+import NumDoc from '../../shared/ui/NumDoc'
+import EtatVide from '../../shared/ui/EtatVide'
+import SignatureApprobation from '../../shared/ui/SignatureApprobation'
+import AutorisationHero from '../../shared/ui/AutorisationHero'
+import { demanderAutorisationVente } from './venteActions'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
-import { COULEUR_MODULE } from '../../utils/color'
+import { COULEUR_MODULE, icone3D, glassModalProps } from '../../utils/color'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem, removeItem, setItem, ts } from '../../core/db'
@@ -120,42 +127,12 @@ export default function Demandes() {
     const vte = ventes.find((v) => v.id === form.venteId)
     if (!vte) return toast.error('Sélectionnez une vente')
     if (!form.message.trim()) return toast.error('Motif obligatoire')
-    const lignes = vte.lignes || []
-    if (!lignes.length) return toast.error('Cette vente ne contient aucune ligne')
-
-    // Contrôle du stock disponible pour chaque brique de la vente.
-    for (const l of lignes) {
-      const etat = l.briqueId === 'caillasses' ? 'caillasses' : 'pret'
-      const stock = dernierStockBriques(inventaires, l.briqueId, etat)
-      if ((parseInt(l.qte) || 0) > stock) return toast.error(`Stock insuffisant pour ${l.briqueNom} (${stock} disponible)`)
-    }
-
-    const totalQte = lignes.reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
-    const resume = lignes.length === 1 ? lignes[0].briqueNom : `${lignes.length} types de briques`
-    const num = genNumero('AUT-BRIQ', demandes.length)
-    await addItem('evenementiel_demandes', {
-      num, date: todayStr(), heure: nowHM(),
-      demandeur: user.login, demandeurNom: user.nom,
-      venteId: vte.id, venteNum: vte.num, clientNom: vte.clientNom,
-      briqueId: lignes[0].briqueId, briqueNom: resume,
-      qte: totalQte, lignes,
-      dateSortie: form.dateSortie || vte.dateChargement || todayStr(),
-      message: form.message.trim(),
-      statut: 'en_attente'
-    })
-    await updateItem('evenementiel_ventes', form.venteId, { statut: 'en_attente' })
-    await notify({
-      type: 'demande',
-      title: 'Autorisation sortie briques',
-      body: `${totalQte} brique(s) : ${resume} : vente ${vte.num} : par ${user.nom}`,
-      module: 'evenementiel',
-      forRoles: [...APPROVER_ROLES, 'secretaire'],
-      excludeUid: user.uid,
-      link: '/evenementiel/demandes'
-    })
-    await audit('evenementiel', 'DEMANDE_SORTIE', num)
-    toast.success('Demande soumise : approbation puis certification requises')
-    setCreateOpen(false)
+    try {
+      const r = await demanderAutorisationVente({ vente: vte, user, demandes, inventaires, dateSortie: form.dateSortie, message: form.message })
+      toast.success('Demande soumise : approbation puis certification requises')
+      if (r.destinataires === 0) toast.warning(`Aucun validateur n'a accès au module Briqueterie : personne n'a été alerté. Prévenez la hiérarchie.`)
+      setCreateOpen(false)
+    } catch (e) { toast.error(e.message) }
   }
 
   // Applique une action du workflow (approuver / certifier / refuser).
@@ -378,11 +355,11 @@ export default function Demandes() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(124,58,237,0.35),0_8px_20px_-8px_rgba(124,58,237,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.85) 0%, rgba(76,29,149,0.8) 100%)' }}>
+      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(71,85,105,0.35),0_8px_20px_-8px_rgba(71,85,105,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: 'linear-gradient(135deg, rgba(138,155,179,0.92) 0%, rgba(100,116,139,0.9) 40%, rgba(51,65,85,0.88) 100%)' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#7c3aed', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
+          background: '#475569', boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
         }}>
           <Shield size={28} color="white" />
         </div>
@@ -400,11 +377,6 @@ export default function Demandes() {
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
         <div className="band-filtres">
 <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client, un demandeur…" />
-        {!lectureSeule && ongletDemande === 'sortie' && (
-          <Button className="btn-glass ml-auto" onClick={openCreate} disabled={!ventesBrouillon.length}>
-            <Plus size={16} /> Demander une autorisation
-          </Button>
-        )}
         </div>
       </div>
 
@@ -412,20 +384,46 @@ export default function Demandes() {
       <PillTabs active={ongletDemande} accent={COULEUR_MODULE.evenementiel}
         onChange={(id) => { setOngletDemande(id); setFiltre('tous') }}
         tabs={[
-          { id: 'sortie', label: '📦 Sortie briques', accent: '#7c3aed' },
+          { id: 'sortie', label: '📦 Sortie briques', accent: '#475569' },
           { id: 'location', label: `🔑 Location matériel${nbLocationEnAttente ? ` (${nbLocationEnAttente})` : ''}`, accent: '#0891b2' }
         ]} />
 
-      <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <Shield size={16} className="mr-1 inline" />
-        {ongletDemande === 'sortie'
-          ? <>Toute sortie de briques exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) avant le chargement.</>
-          : <>Toute location de matériel exige une <strong>approbation</strong> (gérant) puis une <strong>certification</strong> (Direction / GE) : se demande depuis <strong>Matériel & Matériaux</strong>, bouton « Louer » sur le matériel concerné.</>}
+      <div className="flex items-start gap-3 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/90 to-white/70 px-4 py-3 text-sm text-slate-900 shadow-[0_10px_22px_-16px_rgba(71,85,105,0.55),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#475569')}><Info size={16} /></span>
+        <span>
+          {ongletDemande === 'sortie'
+            ? <>Circuit : <strong>approbation</strong> (gérant) → <strong>certification</strong> (Direction / GE). À la certification, la vente est autorisée et le stock de briques baisse.</>
+            : <>Circuit : <strong>approbation</strong> (gérant) → <strong>certification</strong> (Direction / GE). Une location se demande depuis <strong>Matériel & Matériaux</strong>, bouton « Louer ».</>}
+        </span>
       </div>
+
+      {!lectureSeule && ongletDemande === 'sortie' && (
+        <div className="flex justify-end">
+          <style>{`
+            @keyframes da-balayage { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+            @keyframes da-envol { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(3px, -3px) rotate(-8deg); } }
+            @keyframes da-tampon { 0%, 55% { opacity: 0; transform: scale(2.2) rotate(-25deg); } 68% { opacity: 1; transform: scale(0.9) rotate(-10deg); } 74%, 88% { opacity: 1; transform: scale(1) rotate(-10deg); } 100% { opacity: 0; transform: scale(1) rotate(-10deg); } }
+          `}</style>
+          {/* Demander une autorisation : l'avion part, puis le tampon d'autorisation tombe sur le bouton. */}
+          <button onClick={openCreate} disabled={!ventesBrouillon.length}
+            title={ventesBrouillon.length ? "Demander l'autorisation de sortie d'une vente" : "Aucune vente en attente d'autorisation : créez d'abord une vente"}
+            className="group relative flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(71,85,105,0.7),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(71,85,105,0.85)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            style={{ background: 'linear-gradient(135deg, #8a9bb3 0%, #64748b 45%, #334155 100%)' }}>
+            <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+              style={{ animation: 'da-balayage 3.2s ease-in-out infinite' }} />
+            <span className="relative flex h-6 w-6 items-center justify-center">
+              <Send size={17} style={{ animation: 'da-envol 2.4s ease-in-out infinite' }} />
+              <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow"
+                style={{ animation: 'da-tampon 4s ease-in-out infinite' }}><ShieldCheck size={11} strokeWidth={3} /></span>
+            </span>
+            <span className="relative">Demander une autorisation</span>
+          </button>
+        </div>
+      )}
 
 
       <Card className="p-0">
-       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+       <div className="table-verre overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-gray-500">
             {ongletDemande === 'sortie' ? (
@@ -461,32 +459,32 @@ export default function Demandes() {
                 estAuteur: estAuteurDemande(d, user), dejaApprouvePar: d.approuveN1Par, moiNom: user?.nom
               })
               const enCorrectif = !estLocation && correctifEnCours(d)
-              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande })
+              const suppressible = !lectureSeule && role !== 'agent' && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande })
               const relancable = !estLocation && !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: isManager })
               return (
-              <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
-                <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white group-hover:bg-gray-50'}`} style={{ width: '110px' }}>{d.num}</td>
+              <tr key={d.id} onClick={() => setDecision({ demande: d, lecture: true })}
+                className={`group cursor-pointer ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
+                <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white group-hover:bg-gray-50'}`} style={{ width: '110px' }}><NumDoc num={d.num} /></td>
                 {estLocation ? (
                   <>
-                    <td className="px-3 py-2"><span className="font-semibold">{d.materielNom}</span><br /><span className="text-xs text-gray-500">{d.locataireNom}</span></td>
+                    <td className="px-3 py-2"><span className="flex items-center gap-2"><AvatarNom nom={d.locataireNom} size={26} accent={COULEUR_MODULE.evenementiel} className="hidden sm:inline-flex" /><span><span className="font-semibold">{d.materielNom}</span><br /><span className="text-xs text-gray-500">{d.locataireNom}</span></span></span></td>
                     <td className="px-3 py-2 text-center">{d.nombreJours} j.</td>
                     <td className="px-3 py-2 text-right font-semibold">{formatMoney(d.prixTotal)}</td>
                   </>
                 ) : (
                   <>
-                    <td className="px-3 py-2"><span className="font-semibold">{d.venteNum}</span><br /><span className="text-xs text-gray-500">{d.clientNom}</span></td>
+                    <td className="px-3 py-2"><span className="flex items-center gap-2"><AvatarNom nom={d.clientNom} size={26} accent={COULEUR_MODULE.evenementiel} className="hidden sm:inline-flex" /><span><span className="font-semibold">{d.clientNom}</span><br /><span className="font-mono text-[10px] text-gray-400">{d.venteNum}</span></span></span></td>
                     <td className="px-3 py-2 font-semibold">{d.briqueNom}</td>
-                    <td className="px-3 py-2 text-center">{d.qte}</td>
+                    <td className="px-3 py-2 text-center"><span className="inline-flex min-w-[2.5rem] justify-center rounded-xl bg-white/80 px-2 py-0.5 text-xs font-extrabold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_3px_6px_-3px_rgba(0,0,0,0.25)]">{d.qte}</span></td>
                     <td className="px-3 py-2">{d.dateSortie}</td>
                   </>
                 )}
                 <td className="px-3 py-2 text-xs text-gray-500">
                   {logistiqueVoitValidateur(role) ? (
-                    <>
-                      {d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : '—'}
-                      {d.certifiePar && <span className="block">Certifié : {d.certifiePar}</span>}
-                    </>
-                  ) : (d.approuveN1Par ? <span className="block">Approuvée</span> : '—')}
+                    d.certifiePar
+                      ? <SignatureApprobation par={d.certifiePar} le={d.certifieLe ? formatDateShort(String(d.certifieLe).slice(0, 10)) : ''} auto={/syst/i.test(d.certifiePar)} />
+                      : d.approuveN1Par ? <span className="block">Approuvé : {d.approuveN1Par}</span> : <span className="text-gray-300">:</span>
+                  ) : (d.approuveN1Par ? <span className="block">Approuvée</span> : <span className="text-gray-300">:</span>)}
                 </td>
                 <td className="px-3 py-2">
                   <Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>
@@ -499,24 +497,20 @@ export default function Demandes() {
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap items-center justify-end gap-1">
                     {/* Consultation ouverte à tous : la même fiche, sans les actions. */}
-                    <button onClick={() => setDecision({ demande: d, lecture: true })} title="Voir le détail"
-                      className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                    <ActionIcone icone={Eye} tone="voir" title="Voir le détail" onClick={() => setDecision({ demande: d, lecture: true })} />
                     {(acts.length > 0 || enCorrectif) && gereCetteDemande && (
-                      <button onClick={() => setDecision({ demande: d })} className="rounded bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/20">
+                      <button onClick={(e) => { e.stopPropagation(); setDecision({ demande: d }) }} className="btn-balaye inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white shadow-[0_10px_18px_-8px_rgba(71,85,105,0.8),inset_0_1px_0_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5" style={{ background: sn === 'approuve_n1' ? 'linear-gradient(135deg, #34d399, #059669)' : 'linear-gradient(135deg, #64748b, #334155)' }}>
                         {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Traiter'}
                       </button>
                     )}
                     {relancable && (
-                      <button onClick={() => setRelance(d)} title="Demander un correctif"
-                        className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-200">
+                      <button onClick={(e) => { e.stopPropagation(); setRelance(d) }} title="Demander un correctif"
+                        className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50/80 px-2.5 py-1 text-xs font-bold text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all hover:-translate-y-0.5 hover:bg-amber-100">
                         <RotateCcw size={13} /> Relancer
                       </button>
                     )}
                     {suppressible && (
-                      <button onClick={() => supprimer(d)} disabled={busy} title="Supprimer la demande"
-                        className="rounded p-1.5 text-red-500 hover:bg-red-50 disabled:opacity-50">
-                        <Trash2 size={15} />
-                      </button>
+                      <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer la demande" disabled={busy} onClick={() => supprimer(d)} />
                     )}
                   </div>
                 </td>
@@ -524,54 +518,97 @@ export default function Demandes() {
             )})}
           </tbody>
         </table>
-        {!filtrees.length && <p className="py-10 text-center text-gray-400">Aucune demande.</p>}
+        {!filtrees.length && <EtatVide icone={ShieldCheck} texte="Aucune demande" accent={COULEUR_MODULE.evenementiel} />}
        </div>
       </Card>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Demande d'autorisation de sortie"
-        footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}>Soumettre</Button></>}>
-        <FormGroup label="Vente liée" required hint="Le client, les briques et les quantités sont repris automatiquement de la vente.">
-          <Select value={form.venteId} onChange={(e) => {
-            const v = ventes.find((x) => x.id === e.target.value)
-            setForm((s) => ({ ...s, venteId: e.target.value, venteNum: v?.num, dateSortie: v?.dateChargement || todayStr() }))
-          }}>
-            {ventesBrouillon.map((v) => <option key={v.id} value={v.id}>{v.num} : {v.clientNom} ({formatMoney(v.total)})</option>)}
-          </Select>
-        </FormGroup>
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} size="lg" {...glassModalProps(COULEUR_MODULE.evenementiel)}
+        title="Demande d'autorisation de sortie"
+        footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}><Send size={15} /> Soumettre</Button></>}>
+        <style>{`
+          @keyframes aut-barre { from { width: 0; } }
+          @keyframes aut-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        `}</style>
+        <div className="space-y-3">
+          <AutorisationHero accent={COULEUR_MODULE.evenementiel} sous="Les briques ne sortent qu'après approbation puis certification." />
 
-        {/* Détail repris automatiquement de la vente (non modifiable par l'agent). */}
-        {selectedVente && (
-          <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm">
-            <p className="mb-2 text-xs font-bold uppercase text-gray-500">Contenu de la vente (automatique)</p>
-            <p className="mb-2">Client : <strong>{selectedVente.clientNom || '—'}</strong></p>
-            <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="text-xs uppercase text-gray-400">
-                <tr><th className="pb-1 text-left">Brique</th><th className="pb-1 text-right">Quantité</th></tr>
-              </thead>
-              <tbody>
-                {(selectedVente.lignes || []).map((l, i) => (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="py-1 font-medium">{l.briqueNom}</td>
-                    <td className="py-1 text-right font-semibold">{l.qte}</td>
-                  </tr>
-                ))}
-                {!(selectedVente.lignes || []).length && (
-                  <tr><td colSpan={2} className="py-2 text-center text-gray-400">Aucune ligne.</td></tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-            <p className="mt-2 text-xs text-gray-500">Chargement prévu : {selectedVente.dateChargement || '—'}</p>
+          <div className="tuile-verre">
+            <p className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-600">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D(COULEUR_MODULE.evenementiel)}><ShoppingCart size={14} /></span>
+              Vente liée <span className="text-red-500">*</span>
+            </p>
+            <Select value={form.venteId} onChange={(e) => {
+              const v = ventes.find((x) => x.id === e.target.value)
+              setForm((s) => ({ ...s, venteId: e.target.value, venteNum: v?.num, dateSortie: v?.dateChargement || todayStr() }))
+            }}>
+              {ventesBrouillon.map((v) => <option key={v.id} value={v.id}>{v.num} : {v.clientNom} ({formatMoney(v.total)})</option>)}
+            </Select>
+            {selectedVente && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-2.5 py-1 font-semibold text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                  <AvatarNom nom={selectedVente.clientNom} size={16} accent={COULEUR_MODULE.evenementiel} />{selectedVente.clientNom}
+                </span>
+                <span className="text-[11px] text-gray-500">Le client et les briques sont repris de la vente.</span>
+              </div>
+            )}
           </div>
-        )}
 
-        <FormGroup label="Motif / justification" required>
-          <Input value={form.message} onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))} placeholder="Destination, véhicule…" />
-        </FormGroup>
+          {selectedVente && (
+            <div className="tuile-verre">
+              <p className="mb-2 flex items-center justify-between gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-600">
+                <span className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#E8850F')}><Boxes size={14} /></span>
+                  Briques à sortir
+                </span>
+                <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-[11px] font-extrabold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                  {(selectedVente.lignes || []).reduce((t, l) => t + (parseInt(l.qte) || 0), 0)} brique(s)
+                </span>
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(selectedVente.lignes || []).map((l, i) => {
+                  const stock = stockDe(l.briqueId)
+                  const qte = parseInt(l.qte) || 0
+                  const insuffisant = qte > stock
+                  const pct = stock > 0 ? Math.min(100, Math.round((qte / stock) * 100)) : 100
+                  const couleur = insuffisant ? '#DC2626' : pct > 80 ? '#E8850F' : '#16A34A'
+                  return (
+                    <div key={i} className="rounded-2xl border border-white/80 bg-white/65 p-2.5 shadow-[0_8px_16px_-14px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.95)]">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleur)}>
+                          {insuffisant ? <AlertTriangle size={14} style={{ animation: 'aut-pulse 1.4s ease-in-out infinite' }} /> : <Boxes size={14} />}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800" title={l.briqueNom}>{l.briqueNom}</span>
+                        <span className="rounded-lg bg-slate-50 px-2 py-0.5 text-xs font-extrabold text-slate-700">× {qte}</span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200/80">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${couleur}, ${couleur}aa)`, animation: 'aut-barre 0.8s ease-out' }} />
+                      </div>
+                      <p className={`mt-1 text-[11px] ${insuffisant ? 'font-bold text-red-600' : 'text-gray-500'}`}>
+                        Stock prêt : {stock}{insuffisant ? ' : insuffisant pour cette sortie' : ''}
+                      </p>
+                    </div>
+                  )
+                })}
+                {!(selectedVente.lignes || []).length && <p className="py-2 text-sm text-gray-400">Aucune ligne.</p>}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-x-3">
+            <FormGroup label="Date de sortie" className="col-span-2 sm:col-span-1">
+              <div className="relative">
+                <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-500" />
+                <Input className="pl-9" type="date" value={form.dateSortie} onChange={(e) => setForm((s) => ({ ...s, dateSortie: e.target.value }))} />
+              </div>
+            </FormGroup>
+            <FormGroup label="Motif / justification" required className="col-span-2 sm:col-span-1">
+              <Input value={form.message} onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))} placeholder="Destination, véhicule…" />
+            </FormGroup>
+          </div>
+        </div>
       </Modal>
 
-      <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }}
+      <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }} size="lg" {...glassModalProps(COULEUR_MODULE.evenementiel)}
         title={decision?.lecture
           ? `Autorisation ${decision.demande.num}`
           : decision && correctifEnCours(decision.demande) ? 'Trancher le correctif' : 'Traiter la demande'}
@@ -579,7 +616,7 @@ export default function Demandes() {
           ? <Button variant="ghost" onClick={() => setDecision(null)}>Fermer</Button>
           : <>
             <Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-            {decision && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) }) && !lectureSeule && (
+            {decision && role !== 'agent' && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) }) && !lectureSeule && (
               <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
             )}
             {decision && correctifEnCours(decision.demande) ? (
@@ -614,7 +651,7 @@ export default function Demandes() {
           const montant = estLocation ? d.prixTotal : (lignes.length ? lignes.reduce((s, l) => s + (l.montant || 0), 0) : undefined)
           return (
             <>
-              {!estLocation && <p className="mb-2 text-sm font-semibold text-gray-800">Vente {d.venteNum}</p>}
+              <div className="mb-3"><AutorisationHero accent={COULEUR_MODULE.evenementiel} titre={`Autorisation ${d.num}`} sous={estLocation ? `Location : ${d.materielNom}` : `Vente ${d.venteNum} : ${d.clientNom || ''}`} /></div>
               {!estLocation && correctifEnCours(d) && (
                 <div className="mb-3">
                   <CorrectifCompare

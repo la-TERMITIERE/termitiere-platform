@@ -4,7 +4,7 @@ export const MODULE_THEME = {
   agro:         { color: '#2EAA3F', color2: '#1a6e27', logo: '/maxi-agro-logo.png',        nom: 'MAXI AGRO'              },
   logistique:   { color: '#BC3C31', color2: '#1A1A1A', logo: '/logo_maxi_logistique.png',  nom: 'Maxi Logistique'        },
   garderie:     { color: '#E8390E', color2: '#F5A800', logo: '/garderie-logo.png',          nom: 'Garderie La Termitière' },
-  evenementiel: { color: '#7c3aed', color2: '#4c1d95', logo: null,                          nom: 'BRIQUETERIE'            },
+  evenementiel: { color: '#475569', color2: '#1e293b', logo: null,                          nom: 'BRIQUETERIE'            },
   foncier:      { color: '#059669', color2: '#065f46', logo: null,                          nom: 'FONCIER'                },
   rh:           { color: '#0284c7', color2: '#075985', logo: null,                          nom: 'RESSOURCES HUMAINES'    },
   comptabilite: { color: '#ea580c', color2: '#9a3412', logo: null,                          nom: 'COMPTABILITÉ'           },

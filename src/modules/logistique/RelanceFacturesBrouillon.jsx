@@ -8,7 +8,7 @@
 // Composant « headless » (aucun rendu), monté dans AppShell.
 import { useEffect, useRef } from 'react'
 import { useCollection } from '../../hooks/useFirestore'
-import { updateItem } from '../../core/db'
+import { updateItem, getOne } from '../../core/db'
 import { notify } from '../../core/notify'
 import { siteLabel } from './site/useSite'
 
@@ -27,6 +27,7 @@ export default function RelanceFacturesBrouillon() {
     async function relancer(f, prochainRang) {
       const cle = `${f.id}#${prochainRang}`
       try {
+        if (!(await getOne('logistique_factures', f.id))) return // supprimée entre-temps : ne pas recréer de fiche vide
         await updateItem('logistique_factures', f.id, {
           relanceBrouillon: { count: prochainRang, dernierEnvoiLe: Date.now() }
         })

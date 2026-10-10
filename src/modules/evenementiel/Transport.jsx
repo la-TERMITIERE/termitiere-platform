@@ -113,7 +113,7 @@ export default function Transport() {
   return (
     <div className="space-y-5">
       {/* En-tête + période */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-violet-700 to-violet-900 p-4 text-white shadow-lg">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-4 text-white shadow-lg">
         <Truck size={22} />
         <div>
           <h2 className="text-base font-extrabold">Transport : Briqueterie</h2>
@@ -128,7 +128,7 @@ export default function Transport() {
       <div className="grid grid-cols-3 gap-3">
         <div className="card p-4">
           <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Recette (période)</p>
-          <p className="text-xl font-extrabold text-violet-700">{formatMoney(cumul.recette)}</p>
+          <p className="text-xl font-extrabold text-slate-700">{formatMoney(cumul.recette)}</p>
         </div>
         <div className="card p-4">
           <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Dépenses (période)</p>
@@ -142,7 +142,7 @@ export default function Transport() {
 
       {peutSaisir && (
         <div className="flex justify-end">
-          <Button style={{ backgroundColor: '#7c3aed' }} onClick={() => { setModal({ data: vide(), isNew: true }); setDep({ label: '', montant: '' }) }}>
+          <Button style={{ backgroundColor: '#475569' }} onClick={() => { setModal({ data: vide(), isNew: true }); setDep({ label: '', montant: '' }) }}>
             <Plus size={16} /> Nouveau trajet
           </Button>
         </div>
@@ -170,20 +170,20 @@ export default function Transport() {
               const d = totalDep(t.depenses)
               const m = margeDe(t)
               return (
-                <tr key={t.id} className="hover:bg-violet-50/40">
+                <tr key={t.id} className="hover:bg-slate-50/40">
                   <td className="px-3 py-2 font-mono text-xs">{formatDateShort(t.date)}</td>
                   <td className="px-3 py-2"><span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-bold">{t.plaque || '—'}</span></td>
                   <td className="px-3 py-2">{(t.lieuDepart || t.lieuArrivee) ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="text-gray-400" />{t.lieuDepart || '?'} → {t.lieuArrivee || '?'}</span> : '—'}</td>
                   <td className="px-3 py-2 text-xs text-gray-500">{horaire(t)}</td>
                   <td className="px-3 py-2 text-xs text-gray-600">{t.cargaison || '—'}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-violet-700">{formatMoney(parseFloat(t.recette) || 0)}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-slate-700">{formatMoney(parseFloat(t.recette) || 0)}</td>
                   <td className="px-3 py-2 text-right text-amber-700">{formatMoney(d)}</td>
                   <td className={`px-3 py-2 text-right font-bold ${m >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatMoney(m)}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-1">
                       {(estMien(t) || peutSupprimer) && peutSaisir && (
                         <button onClick={() => { setModal({ data: { ...vide(), ...t }, dataInitial: t, isNew: false, id: t.id }); setDep({ label: '', montant: '' }) }}
-                          title="Modifier" className="rounded-lg p-1.5 text-violet-600 hover:bg-violet-50"><Pencil size={15} /></button>
+                          title="Modifier" className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-50"><Pencil size={15} /></button>
                       )}
                       {peutSupprimer && (
                         <button onClick={() => setToDelete(t)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
@@ -201,7 +201,7 @@ export default function Transport() {
             <tfoot className="bg-gray-50 font-bold">
               <tr>
                 <td className="px-3 py-2" colSpan={5}>TOTAL PÉRIODE ({formatDateShort(start)} → {formatDateShort(end)})</td>
-                <td className="px-3 py-2 text-right text-violet-700">{formatMoney(cumul.recette)}</td>
+                <td className="px-3 py-2 text-right text-slate-700">{formatMoney(cumul.recette)}</td>
                 <td className="px-3 py-2 text-right text-amber-700">{formatMoney(cumul.depenses)}</td>
                 <td className={`px-3 py-2 text-right ${cumul.marge >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatMoney(cumul.marge)}</td>
                 <td className="px-3 py-2" />
@@ -214,8 +214,8 @@ export default function Transport() {
       {/* Modal création / édition d'un trajet */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="lg"
         title={modal?.isNew ? 'Nouveau trajet' : 'Modifier le trajet'}
-        panelClassName="bg-gradient-to-br from-violet-200/85 via-violet-100/75 to-purple-300/75 backdrop-blur-2xl backdrop-saturate-200"
-        footer={<><Button variant="outline" onClick={() => setModal(null)}>Annuler</Button><Button style={{ backgroundColor: '#7c3aed' }} onClick={enregistrer} loading={saving}>Enregistrer</Button></>}>
+        panelClassName="bg-gradient-to-br from-slate-200/85 via-slate-100/75 to-slate-300/75 backdrop-blur-2xl backdrop-saturate-200"
+        footer={<><Button variant="outline" onClick={() => setModal(null)}>Annuler</Button><Button style={{ backgroundColor: '#475569' }} onClick={enregistrer} loading={saving}>Enregistrer</Button></>}>
         {modal && (
           <div className="space-y-3">
             {/* Identification & date */}
@@ -234,7 +234,7 @@ export default function Transport() {
 
             {/* Itinéraire & horaires */}
             <div className="rounded-lg bg-white p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-violet-700"><MapPin size={13} /> Itinéraire & horaires</p>
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-700"><MapPin size={13} /> Itinéraire & horaires</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label="Départ (lieu)"><Input value={modal.data.lieuDepart} onChange={(e) => set('lieuDepart', e.target.value)} placeholder="D'où" /></FormGroup>
                 <FormGroup label="Arrivée (lieu)"><Input value={modal.data.lieuArrivee} onChange={(e) => set('lieuArrivee', e.target.value)} placeholder="Vers où" /></FormGroup>
@@ -248,7 +248,7 @@ export default function Transport() {
 
             {/* Finances : recette + dépenses un à un */}
             <div className="rounded-lg bg-white p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-violet-700"><Fuel size={13} /> Coût & dépenses du trajet</p>
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-700"><Fuel size={13} /> Coût & dépenses du trajet</p>
               <FormGroup label="Recette de la course (travail / location du camion, FCFA)">
                 <Input type="number" min="0" value={modal.data.recette} onChange={(e) => set('recette', e.target.value)} placeholder="Montant facturé / gagné pour ce trajet" />
               </FormGroup>

@@ -67,7 +67,7 @@ export default function EvenementielModule() {
       {/* Paramètres ouverts aussi aux AGENTS (et secrétaire) : ils ajustent les prix
           unitaires, tarifs, rendement… La réinitialisation des données reste réservée
           à l'administration (garde `isAdmin` à l'intérieur de l'écran). */}
-      <Route path="params" element={peutVoirVoletsAdmin(role) || role === 'secretaire' || role === 'agent' ? <Params /> : <AccesRefuseAdmin />} />
+      <Route path="params" element={peutVoirVoletsAdmin(role) || role === 'secretaire' ? <Params /> : <AccesRefuseAdmin />} />
       <Route path="clients" element={<Clients />} />
       <Route path="partenaires" element={<Partenaires module="evenementiel" />} />
       <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />

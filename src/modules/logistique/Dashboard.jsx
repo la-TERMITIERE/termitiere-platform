@@ -1,13 +1,17 @@
 // Dashboard Logistique & Événementiel — KPI matériel, prestations, autorisations.
 // Cartes cliquables avec drill-down (catégorie → articles → détail).
 import { useMemo, useState } from 'react'
-import { Bar, Doughnut } from 'react-chartjs-2'
 import { Boxes, BadgeDollarSign, Send, AlertTriangle, RotateCcw, ChevronRight, PackageX } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
+import { useAuth } from '../../hooks/useAuth'
+import RetardsRetoursAlerte from './RetardsRetoursAlerte'
+import { StockCategorieCard, FluxPeriodeCard } from './GraphiquesDashboard'
+import { MaterielDehorsCard, DernieresPrestationsCard, MeilleursClientsCard, CaMensuelCard, materielDehors, meilleursClients, caParMois } from './CartesDashboard'
+import { logistiqueVoitMontants, peutVoirCaMensuel } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
@@ -19,6 +23,7 @@ const TOUTES = '__TOUTES__'
 
 export default function Dashboard() {
   const materiel = useLogistiqueStore((s) => s.materiel)
+  const role = useAuth((s) => s.role)
   const site = useSite()
   const { data: allInventaires } = useCollection('logistique_inventaires')
   const { data: allPrestations } = useCollection('logistique_prestations')
@@ -60,6 +65,11 @@ export default function Dashboard() {
     const finMois = new Date(Number(mois.slice(0, 4)), Number(mois.slice(5, 7)), 0).toISOString().slice(0, 10)
     return { start: `${mois}-01`, end: mois === auj.slice(0, 7) ? auj : finMois }
   }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+
+  const voitMontants = logistiqueVoitMontants(role)
+  const dehors = useMemo(() => materielDehors(prestations, retours, demandes), [prestations, retours, demandes])
+  const clientsTop = useMemo(() => meilleursClients(prestations.filter((p) => (p.date || '') >= start && (p.date || '') <= end), voitMontants), [prestations, start, end, voitMontants])
+  const caMensuel = useMemo(() => caParMois(factures), [factures])
 
   const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
   const dansPeriode = (d) => (d || '') >= start && (d || '') <= end
@@ -110,21 +120,13 @@ export default function Dashboard() {
     }).filter((p) => p.stock > 0)
   }, [materiel, dernier, cats])
 
-  const repartition = {
-    labels: parCat.map((p) => p.cat),
-    datasets: [{ data: parCat.map((p) => p.stock), backgroundColor: parCat.map((p) => p.color) }]
-  }
-
   const fluxMois = useMemo(() => {
     const invMois = inventaires.filter((i) => dansPeriode(i.date))
     let achats = 0, sorties = 0, retOk = 0
     invMois.forEach((i) => Object.values(i.materiels || {}).forEach((m) => {
       achats += m.ent || 0; sorties += m.sor || 0; retOk += m.retourOk || 0
     }))
-    return {
-      labels: ['Achats', 'Sorties', 'Retours OK'],
-      datasets: [{ data: [achats, sorties, retOk], backgroundColor: ['#16a34a', '#d97706', '#0284c7'] }]
-    }
+    return { achats, sorties, retOk }
   }, [inventaires, start, end])
 
   // Détail des articles d'une catégorie (2e niveau de drill-down).
@@ -190,6 +192,8 @@ export default function Dashboard() {
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
       </div>
+      {/* Retours en retard : alerte fermable pour les rôles autres qu'agent (les agents reçoivent une notification). */}
+      {role !== 'agent' && <RetardsRetoursAlerte prestations={prestations} retours={retours} demandes={demandes} site={site} />}
 
       {/* Filtre par catégorie (comme Maxi Agro) */}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -267,16 +271,18 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Répartition du stock par catégorie">
-          <div className="h-64">
-            {parCat.length
-              ? <Doughnut data={repartition} options={{ maintainAspectRatio: false }} />
-              : <p className="py-16 text-center text-sm text-gray-400">Aucun stock enregistré : commencez par la saisie magasin</p>}
-          </div>
-        </Card>
-        <Card title={`Flux de la période (${formatDateShort(start)} → ${formatDateShort(end)})`}>
-          <div className="h-64"><Bar data={fluxMois} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { precision: 0 } } } }} /></div>
-        </Card>
+        <StockCategorieCard parCat={parCat} onOuvrir={ouvrirCategorie} />
+        <FluxPeriodeCard {...fluxMois} periode={`Du ${formatDateShort(start)} au ${formatDateShort(end)}`} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <MaterielDehorsCard liste={dehors} site={site} />
+        <DernieresPrestationsCard prestations={prestations} site={site} voitMontants={voitMontants} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <MeilleursClientsCard clients={clientsTop} voitMontants={voitMontants} />
+        {peutVoirCaMensuel(role) && <CaMensuelCard mois={caMensuel} />}
       </div>
 
       {demandesActives.length > 0 && (

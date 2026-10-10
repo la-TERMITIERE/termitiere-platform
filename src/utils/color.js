@@ -43,7 +43,7 @@ export function avatarGradient(seed) {
 // teinter les petites fenêtres de détail (factures, dossiers, fiches…) à la couleur
 // du module plutôt qu'en gris/blanc générique.
 export const COULEUR_MODULE = {
-  agro: '#2EAA3F', logistique: '#BC3C31', evenementiel: '#7c3aed',
+  agro: '#2EAA3F', logistique: '#BC3C31', evenementiel: '#475569',
   foncier: '#059669', garderie: '#E8390E', rh: '#ea580c',
   projet: '#0d9488', depense: '#B45309', gym: '#E8850F'
 }

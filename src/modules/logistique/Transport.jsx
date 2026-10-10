@@ -20,6 +20,8 @@ import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
+import NumDoc from '../../shared/ui/NumDoc'
+import EtatVide from '../../shared/ui/EtatVide'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -379,6 +381,7 @@ export default function Transport() {
       {/* Tableau des trajets — défile horizontalement sur mobile (beaucoup de
           colonnes + colonne d'actions large). */}
       <Card className="overflow-x-auto p-0">
+        <div className="table-verre overflow-x-auto">
         <table className="w-full min-w-[920px] text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
@@ -402,10 +405,10 @@ export default function Transport() {
               const st = statutTrajet(t)
               return (
                 <tr key={t.id} onClick={() => setDetail(t)} className="cursor-pointer transition-colors hover:bg-gray-50">
-                  <td className="px-3 py-2 font-mono text-[11px] text-gray-500">{t.num || '—'}</td>
+                  <td className="px-3 py-2"><NumDoc num={t.num} /></td>
                   <td className="px-3 py-2 font-mono text-xs">{formatDateShort(t.date)}</td>
-                  <td className="px-3 py-2"><span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-bold">{t.plaque || '—'}</span></td>
-                  <td className="px-3 py-2">{(t.lieuDepart || t.lieuArrivee) ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="text-gray-400" />{t.lieuDepart || '?'} → {t.lieuArrivee || '?'}</span> : '—'}</td>
+                  <td className="px-3 py-2"><span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-mono text-xs font-extrabold tracking-wider shadow-[inset_0_1px_0_#fff,0_4px_8px_-4px_rgba(0,0,0,0.35)]"><Truck size={12} className="text-red-600" />{t.plaque || ':'}</span></td>
+                  <td className="px-3 py-2">{(t.lieuDepart || t.lieuArrivee) ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="text-red-500" />{t.lieuDepart || '?'} → {t.lieuArrivee || '?'}</span> : '—'}</td>
                   <td className="px-3 py-2 text-xs text-gray-500">{horaire(t)}</td>
                   <td className="px-3 py-2 text-xs text-gray-600">{t.cargaison || '—'}</td>
                   {voitMontants && <td className="px-3 py-2 text-right font-semibold" style={{ color: COULEUR }}>{formatMoney(parseFloat(t.recette) || 0)}</td>}
@@ -422,8 +425,9 @@ export default function Transport() {
               )
             })}
             {!liste.length && (
-              <tr><td colSpan={11} className="py-10 text-center text-gray-400">
-                {onglet === 'attente' ? 'Aucun trajet en attente d\'autorisation.' : onglet === 'route' ? 'Aucun camion en route.' : 'Aucun trajet sur la période.'}
+              <tr className="tv-vide"><td colSpan={11}>
+                <EtatVide icone={Truck} accent={COULEUR}
+                  texte={onglet === 'attente' ? "Aucun trajet en attente d'autorisation" : onglet === 'route' ? 'Aucun camion en route' : 'Aucun trajet sur la période'} />
               </td></tr>
             )}
           </tbody>
@@ -439,6 +443,7 @@ export default function Transport() {
             </tfoot>
           )}
         </table>
+        </div>
       </Card>
 
       {/* Modale création / édition d'un trajet — glassmorphism teinté module. */}

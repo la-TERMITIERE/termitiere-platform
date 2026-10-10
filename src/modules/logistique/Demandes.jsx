@@ -4,12 +4,16 @@
 //   • la facture passe « approuvée » → elle compte alors dans le chiffre d'affaires ;
 //   • le matériel loué est décompté du stock magasin (sorties auto, cf. logic.autoSorties).
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, RotateCcw, Eye, CheckCircle2, Send } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Eye, CheckCircle2, Send, Info, ShieldCheck, FileText, Boxes, CalendarDays, AlertTriangle, ClipboardList } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
-import { COULEUR_MODULE } from '../../utils/color'
+import { COULEUR_MODULE, icone3D, glassModalProps } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
+import ActionIcone from '../../shared/ui/ActionIcone'
+import AvatarNom from '../../shared/ui/AvatarNom'
+import NumDoc from '../../shared/ui/NumDoc'
+import EtatVide from '../../shared/ui/EtatVide'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
@@ -77,7 +81,7 @@ export default function Demandes() {
   const inventaires = useMemo(() => allInventaires.filter((i) => matchSite(i, site)), [allInventaires, site])
 
   const [recherche, setRecherche] = useState('')
-  const [filtre, setFiltre] = useState('en_attente')
+  const [filtre, setFiltre] = useState('tous')
   const [createOpen, setCreateOpen] = useState(false)
   const [decision, setDecision] = useState(null)
   const [commentaire, setCommentaire] = useState('')
@@ -91,7 +95,7 @@ export default function Demandes() {
   // absent) — ne lui donne PAS pour autant le pouvoir d'approuver/certifier/refuser,
   // qui reste réservé à logistiquePeutApprouver/CERTIFIER_ROLES (cf. peutSupprimerDemande,
   // qui ferme de toute façon la suppression dès que le statut passe à `certifie`).
-  const peutAnnulerAgent = role === 'agent'
+  const peutAnnulerAgent = false // règle générale : un agent ne supprime jamais, pas même une autorisation non certifiée
 
   // Factures en brouillon dont l'autorisation de sortie reste à émettre. Triée du
   // plus récemment créé au plus ancien — une facture qu'on vient de créer pour un
@@ -176,7 +180,7 @@ export default function Demandes() {
       lignes, dateSortie: form.dateSortie,
       message: form.message.trim(), statut: 'en_attente'
     })
-    await notify({
+    const alerte = await notify({
       type: 'demande',
       title: 'Autorisation de sortie matériel',
       body: `${siteLabel(site)} : ${totalQte} pièce(s) · prestation ${p.num} : facture ${fac.num} : par ${user.nom}`,
@@ -187,6 +191,7 @@ export default function Demandes() {
     })
     await audit('logistique', 'DEMANDE_SORTIE', `${siteLabel(site)} : ${num} : prestation ${p.num}`)
     toast.success('Autorisation soumise à la hiérarchie ✓')
+    if (alerte && alerte.destinataires === 0) toast.warning(`Aucun validateur n'a accès au module Logistique : personne n'a été alerté. Prévenez la hiérarchie.`)
     setCreateOpen(false)
   }
 
@@ -207,8 +212,8 @@ export default function Demandes() {
 
     // Effet métier à la CERTIFICATION : facture approuvée (→ CA) + stock décrémenté (auto).
     if (statut === 'certifie') {
-      if (d.factureId) await updateItem('logistique_factures', d.factureId, { statut: 'approuvee', approuveePar: user.nom, approuveeLe: horodate })
-      if (d.prestationId) await updateItem('logistique_prestations', d.prestationId, { approuvee: true, approuveePar: user.nom, approuveeLe: horodate })
+      if (d.factureId && factures.some((f) => f.id === d.factureId)) await updateItem('logistique_factures', d.factureId, { statut: 'approuvee', approuveePar: user.nom, approuveeLe: horodate })
+      if (d.prestationId && prestations.some((x) => x.id === d.prestationId)) await updateItem('logistique_prestations', d.prestationId, { approuvee: true, approuveePar: user.nom, approuveeLe: horodate })
     }
 
     if (statut === 'approuve_n1') {
@@ -371,29 +376,48 @@ export default function Demandes() {
           <p className="text-sm text-white/80">{liste.length} autorisation(s) · {siteLabel(site)}</p>
         </div>
         <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
-        {!lectureSeule && (
-          <button onClick={openCreate} disabled={!facturesDispo.length}
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50">
-            <Plus size={14} /> Nouvelle autorisation
-          </button>
-        )}
       </div>
 
-      <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Chaque sortie de matériel exige une <strong>facture (brouillon)</strong>, puis une <strong>approbation</strong> (gérant) suivie d'une <strong>certification</strong> (Direction / GE).
-        À la certification, la <strong>facture est approuvée</strong> (chiffre d'affaires) et le <strong>stock est décrémenté</strong>.
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 to-white/70 px-4 py-3 text-sm text-amber-900 shadow-[0_10px_22px_-16px_rgba(217,119,6,0.55),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#D97706')}><Info size={16} /></span>
+        <span>
+        Circuit : <strong>facture</strong> → <strong>approbation</strong> (gérant) → <strong>certification</strong> (Direction / GE). À la certification, le chiffre d'affaires et le stock sont mis à jour.</span>
       </div>
 
       {/* Filtre de statut — glassmorphism léger (teinte + reflet), même recette que
           Facturation/Prestations. */}
-      <div className="relative flex flex-wrap items-center gap-1 overflow-hidden rounded-2xl border border-red-100/50 bg-gradient-to-br from-red-50/40 via-white/70 to-white/70 p-1.5 shadow-sm backdrop-blur-md">
-        <span aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 h-14 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
-        {['en_attente', 'approuve_n1', 'correctif', 'certifie', 'refuse', 'tous'].map((f) => (
-          <button key={f} onClick={() => setFiltre(f)}
-            className={`relative rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${filtre === f ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}>
-            {f === 'tous' ? 'Toutes' : f === 'correctif' ? `${CORRECTIF_STATUTS.demande.short}${nbCorrectifs ? ` (${nbCorrectifs})` : ''}` : STATUTS[f]?.short || f}
-          </button>
-        ))}
+      {/* Filtre de statut et bouton sur la même ligne (ordinateur) ; sur mobile : pastilles qui défilent, bouton dessous. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex min-w-0 items-center gap-1 overflow-x-auto rounded-2xl border border-red-100/50 bg-gradient-to-br from-red-50/40 via-white/70 to-white/70 p-1 shadow-sm backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {['tous', 'certifie', 'en_attente', 'approuve_n1', 'correctif', 'refuse'].map((f) => (
+            <button key={f} onClick={() => setFiltre(f)}
+              className={`relative shrink-0 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-semibold transition-colors ${filtre === f ? 'bg-secondary text-white shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}>
+              {f === 'tous' ? 'Toutes' : f === 'correctif' ? `${CORRECTIF_STATUTS.demande.short}${nbCorrectifs ? ` (${nbCorrectifs})` : ''}` : STATUTS[f]?.short || f}
+            </button>
+          ))}
+        </div>
+        {!lectureSeule && (
+          <div className="flex shrink-0 justify-end">
+            <style>{`
+              @keyframes da-balayage { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+              @keyframes da-envol { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(3px, -3px) rotate(-8deg); } }
+              @keyframes da-tampon { 0%, 55% { opacity: 0; transform: scale(2.2) rotate(-25deg); } 68% { opacity: 1; transform: scale(0.9) rotate(-10deg); } 74%, 88% { opacity: 1; transform: scale(1) rotate(-10deg); } 100% { opacity: 0; transform: scale(1) rotate(-10deg); } }
+            `}</style>
+            {/* Nouvelle autorisation : l'avion part, puis le tampon d'autorisation tombe sur le bouton. */}
+            <button onClick={openCreate} disabled={!facturesDispo.length}
+              className="group relative flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_-10px_rgba(188,60,49,0.7),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(188,60,49,0.85)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              style={{ background: 'linear-gradient(135deg, #d9594b 0%, #bc3c31 100%)' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+                style={{ animation: 'da-balayage 3.2s ease-in-out infinite' }} />
+              <span className="relative flex h-6 w-6 items-center justify-center">
+                <Send size={17} style={{ animation: 'da-envol 2.4s ease-in-out infinite' }} />
+                <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow"
+                  style={{ animation: 'da-tampon 4s ease-in-out infinite' }}><ShieldCheck size={11} strokeWidth={3} /></span>
+              </span>
+              <span className="relative">Nouvelle autorisation</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {!lectureSeule && !facturesDispo.length && (
@@ -402,14 +426,9 @@ export default function Demandes() {
         </div>
       )}
 
-      {!lectureSeule && !facturesDispo.length && (
-        <div className="rounded-lg bg-sky-50 px-4 py-2 text-xs text-sky-700">
-          Aucune facture en attente d'autorisation. Émettez d'abord une facture (onglet Facturation).
-        </div>
-      )}
 
       <Card className="p-0">
-       <div className="max-h-[calc(100vh-16rem)] overflow-auto rounded-2xl">
+       <div className="table-verre max-h-[calc(100vh-16rem)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm">
             <tr>
@@ -434,18 +453,19 @@ export default function Demandes() {
               })
               const totalQte = (d.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0) || d.qte || 0
               const enCorrectif = correctifEnCours(d)
-              const suppressible = !lectureSeule && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande || peutAnnulerAgent })
+              const suppressible = !lectureSeule && role !== 'agent' && peutSupprimerDemande(d.statut, { isAuteur: estAuteur(d), canManage: gereCetteDemande || peutAnnulerAgent })
               // Correctif ouvert à TOUT agent (pas seulement l'auteur) — comme l'annulation :
               // n'importe quel agent peut demander une correction d'une autorisation certifiée
               // (ex. reprendre le dossier d'un collègue). La hiérarchie tranche de toute façon.
               const relancable = !lectureSeule && peutRelancer(d, { estCertifiee: sn === 'certifie', isAuteur: estAuteur(d), canManage: gereCetteDemande || peutAnnulerAgent })
               return (
-              <tr key={d.id} className={`group ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
-                <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white'} group-hover:bg-gray-50`}>{d.num}</td>
-                <td className="px-3 py-2">{d.factureNum}</td>
-                <td className="px-3 py-2 font-semibold">{d.prestationNum || '—'}</td>
-                <td className="px-3 py-2">{d.clientNom || '—'}</td>
-                <td className="px-3 py-2 text-center">{totalQte}</td>
+              <tr key={d.id} onClick={voitCeDetail ? () => setDecision({ demande: d, lecture: true }) : undefined}
+                className={`group ${voitCeDetail ? 'cursor-pointer' : ''} ${enCorrectif ? 'bg-amber-50/50' : ''}`}>
+                <td className={`sticky left-0 z-10 px-3 py-2 font-mono text-xs ${enCorrectif ? 'bg-amber-50' : 'bg-white'} group-hover:bg-gray-50`}><NumDoc num={d.num} /></td>
+                <td className="px-3 py-2"><span className="whitespace-nowrap font-mono text-[11px] text-gray-600">{d.factureNum}</span></td>
+                <td className="px-3 py-2"><NumDoc num={d.prestationNum} /></td>
+                <td className="px-3 py-2"><span className="flex items-center gap-2"><AvatarNom nom={d.clientNom} size={26} accent={COULEUR_MODULE.logistique} className="hidden sm:inline-flex" /><span className="font-semibold">{d.clientNom || ':'}</span></span></td>
+                <td className="px-3 py-2 text-center"><span className="inline-flex min-w-[2rem] justify-center rounded-xl bg-white/80 px-2 py-0.5 text-xs font-extrabold text-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_3px_6px_-3px_rgba(0,0,0,0.25)]">{totalQte}</span></td>
                 <td className="px-3 py-2">{formatDateShort(d.dateSortie)}</td>
                 <td className="px-3 py-2">
                   <Badge tone={STATUTS[sn]?.tone}>{STATUTS[sn]?.label}</Badge>
@@ -460,29 +480,26 @@ export default function Demandes() {
                     {/* Consultation ouverte à tous — SAUF la secrétaire une fois la demande
                         sortie de « en_attente » : passé ce point, elle n'a plus à la rouvrir. */}
                     {voitCeDetail && (
-                      <button onClick={() => setDecision({ demande: d, lecture: true })} title="Voir le détail"
-                        className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
+                      <ActionIcone icone={Eye} tone="voir" title="Voir le détail" onClick={() => setDecision({ demande: d, lecture: true })} />
                     )}
                     {/* Action prioritaire (approuver/certifier/traiter le correctif) : bien
                         visible plutôt qu'une pastille discrète — c'est l'action attendue. */}
                     {(acts.length > 0 || enCorrectif) && gereCetteDemande && (
-                      <button onClick={() => setDecision({ demande: d })}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shadow-emerald-600/40 transition-colors hover:bg-emerald-700">
+                      <button onClick={(e) => { e.stopPropagation(); setDecision({ demande: d }) }}
+                        className="btn-balaye inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white shadow-[0_10px_18px_-8px_rgba(5,150,105,0.8),inset_0_1px_0_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5"
+                        style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>
                         <CheckCircle2 size={14} />
                         {enCorrectif ? 'Correctif' : sn === 'approuve_n1' ? 'Certifier' : 'Approuver'}
                       </button>
                     )}
                     {relancable && (
-                      <button onClick={() => setRelance(d)} title="Demander un correctif"
-                        className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-200">
+                      <button onClick={(e) => { e.stopPropagation(); setRelance(d) }} title="Demander un correctif"
+                        className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50/80 px-2.5 py-1 text-xs font-bold text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all hover:-translate-y-0.5 hover:bg-amber-100">
                         <RotateCcw size={13} /> Relancer
                       </button>
                     )}
                     {suppressible && (
-                      <button onClick={() => supprimer(d)} disabled={busy} title="Supprimer l'autorisation"
-                        className="rounded p-1.5 text-red-500 hover:bg-red-50 disabled:opacity-50">
-                        <Trash2 size={15} />
-                      </button>
+                      <ActionIcone icone={Trash2} tone="supprimer" title="Supprimer l'autorisation" disabled={busy} onClick={() => supprimer(d)} />
                     )}
                   </div>
                 </td>
@@ -490,48 +507,127 @@ export default function Demandes() {
             )})}
           </tbody>
         </table>
-        {!filtrees.length && <p className="py-10 text-center text-gray-400">Aucune demande.</p>}
+        {!filtrees.length && <EtatVide icone={ShieldCheck} texte="Aucune demande" accent={COULEUR_MODULE.logistique} />}
        </div>
       </Card>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Autorisation de sortie (prestation)"
-        footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}>Soumettre</Button></>}>
-        <FormGroup label="Facture liée (brouillon)" required>
-          <Select value={form.factureId} onChange={(e) => choisirFacture(e.target.value)}>
-            {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} : {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
-          </Select>
-        </FormGroup>
-        {formPresta && (
-          <div className="mt-2 rounded-lg border border-gray-200 p-3">
-            <p className="mb-1 text-xs font-bold uppercase text-gray-500">Matériel de la prestation {formPresta.num}</p>
-            {formLignes.length ? (
-              <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase text-gray-400"><tr><th className="py-1 text-left">Matériel</th><th className="py-1 text-center">Qté</th><th className="py-1 text-center">Stock</th></tr></thead>
-                <tbody>
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} size="lg" {...glassModalProps(COULEUR_MODULE.logistique)}
+        title="Autorisation de sortie (prestation)"
+        footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={submitDemande}><Send size={15} /> Soumettre</Button></>}>
+        <style>{`
+          @keyframes aut-orbite { to { transform: rotate(360deg); } }
+          @keyframes aut-envol { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(4px, -4px) rotate(-8deg); } }
+          @keyframes aut-tampon { 0%, 50% { opacity: 0; transform: scale(2.2) rotate(-25deg); } 64% { opacity: 1; transform: scale(0.9) rotate(-10deg); } 70%, 88% { opacity: 1; transform: scale(1) rotate(-10deg); } 100% { opacity: 0; transform: scale(1) rotate(-10deg); } }
+          @keyframes aut-point { 0%, 100% { opacity: 0.2; transform: translateX(0); } 50% { opacity: 1; transform: translateX(4px); } }
+          @keyframes aut-barre { from { width: 0; } }
+          @keyframes aut-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        `}</style>
+        <div className="space-y-3">
+          {/* En-tête : l'avion part en orbite, le tampon d'autorisation tombe, puis les 3 étapes du circuit */}
+          <div className="relative overflow-hidden rounded-3xl p-4 text-white shadow-[0_16px_28px_-16px_rgba(0,0,0,0.55)]"
+            style={{ background: 'linear-gradient(135deg, #d9594b 0%, #BC3C31 55%, #3a1512 120%)' }}>
+            <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+            <div className="relative flex items-center gap-4">
+              <div className="relative flex h-[76px] w-[76px] shrink-0 items-center justify-center">
+                <span aria-hidden="true" className="absolute inset-0 rounded-full border-2 border-dashed border-white/55" style={{ animation: 'aut-orbite 14s linear infinite' }} />
+                <span aria-hidden="true" className="absolute inset-0" style={{ animation: 'aut-orbite 4.5s linear infinite' }}>
+                  <span className="absolute left-1/2 -top-1 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-white shadow-[0_0_10px_3px_rgba(255,255,255,0.8)]" />
+                </span>
+                <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),0_10px_20px_-8px_rgba(0,0,0,0.5)]">
+                  <Send size={24} style={{ animation: 'aut-envol 2.4s ease-in-out infinite' }} />
+                  <span className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full text-white" style={{ ...icone3D('#16A34A'), animation: 'aut-tampon 4s ease-in-out infinite' }}>
+                    <ShieldCheck size={13} strokeWidth={3} />
+                  </span>
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-base font-extrabold leading-tight">Autorisation de sortie</p>
+                <p className="mt-0.5 text-xs leading-snug text-white/85">Le matériel ne sort qu'après approbation puis certification.</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                  {['Soumise', 'Approbation', 'Certification'].map((e, i) => (
+                    <span key={e} className="flex items-center gap-1.5">
+                      <span className="rounded-full border border-white/40 bg-white/20 px-2 py-0.5 backdrop-blur-md">{e}</span>
+                      {i < 2 && <span aria-hidden="true" className="flex gap-0.5">{[0, 1].map((k) => <i key={k} className="block h-1 w-1 rounded-full bg-white" style={{ animation: `aut-point 1.4s ease-in-out ${k * 0.25}s infinite` }} />)}</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Facture liée */}
+          <div className="tuile-verre">
+            <p className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-600">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D(COULEUR_MODULE.logistique)}><FileText size={14} /></span>
+              Facture liée (brouillon) <span className="text-red-500">*</span>
+            </p>
+            <Select value={form.factureId} onChange={(e) => choisirFacture(e.target.value)}>
+              {facturesDispo.map((f) => <option key={f.id} value={f.id}>{f.num} : {f.clientNom}{voitMontants ? ` (${formatMoney(f.totalTTC)})` : ''}</option>)}
+            </Select>
+            {formPresta && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-2.5 py-1 font-semibold text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                  <ClipboardList size={12} className="text-red-500" />{formPresta.num}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-2.5 py-1 font-semibold text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                  <AvatarNom nom={formPresta.clientNom} size={16} accent={COULEUR_MODULE.logistique} />{formPresta.clientNom}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Matériel à sortir : une tuile par article, jauge de stock */}
+          {formPresta && (
+            <div className="tuile-verre">
+              <p className="mb-2 flex items-center justify-between gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-600">
+                <span className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#7C3AED')}><Boxes size={14} /></span>
+                  Matériel à sortir
+                </span>
+                {formLignes.length > 0 && <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-[11px] font-extrabold text-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">{formLignes.reduce((t, l) => t + l.qte, 0)} pièce(s)</span>}
+              </p>
+              {formLignes.length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
                   {formLignes.map((l, i) => {
                     const stock = dernierStock(inventaires, l.materielId)
                     const insuffisant = l.qte > stock
+                    const pct = stock > 0 ? Math.min(100, Math.round((l.qte / stock) * 100)) : 100
+                    const couleur = insuffisant ? '#DC2626' : pct > 80 ? '#E8850F' : '#16A34A'
                     return (
-                      <tr key={i} className="border-t">
-                        <td className="py-1">{l.materielNom}</td>
-                        <td className="py-1 text-center font-semibold">{l.qte}</td>
-                        <td className={`py-1 text-center ${insuffisant ? 'font-bold text-red-600' : 'text-gray-500'}`}>{stock}{insuffisant ? ' ⚠️' : ''}</td>
-                      </tr>
+                      <div key={i} className="rounded-2xl border border-white/80 bg-white/65 p-2.5 shadow-[0_8px_16px_-14px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.95)]">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleur)}>
+                            {insuffisant ? <AlertTriangle size={14} style={{ animation: 'aut-pulse 1.4s ease-in-out infinite' }} /> : <Boxes size={14} />}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800" title={l.materielNom}>{l.materielNom}</span>
+                          <span className="rounded-lg bg-red-50 px-2 py-0.5 text-xs font-extrabold text-red-700">× {l.qte}</span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200/80">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${couleur}, ${couleur}aa)`, animation: 'aut-barre 0.8s ease-out' }} />
+                        </div>
+                        <p className={`mt-1 text-[11px] ${insuffisant ? 'font-bold text-red-600' : 'text-gray-500'}`}>
+                          Stock : {stock}{insuffisant ? ' : insuffisant pour cette sortie' : ''}
+                        </p>
+                      </div>
                     )
                   })}
-                </tbody>
-              </table>
+                </div>
+              ) : <p className="py-2 text-sm text-gray-400">Aucun matériel du référentiel dans cette prestation.</p>}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-x-3">
+            <FormGroup label="Date de sortie" className="col-span-2 sm:col-span-1">
+              <div className="relative">
+                <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-red-500" />
+                <Input className="pl-9" type="date" value={form.dateSortie} onChange={(e) => setForm((s) => ({ ...s, dateSortie: e.target.value }))} />
               </div>
-            ) : <p className="text-sm text-gray-400">Aucun matériel du référentiel dans cette prestation.</p>}
+            </FormGroup>
+            <FormGroup label="Motif / justification" required className="col-span-2 sm:col-span-1">
+              <Input value={form.message} onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))} placeholder="Événement, client, lieu…" />
+            </FormGroup>
           </div>
-        )}
-        <FormGroup label="Date de sortie" className="mt-2">
-          <Input type="date" value={form.dateSortie} onChange={(e) => setForm((s) => ({ ...s, dateSortie: e.target.value }))} />
-        </FormGroup>
-        <FormGroup label="Motif / justification" required>
-          <Input value={form.message} onChange={(e) => setForm((s) => ({ ...s, message: e.target.value }))} placeholder="Événement, client, lieu…" />
-        </FormGroup>
+        </div>
       </Modal>
 
       <Modal open={!!decision} onClose={() => { setDecision(null); setCommentaire('') }}
@@ -541,7 +637,7 @@ export default function Demandes() {
         footer={decision?.lecture
           ? <Button variant="ghost" onClick={() => setDecision(null)}>Fermer</Button>
           : <><Button variant="ghost" onClick={() => { setDecision(null); setCommentaire('') }}>Annuler</Button>
-            {decision && !lectureSeule && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) || peutAnnulerAgent }) && (
+            {decision && !lectureSeule && role !== 'agent' && peutSupprimerDemande(decision.demande.statut, { isAuteur: estAuteur(decision.demande), canManage: peutGererDemande(decision.demande) || peutAnnulerAgent }) && (
               <Button variant="danger" loading={busy} onClick={() => supprimer(decision.demande)}><Trash2 size={15} /> Supprimer</Button>
             )}
             {decision && correctifEnCours(decision.demande) ? (

@@ -10,7 +10,7 @@ export const SECTEURS = [
   { id: 'agro',         label: 'MAXI-AGRO',          color: '#2EAA3F' },
   { id: 'logistique',   label: 'MAXI LOGISTIQUE',    color: '#BC3C31' },
   { id: 'bat',          label: 'MAXI BAT',           color: '#0d9488' },
-  { id: 'evenementiel', label: 'BRIQUETERIE',        color: '#7c3aed' },
+  { id: 'evenementiel', label: 'BRIQUETERIE',        color: '#475569' },
   { id: 'garderie',     label: 'GARDERIE',           color: '#E8390E' },
   { id: 'gym',          label: 'MAXI-GYM',           color: '#E8850F' }
 ]
