@@ -9,6 +9,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { useCompta } from './useCompta'
 import { balance, grandLivreCompte } from './logic'
 import { getJournal, classeDe } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const TABS = ['Balance Générale', 'Grand Livre', 'Balance Auxiliaire']
 
@@ -45,30 +46,12 @@ export default function GrandLivre() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Scale className="text-orange-600" /> Grand Livre &amp; Balance
-          </h1>
-          <p className="text-sm text-gray-500">Consultez les balances périodiques de comptes et le grand livre analytique de vos transactions.</p>
-        </div>
-        <Button variant="outline" onClick={exporter}><FileDown size={15} /> Exporter (Excel)</Button>
-      </header>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>{t}</button>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-2 text-sm">
-          <label className="text-gray-500">Du</label>
-          <input type="date" value={du} onChange={(e) => setDu(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-1.5 dark:border-white/10 dark:bg-white/5" />
-          <label className="text-gray-500">Au</label>
-          <input type="date" value={au} onChange={(e) => setAu(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-1.5 dark:border-white/10 dark:bg-white/5" />
-        </div>
-      </div>
+      <BandeauCompta icone={Scale} titre="Grand Livre & Balance" sous="Consultez les balances périodiques de comptes et le grand livre analytique de vos transactions.">
+        <OngletsBande options={TABS.map((t) => ({ id: t, label: t }))} valeur={tab} onChange={setTab} />
+        <ChampBande label="Du"><input type="date" value={du} onChange={(e) => setDu(e.target.value)} className={CLASSE_CHAMP_BANDE} /></ChampBande>
+        <ChampBande label="Au"><input type="date" value={au} onChange={(e) => setAu(e.target.value)} className={CLASSE_CHAMP_BANDE} /></ChampBande>
+        <BoutonBande icone={FileDown} onClick={exporter}>Exporter (Excel)</BoutonBande>
+      </BandeauCompta>
 
       {tab === 'Balance Générale' && <BalanceGenerale bal={bal} />}
       {tab === 'Grand Livre' && <GrandLivreVue plan={plan} mvts={mvtsValides} bal={bal} bornes={bornes} />}

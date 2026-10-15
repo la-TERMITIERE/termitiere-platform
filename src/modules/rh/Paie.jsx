@@ -11,6 +11,8 @@ import { setItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { calculerBulletin, STATUTS_BULLETIN, PAIE_CONFIG_DEFAUT, COMPTA_PAIE, MOIS_LABELS, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function Paie() {
   const { data: employes } = useCollection(COL.employes)
@@ -60,20 +62,13 @@ export default function Paie() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Temps & Paie</div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Receipt className="text-sky-600" /> Paie &amp; Bulletins
-          </h1>
-          <p className="text-sm text-gray-500">Génération des bulletins mensuels : CNSS et ITS (barème Togo).</p>
-        </div>
-        <div className="flex items-end gap-2">
-          <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className="input-base !w-auto" />
-          <Button variant="outline" onClick={genererPaie}><Zap size={16} /> Générer (brouillon)</Button>
-          <Button style={{ background: '#0284c7' }} onClick={validerMois}><BadgeCheck size={16} /> Valider le mois</Button>
-        </div>
-      </header>
+      <PageHeader icon={Receipt} sousModule="Temps & Paie" titre="Paie & Bulletins" sousTitre="Génération des bulletins mensuels : CNSS et ITS (barème Togo)."
+        action={<>
+          <ChampBande label="Mois"><input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className={CLASSE_CHAMP_BANDE} /></ChampBande>
+          <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
+          <BoutonBande icone={Zap} plein={false} onClick={genererPaie}>Générer (brouillon)</BoutonBande>
+          <BoutonBande icone={BadgeCheck} onClick={validerMois}>Valider le mois</BoutonBande>
+        </>} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard title="Masse salariale (brut)" value={formatMoney(totaux.brut)} accent="#7c3aed" icon={Receipt} />
@@ -92,7 +87,6 @@ export default function Paie() {
           <p className="font-bold text-gray-800 dark:text-gray-100">Bulletins de {moisLabel(mois)}</p>
           <p className="text-xs text-gray-500">{bulletinsMois.length} bulletin(s) · {actifs.length} employé(s) actif(s)</p>
         </div>
-        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

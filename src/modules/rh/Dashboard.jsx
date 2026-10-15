@@ -8,6 +8,8 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { calculerBulletin, DROIT_CONGE_ANNUEL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const VUES = [
   { id: 'admin', label: 'Vue Admin RH', perimetre: "Toute l'Organisation" },
@@ -49,22 +51,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <LayoutDashboard className="text-sky-600" /> Tableau de Bord RH
-          </h1>
-          <p className="text-sm text-gray-500">Vue globale d'administration des ressources humaines, paie et conformité.</p>
-        </div>
-        <Link to="/rh/employes"><Button style={{ background: '#0284c7' }}><Users size={16} /> Nouvel Employé</Button></Link>
-      </header>
+      <PageHeader icon={LayoutDashboard} titre="Tableau de Bord RH" sousTitre="Vue globale d'administration des ressources humaines, paie et conformité."
+        action={<>
+          <OngletsBande options={VUES.map((v) => ({ id: v.id, label: v.label }))} valeur={vue} onChange={setVue} taille="sm" />
+          <Link to="/rh/employes" className="inline-flex items-center gap-1.5 rounded-2xl border border-white bg-white px-3.5 py-2 text-xs font-extrabold text-[color:var(--bv)] shadow-md transition-all hover:-translate-y-0.5"><Users size={15} /> Nouvel Employé</Link>
+        </>} />
 
-      <div className="flex flex-wrap gap-1.5">
-        {VUES.map((v) => (
-          <button key={v.id} onClick={() => setVue(v.id)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${vue === v.id ? 'bg-sky-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>{v.label}</button>
-        ))}
-      </div>
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Périmètre : {perimetre}</p>
 
       {vue === 'admin' && (

@@ -15,10 +15,9 @@ import Journal from './Journal'
 import Params from './Params'
 import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
-import Banque from './Banque'
 import { useGarderieStore } from './store/garderieStore'
 import { useAuth } from '../../hooks/useAuth'
-import { FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES } from '../../core/roles'
+import { FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES } from '../../core/roles'
 
 // Guard : redirige vers le dashboard si le rôle n'est pas autorisé
 function GarderieGuard({ roles, children }) {
@@ -66,9 +65,7 @@ export default function GarderieModule() {
         <GarderieGuard roles={[...ROLES_GESTION, 'secretaire', 'agent']}><RecettesDepenses secteurId="garderie" masquerRevenu /></GarderieGuard>
       } />
       <Route path="partenaires" element={<Partenaires module="garderie" />} />
-      <Route path="banque" element={
-        <GarderieGuard roles={BANQUE_ROLES}><Banque /></GarderieGuard>
-      } />
+      <Route path="banque" element={<Navigate to="/comptabilite/mouvements-bancaires" replace />} />
       <Route path="journal" element={
         <GarderieGuard roles={ROLES_ADMIN}><Journal /></GarderieGuard>
       } />

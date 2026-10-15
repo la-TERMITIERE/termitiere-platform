@@ -4,6 +4,7 @@ import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
 import { FileText, Plus, BookOpen } from 'lucide-react'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const PLANS = [
   { code: 'PCF_FR', nom: 'Plan Comptable Français (PCF)', desc: 'Plan comptable standard utilisé par les entreprises en France.', fourni: true, actif: false },
@@ -13,15 +14,9 @@ const PLANS = [
 export default function ModelesPlans() {
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <FileText className="text-orange-600" /> Modèles de Plans Comptables
-          </h1>
-          <p className="text-sm text-gray-500">Les plans fournis avec la plateforme sont partagés et ne se modifient pas. Créez le vôtre pour l'adapter, et importez sa structure via Excel/CSV.</p>
-        </div>
-        <Button><Plus size={16} /> Créer un plan comptable</Button>
-      </header>
+      <BandeauCompta icone={FileText} titre="Modèles de Plans Comptables" sous={"Les plans fournis avec la plateforme sont partagés et ne se modifient pas. Créez le vôtre pour l'adapter, et importez sa structure via Excel/CSV."}>
+        <BoutonBande icone={Plus} disabled title="Prochainement">Créer un plan comptable</BoutonBande>
+      </BandeauCompta>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {PLANS.map((p) => (

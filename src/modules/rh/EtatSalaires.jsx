@@ -8,6 +8,8 @@ import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, todayStr } from '../../utils/formatters'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function EtatSalaires() {
   const { data: bulletins } = useCollection(COL.bulletins)
@@ -67,19 +69,11 @@ export default function EtatSalaires() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Temps & Paie</div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <BarChart2 className="text-sky-600" /> État des salaires
-          </h1>
-          <p className="text-sm text-gray-500">Synthèse de la masse salariale par période et par département.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className="input-base !w-auto" />
-          <Button variant="outline" onClick={exporter} disabled={b.length === 0}><FileDown size={15} /> Exporter (Excel)</Button>
-        </div>
-      </header>
+      <PageHeader icon={BarChart2} sousModule="Temps & Paie" titre="État des salaires" sousTitre="Synthèse de la masse salariale par période et par département."
+        action={<>
+          <ChampBande label="Mois"><input type="month" value={mois} onChange={(e) => setMois(e.target.value)} className={CLASSE_CHAMP_BANDE} /></ChampBande>
+          <BoutonBande icone={FileDown} onClick={exporter} disabled={b.length === 0}>Exporter (Excel)</BoutonBande>
+        </>} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard title="Masse brute" value={formatMoney(totaux.brut)} accent="#7c3aed" />

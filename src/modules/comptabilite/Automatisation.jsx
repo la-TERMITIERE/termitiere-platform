@@ -5,17 +5,13 @@ import Badge from '../../shared/ui/Badge'
 import { Wrench } from 'lucide-react'
 import { MODELES_ACTIFS } from './moteur'
 import { getJournal } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 export default function Automatisation() {
   const actifs = MODELES_ACTIFS.filter((m) => m.statut === 'actif')
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-          <Wrench className="text-orange-600" /> Automatisation d'écriture
-        </h1>
-        <p className="text-sm text-gray-500">Ce qu'un événement métier produit au grand livre. Un modèle naît brouillon, s'essaie sur un cas inventé, puis s'active.</p>
-      </header>
+      <BandeauCompta icone={Wrench} titre="Automatisation d'écriture" sous={"Ce qu'un événement métier produit au grand livre. Un modèle naît brouillon, s'essaie sur un cas inventé, puis s'active."} />
 
       <div className="grid grid-cols-4 gap-3">
         <Stat label="Actifs" value={actifs.length} tone="success" />

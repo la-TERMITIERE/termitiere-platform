@@ -4,17 +4,13 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { Repeat, Info } from 'lucide-react'
 import { CATALOGUE_FAITS, MODELES_ACTIFS } from './moteur'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 export default function Faits() {
   const cible = new Set(MODELES_ACTIFS.map((m) => m.fait))
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-          <Repeat className="text-orange-600" /> Faits comptables
-        </h1>
-        <p className="text-sm text-gray-500">Ce qui peut donner naissance à une écriture : et sous quel nom vous le désignez.</p>
-      </header>
+      <BandeauCompta icone={Repeat} titre="Faits comptables" sous={"Ce qui peut donner naissance à une écriture : et sous quel nom vous le désignez."} />
 
       <Card>
         <div className="flex gap-3 text-sm text-gray-600 dark:text-gray-300">

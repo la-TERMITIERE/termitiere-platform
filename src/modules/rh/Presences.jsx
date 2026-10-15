@@ -10,6 +10,9 @@ import { setItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { todayStr } from '../../utils/formatters'
 import { TYPES_PRESENCE } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
+import { CalendarCheck as IconePresences } from 'lucide-react'
 
 export default function Presences() {
   const { data: employes } = useCollection('rh_employes')
@@ -34,11 +37,12 @@ export default function Presences() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-2">
-        <div><label className="mb-1 block text-xs font-semibold text-gray-600">Date</label><Input type="date" className="w-auto" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-      </div>
+      <PageHeader icon={IconePresences} sousModule="Temps & Paie" titre="Présences & Pointages" sousTitre="Pointage quotidien de chaque employé."
+        action={<>
+          <ChampBande label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={CLASSE_CHAMP_BANDE} /></ChampBande>
+          <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
+        </>} />
 
-      <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
       <Card className="p-0">
         {employes.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">Ajoutez d'abord des employés.</p>

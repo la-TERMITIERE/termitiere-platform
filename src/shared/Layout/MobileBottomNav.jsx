@@ -137,7 +137,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
 
   return (
     <nav
-      className="fixed inset-x-3 bottom-3 z-40 overflow-hidden rounded-[28px] border border-white/70 bg-white/30 ring-1 ring-inset ring-white/50 backdrop-blur-3xl backdrop-saturate-200 md:hidden dark:border-white/10 dark:bg-neutral-900/40"
+      className="fixed inset-x-3 bottom-3 z-40 overflow-hidden rounded-[28px] border border-white/70 bg-white/30 ring-1 ring-inset ring-white/50 backdrop-blur-3xl backdrop-saturate-200 lg:hidden dark:border-white/10 dark:bg-neutral-900/40"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)', boxShadow: `0 18px 40px -16px rgba(26,26,26,0.45), 0 10px 28px -14px ${accentColor}88, inset 0 1.5px 0 0 rgba(255,255,255,0.95), inset 0 -1px 0 0 rgba(0,0,0,0.06)` }}
     >
       {/* Reflet diagonal (sheen) — signature visuelle du verre : une bande claire

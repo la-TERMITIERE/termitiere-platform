@@ -11,6 +11,7 @@ import Badge from '../../shared/ui/Badge'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { compteDeResultat, grandesMasses, balance, syntheseTva } from './logic'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 export default function Dashboard() {
   const { plan, mvtsValides, ecritures, immobilisations, patrimoine, loading } = useCompta()
@@ -34,17 +35,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Scale className="text-orange-600" /> Comptabilité
-          </h1>
-          <p className="text-sm text-gray-500">Exercice {exercice} : partie double (SYSCOHADA)</p>
-        </div>
-        <Badge tone={bal.equilibree ? 'success' : 'danger'}>
+      <BandeauCompta icone={Scale} titre="Comptabilité" sous={`Exercice ${exercice} : partie double (SYSCOHADA)`}>
+        <span className={`inline-flex items-center gap-1.5 rounded-full border border-white px-3 py-1.5 text-xs font-extrabold text-white shadow-sm ${bal.equilibree ? 'bg-green-600/90' : 'bg-red-600/90'}`}>
           {bal.equilibree ? <><CheckCircle2 size={13} /> Balance équilibrée</> : <><AlertTriangle size={13} /> Balance déséquilibrée</>}
-        </Badge>
-      </header>
+        </span>
+      </BandeauCompta>
 
       {/* Résultat & grandes masses */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

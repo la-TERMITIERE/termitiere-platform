@@ -15,6 +15,7 @@ import PillTabs from '../../shared/ui/PillTabs'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
+import { useReportAutomatique, reportManuelInterdit } from './reportAuto'
 import { isReadOnlyRole, isFullAccessRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -79,6 +80,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // Seuils d'alerte configurables en Paramètres — cf. Dashboard.jsx.
   const seuils = useMemo(() => seuilsBudgetDe(depenseParams), [depenseParams])
   const { user, role: roleReel } = useAuth()
+  useReportAutomatique(!secteurId) // report du mois précédent : calculé et enregistré tout seul (vue E-DÉPENSES uniquement)
   // Écran partagé : embarqué dans d'autres modules via `secteurId` (leur onglet
   // « Dépense »), où la restriction E-DÉPENSES ne s'applique pas. Seule l'instance
   // standalone d'E-DÉPENSES (« Revenus & Budget », sans secteurId) ramène
@@ -278,6 +280,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     const estAllocation = revision.montantActuel === 0
     if (!estCaisseCommune && !estAllocation && !revMotif.trim()) return toast.error('Motif de révision requis')
     const motif = revMotif.trim() || (estCaisseCommune ? 'Apport à la caisse commune' : 'Allocation initiale')
+    if (estCaisseCommune && reportManuelInterdit(revDate.slice(0, 7), motif)) return toast.error('Le report du mois précédent est calculé automatiquement : inutile de le saisir')
     // Jour réel de l'apport (modifiable, cf. revDate) — heure fixée à l'instant présent
     // pour départager plusieurs apports le même jour dans l'historique (tri chronologique).
     const dateEntry = new Date(`${revDate}T00:00:00`)

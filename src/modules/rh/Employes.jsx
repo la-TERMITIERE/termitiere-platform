@@ -13,6 +13,9 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { DEPARTEMENTS } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
+import { UserCircle as IconeEmployes } from 'lucide-react'
 
 const empty = () => ({ nom: '', poste: '', departement: DEPARTEMENTS[0], dateEmbauche: todayStr(), salaire: 0, contact: '' })
 
@@ -31,7 +34,8 @@ export default function Employes() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end"><Button style={{ background: '#ea580c' }} onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Ajouter un employé</Button></div>
+      <PageHeader icon={IconeEmployes} sousModule="Collaborateurs & Contrats" titre="Employés & Annuaire" sousTitre="Fiches des employés, postes, départements et contacts."
+        action={<BoutonBande icone={Plus} onClick={() => setModal({ data: empty(), id: null })}>Ajouter un employé</BoutonBande>} />
       <Card className="p-0">
         <Table searchBy={['nom', 'prenom', 'matricule']}
           columns={[

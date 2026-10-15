@@ -55,7 +55,7 @@ export default function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <OfflineBanner />
-        <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-6" style={{ '--tv-accent': accent }}>
+        <main className="flex-1 overflow-y-auto p-4 pb-24 md:px-6 md:pt-6 lg:pb-6" style={{ '--tv-accent': accent }}>
           <div className="relative -mt-2 md:-mt-3">
             <Outlet />
           </div>

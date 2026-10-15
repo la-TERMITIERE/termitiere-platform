@@ -12,6 +12,8 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_CONGE, STATUTS_CONGE, DROIT_CONGE_ANNUEL, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const vide = () => ({ employeId: '', type: 'annuel', dateDebut: todayStr(), dateFin: todayStr(), motif: '' })
 const nbJours = (d1, d2) => {
@@ -53,16 +55,11 @@ export default function Conges() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Temps & Paie</div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <CalendarDays className="text-sky-600" /> Congés & Absences
-          </h1>
-          <p className="text-sm text-gray-500">Demandes de congé, validation et soldes.</p>
-        </div>
-        <Button style={{ background: '#0284c7' }} onClick={() => setModal(vide())}><Plus size={16} /> Poser une demande</Button>
-      </header>
+      <PageHeader icon={CalendarDays} sousModule="Temps & Paie" titre="Congés & Absences" sousTitre="Demandes de congé, validation et soldes."
+        action={<>
+          <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
+          <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Poser une demande</BoutonBande>
+        </>} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard title="En attente" value={enAttente.length} accent="#f59e0b" icon={CalendarDays} />
@@ -72,7 +69,6 @@ export default function Conges() {
 
       <Card className="!p-0 overflow-hidden">
         <div className="border-b border-gray-100 px-4 py-3 dark:border-white/10"><p className="font-bold text-gray-800 dark:text-gray-100">Demandes de congé</p></div>
-        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

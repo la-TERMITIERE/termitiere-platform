@@ -8,6 +8,7 @@ import Badge from '../../shared/ui/Badge'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { balance, compteDeResultat, soldePrefixe } from './logic'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const TABS = ['Bilan', 'Résultat', 'Flux Trésorerie', 'Ratios & Analyses']
 
@@ -40,23 +41,12 @@ export default function Etats() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <BarChart2 className="text-orange-600" /> États Financiers
-          </h1>
-          <p className="text-sm text-gray-500">Consultez les états financiers réglementaires, les flux de trésorerie et les indicateurs analytiques de l'organisation.</p>
-        </div>
-        <input type="number" value={exercice} onChange={(e) => setExercice(Number(e.target.value))}
-          className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5" />
-      </header>
-
-      <div className="flex flex-wrap gap-1.5">
-        {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>{t}</button>
-        ))}
-      </div>
+      <BandeauCompta icone={BarChart2} titre="États Financiers" sous="Consultez les états financiers réglementaires, les flux de trésorerie et les indicateurs analytiques de l'organisation.">
+        <OngletsBande options={TABS.map((t) => ({ id: t, label: t }))} valeur={tab} onChange={setTab} />
+        <ChampBande label="Exercice">
+          <input type="number" value={exercice} onChange={(e) => setExercice(Number(e.target.value))} className={`${CLASSE_CHAMP_BANDE} w-24`} />
+        </ChampBande>
+      </BandeauCompta>
 
       {tab === 'Bilan' && <Bilan bilan={bilan} />}
       {tab === 'Résultat' && <Resultat res={res} />}

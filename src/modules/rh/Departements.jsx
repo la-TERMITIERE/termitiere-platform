@@ -8,6 +8,8 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { DEPARTEMENTS, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function Departements() {
   const { data: departements } = useCollection(COL.departements)
@@ -39,16 +41,8 @@ export default function Departements() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Structure RH</div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Factory className="text-sky-600" /> Départements
-          </h1>
-          <p className="text-sm text-gray-500">Organisez votre structure : départements, responsables et effectifs.</p>
-        </div>
-        <Button style={{ background: '#0284c7' }} onClick={() => setModal({ nom: '', responsable: '', description: '' })}><Plus size={16} /> Nouveau département</Button>
-      </header>
+      <PageHeader icon={Factory} sousModule="Structure RH" titre="Départements" sousTitre="Organisez votre structure : départements, responsables et effectifs."
+        action={<BoutonBande icone={Plus} onClick={() => setModal({ nom: '', responsable: '', description: '' })}>Nouveau département</BoutonBande>} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {liste.map((d) => (
