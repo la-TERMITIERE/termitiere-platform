@@ -8,6 +8,8 @@ import Modal from '../../shared/ui/Modal'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { useCompta } from './useCompta'
 import { CLASSES, COL, classeDe, TYPES_COMPTE } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
+import ChampRecherche from '../../shared/ui/ChampRecherche'
 
 export default function PlanComptable() {
   const { plan, comptesPerso } = useCompta()
@@ -47,19 +49,18 @@ export default function PlanComptable() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <BookMarked className="text-orange-600" /> Plan Comptable
-          </h1>
-          <p className="text-sm text-gray-500">Gérez le plan de comptes de votre entreprise. <Badge tone="primary" className="ml-1">Plan SYSCOHADA Révisé</Badge></p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled title="Prochainement"><Upload size={15} /> Importer</Button>
-          <Button variant="outline" disabled title="Prochainement"><Eraser size={15} /> Vider le plan</Button>
-          <Button onClick={() => setModal({ num: '', label: '', type: 'ASSET' })}><Plus size={16} /> Créer un compte</Button>
-        </div>
-      </header>
+      <BandeauCompta icone={BookMarked} titre="Plan Comptable" sous="Gérez le plan de comptes de votre entreprise : Plan SYSCOHADA Révisé">
+        <ChampRecherche variant="glass" value={q} onChange={setQ} placeholder="Numéro ou libellé…" />
+        <ChampBande label="Classe">
+          <select value={classeSel} onChange={(e) => setClasseSel(e.target.value)} className={CLASSE_CHAMP_BANDE}>
+            <option value="">Toutes les classes</option>
+            {CLASSES.map((c) => <option key={c.num} value={c.num}>Classe {c.num} - {c.label}</option>)}
+          </select>
+        </ChampBande>
+        <BoutonBande icone={Upload} plein={false} disabled title="Prochainement">Importer</BoutonBande>
+        <BoutonBande icone={Eraser} plein={false} disabled title="Prochainement">Vider le plan</BoutonBande>
+        <BoutonBande icone={Plus} onClick={() => setModal({ num: '', label: '', type: 'ASSET' })}>Créer un compte</BoutonBande>
+      </BandeauCompta>
 
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         <Tuile label="Total comptes" value={stats.total} />
@@ -70,20 +71,6 @@ export default function PlanComptable() {
         <Tuile label="Charges" value={stats.CHARGE} />
       </div>
 
-      <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un compte (numéro ou libellé)…"
-              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm dark:border-white/10 dark:bg-white/5" />
-          </div>
-          <select value={classeSel} onChange={(e) => setClasseSel(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5">
-            <option value="">Toutes les classes</option>
-            {CLASSES.map((c) => <option key={c.num} value={c.num}>Classe {c.num} - {c.label}</option>)}
-          </select>
-        </div>
-      </Card>
 
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">

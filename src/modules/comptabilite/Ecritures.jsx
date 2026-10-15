@@ -13,6 +13,7 @@ import { useCompta } from './useCompta'
 import { useAuth } from '../../hooks/useAuth'
 import { JOURNAUX, getJournal, journalDefaut, STATUTS_ECRITURE, COL } from './data'
 import { validerEcriture, totalDebit, totalCredit, ecritureEquilibree, prochainNumeroPiece } from './logic'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const ligneVide = () => ({ compte: '', libelle: '', debit: '', credit: '', axe: '' })
 
@@ -102,30 +103,16 @@ export default function Ecritures() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <ScrollText className="text-orange-600" /> Écritures & journaux
-          </h1>
-          <p className="text-sm text-gray-500">{ecritures.length} écritures : livre-journal en partie double</p>
-        </div>
-        <Button onClick={ouvrirNouvelle}><Plus size={16} /> Nouvelle écriture</Button>
-      </header>
+      <BandeauCompta icone={ScrollText} titre="Écritures & journaux" sous={`${ecritures.length} écritures : livre-journal en partie double`}>
+        <ChampBande label="Journal">
+          <select value={filtreJournal} onChange={(e) => setFiltreJournal(e.target.value)} className={CLASSE_CHAMP_BANDE}>
+            <option value="">Tous les journaux</option>
+            {JOURNAUX.map((j) => <option key={j.code} value={j.code}>{j.code} · {j.label}</option>)}
+          </select>
+        </ChampBande>
+        <BoutonBande icone={Plus} onClick={ouvrirNouvelle}>Nouvelle écriture</BoutonBande>
+      </BandeauCompta>
 
-      <Card>
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => setFiltreJournal('')}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${!filtreJournal ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>
-            Tous
-          </button>
-          {JOURNAUX.map((j) => (
-            <button key={j.code} onClick={() => setFiltreJournal(j.code)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${filtreJournal === j.code ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>
-              {j.code} · {j.label}
-            </button>
-          ))}
-        </div>
-      </Card>
 
       <div className="space-y-3">
         {liste.length === 0 && <Card><p className="py-8 text-center text-gray-400">Aucune écriture. Cliquez sur « Nouvelle écriture ».</p></Card>}

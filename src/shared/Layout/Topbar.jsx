@@ -76,7 +76,7 @@ export default function Topbar({ onMenuToggle, user }) {
       {/* Bouton menu mobile */}
       <button onClick={onMenuToggle}
         style={{ color, padding: 6, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
-        className="md:hidden" aria-label="Menu">
+        className="lg:hidden" aria-label="Menu">
         <Menu size={22} />
       </button>
 

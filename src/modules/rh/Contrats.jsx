@@ -11,6 +11,8 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_CONTRAT, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const vide = () => ({ employeId: '', type: 'cdi', dateDebut: todayStr(), dateFin: '', salaire: 0, poste: '' })
 
@@ -47,16 +49,11 @@ export default function Contrats() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Collaborateurs & Contrats</div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <FileText className="text-sky-600" /> Contrats de travail
-          </h1>
-          <p className="text-sm text-gray-500">CDI, CDD et autres contrats, avec suivi des échéances.</p>
-        </div>
-        <Button style={{ background: '#0284c7' }} onClick={() => setModal(vide())}><Plus size={16} /> Nouveau contrat</Button>
-      </header>
+      <PageHeader icon={FileText} sousModule="Collaborateurs & Contrats" titre="Contrats de travail" sousTitre="CDI, CDD et autres contrats, avec suivi des échéances."
+        action={<>
+          <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
+          <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Nouveau contrat</BoutonBande>
+        </>} />
 
       {alertes > 0 && (
         <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
@@ -65,7 +62,6 @@ export default function Contrats() {
       )}
 
       <Card className="!p-0 overflow-hidden">
-        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

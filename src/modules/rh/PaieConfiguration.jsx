@@ -8,6 +8,7 @@ import { setItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
 import { PAIE_CONFIG_DEFAUT, COMPTA_PAIE, calculerBulletin, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
 
 export default function PaieConfiguration() {
   const { data: config } = useCollection(COL.config)
@@ -40,13 +41,7 @@ export default function PaieConfiguration() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Temps & Paie</div>
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-          <Settings className="text-sky-600" /> Configuration de la paie
-        </h1>
-        <p className="text-sm text-gray-500">Taux de cotisation et barème d'imposition appliqués au calcul des bulletins.</p>
-      </header>
+      <PageHeader icon={Settings} sousModule="Temps & Paie" titre="Configuration de la paie" sousTitre="Taux de cotisation et barème d'imposition appliqués au calcul des bulletins." />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Cotisations CNSS">

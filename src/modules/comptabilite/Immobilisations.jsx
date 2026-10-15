@@ -11,6 +11,7 @@ import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { CATEGORIES_IMMO, getCategorieImmo, COL } from './data'
 import { planAmortissement } from './logic'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const vide = () => ({ libelle: '', categorie: 'materiel', valeur: '', dateAcquisition: todayStr(), dureeAmort: '', reference: '', affectation: '' })
 
@@ -55,15 +56,9 @@ export default function Immobilisations() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Boxes className="text-orange-600" /> Immobilisations &amp; Actifs
-          </h1>
-          <p className="text-sm text-gray-500">Gérez le registre des actifs physiques et incorporels, simulez les plans d'amortissement et passez automatiquement les écritures de dotation et de cession.</p>
-        </div>
-        <Button onClick={() => setModal(vide())}><Plus size={16} /> Créer un Actif</Button>
-      </header>
+      <BandeauCompta icone={Boxes} titre="Immobilisations & Actifs" sous={"Gérez le registre des actifs physiques et incorporels, simulez les plans d'amortissement et passez automatiquement les écritures de dotation et de cession."}>
+        <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Créer un Actif</BoutonBande>
+      </BandeauCompta>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard title="VALEUR BRUTE GLOBALE" value={formatMoney(totaux.brut)} sub="Valeur d'origine (HT) des actifs en service" accent="#0d9488" icon={Boxes} />

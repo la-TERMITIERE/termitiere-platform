@@ -8,6 +8,7 @@ import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { syntheseTva, soldePrefixe } from './logic'
 import { MOIS_LABELS, TAUX_TVA, COMPTE_TVA_COLLECTEE, COMPTE_TVA_DEDUCTIBLE } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const TABS = ['Rapport Direct', 'Déclarations TVA', 'Taux de TVA']
 
@@ -32,23 +33,12 @@ export default function Tva() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Receipt className="text-orange-600" /> Fiscalité &amp; Déclarations de TVA
-          </h1>
-          <p className="text-sm text-gray-500">Gérez vos taux de TVA, suivez en temps réel la TVA collectée et déductible, et gérez vos déclarations fiscales périodiques.</p>
-        </div>
-        <input type="number" value={exercice} onChange={(e) => setExercice(Number(e.target.value))}
-          className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5" />
-      </header>
-
-      <div className="flex flex-wrap gap-1.5">
-        {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>{t}</button>
-        ))}
-      </div>
+      <BandeauCompta icone={Receipt} titre="Fiscalité & Déclarations de TVA" sous="Gérez vos taux de TVA, suivez en temps réel la TVA collectée et déductible, et gérez vos déclarations fiscales périodiques.">
+        <OngletsBande options={TABS.map((t) => ({ id: t, label: t }))} valeur={tab} onChange={setTab} />
+        <ChampBande label="Exercice">
+          <input type="number" value={exercice} onChange={(e) => setExercice(Number(e.target.value))} className={`${CLASSE_CHAMP_BANDE} w-24`} />
+        </ChampBande>
+      </BandeauCompta>
 
       {tab === 'Rapport Direct' && (
         <>

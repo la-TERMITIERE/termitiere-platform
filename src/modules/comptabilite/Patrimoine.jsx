@@ -13,6 +13,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { NATURES_BIEN, getNatureBien, STATUTS_BIEN, COL } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const vide = () => ({
   designation: '', nature: 'terrain', statut: 'proprietaire',
@@ -65,15 +66,15 @@ export default function Patrimoine() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Building2 className="text-orange-600" /> Immobilier / Patrimoine
-          </h1>
-          <p className="text-sm text-gray-500">Biens immobiliers de l'entreprise : terrains, bâtiments, locaux</p>
-        </div>
-        <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouveau bien</Button>
-      </header>
+      <BandeauCompta icone={Building2} titre="Immobilier / Patrimoine" sous="Biens immobiliers de l'entreprise : terrains, bâtiments, locaux">
+        <ChampBande label="Statut">
+          <select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)} className={CLASSE_CHAMP_BANDE}>
+            <option value="">Tous les statuts</option>
+            {Object.entries(STATUTS_BIEN).map(([k, st]) => <option key={k} value={k}>{st.label}</option>)}
+          </select>
+        </ChampBande>
+        <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Nouveau bien</BoutonBande>
+      </BandeauCompta>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard title="Valeur du patrimoine" value={formatMoney(totaux.valeur)} accent="#0d9488" icon={Building2} />
@@ -82,16 +83,6 @@ export default function Patrimoine() {
         <StatCard title="Loyers mensuels perçus" value={formatMoney(totaux.loyer)} accent="#16a34a" icon={FileText} />
       </div>
 
-      <Card>
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => setFiltreStatut('')}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${!filtreStatut ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>Tous</button>
-          {Object.entries(STATUTS_BIEN).map(([k, s]) => (
-            <button key={k} onClick={() => setFiltreStatut(k)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${filtreStatut === k ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>{s.label}</button>
-          ))}
-        </div>
-      </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {liste.length === 0 && <Card className="sm:col-span-2 lg:col-span-3"><p className="py-8 text-center text-gray-400">Aucun bien enregistré. Cliquez sur « Nouveau bien ».</p></Card>}

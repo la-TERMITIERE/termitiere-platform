@@ -156,6 +156,35 @@ function CantineNavMenu({ item, isActive, currentSearch, onNavigate }) {
   )
 }
 
+// Menu déroulant générique : un élément du menu qui porte `sousMenu: [{ label, to, icon }]` s'ouvre pour
+// montrer ses entrées (ex. Comptabilité : Suivi journalier, avec Caisse et Recettes).
+function SousMenuNav({ item, pathname, onNavigate }) {
+  const isActive = pathname.startsWith(item.to)
+  const [ouvert, setOuvert] = useState(isActive)
+  return (
+    <div>
+      <button type="button" onClick={() => setOuvert((o) => !o)} aria-expanded={ouvert}
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+          isActive ? 'bg-white/20 text-white shadow-[0_16px_32px_-12px_rgba(0,0,0,0.45),0_4px_10px_-4px_rgba(0,0,0,0.3)]' : 'text-white/80 hover:bg-white/10 hover:text-white'
+        }`}>
+        <item.icon size={18} /> {item.label}
+        <span className="ml-auto">{ouvert ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
+      </button>
+      {ouvert && (
+        <div className="ml-3 mt-1 space-y-0.5 border-l border-white/15 pl-2">
+          {item.sousMenu.map((sm) => (
+            <NavLink key={sm.to} to={sm.to} onClick={onNavigate}
+              className={({ isActive: actif }) => `flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold transition-all ${actif ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>
+              {sm.icon && <sm.icon size={15} />}
+              <span className="flex-1 truncate">{sm.label}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
   const { user, role, hasModule, isAdmin, logout } = useAuth()
@@ -265,12 +294,12 @@ export default function Sidebar({ open, onClose }) {
     <>
       {/* Overlay mobile */}
       {open && (
-        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onClose} aria-hidden="true" />
+        <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onClose} aria-hidden="true" />
       )}
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col text-white transition-transform duration-200
-          md:static md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+          lg:static lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ background: activeModule?.sidebarGradient || `linear-gradient(180deg, ${shade(accentColor, -18)}, ${accentColor})` }}
       >
         {/* En-tête marque */}
@@ -313,7 +342,7 @@ export default function Sidebar({ open, onClose }) {
               </p>
             </div>
 
-            <button onClick={onClose} className="md:hidden" aria-label="Fermer" style={{ flexShrink: 0 }}>
+            <button onClick={onClose} className="lg:hidden" aria-label="Fermer" style={{ flexShrink: 0 }}>
               <X size={20} />
             </button>
           </div>
@@ -380,6 +409,8 @@ export default function Sidebar({ open, onClose }) {
                   <p key={`h-${item.heading}`} className="px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-wider text-white/45">
                     {item.heading}
                   </p>
+                ) : item.sousMenu ? (
+                  <SousMenuNav key={item.to} item={item} pathname={location.pathname} onNavigate={onClose} />
                 ) : item.to === '/projet/projets' ? (
                   <ProjetsNavMenu key={item.to} item={item} secteursMenu={secteursMenu}
                     badgeCount={item.badgeKey && badges[item.badgeKey] > 0 ? badges[item.badgeKey] : 0}

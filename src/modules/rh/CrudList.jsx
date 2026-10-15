@@ -12,6 +12,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { PageHeader, Champ } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function CrudList({
   collection, icon, sousModule, titre, sousTitre, boutonLabel = 'Ajouter',
@@ -50,13 +51,15 @@ export default function CrudList({
   return (
     <div className="space-y-5">
       <PageHeader icon={icon} sousModule={sousModule} titre={titre} sousTitre={sousTitre}
-        action={<Button style={{ background: '#0284c7' }} onClick={() => setModal(vide())}><Plus size={16} /> {boutonLabel}</Button>} />
+        action={<>
+          <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher par nom…" />
+          <BoutonBande icone={Plus} onClick={() => setModal(vide())}>{boutonLabel}</BoutonBande>
+        </>} />
 
       {stats && stats(data)}
       {extraHeader}
 
       <Card className="!p-0 overflow-hidden">
-        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher par nom…" /></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -6,6 +6,7 @@ import { Gauge, RefreshCw } from 'lucide-react'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { CATALOGUE_FAITS } from './moteur'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 export default function Supervision() {
   const { data: depenses } = useCollection('depense_depenses')
@@ -19,17 +20,7 @@ export default function Supervision() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Gauge className="text-orange-600" /> Supervision du moteur
-          </h1>
-          <p className="text-sm text-gray-500">Ce que le moteur a reçu, ce qu'il a produit, et ce qui l'a empêché.</p>
-        </div>
-        <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5">
-          <RefreshCw size={14} /> Actualiser
-        </button>
-      </header>
+      <BandeauCompta icone={Gauge} titre="Supervision du moteur" sous={"Ce que le moteur a reçu, ce qu'il a produit, et ce qui l'a empêché."} />
 
       <Card title="Incidents ouverts">
         <p className="mb-2 text-xs text-gray-500">Ce qui a empêché une écriture d'aboutir, et qui attend une décision.</p>

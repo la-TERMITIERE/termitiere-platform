@@ -10,6 +10,8 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
 import { DEPARTEMENTS, COL } from './store/rhStore'
+import { PageHeader } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const CLASSIFICATIONS = ['Ouvrier', 'Employé', 'Agent de maîtrise', 'Cadre', 'Direction']
 const vide = () => ({ intitule: '', departement: DEPARTEMENTS[0], classification: 'Employé', salaireBase: 0, missions: '' })
@@ -33,16 +35,8 @@ export default function Postes() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-sky-600">Structure RH</div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <ClipboardList className="text-sky-600" /> Postes de travail
-          </h1>
-          <p className="text-sm text-gray-500">Fiches de postes, classification salariale et effectifs par poste.</p>
-        </div>
-        <Button style={{ background: '#0284c7' }} onClick={() => setModal(vide())}><Plus size={16} /> Nouveau poste</Button>
-      </header>
+      <PageHeader icon={ClipboardList} sousModule="Structure RH" titre="Postes de travail" sousTitre="Fiches de postes, classification salariale et effectifs par poste."
+        action={<BoutonBande icone={Plus} onClick={() => setModal(vide())}>Nouveau poste</BoutonBande>} />
 
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">

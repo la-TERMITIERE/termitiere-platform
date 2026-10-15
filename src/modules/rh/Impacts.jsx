@@ -10,6 +10,7 @@ import { toast } from '../../core/notifications'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { COL } from './store/rhStore'
 import { PageHeader, Champ } from './rhui'
+import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function Impacts() {
   const { data: recos } = useCollection(COL.reconnaissances)
@@ -27,7 +28,7 @@ export default function Impacts() {
     <div className="space-y-5">
       <PageHeader icon={Lightbulb} sousModule="Vie d'Équipe" titre="Impact Collègue"
         sousTitre="Valorisez les réussites et le travail d'équipe au quotidien."
-        action={<Button style={{ background: '#0284c7' }} onClick={() => setModal({ deId: '', aId: '', message: '' })}><Plus size={16} /> Publier une reconnaissance</Button>} />
+        action={<BoutonBande icone={Plus} onClick={() => setModal({ deId: '', aId: '', message: '' })}>Publier une reconnaissance</BoutonBande>} />
 
       {recos.length === 0
         ? <Card><p className="py-8 text-center text-sm text-gray-400">Aucune reconnaissance publiée. Envoyez un feedback positif à un collègue.</p></Card>

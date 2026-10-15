@@ -187,8 +187,8 @@ export default function PortalHome() {
                   }
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100">{m.nom}</h3>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h3 className="min-w-0 break-words text-base font-extrabold text-gray-900 sm:text-lg dark:text-gray-100">{m.nom}</h3>
                     {m.statut === 'en_developpement' ? (
                       <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
                         En développement

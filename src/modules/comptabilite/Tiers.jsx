@@ -11,6 +11,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { TYPES_TIERS, COL } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const vide = (type) => ({ type, nom: '', compte: TYPES_TIERS[type].compte, telephone: '', email: '', ville: '', note: '' })
 
@@ -37,24 +38,11 @@ export default function Tiers() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <Users className="text-orange-600" /> Comptabilité Tiers
-          </h1>
-          <p className="text-sm text-gray-500">Gérez les comptes clients et fournisseurs, suivez les créances et dettes, effectuez les lettrages et planifiez vos paiements.</p>
-        </div>
-        <Button onClick={() => setModal(vide(tab))}><Plus size={16} /> {estClient ? 'Nouveau Client' : 'Nouveau Fournisseur'}</Button>
-      </header>
-
-      <div className="flex gap-1.5">
-        {['client', 'fournisseur'].map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'}`}>
-            {t === 'client' ? 'Clients' : 'Fournisseurs'}
-          </button>
-        ))}
-      </div>
+      <BandeauCompta icone={Users} titre="Comptabilité Tiers" sous="Gérez les comptes clients et fournisseurs, suivez les créances et dettes, effectuez les lettrages et planifiez vos paiements.">
+        <OngletsBande options={[{ id: 'client', label: 'Clients' }, { id: 'fournisseur', label: 'Fournisseurs' }]} valeur={tab} onChange={setTab} />
+        <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un tiers par nom…" />
+        <BoutonBande icone={Plus} onClick={() => setModal(vide(tab))}>{estClient ? 'Nouveau Client' : 'Nouveau Fournisseur'}</BoutonBande>
+      </BandeauCompta>
 
       <div className="grid grid-cols-2 gap-3">
         <StatCard title={estClient ? 'TOTAL CRÉANCES CLIENTS' : 'TOTAL DETTES FOURNISSEURS'} value={formatMoney(totalCreances)} accent={estClient ? '#0ea5e9' : '#dc2626'} icon={Users} />
@@ -66,7 +54,6 @@ export default function Tiers() {
           <p className="font-bold text-gray-800 dark:text-gray-100">{estClient ? 'Registre des Créances Clients' : 'Registre des Dettes Fournisseurs'}</p>
           <p className="text-xs text-gray-500">{estClient ? 'Suivi des factures de ventes et relances clients.' : 'Suivi des factures d\'achats et échéances de paiement.'}</p>
         </div>
-        <div className="border-b border-gray-100 p-2 dark:border-white/10"><ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un tiers par nom…" /></div>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-white/5">

@@ -10,6 +10,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { COL } from './data'
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const vide = () => ({ code: '', libelle: '', type: 'cout' })
 
@@ -54,15 +55,9 @@ export default function Analytique() {
   const centresCout = (centres || [])
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-            <PieChart className="text-orange-600" /> Comptabilité Analytique
-          </h1>
-          <p className="text-sm text-gray-500">Configurez vos axes analytiques et suivez la répartition réelle de vos coûts et de vos profits par projet ou département.</p>
-        </div>
-        <Button onClick={() => setModal(vide())}><Plus size={16} /> Créer un Centre</Button>
-      </header>
+      <BandeauCompta icone={PieChart} titre="Comptabilité Analytique" sous={"Configurez vos axes analytiques et suivez la répartition réelle de vos coûts et de vos profits par projet ou département."}>
+        <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Créer un Centre</BoutonBande>
+      </BandeauCompta>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard title="REVENUS ANALYTIQUES" value={formatMoney(totaux.produits)} accent="#16a34a" icon={PieChart} />

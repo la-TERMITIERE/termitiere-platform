@@ -2,7 +2,7 @@
 // S'affiche dans le shell du portail (sidebar + topbar + retour à l'accueil),
 // sans second écran de connexion : l'authentification est celle du portail.
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import Dashboard from './Dashboard'
 import Saisie from './Saisie'
@@ -17,10 +17,9 @@ import Params from './Params'
 import AutoCarryForward from './AutoCarryForward'
 import RecettesDepenses from '../depense/RecettesDepenses'
 import Partenaires from '../../shared/partenaires/Partenaires'
-import Banque from './Banque'
 import { useAgroStore } from './store/agroStore'
 import { useAuth } from '../../hooks/useAuth'
-import { canViewPilotage, isFullAccessRole, peutVoirBanque, peutVoirVoletsAdmin } from '../../core/roles'
+import { canViewPilotage, isFullAccessRole, peutVoirVoletsAdmin } from '../../core/roles'
 
 // Garde d'accès : Pilotage & Analyses réservé à la hiérarchie (pas les agents).
 function AccesRefuse() {
@@ -65,7 +64,7 @@ export default function AgroModule() {
       <Route path="demandes" element={<Demandes />} />
       <Route path="besoins" element={<SectorBesoins secteurId="agro" />} />
       <Route path="partenaires" element={<Partenaires module="agro" />} />
-      <Route path="banque" element={peutVoirBanque(role) ? <Banque /> : <AccesRefuseAdmin />} />
+      <Route path="banque" element={<Navigate to="/comptabilite/mouvements-bancaires" replace />} />
       <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
       <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
     </Routes>

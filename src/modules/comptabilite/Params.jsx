@@ -1,18 +1,72 @@
 // COMPTABILITÉ — paramètres du module.
-import { Settings, Info } from 'lucide-react'
+import { useState } from 'react'
+import { Settings, Info, Plus, Trash2, Landmark } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
-import { PLAN_COMPTABLE_DEFAUT, JOURNAUX, TAUX_TVA, CATEGORIES_IMMO } from './data'
+import { PLAN_COMPTABLE_DEFAUT, JOURNAUX, TAUX_TVA, CATEGORIES_IMMO, COL } from './data'
+import { useCollection } from '../../hooks/useFirestore'
+import { addItem, removeItem } from '../../core/db'
+import { toast } from '../../core/notifications'
+
+const BANQUES_COURANTES = ['SUNU Banque', 'NSIA Banque']
+
+// Banques de l'entreprise : proposées à chaque dépôt ou retrait (Comptabilité, Mouvements bancaires).
+function Banques() {
+  const { data: banques } = useCollection(COL.banques)
+  const [nom, setNom] = useState('')
+  const norm = (v) => String(v || '').trim().toLowerCase()
+  const existe = (n) => banques.some((b) => norm(b.nom) === norm(n))
+
+  async function ajouter(n) {
+    const v = String(n || '').trim()
+    if (!v) return
+    if (existe(v)) return toast.error('Cette banque existe déjà')
+    await addItem(COL.banques, { nom: v })
+    toast.success(`${v} ajoutée ✓`)
+    setNom('')
+  }
+  async function supprimer(b) {
+    if (!confirm(`Supprimer la banque « ${b.nom} » ? Les mouvements déjà enregistrés gardent son nom.`)) return
+    await removeItem(COL.banques, b.id)
+  }
+  const proposees = BANQUES_COURANTES.filter((n) => !existe(n))
+
+  return (
+    <Card title="Banques">
+      <p className="mb-3 text-xs text-gray-500">Les banques de l'entreprise. Chaque dépôt ou retrait enregistré dans « Mouvements bancaires » précise dans laquelle il a été fait.</p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {banques.length === 0 && <p className="text-sm text-gray-400">Aucune banque enregistrée.</p>}
+        {[...banques].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')).map((b) => (
+          <span key={b.id} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
+            <Landmark size={14} className="text-orange-600" /> {b.nom}
+            <button type="button" onClick={() => supprimer(b)} title="Supprimer" className="rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
+          </span>
+        ))}
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); ajouter(nom) }} className="flex flex-wrap items-center gap-2">
+        <input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Nom de la banque, ex : SUNU Banque" aria-label="Nom de la banque"
+          className="min-w-[220px] flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
+        <button type="submit" disabled={!nom.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3.5 py-2 text-sm font-bold text-white disabled:opacity-50"><Plus size={15} /> Ajouter la banque</button>
+      </form>
+      {proposees.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          Ajout rapide :
+          {proposees.map((n) => (
+            <button key={n} type="button" onClick={() => ajouter(n)} className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 font-bold text-orange-700 hover:bg-orange-100">+ {n}</button>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 export default function Params() {
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold text-gray-900 dark:text-gray-50">
-          <Settings className="text-orange-600" /> Paramètres comptables
-        </h1>
-        <p className="text-sm text-gray-500">Référentiel et conventions du module</p>
-      </header>
+      <BandeauCompta icone={Settings} titre="Paramètres comptables" sous={"Référentiel et conventions du module"} />
+
+      <Banques />
 
       <Card title="Référentiel">
         <div className="grid gap-3 sm:grid-cols-2">
