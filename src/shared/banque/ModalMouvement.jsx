@@ -104,6 +104,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
     if (saving) return
     if (!d.secteurId) return toast.error('Choisissez le secteur concerné')
     if (secteur?.sites?.length && !d.site) return toast.error(`Choisissez le site de ${secteur.nom}`)
+    if (!d.banqueId) return toast.error(banques.length ? 'Précisez la banque du mouvement' : 'Aucune banque enregistrée : ajoutez-en dans Comptabilité, Paramètres')
     if (!d.date) return toast.error('Date requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     setSaving(true)
@@ -215,7 +216,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
           )}
 
           <div>
-            <Etiquette icone={Landmark} couleur={COULEUR_BANQUE}>Banque</Etiquette>
+            <Etiquette icone={Landmark} couleur={COULEUR_BANQUE}>Banque <span className="text-red-500">*</span></Etiquette>
             {banques.length === 0 ? (
               <p className="text-xs text-gray-400">Aucune banque enregistrée : ajoutez-en dans Comptabilité, Paramètres.</p>
             ) : (
