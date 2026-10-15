@@ -17,6 +17,7 @@ export const COL = {
   tiers: 'compta_tiers',                  // clients & fournisseurs (comptabilité tiers)
   centres: 'compta_centres',              // centres analytiques (axes)
   modeles: 'compta_modeles',              // modèles d'écritures (saisies répétitives)
+  sourcesRevenus: 'compta_sources_revenus', // autres sources de revenus ajoutées à la main dans « Mouvements bancaires » (au-delà des secteurs)
   banques: 'compta_banques',              // banques de l'entreprise (SUNU Banque, NSIA Banque…), choisies à chaque mouvement bancaire
   params: 'compta_params'                 // paramètres — doc id 'config'
 }

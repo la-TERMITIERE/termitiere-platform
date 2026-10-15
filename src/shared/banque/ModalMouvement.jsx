@@ -4,7 +4,7 @@
 // banque est renommée ou supprimée). Ordre de saisie : type de mouvement, secteur, banque, puis le reste.
 // La fenêtre garde la couleur du module (Comptabilité), quel que soit le secteur choisi.
 import { useEffect, useState } from 'react'
-import { Paperclip, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Layers, Landmark, Wallet, MapPin, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Paperclip, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Layers, Landmark, Wallet, MapPin, Check, ChevronDown, ChevronUp } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import FormGroup from '../forms/FormGroup'
@@ -17,6 +17,8 @@ import { todayStr, genId } from '../../utils/formatters'
 import { lireFichier, formatTaille } from '../../utils/fichiers'
 import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
 import { TYPES_MOUVEMENT_BANQUE } from '../../modules/depense/data'
+import { COL } from '../../modules/comptabilite/data'
+import { PREFIXE_AUTRE, estAutreSource, collectionBanque, moduleAudit, idSource } from './comptes'
 
 const COULEUR = COULEUR_MODULE.comptabilite || '#ea580c'
 const COULEUR_BANQUE = '#0f766e' // les banques se distinguent des secteurs (orange du module) par leur teinte
@@ -54,10 +56,12 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [toutesBanques, setToutesBanques] = useState(false)
+  const [nouvelleSource, setNouvelleSource] = useState(null) // null = fermé, sinon le nom en cours de saisie
 
   useEffect(() => {
     if (!open) return
     setToutesBanques(false)
+    setNouvelleSource(null)
     setD(mouvement ? { ...vide(secteurId), ...mouvement, secteurId } : vide(secteurId))
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,10 +87,24 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
     try { set('piece', await lireFichier(file)) } catch (err) { toast.error(err.message || 'Fichier illisible') } finally { setUploading(false) }
   }
 
+  // Crée une autre source de revenus (hors secteurs) : elle apparaît ensuite dans la liste et dans les filtres.
+  async function creerSource() {
+    const nom = (nouvelleSource || '').trim()
+    if (!nom) return toast.error('Donnez un nom à la source')
+    if (secteurs.some((x) => x.nom.toLowerCase() === nom.toLowerCase())) return toast.error('Cette source existe déjà')
+    const id = genId()
+    await setItem(COL.sourcesRevenus, id, { id, nom, creePar: user?.nom || '', createdAt: Date.now() })
+    await audit('comptabilite', 'BANQUE_SOURCE_CREATE', `Nouvelle source de revenus : ${nom}`)
+    setD((v) => ({ ...v, secteurId: `${PREFIXE_AUTRE}${id}`, site: '' }))
+    setNouvelleSource(null)
+    toast.success('Source ajoutée ✓')
+  }
+
   async function enregistrer() {
     if (saving) return
     if (!d.secteurId) return toast.error('Choisissez le secteur concerné')
     if (secteur?.sites?.length && !d.site) return toast.error(`Choisissez le site de ${secteur.nom}`)
+    if (!d.banqueId) return toast.error(banques.length ? 'Précisez la banque du mouvement' : 'Aucune banque enregistrée : ajoutez-en dans Comptabilité, Paramètres')
     if (!d.date) return toast.error('Date requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     setSaving(true)
@@ -95,18 +113,18 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
       const banque = banques.find((b) => b.id === d.banqueId)
       const { secteurId: sid, secteurNom, siteNom, solde, ...champs } = d // champs d'affichage : jamais enregistrés
       void secteurNom; void siteNom; void solde
-      const donnees = { ...champs, site: secteur?.sites?.length ? d.site : '', montant, banqueId: banque?.id || '', banqueNom: banque?.nom || '' }
-      const collection = `${sid}_banque`
+      const donnees = { ...champs, site: secteur?.sites?.length ? d.site : '', montant, banqueId: banque?.id || '', banqueNom: banque?.nom || '', ...(estAutreSource(sid) ? { sourceId: idSource(sid) } : {}) }
+      const collection = collectionBanque(sid)
       const info = TYPES_MOUVEMENT_BANQUE[d.type]
       const desc = `${info.label} : ${montant.toLocaleString('fr-FR')} FCFA${banque ? ` (${banque.nom})` : ''}${d.origine ? ` (${d.origine})` : ''}`
       if (!edition) {
         const id = genId()
         await setItem(collection, id, { ...donnees, id, enregistrePar: user?.nom || ':', enregistreParUid: user?.uid || null, createdAt: Date.now() })
-        await audit(sid, 'BANQUE_MOUVEMENT_CREATE', desc, { type: d.type, montant, date: d.date })
+        await audit(moduleAudit(sid), 'BANQUE_MOUVEMENT_CREATE', desc, { type: d.type, montant, date: d.date })
         toast.success('Mouvement enregistré ✓')
       } else {
         await setItem(collection, mouvement.id, { ...donnees, id: mouvement.id })
-        await audit(sid, 'BANQUE_MOUVEMENT_EDIT', desc, { type: d.type, montant, date: d.date })
+        await audit(moduleAudit(sid), 'BANQUE_MOUVEMENT_EDIT', desc, { type: d.type, montant, date: d.date })
         toast.success('Mouvement mis à jour ✓')
       }
       onClose()
@@ -162,9 +180,27 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
           <div>
             <Etiquette icone={Layers}>Secteur {!fixeSecteur && <span className="text-red-500">*</span>}</Etiquette>
             {!fixeSecteur ? (
+              <>
               <div className="flex flex-wrap gap-1.5">
                 {secteurs.map((x) => <Choix key={x.id} actif={d.secteurId === x.id} point={x.color} onClick={() => setD((v) => ({ ...v, secteurId: v.secteurId === x.id ? '' : x.id, site: '' }))}>{x.nom}</Choix>)}
+                {nouvelleSource === null && (
+                  <button type="button" onClick={() => setNouvelleSource('')}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed px-3 py-1.5 text-xs font-bold transition-all hover:-translate-y-0.5"
+                    style={{ borderColor: COULEUR, color: COULEUR }}>
+                    <Plus size={12} strokeWidth={3} /> Autre source
+                  </button>
+                )}
               </div>
+              {nouvelleSource !== null && (
+                <div className="mt-2 flex items-center gap-2" style={{ animation: 'mm-entre 0.3s ease-out' }}>
+                  <input autoFocus value={nouvelleSource} onChange={(e) => setNouvelleSource(e.target.value)} placeholder="Nom de la source de revenus (ex: LOCATION)"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); creerSource() } if (e.key === 'Escape') setNouvelleSource(null) }}
+                    className="input-base min-w-0 flex-1 !py-1.5 text-sm" />
+                  <Button size="sm" style={{ backgroundColor: COULEUR }} onClick={creerSource}>Ajouter</Button>
+                  <Button size="sm" variant="outline" onClick={() => setNouvelleSource(null)}>Annuler</Button>
+                </div>
+              )}
+              </>
             ) : (
               <Choix actif onClick={() => {}} point={secteur?.color}>{secteur?.nom || ':'}</Choix>
             )}
@@ -180,7 +216,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
           )}
 
           <div>
-            <Etiquette icone={Landmark} couleur={COULEUR_BANQUE}>Banque</Etiquette>
+            <Etiquette icone={Landmark} couleur={COULEUR_BANQUE}>Banque <span className="text-red-500">*</span></Etiquette>
             {banques.length === 0 ? (
               <p className="text-xs text-gray-400">Aucune banque enregistrée : ajoutez-en dans Comptabilité, Paramètres.</p>
             ) : (

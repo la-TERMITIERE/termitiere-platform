@@ -4,7 +4,7 @@
 // choisi apparaît alors en tête. Toucher « Dépôts » ou « Retraits » ouvre le détail. Les anciens volets
 // « Compte bancaire » des secteurs sont retirés. Réservé à PAU / Assistant PAU / GE / Info (BANQUE_ROLES).
 import { useMemo, useState } from 'react'
-import { Plus, Landmark, ArrowDownCircle, ArrowUpCircle, ListOrdered, FileSpreadsheet, Paperclip, Inbox, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Landmark, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CalendarDays, Layers, FileText, Wallet, ListOrdered, FileSpreadsheet, Paperclip, Inbox, Pencil, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -27,17 +27,55 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_MOUVEMENT_BANQUE, SECTEURS as SECTEURS_DEPENSE, LOGISTIQUE_SITES } from '../depense/data'
+import { PREFIXE_AUTRE, collectionBanque, moduleAudit } from '../../shared/banque/comptes'
 import BandeauCompta, { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 // Un compte bancaire par secteur : collection `${id}_banque`. Les secteurs sont ceux d'E-DÉPENSES, sans la
 // caisse commune (qui n'est pas un secteur) : E-G.Pro et E-VOYAGE n'en sont pas non plus. MAXI LOGISTIQUE et
 // MAXI-GYM ont deux sites (Lomé, Kara) : le site se choisit à la saisie.
 const SITES_PAR_SECTEUR = { logistique: LOGISTIQUE_SITES, gym: [{ id: 'lome', label: 'Lomé' }, { id: 'kara', label: 'Kara' }] }
-const SECTEURS = SECTEURS_DEPENSE.filter((x) => x.id !== 'divers').map((x) => ({ id: x.id, nom: x.label, color: x.color, sites: SITES_PAR_SECTEUR[x.id] || null }))
+// TRANSPORTS s'y ajoute comme source de revenus à part entière. D'autres sources se créent à la main (« Autre source »).
+const SECTEURS = [
+  ...SECTEURS_DEPENSE.filter((x) => x.id !== 'divers').map((x) => ({ id: x.id, nom: x.label, color: x.color, sites: SITES_PAR_SECTEUR[x.id] || null })),
+  { id: 'transport', nom: 'TRANSPORTS', color: '#0891b2', sites: null }
+]
+const COULEUR_AUTRE_SOURCE = '#7c3aed'
 
 const montant = (m) => Number(m.montant) || 0
 const somme = (rows, type) => rows.filter((m) => m.type === type).reduce((t, m) => t + montant(m), 0)
 const TH = 'sticky top-0 z-10 bg-orange-50 shadow-[0_1px_0_rgba(234,88,12,0.25)] dark:bg-gray-800 px-3 py-2.5'
+
+// Chaque banque garde sa teinte (SUNU, NSIA…) pour la repérer d'un coup d'œil dans la liste.
+const TEINTES_BANQUE = ['#0f766e', '#4f46e5', '#b45309', '#be185d', '#0369a1', '#7c3aed']
+const teinteBanque = (nom) => {
+  let h = 0
+  for (const c of String(nom)) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return TEINTES_BANQUE[h % TEINTES_BANQUE.length]
+}
+
+// Indicateur de la banque où le dépôt (ou le retrait) a été fait : pastille teintée avec la petite icône de banque.
+function PastilleBanque({ nom }) {
+  if (!nom) return <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] font-semibold text-gray-400"><Landmark size={11} /> Non précisée</span>
+  const c = teinteBanque(nom)
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold shadow-sm" style={{ background: `linear-gradient(135deg, ${c}22, ${c}0d)`, color: c, boxShadow: `inset 0 0 0 1px ${c}33` }}>
+      <Landmark size={11} strokeWidth={2.4} /> {nom}
+    </span>
+  )
+}
+
+// Type du mouvement : flèche qui descend vers la banque pour un dépôt, qui en sort pour un retrait.
+function PastilleType({ type, label }) {
+  const depot = type === 'depot'
+  const Icone = depot ? ArrowDownCircle : ArrowUpCircle
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${depot ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'bg-red-50 text-red-700 ring-1 ring-red-200'}`}>
+      <Icone size={12} strokeWidth={2.4} /> {label}
+    </span>
+  )
+}
+
+const ENTETE = (Icone, texte) => <span className="inline-flex items-center gap-1.5"><Icone size={12} className="shrink-0 text-orange-400" strokeWidth={2.4} />{texte}</span>
 
 export default function MouvementsBancaires() {
   const { role, user } = useAuth()
@@ -47,8 +85,11 @@ export default function MouvementsBancaires() {
   const { data: garderie } = useCollection('garderie_banque')
   const { data: bat } = useCollection('bat_banque')
   const { data: evenementiel } = useCollection('evenementiel_banque')
+  const { data: transport } = useCollection('transport_banque')
+  const { data: autres } = useCollection('autres_banque')
+  const { data: sourcesPerso } = useCollection(COL.sourcesRevenus)
   const { data: banques } = useCollection(COL.banques)
-  const sources = { agro, logistique, gym, garderie, bat, evenementiel }
+  const sources = { agro, logistique, gym, garderie, bat, evenementiel, transport }
 
   const [secteur, setSecteur] = useState('') // '' = tous les secteurs
   const [type, setType] = useState('') // '' | 'depot' | 'retrait'
@@ -69,13 +110,17 @@ export default function MouvementsBancaires() {
   const peutEcrire = !isReadOnlyRole(role)
 
   // Solde de chaque secteur : ouverture + dépôts - retraits.
-  const parSecteur = useMemo(() => SECTEURS.map((s) => {
-    const brut = sources[s.id] || []
+  const comptes = useMemo(() => [
+    ...SECTEURS,
+    ...sourcesPerso.map((c) => ({ id: `${PREFIXE_AUTRE}${c.id}`, nom: String(c.nom || '').toUpperCase(), color: COULEUR_AUTRE_SOURCE, sites: null, custom: true, sourceId: c.id }))
+  ], [sourcesPerso])
+  const parSecteur = useMemo(() => comptes.map((s) => {
+    const brut = s.custom ? autres.filter((m) => m.sourceId === s.sourceId) : (sources[s.id] || [])
     const ouvertureRec = brut.find((m) => m.ouverture)
     const initial = Number(ouvertureRec?.montant) || 0
     const rows = brut.filter((m) => !m.ouverture).map((m) => ({ ...m, secteurId: s.id, secteurNom: s.nom, siteNom: (s.sites || []).find((st) => st.id === m.site)?.label || '' }))
     return { ...s, ouvertureRec, initial, rows, depots: somme(rows, 'depot'), retraits: somme(rows, 'retrait'), solde: initial + somme(rows, 'depot') - somme(rows, 'retrait') }
-  }), [agro, logistique, gym, garderie, bat, evenementiel]) // eslint-disable-line react-hooks/exhaustive-deps
+  }), [agro, logistique, gym, garderie, bat, evenementiel, transport, autres, comptes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Solde de chaque banque : solde d'ouverture de la banque + dépôts - retraits qui lui sont rattachés (tous secteurs).
   const parBanque = useMemo(() => {
@@ -128,8 +173,8 @@ export default function MouvementsBancaires() {
 
   async function supprimer(m) {
     try {
-      await removeItem(`${m.secteurId}_banque`, m.id)
-      await audit(m.secteurId, 'BANQUE_MOUVEMENT_DELETE', `${TYPES_MOUVEMENT_BANQUE[m.type]?.label || m.type} : ${montant(m).toLocaleString('fr-FR')} FCFA`)
+      await removeItem(collectionBanque(m.secteurId), m.id)
+      await audit(moduleAudit(m.secteurId), 'BANQUE_MOUVEMENT_DELETE', `${TYPES_MOUVEMENT_BANQUE[m.type]?.label || m.type} : ${montant(m).toLocaleString('fr-FR')} FCFA`)
       toast.success('Mouvement supprimé ✓')
     } catch (e) {
       if (!String(e?.message || e?.code || e).startsWith('SUPPRESSION')) throw e
@@ -141,9 +186,9 @@ export default function MouvementsBancaires() {
     setSaving(true)
     try {
       const m = Number(ouverture.montant) || 0
-      const id = choisi.ouvertureRec?.id || 'ouverture'
-      await setItem(`${choisi.id}_banque`, id, { id, ouverture: true, montant: m, date: ouverture.date, type: 'ouverture' })
-      await audit(choisi.id, 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${m.toLocaleString('fr-FR')} FCFA au ${formatDateShort(ouverture.date)}`)
+      const id = choisi.ouvertureRec?.id || (choisi.custom ? `ouverture_${choisi.sourceId}` : 'ouverture')
+      await setItem(collectionBanque(choisi.id), id, { id, ouverture: true, montant: m, date: ouverture.date, type: 'ouverture', ...(choisi.custom ? { sourceId: choisi.sourceId } : {}) })
+      await audit(moduleAudit(choisi.id), 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${m.toLocaleString('fr-FR')} FCFA au ${formatDateShort(ouverture.date)}`)
       toast.success("Solde d'ouverture mis à jour ✓")
       setOuverture(null)
     } finally {
@@ -292,8 +337,8 @@ export default function MouvementsBancaires() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-gray-500">
-                <th className={TH}>Date</th><th className={TH}>Secteur</th><th className={TH}>Libellé / Origine</th><th className={TH}>Banque</th>
-                <th className={TH}>Type</th><th className={`${TH} text-right`}>Montant</th>{peutEcrire && <th className={`${TH} w-20`}></th>}
+                <th className={TH}>{ENTETE(CalendarDays, 'Date')}</th><th className={TH}>{ENTETE(Layers, 'Secteur')}</th><th className={TH}>{ENTETE(FileText, 'Libellé / Origine')}</th><th className={TH}>{ENTETE(Landmark, 'Banque')}</th>
+                <th className={TH}>{ENTETE(ArrowLeftRight, 'Type')}</th><th className={`${TH} text-right`}>{ENTETE(Wallet, 'Montant')}</th>{peutEcrire && <th className={`${TH} w-20`}></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
@@ -323,8 +368,8 @@ export default function MouvementsBancaires() {
                       </p>
                       {(m.origine || m.personne) && <p className="text-[11px] text-gray-500">{[m.origine, m.personne].filter(Boolean).join(' · ')}</p>}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">{nomBanque(m) || <span className="text-gray-300">:</span>}</td>
-                    <td className="px-3 py-2"><Badge tone={t.tone}>{t.label}</Badge></td>
+                    <td className="px-3 py-2"><PastilleBanque nom={nomBanque(m)} /></td>
+                    <td className="px-3 py-2"><PastilleType type={m.type} label={t.label} /></td>
                     <td className={`whitespace-nowrap px-3 py-2 text-right font-extrabold ${t.signe > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                       {t.signe > 0 ? '+' : '-'}{montant(m).toLocaleString('fr-FR')}
                     </td>
