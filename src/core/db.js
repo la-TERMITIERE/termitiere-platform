@@ -7,7 +7,7 @@
 // garde-fous (sanitize, rateLimit) sont appliqués dans chaque implémentation.
 import * as firebaseImpl from './db.firebase'
 import * as supabaseImpl from './db.supabase'
-import { isReadOnlyRole } from './roles'
+import { isReadOnlyRole, peutEcrireGym } from './roles'
 import { demanderMotif, SuppressionAnnulee } from './motifSuppression'
 
 const useSupabase = import.meta.env.VITE_USE_SUPABASE === 'true'
@@ -46,6 +46,13 @@ function protegerEcriture(nom, fn) {
       const err = new Error('Votre profil est en lecture seule : aucune modification n\'est autorisée.')
       err.code = 'LECTURE_SEULE'
       console.warn(`[db] écriture refusée (rôle ${role} en lecture seule) : ${nom}`, args[0])
+      return Promise.reject(err)
+    }
+    // MAXI-GYM : seuls les agents et Info écrivent dans les collections `gym_*` (cf. peutEcrireGym).
+    if (role && String(args[0] || '').startsWith('gym_') && !peutEcrireGym(role)) {
+      const err = new Error('MAXI-GYM : seuls les agents et Info peuvent modifier ces données, votre profil est en lecture seule.')
+      err.code = 'LECTURE_SEULE'
+      console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents et à Info) : ${nom}`, args[0])
       return Promise.reject(err)
     }
     return fn(...args)

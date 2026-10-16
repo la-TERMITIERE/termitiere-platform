@@ -1,11 +1,12 @@
 // MAXI-GYM — Paramètres : tarifs, durées et validité, réservé à l'administration.
 import { useEffect, useMemo, useState } from 'react'
-import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Target } from 'lucide-react'
+import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Target, Eraser } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useAuth } from '../../hooks/useAuth'
+import { peutEcrireGym } from '../../core/roles'
 import { useCollection } from '../../hooks/useFirestore'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -14,7 +15,8 @@ import { useGymParams, saveGymParams } from './useGymParams'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { JOURS_SEMAINE, horairesVides } from './data'
 import CoachFormModal from './CoachFormModal'
-import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, ChampUnite } from './uiHelpers'
+import { candidatsAutoSuppression } from './purgeClient'
+import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, ChampUnite, BoutonGym } from './uiHelpers'
 
 const COULEUR = '#E8850F'
 // Le mot RÉELLEMENT attendu est en minuscules sans accent, alors que l'écran
@@ -43,7 +45,8 @@ const COLLECTIONS_A_VIDER = [
 ]
 
 export default function Params() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const lectureSeule = !peutEcrireGym(role)
   const site = useSite()
   const params = useGymParams(site)
   const [form, setForm] = useState(params)
@@ -125,16 +128,26 @@ export default function Params() {
   // resynchronise le formulaire dès qu'elles sont disponibles (une seule fois,
   // pour ne pas écraser une saisie en cours si le doc change entre-temps ailleurs),
   // et aussi si on change de salle (chaque salle a ses propres réglages).
-  useEffect(() => { setForm(params) }, [site, params.tarifSeanceSimple, params.tarifSeanceVip, params.tarifAbonnementSimple, params.tarifAbonnementVip, params.tarifAbonnementClassique, params.dureeClassiqueMinJours, params.validiteSeanceHeures, params.objectifMensuel])
+  useEffect(() => { setForm(params) }, [site, params.tarifSeanceSimple, params.tarifSeanceVip, params.tarifAbonnementSimple, params.tarifAbonnementVip, params.tarifAbonnementClassique, params.dureeClassiqueMinJours, params.validiteSeanceHeures, params.objectifMensuel, params.autoSuppressionActive, params.delaiSuppressionAbonneJours, params.delaiSuppressionSeanceJours])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: Number(e.target.value) || 0 }))
   // Champ nullable : vide = comportement libre historique (Classique), un nombre = prix fixe.
   const setNullable = (k) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [k]: v === '' ? null : (Number(v) || 0) })) }
 
+  // Clients qui seraient supprimés MAINTENANT avec les délais saisis : aperçu avant d'activer la suppression automatique.
+  const delais = { ...form, delaiSuppressionAbonneJours: Math.max(1, Number(form.delaiSuppressionAbonneJours) || 1), delaiSuppressionSeanceJours: Math.max(1, Number(form.delaiSuppressionSeanceJours) || 1) }
+  const candidatsSuppression = useMemo(
+    () => candidatsAutoSuppression({ clients, abonnements, seances, presences, params: delais, site }),
+    [clients, abonnements, seances, presences, site, delais.validiteSeanceHeures, delais.delaiSuppressionAbonneJours, delais.delaiSuppressionSeanceJours] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
   async function enregistrer() {
+    if (form.autoSuppressionActive && !params.autoSuppressionActive && candidatsSuppression.length > 0) {
+      if (!window.confirm(`En activant la suppression automatique, ${candidatsSuppression.length} client(s) déjà terminé(s) seront supprimés dès la prochaine ouverture du Dashboard par l'administration. Continuer ?`)) return
+    }
     setSaving(true)
     try {
-      await saveGymParams(form, user, site)
+      await saveGymParams({ ...form, delaiSuppressionAbonneJours: delais.delaiSuppressionAbonneJours, delaiSuppressionSeanceJours: delais.delaiSuppressionSeanceJours }, user, site)
       toast.success('Réglages enregistrés ✓')
     } finally { setSaving(false) }
   }
@@ -155,6 +168,11 @@ export default function Params() {
         </div>
       </div>
 
+      {lectureSeule && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
+          Lecture seule : dans MAXI-GYM, seuls les agents et Info peuvent modifier les réglages.
+        </div>
+      )}
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
         Ces réglages sont propres à <strong>{siteLabel(site)}</strong> : l'autre salle a les siens, indépendants.
       </div>
@@ -216,8 +234,37 @@ export default function Params() {
         </FormGroup>
       </Card>
 
+      <Card title={titreSection(Eraser, 'Suppression automatique des clients')}
+        className={CARD_ACCENT_CLASS}
+        style={cardAccentStyle(COULEUR)}>
+        <p className="mb-3 text-xs text-gray-500">
+          Libère la base : une fois l'abonnement (ou la séance) terminé depuis plus longtemps que le délai ci-dessous, le client disparaît totalement
+          (fiche, abonnements, séances et arrivées pointées). Les factures restent, donc le chiffre d'affaires aussi.
+          Elle s'applique quand l'administration ouvre le Dashboard de la salle.
+        </p>
+        <label className="mb-3 flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+          <input type="checkbox" checked={!!form.autoSuppressionActive}
+            onChange={(e) => setForm((f) => ({ ...f, autoSuppressionActive: e.target.checked }))}
+            className="h-4 w-4 shrink-0 accent-orange-600" />
+          <span className="text-sm font-semibold text-gray-800">Activer la suppression automatique pour {siteLabel(site)}</span>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <FormGroup label="Abonnés : délai après la fin de l'abonnement" hint="Par défaut 90 jours (3 mois).">
+            <ChampUnite unite="jours" min="1" value={form.delaiSuppressionAbonneJours} onChange={set('delaiSuppressionAbonneJours')} />
+          </FormGroup>
+          <FormGroup label="Clients de séances : délai après la dernière séance" hint="Par défaut 30 jours.">
+            <ChampUnite unite="jours" min="1" value={form.delaiSuppressionSeanceJours} onChange={set('delaiSuppressionSeanceJours')} />
+          </FormGroup>
+        </div>
+        <p className={`mt-2 rounded-lg px-3 py-2 text-xs font-semibold ${candidatsSuppression.length ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500'}`}>
+          {candidatsSuppression.length
+            ? `Avec ces délais, ${candidatsSuppression.length} client(s) seraient supprimés dès maintenant : ${candidatsSuppression.slice(0, 5).map((c) => c.dossier.nom).join(', ')}${candidatsSuppression.length > 5 ? '…' : ''}`
+            : 'Avec ces délais, aucun client ne serait supprimé pour le moment.'}
+        </p>
+      </Card>
+
       <div className="flex justify-end">
-        <Button onClick={enregistrer} loading={saving}><Save size={16} /> Enregistrer les réglages</Button>
+        <BoutonGym icone={Save} onClick={enregistrer} loading={saving} disabled={lectureSeule}>Enregistrer les réglages</BoutonGym>
       </div>
 
       <Card title={titreSection(UserCog, 'Coachs')}
@@ -250,9 +297,7 @@ export default function Params() {
           ))}
           {!coachs.length && <p className="py-4 text-center text-sm text-gray-400">Aucun coach enregistré pour {siteLabel(site)}.</p>}
         </div>
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => setCoachModal({ nom: '', horaires: horairesVides() })}>
-          <Plus size={14} /> Ajouter un coach
-        </Button>
+        <BoutonGym variante="secondaire" icone={Plus} className="mt-3" disabled={lectureSeule} onClick={() => setCoachModal({ nom: '', horaires: horairesVides() })}>Ajouter un coach</BoutonGym>
       </Card>
 
       <Card className="border-2 border-red-200 bg-red-50/60">
@@ -278,10 +323,10 @@ export default function Params() {
           <Input value={confirmTexte} onChange={(e) => setConfirmTexte(e.target.value)} placeholder={TEXTE_CONFIRMATION.toUpperCase()}
             className="border-red-300 focus:border-red-500 focus:ring-red-400/40" />
         </FormGroup>
-        <Button variant="danger" disabled={confirmTexte !== TEXTE_CONFIRMATION || totalEnregistrements === 0}
+        <BoutonGym variante="danger" icone={Trash2} disabled={lectureSeule || confirmTexte !== TEXTE_CONFIRMATION || totalEnregistrements === 0}
           loading={resetting} onClick={reinitialiserTout}>
-          <Trash2 size={16} /> Réinitialiser définitivement MAXI-GYM {siteLabel(site)}
-        </Button>
+          Réinitialiser définitivement MAXI-GYM {siteLabel(site)}
+        </BoutonGym>
       </Card>
 
       <CoachFormModal coachModal={coachModal} setCoachModal={setCoachModal} site={site} />

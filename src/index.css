@@ -315,3 +315,52 @@ html[data-role="agent"] td button:has(.lucide-trash) { display: none !important;
 }
 .btn-etat-fleche { display: inline-block; transition: transform 0.2s ease; }
 .btn-etat:hover .btn-etat-fleche { transform: translateX(3px); }
+
+/* ── Barre de défilement horizontal fixe (mobile et tablette) ────────────────────────────
+   Posée au-dessus de la barre de navigation du bas tant qu'un tableau large est à l'écran
+   (cf. shared/Layout/BarreDefilementFixe.jsx). Verre dépoli, curseur à la couleur du module. */
+.barre-defilement-fixe {
+  position: fixed;
+  z-index: 39;
+  height: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow: 0 10px 20px -12px rgba(26, 26, 26, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  scrollbar-width: auto;
+  scrollbar-color: var(--tv-accent, #BC3C31) transparent;
+  animation: bdf-entree 0.35s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+  transition: box-shadow 0.25s ease, background 0.25s ease;
+}
+.barre-defilement-fixe:hover { background: rgba(255, 255, 255, 0.75); box-shadow: 0 12px 24px -12px color-mix(in srgb, var(--tv-accent, #BC3C31) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, 1); }
+@keyframes bdf-entree { from { opacity: 0; transform: translateY(10px) scaleX(0.96); } to { opacity: 1; transform: none; } }
+.barre-defilement-fixe::-webkit-scrollbar { height: 14px; }
+.barre-defilement-fixe::-webkit-scrollbar-track { background: transparent; border-radius: 9999px; }
+.barre-defilement-fixe::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tv-accent, #BC3C31) 70%, #ffffff), var(--tv-accent, #BC3C31));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+  transition: filter 0.2s ease;
+}
+.barre-defilement-fixe::-webkit-scrollbar-thumb:hover { filter: brightness(1.1) saturate(1.2); }
+html.dark .barre-defilement-fixe { background: rgba(30, 34, 38, 0.6); border-color: rgba(255, 255, 255, 0.12); }
+
+/* ── Boutons MAXI-GYM « ajouter » : halo qui respire + icône qui dit l'action ───────────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes bg-halo-ajouter {
+    0%, 100% { box-shadow: 0 14px 26px -12px rgba(13, 148, 136, 0.8), 0 0 0 0 rgba(45, 212, 191, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -2px 0 rgba(0, 0, 0, 0.12); }
+    50% { box-shadow: 0 14px 26px -12px rgba(13, 148, 136, 0.8), 0 0 0 9px rgba(45, 212, 191, 0), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -2px 0 rgba(0, 0, 0, 0.12); }
+  }
+  .bg-halo-ajouter { animation: bg-halo-ajouter 2.8s ease-out infinite; }
+  .bg-halo-ajouter:hover { animation-play-state: paused; }
+  /* Abonnement : la carte qu'on passe (petit va-et-vient incliné). */
+  @keyframes bg-carte { 0%, 55%, 100% { transform: translateX(0) rotate(0); } 15% { transform: translateX(3px) rotate(10deg); } 30% { transform: translateX(-3px) rotate(-10deg); } 42% { transform: translateX(2px) rotate(5deg); } }
+  .bg-anim-carte { animation: bg-carte 2.8s ease-in-out infinite; }
+  /* Séance : le ticket qui s'agite comme un ticket qu'on tend. */
+  @keyframes bg-ticket { 0%, 55%, 100% { transform: rotate(0) scale(1); } 12% { transform: rotate(-16deg) scale(1.1); } 28% { transform: rotate(14deg) scale(1.1); } 42% { transform: rotate(-7deg); } }
+  .bg-anim-ticket { animation: bg-ticket 2.8s ease-in-out infinite; }
+}

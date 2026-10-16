@@ -16,7 +16,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isFullAccessRole } from '../../core/roles'
+import { peutAdministrerGym } from '../../core/roles'
 import { formatMoney } from '../../utils/formatters'
 import { CATEGORIES_GYM } from './data'
 import { useGymParams, saveGymParams } from './useGymParams'
@@ -29,7 +29,7 @@ const BORDURE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
 export default function Forfaits() {
   const { user, role } = useAuth()
   const site = useSite()
-  const peutGerer = isFullAccessRole(role)
+  const peutGerer = peutAdministrerGym(role)
   const params = useGymParams(site)
   // Classique à prix FIXE (Kara par défaut) : cf. Abonnements.jsx / Params.jsx.
   const classiqueFixe = params.tarifAbonnementClassique != null

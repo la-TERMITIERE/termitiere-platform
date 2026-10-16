@@ -99,6 +99,37 @@ export function joursDepuis(dateStr) {
   return Math.round((aujourdhui - jour) / 86400000)
 }
 
+// ── Fin d'abonnement : jours restants, couleurs et renouvellement ─────────────────
+export const SEUIL_RENOUVELLEMENT_JOURS = 10 // 10 jours restants ou moins : orange, et le bouton « Renouveler » apparaît
+export const SEUIL_URGENT_JOURS = 5          // 5 jours restants ou moins : rouge, avec un voyant qui clignote
+
+// Jours restants avant la fin (0 = dernier jour, négatif = expiré) ; null sans date de fin.
+export function joursRestantsAbonnement(dateFin) {
+  const j = joursDepuis(dateFin)
+  return j == null ? null : -j
+}
+export const NIVEAUX_RESTANT = {
+  vert:   { cle: 'vert',   classes: 'bg-green-100 text-green-700' },
+  orange: { cle: 'orange', classes: 'bg-orange-100 text-orange-700' },
+  rouge:  { cle: 'rouge',  classes: 'bg-red-100 text-red-700' },
+  expire: { cle: 'expire', classes: 'bg-gray-100 text-gray-500' }
+}
+export function niveauRestant(jours) {
+  if (jours == null) return null
+  if (jours < 0) return NIVEAUX_RESTANT.expire
+  if (jours <= SEUIL_URGENT_JOURS) return NIVEAUX_RESTANT.rouge
+  if (jours <= SEUIL_RENOUVELLEMENT_JOURS) return NIVEAUX_RESTANT.orange
+  return NIVEAUX_RESTANT.vert
+}
+export function libelleJoursRestants(jours) {
+  if (jours == null) return '—'
+  if (jours < 0) return `Expiré depuis ${-jours} j`
+  if (jours === 0) return 'Dernier jour'
+  return jours === 1 ? 'Reste 1 jour' : `Reste ${jours} jours`
+}
+// Renouvelable : à 10 jours de la fin ou moins, y compris une fois expiré.
+export const peutRenouveler = (dateFin) => { const j = joursRestantsAbonnement(dateFin); return j != null && j <= SEUIL_RENOUVELLEMENT_JOURS }
+
 // Seuil (en jours) sans passage d'un abonné actif avant de le signaler comme
 // « à relancer » — cf. Dashboard.jsx (alerte) et pointageArrivee (relance WhatsApp).
 export const SEUIL_RELANCE_JOURS = 7

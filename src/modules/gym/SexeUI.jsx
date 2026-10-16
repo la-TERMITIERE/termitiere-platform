@@ -7,13 +7,17 @@ import { SEXES, sexeInfo } from './data'
 export function SexeBoutons({ value, onChange }) {
   return (
     <div className="grid grid-cols-2 gap-2">
+      <style>{'@keyframes sx-pop { 0% { transform: scale(0.94); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }'}</style>
       {SEXES.map((s) => {
         const actif = value === s.id
         return (
           <button key={s.id} type="button" onClick={() => onChange(s.id)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold transition-all ${actif ? 'text-white shadow-[0_6px_14px_-4px_rgba(0,0,0,0.35)]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
-            style={actif ? { background: s.couleur, borderColor: s.couleur } : undefined}>
-            <span className="text-base leading-none">{s.symbole}</span> {s.label}
+            className={`group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border px-2 py-2 text-xs font-extrabold backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${actif ? 'border-white/60 text-white shadow-[0_10px_20px_-10px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.5)]' : 'border-white/70 bg-white/60 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] hover:bg-white/85'}`}
+            style={actif ? { background: `linear-gradient(135deg, ${s.couleur}, ${s.couleur}cc)`, animation: 'sx-pop 0.3s ease-out' } : undefined}>
+            {actif && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />}
+            <span className="relative flex h-6 w-6 items-center justify-center rounded-full text-base leading-none transition-transform duration-300 group-hover:scale-110"
+              style={actif ? { background: 'rgba(255,255,255,0.25)', boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5), inset 0 -2px 3px rgba(0,0,0,0.2)' } : { background: `linear-gradient(135deg, ${s.couleur}, ${s.couleur}cc)`, color: '#fff', boxShadow: `0 4px 8px -3px ${s.couleur}77, inset 0 1px 1px rgba(255,255,255,0.5)` }}>{s.symbole}</span>
+            <span className="relative">{s.label}</span>
           </button>
         )
       })}

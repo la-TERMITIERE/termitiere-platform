@@ -16,10 +16,11 @@ import { useAuth } from '../../hooks/useAuth'
 import { updateItem } from '../../core/db'
 import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
-import { ROLES, isReadOnlyRole } from '../../core/roles'
+import { ROLES, peutEcrireGym } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach } from './data'
+import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach, niveauRestant, SEUIL_RENOUVELLEMENT_JOURS } from './data'
 import ClientDetailModal from './ClientDetailModal'
+import { BoutonRenouveler } from './JoursRestants'
 import CoachAbsentModal from './CoachAbsentModal'
 import { CoachBoutonsStyles, BoutonPointerMini, BoutonAbsentMini } from './CoachBoutons'
 import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
@@ -28,6 +29,7 @@ import { SexeDonut, SexeBadge } from './SexeUI'
 import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { useGymParams } from './useGymParams'
+import { useAutoSuppressionGym } from './useAutoSuppression'
 
 const COULEUR_BARRE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
 
@@ -103,7 +105,7 @@ function salutation() {
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, role } = useAuth()
-  const peutPointer = !isReadOnlyRole(role)
+  const peutPointer = peutEcrireGym(role)
 
   // Horloge en direct affichée dans le bandeau — mise à jour chaque minute (pas
   // besoin de la seconde près pour ce simple repère visuel).
@@ -115,6 +117,7 @@ export default function Dashboard() {
 
   const site = useSite()
   const params = useGymParams(site)
+  useAutoSuppressionGym(site) // libère la base des clients terminés, si l'administration l'a activé dans Paramètres
   const { data: allSeances }     = useCollection('gym_seances')
   const { data: allAbonnements } = useCollection('gym_abonnements')
   const { data: allFactures }    = useCollection('gym_factures')
@@ -401,17 +404,23 @@ export default function Dashboard() {
       .slice(0, 10)
   }, [seances, abonnements, presences, clients, modeFideles, aujStr])
 
-  // Abonnements arrivant à échéance dans les 7 prochains jours — pour relancer les
-  // clients avant l'expiration plutôt que de les perdre silencieusement.
+  // Abonnements arrivant à échéance dans les 10 prochains jours — pour renouveler les clients avant l'expiration
+  // plutôt que de les perdre silencieusement. Seul le DERNIER abonnement d'un client compte : un abonnement déjà
+  // renouvelé n'alerte plus.
   const abonnementsExpirentBientot = useMemo(() => {
     const aujourdhui = todayStr()
-    const limite = new Date()
-    limite.setDate(limite.getDate() + 7)
-    const limiteStr = limite.toISOString().slice(0, 10)
+    const limiteStr = addDays(aujourdhui, SEUIL_RENOUVELLEMENT_JOURS)
+    const finMax = new Map()
+    for (const a of abonnements) {
+      const k = (a.clientNom || '').trim().toLowerCase()
+      if ((a.dateFin || '') > (finMax.get(k) || '')) finMax.set(k, a.dateFin || '')
+    }
+    const vus = new Set()
     return abonnements
-      .filter((a) => a.dateFin && a.dateFin >= aujourdhui && a.dateFin <= limiteStr)
+      .filter((a) => a.dateFin && a.dateFin >= aujourdhui && a.dateFin <= limiteStr && a.dateFin >= (finMax.get((a.clientNom || '').trim().toLowerCase()) || ''))
       .sort((a, b) => (a.dateFin < b.dateFin ? -1 : 1))
-      .map((a) => ({ ...a, joursRestants: Math.ceil((new Date(a.dateFin) - new Date(aujourdhui)) / 86400000) }))
+      .filter((a) => { const k = (a.clientNom || '').trim().toLowerCase(); if (vus.has(k)) return false; vus.add(k); return true })
+      .map((a) => ({ ...a, joursRestants: Math.round((new Date(`${a.dateFin}T00:00:00`) - new Date(`${aujourdhui}T00:00:00`)) / 86400000) }))
   }, [abonnements])
   // Retire ceux fermés récemment (cf. dismissRenouvellement) — se réévalue tout
   // seul au fil du temps via `heureActuelle` (tick 60s du bandeau), donc un rappel
@@ -621,19 +630,20 @@ export default function Dashboard() {
 
 
       {abonnementsARelancer.length > 0 && (
-        <Card title="⏰ Abonnements à renouveler bientôt"
+        <Card title="⏰ Abonnements à renouveler : 10 derniers jours"
           className="overflow-hidden border-amber-50 bg-gradient-to-br from-amber-50/25 via-white to-white">
           <div className="space-y-2">
             {(voirTousRenouvellements ? abonnementsARelancer : abonnementsARelancer.slice(0, LIMITE_RENOUVELLEMENTS)).map((a) => {
-              const urgent = a.joursRestants <= 1
+              const niveau = niveauRestant(a.joursRestants)
+              const rouge = niveau.cle === 'rouge'
               return (
                 <div key={a.id}
                   className="group relative flex w-full items-center gap-1 overflow-hidden rounded-2xl border border-amber-100/50 bg-white/55 pr-1 shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                   <span aria-hidden="true" className="pointer-events-none absolute -inset-x-4 -top-6 h-10 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
                   <button onClick={() => setClientDetail(a.clientNom)}
                     className="relative flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
-                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-500">
-                      {urgent && <span className="absolute inset-0 animate-ping rounded-full bg-amber-300 opacity-40" />}
+                    <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${rouge ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-500'}`}>
+                      {rouge && <span className="absolute inset-0 animate-ping rounded-full bg-red-300 opacity-40" />}
                       <AlertTriangle size={16} className="relative" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -643,10 +653,11 @@ export default function Dashboard() {
                         {' '}expire le {formatDateShort(a.dateFin)}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${urgent ? 'bg-amber-400 text-white' : 'bg-amber-50 text-amber-600'}`}>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${niveau.classes}`}>
                       {a.joursRestants <= 0 ? "Aujourd'hui" : a.joursRestants === 1 ? 'Demain' : `Dans ${a.joursRestants} jours`}
                     </span>
                   </button>
+                  {peutPointer && <BoutonRenouveler compact onClick={() => navigate(`/gym/${site}/abonnements`, { state: { renouveler: a.id } })} />}
                   <button
                     onClick={() => { dismissRenouvellement(a.id, a.joursRestants); setDismissTick((t) => t + 1) }}
                     title={a.joursRestants <= 3 ? 'Fermer : reviendra dans 3h' : 'Fermer : reviendra demain'}
