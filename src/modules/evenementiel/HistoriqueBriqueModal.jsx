@@ -1,5 +1,6 @@
 // Historique complet d'une catégorie de brique : état du stock, chiffres clés, puis la chronologie
 // de TOUT ce qui la concerne (productions, ventes, mouvements appatam / séchage / prêtes, casses).
+import { inventairesCompletes } from './logic'
 import { useMemo, useState } from 'react'
 import { Factory, ShoppingCart, ArrowRightLeft, Hammer, Layers, Boxes, Sun, CheckCircle2, Package, Inbox } from 'lucide-react'
 import Modal from '../../shared/ui/Modal'
@@ -46,7 +47,7 @@ export default function HistoriqueBriqueModal({ brique, onClose }) {
     return ev.sort((a, b) => ((a.date || '') < (b.date || '') ? 1 : -1))
   }, [brique, productions, ventes, transferts])
 
-  const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
+  const dernier = useMemo(() => [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
   const etat = (brique && dernier?.briques?.[brique.id]) || {}
   const total = (type) => evenements.filter((e) => e.type === type && !e.annulee).reduce((s, e) => s + e.qte, 0)
   const visibles = filtre === 'tout' ? evenements : evenements.filter((e) => (filtre === 'mouvement' ? ['mouvement', 'casse'].includes(e.type) : e.type === filtre))

@@ -95,8 +95,48 @@ export function annoterLignesAgent(lignes, userId, userNom) {
   return (lignes || []).map((l) => (l.agentId ? l : { ...l, agentId: userId, agentNom: userNom }))
 }
 
+// Un inventaire n'est pas toujours complet : un jour créé par une production ou une vente ne contient que les briques
+// touchées. Chaque brique absente d'un jour reprend donc son dernier état connu (report des jours d'avant), sinon
+// son stock « disparaît » dès que le dernier inventaire est un jour partiel.
+export function inventairesCompletes(inventaires) {
+  const dernierEtat = {}
+  return [...inventaires].sort((a, b) => ((a.date || '') < (b.date || '') ? -1 : 1)).map((inv) => {
+    const briques = { ...(inv.briques || {}) }
+    Object.keys(dernierEtat).forEach((id) => { if (!briques[id]) briques[id] = dernierEtat[id] })
+    Object.keys(briques).forEach((id) => { dernierEtat[id] = briques[id] })
+    return { ...inv, briques }
+  })
+}
+
+// Dernier solde connu d'une matière : le jour le plus récent qui la mentionne (un jour partiel n'en a pas).
+export function dernierStockMatiere(inventaires, matiereId) {
+  const jour = [...(inventaires || [])].filter((i) => i.matieres?.[matiereId]).sort((a, b) => ((a.date || '') < (b.date || '') ? 1 : -1))[0]
+  const m = jour?.matieres?.[matiereId]
+  if (!m) return 0
+  if (m.fin != null) return Number(m.fin) || 0
+  return Math.max(0, (Number(m.init) || 0) + sommeMouvements(m.entrees) - sommeMouvements(m.consommations))
+}
+
+// À appeler AVANT d'écrire un inventaire (production, etc.) : un jour créé ou complété ne doit jamais contenir que
+// les briques touchées, sinon les autres stocks « disparaissent » ce jour-là. Les briques absentes reprennent leur
+// dernier état connu, les matières absentes leur dernier solde (sans rejouer arrivages ni coûts d'un autre jour).
+export function completerInventaire(cur, inventaires, date) {
+  const doc = cur || { date, matieres: {}, briques: {} }
+  const avant = inventairesCompletes(inventaires || []).filter((i) => i.date < date)
+  const dernier = avant[avant.length - 1]
+  const briques = { ...(dernier?.briques || {}), ...(doc.briques || {}) }
+  const matieres = { ...(doc.matieres || {}) }
+  const ids = new Set(avant.flatMap((i) => Object.keys(i.matieres || {})))
+  ids.forEach((id) => {
+    if (matieres[id]) return
+    const fin = dernierStockMatiere(avant, id)
+    matieres[id] = { init: fin, entrees: [], consommations: [], ent: 0, conso: 0, fin, coutEntrees: 0 }
+  })
+  return { ...doc, date, briques, matieres }
+}
+
 export function dernierStockBriques(inventaires, briqueId, etat = 'pret') {
-  const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
+  const tri = [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))
   return tri[0]?.briques?.[briqueId]?.[etat] || 0
 }
 
@@ -104,7 +144,7 @@ export function dernierStockBriques(inventaires, briqueId, etat = 'pret') {
 // vente sur le dernier inventaire connu. Renvoie l'inventaire mis à jour à persister
 // ({ date, inv, briques }) ou null si aucun inventaire n'existe encore.
 export function retirerVenteDuStock(inventaires, vente) {
-  const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
+  const tri = [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))
   const inv = tri[0]
   if (!inv) return null
   const briques = { ...(inv.briques || {}) }
@@ -121,7 +161,7 @@ export function retirerVenteDuStock(inventaires, vente) {
 // supplément ; delta < 0 → l'excédent RENTRE au stock. Même contrat de retour
 // que retirerVenteDuStock ({ date, inv, briques } ou null).
 export function appliquerDeltasStockBriques(inventaires, deltas) {
-  const tri = [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))
+  const tri = [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))
   const inv = tri[0]
   if (!inv) return null
   const briques = { ...(inv.briques || {}) }

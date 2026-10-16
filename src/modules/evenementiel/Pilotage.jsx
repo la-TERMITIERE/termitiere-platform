@@ -2,6 +2,7 @@
 // Indicateurs clés de performance filtrables par PÉRIODE et par TYPE de brique :
 // chiffre d'affaires, ventes de la période, écoulement, prix moyen et clients
 // servis. Détail par type de brique + matières premières.
+import { inventairesCompletes, dernierStockMatiere } from './logic'
 import { useMemo, useState } from 'react'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
@@ -42,7 +43,7 @@ export default function Pilotage() {
   const [modal, setModal] = useState(null)
 
   const inPeriode = (d) => (d || '') >= start && (d || '') <= end
-  const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
+  const dernier = useMemo(() => [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
 
   // Période précédente de MÊME durée — socle des indicateurs de tendance.
   const comparable = preset !== 'all'
@@ -415,7 +416,7 @@ export default function Pilotage() {
               {matieres.map((m) => {
                 const ent = mat.ent[m.id] || 0
                 const conso = mat.conso[m.id] || 0
-                const stock = dernier?.matieres?.[m.id]?.fin || 0
+                const stock = dernierStockMatiere(inventaires, m.id)
                 return (
                   <tr key={m.id}>
                     <td className="px-3 py-1.5 font-semibold">{m.nom} <span className="text-[10px] font-normal text-gray-400">({m.unite})</span></td>

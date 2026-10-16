@@ -19,7 +19,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateShort, formatNumber, formatMoney, genId } from '../../utils/formatters'
 import { ETATS_BRIQUE, DUREE_SECHAGE_JOURS } from './data'
-import { getInventaire, previousInventoryDate, joursDepuis, coutMatiereBrique } from './logic'
+import { getInventaire, previousInventoryDate, joursDepuis, coutMatiereBrique, inventairesCompletes } from './logic'
 
 const sumQte = (arr) => (arr || []).reduce((s, l) => s + (parseFloat(l.qte) || 0), 0)
 
@@ -70,9 +70,11 @@ export default function StockBriques() {
   const peutSaisir = role === 'agent'
 
   useEffect(() => {
-    const inv = getInventaire(inventaires, date) || { briques: {} }
-    const prevDate = previousInventoryDate(inventaires, date)
-    const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
+    // Inventaires complétés : une brique absente d'un jour partiel reprend son dernier état connu (rien ne disparaît).
+    const completes = inventairesCompletes(inventaires)
+    const inv = getInventaire(completes, date) || { briques: {} }
+    const prevDate = previousInventoryDate(completes, date)
+    const prevInv = prevDate ? getInventaire(completes, prevDate) : null
     const s = {}
     briques.forEach((b) => {
       // Stock du jour si saisi, sinon report de la veille (solde d'ouverture si rien).
@@ -91,15 +93,17 @@ export default function StockBriques() {
   // Chargement du stock matières : saisie du jour, sinon report du solde de la veille.
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { matieres: {} }
-    const prevDate = previousInventoryDate(inventaires, date)
-    const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
+    // Report par matière : dernier jour d'avant qui contient cette matière (un jour partiel, créé par une production,
+    // n'a pas de matières : il ne doit pas remettre les stocks à zéro).
+    const avant = inventairesCompletes(inventaires).filter((i) => i.date < date)
+    const prevMat = (id) => { for (let k = avant.length - 1; k >= 0; k--) { const m = avant[k].matieres?.[id]; if (m) return m } return null }
     const ms = {}
     matieres.forEach((m) => {
       const saved = inv.matieres?.[m.id]
       if (saved) {
         ms[m.id] = { init: saved.init || 0, entrees: saved.entrees || [], consommations: saved.consommations || [] }
       } else {
-        const prev = prevInv?.matieres?.[m.id]
+        const prev = prevMat(m.id)
         const prevFin = prev ? (prev.fin != null ? prev.fin : Math.max(0, (prev.init || 0) + sumQte(prev.entrees) - sumQte(prev.consommations))) : 0
         ms[m.id] = { init: prevFin, entrees: [], consommations: [] }
       }

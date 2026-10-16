@@ -20,7 +20,7 @@ import AlerteVentesBrouillon from './AlerteVentesBrouillon'
 import { useBriqueterieStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { formatMoney, formatNumber, formatDateShort, addDays, todayStr } from '../../utils/formatters'
-import { stockBriqueTotal, coutMatiereBrique } from './logic'
+import { stockBriqueTotal, coutMatiereBrique, inventairesCompletes } from './logic'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
 
 // Podium : médaille + fond dégradé pour les 3 premiers, comme le classement des clients fréquents de MAXI-GYM.
@@ -53,7 +53,7 @@ export default function Dashboard() {
   const prevStart = addDays(prevEnd, -(dayCount - 1))
   const inPrev = (d) => comparable && (d || '') >= prevStart && (d || '') <= prevEnd
 
-  const dernier = useMemo(() => [...inventaires].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
+  const dernier = useMemo(() => [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [inventaires])
 
   const stockPret = useMemo(() => {
     if (!dernier?.briques) return 0
