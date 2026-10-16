@@ -1,7 +1,7 @@
 // MAXI-GYM — Séances : liste complète + ajout d'une séance ponctuelle.
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useEffect, useMemo, useState } from 'react'
-import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock, FileSpreadsheet } from 'lucide-react'
+import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock, FileSpreadsheet, Eraser } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -16,7 +16,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { sendWhatsApp } from '../../core/whatsapp'
-import { isFullAccessRole, canExportGym } from '../../core/roles'
+import { peutEcrireGym, peutAdministrerGym, peutPurgerClientGym, canExportGym } from '../../core/roles'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
@@ -25,6 +25,9 @@ import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import { imprimerTicketSeance } from './printTicket'
 import ClientDetailModal from './ClientDetailModal'
+import PurgeClientModal from './PurgeClientModal'
+import { BoutonGym } from './uiHelpers'
+import { dossierClient, dossierTermine } from './purgeClient'
 import QrCarnetModal from './QrCarnetModal'
 import { useSite, matchSite } from './site/useSite'
 import { SexeBoutons, SexeFiltre, SexeBadge } from './SexeUI'
@@ -60,7 +63,9 @@ export default function Seances() {
     const p = pointagesCoach.find((x) => x.date === date && x.statut !== 'absent' && x.coachId === idsUniques[0])
     return { coachId: p.coachId, coachNom: p.coachNom }
   }
-  const peutSupprimer = isFullAccessRole(role)
+  const peutSupprimer = peutAdministrerGym(role)
+  const lectureSeule = !peutEcrireGym(role)
+  const peutPurger = peutPurgerClientGym(role)
   const params = useGymParams(site)
   const tarifs = { simple: params.tarifSeanceSimple, vip: params.tarifSeanceVip }
 
@@ -71,6 +76,17 @@ export default function Seances() {
   const [saving, setSaving] = useState(false)
   const [suggClient, setSuggClient] = useState(false)
   const [clientDetail, setClientDetail] = useState(null)
+  const [purge, setPurge] = useState(null) // dossier d'un client terminé à supprimer totalement
+  // Séance terminée (validité dépassée) d'un client sans abonnement en cours : suppression totale de son dossier.
+  const boutonPurge = (r) => {
+    if (!peutPurger || seanceValide(r.createdAt, params.validiteSeanceHeures, r.date)) return null
+    const dossier = dossierClient({ nom: r.clientNom, site, clients, abonnements, seances, presences })
+    if (!dossierTermine(dossier, params.validiteSeanceHeures)) return null
+    return (
+      <button onClick={(e) => { e.stopPropagation(); setPurge(dossier) }} title="Séance terminée : supprimer totalement ce client de la base"
+        className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"><Eraser size={16} /></button>
+    )
+  }
   const [qrNouveauClient, setQrNouveauClient] = useState(null)
 
   // Rafraîchit l'affichage toutes les 30 s : sans ça, le badge « Valide / Expirée »
@@ -300,7 +316,7 @@ export default function Seances() {
       </div>
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvelle séance</Button>
+        {!lectureSeule && <BoutonGym variante="ajouter" icone={Ticket} animation="ticket" badgePlus onClick={() => setModal(vide())}>Nouvelle séance</BoutonGym>}
       </div>
 
       <Card className="p-0">
@@ -337,10 +353,11 @@ export default function Seances() {
                     <Badge tone={r.regleParPartenaire ? 'success' : 'warning'}>
                       {r.regleParPartenaire ? 'Réglé par la structure' : 'Au compte du partenaire'}
                     </Badge>
-                    <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                    {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
                     {peutSupprimer && (
                       <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                     )}
+                  {boutonPurge(r)}
                   </div>
                 )
               }
@@ -355,10 +372,11 @@ export default function Seances() {
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
                       className="rounded p-1.5 text-amber-600 hover:bg-amber-50"><Receipt size={16} /></button>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                  {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
                   {peutSupprimer && (
                     <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                   )}
+                  {boutonPurge(r)}
                 </div>
               )
             } }
@@ -532,6 +550,7 @@ export default function Seances() {
         })()}
       </Modal>
 
+      <PurgeClientModal dossier={purge} onClose={() => setPurge(null)} />
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
         clients={clients} seances={seances} abonnements={abonnements} presences={presences} />
       <QrCarnetModal client={qrNouveauClient} onClose={() => setQrNouveauClient(null)} />

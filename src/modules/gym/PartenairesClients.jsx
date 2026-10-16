@@ -19,7 +19,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { addItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isFullAccessRole, canExportExcel } from '../../core/roles'
+import { peutAdministrerGym, canExportExcel } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatMoney, formatDateShort, todayStr, genNumero } from '../../utils/formatters'
@@ -40,7 +40,7 @@ export default function PartenairesClients() {
   const site = useSite()
   const { user, role } = useAuth()
   const { generateRapportPDF } = usePDF('gym')
-  const peutRegler = isFullAccessRole(role)
+  const peutRegler = peutAdministrerGym(role)
 
   const { data: allSeances } = useCollection('gym_seances')
   const { data: allClients } = useCollection('gym_clients')

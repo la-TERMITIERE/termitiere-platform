@@ -1,8 +1,9 @@
 // MAXI-GYM — Abonnements : liste complète + ajout d'un abonnement.
 // Simple / VIP : durée fixe 1 mois, tarif fixe. Classique : durée ET tarif libres.
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
-import { useMemo, useState } from 'react'
-import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, FileSpreadsheet } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, FileSpreadsheet, Eraser, Repeat, X, Users, Tag, CalendarCheck, Hourglass, Flag, Wallet, StickyNote, Dumbbell, Zap, Crown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -17,14 +18,18 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { sendWhatsApp } from '../../core/whatsapp'
-import { isFullAccessRole, canExportGym } from '../../core/roles'
+import { peutEcrireGym, peutAdministrerGym, peutPurgerClientGym, canExportGym } from '../../core/roles'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
-import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
-import { CATEGORIES_GYM, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF } from './data'
+import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
+import { BoutonGym } from './uiHelpers'
+import { CATEGORIES_GYM, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF, peutRenouveler } from './data'
 import { useGymParams } from './useGymParams'
 import { genererFactureGym } from './genererFacture'
 import ClientDetailModal from './ClientDetailModal'
+import JoursRestants, { BoutonRenouveler, BoutonPointer } from './JoursRestants'
+import PurgeClientModal from './PurgeClientModal'
+import { dossierClient, dossierTermine } from './purgeClient'
 import QrCarnetModal from './QrCarnetModal'
 import CalendrierPresences from './CalendrierPresences'
 import { useSite, matchSite } from './site/useSite'
@@ -33,6 +38,17 @@ import { SexeBoutons, SexeFiltre, SexeBadge } from './SexeUI'
 const COULEUR = '#A6342A'
 const COULEUR2 = '#E8850F'
 const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
+const ICONE_CATEGORIE = { simple: Dumbbell, classique: Zap, vip: Crown }
+
+// Étiquette d'une tuile : petite icône 3D (relief) puis le libellé.
+function Etiq({ icone: Icone, couleur, children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(couleur)}><Icone size={13} /></span>
+      {children}
+    </span>
+  )
+}
 const heureCourte = (d) => d.toTimeString().slice(0, 5)
 
 // Recalcule `dateFin` à partir de la DATE DE DÉBUT + durée — sauf si l'utilisateur
@@ -80,7 +96,11 @@ export default function Abonnements() {
     const p = pointagesCoach.find((x) => x.date === date && x.statut !== 'absent' && x.coachId === idsUniques[0])
     return { coachId: p.coachId, coachNom: p.coachNom }
   }
-  const peutSupprimer = isFullAccessRole(role)
+  const peutSupprimer = peutAdministrerGym(role)
+  const lectureSeule = !peutEcrireGym(role)
+  const peutPurger = peutPurgerClientGym(role)
+  const navigate = useNavigate()
+  const location = useLocation()
   const params = useGymParams(site)
   const dureeMin = params.dureeClassiqueMinJours
   // Classique à prix FIXE (Kara) : `tarifAbonnementClassique` non nul — se comporte
@@ -94,6 +114,7 @@ export default function Abonnements() {
   const [recherche, setRecherche] = useState('')
   const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [saving, setSaving] = useState(false)
+  const [purge, setPurge] = useState(null) // dossier d'un client terminé à supprimer totalement
   const [suggClient, setSuggClient] = useState(false)
   const [clientDetail, setClientDetail] = useState(null)
   const [qrNouveauClient, setQrNouveauClient] = useState(null)
@@ -119,6 +140,29 @@ export default function Abonnements() {
       montant: String(tarifs[categorie] || ''), notes: ''
     }
   }
+  // Renouvellement : le formulaire est pré-rempli à partir de l'abonnement actuel du client (nom, catégorie, durée, tarif),
+  // sans le réinscrire. Si l'abonnement court encore, le nouveau commence le lendemain de sa fin ; s'il est expiré, aujourd'hui.
+  const renouveler = (a) => {
+    const auj = todayStr()
+    const dateDebut = a.dateFin && a.dateFin >= auj ? dateFinAbonnement(a.dateFin, 1) : auj
+    const categorie = a.categorie
+    const dureeJours = a.dureeJours != null ? String(a.dureeJours) : String(dureeJoursMoisDefaut(dateDebut))
+    return {
+      id: null, renouvellement: true, renouvelleDe: a.id, date: auj, dateDebut, dateDebutManuelle: dateDebut !== auj,
+      clientNom: a.clientNom, telephone: '', sexe: sexeDe(a, idxSexe), categorie, dureeJours,
+      dateFin: dateFinAbonnement(dateDebut, dureeJours), dateFinManuelle: false,
+      montant: String(tarifs[categorie] || a.montant || ''), notes: ''
+    }
+  }
+  // Ouverture depuis une alerte du Dashboard (« Renouveler ») : la navigation porte l'id de l'abonnement.
+  useEffect(() => {
+    const id = location.state?.renouveler
+    if (!id || !allAbonnements.length) return
+    const a = allAbonnements.find((x) => x.id === id)
+    if (a) setModal(renouveler(a))
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.state, allAbonnements.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Durée d'origine d'un abonnement existant : si elle n'a pas été enregistrée (ancien
   // abonnement Simple/VIP, avant cette fonctionnalité), on la reconstitue exactement à
   // partir des dates déjà enregistrées plutôt que d'appliquer un défaut approximatif.
@@ -133,7 +177,23 @@ export default function Abonnements() {
     }
   }
 
-  const toutes = useMemo(() => [...abonnements].sort((a, b) => (a.date < b.date ? 1 : -1)), [abonnements])
+  const cleNom = (n) => (n || '').trim().toLowerCase()
+  const toutes = useMemo(() => [...abonnements].sort((a, b) => (a.date === b.date ? ((b.dateFin || '') < (a.dateFin || '') ? -1 : 1) : (a.date < b.date ? 1 : -1))), [abonnements])
+  // Dernier abonnement de chaque client (la fin la plus lointaine) : c'est lui qu'on renouvelle, et lui seul porte le bouton.
+  const dernierParClient = useMemo(() => {
+    const m = new Map()
+    for (const a of abonnements) {
+      const k = cleNom(a.clientNom)
+      const cur = m.get(k)
+      if (!cur || (a.dateFin || '') > (cur.dateFin || '') || ((a.dateFin || '') === (cur.dateFin || '') && a.date > cur.date)) m.set(k, a)
+    }
+    return m
+  }, [abonnements])
+  const nbParClient = useMemo(() => {
+    const m = new Map()
+    for (const a of abonnements) m.set(cleNom(a.clientNom), (m.get(cleNom(a.clientNom)) || 0) + 1)
+    return m
+  }, [abonnements])
   // Période d'abord ; le tri par sexe s'applique ensuite (`liste`). `listePeriode`
   // sert à compter les « non précisé » sur la période affichée.
   const listePeriode = useMemo(() => {
@@ -146,6 +206,12 @@ export default function Abonnements() {
     return toutes
   }, [toutes, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe).filter((a) => correspond(recherche, a.clientNom)), [listePeriode, filtreSexe, idxSexe, recherche])
+  // Un client n'apparaît qu'UNE fois dans la liste (son abonnement le plus récent de la période) : un renouvellement
+  // ne crée plus de seconde ligne à son nom. L'historique complet est dans sa fiche ; les paiements restent comptés.
+  const listeClients = useMemo(() => {
+    const vus = new Set()
+    return liste.filter((a) => { const k = cleNom(a.clientNom); if (vus.has(k)) return false; vus.add(k); return true })
+  }, [liste])
   const nbInconnus = useMemo(() => listePeriode.filter((a) => !sexeDe(a, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
 
@@ -256,9 +322,10 @@ export default function Abonnements() {
         date: d.date, dateDebut, dateFin, clientNom, sexe: d.sexe, categorie: d.categorie,
         dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
         montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
+        ...(d.renouvelleDe ? { renouvelleDe: d.renouvelleDe } : {}),
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
-      await audit('gym', 'ABONNEMENT_CREATE', `${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+      await audit('gym', d.renouvelleDe ? 'ABONNEMENT_RENOUVELE' : 'ABONNEMENT_CREATE', `${d.renouvelleDe ? 'Renouvellement : ' : ''}${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
       // Le répertoire Clients se construit uniquement à partir des séances/abonnements
       // réellement enregistrés — pas d'ajout manuel possible (cf. Clients.jsx). La
       // fiche est rattachée à la salle : le même nom peut donc exister des deux côtés,
@@ -283,7 +350,7 @@ export default function Abonnements() {
           : `valable jusqu'au ${formatDateShort(dateFin)}`
         sendWhatsApp([telephone], {
           title: '🎉 MAXI-GYM',
-          body: `Bonjour ${clientNom}, votre abonnement ${categorieLabel(d.categorie)} a bien été enregistré, ${validite}. Bel abonnement à MAXI-GYM ! 🏋️`
+          body: `Bonjour ${clientNom}, votre abonnement ${categorieLabel(d.categorie)} a bien été ${d.renouvelleDe ? 'renouvelé' : 'enregistré'}, ${validite}. Bel abonnement à MAXI-GYM ! 🏋️`
         })
       }
       // Une facture est TOUJOURS générée (visible dans le volet Facturation, avec
@@ -293,7 +360,7 @@ export default function Abonnements() {
         categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: d.montant,
         user, site, date: d.date, sexe: d.sexe
       })
-      toast.success('Abonnement enregistré ✓')
+      toast.success(d.renouvelleDe ? 'Abonnement renouvelé ✓' : 'Abonnement enregistré ✓')
       setModal(null)
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
       // est encore devant la réception — masqué tant que QR_CARNET_ACTIF est faux.
@@ -385,7 +452,7 @@ export default function Abonnements() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Abonnements</h2>
-          <p className="text-sm text-white/80">{liste.length} abonnement(s) : {formatMoney(total)} au total</p>
+          <p className="text-sm text-white/80">{listeClients.length} abonné(s){liste.length !== listeClients.length ? ` · ${liste.length} abonnement(s)` : ''} : {formatMoney(total)} au total</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism). */}
         <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
@@ -405,7 +472,7 @@ export default function Abonnements() {
       </div>
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button onClick={() => setModal(vide())}><Plus size={16} /> Nouvel abonnement</Button>
+        {!lectureSeule && <BoutonGym variante="ajouter" icone={CreditCard} animation="carte" badgePlus onClick={() => setModal(vide())}>Nouvel abonnement</BoutonGym>}
       </div>
 
       <Card className="p-0">
@@ -416,10 +483,19 @@ export default function Abonnements() {
               const deb = r.dateDebut || r.date
               return <span className={deb > todayStr() ? 'font-semibold text-sky-600' : ''}>{formatDateShort(deb)}</span>
             } },
-            { key: 'clientNom', label: 'Client' },
+            { key: 'clientNom', label: 'Client', render: (r) => {
+              const n = nbParClient.get(cleNom(r.clientNom)) || 1
+              return (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span>{r.clientNom}</span>
+                  {n > 1 && <span title={`${n} abonnements enregistrés : voir la fiche du client`} className="inline-flex items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700"><Repeat size={10} /> ×{n - 1}</span>}
+                </div>
+              )
+            } },
             { key: 'sexe', label: 'Sexe', align: 'center', render: (r) => <SexeBadge sexe={sexeDe(r, idxSexe)} /> },
             { key: 'categorie', label: 'Catégorie', render: (r) => <Badge tone={categorieTone(r.categorie)}>{categorieLabel(r.categorie)}</Badge> },
             { key: 'dateFin', label: 'Fin', render: (r) => r.dateFin ? formatDateShort(r.dateFin) : '—' },
+            { key: 'reste', label: 'Jours restants', render: (r) => <JoursRestants dateFin={r.dateFin} dateDebut={r.dateDebut} /> },
             { key: 'statut', label: 'Statut', render: (r) => {
               const st = statutAbonnement(r.dateDebut, r.dateFin)
               return <Badge tone={st.tone}>{st.label}</Badge>
@@ -436,216 +512,234 @@ export default function Abonnements() {
             { key: 'enregistrePar', label: 'Enregistré par' },
             { key: 'actions', label: '', align: 'right', render: (r) => {
               const dejaFacturee = factures.some((f) => f.sourceType === 'abonnement' && f.sourceId === r.id)
+              const estDernier = dernierParClient.get(cleNom(r.clientNom))?.id === r.id
+              const dossier = (peutPurger && estDernier) ? dossierClient({ nom: r.clientNom, site, clients, abonnements, seances, presences }) : null
+              const termine = dossier && dossierTermine(dossier, params.validiteSeanceHeures)
               return (
                 <div className="flex justify-end gap-1">
-                  {abonnementActif(r.dateFin, r.dateDebut) && (
-                    <button onClick={(e) => { e.stopPropagation(); pointerArrivee(r) }} disabled={pointageBusy === r.id} title="Pointer l'arrivée (aujourd'hui)"
-                      className="flex items-center gap-1 rounded-lg bg-green-500 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-50">
-                      <CheckCircle2 size={15} /> Pointer
-                    </button>
+                  {!lectureSeule && estDernier && peutRenouveler(r.dateFin) && <BoutonRenouveler compact onClick={() => setModal(renouveler(r))} />}
+                  {!lectureSeule && abonnementActif(r.dateFin, r.dateDebut) && (
+                    <BoutonPointer onClick={() => pointerArrivee(r)} disabled={pointageBusy === r.id} />
                   )}
                   <button onClick={(e) => { e.stopPropagation(); setDateSelectionnee(null); setCalendrierClient(r) }} title="Voir le calendrier de présence : et corriger un pointage oublié"
                     className="rounded p-1.5 text-sky-600 hover:bg-sky-50"><CalendarDays size={16} /></button>
-                  {!dejaFacturee && (
+                  {!lectureSeule && !dejaFacturee && (
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
                       className="rounded p-1.5 text-amber-600 hover:bg-amber-50"><Receipt size={16} /></button>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                  {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
                   {peutSupprimer && (
                     <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                  )}
+                  {termine && (
+                    <button onClick={(e) => { e.stopPropagation(); setPurge(dossier) }} title="Abonnement terminé : supprimer totalement ce client de la base"
+                      className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"><Eraser size={16} /></button>
                   )}
                 </div>
               )
             } }
           ]}
-          rows={liste}
+          rows={listeClients}
           onRowClick={(r) => setClientDetail(r.clientNom)}
           empty="Aucun abonnement enregistré."
         />
       </Card>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier l\'abonnement' : 'Nouvel abonnement'}
+      <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier l\'abonnement' : modal?.renouvellement ? 'Renouveler l\'abonnement' : 'Nouvel abonnement'}
         {...glassModalProps(COULEUR_MODULE.gym)}
-        footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={enregistrer} loading={saving}>{modal?.id ? 'Enregistrer les modifications' : 'Enregistrer'}</Button></>}>
-        {modal && (
-          <div className="space-y-4">
-            {/* Bandeau héro — même dégradé/badge lumineux que l'en-tête du volet. */}
-            <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(166,52,42,0.35),0_8px_20px_-8px_rgba(166,52,42,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-              style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, ${COULEUR2}e6 100%)` }}>
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-white/80 bg-white/20 shadow-lg backdrop-blur-sm">
-                <CreditCard size={22} color="white" />
-              </div>
-              <div className="min-w-0">
+        footer={<>
+          <BoutonGym variante="secondaire" icone={X} onClick={() => setModal(null)} disabled={saving}>Annuler</BoutonGym>
+          <BoutonGym icone={modal?.renouvellement ? Repeat : CheckCircle2} onClick={enregistrer} loading={saving}>
+            {modal?.id ? 'Enregistrer les modifications' : modal?.renouvellement ? 'Renouveler' : 'Enregistrer'}
+          </BoutonGym>
+        </>}>
+        {modal && (() => {
+          const libre = modal.categorie === 'classique' && !classiqueFixe
+          const tarifPlancher = libre ? null : tarifs[modal.categorie]
+          const differe = (modal.dateDebut || modal.date) > todayStr()
+          const entree = (i) => ({ animation: `ab-entree 0.4s ease-out ${i * 0.06}s both` })
+          return (
+          <div className="space-y-3">
+            <style>{`
+              @keyframes ab-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+              @keyframes ab-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+              @keyframes ab-pop { 0% { transform: scale(0.94); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+              @keyframes ab-reflet { 0% { transform: translateX(-120%) skewX(-12deg); } 100% { transform: translateX(520%) skewX(-12deg); } }
+              @keyframes ab-montant { 0% { transform: scale(0.96); opacity: 0.6; } 100% { transform: scale(1); opacity: 1; } }
+            `}</style>
+
+            {/* Héro en verre : icône 3D qui flotte, reflet qui passe de temps en temps. */}
+            <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl border border-white/40 p-4 text-white shadow-[0_16px_30px_-14px_rgba(166,52,42,0.65),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-xl"
+              style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, ${COULEUR2}e6 100%)`, animation: 'ab-entree 0.35s ease-out both' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/5 bg-white/25 blur-md" style={{ animation: 'ab-reflet 4.5s ease-in-out 1s infinite' }} />
+              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),inset_0_-3px_5px_rgba(0,0,0,0.2),0_10px_20px_-8px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+                {modal.renouvellement ? <Repeat size={26} style={{ animation: 'ab-flotte 2.8s ease-in-out infinite' }} /> : <CreditCard size={26} style={{ animation: 'ab-flotte 2.8s ease-in-out infinite' }} />}
+              </span>
+              <div className="relative min-w-0">
                 <p className="truncate text-lg font-extrabold leading-tight">{modal.clientNom || (modal.id ? 'Modifier l\'abonnement' : 'Nouvel abonnement')}</p>
-                <p className="text-sm text-white/80">
-                  {modal.categorie === 'classique' && !classiqueFixe ? 'Durée libre : définie à la saisie' : 'Durée par défaut : 1 mois calendaire, modifiable'}
+                <p className="text-sm text-white/85">
+                  {modal.renouvellement ? 'Renouvellement : le client n\'est pas réinscrit' : libre ? 'Durée libre : définie à la saisie' : 'Durée par défaut : 1 mois calendaire, modifiable'}
                 </p>
               </div>
             </div>
 
-            {/* 📋 Détails */}
-            <div className="rounded-2xl border border-red-200 border-l-4 border-l-red-400 bg-red-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-16px_rgba(26,26,26,0.20)]">
-              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-red-700">📋 Détails de l'abonnement</p>
-              <FormGroup label="👤 Client" required>
-                <div className="relative">
-                  <User size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <Input value={modal.clientNom} className="pl-8"
-                    onChange={(e) => {
-                      const nom = e.target.value
-                      const fiche = clients.find((c) => (c.nom || '').trim().toLowerCase() === nom.trim().toLowerCase())
-                      setModal((f) => ({ ...f, clientNom: nom, ...(fiche?.sexe ? { sexe: fiche.sexe } : {}) }))
-                      setSuggClient(true)
-                    }}
-                    onFocus={() => setSuggClient(true)}
-                    onBlur={() => setTimeout(() => setSuggClient(false), 150)}
-                    placeholder="Nom du client" autoComplete="off" />
-                  {suggClient && modal.clientNom.trim() && (() => {
-                    const q = modal.clientNom.trim().toLowerCase()
-                    const suggestions = clients.filter((c) => (c.nom || '').toLowerCase().includes(q) && (c.nom || '').toLowerCase() !== q).slice(0, 5)
-                    return suggestions.length > 0 ? (
-                      <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-                        {suggestions.map((c) => (
-                          <button key={c.id} type="button"
-                            onMouseDown={() => { setModal((f) => ({ ...f, clientNom: c.nom, telephone: c.telephone || f.telephone, sexe: c.sexe || f.sexe })); setSuggClient(false) }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-red-50">
-                            <span className="font-semibold text-gray-700">{c.nom}</span>
-                            {c.telephone && <span className="text-xs text-gray-400">· {c.telephone}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null
-                  })()}
-                </div>
-              </FormGroup>
-              <FormGroup label="⚥ Sexe" required={!modal.id} hint="Sert à suivre la proportion de femmes et d'hommes dans la salle">
-                <SexeBoutons value={modal.sexe} onChange={(v) => setModal((f) => ({ ...f, sexe: v }))} />
-              </FormGroup>
-              {!modal.id && (
-                <FormGroup label="📱 Téléphone (WhatsApp)" hint="Optionnel : pour la confirmation WhatsApp automatique">
+            {/* Bento : chaque information dans sa tuile de verre. */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2" style={entree(1)}>
+                <FormGroup label={<Etiq icone={User} couleur="#7c3aed">Client</Etiq>} required className="!mb-0">
                   <div className="relative">
-                    <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-green-500" />
-                    <Input className="pl-8" value={modal.telephone} onChange={(e) => setModal((f) => ({ ...f, telephone: e.target.value }))} placeholder="ex : 22890000000" />
+                    <User size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Input value={modal.clientNom} className="pl-8" disabled={!!modal.renouvellement}
+                      onChange={(e) => {
+                        const nom = e.target.value
+                        const fiche = clients.find((c) => (c.nom || '').trim().toLowerCase() === nom.trim().toLowerCase())
+                        setModal((f) => ({ ...f, clientNom: nom, ...(fiche?.sexe ? { sexe: fiche.sexe } : {}) }))
+                        setSuggClient(true)
+                      }}
+                      onFocus={() => setSuggClient(true)}
+                      onBlur={() => setTimeout(() => setSuggClient(false), 150)}
+                      placeholder="Nom du client" autoComplete="off" />
+                    {suggClient && modal.clientNom.trim() && (() => {
+                      const q = modal.clientNom.trim().toLowerCase()
+                      const suggestions = clients.filter((c) => (c.nom || '').toLowerCase().includes(q) && (c.nom || '').toLowerCase() !== q).slice(0, 5)
+                      return suggestions.length > 0 ? (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-white/70 bg-white/90 shadow-lg backdrop-blur-xl">
+                          {suggestions.map((c) => (
+                            <button key={c.id} type="button"
+                              onMouseDown={() => { setModal((f) => ({ ...f, clientNom: c.nom, telephone: c.telephone || f.telephone, sexe: c.sexe || f.sexe })); setSuggClient(false) }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-orange-50">
+                              <span className="font-semibold text-gray-700">{c.nom}</span>
+                              {c.telephone && <span className="text-xs text-gray-400">· {c.telephone}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null
+                    })()}
                   </div>
                 </FormGroup>
+              </div>
+
+              <div className={!modal.id && !modal.renouvellement ? '' : 'col-span-2'} style={entree(2)}>
+                <FormGroup label={<Etiq icone={Users} couleur="#ec4899">Sexe</Etiq>} required={!modal.id} className="!mb-0" hint="Pour suivre la proportion de femmes et d'hommes">
+                  <SexeBoutons value={modal.sexe} onChange={(v) => setModal((f) => ({ ...f, sexe: v }))} />
+                </FormGroup>
+              </div>
+              {!modal.id && !modal.renouvellement && (
+                <div style={entree(3)}>
+                  <FormGroup label={<Etiq icone={MessageCircle} couleur="#16a34a">Téléphone</Etiq>} className="!mb-0" hint="Optionnel : confirmation WhatsApp">
+                    <div className="relative">
+                      <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-green-500" />
+                      <Input className="pl-8" value={modal.telephone} onChange={(e) => setModal((f) => ({ ...f, telephone: e.target.value }))} placeholder="ex : 22890000000" />
+                    </div>
+                  </FormGroup>
+                </div>
               )}
-              <FormGroup label="🏷️ Catégorie" hint={categorieDesc(modal.categorie)}>
-                <div className="grid grid-cols-3 gap-2">
-                  {CATEGORIES_GYM.map((c) => {
-                    const actif = modal.categorie === c.id
-                    const coul = COULEUR_CATEGORIE[c.id]
-                    return (
-                      <button key={c.id} type="button" onClick={() => {
-                        setModal((f) => {
-                          const tarif = tarifs[c.id]
-                          const dureeJours = dureeJoursInitiale(c.id, f.dateDebut || f.date, classiqueFixe, dureeMin)
-                          return recalculerDateFin({ ...f, categorie: c.id, dureeJours, montant: tarif != null ? String(tarif) : f.montant })
-                        })
-                      }}
-                        className={`rounded-xl border px-2 py-2 text-xs font-bold transition-all ${actif ? 'text-white shadow-[0_6px_14px_-4px_rgba(0,0,0,0.35)]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
-                        style={actif ? { background: coul, borderColor: coul } : undefined}>
-                        {c.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </FormGroup>
-              <FormGroup label="📅 Date de souscription" hint="Jour où l'abonnement est enregistré / payé (compte dans le chiffre d'affaires de ce mois).">
-                <Input type="date" value={modal.date} onChange={(e) => setModal((f) => {
-                  // Tant que la date de début n'a pas été fixée à part, elle suit la souscription.
-                  const next = { ...f, date: e.target.value }
-                  if (!f.dateDebutManuelle) next.dateDebut = e.target.value
-                  return recalculerDateFin(next)
-                })} />
-              </FormGroup>
 
-              {/* Date de début effective — par défaut = souscription, mais le client peut
-                  vouloir commencer plus tard (ex. souscrit aujourd'hui, démarre le 1er du
-                  mois prochain). C'est ELLE qui détermine la date de fin et le statut. */}
-              <FormGroup label="▶️ Début de l'abonnement" required
-                hint={modal.dateDebutManuelle
-                  ? "Le client commence à cette date : l'abonnement reste « À venir » jusque-là."
-                  : 'Par défaut le jour de la souscription. Changez-le pour un démarrage différé.'}>
-                <div className="flex items-center gap-2">
-                  <Input type="date" value={modal.dateDebut || modal.date} min={modal.date}
-                    onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dateDebut: e.target.value, dateDebutManuelle: true }))} />
-                  {modal.dateDebutManuelle && (
-                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateDebut: f.date, dateDebutManuelle: false }))}
-                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50">
-                      🔄 Le jour même
-                    </button>
-                  )}
-                </div>
-                {(modal.dateDebut || modal.date) > todayStr() && (
-                  <p className="mt-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
-                    ⏳ Démarrage différé : l'abonnement sera « À venir » puis « Actif » le {formatDateShort(modal.dateDebut || modal.date)}.
-                  </p>
-                )}
-              </FormGroup>
+              {/* Catégorie : trois cartes en verre avec icône 3D ; la choisie se teinte et fait un petit « pop ». */}
+              <div className="col-span-2" style={entree(4)}>
+                <FormGroup label={<Etiq icone={Tag} couleur="#0ea5e9">Catégorie</Etiq>} className="!mb-0" hint={categorieDesc(modal.categorie)}>
+                  <div className="grid grid-cols-3 gap-2">
+                    {CATEGORIES_GYM.map((c) => {
+                      const actif = modal.categorie === c.id
+                      const coul = COULEUR_CATEGORIE[c.id]
+                      const Ic = ICONE_CATEGORIE[c.id]
+                      const tarif = tarifs[c.id]
+                      return (
+                        <button key={c.id} type="button" onClick={() => {
+                          setModal((f) => {
+                            const dureeJours = dureeJoursInitiale(c.id, f.dateDebut || f.date, classiqueFixe, dureeMin)
+                            return recalculerDateFin({ ...f, categorie: c.id, dureeJours, montant: tarif != null ? String(tarif) : f.montant })
+                          })
+                        }}
+                          className={`group relative flex flex-col items-center gap-1 overflow-hidden rounded-2xl border px-2 py-2.5 text-xs font-extrabold backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${actif ? 'border-white/60 text-white shadow-[0_12px_22px_-10px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.5)]' : 'border-white/70 bg-white/60 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] hover:bg-white/85'}`}
+                          style={actif ? { background: `linear-gradient(135deg, ${coul}, ${coul}cc)`, animation: 'ab-pop 0.3s ease-out' } : undefined}>
+                          {actif && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />}
+                          <span className="relative flex h-8 w-8 items-center justify-center rounded-xl" style={actif ? { background: 'rgba(255,255,255,0.25)', boxShadow: 'inset 0 2px 2px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.2)' } : icone3D(coul)}>
+                            <Ic size={16} className="transition-transform duration-300 group-hover:scale-110" />
+                          </span>
+                          <span className="relative">{c.label}</span>
+                          {tarif != null && tarif > 0 && <span className={`relative text-[10px] font-semibold ${actif ? 'text-white/85' : 'text-gray-400'}`}>{formatMoney(tarif)}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </FormGroup>
+              </div>
 
-              {/* Durée modifiable pour TOUTES les catégories — pas seulement Classique :
-                  pré-remplie sur l'équivalent d'1 mois calendaire (Simple/VIP/Classique
-                  fixe) ou sur le minimum de Paramètres (Classique libre), mais on peut y
-                  saisir plus ou moins pour un abonnement plus court ou plus long qu'un mois. */}
-              {(() => {
-                const libre = modal.categorie === 'classique' && !classiqueFixe
-                return (
-                  <FormGroup label="⏳ Durée (jours)" required={libre}
-                    hint={libre
-                      ? `Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. Ex : 7 = une semaine, 14 = deux semaines, 30 = un mois…`
-                      : "Pré-remplie sur l'équivalent d'un mois calendaire : modifiable pour un abonnement plus court ou plus long."}>
-                    <Input type="number" min={libre ? dureeMin : 1} value={modal.dureeJours}
-                      onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }))}
-                      placeholder={libre ? `ex : ${dureeMin}` : 'ex : 30'} />
-                  </FormGroup>
-                )
-              })()}
+              <div style={entree(5)}>
+                <FormGroup label={<Etiq icone={CalendarDays} couleur="#f59e0b">Souscription</Etiq>} className="!mb-0" hint="Jour de l'enregistrement : compte dans le chiffre d'affaires du mois.">
+                  <Input type="date" value={modal.date} onChange={(e) => setModal((f) => {
+                    // Tant que la date de début n'a pas été fixée à part, elle suit la souscription.
+                    const next = { ...f, date: e.target.value }
+                    if (!f.dateDebutManuelle) next.dateDebut = e.target.value
+                    return recalculerDateFin(next)
+                  })} />
+                </FormGroup>
+              </div>
+              <div style={entree(6)}>
+                <FormGroup label={<Etiq icone={CalendarCheck} couleur="#0d9488">Début</Etiq>} required className="!mb-0"
+                  hint={modal.dateDebutManuelle ? 'Le client commence à cette date.' : 'Par défaut le jour de la souscription.'}>
+                  <div className="flex items-center gap-2">
+                    <Input type="date" value={modal.dateDebut || modal.date} min={modal.date}
+                      onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dateDebut: e.target.value, dateDebutManuelle: true }))} />
+                    {modal.dateDebutManuelle && (
+                      <button type="button" title="Revenir au jour même" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateDebut: f.date, dateDebutManuelle: false }))}
+                        className="shrink-0 rounded-lg border border-white/70 bg-white/70 px-2 py-2 text-xs font-semibold text-gray-500 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white">🔄</button>
+                    )}
+                  </div>
+                </FormGroup>
+              </div>
+              {differe && (
+                <p className="col-span-2 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-1.5 text-xs font-semibold text-sky-700 backdrop-blur-md" style={{ animation: 'ab-entree 0.3s ease-out both' }}>
+                  ⏳ Démarrage différé : l'abonnement sera « À venir » puis « Actif » le {formatDateShort(modal.dateDebut || modal.date)}.
+                </p>
+              )}
 
-              <FormGroup label="🏁 Date de fin" required
-                hint={modal.dateFinManuelle ? 'Corrigée manuellement : recalculer pour revenir à la valeur automatique.' : 'Calculée automatiquement : modifiable si besoin de corriger.'}>
-                <div className="flex items-center gap-2">
-                  <Input type="date" value={modal.dateFin}
-                    onChange={(e) => setModal((f) => ({ ...f, dateFin: e.target.value, dateFinManuelle: true }))} />
-                  {modal.dateFinManuelle && (
-                    <button type="button" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateFinManuelle: false }))}
-                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50">
-                      🔄 Recalculer
-                    </button>
-                  )}
-                </div>
-              </FormGroup>
+              <div style={entree(7)}>
+                <FormGroup label={<Etiq icone={Hourglass} couleur="#8b5cf6">Durée (jours)</Etiq>} required={libre} className="!mb-0"
+                  hint={libre ? `Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. 7 = une semaine, 14 = deux semaines.` : 'Un mois calendaire par défaut, modifiable.'}>
+                  <Input type="number" min={libre ? dureeMin : 1} value={modal.dureeJours}
+                    onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }))}
+                    placeholder={libre ? `ex : ${dureeMin}` : 'ex : 30'} />
+                </FormGroup>
+              </div>
+              <div style={entree(8)}>
+                <FormGroup label={<Etiq icone={Flag} couleur="#dc2626">Fin</Etiq>} required className="!mb-0"
+                  hint={modal.dateFinManuelle ? 'Corrigée à la main.' : 'Calculée automatiquement, modifiable.'}>
+                  <div className="flex items-center gap-2">
+                    <Input type="date" value={modal.dateFin}
+                      onChange={(e) => setModal((f) => ({ ...f, dateFin: e.target.value, dateFinManuelle: true }))} />
+                    {modal.dateFinManuelle && (
+                      <button type="button" title="Recalculer la date de fin" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateFinManuelle: false }))}
+                        className="shrink-0 rounded-lg border border-white/70 bg-white/70 px-2 py-2 text-xs font-semibold text-gray-500 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white">🔄</button>
+                    )}
+                  </div>
+                </FormGroup>
+              </div>
 
-              {/* Pré-rempli sur le tarif de Paramètres dès que la catégorie en a un fixe
-                  (Simple/VIP toujours, Classique seulement si `classiqueFixe`), mais reste
-                  modifiable — ce tarif n'est qu'un PLANCHER (ex. majoration négociée), pas
-                  un prix imposé : impossible de descendre en dessous, cf. validation dans
-                  enregistrer(). Un Classique à prix libre (Lomé) n'a pas de plancher. */}
-              {(() => {
-                const tarifPlancher = (modal.categorie === 'classique' && !classiqueFixe) ? null : tarifs[modal.categorie]
-                return (
-                  <FormGroup label="💰 Montant (FCFA)" required
-                    hint={tarifPlancher > 0 ? `Minimum ${formatMoney(tarifPlancher)} pour cette catégorie : modifiable au-delà.` : undefined}>
-                    <Input type="number" min={tarifPlancher || 0} value={modal.montant} placeholder="ex : 15000"
-                      onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} />
-                  </FormGroup>
-                )
-              })()}
-              <FormGroup label="📝 Notes" hint="Optionnel">
-                <Input value={modal.notes} onChange={(e) => setModal((f) => ({ ...f, notes: e.target.value }))} />
-              </FormGroup>
+              <div className="col-span-2" style={entree(9)}>
+                <FormGroup label={<Etiq icone={Wallet} couleur="#16a34a">Montant (FCFA)</Etiq>} required className="!mb-0"
+                  hint={tarifPlancher > 0 ? `Minimum ${formatMoney(tarifPlancher)} pour cette catégorie : modifiable au-delà.` : undefined}>
+                  <Input type="number" min={tarifPlancher || 0} value={modal.montant} placeholder="ex : 15000"
+                    onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} />
+                </FormGroup>
+              </div>
+              <div className="col-span-2" style={entree(10)}>
+                <FormGroup label={<Etiq icone={StickyNote} couleur="#64748b">Notes</Etiq>} className="!mb-0" hint="Optionnel">
+                  <Input value={modal.notes} onChange={(e) => setModal((f) => ({ ...f, notes: e.target.value }))} />
+                </FormGroup>
+              </div>
             </div>
 
-            {/* Résumé — confirmation visuelle avant validation. Fond blanc opaque (pas de
-                teinte translucide) : sur le panneau glassmorphism déjà semi-transparent,
-                un fond en rgba faisait perdre le contraste du texte selon ce qu'il y a
-                derrière la modale. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-xl border px-3.5 py-2.5 shadow-sm"
-              style={{ background: '#ffffff', borderColor: `${COULEUR}40` }}>
+            {/* Résumé en verre : confirmation visuelle avant validation (fond assez opaque pour rester lisible). */}
+            <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 overflow-hidden rounded-2xl border border-white/80 bg-white/85 px-3.5 py-3 shadow-[0_12px_24px_-14px_rgba(166,52,42,0.45),inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-xl" style={entree(11)}>
               <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-gray-600">
-                <User size={13} className="shrink-0 text-gray-400" />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={icone3D('#7c3aed')}><User size={14} /></span>
                 <span className="truncate">{modal.clientNom || 'Client à saisir'}</span>
                 <Badge tone={categorieTone(modal.categorie)}>{categorieLabel(modal.categorie)}</Badge>
               </div>
-              <span className="shrink-0 text-base font-extrabold" style={{ color: COULEUR2 }}>{formatMoney(Number(modal.montant) || 0)}</span>
+              <span key={modal.montant} className="shrink-0 text-lg font-black" style={{ color: COULEUR2, animation: 'ab-montant 0.25s ease-out' }}>{formatMoney(Number(modal.montant) || 0)}</span>
               <span className="w-full shrink-0 text-[11px] text-gray-500">
                 {(modal.dateDebut || modal.date) !== modal.date
                   ? `Du ${formatDateShort(modal.dateDebut)} au ${formatDateShort(modal.dateFin)}`
@@ -657,11 +751,14 @@ export default function Abonnements() {
               <p className="text-[11px] text-gray-400">🧾 Une facture sera générée automatiquement : téléchargeable depuis le volet Facturation.</p>
             )}
           </div>
-        )}
+          )
+        })()}
       </Modal>
 
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
-        clients={clients} seances={seances} abonnements={abonnements} presences={presences} />
+        clients={clients} seances={seances} abonnements={abonnements} presences={presences}
+        onRenouveler={(a) => { setClientDetail(null); setModal(renouveler(a)) }} />
+      <PurgeClientModal dossier={purge} onClose={() => setPurge(null)} />
       <QrCarnetModal client={qrNouveauClient} onClose={() => setQrNouveauClient(null)} />
 
       {/* Calendrier rapide — accessible sans ouvrir la fiche complète du client, pour

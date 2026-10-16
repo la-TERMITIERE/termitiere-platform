@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import MobileBottomNav from './MobileBottomNav'
+import BarreDefilementFixe from './BarreDefilementFixe'
 import OfflineBanner from './OfflineBanner'
 import AlertesHeadsUp from './AlertesHeadsUp'
 import ActiverAlertes from './ActiverAlertes'
@@ -61,6 +62,7 @@ export default function AppShell() {
           </div>
         </main>
       </div>
+      <BarreDefilementFixe />
       <MobileBottomNav onOpenMenu={() => setSidebarOpen(true)} />
       {/* Motif obligatoire de toute suppression (cf. core/db.js) */}
       <MotifSuppressionHost />

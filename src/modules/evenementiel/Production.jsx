@@ -24,6 +24,7 @@ import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateShort, genNumero, formatNumber } from '../../utils/formatters'
 import { DUREE_PRODUCTION_OPTIONS } from './data'
+import { completerInventaire } from './logic'
 
 export default function Production() {
   const { user, role } = useAuth()
@@ -33,6 +34,7 @@ export default function Production() {
   // briques correspondantes du stock (cf. `supprimer` ci-dessous).
   const peutSupprimer = isFullAccessRole(role)
   const { data: productions } = useCollection('evenementiel_productions')
+  const { data: inventaires } = useCollection('evenementiel_inventaires') // sert à compléter un jour créé par une production
   const briques = useBriqueterieStore((s) => s.briques.filter((b) => b.id !== 'caillasses'))
 
   const [open, setOpen] = useState(false)
@@ -113,7 +115,7 @@ export default function Production() {
         // en appatam (signe qu'une partie est déjà passée en séchage).
         await updateAtomic('evenementiel_inventaires', form.date, (cur) => {
           echec = null
-          cur = cur || { date: form.date, matieres: {}, briques: {} }
+          cur = completerInventaire(cur, inventaires, form.date)
           const briquesStock = { ...(cur.briques || {}) }
           const briqueIds = new Set([...(vAvant.lignes || []).map((l) => l.briqueId), ...lignes.map((l) => l.briqueId)])
           for (const id of briqueIds) {
@@ -167,7 +169,7 @@ export default function Production() {
         })
         if (echec) return toast.error(echec)
         await updateAtomic('evenementiel_inventaires', form.date, (cur) => {
-          cur = cur || { date: form.date, matieres: {}, briques: {} }
+          cur = completerInventaire(cur, inventaires, form.date)
           const briquesStock = { ...(cur.briques || {}) }
           lignes.forEach((l) => {
             const c = briquesStock[l.briqueId] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
@@ -206,7 +208,7 @@ export default function Production() {
       // n'avait pas encore rattrapé l'écriture précédente — updateAtomic relit
       // toujours la valeur réelle en base au moment de l'écriture.
       await updateAtomic('evenementiel_inventaires', form.date, (cur) => {
-        cur = cur || { date: form.date, matieres: {}, briques: {} }
+        cur = completerInventaire(cur, inventaires, form.date)
         const briquesStock = { ...(cur.briques || {}) }
         lignes.forEach((l) => {
           const c = briquesStock[l.briqueId] || { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }

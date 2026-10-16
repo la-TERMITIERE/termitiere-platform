@@ -113,7 +113,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
       const banque = banques.find((b) => b.id === d.banqueId)
       const { secteurId: sid, secteurNom, siteNom, solde, ...champs } = d // champs d'affichage : jamais enregistrés
       void secteurNom; void siteNom; void solde
-      const donnees = { ...champs, site: secteur?.sites?.length ? d.site : '', montant, banqueId: banque?.id || '', banqueNom: banque?.nom || '', ...(estAutreSource(sid) ? { sourceId: idSource(sid) } : {}) }
+      const donnees = { ...champs, site: secteur?.sites?.length ? d.site : '', montant, banqueId: banque?.id || '', banqueNom: banque?.nom || '', banqueNumero: banque?.numero || '', ...(estAutreSource(sid) ? { sourceId: idSource(sid) } : {}) }
       const collection = collectionBanque(sid)
       const info = TYPES_MOUVEMENT_BANQUE[d.type]
       const desc = `${info.label} : ${montant.toLocaleString('fr-FR')} FCFA${banque ? ` (${banque.nom})` : ''}${d.origine ? ` (${d.origine})` : ''}`
@@ -222,7 +222,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {banquesVisibles.map((b) => (
-                  <Choix key={b.id} actif={d.banqueId === b.id} couleur={COULEUR_BANQUE} onClick={() => set('banqueId', d.banqueId === b.id ? '' : b.id)}><Landmark size={12} /> {b.nom}</Choix>
+                  <Choix key={b.id} actif={d.banqueId === b.id} couleur={COULEUR_BANQUE} onClick={() => set('banqueId', d.banqueId === b.id ? '' : b.id)}><Landmark size={12} /> {b.nom}{b.numero ? <span className="font-mono text-[10px] opacity-80">••{String(b.numero).slice(-4)}</span> : null}</Choix>
                 ))}
                 {banques.length > MAX_BANQUES_VISIBLES && (
                   <button type="button" onClick={() => setToutesBanques((x) => !x)}

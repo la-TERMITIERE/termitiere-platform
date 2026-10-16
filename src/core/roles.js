@@ -109,6 +109,16 @@ export const peutVoirCaMensuel = (r) => CA_MENSUEL_ROLES.includes(r)
 export const READONLY_ROLES = ['superviseur', 'partenaire']
 export const isReadOnlyRole = (r) => READONLY_ROLES.includes(r)
 
+// MAXI-GYM (décision du 16/10/2026) : seuls les AGENTS (réception) et INFO écrivent dans ce module ; tous les autres
+// profils y sont en lecture seule. Le verrou est posé dans db.js (collections `gym_*`) ; l'affichage suit ces règles.
+//   - peutEcrireGym : enregistrer, modifier, pointer, renouveler ;
+//   - peutPurgerClientGym : supprimer un client dont l'abonnement est terminé (les agents y ont droit) ;
+//   - peutAdministrerGym : suppressions ordinaires, forfaits, règlements : Info seulement (un agent ne supprime jamais).
+export const GYM_ECRITURE_ROLES = ['agent', 'info']
+export const peutEcrireGym = (r) => GYM_ECRITURE_ROLES.includes(r)
+export const peutPurgerClientGym = (r) => GYM_ECRITURE_ROLES.includes(r)
+export const peutAdministrerGym = (r) => r === 'info'
+
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
 // secrétaire/l'agent (administratif) et le chef de projet (terrain, cloisonné à ses projets).
 export const PROJET_PILOTAGE_ROLES = ROLES.map((r) => r.value)

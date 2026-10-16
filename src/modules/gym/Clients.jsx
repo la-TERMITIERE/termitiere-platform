@@ -11,7 +11,7 @@
 // restent strictement par salle — ce cloisonnement n'est levé qu'ici.
 import ChampRecherche from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
-import { Users, Eye, EyeOff, Search, Trash2, AlertTriangle } from 'lucide-react'
+import { Users, Eye, EyeOff, Search, Trash2, AlertTriangle, Eraser } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Table from '../../shared/ui/Table'
@@ -23,11 +23,15 @@ import { useAuth } from '../../hooks/useAuth'
 import { removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isFullAccessRole } from '../../core/roles'
+import { peutAdministrerGym, peutPurgerClientGym } from '../../core/roles'
 import { glassModalProps } from '../../utils/color'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { joursDepuis, categorieLabel, categorieTone, abonnementActif } from './data'
 import ClientDetailModal from './ClientDetailModal'
+import JoursRestants from './JoursRestants'
+import PurgeClientModal from './PurgeClientModal'
+import { dossierClient, dossierTermine } from './purgeClient'
+import { useGymParams } from './useGymParams'
 import { SITES, siteLabel } from './site/useSite'
 
 const COULEUR = '#E8850F'
@@ -40,7 +44,8 @@ const cleClientSite = (site, nom) => `${site || 'lome'}::${(nom || '').trim().to
 
 export default function Clients() {
   const { role } = useAuth()
-  const peutSupprimer = isFullAccessRole(role) // administration + Info
+  const peutSupprimer = peutAdministrerGym(role) // Info
+  const peutPurger = peutPurgerClientGym(role) // agents + Info : client terminé
   const { data: clients } = useCollection('gym_clients')
   const { data: seances } = useCollection('gym_seances')
   const { data: abonnements } = useCollection('gym_abonnements')
@@ -50,6 +55,10 @@ export default function Clients() {
   const [filtreSite, setFiltreSite] = useState('') // '' = toutes les salles
   const [recherche, setRecherche] = useState('')
   const [toDelete, setToDelete] = useState(null)
+  const [purge, setPurge] = useState(null) // dossier d'un client terminé à supprimer totalement
+  const paramsLome = useGymParams('lome')
+  const paramsKara = useGymParams('kara')
+  const validiteHeures = (site) => (site === 'kara' ? paramsKara : paramsLome).validiteSeanceHeures
   const [suppression, setSuppression] = useState(false)
 
   async function confirmerSuppression() {
@@ -199,6 +208,10 @@ export default function Clients() {
               if (abo.aVenir) return <Badge tone="info">Débute le {formatDateShort(abo.dateDebut)}</Badge>
               return <Badge tone={abo.actif ? 'success' : 'neutral'}>{abo.actif ? `Actif jusqu'au ${formatDateShort(abo.dateFin)}` : 'Expiré'}</Badge>
             } },
+            { key: 'reste', label: 'Jours restants', render: (r) => {
+              const abo = abonnementParNom.get(cleClientSite(r.site, r.nom))
+              return abo ? <JoursRestants dateFin={abo.dateFin} dateDebut={abo.dateDebut} /> : <span className="text-gray-400">—</span>
+            } },
             { key: 'telephone', label: 'Téléphone', render: (r) => r.telephone || '—' },
             { key: 'derniereVisite', label: 'Dernière visite', render: (r) => {
               const derniere = derniereVisiteParNom.get(cleClientSite(r.site, r.nom))
@@ -212,15 +225,29 @@ export default function Clients() {
             } },
             { key: 'total', label: 'Total dépensé', align: 'right', render: (r) => <strong>{formatMoney(cumulParNom.get(cleClientSite(r.site, r.nom)) || 0)}</strong> },
             { key: 'notes', label: 'Notes', render: (r) => r.notes || '—' },
-            ...(peutSupprimer ? [{
-              key: 'actions', label: '', align: 'right', render: (r) => (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setToDelete(r) }}
-                  title="Supprimer la fiche client"
-                  className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100">
-                  <Trash2 size={15} />
-                </button>
-              )
+            ...((peutSupprimer || peutPurger) ? [{
+              key: 'actions', label: '', align: 'right', render: (r) => {
+                // Abonnement (ou séance) terminé : suppression TOTALE possible, pour libérer la base.
+                const dossier = dossierClient({ nom: r.nom, site: r.site || 'lome', clients, abonnements, seances, presences })
+                const termine = dossierTermine(dossier, validiteHeures(r.site || 'lome'))
+                return (
+                  <div className="flex justify-end gap-1">
+                    {peutPurger && termine && (
+                      <button onClick={(e) => { e.stopPropagation(); setPurge(dossier) }}
+                        title="Abonnement terminé : supprimer totalement ce client de la base"
+                        className="rounded-lg border border-red-300 bg-red-100 p-1.5 text-red-700 transition-colors hover:bg-red-200">
+                        <Eraser size={15} />
+                      </button>
+                    )}
+                    {peutSupprimer && <button
+                      onClick={(e) => { e.stopPropagation(); setToDelete(r) }}
+                      title="Retirer la fiche du répertoire (l'historique est conservé)"
+                      className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100">
+                      <Trash2 size={15} />
+                    </button>}
+                  </div>
+                )
+              }
             }] : [])
           ]}
           rows={clientsAffiches}
@@ -231,6 +258,7 @@ export default function Clients() {
 
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
         clients={clients} seances={seances} abonnements={abonnements} presences={presences} />
+      <PurgeClientModal dossier={purge} onClose={() => setPurge(null)} />
 
       {/* Confirmation de suppression d'une fiche client — réservée à l'administration.
           L'historique des séances / abonnements / présences n'est PAS effacé : seule

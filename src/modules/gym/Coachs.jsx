@@ -12,7 +12,7 @@ import StatCard from '../../shared/ui/StatCard'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isReadOnlyRole, canExportGym } from '../../core/roles'
+import { peutEcrireGym, canExportGym } from '../../core/roles'
 import { genererRapportMultiPDF } from '../../utils/exportPDF'
 import { todayStr, formatDateShort } from '../../utils/formatters'
 import { creneauCoach, horairesVides, JOURS_SEMAINE } from './data'
@@ -22,7 +22,7 @@ import CoachDetailModal from './CoachDetailModal'
 import { CoachBoutonsStyles, BoutonPointer, BoutonPointerRepos, BoutonAbsent, IndicateurRepos } from './CoachBoutons'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import CoachFormModal from './CoachFormModal'
-import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle } from './uiHelpers'
+import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, BoutonGym } from './uiHelpers'
 
 const COULEUR = '#E8850F'
 const COULEUR2 = '#A6342A'
@@ -37,7 +37,7 @@ const RANG_PODIUM = [
 
 export default function Coachs() {
   const { user, role } = useAuth()
-  const peutSaisir = !isReadOnlyRole(role)
+  const peutSaisir = peutEcrireGym(role)
   const site = useSite()
   const { data: allCoachs } = useCollection('gym_coachs')
   const { data: allPointages } = useCollection('gym_pointages_coach')
@@ -289,9 +289,7 @@ export default function Coachs() {
           {!coachs.length && <p className="py-4 text-center text-sm text-gray-400">Aucun coach enregistré pour {siteLabel(site)}.</p>}
         </div>
         {peutSaisir && (
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCoachModal({ nom: '', horaires: horairesVides() })}>
-            <Plus size={14} /> Ajouter un coach
-          </Button>
+          <BoutonGym variante="ajouter" icone={Plus} className="mt-3" onClick={() => setCoachModal({ nom: '', horaires: horairesVides() })}>Ajouter un coach</BoutonGym>
         )}
       </Card>
 

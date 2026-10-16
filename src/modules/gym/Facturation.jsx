@@ -17,7 +17,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { isFullAccessRole, canExportGym } from '../../core/roles'
+import { peutAdministrerGym, canExportGym } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { imprimerTicketSeance } from './printTicket'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -40,7 +40,7 @@ export default function Facturation() {
   const [recherche, setRecherche] = useState('')
   const { generateFacturePDF } = usePDF('gym')
   const { role } = useAuth()
-  const peutSupprimer = isFullAccessRole(role)
+  const peutSupprimer = peutAdministrerGym(role)
 
   // Filtre de période — Jour / Mois / Année, sur la liste affichée ci-dessous.
   // Par défaut sur le MOIS EN COURS (pas « Tous ») : c'est ce qui permet au Cumul

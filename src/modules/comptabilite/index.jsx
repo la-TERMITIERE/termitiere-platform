@@ -1,6 +1,6 @@
 // Module COMPTABILITÉ — routes internes (reproduction fidèle de la Comptabilité FEZIRE,
 // socle SYSCOHADA Révisé). Sections alignées sur /accounting/* de FEZIRE.
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import Dashboard from './Dashboard'
 import Ecritures from './Ecritures'
 import Faits from './Faits'
@@ -8,6 +8,7 @@ import Automatisation from './Automatisation'
 import Supervision from './Supervision'
 import Tiers from './Tiers'
 import MouvementsBancaires from './MouvementsBancaires'
+import ComptesBancaires from './ComptesBancaires'
 import SuiviJournalier from './SuiviJournalier'
 import GrandLivre from './GrandLivre'
 import Analytique from './Analytique'
@@ -20,6 +21,12 @@ import ModelesPlans from './ModelesPlans'
 import Params from './Params'
 import { useAuth } from '../../hooks/useAuth'
 import { peutVoirVoletsAdmin, peutVoirBanque, isFullAccessRole } from '../../core/roles'
+
+// Mouvements d'un compte bancaire : la clé force un état neuf quand on passe d'un compte à l'autre.
+function MouvementsDuCompte() {
+  const { banqueId } = useParams()
+  return <MouvementsBancaires key={banqueId} />
+}
 
 export default function ComptabiliteModule() {
   const role = useAuth((s) => s.role)
@@ -36,7 +43,8 @@ export default function ComptabiliteModule() {
       <Route path="supervision" element={<Supervision />} />
       <Route path="tiers" element={<Tiers />} />
       {/* Mouvements bancaires : réservé à PAU / Assistant PAU / GE / Info (BANQUE_ROLES), comme les comptes bancaires des secteurs. */}
-      <Route path="mouvements-bancaires" element={peutVoirBanque(role) ? <MouvementsBancaires /> : <Navigate to="/comptabilite" replace />} />
+      <Route path="mouvements-bancaires" element={peutVoirBanque(role) ? <ComptesBancaires /> : <Navigate to="/comptabilite" replace />} />
+      <Route path="mouvements-bancaires/:banqueId" element={peutVoirBanque(role) ? <MouvementsDuCompte /> : <Navigate to="/comptabilite" replace />} />
       <Route path="grand-livre" element={<GrandLivre />} />
       {/* Ancienne route Balance fusionnée dans « Balance & Grand Livre ». */}
       <Route path="balance" element={<Navigate to="/comptabilite/grand-livre" replace />} />
