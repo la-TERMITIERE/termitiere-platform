@@ -14,7 +14,7 @@ const montant = (m) => Number(m.montant) || 0
 const dateHeure = (t) => (t ? new Date(t).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null)
 
 // secteur : l'entrée de parSecteur (initial, rows, color, nom) du mouvement.
-export default function MouvementFiche({ mouvement, secteur, banque, onClose, onModifier, onSupprimer }) {
+export default function MouvementFiche({ mouvement, secteur, banque, numero, onClose, onModifier, onSupprimer }) {
   const m = mouvement
   const depot = m?.type === 'depot'
   const couleur = depot ? '#2563eb' : '#dc2626'
@@ -61,6 +61,7 @@ export default function MouvementFiche({ mouvement, secteur, banque, onClose, on
             { label: 'Secteur', value: m.secteurNom },
             { label: 'Site', value: m.siteNom },
             { label: 'Banque', value: banque || 'Non précisée' },
+            { label: 'N° de compte', value: numero || (banque ? 'Non renseigné' : '') },
             { label: "Type d'action", value: m.libelle },
             { label: 'Origine / destination des fonds', value: m.origine },
             { label: 'Personne en charge', value: m.personne },

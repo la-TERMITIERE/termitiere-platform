@@ -4,7 +4,8 @@
 // choisi apparaît alors en tête. Toucher « Dépôts » ou « Retraits » ouvre le détail. Les anciens volets
 // « Compte bancaire » des secteurs sont retirés. Réservé à PAU / Assistant PAU / GE / Info (BANQUE_ROLES).
 import { useMemo, useState } from 'react'
-import { Plus, Landmark, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CalendarDays, Layers, FileText, Wallet, ListOrdered, FileSpreadsheet, Paperclip, Inbox, Pencil, Trash2 } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Plus, Landmark, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CalendarDays, Layers, FileText, Wallet, ListOrdered, FileSpreadsheet, Paperclip, Inbox, Pencil, Trash2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -27,7 +28,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_MOUVEMENT_BANQUE, SECTEURS as SECTEURS_DEPENSE, LOGISTIQUE_SITES } from '../depense/data'
-import { PREFIXE_AUTRE, collectionBanque, moduleAudit } from '../../shared/banque/comptes'
+import { PREFIXE_AUTRE, collectionBanque, moduleAudit, teinteBanque } from '../../shared/banque/comptes'
 import BandeauCompta, { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 // Un compte bancaire par secteur : collection `${id}_banque`. Les secteurs sont ceux d'E-DÉPENSES, sans la
@@ -45,21 +46,13 @@ const montant = (m) => Number(m.montant) || 0
 const somme = (rows, type) => rows.filter((m) => m.type === type).reduce((t, m) => t + montant(m), 0)
 const TH = 'sticky top-0 z-10 bg-orange-50 shadow-[0_1px_0_rgba(234,88,12,0.25)] dark:bg-gray-800 px-3 py-2.5'
 
-// Chaque banque garde sa teinte (SUNU, NSIA…) pour la repérer d'un coup d'œil dans la liste.
-const TEINTES_BANQUE = ['#0f766e', '#4f46e5', '#b45309', '#be185d', '#0369a1', '#7c3aed']
-const teinteBanque = (nom) => {
-  let h = 0
-  for (const c of String(nom)) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return TEINTES_BANQUE[h % TEINTES_BANQUE.length]
-}
-
 // Indicateur de la banque où le dépôt (ou le retrait) a été fait : pastille teintée avec la petite icône de banque.
-function PastilleBanque({ nom }) {
+function PastilleBanque({ nom, numero }) {
   if (!nom) return <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] font-semibold text-gray-400"><Landmark size={11} /> Non précisée</span>
   const c = teinteBanque(nom)
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold shadow-sm" style={{ background: `linear-gradient(135deg, ${c}22, ${c}0d)`, color: c, boxShadow: `inset 0 0 0 1px ${c}33` }}>
-      <Landmark size={11} strokeWidth={2.4} /> {nom}
+      <Landmark size={11} strokeWidth={2.4} /> {nom}{numero ? <span className="font-mono text-[10px] opacity-80">••{String(numero).slice(-4)}</span> : null}
     </span>
   )
 }
@@ -93,7 +86,10 @@ export default function MouvementsBancaires() {
 
   const [secteur, setSecteur] = useState('') // '' = tous les secteurs
   const [type, setType] = useState('') // '' | 'depot' | 'retrait'
-  const [banqueFiltre, setBanqueFiltre] = useState('') // '' = toutes, '__aucune__' = non précisée
+  // Ouvert depuis la carte d'un compte (…/mouvements-bancaires/:banqueId) : ce compte est déjà choisi.
+  const { banqueId } = useParams()
+  const navigate = useNavigate()
+  const [banqueFiltre, setBanqueFiltre] = useState(banqueId && banqueId !== 'tous' ? banqueId : '') // '' = toutes, '__aucune__' = non précisée
   const [mois, setMois] = useState('')
   const [recherche, setRecherche] = useState('')
   const [ajout, setAjout] = useState(false)
@@ -107,6 +103,7 @@ export default function MouvementsBancaires() {
 
   const secteurComplet = (m) => (m.siteNom ? `${m.secteurNom} · ${m.siteNom}` : m.secteurNom)
   const nomBanque = (m) => banques.find((b) => b.id === m.banqueId)?.nom || m.banqueNom || ''
+  const numeroBanque = (m) => banques.find((b) => b.id === m.banqueId)?.numero || m.banqueNumero || ''
   const peutEcrire = !isReadOnlyRole(role)
 
   // Solde de chaque secteur : ouverture + dépôts - retraits.
@@ -227,22 +224,22 @@ export default function MouvementsBancaires() {
         {
           name: 'Soldes par banque', title: 'Comptes bancaires : soldes par banque', subtitle: `Situation au ${formatDateShort(todayStr())}`,
           columns: [
-            { key: 'banque', label: 'Banque', width: 26 }, { key: 'ouverture', label: "Solde d'ouverture", type: 'money', width: 18 },
+            { key: 'banque', label: 'Banque', width: 26 }, { key: 'numero', label: 'N° de compte', width: 22 }, { key: 'ouverture', label: "Solde d'ouverture", type: 'money', width: 18 },
             { key: 'depots', label: 'Dépôts', type: 'money', width: 16 }, { key: 'retraits', label: 'Retraits', type: 'money', width: 16 },
             { key: 'solde', label: 'Solde actuel', type: 'money', width: 18 }, { key: 'nb', label: 'Mouvements', width: 12 }
           ],
-          rows: parBanque.map((b) => ({ banque: b.nom, ouverture: b.initial, depots: b.depots, retraits: b.retraits, solde: b.solde, nb: b.rows.length })),
+          rows: parBanque.map((b) => ({ banque: b.nom, numero: b.rec?.numero || '', ouverture: b.initial, depots: b.depots, retraits: b.retraits, solde: b.solde, nb: b.rows.length })),
           totals: { __label: 'TOTAL', ouverture: parBanque.reduce((t, b) => t + b.initial, 0), depots: parBanque.reduce((t, b) => t + b.depots, 0), retraits: parBanque.reduce((t, b) => t + b.retraits, 0), solde: soldeTotalBanques }
         },
         {
           name: 'Mouvements', title: 'Mouvements bancaires', subtitle: `${liste.length} mouvement(s)${choisi ? ` : ${choisi.nom}` : ''}${mois ? ` : ${mois}` : ''}`,
           columns: [
             { key: 'date', label: 'Date', width: 12 }, { key: 'secteur', label: 'Secteur', width: 22 }, { key: 'libelle', label: 'Libellé', width: 34 },
-            { key: 'banque', label: 'Banque', width: 20 }, { key: 'origine', label: 'Origine', width: 24 }, { key: 'personne', label: 'Personne', width: 22 }, { key: 'type', label: 'Type', width: 12 },
+            { key: 'banque', label: 'Banque', width: 20 }, { key: 'numero', label: 'N° de compte', width: 22 }, { key: 'origine', label: 'Origine', width: 24 }, { key: 'personne', label: 'Personne', width: 22 }, { key: 'type', label: 'Type', width: 12 },
             { key: 'depot', label: 'Dépôt', type: 'money', width: 16 }, { key: 'retrait', label: 'Retrait', type: 'money', width: 16 }
           ],
           rows: liste.map((m) => ({
-            date: formatDateShort(m.date), secteur: secteurComplet(m), libelle: m.libelle || '', banque: nomBanque(m), origine: m.origine || '', personne: m.personne || '',
+            date: formatDateShort(m.date), secteur: secteurComplet(m), libelle: m.libelle || '', banque: nomBanque(m), numero: numeroBanque(m), origine: m.origine || '', personne: m.personne || '',
             type: TYPES_MOUVEMENT_BANQUE[m.type]?.label || m.type, depot: m.type === 'depot' ? montant(m) : 0, retrait: m.type === 'retrait' ? montant(m) : 0
           })),
           totals: { __label: 'TOTAL', depot: totalListeDepots, retrait: totalListeRetraits }
@@ -253,7 +250,10 @@ export default function MouvementsBancaires() {
 
   return (
     <div className="space-y-5">
-      <BandeauCompta icone={Landmark} titre="Mouvements bancaires" sous="Soldes et mouvements des comptes bancaires de tous les secteurs.">
+      <BandeauCompta icone={Landmark}
+        titre={banqueChoisie && banqueId === banqueChoisie.id ? banqueChoisie.nom : 'Mouvements bancaires'}
+        sous={banqueChoisie && banqueId === banqueChoisie.id ? `${banqueChoisie.rec?.numero ? `Compte N° ${banqueChoisie.rec.numero} · ` : ''}mouvements de tous les secteurs sur ce compte.` : 'Soldes et mouvements des comptes bancaires de tous les secteurs.'}>
+        <BoutonBande icone={ArrowLeft} onClick={() => navigate('/comptabilite/mouvements-bancaires')} title="Revenir au choix du compte">Comptes</BoutonBande>
         <ChampBande label="Secteur">
           <select value={secteur} onChange={(e) => setSecteur(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-36`}>
             <option value="">Tous les secteurs</option>
@@ -271,7 +271,7 @@ export default function MouvementsBancaires() {
         <ChampBande label="Banque">
           <select value={banqueFiltre} onChange={(e) => setBanqueFiltre(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-32`}>
             <option value="">Toutes</option>
-            {banques.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
+            {banques.map((b) => <option key={b.id} value={b.id}>{b.nom}{b.numero ? ` · N° ${b.numero}` : ''}</option>)}
             <option value="__aucune__">Non précisée</option>
           </select>
         </ChampBande>
@@ -319,7 +319,7 @@ export default function MouvementsBancaires() {
         {/* Le solde d'une banque n'apparaît que lorsqu'on filtre sur cette banque. */}
         {banqueChoisie && (
           <div className="relative">
-            <StatCard title={`SOLDE ${banqueChoisie.nom}`.toUpperCase()} value={formatMoney(banqueChoisie.solde)} sub={`${banqueChoisie.rows.length} mouvement(s) · tous secteurs`} accent="#0f766e" icon={Landmark} onClick={() => setSoldes(true)} />
+            <StatCard title={`SOLDE ${banqueChoisie.nom}`.toUpperCase()} value={formatMoney(banqueChoisie.solde)} sub={`${banqueChoisie.rec?.numero ? `N° ${banqueChoisie.rec.numero} · ` : ''}${banqueChoisie.rows.length} mouvement(s) · tous secteurs`} accent="#0f766e" icon={Landmark} onClick={() => setSoldes(true)} />
             {banqueChoisie.rec && isFullAccessRole(role) && (
               <button type="button" title="Modifier le solde d'ouverture de la banque" aria-label="Modifier le solde d'ouverture de la banque"
                 onClick={() => setOuvBanque({ id: banqueChoisie.id, nom: banqueChoisie.nom, montant: banqueChoisie.initial, date: banqueChoisie.rec.dateOuverture || todayStr() })}
@@ -368,7 +368,7 @@ export default function MouvementsBancaires() {
                       </p>
                       {(m.origine || m.personne) && <p className="text-[11px] text-gray-500">{[m.origine, m.personne].filter(Boolean).join(' · ')}</p>}
                     </td>
-                    <td className="px-3 py-2"><PastilleBanque nom={nomBanque(m)} /></td>
+                    <td className="px-3 py-2"><PastilleBanque nom={nomBanque(m)} numero={numeroBanque(m)} /></td>
                     <td className="px-3 py-2"><PastilleType type={m.type} label={t.label} /></td>
                     <td className={`whitespace-nowrap px-3 py-2 text-right font-extrabold ${t.signe > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                       {t.signe > 0 ? '+' : '-'}{montant(m).toLocaleString('fr-FR')}
@@ -411,7 +411,7 @@ export default function MouvementsBancaires() {
         secteurs={parSecteur.map((x) => ({ id: x.id, nom: x.nom, color: x.color, sites: x.sites }))} secteurId={edition?.secteurId} mouvement={edition} />
 
       {/* Tous les détails d'un mouvement */}
-      <MouvementFiche mouvement={fiche} secteur={fiche ? parSecteur.find((x) => x.id === fiche.secteurId) : null} banque={fiche ? nomBanque(fiche) : ''}
+      <MouvementFiche mouvement={fiche} secteur={fiche ? parSecteur.find((x) => x.id === fiche.secteurId) : null} banque={fiche ? nomBanque(fiche) : ''} numero={fiche ? numeroBanque(fiche) : ''}
         onClose={() => setFiche(null)}
         onModifier={peutEcrire ? (m) => { setFiche(null); setEdition(m) } : null}
         onSupprimer={isFullAccessRole(role) ? (m) => { setFiche(null); supprimer(m) } : null} />
