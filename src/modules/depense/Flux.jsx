@@ -27,6 +27,7 @@ export default function Flux() {
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
+  const { data: facturesGym } = useCollection('gym_factures')
 
   // Coût matières Briqueterie, inclus en lecture seule — pas de double saisie. Les
   // dépenses de projet (E-G.Pro) n'apparaissent plus ici — elles ne se consultent
@@ -37,7 +38,7 @@ export default function Flux() {
     ...coutsMatieresBriqueterie(inventairesBriq)
   ].filter(visibleDansEDepenses), [depensesReelles, inventairesBriq])
 
-  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
+  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym }
 
   const [annee, setAnnee] = useState(now.getFullYear())
   const [mois, setMois]   = useState(now.getMonth() + 1)
@@ -52,18 +53,18 @@ export default function Flux() {
   const revenuMois = (a, m) => SECTEURS_AVEC_REVENU.reduce((s, id) => s + revenuSecteur(collections, id, a, m), 0)
 
   const solde = useMemo(() => soldesFluxMois(depenses, revenuMois(annee, mois), annee, mois),
-    [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+    [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym, annee, mois])
 
   const { annee: aPrec, mois: mPrec } = moisPrecedent(annee, mois)
   const soldePrecedent = useMemo(() => soldesFluxMois(depenses, revenuMois(aPrec, mPrec), aPrec, mPrec),
-    [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, aPrec, mPrec])
+    [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym, aPrec, mPrec])
 
   const tauxCroissance = croissance(solde.soldeGlobal, soldePrecedent.soldeGlobal)
 
   const tendance = useMemo(() => derniersMois(6, MOIS_LABELS).map(({ annee: a, mois: m, label }) => {
     const s = soldesFluxMois(depenses, revenuMois(a, m), a, m)
     return { label, ...s }
-  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel])
+  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym])
 
   // Barres = solde de chaque nature (exploitation / investissement / perte), ligne = solde global.
   // Le zéro accentué sépare visuellement gain (au-dessus) et sortie (en-dessous).

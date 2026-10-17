@@ -78,6 +78,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const { data: facturesAgro }        = useCollection('agro_factures')
   const { data: facturesLogistique }  = useCollection('logistique_factures')
   const { data: facturesEvenementiel }= useCollection('evenementiel_factures')
+  const { data: facturesGym } = useCollection('gym_factures')
   const { data: usersTous }           = useCollection('users')
   const { data: depenseParams }       = useCollection('depense_params')
   // Seuils d'alerte configurables en Paramètres — cf. Dashboard.jsx.
@@ -97,7 +98,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const peutModifierApport = !lectureSeule
   const peutGererApport = isFullAccessRole(role)
 
-  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
+  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym }
 
   // Dépenses = saisies directes + Briqueterie. Tout ce qui vient d'E-G.Pro (repérable à
   // son `projetId`) n'apparaît plus ici — ça ne se consulte que depuis E-G.Pro lui-même.
@@ -216,7 +217,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
       proposeParText: budgetDoc?.proposeParText || null, motifPropose: budgetDoc?.motifPropose || null
     }
-  }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois, seuils])
+  }), [secteursAffiches, budgets, depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym, annee, mois, seuils])
 
   // Journal consolidé de tous les apports/ajouts de budget du mois, tous secteurs (+
   // sites) confondus — onglet « Apports & ajouts » de la vue standalone. Chaque révision

@@ -39,8 +39,16 @@ export function revenuLogistique(factures, annee, mois, site = null) {
     .reduce((s, f) => s + (Number(f.totalTTC) || 0), 0)
 }
 
+// MAXI-GYM : les factures (abonnements, séances) de ses salles, comptées comme dans le volet Recettes de la Comptabilité.
+export function revenuGym(factures, annee, mois) {
+  const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
+  return (factures || [])
+    .filter((f) => (f.date || '').startsWith(prefixe))
+    .reduce((s, f) => s + (Number(f.montant) || 0), 0)
+}
+
 // Secteurs pour lesquels un revenu réel est disponible ailleurs dans l'application.
-export const SECTEURS_AVEC_REVENU = ['garderie', 'agro', 'logistique', 'evenementiel']
+export const SECTEURS_AVEC_REVENU = ['garderie', 'agro', 'logistique', 'evenementiel', 'gym']
 
 // `versementsClientRoutes` (optionnel) : versements clients des projets E-G.Pro déjà
 // routés par secteur (cf. versementsClientVersSecteurs) — sert à compter les paiements
@@ -49,12 +57,13 @@ export const SECTEURS_AVEC_REVENU = ['garderie', 'agro', 'logistique', 'evenemen
 // L'apport du PAU (financement personnel du promoteur) ne compte plus ici — son suivi
 // (apport, dette, remboursement) vit désormais exclusivement dans E-G.Pro.
 export function revenuSecteur(collections, secteurId, annee, mois, versementsClientRoutes = [], revenusManuels = [], site = null) {
-  const { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel } = collections
+  const { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym } = collections
   let revenu = 0
   if (secteurId === 'garderie') revenu = revenuGarderie(paiementsGarderie, annee, mois)
   else if (secteurId === 'agro') revenu = revenuAgro(facturesAgro, annee, mois)
   else if (secteurId === 'logistique') revenu = revenuLogistique(facturesLogistique, annee, mois, site)
   else if (secteurId === 'evenementiel') revenu = revenuFactures(facturesEvenementiel, annee, mois)
+  else if (secteurId === 'gym') revenu = revenuGym(facturesGym, annee, mois)
   return revenu
     + revenuClientSecteurMois(versementsClientRoutes, secteurId, annee, mois, site)
     + revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, site)

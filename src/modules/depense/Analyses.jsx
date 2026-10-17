@@ -40,6 +40,7 @@ export default function Analyses() {
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
+  const { data: facturesGym } = useCollection('gym_factures')
   const { data: projetsTous }          = useCollection('projets')
   const { data: versementsClientTous } = useCollection('projet_versements_client')
   const { data: revenusManuelsTous }   = useCollection('depense_revenus_manuels')
@@ -50,7 +51,7 @@ export default function Analyses() {
     ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
   ].filter(visibleDansEDepenses), [depensesReelles, inventairesBriq])
-  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
+  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym }
 
   // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu
   // (utilisé par la section Rentabilité ci-dessous).
@@ -114,7 +115,7 @@ export default function Analyses() {
       return { ...s, revenu, depense, marge, margePct }
     })
     .sort((a, b) => b.marge - a.marge),
-  [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym, annee, mois])
 
   const totalRevenuRentab  = secteursRentabilite.reduce((s, x) => s + x.revenu, 0)
   const totalDepenseRentab = secteursRentabilite.reduce((s, x) => s + x.depense, 0)
@@ -197,7 +198,7 @@ export default function Analyses() {
     const depExploitation   = totalDepenses(depensesNatureMois(depenses, 'exploitation', a, m))
     const depInvestissement = totalDepenses(depensesNatureMois(depenses, 'investissement', a, m))
     return { label, revenu, depExploitation, depInvestissement }
-  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel])
+  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym])
 
   const lineData = {
     labels: tendance.map((t) => t.label),
