@@ -99,7 +99,9 @@ export async function handler(event) {
             messaging_product: 'whatsapp', to, type: 'template',
             template: {
               name: WHATSAPP_TEMPLATE, language: { code: WHATSAPP_LANG },
-              components: [{ type: 'body', parameters: [{ type: 'text', text: texte }] }]
+              // Meta REFUSE une variable de template contenant un saut de ligne, une
+              // tabulation ou plus de 4 espaces consécutifs (erreur 132018) : on aplatit.
+              components: [{ type: 'body', parameters: [{ type: 'text', text: texte.replace(/\s*\n+\s*/g, ' — ').replace(/\t/g, ' ').replace(/ {4,}/g, '   ') }] }]
             }
           }
         : { messaging_product: 'whatsapp', to, type: 'text', text: { body: texte, preview_url: false } }

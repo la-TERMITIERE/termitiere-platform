@@ -64,21 +64,73 @@ export function subscribeCollection(name, callback) {
     Promise.resolve().then(() => callback(demoRead(name)))
     return () => demoListeners[name]?.delete(callback)
   }
-  return onValue(
+  const entry = live.get(name) || ouvrirEcoute(name)
+  if (entry.timer) { clearTimeout(entry.timer); entry.timer = null }
+  entry.subs.add(callback)
+  // Collection déjà en mémoire : livraison immédiate, SANS nouveau téléchargement.
+  if (entry.snap) {
+    const snap = entry.snap
+    Promise.resolve().then(() => { if (entry.subs.has(callback)) callback(snapToRows(snap.val())) })
+  }
+  return () => {
+    entry.subs.delete(callback)
+    if (entry.subs.size || entry.timer || live.get(name) !== entry) return
+    entry.timer = setTimeout(() => {
+      if (entry.subs.size) return
+      entry.unsub()
+      live.delete(name)
+    }, KEEP_ALIVE_MS)
+  }
+}
+
+// ÉCONOMIE DE BANDE PASSANTE (quota « Téléchargements » de la Realtime Database).
+// Avant : chaque changement de page désabonnait les collections de l'écran quitté,
+// et la RTDB oublie alors ses données — revenir sur un écran RETÉLÉCHARGEAIT la
+// collection entière. Désormais une seule écoute par collection est partagée par
+// tous les écrans et reste ouverte KEEP_ALIVE_MS après le dernier désabonnement :
+// la navigation n'ajoute plus aucun téléchargement (seules les modifications
+// arrivent, comme avant). Comportement identique pour l'utilisateur, en plus rapide.
+const KEEP_ALIVE_MS = 30 * 60 * 1000
+const live = new Map() // name -> { subs: Set<callback>, snap, unsub, timer }
+
+function ouvrirEcoute(name) {
+  const entry = { subs: new Set(), snap: null, unsub: null, timer: null }
+  live.set(name, entry)
+  entry.unsub = onValue(
     colRef(name),
-    (snap) => callback(snapToRows(snap.val())),
-    (err) => console.error(`[db] onValue ${name} :`, err)
+    (snap) => {
+      entry.snap = snap
+      // snap.val() par abonné : chaque écran reçoit ses propres objets (comme avant).
+      entry.subs.forEach((cb) => cb(snapToRows(snap.val())))
+    },
+    (err) => {
+      console.error(`[db] onValue ${name} :`, err)
+      // Écoute annulée par la base (ex. droits) : on l'oublie pour qu'un prochain
+      // abonnement réessaie au lieu de rester bloqué sur une écoute morte.
+      if (live.get(name) === entry) live.delete(name)
+      if (entry.timer) clearTimeout(entry.timer)
+    }
   )
+  return entry
 }
 
 export async function getAll(name) {
   if (!isFirebaseConfigured) return demoRead(name)
+  // Collection déjà écoutée en temps réel : sa copie locale est à jour, inutile de
+  // la retélécharger en entier (ex. `users` relu à chaque notify()).
+  const cached = live.get(name)?.snap
+  if (cached) return snapToRows(cached.val())
   const snap = await rtdbGet(colRef(name))
   return snapToRows(snap.val())
 }
 
 export async function getOne(name, id) {
   if (!isFirebaseConfigured) return demoRead(name).find((x) => x.id === id) || null
+  const cached = live.get(name)?.snap
+  if (cached) {
+    const v = cached.child(id).val()
+    return v != null ? { id, ...v } : null
+  }
   const snap = await rtdbGet(docRef(name, id))
   return snap.exists() ? { id, ...snap.val() } : null
 }
