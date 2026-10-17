@@ -423,3 +423,11 @@ html.dark .barre-defilement-fixe { background: rgba(30, 34, 38, 0.6); border-col
   .ed-grille > *:nth-child(5) { animation-delay: 0.24s; }
   .ed-grille > *:nth-child(6) { animation-delay: 0.3s; }
 }
+
+/* Demandes : l'étape en cours et les demandes très urgentes pulsent doucement. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes ed-halo { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.55); } 50% { box-shadow: 0 0 0 6px rgba(217, 119, 6, 0); } }
+  @keyframes ed-halo-carte { 0%, 100% { box-shadow: 0 14px 30px -18px rgba(220, 38, 38, 0.5), 0 0 0 0 rgba(220, 38, 38, 0.35); } 50% { box-shadow: 0 14px 30px -18px rgba(220, 38, 38, 0.5), 0 0 0 7px rgba(220, 38, 38, 0); } }
+  .ed-halo { animation: ed-halo 2s ease-out infinite; }
+  .ed-halo-carte { animation: ed-halo-carte 2.4s ease-out infinite; }
+}

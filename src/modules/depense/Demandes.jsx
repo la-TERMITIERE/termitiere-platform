@@ -2,7 +2,7 @@
 // et l'un d'eux la valide (elle devient une dépense décaissée, qui compte dans le budget) ou la refuse, en une seule étape.
 //   en_attente (envoyée) → decaissee (validée) ou refusee. L'ancien état « approuvee » reste décidable d'un seul clic.
 import { useMemo, useState } from 'react'
-import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle, Send, Plus, HandCoins, Wallet, Tag, CalendarDays, UserRound, FileText, Building2 } from 'lucide-react'
+import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle, Hourglass, CheckCircle2, XCircle, Layers, Phone, PiggyBank, Briefcase, Siren, Send, Plus, HandCoins, Wallet, Tag, CalendarDays, UserRound, FileText, Building2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
@@ -20,7 +20,8 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { formatDateShort, formatMoney, genId, todayStr } from '../../utils/formatters'
-import { glassModalProps } from '../../utils/color'
+import { glassModalProps, icone3D, avatarGradient } from '../../utils/color'
+import Compteur from '../../shared/ui/Compteur'
 import { SECTEURS, STATUTS_DECAISSEMENT, CATEGORIES_DEPENSE, LOGISTIQUE_SITES, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { notifierBeneficiaire } from './notifications'
@@ -36,6 +37,35 @@ const VALIDEURS_DEMANDE = [...DESTINATAIRES_DEMANDE, 'assistant_pau']
 
 // Couleur d'accent (barre latérale de la carte) selon le statut de la demande.
 const STATUT_ACCENT = { en_attente: '#d97706', approuvee: '#0ea5e9', decaissee: '#16a34a', refusee: '#dc2626' }
+
+const initiales = (nom) => (nom || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]).join('').toUpperCase() || '?'
+const fmtN = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
+
+// Parcours d'une demande : envoyée → décision → argent décaissé. L'étape en cours pulse doucement.
+function Etapes({ d }) {
+  const refusee = d.statut === 'refusee'
+  const validee = d.statut === 'decaissee'
+  const etapes = [
+    { label: 'Envoyée', etat: 'fait', couleur: '#16a34a' },
+    { label: refusee ? 'Refusée' : 'Décision', etat: refusee ? 'refus' : validee ? 'fait' : 'cours', couleur: refusee ? '#dc2626' : validee ? '#16a34a' : '#d97706' },
+    { label: 'Décaissée', etat: validee ? 'fait' : 'attente', couleur: validee ? '#16a34a' : '#cbd5e1' }
+  ]
+  return (
+    <div className="flex items-center">
+      {etapes.map((e, i) => (
+        <div key={e.label} className="flex items-center">
+          {i > 0 && <span className="h-0.5 w-5 rounded-full sm:w-8" style={{ background: etapes[i - 1].etat === 'fait' ? '#16a34a' : '#e2e8f0' }} />}
+          <span className="flex flex-col items-center">
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white ${e.etat === 'cours' ? 'ed-halo' : ''}`} style={{ background: e.couleur }}>
+              {e.etat === 'fait' ? <Check size={11} strokeWidth={3} /> : e.etat === 'refus' ? <X size={11} strokeWidth={3} /> : e.etat === 'cours' ? <Hourglass size={10} /> : null}
+            </span>
+            <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-400">{e.label}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function Demandes() {
   const { user, role: roleReel } = useAuth()
@@ -228,100 +258,164 @@ export default function Demandes() {
         </div>
       )}
 
-      {filtrees.length === 0 ? (
-        <Card><p className="py-8 text-center text-sm text-gray-400">Aucune demande dans cet état.</p></Card>
-      ) : (
-        <div className="grid gap-2.5 md:grid-cols-2">
-          {filtrees.map((d) => {
-            const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-            const st = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.en_attente
-            return (
-              <button key={d.id} onClick={() => setDetail(d)}
-                className="flex items-center gap-3 rounded-2xl border-l-4 bg-white px-4 py-3 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_8px_22px_-10px_rgba(0,0,0,0.15)] hover:ring-gray-200"
-                style={{ borderLeftColor: STATUT_ACCENT[d.statut] || '#94a3b8' }}>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate font-bold text-gray-800">{libelleSecteurSite(secteur, d)}</p>
-                    <Badge tone={st.tone}>{st.label}</Badge>
-                    {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
-                    {d.urgence && d.urgence !== 'normale' && URGENCES[d.urgence] && (() => { const u = URGENCES[d.urgence]; const Ic = u.icone; return <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white" style={{ background: u.couleur }}><Ic size={10} /> {u.label}</span> })()}
+      {/* Chiffres clés : ce qui attend une décision, ce qui est validé, refusé, et le plus urgent. */}
+      {(() => {
+        const attente = demandes.filter(estAttente)
+        const validees = demandes.filter((d) => d.statut === 'decaissee')
+        const refusees = demandes.filter((d) => d.statut === 'refusee')
+        const urgentes = attente.filter((d) => d.urgence && d.urgence !== 'normale')
+        const somme = (l) => l.reduce((t, d) => t + (Number(d.montant) || 0), 0)
+        const tuiles = [
+          { icone: Hourglass, couleur: '#d97706', titre: 'En attente', nb: attente.length, montant: somme(attente) },
+          { icone: CheckCircle2, couleur: '#16a34a', titre: 'Validées', nb: validees.length, montant: somme(validees) },
+          { icone: XCircle, couleur: '#dc2626', titre: 'Refusées', nb: refusees.length, montant: somme(refusees) },
+          { icone: Siren, couleur: '#7c3aed', titre: 'Urgentes en attente', nb: urgentes.length, montant: somme(urgentes) }
+        ]
+        return (
+          <div className="ed-grille grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {tuiles.map((t) => {
+              const Ic = t.icone
+              return (
+                <div key={t.titre} className="flex items-center gap-3 rounded-3xl border border-white/70 bg-white/70 p-3.5 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
+                  <span className="ed-flotte flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(t.couleur)}><Ic size={20} /></span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[10px] font-extrabold uppercase tracking-wide text-gray-500">{t.titre}</p>
+                    <p className="text-2xl font-black leading-tight text-gray-800"><Compteur valeur={t.nb} /></p>
+                    <p className="truncate text-[11px] font-semibold text-gray-400">{fmtN(t.montant)} FCFA</p>
                   </div>
-                  <p className="mt-0.5 text-xs text-gray-500">{d.categorie || '—'} · {formatDateShort(d.date)}</p>
-                  {d.description && <p className="mt-1 truncate text-sm text-gray-600">{d.description}</p>}
-                  <p className="mt-1 truncate text-[11px] text-gray-400">
-                    ✍️ Demandé par <b className="text-gray-600">{d.enregistrePar || '—'}</b>
-                    {(d.valideePar || d.approuveePar) && <> · ✓ {d.valideePar ? 'Validé' : 'Approuvé'} par <b className="text-gray-600">{d.valideePar || d.approuveePar}</b></>}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {filtrees.length === 0 ? (
+        <Card className="ed-entree">
+          <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
+            <span className="ed-flotte flex h-14 w-14 items-center justify-center rounded-2xl" style={icone3D('#94a3b8')}><Send size={26} /></span>
+            <p className="text-sm">Aucune demande dans cet état.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {filtrees.map((d, idx) => {
+            const secteur = SECTEURS.find((x) => x.id === d.secteurId)
+            const couleurSecteur = secteur?.color || '#64748b'
+            const u = d.urgence && d.urgence !== 'normale' ? URGENCES[d.urgence] : null
+            const critique = estAttente(d) && d.urgence === 'critique'
+            const accent = u && estAttente(d) ? u.couleur : (STATUT_ACCENT[d.statut] || '#94a3b8')
+            return (
+              <button key={d.id} onClick={() => setDetail(d)} style={{ borderLeftColor: accent, animation: 'ed-entree 0.45s ease-out backwards', animationDelay: `${Math.min(idx, 10) * 50}ms` }}
+                className={`group relative overflow-hidden rounded-3xl border border-l-[5px] border-white/70 bg-white/70 p-4 text-left shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-[0_20px_36px_-16px_rgba(26,26,26,0.35)] ${critique ? 'ed-halo-carte' : ''}`}>
+                <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.12] blur-2xl" style={{ background: couleurSecteur }} />
+                <div className="relative flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-black text-white shadow-[inset_0_2px_2px_rgba(255,255,255,0.5),0_8px_16px_-8px_rgba(0,0,0,0.5)]" style={{ background: avatarGradient(d.enregistrePar) }} title={`Demandé par ${d.enregistrePar || '—'}`}>{initiales(d.enregistrePar)}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${couleurSecteur}1a`, color: couleurSecteur }}>{libelleSecteurSite(secteur, d)}</span>
+                      {u && (() => { const Ic = u.icone; return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white ${critique ? 'ed-halo' : ''}`} style={{ background: u.couleur }}><Ic size={10} /> {u.label}</span> })()}
+                      {d.financePar === 'caisse_commune' && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700"><PiggyBank size={10} /> Caisse commune</span>}
+                    </div>
+                    <p className="mt-1 line-clamp-2 break-words text-sm font-bold text-gray-800">{d.description || d.categorie || 'Demande'}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-500">
+                      <span className="inline-flex items-center gap-1"><Tag size={10} /> {d.categorie || '—'}</span>
+                      <span className="inline-flex items-center gap-1"><CalendarDays size={10} /> {formatDateShort(d.date)}</span>
+                      {d.beneficiaireNom && <span className="inline-flex items-center gap-1"><UserRound size={10} /> {d.beneficiaireNom}</span>}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-right text-xl font-black leading-tight text-gray-900">{fmtN(d.montant)}<span className="block text-[10px] font-bold text-gray-400">FCFA</span></p>
+                </div>
+                <div className="relative mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                  <Etapes d={d} />
+                  <p className="min-w-0 truncate text-right text-[11px] text-gray-400">
+                    {d.statut === 'refusee' ? <>Refusée par <b className="text-gray-600">{d.refuseePar || '—'}</b></>
+                      : (d.valideePar || d.approuveePar) ? <>{d.valideePar ? 'Validée' : 'Approuvée'} par <b className="text-gray-600">{d.valideePar || d.approuveePar}</b></>
+                      : <>Demandé par <b className="text-gray-600">{d.enregistrePar || '—'}</b></>}
                   </p>
                 </div>
-                <p className="shrink-0 text-lg font-extrabold text-gray-900">{Number(d.montant).toLocaleString('fr-FR')}<span className="ml-0.5 text-xs font-bold text-gray-400">FCFA</span></p>
               </button>
             )
           })}
         </div>
       )}
 
-      {/* Fiche détail — toutes les infos + actions selon le statut et le rôle */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de la demande"
-        panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
+      {/* Fiche détail : bandeau du montant, tuiles d'information, parcours, puis les actions selon le statut et le rôle. */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} size="md" {...glassModalProps('#B45309')} title="Détail de la demande">
         {detail && (() => {
           const d = detail
-          const secteur = SECTEURS.find((s) => s.id === d.secteurId)
+          const secteur = SECTEURS.find((x) => x.id === d.secteurId)
+          const couleurSecteur = secteur?.color || '#B45309'
           const st = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.en_attente
+          const u = URGENCES[d.urgence] || null
+          const refusee = d.statut === 'refusee'
+          const validee = d.statut === 'decaissee'
+          const fond = refusee ? 'linear-gradient(135deg, #f87171 0%, #dc2626 55%, #7f1d1d 130%)'
+            : validee ? 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #14532d 130%)'
+            : 'linear-gradient(135deg, #E08A1E 0%, #B45309 55%, #5c2a05 130%)'
+          const cell = 'flex items-center gap-3 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm backdrop-blur-md'
+          const Tuile = ({ icone: Ic, couleur, titre, children }) => (
+            <div className={cell}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleur)}><Ic size={16} /></span>
+              <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase text-gray-400">{titre}</p><div className="truncate text-sm font-bold text-gray-800">{children}</div></div>
+            </div>
+          )
           return (
-            <div className="space-y-4">
-              {/* En-tête glassmorphism — montant bien visible */}
-              <div className="relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(180,83,9,0.35),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-                style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.92) 0%, rgba(120,53,15,0.88) 100%)' }}>
-                <p className="text-xs text-white/70">{libelleSecteurSite(secteur, d)} · {formatDateShort(d.date)}</p>
-                <p className="mt-0.5 text-2xl font-black leading-none">{Number(d.montant).toLocaleString('fr-FR')} FCFA</p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{st.label}</span>
-                  {d.categorie && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{d.categorie}</span>}
-                  {d.financePar === 'caisse_commune' && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">💰 Caisse commune</span>}
-                  {d.urgence && URGENCES[d.urgence] && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">Urgence : {URGENCES[d.urgence].label}</span>}
+            <div className="space-y-3">
+              <div className="relative overflow-hidden rounded-3xl p-4 text-white shadow-[0_16px_28px_-16px_rgba(0,0,0,0.55)]" style={{ background: fond }}>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+                <div className="relative flex items-center gap-3">
+                  <span className="ed-flotte flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),0_10px_20px_-8px_rgba(0,0,0,0.5)]">
+                    {refusee ? <XCircle size={24} /> : validee ? <CheckCircle2 size={24} /> : <Hourglass size={24} />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold uppercase tracking-wide text-white/80">{st.label}</p>
+                    <p className="text-3xl font-black leading-tight"><Compteur valeur={Number(d.montant) || 0} format={fmtN} /> <span className="text-sm font-bold text-white/75">FCFA</span></p>
+                  </div>
                 </div>
+                <div className="relative mt-3 rounded-2xl bg-white/90 px-3 py-2"><Etapes d={d} /></div>
               </div>
 
               {d.description && (
-                <div className="rounded-2xl bg-white/70 p-3.5 shadow-sm backdrop-blur-sm">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.description}</p>
+                <div className={cell}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#475569')}><MessageSquare size={16} /></span>
+                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase text-gray-400">Motif</p><p className="whitespace-pre-wrap text-sm text-gray-700">{d.description}</p></div>
                 </div>
               )}
 
-              <div className="rounded-2xl bg-white/70 p-3.5 shadow-sm backdrop-blur-sm">
-                <p className="text-xs text-gray-500">Créée par <b className="text-gray-700">{d.enregistrePar || '—'}</b></p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Tuile icone={Layers} couleur={couleurSecteur} titre="Secteur"><span style={{ color: couleurSecteur }}>{libelleSecteurSite(secteur, d)}</span></Tuile>
+                <Tuile icone={Tag} couleur="#7c3aed" titre="Catégorie">{d.categorie || '—'}</Tuile>
+                <Tuile icone={CalendarDays} couleur="#0ea5e9" titre="Date">{formatDateShort(d.date)}</Tuile>
+                <Tuile icone={UserRound} couleur="#16a34a" titre="Demandée par">{d.enregistrePar || '—'}</Tuile>
+                {d.beneficiaireNom && <Tuile icone={Briefcase} couleur="#d97706" titre="Bénéficiaire">{d.beneficiaireNom}{d.beneficiaireFonction ? ` · ${d.beneficiaireFonction}` : ''}</Tuile>}
+                {d.beneficiaireTelephone && <Tuile icone={Phone} couleur="#0ea5e9" titre="Téléphone">{d.beneficiaireTelephone}</Tuile>}
+                {u && <Tuile icone={u.icone} couleur={u.couleur} titre="Urgence"><span style={{ color: u.couleur }}>{u.label}</span></Tuile>}
+                {d.financePar === 'caisse_commune' && <Tuile icone={PiggyBank} couleur="#7c3aed" titre="Paiement">Depuis la caisse commune</Tuile>}
               </div>
 
-              {/* Historique des décisions */}
-              {(d.valideePar || d.approuveePar || d.certifieePar || (d.statut === 'refusee' && d.refusMotif)) && (
-                <div className="space-y-2">
-                  {(d.valideePar || d.approuveePar) && (
-                    <div className="rounded-2xl bg-white/70 p-3 shadow-sm backdrop-blur-sm">
-                      <p className="text-xs text-gray-500">{d.valideePar ? 'Validée' : 'Approuvée'} par <b className="text-gray-700">{d.valideePar || d.approuveePar}</b></p>
-                      {(d.validationCommentaire || d.approbationCommentaire) && (
-                        <p className="mt-1 flex items-start gap-1 rounded bg-green-50 p-2 text-xs italic text-green-700">
-                          <MessageSquare size={12} className="mt-0.5 shrink-0" /> « {d.validationCommentaire || d.approbationCommentaire} »
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {d.statut === 'refusee' && d.refusMotif && (
-                    <div className="rounded-2xl bg-white/70 p-3 shadow-sm backdrop-blur-sm">
-                      <p className="text-xs text-gray-500">Refusée par <b className="text-gray-700">{d.refuseePar}</b></p>
-                      <p className="mt-1 flex items-start gap-1 rounded bg-red-50 p-2 text-xs italic text-red-700">
-                        <MessageSquare size={12} className="mt-0.5 shrink-0" /> « {d.refusMotif} »
-                      </p>
-                    </div>
-                  )}
+              {/* Décisions déjà prises */}
+              {(d.valideePar || d.approuveePar) && (
+                <div className={cell}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#16a34a')}><CheckCircle2 size={16} /></span>
+                  <div className="min-w-0">
+                    <p className="text-sm"><span className="text-gray-500">{d.valideePar ? 'Validée' : 'Approuvée'} par</span> <b className="text-gray-800">{d.valideePar || d.approuveePar}</b></p>
+                    {(d.validationCommentaire || d.approbationCommentaire) && <p className="mt-1 text-xs italic text-green-700">« {d.validationCommentaire || d.approbationCommentaire} »</p>}
+                  </div>
+                </div>
+              )}
+              {refusee && (
+                <div className={cell}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#dc2626')}><XCircle size={16} /></span>
+                  <div className="min-w-0">
+                    <p className="text-sm"><span className="text-gray-500">Refusée par</span> <b className="text-gray-800">{d.refuseePar || '—'}</b></p>
+                    {d.refusMotif && <p className="mt-1 text-xs italic text-red-700">« {d.refusMotif} »</p>}
+                  </div>
                 </div>
               )}
 
               {/* Actions selon statut + rôle.
-                  SÉPARATION DES POUVOIRS : on ne décide jamais sur sa propre demande,
-                  et le certificateur ne peut pas être celui qui a approuvé au 1er
-                  niveau. Sans cela, une même personne pouvait saisir un décaissement,
-                  l'approuver et le certifier — argent sorti en trois clics. */}
+                  SÉPARATION DES POUVOIRS : on ne décide jamais sur sa propre demande. */}
               {estAttente(d) && peutValider && !estMienne(d) && (
                 <div className="flex gap-2 pt-1">
                   <Button variant="success" disabled={busy} onClick={() => ouvrirAction(d, 'valider')} className="flex-1">
@@ -352,35 +446,36 @@ export default function Demandes() {
 
       <NouvelleDemandeModal open={demandeOuverte} onClose={() => setDemandeOuverte(false)} />
 
-      <Modal
-        open={!!actionModal}
-        onClose={() => setActionModal(null)}
-        title={infoModal?.titre || ''}
+      <Modal open={!!actionModal} onClose={() => setActionModal(null)} size="sm" {...glassModalProps(actionModal?.type === 'refuser' ? '#dc2626' : '#16a34a')} title={infoModal?.titre || ''}
         footer={
           <>
-            <Button variant="outline" onClick={() => setActionModal(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setActionModal(null)}><X size={15} /> Annuler</Button>
             <Button variant={infoModal?.variant} disabled={busy} onClick={confirmerAction}>
-              {infoModal?.bouton}
+              {actionModal?.type === 'refuser' ? <XCircle size={15} /> : <CheckCircle2 size={15} />} {infoModal?.bouton}
             </Button>
           </>
-        }
-      >
+        }>
         {actionModal && (
-          <>
-            <p className="mb-3 text-sm text-gray-600">
-              {Number(actionModal.d.montant).toLocaleString('fr-FR')} FCFA : {SECTEURS.find((s) => s.id === actionModal.d.secteurId)?.label || actionModal.d.secteurId}
-            </p>
-            <FormGroup label={infoModal.label} required={infoModal.requis}>
-              <textarea
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                rows={3}
-                autoFocus
-                value={commentaire}
-                onChange={(e) => setCommentaire(e.target.value)}
-                placeholder={infoModal.placeholder}
-              />
-            </FormGroup>
-          </>
+          <div className="space-y-3">
+            <div className="relative flex items-center gap-3 overflow-hidden rounded-3xl p-3.5 text-white shadow-[0_16px_28px_-16px_rgba(0,0,0,0.55)]"
+              style={{ background: actionModal.type === 'refuser' ? 'linear-gradient(135deg, #f87171 0%, #dc2626 55%, #7f1d1d 130%)' : 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #14532d 130%)' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+              <span className="ed-flotte relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),0_10px_20px_-8px_rgba(0,0,0,0.5)]">
+                {actionModal.type === 'refuser' ? <XCircle size={22} /> : <CheckCircle2 size={22} />}
+              </span>
+              <div className="relative min-w-0">
+                <p className="text-2xl font-black leading-tight">{fmtN(actionModal.d.montant)} <span className="text-sm font-bold text-white/75">FCFA</span></p>
+                <p className="truncate text-xs text-white/85">{SECTEURS.find((x) => x.id === actionModal.d.secteurId)?.label || actionModal.d.secteurId}{actionModal.d.beneficiaireNom ? ` · ${actionModal.d.beneficiaireNom}` : ''}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm">
+              <span className="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#475569')}><MessageSquare size={13} /></span>
+                {infoModal.label}{infoModal.requis && <span className="text-red-500">*</span>}
+              </span>
+              <textarea className="input-base w-full" rows={3} autoFocus value={commentaire} onChange={(e) => setCommentaire(e.target.value)} placeholder={infoModal.placeholder} />
+            </div>
+          </div>
         )}
       </Modal>
 
