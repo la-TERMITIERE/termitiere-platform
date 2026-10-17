@@ -321,7 +321,7 @@ export const MODULE_NAV = {
     { label: 'Dépenses',                     to: '/depense/liste',        icon: Wallet, badgeKey: 'depenseDepenses' },
     { label: 'Budget',                       to: '/depense/recettes-depenses', icon: Scale, roles: FINANCE_VIEW_ROLES },
     { label: 'Sources de revenus',           to: '/depense/revenus',      icon: Coins,           roles: [...FULL_ACCESS_ROLES, 'secretaire'] },
-    { label: 'Autorisation de décaissement', to: '/depense/autorisations', icon: Stamp },
+    { label: 'Demandes',                     to: '/depense/demandes',      icon: Send },
     { label: 'Analyses',                     to: '/depense/analyses',     icon: BarChart2,       roles: ANALYSES_DEPENSE_ROLES },
     { label: 'Flux de trésorerie',           to: '/depense/flux',        icon: Waves,           roles: FINANCE_VIEW_ROLES },
     { label: 'Partenaires',                  to: '/depense/partenaires',  icon: Handshake,       perm: 'partenaires', roles: ['agent'] },

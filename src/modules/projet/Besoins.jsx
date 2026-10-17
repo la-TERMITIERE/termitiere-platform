@@ -433,7 +433,7 @@ export default function Besoins() {
     } : {
       type: 'demande', title: '💰 Décaissement à certifier',
       body: `${b.titre} : ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA, déjà approuvé (besoin validé par ${user?.nom || '—'}) : reste à certifier pour décaisser`,
-      module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
+      module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/demandes'
     }).catch(() => {})
   }
   async function refuserBesoin(b, motif = '') {

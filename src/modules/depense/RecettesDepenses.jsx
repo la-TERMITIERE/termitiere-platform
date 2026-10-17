@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2, HandCoins, Layers, CalendarDays, ArrowUpDown, PenLine, Banknote, MessageSquareText, X, Save, Undo2 } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -16,6 +16,8 @@ import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useReportAutomatique, reportManuelInterdit } from './reportAuto'
+import BoutonVerre from '../../shared/ui/BoutonVerre'
+import DotationModal from '../comptabilite/DotationModal'
 import { isReadOnlyRole, isFullAccessRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
 import { setItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -23,7 +25,8 @@ import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
-import { teinterHex, shadeHex, COULEUR_MODULE } from '../../utils/color'
+import { teinterHex, shadeHex, COULEUR_MODULE, icone3D, glassModalProps } from '../../utils/color'
+import Compteur from '../../shared/ui/Compteur'
 import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
 import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
@@ -154,6 +157,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // Onglet de la vue standalone (« Budget », sans secteurId) : bilan par secteur, ou
   // journal consolidé de tous les apports/ajouts de budget (tous secteurs confondus).
   const [ongletBudget, setOngletBudget] = useState('secteurs')
+  const [dotationOuverte, setDotationOuverte] = useState(false) // fenêtre « Nouvelle dotation de caisse »
   const [secteurAjoutChoisi, setSecteurAjoutChoisi] = useState('')
   const [triApportsDesc, setTriApportsDesc] = useState(true) // tri par date de l'onglet « Apports & ajouts » : true = plus récent d'abord
   // Détail / édition d'un apport précis (un élément de `revisions`) — cf. apportsTous
@@ -523,6 +527,21 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     await audit('depense', 'REVENU_MANUEL_SUPPRIME', `${fmt(r.montant)} FCFA`, { secteurId: r.secteurId })
   }
 
+  // Historique des retours de reliquat du mois (dépense négative créée depuis E-DÉPENSES, Dépenses), avec la dépense d'origine.
+  const retoursMois = useMemo(() => {
+    const m = `${annee}-${String(mois).padStart(2, '0')}`
+    return depensesReelles
+      .filter((d) => d.source === 'retour_reliquat' && (d.date || '').startsWith(m))
+      .map((d) => {
+        const origine = depensesReelles.find((x) => x.id === d.retourDe)
+        const sct = SECTEURS.find((x) => x.id === d.secteurId)
+        const caisse = d.financePar === 'caisse_commune' || d.secteurId === 'divers'
+        return { ...d, origine, secteurLabel: caisse ? 'CAISSE COMMUNE' : (sct?.label || d.secteurId), secteurColor: caisse ? '#7c3aed' : (sct?.color || '#64748b'), vers: caisse ? 'la caisse commune' : `le budget ${sct?.label || ''}` }
+      })
+      .sort((a, b) => ((a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0))))
+  }, [depensesReelles, annee, mois])
+  const totalRetoursMois = retoursMois.reduce((t, d) => t + Math.abs(Number(d.montant) || 0), 0)
+
   return (
     <div className="space-y-5">
       <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
@@ -537,6 +556,21 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           <h2 className="text-lg font-extrabold">{headerTitre}</h2>
           <p className="text-sm text-white/80">{headerSousTitre}</p>
         </div>
+        {ongletBudget === 'apports' && !lectureSeule && !secteurId && (
+          <label className="relative block">
+            <span className="mb-0.5 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wide text-white/80"><HandCoins size={11} /> Ajouter une somme à</span>
+            <select value={secteurAjoutChoisi} onChange={(e) => {
+              const id = e.target.value
+              setSecteurAjoutChoisi(id)
+              const sct = parSecteur.find((x) => x.id === id)
+              if (sct) ouvrirRevision(sct)
+              setSecteurAjoutChoisi('')
+            }} className="w-full rounded-xl border border-white/40 bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white outline-none [color-scheme:dark] focus:bg-white/30 sm:w-56 [&>option]:bg-white [&>option]:text-gray-900">
+              <option value="">Choisir un secteur</option>
+              {parSecteur.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+          </label>
+        )}
         {/* Navigation mois — remontée dans le bandeau (glassmorphism), au lieu d'une
             ligne séparée en dessous. Budget alloué = notion mensuelle, donc un simple
             mois précédent/suivant reste le bon niveau de granularité ici. */}
@@ -550,9 +584,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       {/* Onglets — uniquement sur la vue standalone (pas quand embarqué dans un module
           métier via secteurId, qui n'a pas de vue consolidée tous-secteurs). */}
       {!secteurId && (
-        <PillTabs active={ongletBudget} onChange={setOngletBudget} accent={COULEUR_MODULE.depense} tabs={[
-          { id: 'secteurs', label: 'Par secteur', accent: COULEUR_MODULE.depense },
-          { id: 'apports', label: `Apports & ajouts${apportsTous.length > 0 ? ` (${apportsTous.length})` : ''}`, accent: '#0d9488' }
+        <PillTabs taille="sm" active={ongletBudget} onChange={setOngletBudget} accent={COULEUR_MODULE.depense} tabs={[
+          { id: 'secteurs', label: 'Par secteur', accent: COULEUR_MODULE.depense, icone: Layers },
+          { id: 'apports', label: `Apports & ajouts${apportsTous.length > 0 ? ` (${apportsTous.length})` : ''}`, accent: '#0d9488', icone: HandCoins },
+          { id: 'reliquats', label: `Retours de reliquat${retoursMois.length > 0 ? ` (${retoursMois.length})` : ''}`, accent: '#16a34a', icone: Undo2 }
         ]} />
       )}
 
@@ -566,54 +601,94 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         </div>
       )}
 
-      {ongletBudget !== 'secteurs' ? (
+      {ongletBudget === 'reliquats' ? (
       <div className="space-y-3">
-        <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-          Tous les apports/ajouts de budget du mois, tous secteurs confondus : historique consolidé. Choisis un secteur ci-dessous pour ajouter une somme directement, sans passer par sa carte.
+        <style>{`@keyframes ap-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }`}</style>
+        <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-white/70 bg-white/60 p-3 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={icone3D('#16a34a')}><Undo2 size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-400">Retournés à la caisse ou au budget en {MOIS_LABELS[mois - 1]} {annee}</p>
+            <p className="text-xl font-black text-green-700">+{fmt(totalRetoursMois)} <span className="text-xs font-semibold text-gray-400">FCFA · {retoursMois.length} retour(s)</span></p>
+          </div>
         </div>
-        {!lectureSeule && (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/80 p-3 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150">
-            <span className="text-xs font-semibold text-gray-500">Ajouter une somme à :</span>
-            <Select className="w-auto" value={secteurAjoutChoisi} onChange={(e) => {
-              const id = e.target.value
-              setSecteurAjoutChoisi(id)
-              const s = parSecteur.find((x) => x.id === id)
-              if (s) ouvrirRevision(s)
-              setSecteurAjoutChoisi('')
-            }}>
-              <option value="">Choisir un secteur</option>
-              {parSecteur.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </Select>
+        {retoursMois.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 rounded-3xl border border-white/70 bg-white/60 py-10 text-center text-sm text-gray-400 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3)] backdrop-blur-xl">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={icone3D('#94a3b8')}><Undo2 size={22} /></span>
+            Aucun retour de reliquat ce mois-ci.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {retoursMois.map((r, idx) => (
+              <div key={r.id} style={{ borderLeftColor: r.secteurColor, animation: 'ap-entree 0.4s ease-out backwards', animationDelay: `${Math.min(idx, 12) * 40}ms` }}
+                className="flex items-center gap-3 rounded-2xl border border-l-4 border-white/70 bg-white/65 px-3 py-2.5 shadow-[0_12px_28px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={icone3D('#16a34a')}><Undo2 size={18} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: r.secteurColor + '1a', color: r.secteurColor }}>{r.secteurLabel}</span>
+                    <span className="text-base font-extrabold text-green-700">+{fmt(Math.abs(Number(r.montant) || 0))} <span className="text-xs font-semibold text-gray-400">FCFA vers {r.vers}</span></span>
+                  </div>
+                  {r.origine && <p className="mt-0.5 truncate text-xs text-gray-600">Dépense d'origine : <span className="font-semibold uppercase">{r.origine.description || r.origine.categorie || 'dépense'}</span> ({fmt(r.origine.montant)} FCFA, {formatDateShort(r.origine.date)})</p>}
+                  {r.motif && <p className="mt-0.5 flex items-start gap-1 text-xs text-gray-500"><MessageSquareText size={11} className="mt-0.5 shrink-0" /> {r.motif}</p>}
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
+                    <span className="inline-flex items-center gap-1"><PenLine size={11} /> {r.enregistrePar || '—'}</span>
+                    <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {formatDateShort(r.date)}</span>
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
+      </div>
+      ) : ongletBudget !== 'secteurs' ? (
+      <div className="space-y-3">
+        <style>{`
+          @keyframes ap-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+          @keyframes ap-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+          .ap-ligne { animation: ap-entree 0.4s ease-out backwards; }
+          .ap-icone { animation: ap-flotte 3.2s ease-in-out infinite; }
+        `}</style>
         {apportsTous.length > 0 && (
           <button onClick={() => setTriApportsDesc((v) => !v)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-amber-700">
-            <History size={12} /> Trié par date {triApportsDesc ? '(plus récent d\'abord)' : '(plus ancien d\'abord)'} : inverser
+            className="group inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-xs font-bold text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/90 hover:text-amber-700 active:scale-95">
+            <ArrowUpDown size={13} className={`transition-transform duration-300 ${triApportsDesc ? '' : 'rotate-180'}`} />
+            Trié par date {triApportsDesc ? '(plus récent d\'abord)' : '(plus ancien d\'abord)'} : inverser
           </button>
         )}
         {apportsTous.length === 0 ? (
-          <div className="rounded-2xl bg-white/80 py-10 text-center text-sm text-gray-400 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100">
+          <div className="flex flex-col items-center gap-2 rounded-3xl border border-white/70 bg-white/60 py-10 text-center text-sm text-gray-400 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3)] backdrop-blur-xl">
+            <span className="ap-icone flex h-12 w-12 items-center justify-center rounded-2xl" style={icone3D('#94a3b8')}><HandCoins size={22} /></span>
             Aucun apport ni ajout de budget ce mois-ci.
           </div>
         ) : (
           <div className="space-y-2">
-            {apportsTous.map((r) => {
+            {apportsTous.map((r, idx) => {
               const ctx = { budgetId: r.budgetId, secteurId: r.secteurId, site: r.site, secteurLabel: r.secteurLabel, revisions: r.revisions, estCaisseCommune: r.secteurId === 'divers' }
+              const caisse = r.secteurId === 'divers'
               return (
               <div key={r.id} role="button" tabIndex={0} onClick={() => ouvrirApportDetail(r, ctx)}
                 onKeyDown={(e) => { if (e.key === 'Enter') ouvrirApportDetail(r, ctx) }}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-l-4 bg-white/80 px-4 py-2.5 text-left shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-gray-50/60 cursor-pointer" style={{ borderLeftColor: r.secteurColor }}>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: r.secteurColor + '1a', color: r.secteurColor }}>{r.secteurLabel}</span>
-                <span className="font-bold text-gray-800">
-                  {r.secteurId === 'divers' ? `+${fmt(r.nouveau - r.ancien)} FCFA (total ${fmt(r.nouveau)})` : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
+                style={{ borderLeftColor: r.secteurColor, animationDelay: `${Math.min(idx, 12) * 40}ms` }}
+                className="ap-ligne group flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-l-4 border-white/70 bg-white/65 px-3 py-2.5 text-left shadow-[0_12px_28px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-[0_16px_32px_-16px_rgba(26,26,26,0.35)]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={icone3D(caisse ? '#16a34a' : r.secteurColor)}>
+                  {caisse ? <HandCoins size={18} /> : <Banknote size={18} />}
                 </span>
-                {r.motif && <span className="text-xs text-gray-500">{r.motif}</span>}
-                <span className="ml-auto text-[11px] text-gray-400">{r.auteur || '—'} · {formatDateTime(r.date)}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: r.secteurColor + '1a', color: r.secteurColor }}>{r.secteurLabel}</span>
+                    <span className="text-base font-extrabold text-gray-800">
+                      {caisse ? <><span className="text-green-700">+{fmt(r.nouveau - r.ancien)}</span> FCFA <span className="text-xs font-semibold text-gray-400">(total {fmt(r.nouveau)})</span></> : `${fmt(r.ancien)} → ${fmt(r.nouveau)} FCFA`}
+                    </span>
+                  </div>
+                  {r.motif && <p className="mt-0.5 truncate text-xs text-gray-500">{r.motif}</p>}
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
+                    <span className="inline-flex items-center gap-1"><PenLine size={11} /> {r.auteur || '—'}</span>
+                    <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {formatDateTime(r.date)}</span>
+                  </p>
+                </div>
                 {(peutModifierApport || peutGererApport) && (
-                  <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    {peutModifierApport && <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600"><Pencil size={14} /></button>}
-                    {peutGererApport && <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
+                  <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {peutModifierApport && <button onClick={() => ouvrirEditionApport(r, ctx)} title="Modifier" className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-violet-50 hover:text-violet-600"><Pencil size={14} /></button>}
+                    {peutGererApport && <button onClick={() => supprimerApport(r, ctx)} title="Supprimer" className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
                   </span>
                 )}
               </div>
@@ -623,12 +698,6 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         )}
       </div>
       ) : (<>
-      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        {masquerRevenu
-          ? <>Suivi des <strong>dépenses</strong> de ce secteur face au <strong>budget alloué</strong> depuis E-DÉPENSES (reste & % consommé). L'allocation du budget se fait uniquement dans E-DÉPENSES ; la <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>
-          : <>Bilan financier par secteur : chaque secteur reçoit un <strong>montant alloué</strong> en début de mois, comparé à ses <strong>dépenses</strong> pour donner le <strong>solde</strong> restant. La <strong>saisie</strong> des dépenses se fait dans l'écran <strong>Dépenses</strong>.</>}
-      </div>
-
       {/* KPI globaux */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard title="Dépenses totales" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent="#dc2626" />
@@ -644,6 +713,14 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
             icon={Scale} accent={totalReste < 0 ? '#dc2626' : '#0d9488'} valueColor={totalReste < 0 ? '#dc2626' : undefined} />
         )}
       </div>
+
+      {/* Nouvelle dotation, juste sous les indicateurs : même fenêtre que dans Comptabilité, Caisse, mais ici on choisit le secteur
+          (caisse courante ou un secteur). Elle ajoute un apport au budget du mois, visible ci-dessous. */}
+      {!secteurId && !masquerRevenu && !lectureSeule && (
+        <div className="flex justify-end">
+          <BoutonVerre variante="vert" icone={HandCoins} animation="pieces" badgePlus onClick={() => setDotationOuverte(true)}>Nouvelle dotation</BoutonVerre>
+        </div>
+      )}
 
       {/* Par secteur */}
       <div className="space-y-2.5">
@@ -681,22 +758,12 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                   {s.alloue > 0 ? `${fmt(s.alloue)} FCFA` : <span className="font-normal text-gray-300">Non défini</span>}
                 </span>
                 {!lectureSeule && !masquerRevenu && (
-                  s.secteurId === 'divers' ? (
-                    <button onClick={() => ouvrirRevision(s)} title="Ajouter une somme à la caisse commune (s'additionne au total déjà présent)"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(180,83,9,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-[0_7px_18px_-4px_rgba(180,83,9,0.7)]">
-                      <span className="text-sm leading-none">＋</span> Ajouter un apport
-                    </button>
-                  ) : s.alloue > 0 ? (
+                  s.secteurId === 'divers' ? null : s.alloue > 0 ? (
                     <button onClick={() => ouvrirRevision(s)} title="Réviser ce budget (revoir ou ajouter une somme)"
                       className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm transition-all duration-200 hover:bg-amber-50 hover:shadow-[0_0_10px_1px_rgba(180,83,9,0.45)]">
                       🔄 Réviser
                     </button>
-                  ) : (
-                    <button onClick={() => ouvrirRevision(s)} title="Allouer un budget à ce secteur"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(180,83,9,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-[0_7px_18px_-4px_rgba(180,83,9,0.7)]">
-                      <span className="text-sm leading-none">＋</span> Allouer un budget
-                    </button>
-                  )
+                  ) : null
                 )}
                 {!masquerRevenu && s.revisionsBudget.length > 0 && (
                   <button onClick={() => ouvrirRevision(s)} title="Voir l'historique des révisions"
@@ -1111,48 +1178,86 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           (peutGererApport) ; tout le monde peut consulter le détail. */}
       <Modal open={!!apportDetail} onClose={() => setApportDetail(null)} size="sm"
         title={apportEditMode ? "Modifier l'apport" : 'Détail de l\'apport'}
-        panelClassName={theme.gradient}
+        {...glassModalProps('#B45309')}
         footer={apportDetail && (
           apportEditMode ? (
             <>
-              <Button variant="ghost" onClick={() => setApportEditMode(false)} disabled={apportSaving}>Annuler</Button>
-              <Button onClick={sauverApportEdit} loading={apportSaving}>Enregistrer</Button>
+              <Button variant="outline" onClick={() => setApportEditMode(false)} disabled={apportSaving}><X size={15} /> Annuler</Button>
+              <BoutonVerre icone={Save} onClick={sauverApportEdit} loading={apportSaving}>Enregistrer</BoutonVerre>
             </>
           ) : (
             <div className="flex w-full items-center justify-between gap-2">
               {peutGererApport ? (
                 <Button size="sm" variant="danger" onClick={supprimerApportCourant} loading={apportSaving}><Trash2 size={14} /> Supprimer</Button>
               ) : <span />}
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setApportDetail(null)}>Fermer</Button>
-                {peutModifierApport && <Button onClick={demarrerEditionApport}><Pencil size={14} /> Modifier</Button>}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setApportDetail(null)}>Fermer</Button>
+                {peutModifierApport && <BoutonVerre icone={Pencil} onClick={demarrerEditionApport}>Modifier</BoutonVerre>}
               </div>
             </div>
           )
         )}>
+        <style>{`
+          @keyframes dap-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+          @keyframes dap-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+          @keyframes dap-reflet { 0% { transform: translateX(-120%) skewX(-12deg); } 100% { transform: translateX(520%) skewX(-12deg); } }
+        `}</style>
         {apportDetail && !apportEditMode && (() => {
           const { entry, ctx } = apportDetail
+          const caisse = ctx.estCaisseCommune
+          const couleurHero = caisse ? '#16a34a' : '#B45309'
+          const tuile = 'relative overflow-hidden rounded-2xl border border-white/70 bg-white/65 p-3 shadow-[0_10px_24px_-16px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl'
+          const entree = (i) => ({ animation: `dap-entree 0.4s ease-out ${i * 0.07}s both` })
           return (
             <div className="space-y-3 text-sm">
-              <div className="rounded-xl bg-white p-3 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-gray-400">{ctx.secteurLabel}</p>
-                <p className="text-lg font-extrabold text-gray-800">
-                  {ctx.estCaisseCommune ? `+${fmt(entry.nouveau - entry.ancien)} FCFA` : `${fmt(entry.ancien)} → ${fmt(entry.nouveau)} FCFA`}
-                </p>
-                {ctx.estCaisseCommune && <p className="text-xs text-gray-500">Nouveau total : {fmt(entry.nouveau)} FCFA (avant : {fmt(entry.ancien)} FCFA)</p>}
-              </div>
-              <div className="rounded-xl bg-white p-3 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-gray-400">Motif</p>
-                <p className="font-medium text-gray-700">{entry.motif || '—'}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-white p-3 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase text-gray-400">Date</p>
-                  <p className="font-medium text-gray-700">{formatDateTime(entry.date)}</p>
+              {/* Héro : icône 3D qui flotte, montant de l'apport qui s'anime. */}
+              <div className="relative overflow-hidden rounded-3xl border border-white/40 p-4 text-white shadow-[0_16px_30px_-14px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-xl"
+                style={{ background: `linear-gradient(135deg, color-mix(in srgb, ${couleurHero} 60%, #ffffff) 0%, ${couleurHero} 50%, color-mix(in srgb, ${couleurHero} 55%, #000000) 130%)`, animation: 'dap-entree 0.35s ease-out both' }}>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/5 bg-white/25 blur-md" style={{ animation: 'dap-reflet 5s ease-in-out 1s infinite' }} />
+                <div className="relative flex items-center gap-3.5">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),inset_0_-3px_5px_rgba(0,0,0,0.2),0_10px_20px_-8px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+                    style={{ animation: 'dap-flotte 3s ease-in-out infinite' }}>
+                    {caisse ? <HandCoins size={26} /> : <Banknote size={26} />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-white/80">{ctx.secteurLabel}</p>
+                    {caisse ? (
+                      <p className="text-3xl font-black leading-tight">+<Compteur valeur={entry.nouveau - entry.ancien} format={fmt} /> <span className="text-sm font-bold text-white/75">FCFA</span></p>
+                    ) : (
+                      <p className="text-2xl font-black leading-tight">{fmt(entry.ancien)} → {fmt(entry.nouveau)} <span className="text-sm font-bold text-white/75">FCFA</span></p>
+                    )}
+                  </div>
                 </div>
-                <div className="rounded-xl bg-white p-3 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase text-gray-400">Auteur</p>
-                  <p className="font-medium text-gray-700">{entry.auteur || '—'}</p>
+                {caisse && (
+                  <p className="relative mt-3 inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-bold backdrop-blur-md">
+                    {fmt(entry.ancien)} <span className="text-white/70">→</span> {fmt(entry.nouveau)} FCFA <span className="font-medium text-white/75">(nouveau total)</span>
+                  </p>
+                )}
+              </div>
+
+              <div className={`${tuile} flex items-start gap-2.5`} style={entree(1)}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#475569')}><MessageSquareText size={16} /></span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-400">Motif</p>
+                  <p className="break-words font-semibold text-gray-700">{entry.motif || '—'}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className={`${tuile} flex items-center gap-2.5 transition-all hover:-translate-y-0.5 hover:bg-white/85`} style={entree(2)}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#f59e0b')}><CalendarDays size={16} /></span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-400">Date</p>
+                    <p className="text-sm font-extrabold leading-tight text-gray-800">{formatDateTime(entry.date)}</p>
+                  </div>
+                </div>
+                <div className={`${tuile} flex items-center gap-2.5 transition-all hover:-translate-y-0.5 hover:bg-white/85`} style={entree(3)}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#7c3aed')}><PenLine size={16} /></span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-400">Auteur</p>
+                    <p className="break-words text-sm font-extrabold leading-tight text-gray-800">{entry.auteur || '—'}</p>
+                  </div>
                 </div>
               </div>
               {!peutGererApport && (
@@ -1163,24 +1268,30 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         })()}
         {apportDetail && apportEditMode && (() => {
           const { ctx } = apportDetail
+          const tuile = 'relative rounded-2xl border border-white/70 bg-white/65 p-3 shadow-[0_10px_24px_-16px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl'
+          const etiq = (Ic, couleur, texte) => (
+            <label className="mb-1.5 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D(couleur)}><Ic size={13} /></span>{texte}
+            </label>
+          )
           return (
             <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">{ctx.estCaisseCommune ? 'Montant ajouté (FCFA)' : 'Nouveau montant (FCFA)'}</label>
+              <div className={tuile} style={{ animation: 'dap-entree 0.35s ease-out both' }}>
+                {etiq(Banknote, '#16a34a', ctx.estCaisseCommune ? 'Montant ajouté (FCFA)' : 'Nouveau montant (FCFA)')}
                 <input type="number" min="0" value={apportForm.montant} onChange={(e) => setApportForm((f) => ({ ...f, montant: e.target.value }))} autoFocus
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  className="w-full rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-base font-extrabold outline-none focus:ring-2 focus:ring-amber-300" />
               </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Date</label>
+              <div className={tuile} style={{ animation: 'dap-entree 0.35s ease-out 0.07s both' }}>
+                {etiq(CalendarDays, '#f59e0b', 'Date')}
                 <input type="date" value={apportForm.date} onChange={(e) => setApportForm((f) => ({ ...f, date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  className="w-full rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-300" />
               </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Motif <span className="font-normal normal-case text-gray-400">(optionnel)</span></label>
+              <div className={tuile} style={{ animation: 'dap-entree 0.35s ease-out 0.14s both' }}>
+                {etiq(MessageSquareText, '#475569', 'Motif (optionnel)')}
                 <input value={apportForm.motif} onChange={(e) => setApportForm((f) => ({ ...f, motif: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  className="w-full rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-300" />
               </div>
-              <p className="text-[11px] text-gray-400">Les totaux des apports suivants seront recalculés automatiquement.</p>
+              <p className="text-[11px] text-gray-500">Les totaux des apports suivants seront recalculés automatiquement.</p>
             </div>
           )
         })()}
@@ -1258,6 +1369,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           </div>
         )}
       </Modal>
+      {!secteurId && <DotationModal open={dotationOuverte} onClose={() => setDotationOuverte(false)} budgets={budgets} user={user} tousDomaines titre="Nouvelle dotation" />}
     </div>
   )
 }

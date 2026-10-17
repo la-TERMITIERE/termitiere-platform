@@ -13,6 +13,7 @@ import Button from '../ui/Button'
 import Modal from '../ui/Modal'
 import Table from '../ui/Table'
 import Badge from '../ui/Badge'
+import BandeauVolet, { BoutonBande } from '../ui/BandeauVolet'
 import FormGroup from '../forms/FormGroup'
 import Input from '../forms/Input'
 import ChampAutocomplete from '../forms/ChampAutocomplete'
@@ -22,7 +23,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { canManagePartenaires } from '../../core/roles'
-import { COULEUR_MODULE, teinterHex, shadeHex } from '../../utils/color'
+import { COULEUR_MODULE, icone3D } from '../../utils/color'
 
 const empty = () => ({ nom: '', contact: '', type: '' })
 
@@ -71,33 +72,19 @@ export default function Partenaires({ module, suggestions }) {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_8px_20px_-8px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: `linear-gradient(135deg, ${teinterHex(couleur, 0.85)} 0%, ${teinterHex(shadeHex(couleur, -35), 0.85)} 100%)` }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: couleur, boxShadow: '0 0 0 3px #ffffff, 0 0 12px 4px #ffffff55', flexShrink: 0
-        }}>
-          <Handshake size={28} color="white" />
-        </div>
-        <div className="flex-1">
-          <h2 className="text-lg font-extrabold">Partenaires</h2>
-          <p className="text-sm text-white/80">Contacts externes du secteur : ce ne sont pas des employés</p>
-        </div>
-      </div>
-
-      {peutGerer && (
-        <div className="flex justify-end">
-          <Button onClick={() => setModal({ data: empty(), id: null })}><Plus size={16} /> Nouveau partenaire</Button>
-        </div>
-      )}
+      <BandeauVolet couleur={couleur} icone={Handshake} titre="Partenaires"
+        sous={`${liste.length} partenaire(s) : contacts externes du secteur, ce ne sont pas des employés.`}>
+        {peutGerer && <BoutonBande icone={Plus} anime onClick={() => setModal({ data: empty(), id: null })}>Nouveau partenaire</BoutonBande>}
+      </BandeauVolet>
 
       {!peutGerer && (
-        <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          👁️ Mode consultation : la gestion des partenaires est réservée à l'utilisateur désigné par la direction.
+        <div className="ed-entree flex items-center gap-2 rounded-2xl border border-sky-200/70 bg-sky-50/70 px-4 py-3 text-sm text-sky-800 backdrop-blur-xl">
+          <span className="ed-flotte flex h-7 w-7 shrink-0 items-center justify-center rounded-xl" style={icone3D('#0284c7')}>👁️</span>
+          Mode consultation : la gestion des partenaires est réservée à l'utilisateur désigné par la direction.
         </div>
       )}
 
-      <Card className="p-0">
+      <Card className="ed-entree p-0">
         <Table searchBy={['nom', 'contact', 'type']}
           columns={[
             { key: 'nom', label: 'Nom', render: (r) => <span className="font-semibold">{r.nom}</span> },
@@ -107,8 +94,8 @@ export default function Partenaires({ module, suggestions }) {
               : <span className="text-xs text-gray-400">—</span> },
             ...(peutGerer ? [{ key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
-                <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 shadow-sm transition-all hover:-translate-y-0.5 hover:text-gray-800"><Pencil size={16} /></button>
+                <button onClick={() => supprimer(r)} className="rounded-lg border border-red-200 bg-white p-1.5 text-red-500 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-red-50"><Trash2 size={16} /></button>
               </div>
             ) }] : [])
           ]}

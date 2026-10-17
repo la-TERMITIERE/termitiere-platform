@@ -19,6 +19,7 @@ const FINANCEMENT = { caisse_commune: 'Caisse commune', pau: 'Apport du PAU' }
 export default function CaisseFiche({ ligne, onClose }) {
   const l = ligne
   const dotation = l?.type === 'dotation'
+  const retour = l?.type === 'retour'
   const entree = (l?.entree || 0) > 0
   const couleur = entree ? '#16a34a' : '#dc2626'
   const montant = entree ? l?.entree : l?.sortie
@@ -30,7 +31,7 @@ export default function CaisseFiche({ ligne, onClose }) {
 
   return (
     <Modal open={!!l} onClose={onClose} size="lg" {...glassModalProps(couleur)}
-      title={l ? `${dotation ? 'Dotation' : 'Dépense'} du ${formatDateShort(l.date)}` : ''}
+      title={l ? `${dotation ? 'Dotation' : retour ? 'Retour de reliquat' : 'Dépense'} du ${formatDateShort(l.date)}` : ''}
       footer={<Button variant="ghost" onClick={onClose}>Fermer</Button>}>
       {l && (
         <FicheDetail
@@ -42,7 +43,7 @@ export default function CaisseFiche({ ligne, onClose }) {
               <span className="relative flex h-14 w-14 items-center justify-center rounded-3xl bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),0_10px_20px_-8px_rgba(0,0,0,0.5)]">
                 <Icone size={28} style={{ animation: 'cf-flotte 2.6s ease-in-out infinite' }} />
               </span>
-              <p className="relative text-[11px] font-bold uppercase tracking-[0.2em] text-white/75">{dotation ? (entree ? 'Dotation de caisse' : 'Réduction de dotation') : 'Dépense'}</p>
+              <p className="relative text-[11px] font-bold uppercase tracking-[0.2em] text-white/75">{dotation ? (entree ? 'Dotation de caisse' : 'Réduction de dotation') : retour ? 'Retour de reliquat' : 'Dépense'}</p>
               <p className="relative text-3xl font-black leading-tight">{entree ? '+' : '-'}<Compteur valeur={montant} format={(v) => v.toLocaleString('fr-FR')} /> <span className="text-base font-bold text-white/80">FCFA</span></p>
               <div className="relative flex flex-wrap justify-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-md">

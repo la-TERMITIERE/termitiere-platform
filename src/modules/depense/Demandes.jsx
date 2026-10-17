@@ -1,37 +1,43 @@
-// Autorisation de décaissement — circuit à deux niveaux :
-//   en_attente (créée) → approuvee (1er niveau) → decaissee (2e niveau, définitif, compte dans le budget)
-//   ou refusee à n'importe quelle étape.
+// Demandes de décaissement : on fait une demande, elle part en alerte au PAU, à la GE, à l'Info et à la direction,
+// et l'un d'eux la valide (elle devient une dépense décaissée, qui compte dans le budget) ou la refuse, en une seule étape.
+//   en_attente (envoyée) → decaissee (validée) ou refusee. L'ancien état « approuvee » reste décidable d'un seul clic.
 import { useMemo, useState } from 'react'
-import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle } from 'lucide-react'
+import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle, Send, Plus, HandCoins, Wallet, Tag, CalendarDays, UserRound, FileText, Building2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
+import BoutonVerre from '../../shared/ui/BoutonVerre'
+import BandeauVolet, { OngletsBande } from '../../shared/ui/BandeauVolet'
+import NouvelleDemandeModal, { DESTINATAIRES_DEMANDE, URGENCES } from './NouvelleDemandeModal'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isApproverRole, isCertifierRole, FULL_ACCESS_ROLES, depenseRoleEffectif } from '../../core/roles'
+import { FULL_ACCESS_ROLES, depenseRoleEffectif, isReadOnlyRole } from '../../core/roles'
 import { updateItem, removeItem, setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
-import { formatDateShort, formatMoney } from '../../utils/formatters'
+import { formatDateShort, formatMoney, genId, todayStr } from '../../utils/formatters'
 import { glassModalProps } from '../../utils/color'
-import { SECTEURS, STATUTS_DECAISSEMENT } from './data'
+import { SECTEURS, STATUTS_DECAISSEMENT, CATEGORIES_DEPENSE, LOGISTIQUE_SITES, natureFluxDefaut } from './data'
 import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite, seuilsBudgetDe } from './logic'
 import { notifierBeneficiaire } from './notifications'
 
 const ACTION_INFO = {
-  approuver: { titre: 'Approuver le décaissement', label: 'Commentaire (optionnel)', placeholder: 'Ex. : vérifié avec le fournisseur, montant conforme…', requis: false, variant: 'success', bouton: 'Approuver' },
-  refuser:   { titre: 'Refuser le décaissement',   label: 'Motif du refus', placeholder: 'Expliquez pourquoi cette demande est refusée…', requis: true, variant: 'danger', bouton: 'Refuser' },
-  certifier: { titre: 'Certifier le décaissement', label: 'Commentaire (optionnel)', placeholder: 'Ex. : fonds remis en main propre le…', requis: false, variant: 'success', bouton: 'Certifier' }
+  valider: { titre: 'Valider la demande', label: 'Commentaire (optionnel)', placeholder: 'Ex. : fonds remis en main propre, montant conforme…', requis: false, variant: 'success', bouton: 'Valider' },
+  refuser: { titre: 'Refuser la demande', label: 'Motif du refus', placeholder: 'Expliquez pourquoi cette demande est refusée…', requis: true, variant: 'danger', bouton: 'Refuser' }
 }
+
+// Ceux qui reçoivent l'alerte d'une nouvelle demande et qui peuvent la valider ou la refuser (un seul suffit).
+// Le directeur compte ici, alors que dans le reste d'E-DÉPENSES il est traité comme un agent.
+const VALIDEURS_DEMANDE = [...DESTINATAIRES_DEMANDE, 'assistant_pau']
 
 // Couleur d'accent (barre latérale de la carte) selon le statut de la demande.
 const STATUT_ACCENT = { en_attente: '#d97706', approuvee: '#0ea5e9', decaissee: '#16a34a', refusee: '#dc2626' }
 
-export default function Autorisations() {
+export default function Demandes() {
   const { user, role: roleReel } = useAuth()
   // super_admin/admin/directeur traités comme un agent dans E-DÉPENSES (cf.
   // depenseRoleEffectif) — seuls pau, ge et info gardent l'accès complet ici,
@@ -58,8 +64,9 @@ export default function Autorisations() {
     return [...new Set([d.enregistreParUid, projet?.responsableUid, besoin?.demandeParUid].filter((uid) => uid && uid !== user?.uid))]
   }
 
-  const peutApprouver = isApproverRole(role)
-  const peutCertifier = isCertifierRole(role)
+  // Peut valider ou refuser : PAU, GE, Info, directeur (jamais sa propre demande, cf. estMienne).
+  const peutValider = VALIDEURS_DEMANDE.includes(roleReel)
+  const lectureSeule = isReadOnlyRole(roleReel)
 
   // SÉPARATION DES POUVOIRS (audit sécurité 2026-08-04) : une même personne
   // pouvait saisir un décaissement, l'approuver PUIS le certifier — l'argent
@@ -68,26 +75,29 @@ export default function Autorisations() {
   //  - `approuveeParMoi`: j'ai déjà approuvé au 1er niveau → la certification
   //                       (2e niveau) revient obligatoirement à quelqu'un d'autre.
   const estMienne = (d) => !!user && (d.enregistreParUid === user.uid || d.enregistrePar === user.nom)
-  const approuveeParMoi = (d) => !!user?.nom && d.approuveePar === user.nom
   // Suppression réservée à l'administration — seulement tant qu'aucun niveau
   // d'approbation n'a encore statué (sinon c'est un engagement réel, cf. refuser).
   const peutSupprimer = FULL_ACCESS_ROLES.includes(role)
 
   const [recherche, setRecherche] = useState('')
-  const [filtre, setFiltre] = useState('en_attente')
+  const [filtre, setFiltre] = useState('attente')
   const [busy, setBusy] = useState(false)
-  const [actionModal, setActionModal] = useState(null) // { d, type: 'approuver' | 'refuser' | 'certifier' }
+  const [actionModal, setActionModal] = useState(null) // { d, type: 'valider' | 'refuser' }
+  const [demandeOuverte, setDemandeOuverte] = useState(false) // fenêtre « Nouvelle demande »
   const [commentaire, setCommentaire] = useState('')
   const [detail, setDetail] = useState(null) // dépense sélectionnée pour la fiche détail
   const [toDelete, setToDelete] = useState(null) // dépense en cours de suppression
   const [motifSuppression, setMotifSuppression] = useState('')
 
-  const compteur = (st) => depenses.filter((d) => d.statut === st).length
+  // Une « demande » : tout ce qui est passé par ce circuit (en attente, refusé, ou décaissé après validation).
+  const demandes = useMemo(() => depenses.filter((d) => ['en_attente', 'approuvee', 'refusee'].includes(d.statut) || (d.statut === 'decaissee' && (d.demande || d.valideePar || d.certifieePar || d.approuveePar))), [depenses])
+  const estAttente = (d) => d.statut === 'en_attente' || d.statut === 'approuvee'
+  const compteur = (f) => demandes.filter((d) => (f === 'attente' ? estAttente(d) : f === 'validee' ? d.statut === 'decaissee' : d.statut === 'refusee')).length
   const filtrees = useMemo(() => {
-    const rows = filtre === 'tous' ? depenses.filter((d) => d.statut) : depenses.filter((d) => d.statut === filtre)
-    return rows.filter((d) => correspond(recherche, d.description, d.beneficiaire, d.enregistrePar, d.approuveePar, d.categorie))
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-  }, [depenses, filtre, recherche])
+    const rows = filtre === 'tous' ? demandes : filtre === 'attente' ? demandes.filter(estAttente) : filtre === 'validee' ? demandes.filter((d) => d.statut === 'decaissee') : demandes.filter((d) => d.statut === 'refusee')
+    return rows.filter((d) => correspond(recherche, d.description, d.beneficiaireNom, d.enregistrePar, d.valideePar, d.categorie))
+      .sort((a, b) => (estAttente(b) ? (URGENCES[b.urgence]?.rang || 0) : 0) - (estAttente(a) ? (URGENCES[a.urgence]?.rang || 0) : 0) || (b.createdAt || 0) - (a.createdAt || 0))
+  }, [demandes, filtre, recherche])
 
   const run = async (fn, okMsg) => {
     setBusy(true)
@@ -131,42 +141,32 @@ export default function Autorisations() {
     setDetail(null)
   }
 
-  async function approuver(d, texte) {
-    const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-    await run(async () => {
-      await updateItem('depense_depenses', d.id, { statut: 'approuvee', approuveePar: user?.nom || '—', approuveeLe: Date.now(), approbationCommentaire: texte || '' })
-      await audit('depense', 'DECAISSEMENT_APPROUVE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
-      const dest = destinataires(d)
-      if (dest.length) {
-        await notify({ type: 'info', title: '☑️ Décaissement approuvé', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId} : en attente de certification`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
-      }
-    }, '✅ Décaissement approuvé : en attente de certification')
-  }
-
   async function refuser(d, motif) {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     await run(async () => {
       await updateItem('depense_depenses', d.id, { statut: 'refusee', refusMotif: motif || '', refuseePar: user?.nom || '—', refuseeLe: Date.now() })
-      await audit('depense', 'DECAISSEMENT_REFUSE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, { motif })
+      await audit('depense', 'DEMANDE_REFUSEE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, { motif })
       const dest = destinataires(d)
       if (dest.length) {
-        await notify({ type: 'refus', title: '❌ Décaissement refusé', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId}${motif ? ' : ' + motif : ''}`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
+        await notify({ type: 'refus', title: '❌ Demande refusée', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId}${motif ? ' : ' + motif : ''}`, module: 'depense', forUsers: dest, link: '/depense/demandes' }).catch(() => {})
       }
-    }, 'Décaissement refusé')
+    }, 'Demande refusée')
   }
 
-  async function certifier(d, texte) {
+  async function valider(d, texte) {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     await run(async () => {
-      await updateItem('depense_depenses', d.id, { statut: 'decaissee', certifieePar: user?.nom || '—', certifieeLe: Date.now(), certificationCommentaire: texte || '' })
-      await audit('depense', 'DECAISSEMENT_CERTIFIE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
+      const nom = user?.nom || '—'
+      // On renseigne aussi certifieePar/certifieeLe : d'autres écrans (historique, fiches) les lisent encore.
+      await updateItem('depense_depenses', d.id, { statut: 'decaissee', demande: true, valideePar: nom, valideeLe: Date.now(), validationCommentaire: texte || '', certifieePar: nom, certifieeLe: Date.now() })
+      await audit('depense', 'DEMANDE_VALIDEE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
       const dest = destinataires(d)
       if (dest.length) {
-        await notify({ type: 'success', title: '💸 Décaissement certifié', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId} : argent décaissé`, module: 'depense', forUsers: dest, link: '/depense/autorisations' }).catch(() => {})
+        await notify({ type: 'success', title: '✅ Demande validée', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId} : validée par ${nom}`, module: 'depense', forUsers: dest, link: '/depense/demandes' }).catch(() => {})
       }
       await notifierBeneficiaire(d, secteur?.label || d.secteurId)
       await alerterSiDepassement(d, secteur)
-    }, '✅ Décaissement certifié : argent décaissé')
+    }, '✅ Demande validée : dépense décaissée')
   }
 
   async function confirmerAction() {
@@ -175,9 +175,8 @@ export default function Autorisations() {
     const info = ACTION_INFO[type]
     const texte = commentaire.trim()
     if (info.requis && !texte) { toast.error('Merci de préciser un motif.'); return }
-    if (type === 'approuver') await approuver(d, texte)
+    if (type === 'valider') await valider(d, texte)
     else if (type === 'refuser') await refuser(d, texte)
-    else if (type === 'certifier') await certifier(d, texte)
     setActionModal(null)
     setDetail(null)
   }
@@ -207,31 +206,28 @@ export default function Autorisations() {
   }
 
   const filtres = [
-    ['en_attente', `À approuver (${compteur('en_attente')})`],
-    ['approuvee', `À décaisser (${compteur('approuvee')})`],
-    ['decaissee', `Décaissées (${compteur('decaissee')})`],
-    ['refusee', `Refusées (${compteur('refusee')})`],
-    ['tous', 'Toutes']
+    { id: 'attente', label: `En attente (${compteur('attente')})` },
+    { id: 'validee', label: `Validées (${compteur('validee')})` },
+    { id: 'refusee', label: `Refusées (${compteur('refusee')})` },
+    { id: 'tous', label: 'Toutes' }
   ]
 
   const infoModal = actionModal ? ACTION_INFO[actionModal.type] : null
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        <strong>Réservé aux dépenses imprévues (hors budget).</strong> Les dépenses prévues/budgétées sont comptées directement dans <strong>Dépenses</strong>. Ici : un responsable <strong>approuve</strong> la demande (1er niveau), puis un décideur la <strong>certifie</strong> pour décaisser réellement l'argent (2e niveau, définitif). Seules les dépenses <strong>décaissées</strong> comptent dans le budget du secteur.
-      </div>
+      <BandeauVolet couleur="#B45309" icone={Send} titre="Demandes"
+        sous="Faites une demande de décaissement : le PAU, la GE, l'Info et la direction sont alertés, et l'un d'eux la valide ou la refuse.">
+        <ChampRecherche variant="glass" className="!w-60" value={recherche} onChange={setRecherche} placeholder="Rechercher un bénéficiaire, un libellé…" />
+        <OngletsBande options={filtres} valeur={filtre} onChange={setFiltre} />
+      </BandeauVolet>
 
-      <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1">
-        {filtres.map(([v, l]) => (
-          <button key={v} onClick={() => setFiltre(v)}
-            className={`rounded px-3 py-1.5 text-sm font-semibold ${filtre === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-            {l}
-          </button>
-        ))}
-      </div>
+      {!lectureSeule && (
+        <div className="flex justify-end">
+          <BoutonVerre icone={Send} badgePlus onClick={() => setDemandeOuverte(true)}>Nouvelle demande</BoutonVerre>
+        </div>
+      )}
 
-<ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un bénéficiaire, un libellé…" />
       {filtrees.length === 0 ? (
         <Card><p className="py-8 text-center text-sm text-gray-400">Aucune demande dans cet état.</p></Card>
       ) : (
@@ -248,12 +244,13 @@ export default function Autorisations() {
                     <p className="truncate font-bold text-gray-800">{libelleSecteurSite(secteur, d)}</p>
                     <Badge tone={st.tone}>{st.label}</Badge>
                     {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
+                    {d.urgence && d.urgence !== 'normale' && URGENCES[d.urgence] && (() => { const u = URGENCES[d.urgence]; const Ic = u.icone; return <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white" style={{ background: u.couleur }}><Ic size={10} /> {u.label}</span> })()}
                   </div>
                   <p className="mt-0.5 text-xs text-gray-500">{d.categorie || '—'} · {formatDateShort(d.date)}</p>
                   {d.description && <p className="mt-1 truncate text-sm text-gray-600">{d.description}</p>}
                   <p className="mt-1 truncate text-[11px] text-gray-400">
                     ✍️ Demandé par <b className="text-gray-600">{d.enregistrePar || '—'}</b>
-                    {d.approuveePar && <> · ✓ Approuvé par <b className="text-gray-600">{d.approuveePar}</b></>}
+                    {(d.valideePar || d.approuveePar) && <> · ✓ {d.valideePar ? 'Validé' : 'Approuvé'} par <b className="text-gray-600">{d.valideePar || d.approuveePar}</b></>}
                   </p>
                 </div>
                 <p className="shrink-0 text-lg font-extrabold text-gray-900">{Number(d.montant).toLocaleString('fr-FR')}<span className="ml-0.5 text-xs font-bold text-gray-400">FCFA</span></p>
@@ -281,6 +278,7 @@ export default function Autorisations() {
                   <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{st.label}</span>
                   {d.categorie && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">{d.categorie}</span>}
                   {d.financePar === 'caisse_commune' && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">💰 Caisse commune</span>}
+                  {d.urgence && URGENCES[d.urgence] && <span className="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">Urgence : {URGENCES[d.urgence].label}</span>}
                 </div>
               </div>
 
@@ -296,14 +294,14 @@ export default function Autorisations() {
               </div>
 
               {/* Historique des décisions */}
-              {(d.approuveePar || d.certifieePar || (d.statut === 'refusee' && d.refusMotif)) && (
+              {(d.valideePar || d.approuveePar || d.certifieePar || (d.statut === 'refusee' && d.refusMotif)) && (
                 <div className="space-y-2">
-                  {d.approuveePar && (
+                  {(d.valideePar || d.approuveePar) && (
                     <div className="rounded-2xl bg-white/70 p-3 shadow-sm backdrop-blur-sm">
-                      <p className="text-xs text-gray-500">Approuvée par <b className="text-gray-700">{d.approuveePar}</b></p>
-                      {d.approbationCommentaire && (
+                      <p className="text-xs text-gray-500">{d.valideePar ? 'Validée' : 'Approuvée'} par <b className="text-gray-700">{d.valideePar || d.approuveePar}</b></p>
+                      {(d.validationCommentaire || d.approbationCommentaire) && (
                         <p className="mt-1 flex items-start gap-1 rounded bg-green-50 p-2 text-xs italic text-green-700">
-                          <MessageSquare size={12} className="mt-0.5 shrink-0" /> « {d.approbationCommentaire} »
+                          <MessageSquare size={12} className="mt-0.5 shrink-0" /> « {d.validationCommentaire || d.approbationCommentaire} »
                         </p>
                       )}
                     </div>
@@ -316,16 +314,6 @@ export default function Autorisations() {
                       </p>
                     </div>
                   )}
-                  {d.certifieePar && (
-                    <div className="rounded-2xl bg-white/70 p-3 shadow-sm backdrop-blur-sm">
-                      <p className="text-xs text-gray-500">Certifiée par <b className="text-gray-700">{d.certifieePar}</b></p>
-                      {d.certificationCommentaire && (
-                        <p className="mt-1 flex items-start gap-1 rounded bg-green-50 p-2 text-xs italic text-green-700">
-                          <MessageSquare size={12} className="mt-0.5 shrink-0" /> « {d.certificationCommentaire} »
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -334,20 +322,10 @@ export default function Autorisations() {
                   et le certificateur ne peut pas être celui qui a approuvé au 1er
                   niveau. Sans cela, une même personne pouvait saisir un décaissement,
                   l'approuver et le certifier — argent sorti en trois clics. */}
-              {d.statut === 'en_attente' && peutApprouver && !estMienne(d) && (
+              {estAttente(d) && peutValider && !estMienne(d) && (
                 <div className="flex gap-2 pt-1">
-                  <Button variant="success" disabled={busy} onClick={() => ouvrirAction(d, 'approuver')} className="flex-1">
-                    <Check size={15} /> Approuver
-                  </Button>
-                  <Button variant="danger" disabled={busy} onClick={() => ouvrirAction(d, 'refuser')} className="flex-1">
-                    <X size={15} /> Refuser
-                  </Button>
-                </div>
-              )}
-              {d.statut === 'approuvee' && peutCertifier && !estMienne(d) && !approuveeParMoi(d) && (
-                <div className="flex gap-2 pt-1">
-                  <Button variant="success" disabled={busy} onClick={() => ouvrirAction(d, 'certifier')} className="flex-1">
-                    <BadgeCheck size={15} /> Certifier (décaisser)
+                  <Button variant="success" disabled={busy} onClick={() => ouvrirAction(d, 'valider')} className="flex-1">
+                    <Check size={15} /> Valider
                   </Button>
                   <Button variant="danger" disabled={busy} onClick={() => ouvrirAction(d, 'refuser')} className="flex-1">
                     <X size={15} /> Refuser
@@ -355,17 +333,11 @@ export default function Autorisations() {
                 </div>
               )}
               {/* Messages explicites : l'utilisateur comprend pourquoi il ne peut pas agir. */}
-              {estMienne(d) && ['en_attente', 'approuvee'].includes(d.statut) && (
+              {estMienne(d) && estAttente(d) && (
                 <p className="flex items-center gap-1 text-xs text-amber-600"><Clock size={13} /> Votre propre demande : elle doit être validée par quelqu'un d'autre</p>
               )}
-              {d.statut === 'approuvee' && peutCertifier && !estMienne(d) && approuveeParMoi(d) && (
-                <p className="flex items-center gap-1 text-xs text-amber-600"><Stamp size={13} /> Vous avez déjà approuvé : la certification revient à un autre décideur</p>
-              )}
-              {d.statut === 'en_attente' && !peutApprouver && !estMienne(d) && (
-                <p className="flex items-center gap-1 text-xs text-gray-500"><Clock size={13} /> En attente d'un responsable habilité à approuver</p>
-              )}
-              {d.statut === 'approuvee' && !peutCertifier && !estMienne(d) && (
-                <p className="flex items-center gap-1 text-xs text-gray-500"><Stamp size={13} /> En attente d'un décideur habilité à certifier</p>
+              {estAttente(d) && !peutValider && !estMienne(d) && (
+                <p className="flex items-center gap-1 text-xs text-gray-500"><Clock size={13} /> En attente du PAU, de la GE, de l'Info ou de la direction</p>
               )}
               {peutSupprimer && (
                 <button onClick={() => { setMotifSuppression(''); setToDelete(d) }} disabled={busy}
@@ -377,6 +349,8 @@ export default function Autorisations() {
           )
         })()}
       </Modal>
+
+      <NouvelleDemandeModal open={demandeOuverte} onClose={() => setDemandeOuverte(false)} />
 
       <Modal
         open={!!actionModal}

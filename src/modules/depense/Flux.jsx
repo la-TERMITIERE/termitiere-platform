@@ -3,17 +3,19 @@
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Chart } from 'react-chartjs-2'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileSpreadsheet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileSpreadsheet, Waves, ArrowDownToLine, ArrowUpFromLine, Factory, Landmark, Flame, Scale, LineChart } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import InfoBulle from '../../shared/ui/InfoBulle'
-import Button from '../../shared/ui/Button'
+import BandeauVolet, { BoutonBande } from '../../shared/ui/BandeauVolet'
+import Compteur from '../../shared/ui/Compteur'
 import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { MOIS_LABELS, NATURES_FLUX } from './data'
 import { soldesFluxMois, croissance, derniersMois, moisPrecedent, coutsMatieresBriqueterie, visibleDansEDepenses } from './logic'
 import { revenuSecteur, SECTEURS_AVEC_REVENU } from './revenus'
 import { icone3D } from '../../utils/color'
+import { optionsGraphique, styleBarre, styleCourbe } from './chartStyle'
 
 const now = new Date()
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
@@ -68,22 +70,14 @@ export default function Flux() {
   const chartData = {
     labels: tendance.map((t) => t.label),
     datasets: [
-      { type: 'line', label: 'Solde global', data: tendance.map((t) => t.soldeGlobal), borderColor: '#334155', backgroundColor: 'rgba(51,65,85,0.05)', borderWidth: 3, borderDash: [6, 4], tension: 0.35, pointRadius: 3, pointBackgroundColor: '#334155', order: 0, fill: false },
-      { type: 'bar', label: 'Exploitation',   data: tendance.map((t) => t.soldeExploitation),   backgroundColor: 'rgba(13,148,136,0.6)', borderColor: '#0d9488', borderWidth: 1, borderRadius: 4, order: 1 },
-      { type: 'bar', label: 'Investissement', data: tendance.map((t) => t.soldeInvestissement), backgroundColor: 'rgba(217,119,6,0.55)', borderColor: '#d97706', borderWidth: 1, borderRadius: 4, order: 1 },
-      { type: 'bar', label: 'Pertes',         data: tendance.map((t) => t.soldePerte),          backgroundColor: 'rgba(220,38,38,0.55)', borderColor: '#dc2626', borderWidth: 1, borderRadius: 4, order: 1 }
+      { type: 'line', label: 'Solde global', data: tendance.map((t) => t.soldeGlobal), ...styleCourbe('#334155', { zone: false, pointille: true }), order: 0 },
+      { type: 'bar', label: 'Exploitation',   data: tendance.map((t) => t.soldeExploitation),   ...styleBarre('#0d9488'), order: 1 },
+      { type: 'bar', label: 'Investissement', data: tendance.map((t) => t.soldeInvestissement), ...styleBarre('#d97706'), order: 1 },
+      { type: 'bar', label: 'Pertes',         data: tendance.map((t) => t.soldePerte),          ...styleBarre('#dc2626'), order: 1 }
     ]
   }
 
-  const chartOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'nearest', intersect: false },
-    plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
-    scales: {
-      y: { beginAtZero: false, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') }, grid: { color: (c) => (c.tick.value === 0 ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.05)') } },
-      x: { grid: { display: false } }
-    }
-  }
+  const chartOptions = optionsGraphique()
 
   function exportXLSX() {
     exportRapportExcel({
@@ -112,22 +106,27 @@ export default function Flux() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50">
-          <ChevronLeft size={16} />
-        </button>
-        <span className="text-lg font-extrabold text-gray-800">{MOIS_LABELS[mois - 1]} {annee}</span>
-        <button onClick={() => changerMois(1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50">
-          <ChevronRight size={16} />
-        </button>
-        <Button variant="outline" className="ml-auto" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
-      </div>
+      <style>{`
+        @keyframes fx-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes fx-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        @keyframes fx-barre { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes fx-bascule { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+        .fx-tuile { animation: fx-entree 0.45s ease-out backwards; }
+        .fx-icone { animation: fx-flotte 3.2s ease-in-out infinite; }
+        .fx-barre { transform-origin: left; animation: fx-barre 0.9s ease-out backwards; }
+        @media (prefers-reduced-motion: reduce) { .fx-tuile, .fx-icone, .fx-barre { animation: none; } }
+      `}</style>
 
-      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Chaque dépense décaissée est classée par <strong>nature de flux</strong> (Exploitation, Investissement ou Perte : voir l'onglet Dépenses). Le solde d'exploitation compare cette dépense au revenu réel du mois ; investissement et pertes sont des sorties pures, sans revenu suivi en face.
-      </div>
+      <BandeauVolet couleur="#B45309" icone={Waves} titre="Flux de trésorerie" sous={`${MOIS_LABELS[mois - 1]} ${annee} : entrées, sorties et solde par nature de flux.`}>
+        <div className="flex items-center gap-1 rounded-2xl border border-white/30 bg-white/15 p-1 backdrop-blur-sm">
+          <button onClick={() => changerMois(-1)} aria-label="Mois précédent" className="rounded-xl p-2 text-white/80 transition-all hover:bg-white/20 hover:text-white active:scale-90"><ChevronLeft size={16} /></button>
+          <span className="px-1 text-sm font-bold whitespace-nowrap">{MOIS_LABELS[mois - 1]} {annee}</span>
+          <button onClick={() => changerMois(1)} aria-label="Mois suivant" className="rounded-xl p-2 text-white/80 transition-all hover:bg-white/20 hover:text-white active:scale-90"><ChevronRight size={16} /></button>
+        </div>
+        <BoutonBande icone={FileSpreadsheet} onClick={exportXLSX}>Export Excel</BoutonBande>
+      </BandeauVolet>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="ed-grille grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title={<span className="flex items-center gap-1">Solde d'exploitation <InfoBulle texte="Revenus réels du mois − dépenses classées Exploitation." /></span>}
           value={`${fmt(solde.soldeExploitation)} FCFA`} icon={solde.soldeExploitation >= 0 ? TrendingUp : TrendingDown}
@@ -148,55 +147,91 @@ export default function Flux() {
           accent={solde.soldeGlobal >= 0 ? '#B45309' : '#dc2626'} />
       </div>
 
-      <Card>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleurCroissance)}>
-            <IconCroissance size={20} />
+      <div className="fx-tuile relative overflow-hidden rounded-3xl border border-white/70 bg-white/70 p-4 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl" style={{ animationDelay: '0.1s' }}>
+        <span aria-hidden="true" className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-20 blur-2xl" style={{ background: couleurCroissance }} />
+        <div className="relative flex items-center gap-3">
+          <div className="fx-icone flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={icone3D(couleurCroissance)}>
+            <IconCroissance size={22} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-700">
               Croissance du solde global vs {MOIS_LABELS[mPrec - 1]} {aPrec}
               <InfoBulle texte="(Solde global de ce mois − solde global du mois précédent) ÷ |solde précédent| × 100." className="ml-1" />
             </p>
-            <p className="text-xl font-extrabold" style={{ color: couleurCroissance }}>
+            <p className="text-2xl font-black" style={{ color: couleurCroissance }}>
               {tauxCroissance === null ? 'Non calculable (solde précédent nul)' : `${tauxCroissance >= 0 ? '+' : ''}${tauxCroissance}%`}
             </p>
           </div>
         </div>
-      </Card>
+      </div>
 
-      <Card title={`Entrées vs sorties : ${MOIS_LABELS[mois - 1]} ${annee}`}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-green-700">💰 Entrées</p>
-            <div className="mt-2 flex items-center justify-between text-sm">
-              <span className="text-gray-600">Revenus réels du mois</span>
-              <span className="font-mono font-semibold text-green-700">{fmt(solde.revenuExploitation)} FCFA</span>
+      {/* Entrées vs sorties : deux tuiles verre, des barres proportionnelles, et le solde net. */}
+      {(() => {
+        const entrees = solde.revenuExploitation
+        const sorties = solde.depExploitation + solde.depInvestissement + solde.depPerte
+        const base = Math.max(entrees, sorties, 1)
+        const lignes = [
+          { icone: Factory, label: 'Fonctionnement (exploitation)', valeur: solde.depExploitation, couleur: '#0d9488' },
+          { icone: Landmark, label: 'Investissements', valeur: solde.depInvestissement, couleur: '#d97706' },
+          { icone: Flame, label: 'Pertes', valeur: solde.depPerte, couleur: '#dc2626' }
+        ]
+        const positif = solde.soldeGlobal >= 0
+        return (
+          <div className="space-y-3">
+            <h3 className="flex items-center gap-2 text-base font-bold text-gray-800 dark:text-gray-100">
+              <span className="fx-icone flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#B45309')}><Scale size={15} /></span>
+              Entrées vs sorties : {MOIS_LABELS[mois - 1]} {annee}
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="fx-tuile rounded-3xl border border-green-200/70 bg-gradient-to-br from-green-50/90 to-white/70 p-4 shadow-[0_14px_30px_-18px_rgba(22,163,74,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl" style={{ animationDelay: '0.15s' }}>
+                <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-green-700">
+                  <span className="fx-icone flex h-8 w-8 items-center justify-center rounded-xl" style={icone3D('#16a34a')}><ArrowDownToLine size={16} /></span> Entrées
+                </p>
+                <p className="mt-2 text-xs font-semibold text-gray-500">Revenus réels du mois</p>
+                <p className="text-2xl font-black text-green-700"><Compteur valeur={entrees} format={fmt} /> <span className="text-xs font-bold text-gray-400">FCFA</span></p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
+                  <div className="fx-barre h-full rounded-full bg-gradient-to-r from-green-400 to-green-600" style={{ width: `${Math.round((entrees / base) * 100)}%` }} />
+                </div>
+              </div>
+              <div className="fx-tuile rounded-3xl border border-red-200/70 bg-gradient-to-br from-red-50/90 to-white/70 p-4 shadow-[0_14px_30px_-18px_rgba(220,38,38,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl" style={{ animationDelay: '0.22s' }}>
+                <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-red-700">
+                  <span className="fx-icone flex h-8 w-8 items-center justify-center rounded-xl" style={icone3D('#dc2626')}><ArrowUpFromLine size={16} /></span> Sorties
+                </p>
+                <div className="mt-2 space-y-2">
+                  {lignes.map((l) => {
+                    const Ic = l.icone
+                    return (
+                      <div key={l.label}>
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="flex min-w-0 items-center gap-1.5 text-gray-600"><Ic size={13} style={{ color: l.couleur }} className="shrink-0" /> <span className="truncate">{l.label}</span></span>
+                          <span className="font-mono font-semibold text-gray-800">{fmt(l.valeur)}</span>
+                        </div>
+                        <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-white/80">
+                          <div className="fx-barre h-full rounded-full" style={{ width: `${Math.round((l.valeur / base) * 100)}%`, background: l.couleur }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="flex items-center justify-between border-t border-red-200/70 pt-1.5 font-bold"><span className="text-gray-700">Total sorties</span><span className="font-mono text-red-700">{fmt(sorties)} FCFA</span></div>
+                </div>
+              </div>
+            </div>
+            <div className="fx-tuile relative flex items-center gap-3 overflow-hidden rounded-3xl p-4 text-white shadow-[0_16px_28px_-16px_rgba(0,0,0,0.55)]"
+              style={{ animationDelay: '0.3s', background: positif ? 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #14532d 130%)' : 'linear-gradient(135deg, #f87171 0%, #dc2626 55%, #7f1d1d 130%)' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),0_10px_20px_-8px_rgba(0,0,0,0.5)]">
+                <Scale size={22} style={{ animation: 'fx-bascule 3s ease-in-out infinite' }} />
+              </span>
+              <div className="relative min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase tracking-wide text-white/80">Solde net du mois (entrées − sorties)</p>
+                <p className="text-2xl font-black leading-tight">{positif ? '' : '-'}<Compteur valeur={Math.abs(solde.soldeGlobal)} format={fmt} /> <span className="text-sm font-bold text-white/75">FCFA</span></p>
+              </div>
             </div>
           </div>
-          <div className="rounded-xl border border-red-100 bg-red-50/40 p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-red-700">📤 Sorties</p>
-            <div className="mt-2 space-y-1 text-sm">
-              <div className="flex items-center justify-between"><span className="text-gray-600">Fonctionnement (exploitation)</span><span className="font-mono">{fmt(solde.depExploitation)}</span></div>
-              <div className="flex items-center justify-between"><span className="text-gray-600">Investissements</span><span className="font-mono">{fmt(solde.depInvestissement)}</span></div>
-              <div className="flex items-center justify-between"><span className="text-gray-600">Pertes</span><span className="font-mono">{fmt(solde.depPerte)}</span></div>
-              <div className="flex items-center justify-between border-t border-red-100 pt-1 font-bold"><span className="text-gray-700">Total sorties</span><span className="font-mono text-red-700">{fmt(solde.depExploitation + solde.depInvestissement + solde.depPerte)} FCFA</span></div>
-            </div>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-          <span className="text-sm font-bold text-gray-700">Solde net du mois (entrées − sorties)</span>
-          <span className={`font-mono text-lg font-black ${solde.soldeGlobal >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(solde.soldeGlobal)} FCFA</span>
-        </div>
-      </Card>
+        )
+      })()}
 
-      <Card title="Tendance sur 6 mois : solde par nature de flux">
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#0d9488' }} /> Exploitation (fonctionnement)</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d97706' }} /> Investissement</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Pertes</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-0 w-4 border-t-2 border-dashed" style={{ borderColor: '#334155' }} /> Solde global (ligne)</span>
-        </div>
+      <Card className="fx-tuile" style={{ animationDelay: '0.35s' }} title={<span className="flex items-center gap-2"><span className="fx-icone flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#0d9488')}><LineChart size={15} /></span>Tendance sur 6 mois : solde par nature de flux</span>}>
         <div style={{ height: 300 }}>
           <Chart type="bar" data={chartData} options={chartOptions} />
         </div>

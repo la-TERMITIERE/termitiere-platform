@@ -13,6 +13,8 @@ import Modal from '../../shared/ui/Modal'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
+import BandeauVolet, { ChampBande, CLASSE_CHAMP_BANDE, BoutonBande } from '../../shared/ui/BandeauVolet'
+import ChampRecherche from '../../shared/ui/ChampRecherche'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { formatDateShort, formatMoney, todayStr } from '../../utils/formatters'
@@ -201,56 +203,35 @@ export default function SourcesRevenus() {
 
   return (
     <div className="space-y-4">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]"
-        style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.88) 0%, rgba(26,26,26,0.88) 100%)' }}>
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
-          <TrendingUp size={26} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-extrabold">Sources de revenus</h2>
-          <p className="text-sm text-white/80">Toutes les entrées d'argent réelles : factures, versements clients, saisies manuelles (hors GARDERIE, données de test).</p>
-        </div>
-        {/* Filtre de période directement dans le bandeau (glassmorphism). */}
+      <BandeauVolet couleur="#B45309" icone={TrendingUp} titre="Sources de revenus"
+        sous={`${liste.length} entrée(s) · ${formatMoney(total)} : factures, versements clients et saisies manuelles.`}>
+        <ChampRecherche variant="glass" className="!w-52" value={recherche} onChange={setRecherche} placeholder="Libellé, client…" />
         <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
           valeurJour={filtreJour} onJourChange={setFiltreJour}
           valeurMois={filtreMois} onMoisChange={setFiltreMois}
           avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
           avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut}
           valeurFin={filtreFin} onFinChange={setFiltreFin} />
-        <div className="band-filtres">
-        <div className="min-w-[160px]">
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Recherche</label>
-          <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input className="pl-8" placeholder="Libellé, client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
-          <Select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)}>
+        <ChampBande label="Secteur">
+          <select value={filtreSecteur} onChange={(e) => setFiltreSecteur(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-36`}>
             <option value="">Tous les secteurs</option>
-            {SECTEURS_AFFICHES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </Select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Source</label>
-          <Select value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
+            {SECTEURS_AFFICHES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        </ChampBande>
+        <ChampBande label="Source">
+          <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-32`}>
             <option value="">Toutes</option>
             {Object.entries(SOURCES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </Select>
-        </div>
-        <span className="ml-auto text-xs text-gray-400">{liste.length} entrée(s) · {formatMoney(total)}</span>
-        {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX} className="btn-glass"><FileSpreadsheet size={16} /> Export Excel</Button>
-        )}
-        </div>
-      </div>
+          </select>
+        </ChampBande>
+        {canExportExcel(role) && <BoutonBande icone={FileSpreadsheet} onClick={exportXLSX}>Export Excel</BoutonBande>}
+      </BandeauVolet>
 
       {/* KPI par secteur — une carte par secteur générateur de revenu réellement présent
           dans les données (un nouveau secteur ajoute automatiquement sa carte). Somme du
           jour par défaut, ou du mois choisi dans le filtre ci-dessous. */}
       {kpiParSecteur.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="ed-grille grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {kpiParSecteur.map(({ secteur, montant }) => (
             <StatCard key={secteur.id} title={secteur.label} value={formatMoney(montant)}
               sub={periodeLabel} icon={iconeSecteur(secteur.id)} accent={secteur.color} />

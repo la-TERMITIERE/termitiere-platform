@@ -3,7 +3,8 @@
 // la frise chronologique complète : création → approbation → certification →
 // confirmation du bénéficiaire, ou refus.
 import { Fragment, useMemo, useState } from 'react'
-import { ChevronRight, ChevronDown, FileSpreadsheet, MessageSquare, CheckCircle2, Clock } from 'lucide-react'
+import { ChevronRight, ChevronDown, FileSpreadsheet, MessageSquare, CheckCircle2, Clock, Wallet, Hourglass, Ban, ListChecks } from 'lucide-react'
+import { icone3D } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -128,30 +129,27 @@ export default function Historique() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-        Récapitule <strong>toutes</strong> les dépenses de la période : prévues comptées directement et imprévues passées par l'<strong>autorisation de décaissement</strong> (envoyées, approuvées, certifiées ou refusées). Cliquez sur une ligne pour voir sa frise chronologique complète.
+      <div className="ed-grille grid gap-3 sm:grid-cols-4">
+        {[
+          { icone: Wallet, couleur: '#16a34a', titre: 'Total décaissé', valeur: `${stats.totalDecaisse.toLocaleString('fr-FR')} FCFA`, classe: 'text-green-700' },
+          { icone: Hourglass, couleur: '#d97706', titre: 'En attente de décision', valeur: `${stats.totalEnCircuit.toLocaleString('fr-FR')} FCFA`, classe: 'text-amber-600' },
+          { icone: Ban, couleur: '#dc2626', titre: 'Refusées / supprimées', valeur: `${stats.nbRefusees} / ${stats.nbSupprimees}`, classe: 'text-red-600' },
+          { icone: ListChecks, couleur: '#B45309', titre: 'Total dépenses', valeur: String(stats.nb), classe: 'text-gray-800' }
+        ].map((k) => {
+          const Ic = k.icone
+          return (
+            <div key={k.titre} className="flex items-center gap-3 rounded-3xl border border-white/70 bg-white/70 p-3.5 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
+              <span className="ed-flotte flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(k.couleur)}><Ic size={20} /></span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-500">{k.titre}</p>
+                <p className={`truncate text-lg font-black ${k.classe}`}>{k.valeur}</p>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total décaissé</p>
-          <p className="mt-1 text-xl font-extrabold text-green-700">{stats.totalDecaisse.toLocaleString('fr-FR')} FCFA</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">En circuit d'autorisation</p>
-          <p className="mt-1 text-xl font-extrabold text-amber-600">{stats.totalEnCircuit.toLocaleString('fr-FR')} FCFA</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Refusées / supprimées</p>
-          <p className="mt-1 text-xl font-extrabold text-red-600">{stats.nbRefusees} <span className="text-sm font-semibold text-gray-400">/</span> {stats.nbSupprimees}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total dépenses</p>
-          <p className="mt-1 text-xl font-extrabold text-gray-800">{stats.nb}</p>
-        </Card>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="ed-entree flex flex-wrap items-end gap-3 rounded-3xl border border-white/70 bg-white/60 p-3 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
         {periodNode}
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Secteur</label>
@@ -189,9 +187,9 @@ export default function Historique() {
         </div>
       </div>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="ed-entree overflow-x-auto p-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="bg-amber-50 text-xs uppercase text-amber-900">
             <tr>
               <th className="w-6 px-2 py-2"></th>
               <th className="px-3 py-2 text-left">Date</th>
@@ -212,7 +210,7 @@ export default function Historique() {
               const isOpen = openRow === d.id
               return (
                 <Fragment key={d.id}>
-                  <tr className={`cursor-pointer hover:bg-gray-50 ${d._supprimee ? 'opacity-70' : ''}`} onClick={() => setOpenRow(isOpen ? null : d.id)}>
+                  <tr className={`cursor-pointer hover:bg-amber-50/60 ${d._supprimee ? 'opacity-70' : ''}`} onClick={() => setOpenRow(isOpen ? null : d.id)}>
                     <td className="px-2 py-2 text-center text-gray-400">
                       {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </td>
@@ -297,13 +295,13 @@ function FriseHistorique({ d, secteur }) {
       <Etape actif titre="1. Créée" tone="gray"
         sousTitre={`Par ${d.enregistrePar || '—'} le ${formatDateTime(d.createdAt)}${d.recurrente ? ' · 🔁 récurrente' : ''}`} />
 
-      {!d.imprevue ? (
+      {!d.imprevue && !d.demande ? (
         <Etape actif tone="green" titre="2. Comptée directement" sousTitre="Dépense prévue/budgétée : aucune autorisation requise" />
       ) : (
         <>
           <Etape actif={d.statut !== undefined} tone={d.statut === 'en_attente' ? 'amber' : 'gray'}
-            titre="2. Envoyée pour autorisation"
-            sousTitre={d.statut === 'en_attente' ? 'En attente d\'un responsable' : 'Demande soumise'} />
+            titre={d.demande ? '2. Demande envoyée' : '2. Envoyée pour autorisation'}
+            sousTitre={d.statut === 'en_attente' ? 'En attente du PAU, de la GE, de l\'Info ou de la direction' : 'Demande soumise'} />
           {(d.approuveePar || d.statut === 'refusee') && (
             d.approuveePar
               ? <Etape actif tone="green" titre="3. Approuvée (1er niveau)" sousTitre={`Par ${d.approuveePar} le ${formatDateTime(d.approuveeLe)}`} commentaire={d.approbationCommentaire} />
@@ -312,7 +310,10 @@ function FriseHistorique({ d, secteur }) {
           {d.statut === 'refusee' && (
             <Etape actif tone="red" titre="Refusée" sousTitre={`Par ${d.refuseePar || '—'} le ${formatDateTime(d.refuseeLe)}`} commentaire={d.refusMotif} />
           )}
-          {d.certifieePar && (
+          {d.valideePar && (
+            <Etape actif tone="green" titre="3. Validée (décaissée)" sousTitre={`Par ${d.valideePar} le ${formatDateTime(d.valideeLe)}`} commentaire={d.validationCommentaire} />
+          )}
+          {d.certifieePar && !d.valideePar && (
             <Etape actif tone="green" titre="4. Certifiée (décaissée)" sousTitre={`Par ${d.certifieePar} le ${formatDateTime(d.certifieeLe)}`} commentaire={d.certificationCommentaire} />
           )}
         </>

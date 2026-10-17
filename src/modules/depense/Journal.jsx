@@ -3,9 +3,11 @@
 // (ci-dessous, inchangé) ; « Historique » = frise des dépenses (création → approbation
 // → certification), importée telle quelle depuis ./Historique.jsx.
 import { Fragment, useMemo, useState } from 'react'
-import { FileSpreadsheet, ChevronRight, ChevronDown } from 'lucide-react'
+import { FileSpreadsheet, ChevronRight, ChevronDown, BookOpen, History, Newspaper } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
+import BandeauVolet from '../../shared/ui/BandeauVolet'
+import PillTabs from '../../shared/ui/PillTabs'
 import Select from '../../shared/forms/Select'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { useCollection } from '../../hooks/useFirestore'
@@ -28,6 +30,10 @@ const EVENTS = {
   BANQUE_MOUVEMENT_EDIT:   { label: 'Mouvement bancaire modifié',    emoji: '✏️' },
   BANQUE_MOUVEMENT_DELETE: { label: 'Mouvement bancaire supprimé',   emoji: '🗑️' },
   BANQUE_SOLDE_INITIAL:    { label: 'Solde d\'ouverture modifié',    emoji: '🏦' },
+  DEMANDE_CREEE:         { label: 'Demande de décaissement envoyée', emoji: '📨' },
+  DEMANDE_VALIDEE:       { label: 'Demande validée',               emoji: '✅' },
+  DEMANDE_REFUSEE:       { label: 'Demande refusée',               emoji: '❌' },
+  RETOUR_RELIQUAT:       { label: 'Retour de reliquat',            emoji: '↩️' },
   RESET:                 { label: 'Réinitialisation',              emoji: '♻️' }
 }
 const evInfo = (a) => EVENTS[a] || { label: a || 'Action', emoji: '•' }
@@ -90,7 +96,7 @@ function OngletJournal({ evenements }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="ed-entree flex flex-wrap items-end gap-3 rounded-3xl border border-white/70 bg-white/60 p-3 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
         {periodNode}
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Type d'événement</label>
@@ -112,9 +118,9 @@ function OngletJournal({ evenements }) {
         </div>
       </div>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="ed-entree overflow-x-auto p-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="bg-amber-50 text-xs uppercase text-amber-900">
             <tr>
               <th className="w-6 px-2 py-2"></th>
               <th className="px-3 py-2 text-left">Date / heure</th>
@@ -132,7 +138,7 @@ function OngletJournal({ evenements }) {
               const isOpen = openRow === r.id
               return (
                 <Fragment key={r.id}>
-                  <tr className={hasMeta ? 'cursor-pointer hover:bg-gray-50' : ''} onClick={() => hasMeta && setOpenRow(isOpen ? null : r.id)}>
+                  <tr className={hasMeta ? 'cursor-pointer hover:bg-amber-50/60' : ''} onClick={() => hasMeta && setOpenRow(isOpen ? null : r.id)}>
                     <td className="px-2 py-2 text-center text-gray-400">
                       {hasMeta && (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
                     </td>
@@ -182,17 +188,13 @@ export default function Journal() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
-        {[
-          { id: 'journal',     label: '📰 Journal' },
-          { id: 'historique',  label: '🕐 Historique' }
-        ].map((o) => (
-          <button key={o.id} onClick={() => setOnglet(o.id)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <BandeauVolet couleur="#B45309" icone={BookOpen} titre="Journal et Historique"
+        sous={onglet === 'journal' ? 'Toutes les actions faites dans E-DÉPENSES : qui, quand, quoi.' : 'La frise de chaque dépense : demande, décision, décaissement et réception.'} />
+
+      <PillTabs taille="sm" active={onglet} onChange={setOnglet} accent="#B45309" tabs={[
+        { id: 'journal', label: 'Journal', icone: Newspaper },
+        { id: 'historique', label: 'Historique', icone: History, accent: '#0d9488' }
+      ]} />
 
       {onglet === 'journal'
         ? <OngletJournal evenements={evenements} />

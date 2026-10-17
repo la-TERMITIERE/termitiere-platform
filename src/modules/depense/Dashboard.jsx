@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, Wallet, TrendingDown, Receipt, AlertTriangle
 import StatCard from '../../shared/ui/StatCard'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
+import BandeauVolet from '../../shared/ui/BandeauVolet'
+import { icone3D } from '../../utils/color'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
@@ -206,29 +208,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(180,83,9,0.35),0_8px_20px_-8px_rgba(180,83,9,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.85) 0%, rgba(120,53,15,0.8) 100%)' }}>
-        {/* Halos décoratifs — même recette que les autres modules (ex. MAXI-GYM). */}
-        <span aria-hidden="true" className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full bg-white opacity-[0.12] blur-3xl" />
-        <span aria-hidden="true" className="pointer-events-none absolute -bottom-16 left-1/3 h-40 w-40 rounded-full bg-white opacity-[0.08] blur-3xl" />
-        <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-3xl bg-gradient-to-b from-white/15 to-transparent" />
-        <div className="relative" style={{ flexShrink: 0, width: 64, height: 64 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#B45309', boxShadow: '0 0 0 3px #ffffff, 0 0 14px 4px #ffffff55'
-          }}>
-            <Wallet size={26} color="white" />
-          </div>
-        </div>
-        <div className="relative min-w-0 flex-1">
-          <h2 className="text-lg font-extrabold">Dépenses</h2>
-          <p className="truncate text-sm text-white/80">Suivi du budget alloué et des dépenses par secteur</p>
-        </div>
+      <BandeauVolet couleur="#B45309" icone={Wallet} titre="Dépenses" sous="Suivi du budget alloué et des dépenses par secteur">
         {/* Sélecteur de période — même emplacement (dans le bandeau) que le sélecteur de
             MAXI-GYM, mais avec un choix de mode (Jour/Mois/Année/Plage, comme les
             autres modules — cf. FiltrePeriode) : c'est CE sélecteur qui pilote tout le
             Dashboard (KPI, Répartition par secteur, alertes, Dépenses récentes). */}
-        <div className="relative flex w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:ml-auto sm:w-auto sm:justify-start">
+        <div className="relative flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 p-1.5 backdrop-blur-sm sm:justify-start">
           <select value={modePeriode} onChange={(e) => setModePeriode(e.target.value)}
             className="rounded-xl border-0 bg-white/20 px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-gray-800">
             <option value="jour">Jour</option>
@@ -284,15 +269,15 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </div>
+      </BandeauVolet>
 
       {/* ── Alertes (budget, décaissements en attente, reconduction) ── */}
       {!restreintAgent && alertesVisibles.length > 0 && (() => {
         const critiques = alertesVisibles.filter((a) => a.type === 'budget_depasse' || a.type === 'demande').length
         return (
-          <Card title={
+          <Card className="ed-entree" title={
             <span className="flex items-center gap-2">
-              <span className={`flex h-7 w-7 items-center justify-center rounded-full ${critiques ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-500'}`}>
+              <span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D(critiques ? '#dc2626' : '#d97706')}>
                 <BellRing size={14} />
               </span>
               Alertes
@@ -304,7 +289,7 @@ export default function Dashboard() {
                 const cfg = TYPE_ALERTE[a.type]
                 const Icone = cfg.icon
                 const onClickAlerte = () => {
-                  if (a.type === 'demande') navigate('/depense/autorisations')
+                  if (a.type === 'demande') navigate('/depense/demandes')
                   else if (a.type === 'justificatif_manquant') navigate('/depense/liste', { state: { openDepenseId: a.depenseId } })
                   else navigate('/depense/recettes-depenses', { state: { openSecteurId: a.secteurId, annee: periodeRef.annee, mois: periodeRef.mois } })
                 }
@@ -330,7 +315,7 @@ export default function Dashboard() {
         )
       })()}
 
-      <div className={`grid grid-cols-2 gap-3 ${restreintAgent ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+      <div className={`ed-grille grid grid-cols-2 gap-3 ${restreintAgent ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
         <StatCard title="Budget alloué" value={formatMoney(totalAlloue)} icon={Receipt} accent="#B45309"
           onClick={restreintAgent ? undefined : () => navigate('/depense/recettes-depenses')} />
         <StatCard title="Total dépensé" value={formatMoney(totalDepense)} icon={TrendingDown} accent="#dc2626"
@@ -345,9 +330,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      <Card title={
+      <Card className="ed-entree" title={
         <span className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-600"><Building2 size={14} /></span>
+          <span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#B45309')}><Building2 size={14} /></span>
           Répartition par secteur
         </span>
       }>
@@ -365,7 +350,7 @@ export default function Dashboard() {
                 className={`group rounded-2xl border border-gray-200/60 bg-white/60 p-3.5 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150 transition-all hover:shadow-[0_18px_36px_-16px_rgba(26,26,26,0.20)] ${peutAllouer ? 'cursor-pointer hover:-translate-y-0.5' : ''}`}
                 style={{ borderLeft: `4px solid ${s.color}` }}>
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: `${s.color}1a`, color: s.color }}>
+                  <span className="ed-flotte flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D(s.color)}>
                     <Building2 size={15} />
                   </span>
                   <span className="font-bold text-gray-800">{s.label}</span>
@@ -397,7 +382,7 @@ export default function Dashboard() {
                   <div className="mt-2.5 flex items-center gap-2.5">
                     <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ease-out ${
+                        className={`ed-barre h-full rounded-full transition-all duration-500 ease-out ${
                           s.statut.key === 'depasse' ? 'bg-red-500' : s.statut.key === 'attention' ? 'bg-amber-500' : 'bg-green-500'
                         }`}
                         style={{ width: `${Math.max(Math.min(s.pct, 100), 3)}%` }}
@@ -419,9 +404,9 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      <Card title={
+      <Card className="ed-entree" title={
         <span className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-600"><History size={14} /></span>
+          <span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#B45309')}><History size={14} /></span>
           Dépenses récentes
         </span>
       }>
