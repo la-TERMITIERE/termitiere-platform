@@ -1,7 +1,7 @@
 // MAXI-GYM — Dashboard : KPI du mois — cliquer sur un KPI affiche le détail classé
 // par catégorie (Simple/Classique/VIP), sans quitter la page.
 import '../../utils/chartSetup'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
 import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog, X, Clock } from 'lucide-react'
@@ -13,12 +13,12 @@ import Modal from '../../shared/ui/Modal'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { updateItem } from '../../core/db'
+import { updateItem, updateAtomic } from '../../core/db'
 import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
 import { ROLES, peutEcrireGym } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach, niveauRestant, SEUIL_RENOUVELLEMENT_JOURS } from './data'
+import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach, niveauRestant, SEUIL_RENOUVELLEMENT_JOURS, minutesRetardCreneau, SEUIL_ALERTE_RETARD_MIN, FIN_ALERTE_RETARD_MIN } from './data'
 import ClientDetailModal from './ClientDetailModal'
 import { BoutonRenouveler } from './JoursRestants'
 import CoachAbsentModal from './CoachAbsentModal'
@@ -157,33 +157,42 @@ export default function Dashboard() {
     setPointingCoach(c.id)
     try { await pointerCoach({ coach: c, creneau: c.creneau, site, date: aujStr, user }) } finally { setPointingCoach(null) }
   }
-  const SEUIL_RETARD_COACH_MIN = 20
+  // Retard (en minutes) d'un coach pas encore pointé : 0 si l'heure prévue n'est pas passée ou n'est pas valide.
   function minutesRetard(c) {
-    const [h, m] = c.creneau.heure.split(':').map(Number)
-    const prevu = new Date(heureActuelle)
-    prevu.setHours(h, m, 0, 0)
-    return Math.floor((heureActuelle - prevu) / 60000)
+    return Math.max(0, minutesRetardCreneau(c.creneau, heureActuelle) ?? 0)
   }
+  // Affichage : tout coach non pointé au-delà du seuil apparaît « en retard » sur le bandeau.
   const coachsEnRetard = useMemo(
-    () => coachsAujourdhui.filter((c) => !c.pointage && minutesRetard(c) >= SEUIL_RETARD_COACH_MIN),
+    () => coachsAujourdhui.filter((c) => !c.pointage && minutesRetard(c) >= SEUIL_ALERTE_RETARD_MIN),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [coachsAujourdhui, heureActuelle]
   )
 
-  // Alarme coach en retard — même recette que l'alarme abonné inactif ci-dessous :
-  // alerte l'équipe une seule fois par jour et par coach (dédoublonnée via
-  // `derniereAlerteRetardDate` sur sa fiche), dès qu'il dépasse le seuil de retard.
+  // Alarme coach en retard : UNE seule alerte par coach et par jour, même si plusieurs personnes ont le tableau de
+  // bord ouvert (la réclamation se fait dans une transaction : un seul poste la gagne) et même si l'écran se
+  // rafraîchit entre-temps. Elle ne part que dans la fenêtre « en retard » (cf. FIN_ALERTE_RETARD_MIN).
+  const alertesEnvoyees = useRef(new Set())
   useEffect(() => {
+    const auj = todayStr()
     for (const c of coachsEnRetard) {
-      const auj = todayStr()
-      if (c.derniereAlerteRetardDate === auj) continue
-      notify({
-        type: 'alerte',
-        title: `🔔 Coach en retard : MAXI-GYM ${siteLabel(site)}`,
-        body: `${c.nom} n'a pas encore pointé son arrivée, prévue à ${c.creneau.heure} (${minutesRetard(c)} min de retard).`,
-        module: 'gym', site, forRoles: ROLES.map((r) => r.value), link: `/gym/${site}/coachs`
-      }).catch(() => {})
-      updateItem('gym_coachs', c.id, { derniereAlerteRetardDate: auj })
+      const retard = minutesRetard(c)
+      const cle = `${c.id}_${auj}`
+      if (retard > FIN_ALERTE_RETARD_MIN || c.derniereAlerteRetardDate === auj || alertesEnvoyees.current.has(cle)) continue
+      alertesEnvoyees.current.add(cle)
+      let gagne = false
+      updateAtomic('gym_coachs', c.id, (cur) => {
+        if (!cur || cur.derniereAlerteRetardDate === auj) { gagne = false; return undefined }
+        gagne = true
+        return { ...cur, derniereAlerteRetardDate: auj }
+      }).then(() => {
+        if (!gagne) return
+        notify({
+          type: 'alerte',
+          title: `🔔 Coach en retard : MAXI-GYM ${siteLabel(site)}`,
+          body: `${c.nom} n'a pas encore pointé son arrivée, prévue à ${c.creneau.heure} (${retard} min de retard).`,
+          module: 'gym', site, forRoles: ROLES.map((r) => r.value), link: `/gym/${site}/coachs`
+        }).catch(() => {})
+      }).catch(() => { alertesEnvoyees.current.delete(cle) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachsEnRetard])

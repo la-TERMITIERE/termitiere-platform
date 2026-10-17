@@ -189,6 +189,12 @@ export default function Abonnements() {
     }
     return m
   }, [abonnements])
+  // Nombre de passages (arrivées pointées) de chaque abonné : affiché une seule fois à côté de son nom.
+  const passagesParClient = useMemo(() => {
+    const m = new Map()
+    for (const p of presences) m.set(cleNom(p.clientNom), (m.get(cleNom(p.clientNom)) || 0) + 1)
+    return m
+  }, [presences])
   const nbParClient = useMemo(() => {
     const m = new Map()
     for (const a of abonnements) m.set(cleNom(a.clientNom), (m.get(cleNom(a.clientNom)) || 0) + 1)
@@ -488,6 +494,7 @@ export default function Abonnements() {
               return (
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span>{r.clientNom}</span>
+                  {(passagesParClient.get(cleNom(r.clientNom)) || 0) > 0 && <span title="Arrivées pointées : cliquez sur la ligne pour le détail" className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-extrabold text-orange-700"><Dumbbell size={10} /> {passagesParClient.get(cleNom(r.clientNom))} passage{passagesParClient.get(cleNom(r.clientNom)) > 1 ? 's' : ''}</span>}
                   {n > 1 && <span title={`${n} abonnements enregistrés : voir la fiche du client`} className="inline-flex items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700"><Repeat size={10} /> ×{n - 1}</span>}
                 </div>
               )

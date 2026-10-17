@@ -209,6 +209,21 @@ export function creneauCoach(coach, dateStr) {
   return c?.actif ? c : null
 }
 
+// Minutes écoulées depuis l'heure prévue d'un créneau (négatif tant qu'elle n'est pas passée). Renvoie `null` si le
+// créneau n'a pas d'heure valide (champ vide, mal saisi) : l'appelant ne doit alors ni alerter ni planter.
+export function minutesRetardCreneau(creneau, maintenant = new Date()) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(creneau?.heure || '').trim())
+  if (!m) return null
+  const prevu = new Date(maintenant)
+  prevu.setHours(Number(m[1]), Number(m[2]), 0, 0)
+  return Math.floor((maintenant - prevu) / 60000)
+}
+// Une alerte « coach en retard » ne part que si le retard est entre ces deux bornes. Au-delà, le coach n'est pas en
+// retard : il est absent (à marquer comme tel) ; sans cette borne, ouvrir le tableau de bord le soir déclenchait
+// « 600 min de retard » pour un coach du matin.
+export const SEUIL_ALERTE_RETARD_MIN = 20
+export const FIN_ALERTE_RETARD_MIN = 240
+
 // À l'heure si arrivé au plus tard 10 min après l'heure programmée — tolérance
 // raisonnable pour ne pas marquer « retard » sur un simple décalage d'horloge.
 const TOLERANCE_RETARD_MIN = 10
