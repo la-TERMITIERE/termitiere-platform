@@ -241,7 +241,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
                             <span className="flex items-center gap-2">
                               <span title={libelle} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(cc)}><Ic size={12} /></span>
                               <span className="min-w-0">
-                                {l.type === 'dotation' && <span className="mb-0.5 block text-[9px] font-extrabold tracking-wider" style={{ color: cc }}>{libelle}</span>}
+                                {l.type !== 'depense' && <span className="mb-0.5 block text-[9px] font-extrabold tracking-wider" style={{ color: cc }}>{libelle}</span>}
                                 {l.designation}
                               </span>
                             </span>

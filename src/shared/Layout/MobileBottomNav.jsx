@@ -37,7 +37,7 @@ const ESSENTIELS = {
   rh: [],
   projet: ['/projet/projets'],
   garderie: ['/garderie/presences'],
-  depense: ['/depense/liste', '/depense/recettes-depenses', '/depense/autorisations'],
+  depense: ['/depense/liste', '/depense/recettes-depenses', '/depense/demandes'],
   // Le check-in des séances est l'action la plus répétée dans une journée de
   // salle — abonnements et facturation restent accessibles via Plus.
   gym: ['/gym/seances'],

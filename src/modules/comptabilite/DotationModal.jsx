@@ -2,9 +2,10 @@
 // un motif. La dotation s'ajoute au budget du mois dans E-DÉPENSES (cf. depense/dotationActions.js) et la Caisse
 // la relit : elle impacte donc E-DÉPENSES et le montant de la caisse en même temps.
 import { useEffect, useState } from 'react'
-import { HandCoins, Layers, MapPin, Wallet, CalendarDays, MessageSquareText, ArrowRight, Info, Check } from 'lucide-react'
+import { HandCoins, Layers, MapPin, Wallet, CalendarDays, MessageSquareText, ArrowRight, Info, Check, X } from 'lucide-react'
 import Modal from '../../shared/ui/Modal'
 import Button from '../../shared/ui/Button'
+import BoutonVerre from '../../shared/ui/BoutonVerre'
 import { useCollection } from '../../hooks/useFirestore'
 import { toast } from '../../core/notifications'
 import { glassModalProps, icone3D } from '../../utils/color'
@@ -16,6 +17,8 @@ import { DOMAINES } from './journalCalculs'
 import { COULEUR_DOTATION } from './iconesCaisse'
 
 const VERT = COULEUR_DOTATION
+// La caisse commune s'appelle ici « CAISSE COURANTE » (c'est celle dont on parle pour les dotations).
+const nomDomaine = (d) => (d.id === 'divers' ? 'CAISSE COURANTE' : d.label)
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
 
 function Etiquette({ icone: Icone, couleur = VERT, children }) {
@@ -39,7 +42,8 @@ function Choix({ actif, onClick, point, children }) {
   )
 }
 
-export default function DotationModal({ open, onClose, budgets, user }) {
+// `tousDomaines` : on peut choisir le secteur (E-DÉPENSES, Budget) ; sinon la dotation va à la caisse commune (SIÈGE), comme dans la Caisse.
+export default function DotationModal({ open, onClose, budgets, user, tousDomaines = false, titre }) {
   const { data: users } = useCollection('users')
   const [secteurId, setSecteurId] = useState('divers')
   const [site, setSite] = useState('')
@@ -76,8 +80,8 @@ export default function DotationModal({ open, onClose, budgets, user }) {
   }
 
   return (
-    <Modal open onClose={onClose} size="md" {...glassModalProps(VERT)} title="Nouvelle dotation de caisse"
-      footer={<><Button variant="outline" onClick={onClose} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: VERT }} onClick={enregistrer} loading={saving} disabled={!(valeur > 0)}>Enregistrer la dotation</Button></>}>
+    <Modal open onClose={onClose} size="md" {...glassModalProps(VERT)} title={titre || 'Nouvelle dotation de caisse'}
+      footer={<><Button variant="outline" onClick={onClose} disabled={saving}><X size={15} /> Annuler</Button><BoutonVerre variante="vert" icone={HandCoins} animation="pieces" onClick={enregistrer} loading={saving} disabled={!(valeur > 0) || !motif.trim()}>Enregistrer la dotation</BoutonVerre></>}>
       <style>{`
         @keyframes dt-entre { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         @keyframes dt-pop { 0% { transform: scale(0.92); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
@@ -102,7 +106,7 @@ export default function DotationModal({ open, onClose, budgets, user }) {
           <div>
             <Etiquette icone={Layers}>Domaine <span className="text-red-500">*</span></Etiquette>
             <div className="flex flex-wrap gap-1.5">
-              {DOMAINES.filter((d) => d.id === 'divers').map((d) => <Choix key={d.id} actif={secteurId === d.id} point={d.color} onClick={() => { setSecteurId(d.id); setSite('') }}>{d.label}</Choix>)}
+              {DOMAINES.filter((d) => tousDomaines || d.id === 'divers').map((d) => <Choix key={d.id} actif={secteurId === d.id} point={d.color} onClick={() => { setSecteurId(d.id); setSite('') }}>{nomDomaine(d)}</Choix>)}
             </div>
           </div>
           {secteurId === 'logistique' && (
@@ -125,14 +129,14 @@ export default function DotationModal({ open, onClose, budgets, user }) {
             </div>
             {valeur > 0 && <p key={valeur} className="mt-1 text-sm font-extrabold text-green-700" style={{ animation: 'dt-montant 0.25s ease-out' }}>+{fmt(valeur)} FCFA</p>}
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <Etiquette icone={MessageSquareText} couleur="#475569">Motif <span className="text-red-500">*</span></Etiquette>
+              <input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex : dotation de la caisse courante, apport du PAU…" aria-label="Motif de la dotation" className="input-base w-full" />
+            </div>
             <div>
               <Etiquette icone={CalendarDays} couleur="#7c3aed">Date</Etiquette>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-base" />
-            </div>
-            <div>
-              <Etiquette icone={MessageSquareText} couleur="#475569">Motif <span className="font-medium normal-case text-gray-400">(optionnel)</span></Etiquette>
-              <input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Dotation de caisse" className="input-base" />
             </div>
           </div>
         </div>
@@ -141,7 +145,7 @@ export default function DotationModal({ open, onClose, budgets, user }) {
         <div className="rounded-2xl border border-green-200/80 bg-green-50/80 p-3" style={{ animation: 'dt-entre 0.4s ease-out 0.2s both' }}>
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-green-800"><Info size={13} /> Impact sur E-DÉPENSES</p>
           <p className="text-sm font-semibold text-gray-700">
-            Budget de {domaine?.label}{secteurId === 'logistique' && site ? ` ${LOGISTIQUE_SITES.find((x) => x.id === site)?.label}` : ''} pour {mois ? `${MOIS_LABELS[mois - 1]} ${annee}` : ':'} :
+            Budget de {domaine ? nomDomaine(domaine) : ''}{secteurId === 'logistique' && site ? ` ${LOGISTIQUE_SITES.find((x) => x.id === site)?.label}` : ''} pour {mois ? `${MOIS_LABELS[mois - 1]} ${annee}` : ':'} :
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-base font-black text-gray-900">
             {fmt(avant)} <ArrowRight size={16} className="text-green-600" /> <span className="text-green-700">{fmt(avant + valeur)}</span> <span className="text-xs font-semibold text-gray-400">FCFA</span>

@@ -5,7 +5,7 @@ import Dashboard from './Dashboard'
 import Depenses from './Depenses'
 import RecettesDepenses from './RecettesDepenses'
 import SourcesRevenus from './SourcesRevenus'
-import Autorisations from './Autorisations'
+import Demandes from './Demandes'
 import Analyses from './Analyses'
 import Flux from './Flux'
 import Journal from './Journal'
@@ -49,7 +49,8 @@ export default function DepenseModule() {
       <Route path="revenus" element={isFullAccessRole(role) || role === 'secretaire' ? <SourcesRevenus /> : <AccesRefuseAdmin />} />
       {/* Ancien écran « Budgets » fusionné dans « Bilan par secteur » — redirige les liens existants. */}
       <Route path="budgets" element={<Navigate to="/depense/recettes-depenses" replace />} />
-      <Route path="autorisations" element={<Autorisations />} />
+      <Route path="demandes" element={<Demandes />} />
+      <Route path="autorisations" element={<Navigate to="/depense/demandes" replace />} />
       {/* Secrétaire explicitement exclue (contrairement à Flux de trésorerie ci-dessous) —
           décision explicite du 09/09/2026 : cf. ANALYSES_DEPENSE_ROLES. */}
       <Route path="analyses" element={canViewAnalysesDepense(role) ? <Analyses /> : <AccesRefuse />} />

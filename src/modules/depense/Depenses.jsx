@@ -1,7 +1,7 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2 } from 'lucide-react'
+import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2, Undo2, CalendarDays, FileText, UserRound, PenLine, Banknote, ShieldCheck, Tag, ArrowLeftRight, Phone, CreditCard, ClipboardList, Wrench, MapPin, Briefcase, X, Save, Sparkles, MessageSquareText, Send } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -11,24 +11,39 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
+import ChampRecherche from '../../shared/ui/ChampRecherche'
+import FiltrePeriode from '../../shared/ui/FiltrePeriode'
+import Compteur from '../../shared/ui/Compteur'
+import BoutonVerre from '../../shared/ui/BoutonVerre'
+import NouvelleDemandeModal from './NouvelleDemandeModal'
+import ChampBeneficiaire from './ChampBeneficiaire'
+import PillTabs from '../../shared/ui/PillTabs'
+import BandeauVolet, { ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
+import { iconeCategorie, iconeLigne, COULEUR_DOTATION } from '../comptabilite/iconesCaisse'
+import { construireLignesCaisse, journalPeriode, bornesPeriode } from '../comptabilite/journalCalculs'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { setItem, updateItem, removeItem } from '../../core/db'
+import { addItem, setItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { notify } from '../../core/notify'
 import { todayStr, formatDateShort, formatMoney } from '../../utils/formatters'
-import { glassModalProps } from '../../utils/color'
+import { glassModalProps, icone3D } from '../../utils/color'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT } from './data'
+import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT, MOIS_LABELS } from './data'
 import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
 import { raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
 
 // Origine d'une dépense — d'où vient la ligne (saisie directe ou récupérée d'un autre module).
+// Tableau des dépenses : mêmes en-têtes fixes, lignes teintées et pied de totaux que le journal de la Caisse (Comptabilité).
+const TH = 'sticky top-0 z-10 bg-amber-50 shadow-[0_1px_0_rgba(180,83,9,0.25)] dark:bg-gray-800 px-3 py-2.5'
+const TF = 'sticky bottom-0 z-10 bg-amber-50 px-3 py-2.5 shadow-[0_-1px_0_rgba(180,83,9,0.25)] dark:bg-gray-800'
+
 const SOURCE_INFO = {
+  retour_reliquat: { label: 'Retour de fonds', tone: 'success' },
   besoin:      { label: 'Besoin validé', tone: 'info' },
   briqueterie: { label: 'Briqueterie', tone: 'neutral' }
 }
@@ -62,6 +77,26 @@ function pillToggleClass(active, tone) {
     : `border border-white/60 bg-white/30 text-gray-500 hover:scale-105 hover:shadow-sm ${repos}`}`
 }
 
+// ── Formulaire d'une dépense : blocs de verre, étiquettes à icône 3D, pastilles de choix ──
+function EtiqD({ icone: Icone, couleur = '#B45309', children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(couleur)}><Icone size={13} /></span>
+      {children}
+    </span>
+  )
+}
+function TitreBloc({ icone: Icone, couleur, children, droite }) {
+  return (
+    <p className="mb-2.5 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-amber-800">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleur)}><Icone size={14} /></span>
+      {children}{droite}
+    </p>
+  )
+}
+const BLOC = 'df-bloc rounded-3xl border border-white/60 bg-white/35 p-3.5 shadow-[0_14px_30px_-18px_rgba(120,53,15,0.45),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-xl'
+const chipChoix = (actif) => `group relative inline-flex items-center gap-1.5 overflow-hidden rounded-full border px-3 py-1.5 text-xs font-extrabold backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${actif ? 'border-white/60 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-[0_10px_20px_-10px_rgba(180,83,9,0.8),inset_0_1px_0_rgba(255,255,255,0.5)]' : 'border-white/70 bg-white/60 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] hover:bg-white/85'}`
+
 const empty = () => ({
   // Par défaut : Siège (Caisse commune) — la dépense « ordinaire », sans secteur
   // particulier. L'utilisateur bascule sur « Oui » s'il veut désigner un secteur.
@@ -79,64 +114,6 @@ const empty = () => ({
   justificatifRequis: true, justificatifRecu: false,
   beneficiaireType: 'interne', beneficiaireUid: '', beneficiaireNom: '', beneficiaireFonction: '', beneficiaireTelephone: ''
 })
-
-// ── Champ bénéficiaire (membre de l'entreprise) : saisie libre + suggestions ──
-function ChampBeneficiaire({ value, onChange, onSelectUser, users }) {
-  const [open, setOpen]     = useState(false)
-  const [filtre, setFiltre] = useState('')
-  const ref = useRef(null)
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const suggestions = useMemo(() => {
-    const q = filtre.toLowerCase()
-    return users.filter((u) => u.actif !== false && (u.nom || u.login || '').toLowerCase().includes(q)).slice(0, 10)
-  }, [users, filtre])
-
-  const choisir = (u) => { onSelectUser(u); setFiltre(''); setOpen(false) }
-
-  return (
-    <div ref={ref} className="relative">
-      <div className="flex gap-1">
-        <input
-          className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          placeholder="Nom du bénéficiaire…"
-          value={open ? filtre : value}
-          onChange={(e) => { setFiltre(e.target.value); onChange(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-        />
-        <button type="button" onClick={() => setOpen((o) => !o)}
-          className="rounded-lg border border-gray-200 px-2 text-gray-400 hover:text-primary"><ChevronDown size={14} /></button>
-      </div>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
-          {!suggestions.length
-            ? <p className="px-3 py-2 text-xs text-gray-400">Aucun utilisateur : votre saisie sera utilisée.</p>
-            : <ul className="max-h-48 overflow-y-auto py-1">
-                {suggestions.map((u) => (
-                  <li key={u.uid}
-                    className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-primary/10"
-                    onMouseDown={(e) => { e.preventDefault(); choisir(u) }}>
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary-dark">
-                      {(u.nom || '?').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">{u.nom}</p>
-                      {u.poste && <p className="text-[10px] text-gray-400">{u.poste}</p>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-          }
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function Depenses() {
   const { user, role: roleReel } = useAuth()
@@ -181,12 +158,21 @@ export default function Depenses() {
   const [filtreCategorie, setFiltreCategorie] = useState('')
   const [filtreNature, setFiltreNature] = useState('')
   const [filtreFinancement, setFiltreFinancement] = useState('') // '' | 'caisse_commune'
+  // Période : Jour / Mois / Année / Plage, en menu déroulant (comme dans les autres volets). Mois par défaut.
+  const [modePeriode, setModePeriode] = useState('mois')
+  const [filtreJour, setFiltreJour] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
+  const [filtreAnnee, setFiltreAnnee] = useState('')
+  const [filtreDebut, setFiltreDebut] = useState('')
+  const [filtreFin, setFiltreFin] = useState('')
   const [modal, setModal] = useState(null)
   const [lot, setLot] = useState(null)            // ajout multiple : tableau de lignes, ou null si fermé
   const [savingLot, setSavingLot] = useState(false)
   const [detailId, setDetailId] = useState(null)
   const [toDelete, setToDelete] = useState(null)
+  const [demandeOuverte, setDemandeOuverte] = useState(false) // fenêtre « Nouvelle demande » (onglet Faire une demande)
+  const [retourModal, setRetourModal] = useState(null) // retour de reliquat : { d, montant, date, motif }
+  const [retourSaving, setRetourSaving] = useState(false)
   const [motifSuppression, setMotifSuppression] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -206,12 +192,59 @@ export default function Depenses() {
     const { openDepenseId, filtreMois: moisVoulu, openCreateSecteurId } = location.state || {}
     if (!openDepenseId && !moisVoulu && !openCreateSecteurId) return
     if (openDepenseId) setDetailId(openDepenseId)
-    if (moisVoulu) setFiltreMois(moisVoulu)
+    if (moisVoulu) { setModePeriode('mois'); setFiltreMois(moisVoulu) }
     // Bouton « Ajouter une dépense » depuis le volet Dépense d'un secteur (agro,
     // logistique…) — ouvre directement le formulaire, secteur déjà pré-rempli.
     if (openCreateSecteurId) setModal({ data: { ...empty(), secteurId: openCreateSecteurId }, isNew: true })
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.state])
+
+  // ── Retours de reliquat ──────────────────────────────────────────────────────────────────────
+  // Un retour de fonds est enregistré comme une dépense de montant NÉGATIF (source `retour_reliquat`, lien `retourDe`), de même
+  // secteur et de même financement que la dépense d'origine : partout où l'on additionne les dépenses (budget, solde, Caisse,
+  // report automatique), le reliquat revenu s'en déduit donc tout seul. Dans la Caisse, il apparaît comme une entrée.
+  const fmtN = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
+  const retoursParDepense = useMemo(() => {
+    const m = new Map()
+    depenses.forEach((r) => { if (r.source === 'retour_reliquat' && r.retourDe) m.set(r.retourDe, (m.get(r.retourDe) || 0) + Math.abs(Number(r.montant) || 0)) })
+    return m
+  }, [depenses])
+  const resteRetournable = (d) => Math.max(0, (Number(d.montant) || 0) - (retoursParDepense.get(d.id) || 0))
+  const peutRetourner = (d) => !lectureSeule && d.source !== 'retour_reliquat' && d.source !== 'briqueterie' && d.source !== 'projet'
+    && (d.statut === 'decaissee' || !d.statut) && (d.sourceFinancement || 'entreprise') !== 'pau' && resteRetournable(d) > 0
+  function ouvrirRetour(d) {
+    setDetailId(null)
+    setRetourModal({ d, montant: '', date: todayStr(), motif: `Reliquat de : ${d.description || d.categorie || 'dépense'}` })
+  }
+  async function enregistrerRetour() {
+    if (!retourModal || retourSaving) return
+    const { d, montant, date, motif } = retourModal
+    const m = Number(montant)
+    const reste = resteRetournable(d)
+    if (!(m > 0)) return toast.error('Montant requis')
+    if (m > reste) return toast.error(`Le retour ne peut pas dépasser le reste à retourner (${fmtN(reste)} FCFA)`)
+    if (!motif.trim()) return toast.error('Le motif est obligatoire')
+    if (!date) return toast.error('Date requise')
+    setRetourSaving(true)
+    try {
+      await addItem('depense_depenses', {
+        date, secteurId: d.secteurId, site: d.site || null, categorie: d.categorie || '', montant: -m,
+        description: `Retour de reliquat : ${d.description || d.categorie || 'dépense'}`, motif: motif.trim(),
+        source: 'retour_reliquat', retourDe: d.id, statut: 'decaissee',
+        natureFlux: d.natureFlux || natureFluxDefaut, sourceFinancement: d.sourceFinancement || 'entreprise', financePar: d.financePar || '',
+        secteursConcernes: d.secteursConcernes || [], modePaiement: d.modePaiement || 'espece',
+        justificatifRequis: false, justificatifRecu: false, beneficiaireNom: '', beneficiaireType: 'interne',
+        enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
+      })
+      await audit('depense', 'RETOUR_RELIQUAT', `${fmtN(m)} FCFA retournés : ${d.description || d.categorie || 'dépense'} (${motif.trim()})`, { depenseId: d.id, secteurId: d.secteurId, montant: m, date })
+      toast.success('Reliquat retourné ✓')
+      setRetourModal(null)
+    } catch (e) {
+      toast.error(e?.message || 'Le retour n\'a pas pu être enregistré')
+    } finally {
+      setRetourSaving(false)
+    }
+  }
 
   const liste = useMemo(() => {
     let rows = [...depenses]
@@ -227,7 +260,10 @@ export default function Depenses() {
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
     if (filtreFinancement === 'caisse_commune') rows = rows.filter((d) => d.financePar === 'caisse_commune')
-    if (filtreMois)      rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
+    if (modePeriode === 'mois' && filtreMois) rows = rows.filter((d) => (d.date || '').startsWith(filtreMois))
+    else if (modePeriode === 'jour' && filtreJour) rows = rows.filter((d) => d.date === filtreJour)
+    else if (modePeriode === 'annee' && filtreAnnee) rows = rows.filter((d) => (d.date || '').startsWith(filtreAnnee))
+    else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) rows = rows.filter((d) => (!filtreDebut || d.date >= filtreDebut) && (!filtreFin || d.date <= filtreFin))
     if (recherche.trim()) {
       const q = recherche.toLowerCase()
       rows = rows.filter((d) => (d.description || '').toLowerCase().includes(q))
@@ -239,7 +275,7 @@ export default function Depenses() {
       })
     }
     return rows.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreFinancement, filtreMois, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
+  }, [depenses, filtreSecteur, filtreSite, filtreCategorie, filtreNature, filtreFinancement, modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin, recherche, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
 
   const totalListe = liste.reduce((s, d) => s + (Number(d.montant) || 0), 0)
 
@@ -247,10 +283,17 @@ export default function Depenses() {
   // sinon le mois courant (le filtre peut être vidé pour voir « Toutes périodes »,
   // mais un budget alloué n'a de sens que rapporté à UN mois précis).
   const [anneeKpi, moisKpi] = useMemo(() => {
-    const m = filtreMois || todayStr().slice(0, 7)
+    // Mois de référence du budget : celui de la période choisie (jour, mois, année en cours ou passée, début de plage).
+    const auj = todayStr().slice(0, 7)
+    let m = auj
+    if (modePeriode === 'mois') m = filtreMois || auj
+    else if (modePeriode === 'jour') m = filtreJour ? filtreJour.slice(0, 7) : auj
+    else if (modePeriode === 'annee') m = filtreAnnee ? (filtreAnnee === auj.slice(0, 4) ? auj : `${filtreAnnee}-12`) : auj
+    else m = (filtreDebut || filtreFin || '').slice(0, 7) || auj
     const [a, mo] = m.split('-').map(Number)
     return [a, mo]
-  }, [filtreMois])
+  }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
+  const periodeTexte = modePeriode === 'mois' ? filtreMois : modePeriode === 'jour' ? filtreJour : modePeriode === 'annee' ? filtreAnnee : [filtreDebut, filtreFin].filter(Boolean).join('_au_')
 
   // Budget alloué total, tous secteurs métier confondus (hors Caisse commune, comptée
   // séparément ci-dessous) — Logistique compte ses deux sites (Lomé + Kara).
@@ -271,6 +314,38 @@ export default function Depenses() {
     () => totalDepenses(depensesEntrepriseSecteurMois(depenses, 'divers', anneeKpi, moisKpi)),
     [depenses, anneeKpi, moisKpi]
   )
+  // Caisse commune : les mêmes lignes que la page Caisse (dotations, retours), pour voir les dotations dans la liste.
+  const lignesCaisse = useMemo(
+    () => construireLignesCaisse({ depenses: depensesReelles, coutsMatieres: coutsMatieresBriqueterie(inventairesBriq), budgets }),
+    [depensesReelles, inventairesBriq, budgets]
+  )
+  // Solde initial du mois de référence = reste du dernier jour du mois précédent (même calcul que la page Caisse).
+  const caisseMois = useMemo(() => {
+    const m = `${anneeKpi}-${String(moisKpi).padStart(2, '0')}`
+    const j = journalPeriode(lignesCaisse, bornesPeriode('mois', { mois: m }), { mensuel: true })
+    const veille = new Date(anneeKpi, moisKpi - 1, 0)
+    return { initial: j.soldeInitial, final: j.soldeFinal, veille: `${String(veille.getDate()).padStart(2, '0')}/${String(veille.getMonth() + 1).padStart(2, '0')}/${veille.getFullYear()}` }
+  }, [lignesCaisse, anneeKpi, moisKpi])
+  // Dotations de la période affichée (les reports du mois précédent sont le solde initial, pas des dotations).
+  const dotationsListe = useMemo(() => {
+    if ((filtreSecteur && filtreSecteur !== 'divers') || filtreCategorie || filtreNature) return []
+    const q = recherche.trim().toLowerCase()
+    return lignesCaisse.filter((l) => l.type === 'dotation' && !l.report && l.entree > 0).filter((l) => {
+      const dt = l.date
+      if (modePeriode === 'mois' && filtreMois) { if (!dt.startsWith(filtreMois)) return false }
+      else if (modePeriode === 'jour' && filtreJour) { if (dt !== filtreJour) return false }
+      else if (modePeriode === 'annee' && filtreAnnee) { if (!dt.startsWith(filtreAnnee)) return false }
+      else if (modePeriode === 'plage' && (filtreDebut || filtreFin)) { if ((filtreDebut && dt < filtreDebut) || (filtreFin && dt > filtreFin)) return false }
+      if (restreintMoisCourant) { const m = dt.slice(0, 7); if (m !== moisCourantStr && m !== moisPrecedentStr) return false }
+      return !q || (l.designation || '').toLowerCase().includes(q)
+    })
+  }, [lignesCaisse, filtreSecteur, filtreCategorie, filtreNature, recherche, modePeriode, filtreMois, filtreJour, filtreAnnee, filtreDebut, filtreFin, restreintMoisCourant, moisCourantStr, moisPrecedentStr])
+  const lignesTable = useMemo(() => [
+    ...dotationsListe.map((l) => ({ kind: 'dot', l, date: l.date, id: l.id })),
+    ...liste.map((d) => ({ kind: 'dep', d, date: d.date, id: d.id }))
+  ].sort((x, y) => (x.date === y.date ? (x.kind === 'dot' ? -1 : 0) - (y.kind === 'dot' ? -1 : 0) : x.date < y.date ? 1 : -1)), [dotationsListe, liste])
+  // Ligne « solde initial » en tête : seulement pour un mois précis et pour la caisse commune (ou tous les secteurs).
+  const afficherSoldeInitial = modePeriode === 'mois' && !!filtreMois && (!filtreSecteur || filtreSecteur === 'divers') && !filtreCategorie && !filtreNature && !recherche.trim()
   const resteAutresSecteurs = budgetAutresSecteurs - depenseAutresSecteurs
   const resteCaisseCommune  = budgetCaisseCommune - depenseCaisseCommune
 
@@ -298,10 +373,10 @@ export default function Depenses() {
       }
     })
     exportRapportExcel({
-      filename: `depenses-${filtreMois || 'toutes'}.xlsx`,
+      filename: `depenses-${periodeTexte || 'toutes'}.xlsx`,
       sections: [{
         id: 'depenses', name: 'Dépenses', title: 'Extraction des dépenses',
-        subtitle: filtreMois ? `Période : ${filtreMois}` : 'Toutes périodes',
+        subtitle: periodeTexte ? `Période : ${periodeTexte.replace('_au_', ' au ')}` : 'Toutes périodes',
         columns: [
           { key: 'date', label: 'Date', width: 14 },
           { key: 'libelle', label: 'Libellé', width: 30 },
@@ -476,6 +551,61 @@ export default function Depenses() {
 
   return (
     <div className="space-y-5">
+      <style>{`
+        @keyframes dp-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes dp-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        @keyframes dp-halo { 0%, 100% { box-shadow: 0 12px 22px -10px rgba(180,83,9,0.7), 0 0 0 0 rgba(251,191,36,0.5), inset 0 1px 0 rgba(255,255,255,0.5); } 50% { box-shadow: 0 12px 22px -10px rgba(180,83,9,0.7), 0 0 0 9px rgba(251,191,36,0), inset 0 1px 0 rgba(255,255,255,0.5); } }
+        .dp-ligne { animation: dp-entree 0.4s ease-out backwards; }
+        .dp-icone { animation: dp-flotte 3.2s ease-in-out infinite; }
+        .df-bloc { animation: dp-entree 0.4s ease-out backwards; }
+        .df-bloc:nth-child(2) { animation-delay: 0.06s; } .df-bloc:nth-child(3) { animation-delay: 0.12s; } .df-bloc:nth-child(4) { animation-delay: 0.18s; } .df-bloc:nth-child(5) { animation-delay: 0.24s; }
+      `}</style>
+
+      {/* Bande du volet : tous les filtres (recherche, mois, secteur, site, catégorie, nature, financement) y sont réunis. */}
+      <BandeauVolet couleur="#B45309" icone={Receipt} titre="Dépenses"
+        sous={`${liste.length} dépense(s) · ${totalListe.toLocaleString('fr-FR')} FCFA : saisie, filtres et justificatifs de tous les secteurs.`}>
+        <ChampRecherche variant="glass" className="!w-52" value={recherche} onChange={setRecherche} placeholder="Rechercher une description…" />
+        <FiltrePeriode variant="glass" label="" mode={modePeriode} onModeChange={setModePeriode}
+          valeurJour={filtreJour} onJourChange={setFiltreJour} valeurMois={filtreMois} onMoisChange={setFiltreMois}
+          avecAnnee valeurAnnee={filtreAnnee} onAnneeChange={setFiltreAnnee}
+          avecPlage valeurDebut={filtreDebut} onDebutChange={setFiltreDebut} valeurFin={filtreFin} onFinChange={setFiltreFin} />
+        <ChampBande label="Secteur">
+          <select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }} className={`${CLASSE_CHAMP_BANDE} w-36`}>
+            <option value="">Tous les secteurs</option>
+            {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </ChampBande>
+        {filtreSecteur === 'logistique' && (
+          <ChampBande label="Site">
+            <select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-28`}>
+              <option value="">Lomé + Kara</option>
+              {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </ChampBande>
+        )}
+        <ChampBande label="Nature du flux">
+          <select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-32`}>
+            <option value="">Toutes</option>
+            {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </ChampBande>
+      </BandeauVolet>
+
+      {/* Actions sous la bande : export, ajout multiple, nouvelle dépense (animée). */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Onglets : la liste des dépenses, et « Faire une demande » (ouvre la demande de décaissement, envoyée au PAU, à la GE, à l'Info et à la direction). */}
+        <PillTabs taille="sm" active="depenses" accent="#B45309" onChange={(id) => { if (id === 'demande') setDemandeOuverte(true) }}
+          tabs={[{ id: 'depenses', label: 'Dépenses', icone: Receipt }, ...(lectureSeule ? [] : [{ id: 'demande', label: 'Faire une demande', icone: Send, accent: '#0d9488' }])]} />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
+        {!lectureSeule && <Button variant="outline" onClick={openLot}><Layers size={16} /> Ajout multiple</Button>}
+        {!lectureSeule && (
+          <BoutonVerre icone={Receipt} animation="recu" badgePlus onClick={openCreate}>Ajouter une dépense</BoutonVerre>
+        )}
+        </div>
+      </div>
+      <NouvelleDemandeModal open={demandeOuverte} onClose={() => setDemandeOuverte(false)} />
+
       {/* KPI — récap de la liste affichée + budget alloué (mois du filtre, ou mois
           courant si aucun filtre de mois n'est posé), autres secteurs vs Caisse commune. */}
       <div className="grid gap-3 sm:grid-cols-3">
@@ -489,87 +619,7 @@ export default function Depenses() {
           icon={PiggyBank} accent={resteCaisseCommune < 0 ? '#dc2626' : '#7c3aed'} valueColor={resteCaisseCommune < 0 ? '#dc2626' : undefined} />
       </div>
 
-      <div className={CLAY_PANEL}>
-        <div>
-          <label className={CLAY_LABEL}>Rechercher</label>
-          <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
-            <input
-              className={`${CLAY_FIELD} pl-8`}
-              placeholder="Rechercher une description…"
-              value={recherche}
-              onChange={(e) => setRecherche(e.target.value)}
-            />
-          </div>
-        </div>
-        <div>
-          <label className={CLAY_LABEL}>Mois</label>
-          <input type="month" value={filtreMois} onChange={(e) => setFiltreMois(e.target.value)}
-            min={restreintMoisCourant ? moisPrecedentStr : undefined}
-            max={restreintMoisCourant ? moisCourantStr : undefined}
-            className={CLAY_FIELD} />
-        </div>
-        <div>
-          <label className={CLAY_LABEL}>Secteur</label>
-          <div className="relative">
-            <select value={filtreSecteur} onChange={(e) => { setFiltreSecteur(e.target.value); setFiltreSite('') }} className={`${CLAY_FIELD} pr-9`}>
-              <option value="">Tous les secteurs</option>
-              {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
-          </div>
-        </div>
-        {filtreSecteur === 'logistique' && (
-          <div>
-            <label className={CLAY_LABEL}>Site</label>
-            <div className="relative">
-              <select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
-                <option value="">Lomé + Kara</option>
-                {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-              <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
-            </div>
-          </div>
-        )}
-        <div>
-          <label className={CLAY_LABEL}>Catégorie</label>
-          <div className="relative">
-            <select value={filtreCategorie} onChange={(e) => setFiltreCategorie(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
-              <option value="">Toutes</option>
-              {categoriesPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
-          </div>
-        </div>
-        <div>
-          <label className={CLAY_LABEL}>Nature du flux</label>
-          <div className="relative">
-            <select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
-              <option value="">Toutes</option>
-              {Object.entries(NATURES_FLUX).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
-          </div>
-        </div>
-        <div>
-          <label className={CLAY_LABEL}>Financement</label>
-          <div className="relative">
-            <select value={filtreFinancement} onChange={(e) => setFiltreFinancement(e.target.value)} className={`${CLAY_FIELD} pr-9`}>
-              <option value="">Tous</option>
-              <option value="caisse_commune">💰 Caisse commune uniquement</option>
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-amber-700/50 dark:text-amber-200/40" />
-          </div>
-        </div>
-        <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs font-semibold text-amber-800/60 dark:text-amber-200/50">{liste.length} dépense(s) · {totalListe.toLocaleString('fr-FR')} FCFA</span>
-          <Button variant="outline" onClick={exportExcel} disabled={liste.length === 0}><FileSpreadsheet size={16} /> Export Excel</Button>
-          {!lectureSeule && <Button variant="outline" onClick={openLot}><Layers size={16} /> Ajout multiple</Button>}
-          {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Ajouter une dépense</Button>}
-        </div>
-      </div>
-
-      {liste.length === 0 ? (
+      {lignesTable.length === 0 && !afficherSoldeInitial ? (
         <Card>
           <div className="flex flex-col items-center gap-2 py-12 text-gray-400">
             <Receipt size={34} className="opacity-30" />
@@ -577,175 +627,214 @@ export default function Depenses() {
           </div>
         </Card>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] border-separate border-spacing-y-2.5 text-sm">
-            <thead>
-              <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                <th className="px-4 pb-1 text-left font-bold">Date & secteur</th>
-                <th className="px-4 pb-1 text-left font-bold">Dépense</th>
-                <th className="px-4 pb-1 text-left font-bold">Bénéficiaire</th>
-                <th className="px-4 pb-1 text-right font-bold">Montant</th>
-                <th className="px-4 pb-1 text-center font-bold">Statut</th>
-                <th className="px-4 pb-1"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {liste.map((d) => {
-                const secteur = SECTEURS.find((s) => s.id === d.secteurId)
-                const secteurColor = secteur?.color || '#64748b'
-                const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
-                const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
-                const avecOrigine = d.source === 'besoin' // motif à afficher
-                const origine = infoSource(d)
-                const importe = !!d.source // dépense reprise d'un autre module (besoin, Briqueterie) : non modifiable ici
-                // Modifier une dépense déjà décaissée (ex. corriger la case « Payée depuis
-                // la Caisse commune » après coup) : admin, mais aussi secrétaire — pour
-                // qu'elle puisse réparer une erreur de saisie sans attendre un admin. La
-                // SUPPRESSION, elle, reste réservée à l'admin (action plus irréversible).
-                const modifiable = !importe && (isAdmin || role === 'secretaire' || d.statut === 'en_attente' || !d.statut)
-                const supprimable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
-                // Justificatif à confirmer : dépense décaissée (l'argent est réellement
-                // sorti), justificatif marqué requis à la saisie, pas encore confirmé reçu.
-                const justificatifAConfirmer = d.justificatifRequis && !d.justificatifRecu && (d.statut === 'decaissee' || !d.statut)
-                const cell = 'bg-white py-3 align-middle transition-colors group-hover:bg-amber-50/40'
-                return (
-                  <tr key={d.id} onClick={() => setDetailId(d.id)}
-                    className="group cursor-pointer shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-gray-100 transition-shadow hover:shadow-[0_6px_18px_-6px_rgba(180,83,9,0.18)] hover:ring-amber-200">
-                    {/* Date & secteur — accent coloré du secteur à gauche */}
-                    <td className={`${cell} rounded-l-2xl border-l-[3px] px-4`} style={{ borderColor: secteurColor }}>
-                      <p className="whitespace-nowrap text-xs font-semibold text-gray-700">{formatDateShort(d.date)}</p>
-                      <span className="mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: secteurColor + '1a', color: secteurColor }}>
-                        {libelleSecteurSite(secteur, d)}
-                      </span>
+        <Card className="!p-0 overflow-hidden">
+          <div className="max-h-[66vh] overflow-auto">
+            <table className="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase text-gray-500">
+                  <th className={TH}>Date</th><th className={TH}>Désignation</th><th className={TH}>Secteur</th><th className={TH}>Bénéficiaire</th>
+                  <th className={`${TH} text-right`}>Montant</th><th className={TH}>Statut</th><th className={`${TH} !right-0 z-20`} style={{ position: 'sticky' }} />
+                </tr>
+              </thead>
+              <tbody>
+                {afficherSoldeInitial && (
+                  <tr className="bg-gray-50 font-extrabold dark:bg-white/5">
+                    <td colSpan={4} className="px-3 py-2 text-center text-xs uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Solde initial de la caisse au 1er {MOIS_LABELS[moisKpi - 1]?.toLowerCase()} {anneeKpi} <span className="font-semibold normal-case text-gray-400">(reste au {caisseMois.veille})</span>
                     </td>
-
-                    {/* Dépense : description + catégorie/nature/origine */}
-                    <td className={`${cell} px-4`}>
-                      {avecOrigine ? (
-                        <>
-                          <p className="line-clamp-2 max-w-[320px] font-semibold text-gray-800">{d.projetNom || d.description || '—'}</p>
-                          {d.tacheTitre && <p className="mt-0.5 line-clamp-1 max-w-[320px] text-xs text-gray-500">🔧 {d.tacheTitre}</p>}
-                        </>
-                      ) : (
-                        <p className="line-clamp-2 max-w-[320px] font-medium text-gray-700">{d.description || '—'}</p>
-                      )}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{d.categorie || '—'}</span>
-                        <Badge tone={nature.tone}>{nature.label}</Badge>
-                        <Badge tone={origine.tone}>{origine.label}</Badge>
-                        {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
-                        {(d.secteursConcernes || []).length > 0 && (
-                          <span title={`Concerne aussi : ${d.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')}`}>
-                            <Badge tone="info">+{d.secteursConcernes.length} secteur{d.secteursConcernes.length > 1 ? 's' : ''}</Badge>
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Bénéficiaire : qui a payé → qui a reçu */}
-                    <td className={`${cell} px-4`}>
-                      <div className="space-y-1 text-[11px]">
-                        <p className="text-gray-400">✍️ <span className="font-semibold text-gray-600">{d.enregistrePar || '—'}</span></p>
-                        {d.beneficiaireNom ? (
-                          <p className="text-gray-400">
-                            → 👤 <span className="font-semibold text-gray-700">{d.beneficiaireNom}</span>
-                            {d.beneficiaireFonction ? <span className="text-gray-400"> · {d.beneficiaireFonction}</span> : ''}
-                            {d.beneficiaireTelephone ? <span className="text-gray-400"> · ☎ {d.beneficiaireTelephone}</span> : ''}
-                            <span className="ml-1 text-[10px] text-gray-400">
-                              {d.beneficiaireUid
-                                ? (d.recuConfirme ? '✅ reçu confirmé' : d.statut === 'decaissee' ? '⏳ à confirmer' : '')
-                                : '· externe'}
-                            </span>
-                          </p>
-                        ) : <p className="text-gray-300">—</p>}
-                      </div>
-                    </td>
-
-                    {/* Montant */}
-                    <td className={`${cell} whitespace-nowrap px-4 text-right`}>
-                      <span className="text-base font-extrabold text-gray-900">{Number(d.montant).toLocaleString('fr-FR')}</span>
-                      <span className="ml-0.5 text-[10px] font-semibold text-gray-400">FCFA</span>
-                    </td>
-
-                    {/* Statut + justificatif */}
-                    <td className={`${cell} px-4 text-center`}>
-                      <Badge tone={statut.tone}>{statut.label}</Badge>
-                      {d.justificatifRequis && (
-                        justificatifAConfirmer ? (
-                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600">
-                            <AlertTriangle size={11} /> justif. attendu
-                          </span>
-                        ) : d.justificatifRecu ? (
-                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-600">
-                            <FileCheck2 size={11} /> justif. reçu
-                          </span>
-                        ) : null
-                      )}
-                      {d.piece && (
-                        <button onClick={(e) => { e.stopPropagation(); ouvrirPiece(d.piece) }} title="Voir le justificatif"
-                          className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
-                          <Paperclip size={11} /> justif.
-                        </button>
-                      )}
-                      {!d.piece && avecOrigine && d.noteOrigine && (
-                        <p className="mx-auto mt-1 line-clamp-2 max-w-[150px] text-[10px] italic text-gray-400">{d.noteOrigine}</p>
-                      )}
-                    </td>
-
-                    {/* Actions */}
-                    <td className={`${cell} rounded-r-2xl px-3`} onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-0.5">
-                        <button onClick={() => setDetailId(d.id)} title="Voir les détails" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Eye size={15} /></button>
-                        {modifiable && (
-                          <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><FilePen size={15} /></button>
-                        )}
-                        {justificatifAConfirmer && !lectureSeule && (
-                          <button onClick={() => confirmerJustificatif(d)} title="Confirmer que le justificatif (reçu) a été rapporté"
-                            className="rounded-lg p-1.5 text-green-600 hover:bg-green-50"><FileCheck2 size={15} /></button>
-                        )}
-                        {supprimable && (
-                          <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
-                        )}
-                      </div>
-                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-gray-900 dark:text-gray-50">{fmtN(caisseMois.initial)}</td>
+                    <td colSpan={2} />
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                )}
+                {lignesTable.map((it, idx) => {
+                  const memeJourLigne = idx > 0 && lignesTable[idx - 1].date === it.date
+                  if (it.kind === 'dot') {
+                    const l = it.l
+                    const { icone: IcD, couleur: cD, libelle } = iconeLigne(l)
+                    const sD = SECTEURS.find((x) => x.id === 'divers')
+                    return (
+                      <tr key={it.id} style={{ background: `${COULEUR_DOTATION}1c`, animationDelay: `${Math.min(idx, 14) * 30}ms` }}
+                        className={`dp-ligne border-t border-gray-100 dark:border-white/10 ${memeJourLigne ? '' : 'border-t-gray-300 dark:border-t-white/25'}`}>
+                        <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold text-gray-700 dark:text-gray-200">{memeJourLigne ? '' : formatDateShort(l.date)}</td>
+                        <td className="px-3 py-2 align-top">
+                          <span className="flex items-start gap-2">
+                            <span title={libelle} className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(cD)}><IcD size={12} /></span>
+                            <span className="min-w-0">
+                              <span className="mb-0.5 block text-[9px] font-extrabold uppercase tracking-wider" style={{ color: cD }}>{libelle}</span>
+                              <span className="block max-w-[340px] break-words font-semibold uppercase text-gray-800 dark:text-gray-100">{l.designation}</span>
+                            </span>
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold uppercase" style={{ color: sD?.color || '#7c3aed' }}>Caisse commune</td>
+                        <td className="px-3 py-2 align-top text-[11px] uppercase text-gray-600">{l.operateur || ':'}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right align-top font-extrabold text-green-700">+{fmtN(l.entree)}</td>
+                        <td className="px-3 py-2 align-top"><Badge tone="success">Dotation</Badge></td>
+                        <td className="sticky right-0 z-[5] px-2 py-2" style={{ background: `linear-gradient(${COULEUR_DOTATION}1c, ${COULEUR_DOTATION}1c), #fff` }} />
+                      </tr>
+                    )
+                  }
+                  const d = it.d
+                  const estRetour = d.source === 'retour_reliquat'
+                  const IconeCat = estRetour ? Undo2 : iconeCategorie(d.categorie)
+                  const dejaRetourne = retoursParDepense.get(d.id) || 0
+                  const secteur = SECTEURS.find((s) => s.id === d.secteurId)
+                  const secteurColor = secteur?.color || '#64748b'
+                  const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
+                  const nature = NATURES_FLUX[d.natureFlux || natureFluxDefaut]
+                  const avecOrigine = d.source === 'besoin' // motif à afficher
+                  const importe = !!d.source // dépense reprise d'un autre module (besoin, Briqueterie) : non modifiable ici
+                  // Modifier une dépense déjà décaissée (ex. corriger la case « Payée depuis
+                  // la Caisse commune » après coup) : admin, mais aussi secrétaire — pour
+                  // qu'elle puisse réparer une erreur de saisie sans attendre un admin. La
+                  // SUPPRESSION, elle, reste réservée à l'admin (action plus irréversible).
+                  const modifiable = !importe && (isAdmin || role === 'secretaire' || d.statut === 'en_attente' || !d.statut)
+                  const supprimable = !importe && (isAdmin || d.statut === 'en_attente' || !d.statut)
+                  // Justificatif à confirmer : dépense décaissée (l'argent est réellement
+                  // sorti), justificatif marqué requis à la saisie, pas encore confirmé reçu.
+                  const justificatifAConfirmer = d.justificatifRequis && !d.justificatifRecu && (d.statut === 'decaissee' || !d.statut)
+                  const memeJour = memeJourLigne
+                  const titre = avecOrigine ? (d.projetNom || d.description || '—') : (d.description || '—')
+                  return (
+                    <tr key={d.id} onClick={() => setDetailId(d.id)} style={{ background: `${secteurColor}1c`, animationDelay: `${Math.min(idx, 14) * 30}ms` }}
+                      className={`dp-ligne cursor-pointer border-t border-gray-100 transition-colors hover:brightness-95 dark:border-white/10 ${memeJour ? '' : 'border-t-gray-300 dark:border-t-white/25'}`}>
+                      <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold text-gray-700 dark:text-gray-200">{memeJour ? '' : formatDateShort(d.date)}</td>
+
+                      {/* Désignation : petite icône 3D de catégorie, description, puces discrètes */}
+                      <td className="px-3 py-2 align-top">
+                        <span className="flex items-start gap-2">
+                          <span title={estRetour ? 'Retour de reliquat' : (d.categorie || 'Dépense')} className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(estRetour ? '#16a34a' : secteurColor)}><IconeCat size={12} /></span>
+                          <span className="min-w-0">
+                            <span className="block max-w-[340px] break-words font-semibold uppercase text-gray-800 dark:text-gray-100">{titre}</span>
+                            {avecOrigine && d.tacheTitre && <span className="block max-w-[340px] truncate text-[11px] normal-case text-gray-500">{d.tacheTitre}</span>}
+                            <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] font-semibold">
+                              {d.categorie && <span className="rounded-md bg-white/70 px-1.5 py-0.5 text-gray-500">{d.categorie}</span>}
+                              <span className="rounded-md bg-white/70 px-1.5 py-0.5 text-gray-500">{nature.label}</span>
+                              {d.financePar === 'caisse_commune' && <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-700">Caisse commune</span>}
+                              {dejaRetourne > 0 && <span className="inline-flex items-center gap-0.5 rounded-md bg-green-100 px-1.5 py-0.5 text-green-700"><Undo2 size={9} /> {fmtN(dejaRetourne)} retournés</span>}
+                              {(d.secteursConcernes || []).length > 0 && (
+                                <span title={`Concerne aussi : ${d.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')}`} className="rounded-md bg-sky-100 px-1.5 py-0.5 text-sky-700">+{d.secteursConcernes.length} secteur{d.secteursConcernes.length > 1 ? 's' : ''}</span>
+                              )}
+                            </span>
+                          </span>
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold uppercase" style={{ color: secteurColor }}>{libelleSecteurSite(secteur, d)}</td>
+
+                      {/* Bénéficiaire : qui a payé → qui a reçu */}
+                      <td className="px-3 py-2 align-top text-[11px] text-gray-600">
+                        <span className="block uppercase">{d.enregistrePar || '—'}</span>
+                        {d.beneficiaireNom && (
+                          <span className="block text-gray-500">→ <span className="font-semibold uppercase text-gray-700">{d.beneficiaireNom}</span>
+                            {d.beneficiaireFonction ? ` · ${d.beneficiaireFonction}` : ''}{d.beneficiaireTelephone ? ` · ☎ ${d.beneficiaireTelephone}` : ''}
+                            <span className="ml-1 text-[10px] text-gray-400">{d.beneficiaireUid ? (d.recuConfirme ? '· reçu confirmé' : d.statut === 'decaissee' ? '· à confirmer' : '') : '· externe'}</span>
+                          </span>
+                        )}
+                      </td>
+
+                      <td className={`whitespace-nowrap px-3 py-2 text-right align-top font-extrabold ${estRetour ? 'text-green-700' : 'text-red-600'}`}>
+                        {estRetour ? '+' : ''}{Math.abs(Number(d.montant) || 0).toLocaleString('fr-FR')}
+                      </td>
+
+                      {/* Statut + justificatif */}
+                      <td className="px-3 py-2 align-top">
+                        <Badge tone={statut.tone}>{statut.label}</Badge>
+                        {d.justificatifRequis && (
+                          justificatifAConfirmer ? (
+                            <span className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-red-600"><AlertTriangle size={10} /> justif. attendu</span>
+                          ) : d.justificatifRecu ? (
+                            <span className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-green-600"><FileCheck2 size={10} /> justif. reçu</span>
+                          ) : null
+                        )}
+                        {d.piece && (
+                          <button onClick={(e) => { e.stopPropagation(); ouvrirPiece(d.piece) }} title="Voir le justificatif"
+                            className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"><Paperclip size={10} /> justif.</button>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="sticky right-0 z-[5] px-2 py-2 align-top shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.25)]" style={{ background: `linear-gradient(${secteurColor}1c, ${secteurColor}1c), #fff` }} onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => setDetailId(d.id)} title="Voir les détails" className="rounded-lg border border-gray-200 bg-white p-1 text-gray-500 shadow-sm hover:text-gray-800"><Eye size={14} /></button>
+                          {peutRetourner(d) && (
+                            <button onClick={() => ouvrirRetour(d)} title="Retourner le reliquat à la caisse" className="rounded-lg border border-green-200 bg-white p-1 text-green-600 shadow-sm hover:bg-green-50"><Undo2 size={14} /></button>
+                          )}
+                          {modifiable && (
+                            <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg border border-gray-200 bg-white p-1 text-primary shadow-sm hover:bg-gray-50"><FilePen size={14} /></button>
+                          )}
+                          {justificatifAConfirmer && !lectureSeule && (
+                            <button onClick={() => confirmerJustificatif(d)} title="Confirmer que le justificatif (reçu) a été rapporté"
+                              className="rounded-lg border border-green-200 bg-white p-1 text-green-600 shadow-sm hover:bg-green-50"><FileCheck2 size={14} /></button>
+                          )}
+                          {supprimable && (
+                            <button onClick={() => setToDelete(d)} title="Supprimer" className="rounded-lg border border-red-200 bg-white p-1 text-red-500 shadow-sm hover:bg-red-50"><Trash2 size={14} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} className={`${TF} text-xs font-extrabold uppercase tracking-wide text-gray-700 dark:text-gray-200`}>Total : {liste.length} ligne(s)</td>
+                  <td className={`${TF} whitespace-nowrap text-right font-black text-red-600`}>{totalListe.toLocaleString('fr-FR')}</td>
+                  <td colSpan={2} className={`${TF} !right-0 z-20`} style={{ position: 'sticky' }} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* Modal création / édition */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="md"
-        panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
+        {...glassModalProps('#B45309')}
         title={modal?.isNew ? 'Ajouter une dépense' : 'Modifier la dépense'}
-        footer={<><Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Annuler</Button><Button onClick={handleSave} loading={saving}>{modal?.isNew ? 'Enregistrer' : 'Mettre à jour'}</Button></>}>
+        footer={<>
+          <Button variant="outline" onClick={() => setModal(null)} disabled={saving}><X size={15} /> Annuler</Button>
+          <BoutonVerre icone={Save} onClick={handleSave} loading={saving}>{modal?.isNew ? 'Enregistrer' : 'Mettre à jour'}</BoutonVerre>
+        </>}>
         {modal && (
           <div className="space-y-3">
+            {/* Héro en verre : icône 3D du reçu qui flotte. */}
+            <div className="relative overflow-hidden rounded-3xl border border-white/40 p-4 text-white shadow-[0_16px_30px_-14px_rgba(180,83,9,0.7),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-xl"
+              style={{ background: 'linear-gradient(135deg, #D9822B 0%, #B45309 50%, #7c2d12 130%)', animation: 'dp-entree 0.35s ease-out both' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+              <div className="relative flex items-center gap-3.5">
+                <span className="dp-icone flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),inset_0_-3px_5px_rgba(0,0,0,0.2),0_10px_20px_-8px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+                  <Receipt size={26} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-lg font-extrabold leading-tight">{modal.isNew ? 'Nouvelle dépense' : 'Modifier la dépense'}</p>
+                  <p className="text-sm text-white/85">Secteur, catégorie, montant, bénéficiaire : tout est enregistré et tracé.</p>
+                </div>
+              </div>
+            </div>
+
             {/* Détails de la dépense */}
-            <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">💰 Détails de la dépense</p>
+            <div className={BLOC}>
+              <TitreBloc icone={Banknote} couleur="#B45309">Détails de la dépense</TitreBloc>
               {/* Secteur EN PREMIER, CAISSE COMMUNE par défaut : c'est elle qui alimente
                   les dépenses par défaut — y compris, via « Autres secteurs concernés »
                   ci-dessous, celles qui profitent en réalité à d'autres secteurs. Choisir
                   un secteur précis, c'est décider que la dépense est prélevée sur la
                   somme qui LUI est allouée (son propre budget). */}
               <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Secteur *" hint="CAISSE COMMUNE (par défaut) : dépense financée par le fonds commun. Un autre secteur : prélevée sur son propre budget alloué.">
+                <FormGroup label={<EtiqD icone={Building2} couleur="#B45309">Secteur *</EtiqD>}>
                   <Select value={modal.data.secteurId} onChange={(e) => set('secteurId', e.target.value)}>
                     {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </Select>
                 </FormGroup>
                 {modal.data.secteurId === 'logistique' && (
-                  <FormGroup label="Site *" hint="Budget alloué séparément par site.">
+                  <FormGroup label={<EtiqD icone={MapPin} couleur="#E8850F">Site *</EtiqD>} hint="Budget alloué séparément par site.">
                     <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
                       <option value="">Choisir</option>
                       {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </Select>
                   </FormGroup>
                 )}
-                <FormGroup label="Catégorie *">
+                <FormGroup label={<EtiqD icone={Tag} couleur="#0ea5e9">Catégorie *</EtiqD>}>
                   <ChampAutocomplete
                     value={modal.data.categorie}
                     onChange={(v) => set('categorie', v)}
@@ -755,22 +844,22 @@ export default function Depenses() {
                     accent="amber"
                   />
                 </FormGroup>
-                <FormGroup label="Montant (FCFA) *">
+                <FormGroup label={<EtiqD icone={Banknote} couleur="#16a34a">Montant (FCFA) *</EtiqD>}>
                   <Input type="number" min="0" value={modal.data.montant} onChange={(e) => set('montant', e.target.value)} placeholder="ex: 50000" />
                 </FormGroup>
-                <FormGroup label="Date *">
+                <FormGroup label={<EtiqD icone={CalendarDays} couleur="#f59e0b">Date *</EtiqD>}>
                   <Input type="date" value={modal.data.date} onChange={(e) => set('date', e.target.value)} />
                 </FormGroup>
               </div>
-              <FormGroup label="Description" required className="mt-1">
+              <FormGroup label={<EtiqD icone={FileText} couleur="#475569">Description</EtiqD>} required className="mt-1">
                 <textarea
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  className="w-full rounded-xl border border-white/70 bg-white/80 px-3 py-2 text-sm outline-none backdrop-blur-md focus:ring-2 focus:ring-amber-300"
                   rows={2} value={modal.data.description} onChange={(e) => set('description', e.target.value)}
                   placeholder="Décrivez précisément la dépense : quoi, pourquoi, pour qui, dans quel contexte…"
                 />
               </FormGroup>
               {modal.data.secteurId && modal.data.secteurId !== 'divers' && (
-                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-sm text-gray-700">
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-2xl border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-sm text-gray-700 backdrop-blur-md">
                   <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400/30"
                     checked={modal.data.financePar === 'caisse_commune'}
                     onChange={(e) => set('financePar', e.target.checked ? 'caisse_commune' : '')} />
@@ -788,7 +877,7 @@ export default function Depenses() {
                   (sur la Caisse commune) ; ceci ne sert qu'au tri : la dépense
                   apparaîtra AUSSI quand on filtrera sur ce secteur. */}
               {modal.data.secteurId === 'divers' && (
-                <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
+                <div className="mt-2 rounded-2xl border border-amber-200/70 bg-amber-50/50 px-3 py-2 backdrop-blur-md">
                   <p className="mb-1.5 text-sm font-semibold text-gray-700">Cette dépense concerne-t-elle un secteur ? <span className="font-normal text-gray-400">(optionnel)</span></p>
                   <div className="flex items-center gap-2">
                     <button type="button"
@@ -822,16 +911,16 @@ export default function Depenses() {
             </div>
 
             {/* Classification comptable */}
-            <div className="rounded-xl border border-amber-100 bg-white p-3 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">📊 Classification</p>
-              <FormGroup label="Nature du flux" hint="Sert au calcul du solde de trésorerie (voir l'onglet Flux de trésorerie).">
+            <div className={`${BLOC} space-y-3`}>
+              <TitreBloc icone={ArrowLeftRight} couleur="#14b8a6">Classification</TitreBloc>
+              <FormGroup label={<EtiqD icone={ArrowLeftRight} couleur="#14b8a6">Nature du flux</EtiqD>} hint="Sert au calcul du solde de trésorerie (voir l'onglet Flux de trésorerie).">
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(NATURES_FLUX).map(([k, v]) => (
                     <button key={k} type="button" onClick={() => set('natureFlux', k)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.natureFlux === k ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}
+                      className={chipChoix(modal.data.natureFlux === k)}
                       title={v.desc}>
                       {modal.data.natureFlux === k && (
-                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white text-amber-600"><Check size={9} strokeWidth={3} /></span>
                       )}
                       {v.label}
                     </button>
@@ -846,13 +935,13 @@ export default function Depenses() {
                   </p>
                 ) : null
               })()}
-              <FormGroup label="Mode de paiement">
+              <FormGroup label={<EtiqD icone={Wallet} couleur="#16a34a">Mode de paiement</EtiqD>}>
                 <div className="flex flex-wrap gap-2">
                   {MODES_PAIEMENT.map((m) => (
                     <button key={m.id} type="button" onClick={() => set('modePaiement', m.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.modePaiement === m.id ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                      className={chipChoix(modal.data.modePaiement === m.id)}>
                       {modal.data.modePaiement === m.id && (
-                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white text-amber-600"><Check size={9} strokeWidth={3} /></span>
                       )}
                       {m.label}
                     </button>
@@ -862,22 +951,22 @@ export default function Depenses() {
             </div>
 
             {/* Bénéficiaire */}
-            <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">👤 Bénéficiaire <span className="text-red-500">*</span> <span className="font-medium normal-case text-amber-500">: qui reçoit l'argent</span></p>
+            <div className={BLOC}>
+              <TitreBloc icone={UserRound} couleur="#7c3aed" droite={<><span className="text-red-500">*</span> <span className="font-medium normal-case text-amber-600">: qui reçoit l'argent</span></>}>Bénéficiaire</TitreBloc>
               <div className="mb-2 flex gap-2">
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'interne'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.beneficiaireType !== 'externe' ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                  className={`${chipChoix(modal.data.beneficiaireType !== 'externe')} flex-1 justify-center rounded-2xl`}>
                   {modal.data.beneficiaireType !== 'externe' && (
-                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-white text-amber-600"><Check size={9} strokeWidth={3} /></span>
                   )}
                   Membre de l'entreprise
                 </button>
                 <button type="button"
                   onClick={() => { set('beneficiaireType', 'externe'); set('beneficiaireUid', ''); set('beneficiaireNom', ''); set('beneficiaireFonction', ''); set('beneficiaireTelephone', '') }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${modal.data.beneficiaireType === 'externe' ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-[0_2px_8px_-2px_rgba(217,119,6,0.35)]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>
+                  className={`${chipChoix(modal.data.beneficiaireType === 'externe')} flex-1 justify-center rounded-2xl`}>
                   {modal.data.beneficiaireType === 'externe' && (
-                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={9} strokeWidth={3} /></span>
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-white text-amber-600"><Check size={9} strokeWidth={3} /></span>
                   )}
                   Externe (fournisseur, prestataire…)
                 </button>
@@ -891,19 +980,19 @@ export default function Depenses() {
                   toujours sur une seule ligne. */}
               {modal.data.beneficiaireType === 'externe' ? (
                 <div className="grid gap-3">
-                  <FormGroup label="Nom de la personne" required>
+                  <FormGroup label={<EtiqD icone={UserRound} couleur="#7c3aed">Nom de la personne</EtiqD>} required>
                     <Input value={modal.data.beneficiaireNom} onChange={(e) => set('beneficiaireNom', e.target.value)} placeholder="ex: Kofi Adjovi" />
                   </FormGroup>
-                  <FormGroup label="Profession / fonction">
+                  <FormGroup label={<EtiqD icone={Briefcase} couleur="#64748b">Profession / fonction</EtiqD>}>
                     <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Maçon" />
                   </FormGroup>
-                  <FormGroup label="Contact (téléphone)">
+                  <FormGroup label={<EtiqD icone={Phone} couleur="#16a34a">Contact (téléphone)</EtiqD>}>
                     <Input value={modal.data.beneficiaireTelephone} onChange={(e) => set('beneficiaireTelephone', e.target.value)} placeholder="ex: 90 00 00 00" />
                   </FormGroup>
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  <FormGroup label="Nom du bénéficiaire" required>
+                  <FormGroup label={<EtiqD icone={UserRound} couleur="#7c3aed">Nom du bénéficiaire</EtiqD>} required>
                     <ChampBeneficiaire
                       value={modal.data.beneficiaireNom}
                       onChange={(v) => { set('beneficiaireNom', v); set('beneficiaireUid', '') }}
@@ -911,10 +1000,10 @@ export default function Depenses() {
                       users={users}
                     />
                   </FormGroup>
-                  <FormGroup label="Fonction (optionnel)">
+                  <FormGroup label={<EtiqD icone={Briefcase} couleur="#64748b">Fonction (optionnel)</EtiqD>}>
                     <Input value={modal.data.beneficiaireFonction} onChange={(e) => set('beneficiaireFonction', e.target.value)} placeholder="ex: Comptable" />
                   </FormGroup>
-                  <FormGroup label="Contact (téléphone)">
+                  <FormGroup label={<EtiqD icone={Phone} couleur="#16a34a">Contact (téléphone)</EtiqD>}>
                     <Input value={modal.data.beneficiaireTelephone} onChange={(e) => set('beneficiaireTelephone', e.target.value)} placeholder="ex: 90 00 00 00" />
                   </FormGroup>
                 </div>
@@ -926,8 +1015,8 @@ export default function Depenses() {
                 depuis la liste (bande) une fois la dépense décaissée. Tant qu'il est marqué
                 requis et non confirmé reçu, une alerte reste active sur le Dashboard
                 (secrétaire, info, assistant PAU). */}
-            <div className="rounded-xl border border-amber-100 bg-white p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">🧾 Un reçu sera-t-il rapporté pour cette dépense ?</p>
+            <div className={BLOC}>
+              <TitreBloc icone={FileCheck2} couleur="#ea580c">Un reçu sera-t-il rapporté pour cette dépense ?</TitreBloc>
               <div className="flex items-center gap-2">
                 <button type="button"
                   onClick={() => set('justificatifRequis', modal.data.justificatifRequis === true ? null : true)}
@@ -1083,9 +1172,10 @@ export default function Depenses() {
         })()}
       </Modal>
 
-      {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'un besoin validé */}
+      {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'un besoin validé.
+          Design « verre » : héro dégradé avec icône 3D de la catégorie, tuiles bento à icônes 3D, entrée en cascade. */}
       <Modal open={!!detail} onClose={() => setDetailId(null)} size="md" title="Détail de la dépense"
-        panelClassName="bg-gradient-to-br from-amber-200/85 via-amber-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200"
+        {...glassModalProps('#B45309')}
         footer={
           <div className="flex w-full items-center justify-between gap-2">
             {detail && detail.source !== 'briqueterie' && (isAdmin || detail.statut === 'en_attente' || !detail.statut) ? (
@@ -1100,93 +1190,222 @@ export default function Depenses() {
           const avecOrigine = detail.source === 'besoin'
           const origine = infoSource(detail)
           const secteur = SECTEURS.find((s) => s.id === detail.secteurId)
+          const couleur = secteur?.color || '#B45309'
           const statut = STATUTS_DECAISSEMENT[detail.statut] || STATUTS_DECAISSEMENT.decaissee
           const nature = NATURES_FLUX[detail.natureFlux || natureFluxDefaut]
-          const chips = [
-            { label: 'Date', value: formatDateShort(detail.date) },
-            { label: 'Secteur', value: libelleSecteurSite(secteur, detail) },
-            ...((detail.secteursConcernes || []).length > 0
-              ? [{ label: 'Concerne aussi', value: detail.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ') }]
-              : []),
-            { label: 'Catégorie', value: detail.categorie || '—' },
-            { label: 'Nature de flux', value: nature.label },
-            { label: 'Mode de paiement', value: MODES_PAIEMENT.find((m) => m.id === detail.modePaiement)?.label || '—' },
-            { label: 'Origine', value: origine.label }
+          const IconeCat = iconeCategorie(detail.categorie)
+          const autres = (detail.secteursConcernes || []).map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')
+          const tuiles = [
+            { icone: CalendarDays, couleur: '#f59e0b', titre: 'Date', valeur: formatDateShort(detail.date) },
+            { icone: Building2, couleur, titre: 'Secteur', valeur: libelleSecteurSite(secteur, detail) },
+            ...(autres ? [{ icone: Layers, couleur: '#8b5cf6', titre: 'Concerne aussi', valeur: autres }] : []),
+            { icone: IconeCat, couleur: '#0ea5e9', titre: 'Catégorie', valeur: detail.categorie || '—' },
+            { icone: ArrowLeftRight, couleur: '#14b8a6', titre: 'Nature de flux', valeur: nature.label },
+            { icone: Banknote, couleur: '#16a34a', titre: 'Mode de paiement', valeur: MODES_PAIEMENT.find((m) => m.id === detail.modePaiement)?.label || '—' },
+            { icone: Tag, couleur: '#64748b', titre: 'Origine', valeur: origine.label }
           ]
+          const entree = (i) => ({ animation: `dd-entree 0.4s ease-out ${i * 0.06}s both` })
+          const tuile = 'relative overflow-hidden rounded-2xl border border-white/70 bg-white/65 p-3 shadow-[0_10px_24px_-16px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl'
           return (
             <div className="space-y-3 text-sm">
-              {/* En-tête : montant + statut */}
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-3xl font-black leading-none text-gray-900">
-                      {Number(detail.montant).toLocaleString('fr-FR')}
-                      <span className="ml-1 text-sm font-bold text-gray-400">FCFA</span>
+              <style>{`
+                @keyframes dd-entree { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+                @keyframes dd-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+                @keyframes dd-reflet { 0% { transform: translateX(-120%) skewX(-12deg); } 100% { transform: translateX(520%) skewX(-12deg); } }
+              `}</style>
+
+              {/* Héro : icône 3D de la catégorie, montant qui s'anime, statut et nature. */}
+              <div className="relative overflow-hidden rounded-3xl border border-white/40 p-4 text-white shadow-[0_16px_30px_-14px_rgba(180,83,9,0.7),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-xl"
+                style={{ background: 'linear-gradient(135deg, #D9822B 0%, #B45309 50%, #7c2d12 130%)', animation: 'dd-entree 0.35s ease-out both' }}>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/5 bg-white/25 blur-md" style={{ animation: 'dd-reflet 5s ease-in-out 1s infinite' }} />
+                <div className="relative flex items-start gap-3.5">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),inset_0_-3px_5px_rgba(0,0,0,0.2),0_10px_20px_-8px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+                    style={{ animation: 'dd-flotte 3s ease-in-out infinite' }}>
+                    <IconeCat size={26} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-bold text-white/90">{avecOrigine ? (detail.projetNom || detail.description) : (detail.description || detail.categorie || 'Dépense')}</p>
+                    <p className="text-3xl font-black leading-tight">
+                      {detail.source === 'retour_reliquat' ? '+' : ''}<Compteur valeur={Math.abs(Number(detail.montant) || 0)} format={(n) => Math.round(n).toLocaleString('fr-FR')} />
+                      <span className="ml-1 text-sm font-bold text-white/75">FCFA</span>
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <Badge tone={nature.tone}>{nature.label}</Badge>
-                      {detail.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
-                    </div>
                   </div>
+                </div>
+                <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
                   <Badge tone={statut.tone}>{statut.label}</Badge>
+                  <Badge tone={nature.tone}>{nature.label}</Badge>
+                  {detail.financePar === 'caisse_commune' && <Badge tone="warning">Caisse commune</Badge>}
                 </div>
               </div>
 
-              {/* Informations clés en tuiles */}
-              <div className="grid grid-cols-2 gap-2">
-                {chips.map((c) => (
-                  <div key={c.label} className="rounded-xl bg-white p-3 shadow-sm">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{c.label}</p>
-                    <p className="mt-0.5 font-bold text-gray-800">{c.value}</p>
-                  </div>
-                ))}
+              {/* Bento : les informations clés, chacune dans sa tuile de verre à icône 3D. */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {tuiles.map((t, i) => {
+                  const Ic = t.icone
+                  return (
+                    <div key={t.titre} className={`${tuile} flex items-center gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/85`} style={entree(i + 1)}>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D(t.couleur)}><Ic size={16} /></span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-400">{t.titre}</p>
+                        <p className="break-words text-sm font-extrabold leading-tight text-gray-800">{t.valeur}</p>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Motif (dépenses issues d'un besoin de secteur validé) */}
               {avecOrigine && (detail.projetNom || detail.tacheTitre) && (
-                <div className="rounded-2xl border-l-4 border-teal-400 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600">📋 {origine.label}</p>
-                  <p className="mt-1 font-bold text-gray-800">{detail.projetNom || '—'}</p>
-                  {detail.tacheTitre && <p className="mt-1 flex items-center gap-1 text-gray-600">🔧 <span className="font-medium">{detail.tacheTitre}</span></p>}
-                  {detail.noteOrigine && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs italic text-gray-600">« {detail.noteOrigine} »</p>}
+                <div className={tuile} style={entree(9)}>
+                  <p className="mb-1.5 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-teal-700">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#0d9488')}><ClipboardList size={14} /></span>{origine.label}
+                  </p>
+                  <p className="font-extrabold text-gray-800">{detail.projetNom || '—'}</p>
+                  {detail.tacheTitre && <p className="mt-1 flex items-center gap-1.5 text-gray-600"><Wrench size={13} className="text-teal-600" /> <span className="font-medium">{detail.tacheTitre}</span></p>}
+                  {detail.noteOrigine && <p className="mt-2 rounded-xl border border-white/80 bg-white/70 px-3 py-2 text-xs italic text-gray-600">« {detail.noteOrigine} »</p>}
                 </div>
               )}
 
               {/* Description (dépenses saisies directement dans E-DÉPENSES) */}
               {!avecOrigine && (
-                <div className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</p>
-                  <p className="mt-1 font-medium text-gray-700">{detail.description || '—'}</p>
+                <div className={tuile} style={entree(9)}>
+                  <p className="mb-1.5 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-400">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#475569')}><FileText size={14} /></span>Description
+                  </p>
+                  <p className="font-semibold text-gray-700">{detail.description || '—'}</p>
                 </div>
               )}
 
               {/* Traçabilité : qui a payé → qui a reçu */}
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Traçabilité</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-                    ✍️ {detail.enregistrePar || '—'}
+              <div className={tuile} style={entree(10)}>
+                <p className="mb-2 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-400">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#7c3aed')}><PenLine size={14} /></span>Traçabilité
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1.5 text-xs font-bold text-amber-800 backdrop-blur-md">
+                    <PenLine size={12} /> {detail.enregistrePar || '—'}
                   </span>
                   {detail.beneficiaireNom && (
                     <>
                       <span className="text-gray-300">→</span>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800">
-                        👤 {detail.beneficiaireNom}{detail.beneficiaireFonction ? ` · ${detail.beneficiaireFonction}` : ''}
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200/80 bg-teal-50/80 px-3 py-1.5 text-xs font-bold text-teal-800 backdrop-blur-md">
+                        <UserRound size={12} /> {detail.beneficiaireNom}{detail.beneficiaireFonction ? ` · ${detail.beneficiaireFonction}` : ''}
                       </span>
                     </>
                   )}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                  {detail.beneficiaireTelephone && <span>☎ {detail.beneficiaireTelephone}</span>}
-                  {detail.typePaiement && <span>💳 {detail.typePaiement === 'avance' ? 'Tranche / avance' : 'Somme totale'}</span>}
+                  {detail.beneficiaireTelephone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {detail.beneficiaireTelephone}</span>}
+                  {detail.typePaiement && <span className="inline-flex items-center gap-1"><CreditCard size={12} /> {detail.typePaiement === 'avance' ? 'Tranche / avance' : 'Somme totale'}</span>}
                 </div>
               </div>
 
+              {(() => {
+                const faits = depenses.filter((r) => r.source === 'retour_reliquat' && r.retourDe === detail.id)
+                if (!faits.length && !peutRetourner(detail)) return null
+                return (
+                  <div className={tuile} style={entree(11)}>
+                    <p className="mb-2 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-400">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#16a34a')}><Undo2 size={14} /></span>Reliquat retourné
+                    </p>
+                    {faits.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {faits.map((r) => (
+                          <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/80 bg-white/70 px-3 py-1.5 text-xs">
+                            <span className="text-gray-600">{formatDateShort(r.date)} · {r.enregistrePar || '—'}</span>
+                            <span className="font-extrabold text-green-700">+{fmtN(Math.abs(Number(r.montant) || 0))} FCFA</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-gray-500">Aucun retour pour le moment.</p>}
+                    {peutRetourner(detail) && (
+                      <div className="mt-2.5 flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-gray-500">Reste à retourner : <strong className="text-gray-800">{fmtN(resteRetournable(detail))} FCFA</strong></span>
+                        <BoutonVerre variante="vert" icone={Undo2} onClick={() => ouvrirRetour(detail)}>Retourner le reliquat</BoutonVerre>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               {detail.piece && (
-                <button onClick={() => ouvrirPiece(detail.piece)} className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-primary shadow-sm hover:bg-primary/5">
-                  <Eye size={14} /> Voir le justificatif
+                <button onClick={() => ouvrirPiece(detail.piece)}
+                  className="group inline-flex items-center gap-2 rounded-2xl border border-white/80 bg-white/70 px-3.5 py-2 text-xs font-extrabold text-amber-800 shadow-[0_8px_18px_-10px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/90" style={entree(11)}>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={icone3D('#B45309')}><Paperclip size={14} /></span>
+                  Voir le justificatif
+                  <Eye size={14} className="transition-transform group-hover:scale-110" />
                 </button>
               )}
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* Retour d'un reliquat à la caisse (ou au budget du secteur) : la somme revient, la dépense garde son historique. */}
+      <Modal open={!!retourModal} onClose={() => setRetourModal(null)} size="md" title="Retourner le reliquat"
+        {...glassModalProps('#16a34a')}
+        footer={<>
+          <Button variant="outline" onClick={() => setRetourModal(null)} disabled={retourSaving}><X size={15} /> Annuler</Button>
+          <BoutonVerre variante="vert" icone={Undo2} onClick={enregistrerRetour} loading={retourSaving}
+            disabled={!retourModal || !(Number(retourModal.montant) > 0) || !retourModal.motif.trim()}>Enregistrer le retour</BoutonVerre>
+        </>}>
+        {retourModal && (() => {
+          const { d } = retourModal
+          const reste = resteRetournable(d)
+          const m = Number(retourModal.montant) || 0
+          const versCaisse = d.financePar === 'caisse_commune' || d.secteurId === 'divers'
+          const secteur = SECTEURS.find((x) => x.id === d.secteurId)
+          const tuile = 'relative rounded-2xl border border-white/70 bg-white/65 p-3 shadow-[0_10px_24px_-16px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl'
+          const etiq = (Ic, couleur, texte) => (
+            <label className="mb-1.5 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D(couleur)}><Ic size={13} /></span>{texte}
+            </label>
+          )
+          return (
+            <div className="space-y-3 text-sm">
+              <div className="relative overflow-hidden rounded-3xl border border-white/40 p-4 text-white shadow-[0_16px_30px_-14px_rgba(22,163,74,0.7),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-xl"
+                style={{ background: 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #14532d 130%)' }}>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+                <div className="relative flex items-center gap-3.5">
+                  <span className="dp-icone flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),inset_0_-3px_5px_rgba(0,0,0,0.2),0_10px_20px_-8px_rgba(0,0,0,0.5)] backdrop-blur-sm"><Undo2 size={26} /></span>
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-bold text-white/90">{d.description || d.categorie || 'Dépense'}</p>
+                    <p className="text-xs text-white/80">{libelleSecteurSite(secteur, d)} · {formatDateShort(d.date)}</p>
+                    <p className="text-lg font-black leading-tight">{fmtN(d.montant)} <span className="text-xs font-bold text-white/75">FCFA dépensés</span></p>
+                  </div>
+                </div>
+                <p className="relative mt-3 inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-bold backdrop-blur-md">
+                  Reste à retourner : {fmtN(reste)} FCFA{(retoursParDepense.get(d.id) || 0) > 0 ? ` (déjà retourné : ${fmtN(retoursParDepense.get(d.id))})` : ''}
+                </p>
+              </div>
+
+              <div className={tuile}>
+                {etiq(Banknote, '#16a34a', 'Montant retourné (FCFA) *')}
+                <div className="flex items-center gap-2">
+                  <input type="number" min="0" max={reste} value={retourModal.montant} autoFocus
+                    onChange={(e) => setRetourModal((x) => ({ ...x, montant: e.target.value }))} placeholder="0"
+                    className="min-w-0 flex-1 rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-xl font-black outline-none focus:ring-2 focus:ring-green-300" />
+                  <button type="button" onClick={() => setRetourModal((x) => ({ ...x, montant: String(reste) }))}
+                    className="shrink-0 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-extrabold text-green-700 transition-all hover:-translate-y-0.5 hover:bg-green-100 active:scale-95">Tout le reste</button>
+                </div>
+              </div>
+              <div className={tuile}>
+                {etiq(MessageSquareText, '#475569', 'Motif *')}
+                <input value={retourModal.motif} onChange={(e) => setRetourModal((x) => ({ ...x, motif: e.target.value }))}
+                  className="w-full rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-300" />
+              </div>
+              <div className={tuile}>
+                {etiq(CalendarDays, '#7c3aed', 'Date du retour')}
+                <input type="date" value={retourModal.date} onChange={(e) => setRetourModal((x) => ({ ...x, date: e.target.value }))}
+                  className="w-full rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-green-300" />
+              </div>
+
+              <div className="rounded-2xl border border-green-200/80 bg-green-50/80 p-3 text-xs font-semibold text-green-900 backdrop-blur-md">
+                {versCaisse
+                  ? <>Le retour revient à la <strong>caisse commune</strong> : {m > 0 ? `+${fmtN(m)} FCFA` : 'le montant'} dans le journal de la Caisse, et le budget de la caisse remonte d'autant.</>
+                  : <>Le retour revient au <strong>budget de {secteur?.label || 'ce secteur'}</strong> : ses dépenses baissent de {m > 0 ? `${fmtN(m)} FCFA` : 'ce montant'}.</>}
+              </div>
             </div>
           )
         })()}

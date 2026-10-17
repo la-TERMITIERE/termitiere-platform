@@ -1,7 +1,9 @@
 // Paramètres Dépenses — export des dépenses + réinitialisation.
 import { useState, useEffect } from 'react'
-import { FileSpreadsheet, FileText, FileDown, Trash2, AlertTriangle, Archive, Save, RotateCcw, BellRing } from 'lucide-react'
+import { FileSpreadsheet, FileText, FileDown, Trash2, AlertTriangle, Archive, Save, RotateCcw, BellRing, Settings, Download, Gauge, Building2, ShieldAlert } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import BandeauVolet from '../../shared/ui/BandeauVolet'
+import { icone3D } from '../../utils/color'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
@@ -47,7 +49,7 @@ function SectionConservation() {
   }
 
   return (
-    <Card title={<span className="flex items-center gap-2"><Archive size={15} className="text-slate-500" />Conservation des données</span>}>
+    <Card className="ed-entree" title={<span className="flex items-center gap-2"><span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#475569')}><Archive size={15} /></span>Conservation des données</span>}>
       <p className="mb-4 text-xs text-gray-500">
         Supprime automatiquement les dépenses E-DÉPENSES de plus de X années. Réglage propre à ce module (indépendant d'E-G.Pro).
       </p>
@@ -119,7 +121,7 @@ function SectionSeuils() {
   }
 
   return (
-    <Card title={<span className="flex items-center gap-2"><BellRing size={15} className="text-slate-500" />Seuils d'alerte budgétaire</span>}>
+    <Card className="ed-entree" title={<span className="flex items-center gap-2"><span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#d97706')}><BellRing size={15} /></span>Seuils d'alerte budgétaire</span>}>
       <p className="mb-4 text-xs text-gray-500">
         À partir de quel taux de consommation du budget alloué un secteur passe « Attention » puis « Dépassé » : sur le tableau de bord, les listes et les notifications.
       </p>
@@ -346,7 +348,9 @@ export default function Params() {
 
   return (
     <div className="space-y-4">
-      <Card title="Export des dépenses">
+      <BandeauVolet couleur="#B45309" icone={Settings} titre="Paramètres" sous="Export des dépenses, seuils d'alerte et conservation des données." />
+
+      <Card className="ed-entree" title={<span className="flex items-center gap-2"><span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#16a34a')}><Download size={15} /></span>Export des dépenses</span>}>
         <p className="mb-4 text-sm text-gray-500">
           Exporte l'ensemble des dépenses enregistrées ({depenses.length}) dans le format de ton choix.
         </p>
@@ -363,14 +367,17 @@ export default function Params() {
         </div>
       </Card>
 
-      <Card title="Statistiques rapides">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <Card className="ed-entree" title={<span className="flex items-center gap-2"><span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#B45309')}><Gauge size={15} /></span>Statistiques rapides</span>}>
+        <div className="ed-grille grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {SECTEURS.map((s) => {
             const count = depenses.filter((d) => d.secteurId === s.id).length
             return (
-              <div key={s.id} className="rounded-2xl border border-gray-200/60 bg-white/50 p-3 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150">
-                <p className="text-xl font-extrabold text-gray-800">{count}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
+              <div key={s.id} className="flex items-center gap-2.5 rounded-2xl border border-white/70 bg-white/60 p-3 shadow-[0_10px_24px_-14px_rgba(26,26,26,0.18)] backdrop-blur-md transition-all hover:-translate-y-0.5" style={{ borderLeft: `4px solid ${s.color}` }}>
+                <span className="ed-flotte flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D(s.color)}><Building2 size={16} /></span>
+                <div className="min-w-0">
+                  <p className="text-xl font-extrabold leading-tight text-gray-800">{count}</p>
+                  <p className="truncate text-xs text-gray-500">{s.label}</p>
+                </div>
               </div>
             )
           })}
@@ -381,7 +388,7 @@ export default function Params() {
       <SectionConservation />
 
       {isAdmin && (
-        <Card title="Réinitialisation des données" className="border-red-200">
+        <Card title={<span className="flex items-center gap-2"><span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D('#dc2626')}><ShieldAlert size={15} /></span>Réinitialisation des données</span>} className="ed-entree border-red-200">
           <div className="flex items-start gap-3 rounded-2xl border border-red-200/60 bg-red-50/60 p-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>

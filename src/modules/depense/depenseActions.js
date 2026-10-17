@@ -73,8 +73,8 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
     await notify({
       type: 'warning',
       title: `💰 Demande de décaissement : ${libelle}`,
-      body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` : ${d.description}` : ''} · ${raison}. En attente de votre autorisation.`,
-      module: 'depense', forRoles: ['pau', 'super_admin'], excludeUid: user?.uid, link: '/depense/autorisations'
+      body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` : ${d.description}` : ''} · ${raison}. À valider ou à refuser.`,
+      module: 'depense', forRoles: ['pau', 'ge', 'info', 'directeur', 'super_admin'], excludeUid: user?.uid, link: '/depense/demandes'
     })
     // Confirme aussi à la personne qui a saisi la dépense que sa demande est bien
     // partie en autorisation, sans quoi elle n'apprend son sort qu'à la décision du PAU.
@@ -82,8 +82,8 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
       await notify({
         type: 'info',
         title: '⏳ Dépense envoyée en demande d\'autorisation',
-        body: `${montant.toLocaleString('fr-FR')} FCFA · ${libelle} : ${raison}. En attente de la décision du PAU.`,
-        module: 'depense', forUsers: [user.uid], link: '/depense/autorisations'
+        body: `${montant.toLocaleString('fr-FR')} FCFA · ${libelle} : ${raison}. En attente de la décision du PAU, de la GE, de l'Info ou de la direction.`,
+        module: 'depense', forUsers: [user.uid], link: '/depense/demandes'
       })
     }
   } else {

@@ -38,11 +38,12 @@ export async function creerDotation({ secteurId, site = null, montant, date, mot
   if (!secteurId) throw new Error('Choisissez le domaine')
   if (secteurId === 'logistique' && !site) throw new Error('Choisissez le site de MAXI LOGISTIQUE')
   if (!(valeur > 0)) throw new Error('Montant requis')
+  if (!(motif || '').trim()) throw new Error('Le motif de la dotation est obligatoire')
   if (!date) throw new Error('Date requise')
   const [annee, mois] = date.split('-').map(Number)
   if (secteurId === 'divers' && reportManuelInterdit(date.slice(0, 7), motif)) throw new Error('Le report du mois précédent est calculé automatiquement : inutile de le saisir')
   const secteur = SECTEURS.find((s) => s.id === secteurId)
-  const libelle = (secteurId === 'divers' ? 'SIÈGE' : (secteur?.label || secteurId)) + (secteurId === 'logistique' ? ` : ${site === 'kara' ? 'Kara' : 'Lomé'}` : '')
+  const libelle = (secteurId === 'divers' ? 'CAISSE COURANTE' : (secteur?.label || secteurId)) + (secteurId === 'logistique' ? ` : ${site === 'kara' ? 'Kara' : 'Lomé'}` : '')
   const siteDoc = secteurId === 'logistique' ? site : null
   const doc = budgetDocSecteur(budgets, secteurId, annee, mois, siteDoc)
   const id = idBudget(budgets, secteurId, siteDoc, annee, mois)

@@ -4,11 +4,13 @@
 import '../../utils/chartSetup'
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
-import { ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown, FileSpreadsheet, BarChart3, PieChart, LineChart, Table2, Scale } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
-import Button from '../../shared/ui/Button'
+import BandeauVolet, { BoutonBande } from '../../shared/ui/BandeauVolet'
+import { icone3D } from '../../utils/color'
+import { optionsGraphique, styleBarre, styleCourbe, texteCentreAnneau, infobulle, fmtFcfa } from './chartStyle'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { exportRapportExcel } from '../../utils/excelReport'
@@ -38,6 +40,7 @@ export default function Analyses() {
   const { data: facturesAgro }         = useCollection('agro_factures')
   const { data: facturesLogistique }   = useCollection('logistique_factures')
   const { data: facturesEvenementiel } = useCollection('evenementiel_factures')
+  const { data: facturesGym } = useCollection('gym_factures')
   const { data: projetsTous }          = useCollection('projets')
   const { data: versementsClientTous } = useCollection('projet_versements_client')
   const { data: revenusManuelsTous }   = useCollection('depense_revenus_manuels')
@@ -48,7 +51,7 @@ export default function Analyses() {
     ...depensesReelles.filter((d) => !d.projetId),
     ...coutsMatieresBriqueterie(inventairesBriq)
   ].filter(visibleDansEDepenses), [depensesReelles, inventairesBriq])
-  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel }
+  const collections = { paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym }
 
   // Versements clients des projets E-G.Pro, routés par secteur — comptés en revenu
   // (utilisé par la section Rentabilité ci-dessous).
@@ -112,7 +115,7 @@ export default function Analyses() {
       return { ...s, revenu, depense, marge, margePct }
     })
     .sort((a, b) => b.marge - a.marge),
-  [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, annee, mois])
+  [depenses, versementsClientRoutes, revenusManuelsTous, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym, annee, mois])
 
   const totalRevenuRentab  = secteursRentabilite.reduce((s, x) => s + x.revenu, 0)
   const totalDepenseRentab = secteursRentabilite.reduce((s, x) => s + x.depense, 0)
@@ -121,8 +124,8 @@ export default function Analyses() {
   const barDataRentab = {
     labels: secteursRentabilite.map((s) => s.label),
     datasets: [
-      { label: 'Revenu réalisé',     data: secteursRentabilite.map((s) => s.revenu),  backgroundColor: '#05966933', borderColor: '#059669', borderWidth: 1, borderRadius: 6 },
-      { label: 'Dépense décaissée',  data: secteursRentabilite.map((s) => s.depense), backgroundColor: '#dc262699', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6 }
+      { label: 'Revenu réalisé',     data: secteursRentabilite.map((s) => s.revenu),  ...styleBarre('#059669') },
+      { label: 'Dépense décaissée',  data: secteursRentabilite.map((s) => s.depense), ...styleBarre('#dc2626') }
     ]
   }
 
@@ -158,40 +161,34 @@ export default function Analyses() {
   const barData = {
     labels: parSecteur.map((s) => s.label),
     datasets: [
-      ...(restreintAgent ? [] : [{ label: 'Budget alloué', data: parSecteur.map((s) => s.alloue), backgroundColor: 'rgba(148,163,184,0.55)', borderColor: '#64748b', borderWidth: 1, borderRadius: 6 }]),
-      { label: 'Dépenses courantes', data: parSecteur.map((s) => s.depExpl), backgroundColor: 'rgba(220,38,38,0.65)', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6 },
-      { label: 'Investissements', data: parSecteur.map((s) => s.depInv), backgroundColor: 'rgba(180,83,9,0.6)', borderColor: '#B45309', borderWidth: 1, borderRadius: 6 }
+      ...(restreintAgent ? [] : [{ label: 'Budget alloué', data: parSecteur.map((s) => s.alloue), ...styleBarre('#64748b') }]),
+      { label: 'Dépenses courantes', data: parSecteur.map((s) => s.depExpl), ...styleBarre('#dc2626') },
+      { label: 'Investissements', data: parSecteur.map((s) => s.depInv), ...styleBarre('#B45309') }
     ]
   }
 
-  const barOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'nearest', intersect: false },
-    plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
-    scales: {
-      x: { grid: { display: false } },
-      y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') } }
-    }
-  }
+  const barOptions = optionsGraphique()
 
   const totalCategories = parCategorie.reduce((s, c) => s + c.total, 0)
 
   const doughnutData = {
     labels: parCategorie.map((c) => c.label),
-    datasets: [{ data: parCategorie.map((c) => c.total), backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }]
+    datasets: [{ data: parCategorie.map((c) => c.total), backgroundColor: parCategorie.map((c, i) => PALETTE[i % PALETTE.length]), borderWidth: 0, borderRadius: 8, spacing: 3, hoverOffset: 10 }]
   }
 
   const doughnutOptions = {
-    responsive: true, maintainAspectRatio: false, cutout: '62%',
+    responsive: true, maintainAspectRatio: false, cutout: '68%',
+    animation: { animateRotate: true, animateScale: true, duration: 1100, easing: 'easeOutQuart' },
     plugins: {
       legend: { display: false }, // remplacé par la liste chiffrée à côté
-      tooltip: { callbacks: { label: (ctx) => {
+      tooltip: { ...infobulle, callbacks: { label: (ctx) => {
         const pctRaw = totalCategories > 0 ? (ctx.parsed / totalCategories) * 100 : 0
         const pctLabel = pctRaw > 0 && pctRaw < 1 ? '<1%' : `${Math.round(pctRaw)}%`
-        return `${ctx.label} : ${Number(ctx.parsed).toLocaleString('fr-FR')} FCFA (${pctLabel})`
+        return ` ${ctx.label} : ${fmtFcfa(ctx.parsed)} FCFA (${pctLabel})`
       } } }
     }
   }
+  const centreAnneau = texteCentreAnneau(fmtFcfa(totalCategories), 'FCFA')
 
   // Tendance sur les 6 derniers mois — revenus réels vs dépenses, tous secteurs confondus.
   // Les dépenses sont séparées par nature (fonctionnement courant vs investissements de projet)
@@ -201,28 +198,41 @@ export default function Analyses() {
     const depExploitation   = totalDepenses(depensesNatureMois(depenses, 'exploitation', a, m))
     const depInvestissement = totalDepenses(depensesNatureMois(depenses, 'investissement', a, m))
     return { label, revenu, depExploitation, depInvestissement }
-  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel])
+  }), [depenses, paiementsGarderie, facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym])
 
   const lineData = {
     labels: tendance.map((t) => t.label),
     datasets: [
       // Revenus réservés à l'administration — omis pour l'agent.
-      ...(restreintAgent ? [] : [{ label: 'Revenus', data: tendance.map((t) => t.revenu), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.12)', tension: 0.3, fill: true, borderWidth: 3, pointRadius: 3, pointBackgroundColor: '#059669' }]),
-      { label: 'Dépenses courantes', data: tendance.map((t) => t.depExploitation), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.08)', tension: 0.3, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#dc2626' },
-      { label: 'Investissements (projets)', data: tendance.map((t) => t.depInvestissement), borderColor: '#B45309', backgroundColor: 'rgba(180,83,9,0.06)', tension: 0.3, borderWidth: 2, borderDash: [6, 4], pointRadius: 3, pointBackgroundColor: '#B45309' }
+      ...(restreintAgent ? [] : [{ label: 'Revenus', data: tendance.map((t) => t.revenu), ...styleCourbe('#059669') }]),
+      { label: 'Dépenses courantes', data: tendance.map((t) => t.depExploitation), ...styleCourbe('#dc2626', { trait: 2.5 }) },
+      { label: 'Investissements (projets)', data: tendance.map((t) => t.depInvestissement), ...styleCourbe('#B45309', { zone: false, trait: 2.5, pointille: true }) }
     ]
   }
 
-  const lineOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'nearest', intersect: false },
-    plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} FCFA` } } },
-    scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') } }, x: { grid: { display: false } } }
-  }
+  const lineOptions = optionsGraphique()
+
+  // Titre de carte : pastille d'icône 3D qui flotte doucement.
+  const titre = (Icone, couleur, texte) => (
+    <span className="flex items-center gap-2">
+      <span className="ed-flotte flex h-7 w-7 items-center justify-center rounded-xl" style={icone3D(couleur)}><Icone size={15} /></span>
+      {texte}
+    </span>
+  )
+  const periode = `${MOIS_LABELS[mois - 1]} ${annee}`
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <BandeauVolet couleur="#B45309" icone={BarChart3} titre="Analyses" sous={`${periode} : tendance, budget, catégories et rentabilité par secteur.`}>
+        <div className="flex items-center gap-1 rounded-2xl border border-white/30 bg-white/15 p-1 backdrop-blur-sm">
+          <button onClick={() => changerMois(-1)} aria-label="Mois précédent" className="rounded-xl p-2 text-white/80 transition-all hover:bg-white/20 hover:text-white active:scale-90"><ChevronLeft size={16} /></button>
+          <span className="px-1 text-sm font-bold whitespace-nowrap">{periode}</span>
+          <button onClick={() => changerMois(1)} aria-label="Mois suivant" className="rounded-xl p-2 text-white/80 transition-all hover:bg-white/20 hover:text-white active:scale-90"><ChevronRight size={16} /></button>
+        </div>
+        {!restreintAgent && <BoutonBande icone={FileSpreadsheet} onClick={exportRentabiliteXLSX}>Export rentabilité</BoutonBande>}
+      </BandeauVolet>
+
+      <div className="ed-grille grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Reste à payer (engagé)"
           value={`${resteAPayer.toLocaleString('fr-FR')} FCFA`}
           sub="Approuvé / en attente, non décaissé"
@@ -237,78 +247,51 @@ export default function Analyses() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button onClick={() => changerMois(-1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50">
-          <ChevronLeft size={16} />
-        </button>
-        <span className="text-lg font-extrabold text-gray-800">{MOIS_LABELS[mois - 1]} {annee}</span>
-        <button onClick={() => changerMois(1)} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50">
-          <ChevronRight size={16} />
-        </button>
-        {!restreintAgent && (
-          <Button variant="outline" className="ml-auto" onClick={exportRentabiliteXLSX}><FileSpreadsheet size={16} /> Export Excel rentabilité</Button>
-        )}
-      </div>
-
-      <Card title={restreintAgent ? 'Tendance sur 6 mois : dépenses (tous secteurs)' : 'Tendance sur 6 mois : revenus vs dépenses (tous secteurs)'}>
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
-          {!restreintAgent && (
-            <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#059669' }} /> Revenus réellement encaissés/facturés</span>
-          )}
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Dépenses courantes (fonctionnement)</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#B45309' }} /> Investissements (projets, ponctuels)</span>
-        </div>
-        <div style={{ height: 280 }}>
+      <Card className="ed-entree" title={titre(LineChart, '#059669', restreintAgent ? 'Tendance sur 6 mois : dépenses (tous secteurs)' : 'Tendance sur 6 mois : revenus vs dépenses (tous secteurs)')}>
+        <div style={{ height: 300 }}>
           <Line data={lineData} options={lineOptions} />
         </div>
       </Card>
 
       {!restreintAgent && (
-        <>
-          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150">
-            Rentabilité : compare le revenu de chaque secteur (paiements garderie, factures certifiées MAXI-AGRO, factures MAXI Logistique et Briqueterie) à sa dépense <strong>décaissée</strong> du même mois. Les secteurs sans facturation propre ce mois-là affichent un revenu à 0.
+        <Card className="ed-entree" title={titre(Scale, '#0d9488', `Revenu vs dépense par secteur : ${periode}`)}>
+          <div style={{ height: 320 }}>
+            <Bar data={barDataRentab} options={optionsGraphique()} />
           </div>
-
-          <Card title={`Revenu vs dépense par secteur : ${MOIS_LABELS[mois - 1]} ${annee}`}>
-            <div style={{ height: 320 }}>
-              <Bar data={barDataRentab} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
-            </div>
-          </Card>
-        </>
+        </Card>
       )}
 
-      <Card title={restreintAgent ? `Dépenses par secteur : ${MOIS_LABELS[mois - 1]} ${annee}` : `Budget vs dépenses par secteur : ${MOIS_LABELS[mois - 1]} ${annee}`}>
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
-          {!restreintAgent && (
-            <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#94a3b8' }} /> Budget alloué (cible)</span>
-          )}
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#dc2626' }} /> Dépenses courantes</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#B45309' }} /> Investissements (projets)</span>
-        </div>
+      <Card className="ed-entree" title={titre(BarChart3, '#B45309', restreintAgent ? `Dépenses par secteur : ${periode}` : `Budget vs dépenses par secteur : ${periode}`)}>
         <div style={{ height: 320 }}>
           <Bar data={barData} options={barOptions} />
         </div>
       </Card>
 
-      <Card title={`Répartition des dépenses par catégorie : ${MOIS_LABELS[mois - 1]} ${annee}`}>
+      <Card className="ed-entree" title={titre(PieChart, '#7c3aed', `Répartition des dépenses par catégorie : ${periode}`)}>
         {parCategorie.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">Aucune dépense enregistrée ce mois.</p>
         ) : (
           <div className="flex flex-col items-center gap-5 sm:flex-row">
-            <div style={{ height: 240, width: 240, flexShrink: 0 }}>
-              <Doughnut data={doughnutData} options={doughnutOptions} />
+            <div style={{ height: 250, width: 250, flexShrink: 0 }}>
+              <Doughnut data={doughnutData} options={doughnutOptions} plugins={[centreAnneau]} />
             </div>
-            <div className="w-full space-y-1.5">
+            <div className="w-full space-y-2">
               {parCategorie.map((c, i) => {
                 const pctRaw = totalCategories > 0 ? (c.total / totalCategories) * 100 : 0
                 // Part réelle mais < 1 % → « <1% » plutôt que « 0% » (qui laisse croire à rien).
                 const pctLabel = pctRaw > 0 && pctRaw < 1 ? '<1%' : `${Math.round(pctRaw)}%`
+                const couleur = PALETTE[i % PALETTE.length]
                 return (
-                  <div key={c.label} className="flex items-center gap-2 text-sm">
-                    <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
-                    <span className="font-medium text-gray-700">{c.label}</span>
-                    <span className="ml-auto font-mono text-gray-500">{c.total.toLocaleString('fr-FR')} FCFA</span>
-                    <span className="w-12 text-right font-bold text-gray-800">{pctLabel}</span>
+                  <div key={c.label}>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ background: couleur }} />
+                      <span className="font-medium text-gray-700">{c.label}</span>
+                      <span className="ml-auto font-mono text-gray-500">{c.total.toLocaleString('fr-FR')} FCFA</span>
+                      <span className="w-12 text-right font-bold text-gray-800">{pctLabel}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                      <div className="ed-barre h-full rounded-full" style={{ width: `${Math.max(pctRaw, 2)}%`, background: couleur, animationDelay: `${i * 70}ms` }} />
+                    </div>
                   </div>
                 )
               })}
@@ -322,9 +305,9 @@ export default function Analyses() {
       </Card>
 
       {!restreintAgent && (
-        <Card title="Détail de la rentabilité par secteur" className="overflow-x-auto p-0">
+        <Card className="ed-entree overflow-x-auto" title={titre(Table2, '#B45309', 'Détail de la rentabilité par secteur')}>
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <thead className="text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-3 py-2 text-left">Secteur</th>
                 <th className="px-3 py-2 text-right">Revenu réalisé</th>
@@ -333,11 +316,11 @@ export default function Analyses() {
                 <th className="px-3 py-2 text-center">Statut</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {secteursRentabilite.map((s) => (
-                <tr key={s.id}>
+                <tr key={s.id} className="border-t border-gray-100 transition-colors hover:bg-amber-50/50" style={{ background: `${s.color}10` }}>
                   <td className="px-3 py-2 font-semibold text-gray-800">
-                    <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
+                    <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
                     {s.label}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-green-700">{fmt(s.revenu)}</td>
@@ -355,12 +338,6 @@ export default function Analyses() {
             </tbody>
           </table>
         </Card>
-      )}
-
-      {!restreintAgent && (
-        <p className="text-center text-xs text-gray-400">
-          Pour la tendance de la marge sur 6 mois, voir <strong>Flux de trésorerie</strong> : le solde d'exploitation et le solde global y équivalent exactement à la marge courante et à la marge totale ci-dessus.
-        </p>
       )}
     </div>
   )

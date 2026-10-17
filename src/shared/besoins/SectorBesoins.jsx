@@ -290,7 +290,7 @@ export default function SectorBesoins({ secteurId }) {
     await notify({
       type: 'demande', title: '💰 Décaissement à traiter',
       body: `${b.titre} : ${Number(b.montant || 0).toLocaleString('fr-FR')} FCFA (besoin validé par ${user?.nom || '—'})`,
-      module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/autorisations'
+      module: 'depense', forRoles: BESOINS_NOTIF_ROLES, excludeUid: user?.uid, link: '/depense/demandes'
     }).catch(() => {})
   }
   async function refuserBesoin(b, motif = '') {

@@ -129,12 +129,18 @@ export function construireLignesCaisse({ depenses = [], coutsMatieres = [], budg
     .filter(visibleDansEDepenses).filter(estDecaissee)
     .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'remboursement_pau' && d.source !== 'projet')
     .filter((d) => d.financePar === 'caisse_commune' || d.secteurId === 'divers')
-    .forEach((d) => out.push({
-      id: `dep_${d.id}`, date: jour(d.date), designation: d.description || catLabel(d.categorie),
-      operateur: d.enregistrePar && d.enregistrePar !== '—' ? d.enregistrePar : '', secteurId: 'divers',
-      site: null,
-      entree: 0, sortie: montant(d.montant), type: 'depense', source: d.source || 'depense', createdAt: d.createdAt || 0, brut: d
-    }))
+    .forEach((d) => {
+      // Un « retour de reliquat » (dépense de montant négatif, source retour_reliquat) ramène de l'argent à la caisse :
+      // c'est une ENTRÉE du journal, pas une dépense.
+      const m = montant(d.montant)
+      const retour = d.source === 'retour_reliquat' || m < 0
+      out.push({
+        id: `dep_${d.id}`, date: jour(d.date), designation: d.description || catLabel(d.categorie),
+        operateur: d.enregistrePar && d.enregistrePar !== '—' ? d.enregistrePar : '', secteurId: 'divers',
+        site: null,
+        entree: retour ? Math.abs(m) : 0, sortie: retour ? 0 : m, type: retour ? 'retour' : 'depense', source: d.source || 'depense', createdAt: d.createdAt || 0, brut: d
+      })
+    })
   return out.filter((l) => l.date)
 }
 
