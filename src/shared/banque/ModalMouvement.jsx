@@ -128,6 +128,10 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
         toast.success('Mouvement mis à jour ✓')
       }
       onClose()
+    } catch (e) {
+      // Jamais d'échec silencieux : le motif du refus (droits, réseau…) s'affiche.
+      console.error('[banque] enregistrement impossible', e)
+      toast.error(e?.message || "L'enregistrement a échoué : réessayez ou prévenez l'administration.")
     } finally {
       setSaving(false)
     }

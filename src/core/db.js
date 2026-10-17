@@ -49,7 +49,9 @@ function protegerEcriture(nom, fn) {
       return Promise.reject(err)
     }
     // MAXI-GYM : seuls les agents et Info écrivent dans les collections `gym_*` (cf. peutEcrireGym).
-    if (role && String(args[0] || '').startsWith('gym_') && !peutEcrireGym(role)) {
+    // Les mouvements bancaires (`gym_banque`) relèvent de la Comptabilité et de ses propres profils : ils ne sont pas visés.
+    const collection = String(args[0] || '')
+    if (role && collection.startsWith('gym_') && !collection.endsWith('_banque') && !peutEcrireGym(role)) {
       const err = new Error('MAXI-GYM : seuls les agents et Info peuvent modifier ces données, votre profil est en lecture seule.')
       err.code = 'LECTURE_SEULE'
       console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents et à Info) : ${nom}`, args[0])
