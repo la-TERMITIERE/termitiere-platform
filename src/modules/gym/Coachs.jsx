@@ -15,7 +15,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { peutEcrireGym, canExportGym } from '../../core/roles'
 import { genererRapportMultiPDF } from '../../utils/exportPDF'
 import { todayStr, formatDateShort } from '../../utils/formatters'
-import { creneauCoach, horairesVides, JOURS_SEMAINE } from './data'
+import { creneauCoach, horairesVides, JOURS_SEMAINE, minutesRetardCreneau } from './data'
 import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
 import CoachAbsentModal from './CoachAbsentModal'
 import CoachDetailModal from './CoachDetailModal'
@@ -79,11 +79,7 @@ export default function Coachs() {
     }
   }, [searchParams, coachs, setSearchParams])
   // Minutes de retard d'un coach programmé aujourd'hui (positif = heure prévue dépassée).
-  const minutesRetard = (c) => {
-    const [h, m] = c.creneau.heure.split(':').map(Number)
-    const prevu = new Date(maintenant); prevu.setHours(h, m, 0, 0)
-    return Math.floor((maintenant - prevu) / 60000)
-  }
+  const minutesRetard = (c) => minutesRetardCreneau(c.creneau, maintenant) ?? 0
   const equipeDuJour = useMemo(
     () => coachs.map((c) => ({ ...c, creneau: creneauCoach(c, aujourdhui) })).sort((a, b) => (b.creneau ? 1 : 0) - (a.creneau ? 1 : 0)),
     [coachs, aujourdhui]

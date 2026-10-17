@@ -1,7 +1,7 @@
 // MAXI-GYM — Séances : liste complète + ajout d'une séance ponctuelle.
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useEffect, useMemo, useState } from 'react'
-import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock, FileSpreadsheet, Eraser } from 'lucide-react'
+import { Ticket, Plus, Trash2, Pencil, User, MessageCircle, Receipt, Printer, Lock, FileSpreadsheet, Eraser, Eye, Dumbbell } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -124,6 +124,22 @@ export default function Seances() {
   const liste = useMemo(() => filtrerParSexe(listePeriode, filtreSexe, idxSexe).filter((s) => correspond(recherche, s.clientNom, s.partenaireStructure)), [listePeriode, filtreSexe, idxSexe, recherche])
   const nbInconnus = useMemo(() => listePeriode.filter((s) => !sexeDe(s, idxSexe)).length, [listePeriode, idxSexe])
   const total = useMemo(() => liste.reduce((s, x) => s + (Number(x.montant) || 0), 0), [liste])
+
+  // Quand on cherche un client, il n'apparaît qu'UNE fois, avec son nombre de passages et le total payé : plus de
+  // dizaines de lignes à son nom. Un clic ouvre sa fiche, avec le détail de chaque passage. Sans recherche, la liste
+  // reste séance par séance (pour imprimer un ticket, corriger ou supprimer une séance).
+  const groupe = !!recherche.trim()
+  const lignesAffichees = useMemo(() => {
+    if (!groupe) return liste
+    const m = new Map()
+    liste.forEach((x) => { // `liste` est triée de la plus récente à la plus ancienne : la 1re ligne rencontrée est la dernière séance
+      const k = (x.clientNom || '').trim().toLowerCase()
+      const g = m.get(k)
+      if (!g) m.set(k, { ...x, _groupe: true, nbPassages: 1, montantTotal: Number(x.montant) || 0 })
+      else { g.nbPassages += 1; g.montantTotal += Number(x.montant) || 0 }
+    })
+    return [...m.values()]
+  }, [liste, groupe])
 
   // Export Excel — reprend exactement la liste affichée (`liste`), donc le
   // filtre de période (Jour/Mois/Année/Plage) sélectionné ci-dessus.
@@ -295,7 +311,7 @@ export default function Seances() {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold">Séances</h2>
-          <p className="text-sm text-white/80">{liste.length} séance(s) : {formatMoney(total)} au total : valables {params.validiteSeanceHeures} h</p>
+          <p className="text-sm text-white/80">{liste.length} séance(s){groupe ? ` · ${lignesAffichees.length} client(s)` : ''} : {formatMoney(total)} au total : valables {params.validiteSeanceHeures} h</p>
         </div>
         {/* Filtre de période directement dans le bandeau (glassmorphism) — à la place
             d'une ligne séparée en dessous. */}
@@ -326,6 +342,7 @@ export default function Seances() {
             { key: 'clientNom', label: 'Client', render: (r) => (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span>{r.clientNom}</span>
+                {r._groupe && <span title={`${r.nbPassages} passage(s) : cliquez pour le détail de chacun`} className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-extrabold text-orange-700"><Dumbbell size={10} /> {r.nbPassages} passage{r.nbPassages > 1 ? 's' : ''}</span>}
                 {r.partenaire && (
                   <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">🤝 {r.partenaireStructure || 'partenaire'}</span>
                 )}
@@ -333,7 +350,7 @@ export default function Seances() {
             ) },
             { key: 'sexe', label: 'Sexe', align: 'center', render: (r) => <SexeBadge sexe={sexeDe(r, idxSexe)} /> },
             { key: 'categorie', label: 'Catégorie', render: (r) => <Badge tone={categorieTone(r.categorie)}>{categorieLabel(r.categorie)}</Badge> },
-            { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.montant)}</strong> },
+            { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r._groupe ? r.montantTotal : r.montant)}</strong> },
             { key: 'validite', label: 'Validité', render: (r) => {
               const valide = seanceValide(r.createdAt, params.validiteSeanceHeures, r.date)
               return (
@@ -342,9 +359,17 @@ export default function Seances() {
                 </Badge>
               )
             } },
-            { key: 'notes', label: 'Notes', render: (r) => r.notes || '—' },
+            { key: 'notes', label: 'Notes', render: (r) => (r._groupe ? '—' : (r.notes || '—')) },
             { key: 'enregistrePar', label: 'Enregistrée par' },
             { key: 'actions', label: '', align: 'right', render: (r) => {
+              // Ligne regroupée (recherche d'un client) : un seul geste, ouvrir sa fiche avec tous les passages.
+              if (r._groupe) {
+                return (
+                  <div className="flex justify-end">
+                    <button onClick={(e) => { e.stopPropagation(); setClientDetail(r.clientNom) }} title="Voir tous les détails" className="rounded-lg border border-orange-200 bg-white p-1.5 text-orange-600 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-orange-50"><Eye size={16} /></button>
+                  </div>
+                )
+              }
               // Séance partenaire : pas de facture ni de ticket — juste l'état de
               // règlement par la structure (mis à jour depuis le volet Clients partenaires).
               if (r.partenaire) {
@@ -381,7 +406,7 @@ export default function Seances() {
               )
             } }
           ]}
-          rows={liste}
+          rows={lignesAffichees}
           onRowClick={(r) => setClientDetail(r.clientNom)}
           empty="Aucune séance enregistrée."
         />
