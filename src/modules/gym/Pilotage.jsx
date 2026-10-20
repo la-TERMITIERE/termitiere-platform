@@ -9,7 +9,7 @@ import Badge from '../../shared/ui/Badge'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { useCollection } from '../../hooks/useFirestore'
 import { formatMoney, todayStr } from '../../utils/formatters'
-import { CATEGORIES_GYM, categorieLabel, categorieTone, derniersMoisGym, croissanceGym, SEXES, indexSexeClients, statsSexe } from './data'
+import { CATEGORIES_GYM, CATEGORIES_STATS, dansCategorie, categorieLabel, categorieTone, derniersMoisGym, croissanceGym, SEXES, indexSexeClients, statsSexe } from './data'
 import { SexeDonut } from './SexeUI'
 import ClientDetailModal from './ClientDetailModal'
 import { avatarGradient } from '../../utils/color'
@@ -17,7 +17,7 @@ import { useSite, matchSite } from './site/useSite'
 
 const COULEUR = '#E8850F'
 const COULEUR2 = '#A6342A'
-const COULEUR_BARRE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
+const COULEUR_BARRE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706', perso: '#8b5cf6' }
 
 // Podium — médaille + fond dégradé pour les 3 premiers d'un classement ; au-delà,
 // simple numéro gris (même recette que Dashboard.jsx).
@@ -90,8 +90,8 @@ export default function Pilotage() {
   const parCategorie = useMemo(() => {
     const recentes = toutes.filter((x) => mois6.some((m) => (x.date || '').startsWith(m.prefixe)))
     const totalPeriode = recentes.reduce((s, x) => s + (Number(x.montant) || 0), 0)
-    return CATEGORIES_GYM.map((c) => {
-      const lignes = recentes.filter((x) => x.categorie === c.id)
+    return CATEGORIES_STATS.map((c) => {
+      const lignes = recentes.filter((x) => dansCategorie(x, c))
       const montant = lignes.reduce((s, x) => s + (Number(x.montant) || 0), 0)
       return { ...c, nb: lignes.length, montant, pct: totalPeriode > 0 ? Math.round((montant / totalPeriode) * 100) : 0 }
     }).sort((a, b) => b.montant - a.montant)

@@ -48,13 +48,13 @@ function protegerEcriture(nom, fn) {
       console.warn(`[db] écriture refusée (rôle ${role} en lecture seule) : ${nom}`, args[0])
       return Promise.reject(err)
     }
-    // MAXI-GYM : seuls les agents et Info écrivent dans les collections `gym_*` (cf. peutEcrireGym).
+    // MAXI-GYM : seuls les agents, Info et l'Assistant PAU écrivent dans les collections `gym_*` (cf. peutEcrireGym).
     // Les mouvements bancaires (`gym_banque`) relèvent de la Comptabilité et de ses propres profils : ils ne sont pas visés.
     const collection = String(args[0] || '')
     if (role && collection.startsWith('gym_') && !collection.endsWith('_banque') && !peutEcrireGym(role)) {
-      const err = new Error('MAXI-GYM : seuls les agents et Info peuvent modifier ces données, votre profil est en lecture seule.')
+      const err = new Error('MAXI-GYM : seuls les agents, Info et Assistant PAU peuvent modifier ces données, votre profil est en lecture seule.')
       err.code = 'LECTURE_SEULE'
-      console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents et à Info) : ${nom}`, args[0])
+      console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents, à Info et à Assistant PAU) : ${nom}`, args[0])
       return Promise.reject(err)
     }
     return fn(...args)

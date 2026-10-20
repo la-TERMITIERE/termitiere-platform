@@ -18,7 +18,7 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
 import { ROLES, peutEcrireGym } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
-import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach, niveauRestant, SEUIL_RENOUVELLEMENT_JOURS, minutesRetardCreneau, SEUIL_ALERTE_RETARD_MIN, FIN_ALERTE_RETARD_MIN } from './data'
+import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, CATEGORIES_STATS, dansCategorie, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach, niveauRestant, SEUIL_RENOUVELLEMENT_JOURS, minutesRetardCreneau, SEUIL_ALERTE_RETARD_MIN, FIN_ALERTE_RETARD_MIN } from './data'
 import ClientDetailModal from './ClientDetailModal'
 import { BoutonRenouveler } from './JoursRestants'
 import CoachAbsentModal from './CoachAbsentModal'
@@ -30,8 +30,10 @@ import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { useGymParams } from './useGymParams'
 import { useAutoSuppressionGym } from './useAutoSuppression'
+import { useFacturesManquantesGym } from './useFacturesManquantes'
+import { useRapportMensuelGym } from './useRapportMensuel'
 
-const COULEUR_BARRE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
+const COULEUR_BARRE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706', perso: '#8b5cf6' }
 
 const COULEUR = '#E8850F'
 const COULEUR2 = '#A6342A'
@@ -48,8 +50,8 @@ const RANG_PODIUM = [
 // (Simple/Classique/VIP), avec le sous-total de chaque groupe — sert au détail
 // affiché en cliquant un KPI.
 function groupesParCategorie(liste) {
-  return CATEGORIES_GYM.map((c) => {
-    const lignes = liste.filter((x) => x.categorie === c.id).sort((a, b) => (a.date < b.date ? 1 : -1))
+  return CATEGORIES_STATS.map((c) => {
+    const lignes = liste.filter((x) => dansCategorie(x, c)).sort((a, b) => (a.date < b.date ? 1 : -1))
     // Sous-groupes séances/abonnements : une facture porte `sourceType`
     // ('seance'/'abonnement') ; à défaut (séance/abonnement bruts), un abonnement
     // porte un `dateFin`, pas une séance — sert à ne jamais mélanger les deux
@@ -118,6 +120,8 @@ export default function Dashboard() {
   const site = useSite()
   const params = useGymParams(site)
   useAutoSuppressionGym(site) // libère la base des clients terminés, si l'administration l'a activé dans Paramètres
+  useRapportMensuelGym(site) // une alerte par mois quand le rapport du mois précédent est prêt
+  useFacturesManquantesGym(site) // facture les abonnements et séances du mois restés sans facture : ils ne comptaient pas dans les totaux
   const { data: allSeances }     = useCollection('gym_seances')
   const { data: allAbonnements } = useCollection('gym_abonnements')
   const { data: allFactures }    = useCollection('gym_factures')
@@ -265,14 +269,15 @@ export default function Dashboard() {
   const prevStart = addDays(prevEnd, -(dayCount - 1))
   const dansPeriodePrecedente = (d) => (d || '') >= prevStart && (d || '') <= prevEnd
 
-  const seancesMois     = useMemo(() => seances.filter((s) => dansPeriode(s.date)), [seances, start, end])
-  const abonnementsMois = useMemo(() => abonnements.filter((a) => dansPeriode(a.date)), [abonnements, start, end])
+  const seancesMois     = useMemo(() => seances.filter((s) => dansPeriode(s.date) && !s.annule), [seances, start, end])
+  const abonnementsMois = useMemo(() => abonnements.filter((a) => dansPeriode(a.date) && !a.annule), [abonnements, start, end])
   // « Total encaissé » — calqué EXACTEMENT sur la Facturation (somme de
   // `gym_factures`, pas des séances/abonnements bruts) pour que les deux chiffres
   // soient toujours identiques sur une même période. Tant qu'une séance/un
-  // abonnement n'a pas de facture générée (cf. bouton « Générer la facture
-  // manquante » dans Séances/Abonnements), il ne compte pas ici — c'est voulu :
-  // ce KPI représente ce qui est réellement facturé, pas l'activité brute.
+  // abonnement n'a pas de facture, il ne compte pas ici : c'est pourquoi les
+  // factures manquantes du mois sont générées automatiquement (cf.
+  // useFacturesManquantesGym) et que le bouton « Générer la facture manquante »
+  // reste disponible dans Séances/Abonnements pour les mois passés.
   const facturesMois = useMemo(() => factures.filter((f) => dansPeriode(f.date)), [factures, start, end])
   const totalEncaisseMois = useMemo(
     () => facturesMois.reduce((s, x) => s + (Number(x.montant) || 0), 0),
@@ -298,8 +303,8 @@ export default function Dashboard() {
 
   // Répartition séances/abonnements CLASSÉE SÉPARÉMENT (deux diagrammes en bande
   // distincts, jamais mélangés) — chaque catégorie garde sa couleur (COULEUR_BARRE).
-  const parCategorieFn = (liste, total) => CATEGORIES_GYM.map((c) => {
-    const lignes = liste.filter((x) => x.categorie === c.id)
+  const parCategorieFn = (liste, total) => CATEGORIES_STATS.map((c) => {
+    const lignes = liste.filter((x) => dansCategorie(x, c))
     const montant = lignes.reduce((s, x) => s + (Number(x.montant) || 0), 0)
     return { ...c, nb: lignes.length, montant, pct: total > 0 ? Math.round((montant / total) * 100) : 0 }
   })

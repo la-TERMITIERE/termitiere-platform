@@ -11,9 +11,25 @@ export const CATEGORIES_GYM = [
 // Catégories disponibles pour une séance ponctuelle — Classique exclu (réservé aux abonnements).
 export const CATEGORIES_SEANCE = CATEGORIES_GYM.filter((c) => c.id !== 'classique')
 
-export const categorieLabel = (id) => CATEGORIES_GYM.find((c) => c.id === id)?.label || id
-export const categorieTone  = (id) => CATEGORIES_GYM.find((c) => c.id === id)?.tone || 'neutral'
-export const categorieDesc  = (id) => CATEGORIES_GYM.find((c) => c.id === id)?.desc || ''
+// ── Catégorie PERSONNALISÉE (abonnements) ───────────────────────────────────────────────────────
+// Quand aucune catégorie ne convient, l'agent choisit « Personnalisé » sur la fiche d'abonnement et fixe lui-même le
+// nom, le montant et la durée. Elle est enregistrée sous la forme `perso:<nom>` : le nom se lit partout (listes,
+// factures, fiche client) sans que chaque écran ait besoin d'un champ de plus.
+export const PERSO_PREFIXE = 'perso:'
+export const estCategoriePerso = (id) => String(id || '').startsWith(PERSO_PREFIXE)
+export const nomCategoriePerso = (id) => String(id || '').slice(PERSO_PREFIXE.length)
+// Option proposée dans le formulaire d'abonnement (`perso` = valeur du formulaire, jamais enregistrée telle quelle).
+// Elle remplace la carte « Classique » dans le formulaire : « Personnalisé (Classique) ». Le nom proposé par défaut est « Classique » ;
+// si l'agent le garde, l'abonnement reste enregistré comme `classique` (l'historique et les statistiques ne changent pas).
+export const CATEGORIE_PERSO = { id: 'perso', label: 'Personnalisé (Classique)', tone: 'primary', desc: 'Nom, montant et durée libres. Gardez le nom « Classique » ou donnez-en un autre (Étudiant, Couple, Trimestriel…)' }
+export const NOM_CLASSIQUE = 'Classique'
+// Catégories des répartitions chiffrées (Dashboard, Pilotage) : les trois standards + un groupe « Personnalisé ».
+export const CATEGORIES_STATS = [...CATEGORIES_GYM, { id: 'perso', label: 'Personnalisé', tone: 'primary' }]
+export const dansCategorie = (x, c) => (c.id === 'perso' ? estCategoriePerso(x.categorie) : x.categorie === c.id)
+
+export const categorieLabel = (id) => (estCategoriePerso(id) ? (nomCategoriePerso(id) || 'Personnalisé') : (CATEGORIES_GYM.find((c) => c.id === id)?.label || id))
+export const categorieTone  = (id) => (estCategoriePerso(id) ? 'primary' : (CATEGORIES_GYM.find((c) => c.id === id)?.tone || 'neutral'))
+export const categorieDesc  = (id) => (id === 'perso' || estCategoriePerso(id) ? CATEGORIE_PERSO.desc : (CATEGORIES_GYM.find((c) => c.id === id)?.desc || ''))
 
 // Valeurs PAR DÉFAUT — utilisées tant qu'aucun réglage n'a été enregistré depuis le
 // volet Paramètres (cf. useGymParams.js, qui les surcharge avec la config réelle en
@@ -272,3 +288,12 @@ export function statsSexe(listes, idx) {
   out.pctH = connus > 0 ? 100 - out.pctF : 0
   return out
 }
+
+// ── Mode de paiement (séances, abonnements, factures) ─────────────────────────────────────────────
+// Sert à distinguer l'argent en espèces de celui reçu par Mobile Money (rapport mensuel, Facturation).
+// Une vente sans mode enregistré (anciennes données) est considérée payée en espèces.
+export const MODES_PAIEMENT_GYM = [
+  { id: 'especes', label: 'Espèces', couleur: '#16a34a' },
+  { id: 'mobile', label: 'Mobile Money', couleur: '#f59e0b' }
+]
+export const modePaiementLabel = (id) => MODES_PAIEMENT_GYM.find((m) => m.id === (id || 'especes'))?.label || 'Espèces'

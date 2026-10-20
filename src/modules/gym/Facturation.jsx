@@ -1,7 +1,7 @@
 // MAXI-GYM — Facturation : liste des factures générées (depuis Séances/Abonnements).
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
-import { Receipt, FileDown, FileSpreadsheet, FileText, Pencil, Trash2, Printer, Wallet, Ticket, CreditCard, Check } from 'lucide-react'
+import { Receipt, FileDown, FileSpreadsheet, FileText, Pencil, Trash2, Printer, Wallet, Ticket, CreditCard, Check, AlertTriangle, BarChart3 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -22,24 +22,34 @@ import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { imprimerTicketSeance } from './printTicket'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { genererRapportMultiPDF } from '../../utils/exportPDF'
-import { categorieLabel, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo } from './data'
+import { categorieLabel, modePaiementLabel, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo } from './data'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useSite, matchSite } from './site/useSite'
 import { SexeFiltre, SexeBadge } from './SexeUI'
+import { trouverManquants, facturerManquants } from './facturesManquantes'
+import { exporterRapportMensuel } from './rapportMensuel'
+import { useGymParams } from './useGymParams'
+import { useFacturesManquantesGym } from './useFacturesManquantes'
 
 const COULEUR = '#E8850F'
 
 export default function Facturation() {
   const site = useSite()
+  useFacturesManquantesGym(site) // les abonnements et séances du mois sans facture sont facturés automatiquement
   const { data: allFactures } = useCollection('gym_factures')
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
   const { data: allClients } = useCollection('gym_clients')
+  const { data: allAbonnements } = useCollection('gym_abonnements')
+  const { data: allSeances } = useCollection('gym_seances')
+  const abonnements = useMemo(() => allAbonnements.filter((a) => matchSite(a, site)), [allAbonnements, site])
+  const seances = useMemo(() => allSeances.filter((x) => matchSite(x, site)), [allSeances, site])
+  const params = useGymParams(site)
   const clients = useMemo(() => allClients.filter((c) => matchSite(c, site)), [allClients, site])
   const idxSexe = useMemo(() => indexSexeClients(clients), [clients])
   const [filtreSexe, setFiltreSexe] = useState('')
   const [recherche, setRecherche] = useState('')
   const { generateFacturePDF } = usePDF('gym')
-  const { role } = useAuth()
+  const { user, role } = useAuth()
   const peutSupprimer = peutAdministrerGym(role)
 
   // Filtre de période — Jour / Mois / Année, sur la liste affichée ci-dessous.
@@ -56,6 +66,24 @@ export default function Facturation() {
   const filtrePeriodeActif = modePeriode === 'mois' ? filtreMois : modePeriode === 'annee' ? filtreAnnee : modePeriode === 'plage' ? (filtreDebut || filtreFin) : filtreJour
 
   const [edit, setEdit] = useState(null)
+  const [regularisation, setRegularisation] = useState(false)
+
+  // Ventes (abonnements, séances) des MOIS PASSÉS restées sans facture : jamais comptées dans les totaux. Le mois en cours se
+  // rattrape tout seul ; pour les mois passés, Info régularise ici, en connaissance de cause (les totaux de ces mois changent).
+  const manquantsPasses = useMemo(
+    () => trouverManquants({ factures, abonnements, seances, site, moisExclu: todayStr().slice(0, 7) }),
+    [factures, abonnements, seances, site]
+  )
+  const sommeManquants = manquantsPasses.reduce((t, m) => t + m.montant, 0)
+  async function regulariser() {
+    const n = manquantsPasses.length
+    if (!confirm(`Créer la facture de ${n} vente${n > 1 ? 's' : ''} des mois passés restée${n > 1 ? 's' : ''} sans facture (${formatMoney(sommeManquants)} au total) ?\nLes totaux de ces mois vont augmenter de ce montant.`)) return
+    setRegularisation(true)
+    try {
+      const faites = await facturerManquants(manquantsPasses, { clients: allClients, site, user, max: 25 })
+      toast.success(`${faites} facture${faites > 1 ? 's' : ''} créée${faites > 1 ? 's' : ''}${n > faites ? ` : il en reste ${n - faites}, cliquez à nouveau` : ''}`)
+    } finally { setRegularisation(false) }
+  }
   const [saving, setSaving] = useState(false)
 
   const toutes = useMemo(() => [...factures].sort((a, b) => (a.date < b.date ? 1 : -1)), [factures])
@@ -105,6 +133,15 @@ export default function Facturation() {
   }
 
   async function supprimer(f) {
+    // Une facture ne se supprime pas seule tant que sa vente existe et qu'elle en est la seule trace : la vente
+    // reviendrait sans facture (et serait refacturée ou signalée). On supprime alors la vente, la facture part avec.
+    const vente = f.sourceType === 'abonnement' ? abonnements.find((a) => a.id === f.sourceId)
+      : f.sourceType === 'seance' ? seances.find((x) => x.id === f.sourceId) : null
+    const autres = factures.filter((x) => x.id !== f.id && x.sourceType === f.sourceType && x.sourceId === f.sourceId && !x.avoir && !x.versement)
+    if (vente && !f.avoir && !f.versement && autres.length === 0) {
+      toast.error(`Cette facture est celle d'${f.sourceType === 'abonnement' ? 'un abonnement' : 'une séance'} encore enregistré${f.sourceType === 'abonnement' ? '' : 'e'}. Supprimez-${f.sourceType === 'abonnement' ? 'le' : 'la'} depuis ${f.sourceType === 'abonnement' ? 'Abonnements' : 'Séances'} : la facture partira avec.`)
+      return
+    }
     if (!confirm(`Supprimer la facture ${f.numero} de ${f.clientNom} ?`)) return
     await removeItem('gym_factures', f.id)
     await audit('gym', 'FACTURE_SUPPRIMEE', `${f.numero} : ${f.clientNom}`)
@@ -239,7 +276,22 @@ export default function Facturation() {
             <FileSpreadsheet size={14} /> Exporter
           </button>
         )}
+        {canExportGym(role) && (
+          <button onClick={() => exporterRapportMensuel({ mois: (modePeriode === 'mois' && filtreMois) || todayStr().slice(0, 7), site, factures, abonnements, objectif: params.objectifMensuel })}
+            title="Rapport du mois affiché : encaissements, catégories, modes de paiement, nouveaux abonnés et abonnés perdus"
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25">
+            <BarChart3 size={14} /> Rapport mensuel
+          </button>
+        )}
       </div>
+
+      {peutSupprimer && manquantsPasses.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 backdrop-blur-md">
+          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+          <p className="min-w-0 flex-1"><strong>{manquantsPasses.length} vente{manquantsPasses.length > 1 ? 's' : ''} des mois passés sans facture</strong> ({formatMoney(sommeManquants)}) : elle{manquantsPasses.length > 1 ? 's ne sont' : ' n\'est'} comptée{manquantsPasses.length > 1 ? 's' : ''} dans aucun total.</p>
+          <Button onClick={regulariser} loading={regularisation}>Régulariser</Button>
+        </div>
+      )}
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
         Une facture est générée automatiquement à chaque enregistrement d'une séance ou d'un abonnement. Si une facture manque pour un enregistrement plus ancien, une icône 🧾 permet de la générer directement depuis le volet Séances/Abonnements concerné. Pour les séances, le ticket de caisse s'imprime automatiquement (imprimante thermique) : l'icône 🖨️ permet de le réimprimer à tout moment.
@@ -273,9 +325,10 @@ export default function Facturation() {
             { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
             { key: 'clientNom', label: 'Client' },
             { key: 'sexe', label: 'Sexe', align: 'center', render: (r) => <SexeBadge sexe={sexeDe(r, idxSexe)} /> },
-            { key: 'sourceType', label: 'Origine', render: (r) => <Badge tone="info">{r.sourceType === 'abonnement' ? 'Abonnement' : 'Séance'}</Badge> },
+            { key: 'sourceType', label: 'Origine', render: (r) => r.avoir ? <Badge tone="danger">Remboursement</Badge> : r.versement ? <Badge tone="warning">Solde abonnement</Badge> : <Badge tone="info">{r.sourceType === 'abonnement' ? 'Abonnement' : r.sourceType === 'seance' ? 'Séance' : 'Règlement partenaire'}</Badge> },
+            { key: 'modePaiement', label: 'Paiement', render: (r) => <Badge tone="neutral">{modePaiementLabel(r.modePaiement)}</Badge> },
             { key: 'description', label: 'Description', render: (r) => r.description || '—' },
-            { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong>{formatMoney(r.montant)}</strong> },
+            { key: 'montant', label: 'Montant', align: 'right', render: (r) => <strong className={Number(r.montant) < 0 ? 'text-red-600' : ''}>{formatMoney(r.montant)}</strong> },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
                 {r.sourceType === 'seance' ? (

@@ -1,14 +1,14 @@
 // MAXI-GYM — Paramètres : tarifs, durées et validité, réservé à l'administration.
 import { useEffect, useMemo, useState } from 'react'
-import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Target, Eraser } from 'lucide-react'
+import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Target, Eraser, Archive } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useAuth } from '../../hooks/useAuth'
-import { peutEcrireGym } from '../../core/roles'
+import { peutEcrireGym, peutAdministrerGym } from '../../core/roles'
 import { useCollection } from '../../hooks/useFirestore'
-import { removeItem } from '../../core/db'
+import { removeItem, setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { useGymParams, saveGymParams } from './useGymParams'
@@ -16,6 +16,9 @@ import { useSite, matchSite, siteLabel } from './site/useSite'
 import { JOURS_SEMAINE, horairesVides } from './data'
 import CoachFormModal from './CoachFormModal'
 import { candidatsAutoSuppression } from './purgeClient'
+import { exportRapportExcel } from '../../utils/excelReport'
+import { categorieLabel } from './data'
+import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, ChampUnite, BoutonGym } from './uiHelpers'
 
 const COULEUR = '#E8850F'
@@ -88,6 +91,68 @@ export default function Params() {
     toast.success('Coach retiré')
   }
   const nbJoursProgrammes = (c) => Object.values(c.horaires || {}).filter((h) => h?.actif).length
+
+  // ── Archivage des anciennes séances : allège la base sans perdre le chiffre d'affaires ──
+  // Les séances de plus de N mois sont exportées en Excel, résumées par mois (`gym_archives`), puis retirées. Les FACTURES
+  // restent : les totaux d'argent ne changent pas. Jamais archivées : séances de partenaires non encore réglées, et séances
+  // sans facture (leur vente disparaîtrait des totaux).
+  const peutArchiver = peutAdministrerGym(role)
+  const [moisArchive, setMoisArchive] = useState(12)
+  const [archivage, setArchivage] = useState(null) // { fait, total }
+  const limiteArchive = useMemo(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - Math.max(6, Number(moisArchive) || 12))
+    return d.toISOString().slice(0, 10)
+  }, [moisArchive])
+  const seancesArchivables = useMemo(() => {
+    const liees = new Set(factures.filter((f) => f.sourceType === 'seance' && f.sourceId).map((f) => f.sourceId))
+    return seances.filter((s) => (s.date || '') < limiteArchive && !(s.partenaire && !s.regleParPartenaire) && (s.partenaire || liees.has(s.id)))
+  }, [seances, factures, limiteArchive])
+  const montantArchivable = seancesArchivables.reduce((t, s) => t + (Number(s.montant) || 0), 0)
+  async function archiverSeances() {
+    if (!peutArchiver || archivage) return
+    const lot = seancesArchivables.slice(0, 300)
+    if (!window.confirm(`Archiver ${lot.length} séance${lot.length > 1 ? 's' : ''} de plus de ${Math.max(6, Number(moisArchive) || 12)} mois (${formatMoney(lot.reduce((t, s) => t + (Number(s.montant) || 0), 0))}) ?\n\n1. Un fichier Excel de ces séances est d'abord téléchargé : gardez-le.\n2. Un résumé par mois est conservé.\n3. Les séances sont ensuite retirées de la base. Les factures restent : l'argent encaissé ne change pas.\n\nAction définitive.`)) return
+    setArchivage({ fait: 0, total: lot.length })
+    try {
+      exportRapportExcel({
+        filename: `archive-seances-${site}-${limiteArchive}.xlsx`,
+        sections: [{
+          id: 'archive', name: 'Séances archivées', title: `MAXI-GYM ${siteLabel(site)} : séances archivées`, subtitle: `Avant le ${formatDateShort(limiteArchive)} : ${lot.length} séance(s)`,
+          columns: [{ key: 'date', label: 'Date', width: 14 }, { key: 'client', label: 'Client', width: 26 }, { key: 'categorie', label: 'Catégorie', width: 18 }, { key: 'montant', label: 'Montant', width: 14, type: 'money' }, { key: 'par', label: 'Enregistrée par', width: 20 }],
+          rows: lot.map((s) => ({ date: s.date, client: s.clientNom, categorie: categorieLabel(s.categorie), montant: Number(s.montant) || 0, par: s.enregistrePar || '' })),
+          totals: { __label: 'TOTAL', montant: lot.reduce((t, s) => t + (Number(s.montant) || 0), 0) }
+        }]
+      })
+      // Résumé par mois (cumulé si ce mois a déjà été archivé en partie).
+      const parMois = new Map()
+      lot.forEach((s) => {
+        const m = (s.date || '').slice(0, 7)
+        const e = parMois.get(m) || { nb: 0, montant: 0, parCategorie: {} }
+        e.nb += 1; e.montant += Number(s.montant) || 0
+        const k = categorieLabel(s.categorie); e.parCategorie[k] = (e.parCategorie[k] || 0) + (Number(s.montant) || 0)
+        parMois.set(m, e)
+      })
+      const anciens = await import('../../core/db').then((db) => db.getAll('gym_archives')).catch(() => [])
+      for (const [m, e] of parMois) {
+        const avant = anciens.find((a) => a.id === `${site}-${m}`)
+        const cumul = { nb: (avant?.nb || 0) + e.nb, montant: (avant?.montant || 0) + e.montant, parCategorie: { ...(avant?.parCategorie || {}) } }
+        Object.entries(e.parCategorie).forEach(([k, v]) => { cumul.parCategorie[k] = (cumul.parCategorie[k] || 0) + v })
+        await setItem('gym_archives', `${site}-${m}`, { id: `${site}-${m}`, site, mois: m, ...cumul, archiveLe: Date.now() })
+      }
+      let fait = 0
+      for (const s of lot) {
+        await removeItem('gym_seances', s.id, { sansMotif: true })
+        fait += 1
+        if (fait % 10 === 0 || fait === lot.length) setArchivage({ fait, total: lot.length })
+        await new Promise((r) => setTimeout(r, 260))
+      }
+      await audit('gym', 'SEANCES_ARCHIVEES', `MAXI-GYM ${siteLabel(site)} : ${lot.length} séance(s) d'avant le ${limiteArchive} archivée(s) (${lot.reduce((t, s) => t + (Number(s.montant) || 0), 0).toLocaleString('fr-FR')} FCFA)`)
+      toast.success(`${lot.length} séance${lot.length > 1 ? 's' : ''} archivée${lot.length > 1 ? 's' : ''} ✓${seancesArchivables.length > lot.length ? ` : il en reste ${seancesArchivables.length - lot.length}, relancez` : ''}`)
+    } catch (e) {
+      console.error('[gym] archivage échoué', e)
+      toast.error(e?.message || 'L\'archivage a échoué : vérifiez les séances restantes')
+    } finally { setArchivage(null) }
+  }
 
   const [confirmTexte, setConfirmTexte] = useState('')
   const [resetting, setResetting] = useState(false)
@@ -170,7 +235,7 @@ export default function Params() {
 
       {lectureSeule && (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
-          Lecture seule : dans MAXI-GYM, seuls les agents et Info peuvent modifier les réglages.
+          Lecture seule : dans MAXI-GYM, seuls les agents, Info et Assistant PAU peuvent modifier les réglages.
         </div>
       )}
       <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
@@ -263,6 +328,25 @@ export default function Params() {
         </p>
       </Card>
 
+      {peutArchiver && (
+        <Card title={titreSection(Archive, 'Archivage des anciennes séances')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+          <p className="mb-3 text-xs text-gray-500">
+            Allège la base : les séances anciennes sont exportées en Excel, résumées par mois, puis retirées. Les <strong>factures restent</strong>, donc les montants encaissés ne changent pas.
+            Les séances de partenaires non réglées et les séances sans facture ne sont jamais archivées.
+          </p>
+          <FormGroup label="Archiver les séances de plus de" hint="Minimum 6 mois. Par défaut 12 mois.">
+            <ChampUnite unite="mois" min="6" value={moisArchive} onChange={(e) => setMoisArchive(e.target.value)} />
+          </FormGroup>
+          <p className={`mt-2 rounded-lg px-3 py-2 text-xs font-semibold ${seancesArchivables.length ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500'}`}>
+            {seancesArchivables.length
+              ? `${seancesArchivables.length} séance${seancesArchivables.length > 1 ? 's' : ''} d'avant le ${formatDateShort(limiteArchive)} (${formatMoney(montantArchivable)}) peuvent être archivées${seancesArchivables.length > 300 ? ', 300 à la fois' : ''}.`
+              : `Aucune séance à archiver avant le ${formatDateShort(limiteArchive)}.`}
+          </p>
+          {archivage && <p className="mt-2 text-xs font-semibold text-orange-700">Archivage en cours : {archivage.fait} / {archivage.total}. Ne fermez pas la page.</p>}
+          <BoutonGym variante="secondaire" icone={Archive} className="mt-3" onClick={archiverSeances} loading={!!archivage} disabled={!seancesArchivables.length}>Exporter en Excel puis archiver</BoutonGym>
+        </Card>
+      )}
+
       <div className="flex justify-end">
         <BoutonGym icone={Save} onClick={enregistrer} loading={saving} disabled={lectureSeule}>Enregistrer les réglages</BoutonGym>
       </div>
@@ -290,7 +374,7 @@ export default function Params() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires } })} className="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
+                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires }, objectifAbonnements: c.objectifAbonnements ?? '', primeParAbonnement: c.primeParAbonnement ?? '' })} className="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
                 <button onClick={() => supprimerCoach(c)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50" title="Retirer"><Trash2 size={15} /></button>
               </div>
             </div>

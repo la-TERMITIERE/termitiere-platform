@@ -54,6 +54,7 @@ export default function Coachs() {
   // SUPPRESSION reste réservée à l'administration, depuis Paramètres (les agents
   // n'y ont pas accès) : pas de bouton retirer sur ce volet.
   const [coachModal, setCoachModal] = useState(null)
+  const moisCourantStr = todayStr().slice(0, 7)
   const nbJoursProgrammes = (c) => Object.values(c.horaires || {}).filter((h) => h?.actif).length
 
   // Jour courant réévalué toutes les minutes : un volet resté ouvert après minuit
@@ -277,7 +278,7 @@ export default function Coachs() {
               <button onClick={() => setFiche({ id: c.id, vue: 'calendrier' })} title="Calendrier : jours d'arrivée et heures pointées"
                 className="shrink-0 rounded-lg p-1.5 text-sky-600 hover:bg-sky-50"><CalendarDays size={16} /></button>
               {peutSaisir && (
-                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires } })}
+                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires }, objectifAbonnements: c.objectifAbonnements ?? '', primeParAbonnement: c.primeParAbonnement ?? '' })}
                   className="shrink-0 rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
               )}
             </div>
@@ -311,6 +312,29 @@ export default function Coachs() {
                   <StatCard title="🎫 Séances/j" value={p.moyenne} sub={`${p.nbJours} j · ${p.totalClients} au total`} icon={Ticket} accent={COULEUR} />
                   <StatCard title="💳 Abo./j" value={p.moyenneAbo} sub={`${p.totalAbonnements} au total`} icon={CreditCard} accent="#0ea5e9" />
                 </div>
+                {(() => {
+                  // Objectif du mois et prime estimée : abonnements du mois en cours rattachés à ce coach.
+                  const fiche = coachs.find((c) => c.id === p.coachId)
+                  const nbMois = abonnements.filter((a) => !a.annule && a.coachId === p.coachId && (a.date || '').startsWith(moisCourantStr)).length
+                  const obj = Number(fiche?.objectifAbonnements) || 0
+                  const prime = Number(fiche?.primeParAbonnement) || 0
+                  if (!obj && !prime) return null
+                  const pct = obj ? Math.min(100, Math.round((nbMois / obj) * 100)) : 0
+                  return (
+                    <div className="mt-2 rounded-xl border border-white/70 bg-white/70 p-2.5 text-xs shadow-sm">
+                      {obj > 0 && (
+                        <>
+                          <div className="flex items-center justify-between font-bold text-gray-700">
+                            <span>Objectif du mois : {nbMois} / {obj} abonnement{obj > 1 ? 's' : ''}</span>
+                            <span className={nbMois >= obj ? 'text-green-600' : 'text-gray-500'}>{pct}%{nbMois >= obj ? ' ✓ atteint' : ''}</span>
+                          </div>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: nbMois >= obj ? '#16a34a' : COULEUR }} /></div>
+                        </>
+                      )}
+                      {prime > 0 && <p className="mt-1.5 font-bold text-gray-700">Prime estimée : <span className="text-green-700">{(nbMois * prime).toLocaleString('fr-FR')} FCFA</span> <span className="font-medium text-gray-400">({nbMois} × {prime.toLocaleString('fr-FR')})</span></p>}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}

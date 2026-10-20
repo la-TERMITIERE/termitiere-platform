@@ -4,7 +4,7 @@
 // permet de marquer un mois réglé (génère UNE facture globale) et garde l'historique
 // des règlements, exportable en Excel / PDF.
 import { useMemo, useState } from 'react'
-import { Handshake, FileSpreadsheet, FileDown, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Handshake, FileSpreadsheet, FileDown, CheckCircle2, AlertTriangle, Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -22,7 +22,8 @@ import { toast } from '../../core/notifications'
 import { peutAdministrerGym, canExportExcel } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { formatMoney, formatDateShort, todayStr, genNumero } from '../../utils/formatters'
+import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
+import { numeroFactureSuivant } from './genererFacture'
 import { categorieLabel } from './data'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
@@ -106,6 +107,32 @@ export default function PartenairesClients() {
       .sort((a, b) => b.montantARegler - a.montantARegler || a.structure.localeCompare(b.structure))
   }, [seances, clientsPartenaires, dateLimite])
 
+  // Tous les clients marqués partenaires : les fiches (même sans séance) et les clients qui ont des séances « partenaire »,
+  // rangés par structure, avec leur nombre de séances et ce qui reste à régler.
+  const clientsParStructure = useMemo(() => {
+    const cle = (n) => (n || '').trim().toLowerCase()
+    const structureDe = (x) => (x.partenaireStructure || '').trim() || 'Structure non renseignée'
+    const parStructure = new Map()
+    const ligne = (structure, nom, fiche) => {
+      if (!parStructure.has(structure)) parStructure.set(structure, new Map())
+      const m = parStructure.get(structure)
+      const k = cle(nom)
+      if (!m.has(k)) m.set(k, { id: k, nom, telephone: fiche?.telephone || '', nbSeances: 0, nbARegler: 0, montantARegler: 0, derniere: '' })
+      return m.get(k)
+    }
+    for (const c of clientsPartenaires) ligne(structureDe(c), c.nom, c)
+    for (const sc of seances) {
+      const l = ligne(structureDe(sc), sc.clientNom, null)
+      l.nbSeances += 1
+      if (!sc.regleParPartenaire) { l.nbARegler += 1; l.montantARegler += Number(sc.montant) || 0 }
+      if ((sc.date || '') > l.derniere) l.derniere = sc.date || ''
+    }
+    const sortie = new Map()
+    for (const [structure, m] of parStructure) sortie.set(structure, [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom)))
+    return sortie
+  }, [clientsPartenaires, seances])
+  const nbClientsPartenaires = useMemo(() => [...clientsParStructure.values()].reduce((t, l) => t + l.length, 0), [clientsParStructure])
+
   const totalDu = useMemo(() => groupes.reduce((t, g) => t + g.montantARegler, 0), [groupes])
   const nbSeancesDues = useMemo(() => groupes.reduce((t, g) => t + g.aRegler.length, 0), [groupes])
 
@@ -113,7 +140,7 @@ export default function PartenairesClients() {
     const { structure, seances: aRegler, total } = aConfirmer
     setSaving(true)
     try {
-      const numero = genNumero('FACT-GYM', allFactures.length)
+      const numero = await numeroFactureSuivant(todayStr())
       const nb = aRegler.length
       const description = `Règlement partenaire ${structure} : ${libelleMois(mois)} : ${nb} séance${nb > 1 ? 's' : ''}`
       // 1) Une seule facture globale — comptée dans l'encaissement du mois où le
@@ -244,8 +271,9 @@ export default function PartenairesClients() {
         génère <strong>une facture globale</strong> par structure (visible dans Facturation, comptée dans l'encaissement du mois du règlement).
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">
         <StatCard glass title="Structures partenaires" value={groupes.length} icon={Handshake} accent={COULEUR} />
+        <StatCard glass title="Clients partenaires" value={nbClientsPartenaires} icon={Users} accent="#0ea5e9" />
         <StatCard glass title="Séances à régler" value={nbSeancesDues} icon={AlertTriangle} accent="#d97706" />
         <StatCard glass title="Montant dû" value={formatMoney(totalDu)} icon={FileDown} accent="#dc2626" />
       </div>
@@ -274,6 +302,24 @@ export default function PartenairesClients() {
                 </Button>
               )}
             </div>
+            {(clientsParStructure.get(g.structure) || []).length > 0 && (
+              <div className="border-b border-gray-100">
+                <p className="flex items-center gap-1.5 px-4 pt-3 text-xs font-extrabold uppercase tracking-wide text-sky-800">
+                  <Users size={13} /> Clients de la structure ({clientsParStructure.get(g.structure).length})
+                </p>
+                <Table searchBy={['nom']}
+                  columns={[
+                    { key: 'nom', label: 'Client', render: (r) => <strong>{r.nom}</strong> },
+                    { key: 'telephone', label: 'Téléphone', render: (r) => r.telephone || '—' },
+                    { key: 'nbSeances', label: 'Séances', align: 'right' },
+                    { key: 'montantARegler', label: 'À régler', align: 'right', render: (r) => r.nbARegler > 0 ? <strong className="text-amber-700">{formatMoney(r.montantARegler)}</strong> : <span className="text-gray-400">0</span> },
+                    { key: 'derniere', label: 'Dernière séance', render: (r) => r.derniere ? formatDateShort(r.derniere) : 'Aucune' }
+                  ]}
+                  rows={clientsParStructure.get(g.structure)}
+                  empty="—"
+                />
+              </div>
+            )}
             {g.aRegler.length === 0 ? (
               <p className="px-4 py-4 text-center text-sm text-gray-400">Aucune séance en attente de règlement.</p>
             ) : (
