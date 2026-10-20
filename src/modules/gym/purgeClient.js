@@ -69,7 +69,7 @@ export const resumeDossier = (d) => ({
 })
 
 export async function purgerDossier(d, role, { auto = false } = {}) {
-  if (!peutPurgerClientGym(role)) throw new Error("La suppression d'un client est réservée aux agents et à Info")
+  if (!peutPurgerClientGym(role)) throw new Error("La suppression d'un client est réservée aux agents, à Info et à Assistant PAU")
   const jeux = [['gym_abonnements', d.abonnements], ['gym_seances', d.seances], ['gym_presences', d.presences], ['gym_clients', d.fiches]]
   for (const [collection, lignes] of jeux) {
     for (const l of lignes) await removeItem(collection, l.id, { sansMotif: true })

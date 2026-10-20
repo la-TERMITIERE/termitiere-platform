@@ -4,7 +4,7 @@
 // ajout/modification uniquement, la suppression reste réservée à l'administration
 // depuis Paramètres, cf. Params.jsx).
 import { useState } from 'react'
-import { UserCog, Clock3 } from 'lucide-react'
+import { UserCog, Clock3, Target, HandCoins } from 'lucide-react'
 import Modal from '../../shared/ui/Modal'
 import Button from '../../shared/ui/Button'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -17,6 +17,11 @@ import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import { siteLabel } from './site/useSite'
 
 const COULEUR = '#E8850F'
+// Objectif mensuel (nombre d'abonnements) et prime par abonnement : vides = pas d'objectif / pas de prime.
+const objectifPrime = (d) => ({
+  objectifAbonnements: d.objectifAbonnements !== '' && d.objectifAbonnements != null && Number(d.objectifAbonnements) > 0 ? Number(d.objectifAbonnements) : null,
+  primeParAbonnement: d.primeParAbonnement !== '' && d.primeParAbonnement != null && Number(d.primeParAbonnement) > 0 ? Number(d.primeParAbonnement) : null
+})
 
 // `coachModal` (piloté par l'appelant) : null = fermé, { nom:'', horaires } = ajout,
 // { id, nom, horaires } = modification.
@@ -29,11 +34,11 @@ export default function CoachFormModal({ coachModal, setCoachModal, site }) {
     setSaving(true)
     try {
       if (d.id) {
-        await updateItem('gym_coachs', d.id, { nom: d.nom.trim(), horaires: d.horaires })
+        await updateItem('gym_coachs', d.id, { nom: d.nom.trim(), horaires: d.horaires, ...objectifPrime(d) })
         await audit('gym', 'COACH_MODIFIE', `${d.nom.trim()} : ${siteLabel(site)}`)
         toast.success('Coach modifié ✓')
       } else {
-        await addItem('gym_coachs', { nom: d.nom.trim(), site, horaires: d.horaires })
+        await addItem('gym_coachs', { nom: d.nom.trim(), site, horaires: d.horaires, ...objectifPrime(d) })
         await audit('gym', 'COACH_CREATE', `${d.nom.trim()} : ${siteLabel(site)}`)
         toast.success('Coach ajouté ✓')
       }
@@ -67,6 +72,18 @@ export default function CoachFormModal({ coachModal, setCoachModal, site }) {
               <FormGroup label="👤 Nom du coach" required>
                 <Input value={coachModal.nom} onChange={(e) => setCoachModal((m) => ({ ...m, nom: e.target.value }))} placeholder="ex : Willy" />
               </FormGroup>
+            </div>
+
+            <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-700"><Target size={13} /> Objectif et prime (optionnel)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormGroup label="Objectif : abonnements par mois" hint="Laisser vide : pas d'objectif">
+                  <Input type="number" min="0" value={coachModal.objectifAbonnements ?? ''} placeholder="ex : 20" onChange={(e) => setCoachModal((m) => ({ ...m, objectifAbonnements: e.target.value }))} />
+                </FormGroup>
+                <FormGroup label={<span className="inline-flex items-center gap-1"><HandCoins size={13} /> Prime par abonnement (FCFA)</span>} hint="Laisser vide : pas de prime">
+                  <Input type="number" min="0" value={coachModal.primeParAbonnement ?? ''} placeholder="ex : 500" onChange={(e) => setCoachModal((m) => ({ ...m, primeParAbonnement: e.target.value }))} />
+                </FormGroup>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-orange-200 border-l-4 border-l-orange-400 bg-orange-50 p-3.5 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)]">

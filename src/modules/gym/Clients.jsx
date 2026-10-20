@@ -11,7 +11,7 @@
 // restent strictement par salle — ce cloisonnement n'est levé qu'ici.
 import ChampRecherche from '../../shared/ui/ChampRecherche'
 import { useMemo, useState } from 'react'
-import { Users, Eye, EyeOff, Search, Trash2, AlertTriangle, Eraser } from 'lucide-react'
+import { Users, Eye, EyeOff, Search, Trash2, AlertTriangle, Eraser, GitMerge } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Badge from '../../shared/ui/Badge'
 import Table from '../../shared/ui/Table'
@@ -33,6 +33,7 @@ import PurgeClientModal from './PurgeClientModal'
 import { dossierClient, dossierTermine } from './purgeClient'
 import { useGymParams } from './useGymParams'
 import { SITES, siteLabel } from './site/useSite'
+import { fusionnerFiches, documentsDeLaFiche, nombreDocuments } from './fusionClients'
 
 const COULEUR = '#E8850F'
 const SEUIL_INACTIVITE_JOURS = 60 // deux mois — au-delà, le client sort de la liste par défaut
@@ -50,6 +51,8 @@ export default function Clients() {
   const { data: seances } = useCollection('gym_seances')
   const { data: abonnements } = useCollection('gym_abonnements')
   const { data: presences } = useCollection('gym_presences')
+  const { data: factures } = useCollection('gym_factures')
+  const [fusion, setFusion] = useState(null) // { source, cibleId, enCours, fait, total }
   const [clientDetail, setClientDetail] = useState(null)
   const [afficherInactifs, setAfficherInactifs] = useState(false)
   const [filtreSite, setFiltreSite] = useState('') // '' = toutes les salles
@@ -60,6 +63,25 @@ export default function Clients() {
   const paramsKara = useGymParams('kara')
   const validiteHeures = (site) => (site === 'kara' ? paramsKara : paramsLome).validiteSeanceHeures
   const [suppression, setSuppression] = useState(false)
+
+  // Fusion de deux fiches (doublon, nom mal écrit) : l'historique de la fiche retirée passe à la fiche conservée.
+  const candidatsFusion = useMemo(
+    () => (fusion ? clients.filter((c) => c.id !== fusion.source.id && (c.site || 'lome') === (fusion.source.site || 'lome')).sort((a, b) => (a.nom || '').localeCompare(b.nom || '')) : []),
+    [clients, fusion]
+  )
+  async function confirmerFusion() {
+    const cible = clients.find((c) => c.id === fusion?.cibleId)
+    if (!cible || fusion.enCours) return toast.error('Choisissez la fiche à conserver')
+    setFusion((f) => ({ ...f, enCours: true, fait: 0, total: 0 }))
+    try {
+      const n = await fusionnerFiches({ source: fusion.source, cible, donnees: { seances, abonnements, presences, factures }, onProgress: (fait, total) => setFusion((f) => (f ? { ...f, fait, total } : f)) })
+      toast.success(`Fiches fusionnées ✓ (${n} enregistrement${n > 1 ? 's' : ''} rattaché${n > 1 ? 's' : ''})`)
+      setFusion(null)
+    } catch (e) {
+      toast.error(e.message || 'Fusion impossible')
+      setFusion((f) => (f ? { ...f, enCours: false } : f))
+    }
+  }
 
   async function confirmerSuppression() {
     if (!toDelete || suppression) return
@@ -239,6 +261,9 @@ export default function Clients() {
                         <Eraser size={15} />
                       </button>
                     )}
+                    {peutSupprimer && <button onClick={(e) => { e.stopPropagation(); setFusion({ source: r, cibleId: '', enCours: false }) }}
+                      title="Fusionner avec une autre fiche (doublon, nom mal écrit)"
+                      className="rounded-lg border border-violet-200 bg-violet-50 p-1.5 text-violet-600 transition-colors hover:bg-violet-100"><GitMerge size={15} /></button>}
                     {peutSupprimer && <button
                       onClick={(e) => { e.stopPropagation(); setToDelete(r) }}
                       title="Retirer la fiche du répertoire (l'historique est conservé)"
@@ -263,6 +288,33 @@ export default function Clients() {
       {/* Confirmation de suppression d'une fiche client — réservée à l'administration.
           L'historique des séances / abonnements / présences n'est PAS effacé : seule
           la fiche du répertoire disparaît. */}
+      <Modal open={!!fusion} onClose={() => !fusion?.enCours && setFusion(null)} size="sm" title="Fusionner deux fiches client"
+        {...glassModalProps('#7c3aed')}
+        footer={<>
+          <Button variant="outline" onClick={() => setFusion(null)} disabled={fusion?.enCours}>Annuler</Button>
+          <Button onClick={confirmerFusion} loading={fusion?.enCours} disabled={!fusion?.cibleId}><GitMerge size={15} /> Fusionner</Button>
+        </>}>
+        {fusion && (() => {
+          const cible = clients.find((c) => c.id === fusion.cibleId)
+          const aRattacher = nombreDocuments(documentsDeLaFiche(fusion.source, { seances, abonnements, presences, factures }))
+          return (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-violet-200/80 bg-violet-50/70 p-3 text-sm text-violet-900">
+                Fiche à retirer : <strong>{fusion.source.nom}</strong> ({siteLabel(fusion.source.site || 'lome')}). Ses {aRattacher} enregistrement{aRattacher > 1 ? 's' : ''} (séances, abonnements, arrivées, factures) passent à la fiche conservée.
+              </div>
+              <label className="block text-sm font-semibold text-gray-700">Fiche à conserver
+                <select className="input-base mt-1 w-full" value={fusion.cibleId} disabled={fusion.enCours} onChange={(e) => setFusion((f) => ({ ...f, cibleId: e.target.value }))}>
+                  <option value="">Choisir la bonne fiche…</option>
+                  {candidatsFusion.map((c) => <option key={c.id} value={c.id}>{c.nom}{c.telephone ? ` : ${c.telephone}` : ''}</option>)}
+                </select>
+              </label>
+              {cible && <p className="text-xs text-gray-500">« {fusion.source.nom} » deviendra « {cible.nom} » partout dans l'historique. Action définitive.</p>}
+              {fusion.enCours && <p className="text-xs font-semibold text-violet-700">Rattachement en cours : {fusion.fait || 0} / {fusion.total || aRattacher}. Ne fermez pas cette fenêtre.</p>}
+            </div>
+          )
+        })()}
+      </Modal>
+
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} size="sm" title="Supprimer cette fiche client ?"
         {...glassModalProps('#dc2626')}
         footer={<>

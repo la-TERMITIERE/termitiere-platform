@@ -3,7 +3,7 @@
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, FileSpreadsheet, Eraser, Repeat, X, Users, Tag, CalendarCheck, Hourglass, Flag, Wallet, StickyNote, Dumbbell, Zap, Crown } from 'lucide-react'
+import { Check, CalendarRange, SlidersHorizontal, CreditCard, Plus, Trash2, CheckCircle2, Pencil, User, MessageCircle, Receipt, CalendarDays, FileSpreadsheet, Eraser, Repeat, X, Users, Tag, CalendarCheck, Hourglass, Flag, Wallet, StickyNote, Dumbbell, Zap, Crown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -23,8 +23,10 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
 import { BoutonGym } from './uiHelpers'
-import { CATEGORIES_GYM, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF, peutRenouveler } from './data'
+import { CATEGORIES_GYM, CATEGORIE_PERSO, NOM_CLASSIQUE, PERSO_PREFIXE, estCategoriePerso, nomCategoriePerso, indexSexeClients, sexeDe, filtrerParSexe, sexeInfo, categorieLabel, categorieTone, categorieDesc, dateFinAbonnement, dureeJoursMoisDefaut, abonnementActif, statutAbonnement, joursDepuis, genQrToken, QR_CARNET_ACTIF, peutRenouveler } from './data'
 import { useGymParams } from './useGymParams'
+import ModesPaiement from './ModePaiementUI'
+import { notify } from '../../core/notify'
 import { genererFactureGym } from './genererFacture'
 import ClientDetailModal from './ClientDetailModal'
 import JoursRestants, { BoutonRenouveler, BoutonPointer } from './JoursRestants'
@@ -37,8 +39,8 @@ import { SexeBoutons, SexeFiltre, SexeBadge } from './SexeUI'
 
 const COULEUR = '#A6342A'
 const COULEUR2 = '#E8850F'
-const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706' }
-const ICONE_CATEGORIE = { simple: Dumbbell, classique: Zap, vip: Crown }
+const COULEUR_CATEGORIE = { simple: '#94a3b8', classique: '#0ea5e9', vip: '#d97706', perso: '#8b5cf6' }
+const ICONE_CATEGORIE = { simple: Dumbbell, classique: Zap, vip: Crown, perso: SlidersHorizontal }
 
 // Étiquette d'une tuile : petite icône 3D (relief) puis le libellé.
 function Etiq({ icone: Icone, couleur, children }) {
@@ -59,6 +61,33 @@ function recalculerDateFin(next) {
   if (next.dateFinManuelle) return next
   return { ...next, dateFin: dateFinAbonnement(next.dateDebut || next.date, next.dureeJours) }
 }
+
+// Période d'un abonnement « Personnalisé » : semaine, mois ou année, multipliée par un nombre (2 semaines, 3 mois, 1 an…).
+// Le nom de la catégorie enregistrée en découle (« 2 semaines »), la durée en jours aussi (un mois ou un an = calendaire).
+const UNITES_PERIODE = [
+  { id: 'semaine', label: 'Semaine', un: 'semaine', pl: 'semaines', icone: CalendarDays },
+  { id: 'mois', label: 'Mois', un: 'mois', pl: 'mois', icone: CalendarRange },
+  { id: 'annee', label: 'Année', un: 'an', pl: 'ans', icone: CalendarCheck }
+]
+function joursPeriode(unite, n, debut) {
+  if (unite === 'semaine') return 7 * n
+  const d0 = new Date(debut || Date.now())
+  const d1 = new Date(d0)
+  if (unite === 'mois') d1.setMonth(d1.getMonth() + n)
+  else d1.setFullYear(d1.getFullYear() + n)
+  return Math.round((d1 - d0) / 86400000)
+}
+const nomPeriode = (unite, n) => { const u = UNITES_PERIODE.find((x) => x.id === unite); return `${n} ${n > 1 ? u.pl : u.un}` }
+// Retrouve unité et nombre d'après un nom enregistré (« 2 semaines ») ; null si le nom n'a pas cette forme (ex. « Classique »).
+function lirePeriode(nom) {
+  const m = /^(\d+) (semaines?|mois|ans?)$/.exec(String(nom || '').trim())
+  if (!m) return null
+  return { unite: m[2].startsWith('semaine') ? 'semaine' : m[2] === 'mois' ? 'mois' : 'annee', quantite: m[1] }
+}
+// Applique une période au formulaire : nom de la catégorie, durée en jours et date de fin.
+const appliquerPeriode = (f, unite, n) => recalculerDateFin({
+  ...f, unite, quantite: String(n), categorieNom: nomPeriode(unite, n), dureeJours: String(joursPeriode(unite, n, f.dateDebut || f.date))
+})
 
 // Durée (jours) à pré-remplir pour une catégorie donnée — Classique libre garde son
 // minimum réglable depuis Paramètres, toutes les autres (Simple/VIP/Classique fixe)
@@ -135,9 +164,9 @@ export default function Abonnements() {
     const dureeJours = dureeJoursInitiale(categorie, date, classiqueFixe, dureeMin)
     return {
       id: null, date, dateDebut: date, dateDebutManuelle: false,
-      clientNom: '', telephone: '', sexe: '', categorie, dureeJours,
+      clientNom: '', telephone: '', sexe: '', categorie, categorieNom: '', dureeJours,
       dateFin: dateFinAbonnement(date, dureeJours), dateFinManuelle: false,
-      montant: String(tarifs[categorie] || ''), notes: ''
+      montant: String(tarifs[categorie] || ''), notes: '', modePaiement: 'especes', motifPrix: ''
     }
   }
   // Renouvellement : le formulaire est pré-rempli à partir de l'abonnement actuel du client (nom, catégorie, durée, tarif),
@@ -145,13 +174,13 @@ export default function Abonnements() {
   const renouveler = (a) => {
     const auj = todayStr()
     const dateDebut = a.dateFin && a.dateFin >= auj ? dateFinAbonnement(a.dateFin, 1) : auj
-    const categorie = a.categorie
+    const categorie = (estCategoriePerso(a.categorie) || a.categorie === 'classique') ? 'perso' : a.categorie
     const dureeJours = a.dureeJours != null ? String(a.dureeJours) : String(dureeJoursMoisDefaut(dateDebut))
     return {
       id: null, renouvellement: true, renouvelleDe: a.id, date: auj, dateDebut, dateDebutManuelle: dateDebut !== auj,
-      clientNom: a.clientNom, telephone: '', sexe: sexeDe(a, idxSexe), categorie, dureeJours,
+      clientNom: a.clientNom, telephone: '', sexe: sexeDe(a, idxSexe), categorie, categorieNom: a.categorie === 'classique' ? NOM_CLASSIQUE : nomCategoriePerso(a.categorie), ...(lirePeriode(nomCategoriePerso(a.categorie)) || {}), dureeJours,
       dateFin: dateFinAbonnement(dateDebut, dureeJours), dateFinManuelle: false,
-      montant: String(tarifs[categorie] || a.montant || ''), notes: ''
+      montant: String(tarifs[categorie] || a.montant || ''), notes: '', modePaiement: a.modePaiement || 'especes', motifPrix: a.motifPrix || ''
     }
   }
   // Ouverture depuis une alerte du Dashboard (« Renouveler ») : la navigation porte l'id de l'abonnement.
@@ -170,14 +199,16 @@ export default function Abonnements() {
     const dateDebut = a.dateDebut || a.date // abonnements antérieurs : début = souscription
     return {
       id: a.id, date: a.date, dateDebut, dateDebutManuelle: dateDebut !== a.date,
-      clientNom: a.clientNom, sexe: sexeDe(a, idxSexe), telephone: '', categorie: a.categorie,
+      clientNom: a.clientNom, sexe: sexeDe(a, idxSexe), telephone: '', categorie: (estCategoriePerso(a.categorie) || a.categorie === 'classique') ? 'perso' : a.categorie, categorieNom: a.categorie === 'classique' ? NOM_CLASSIQUE : nomCategoriePerso(a.categorie), ...(lirePeriode(nomCategoriePerso(a.categorie)) || {}),
       dureeJours: a.dureeJours != null ? String(a.dureeJours) : String(Math.max(1, Math.round((new Date(a.dateFin) - new Date(dateDebut)) / 86400000))),
       dateFin: a.dateFin, dateFinManuelle: true,
-      montant: String(a.montant), notes: a.notes || ''
+      montant: String(a.montant), notes: a.notes || '', modePaiement: a.modePaiement || 'especes', motifPrix: a.motifPrix || ''
     }
   }
 
   const cleNom = (n) => (n || '').trim().toLowerCase()
+  // Noms de catégories personnalisées déjà utilisés dans cette salle : proposés en suggestion à la saisie.
+  const nomsPerso = useMemo(() => [...new Set(abonnements.filter((a) => estCategoriePerso(a.categorie)).map((a) => nomCategoriePerso(a.categorie)).filter(Boolean))].sort(), [abonnements])
   const toutes = useMemo(() => [...abonnements].sort((a, b) => (a.date === b.date ? ((b.dateFin || '') < (a.dateFin || '') ? -1 : 1) : (a.date < b.date ? 1 : -1))), [abonnements])
   // Dernier abonnement de chaque client (la fin la plus lointaine) : c'est lui qu'on renouvelle, et lui seul porte le bouton.
   const dernierParClient = useMemo(() => {
@@ -275,23 +306,35 @@ export default function Abonnements() {
   }, [presences])
 
   async function enregistrer() {
-    const d = modal
+    // « Personnalisé » : la catégorie enregistrée est `perso:<nom>` (cf. data.js).
+    if (modal.categorie === 'perso' && !(modal.categorieNom || '').trim()) return toast.error('Donnez un nom à la catégorie personnalisée')
+    if (modal.categorie === 'perso' && (!modal.dureeJours || Number(modal.dureeJours) < 1)) return toast.error('Indiquez la durée de l\'abonnement (en jours)')
+    // Un montant libre doit être justifié : le motif est gardé et la direction est prévenue.
+    if (modal.categorie === 'perso' && !(modal.motifPrix || '').trim()) return toast.error('Indiquez le motif du montant (étudiant, négocié, offre…)')
+    const personnalise = modal.categorie === 'perso'
+    const nomPerso = (modal.categorieNom || '').trim()
+    const d = personnalise ? { ...modal, categorie: nomPerso.toLowerCase() === NOM_CLASSIQUE.toLowerCase() ? 'classique' : `${PERSO_PREFIXE}${nomPerso}` } : modal
     if (!d.clientNom.trim()) return toast.error('Nom du client requis')
     if (!d.id && !d.sexe) return toast.error('Précisez le sexe du client (Femme ou Homme)')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     // Le prix reste modifiable (ex. tarif négocié, majoration) mais ne peut pas descendre
     // sous le tarif de référence de Paramètres — plancher, pas prix imposé. Un Classique
     // à prix libre (Lomé) n'a pas de tarif de référence : aucun plancher ne s'applique.
-    const tarifPlancher = (d.categorie === 'classique' && !classiqueFixe) ? null : tarifs[d.categorie]
+    const tarifPlancher = (personnalise || (d.categorie === 'classique' && !classiqueFixe)) ? null : tarifs[d.categorie]
+    if (!d.id && tarifPlancher > 0 && Number(d.montant) !== tarifPlancher) {
+      return toast.error(`Le montant de cette catégorie est fixé à ${formatMoney(tarifPlancher)} (tarif de Paramètres)`)
+    }
     if (tarifPlancher > 0 && Number(d.montant) < tarifPlancher) {
       return toast.error(`Le montant ne peut pas être inférieur à ${formatMoney(tarifPlancher)} pour cette catégorie (tarif de Paramètres)`)
     }
-    if (d.categorie === 'classique' && !classiqueFixe && (!d.dureeJours || Number(d.dureeJours) < dureeMin)) return toast.error(`Durée requise (minimum ${dureeMin} jours) pour un abonnement Classique`)
+    if (!personnalise && d.categorie === 'classique' && !classiqueFixe && (!d.dureeJours || Number(d.dureeJours) < dureeMin)) return toast.error(`Durée requise (minimum ${dureeMin} jours) pour un abonnement Classique`)
+    const total = Number(d.montant)
     if (!d.dateFin) return toast.error('Date de fin requise')
     setSaving(true)
     try {
       const dateFin = d.dateFin
       const clientNom = d.clientNom.trim()
+      const modePaiement = d.modePaiement || 'especes'
 
       // Modification d'un abonnement existant — pas de nouvelle création de client, pas
       // de nouvelle facture ni de nouveau WhatsApp (déjà envoyés à l'enregistrement initial).
@@ -302,40 +345,32 @@ export default function Abonnements() {
         await updateItem('gym_abonnements', d.id, {
           date: d.date, dateDebut, dateFin, clientNom, categorie: d.categorie,
           dureeJours: d.dureeJours ? Number(d.dureeJours) : null,
-          montant: Number(d.montant), notes: d.notes.trim(), coachId, coachNom,
+          montant: total, notes: d.notes.trim(), coachId, coachNom, modePaiement,
+          ...(d.motifPrix ? { motifPrix: d.motifPrix.trim() } : {}),
           ...(d.sexe ? { sexe: d.sexe } : {})
         })
         const ficheEdit = clients.find((c) => (c.nom || '').trim().toLowerCase() === clientNom.toLowerCase())
         if (d.sexe && ficheEdit && ficheEdit.sexe !== d.sexe) await updateItem('gym_clients', ficheEdit.id, { sexe: d.sexe })
-        // La facture déjà générée à la création garde sinon l'ancien montant — le
-        // Dashboard/Facturation (sommes des `gym_factures`) resterait alors désynchronisé.
-        const factureLiee = factures.find((f) => f.sourceType === 'abonnement' && f.sourceId === d.id)
+        // La facture déjà générée à la création garde sinon l'ancien montant — le Dashboard/Facturation (sommes des
+        // `gym_factures`) resterait alors désynchronisé. Un abonnement payé en plusieurs fois garde ses montants encaissés.
+        const factureLiee = factures.find((f) => f.sourceType === 'abonnement' && f.sourceId === d.id && !f.versement && !f.avoir)
         if (factureLiee) {
           await updateItem('gym_factures', factureLiee.id, {
-            date: d.date, clientNom, categorie: d.categorie,
-            description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: Number(d.montant),
+            date: d.date, clientNom, categorie: d.categorie, modePaiement,
+            description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, ...(partiel ? {} : { montant: total }),
             ...(d.sexe ? { sexe: d.sexe } : {})
           })
         }
-        await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
+        await audit('gym', 'ABONNEMENT_MODIFIE', `${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${total.toLocaleString('fr-FR')} FCFA`)
         toast.success('Abonnement modifié ✓')
         setModal(null)
         return
       }
 
-      const { coachId, coachNom } = coachDuJour(d.date)
-      const id = await addItem('gym_abonnements', {
-        date: d.date, dateDebut, dateFin, clientNom, sexe: d.sexe, categorie: d.categorie,
-        dureeJours: (d.categorie === 'classique' && !classiqueFixe) ? Number(d.dureeJours) : null,
-        montant: Number(d.montant), notes: d.notes.trim(), site, coachId, coachNom,
-        ...(d.renouvelleDe ? { renouvelleDe: d.renouvelleDe } : {}),
-        enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
-      })
-      await audit('gym', d.renouvelleDe ? 'ABONNEMENT_RENOUVELE' : 'ABONNEMENT_CREATE', `${d.renouvelleDe ? 'Renouvellement : ' : ''}${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`)
-      // Le répertoire Clients se construit uniquement à partir des séances/abonnements
-      // réellement enregistrés — pas d'ajout manuel possible (cf. Clients.jsx). La
-      // fiche est rattachée à la salle : le même nom peut donc exister des deux côtés,
-      // chaque salle gardant sa propre clientèle.
+      // Fiche client d'abord : l'abonnement et la facture sont rattachés à son identifiant (plus de confusion entre
+      // deux clients du même nom, ni de doublon si le nom est mal écrit plus tard). Le répertoire Clients se construit
+      // uniquement à partir des séances/abonnements réellement enregistrés. La fiche est rattachée à la salle : le même
+      // nom peut exister des deux côtés, chaque salle gardant sa propre clientèle.
       const telephoneSaisi = d.telephone.trim()
       let client = clients.find((c) => (c.nom || '').trim().toLowerCase() === clientNom.toLowerCase())
       let nouveauClient = null
@@ -343,13 +378,42 @@ export default function Abonnements() {
         const qrToken = genQrToken()
         const nouveauClientId = await addItem('gym_clients', { nom: clientNom, telephone: telephoneSaisi, sexe: d.sexe, notes: '', site, qrToken, createdAt: Date.now() })
         nouveauClient = { id: nouveauClientId, nom: clientNom, qrToken }
+        client = { id: nouveauClientId, nom: clientNom, telephone: telephoneSaisi, sexe: d.sexe }
       } else if ((telephoneSaisi && !client.telephone) || client.sexe !== d.sexe) {
         await updateItem('gym_clients', client.id, {
           ...(telephoneSaisi && !client.telephone ? { telephone: telephoneSaisi } : {}),
           ...(client.sexe !== d.sexe ? { sexe: d.sexe } : {})
         })
       }
+      const clientId = client?.id
       const telephone = telephoneSaisi || client?.telephone
+
+      const { coachId, coachNom } = coachDuJour(d.date)
+      const id = await addItem('gym_abonnements', {
+        date: d.date, dateDebut, dateFin, clientNom, ...(clientId ? { clientId } : {}), sexe: d.sexe, categorie: d.categorie,
+        dureeJours: (personnalise || (d.categorie === 'classique' && !classiqueFixe) || estCategoriePerso(d.categorie)) ? Number(d.dureeJours) : null,
+        montant: total, modePaiement,
+        ...(personnalise ? { motifPrix: d.motifPrix.trim() } : {}),
+        notes: d.notes.trim(), site, coachId, coachNom,
+        ...(d.renouvelleDe ? { renouvelleDe: d.renouvelleDe } : {}),
+        enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
+      })
+      await audit('gym', d.renouvelleDe ? 'ABONNEMENT_RENOUVELE' : 'ABONNEMENT_CREATE', `${d.renouvelleDe ? 'Renouvellement : ' : ''}${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${total.toLocaleString('fr-FR')} FCFA${paye < total ? ` (payé ${paye.toLocaleString('fr-FR')}, reste ${(total - paye).toLocaleString('fr-FR')})` : ''}`)
+      // Une facture est TOUJOURS générée (visible dans le volet Facturation, avec son propre bouton de téléchargement). Elle est
+      // créée JUSTE après l'abonnement, avant le WhatsApp : si une étape suivante échoue, l'abonnement reste facturé donc compté.
+      await genererFactureGym({
+        sourceType: 'abonnement', sourceId: id, clientNom, clientId, clientTelephone: telephone,
+        categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}${paye < total ? ` (acompte, reste ${formatMoney(total - paye)})` : ''}`, montant: paye,
+        user, site, date: d.date, sexe: d.sexe, modePaiement
+      })
+      // Montant libre : la direction est prévenue, avec le motif donné par l'agent.
+      if (personnalise) {
+        notify({
+          type: 'info', title: `🎚️ Abonnement personnalisé : MAXI-GYM ${site === 'kara' ? 'Kara' : 'Lomé'}`,
+          body: `${clientNom} : ${categorieLabel(d.categorie)} : ${formatMoney(total)}. Motif : ${d.motifPrix.trim()}. Par ${user?.nom || user?.login || '—'}.`,
+          module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/abonnements`
+        }).catch(() => {})
+      }
       if (telephone) {
         const validite = dateDebut !== d.date
           ? `valable du ${formatDateShort(dateDebut)} au ${formatDateShort(dateFin)}`
@@ -359,13 +423,6 @@ export default function Abonnements() {
           body: `Bonjour ${clientNom}, votre abonnement ${categorieLabel(d.categorie)} a bien été ${d.renouvelleDe ? 'renouvelé' : 'enregistré'}, ${validite}. Bel abonnement à MAXI-GYM ! 🏋️`
         })
       }
-      // Une facture est TOUJOURS générée (visible dans le volet Facturation, avec
-      // son propre bouton de téléchargement) — plus besoin de case à cocher.
-      await genererFactureGym({
-        factures, sourceType: 'abonnement', sourceId: id, clientNom, clientTelephone: telephone,
-        categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: d.montant,
-        user, site, date: d.date, sexe: d.sexe
-      })
       toast.success(d.renouvelleDe ? 'Abonnement renouvelé ✓' : 'Abonnement enregistré ✓')
       setModal(null)
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
@@ -379,16 +436,23 @@ export default function Abonnements() {
   async function facturer(a) {
     const client = clients.find((c) => (c.nom || '').trim().toLowerCase() === (a.clientNom || '').trim().toLowerCase())
     await genererFactureGym({
-      factures, sourceType: 'abonnement', sourceId: a.id, clientNom: a.clientNom, clientTelephone: client?.telephone,
+      sourceType: 'abonnement', sourceId: a.id, clientNom: a.clientNom, clientId: a.clientId || client?.id, clientTelephone: client?.telephone,
       categorie: a.categorie, description: `Abonnement ${categorieLabel(a.categorie)} : jusqu'au ${a.dateFin}`, montant: a.montant,
-      user, site, date: a.date, sexe: sexeDe(a, idxSexe)
+      user, site, date: a.date, sexe: sexeDe(a, idxSexe), modePaiement: a.modePaiement || 'especes'
     })
     toast.success('Facture générée ✓')
   }
 
   async function supprimer(a) {
-    if (!confirm(`Supprimer l'abonnement de ${a.clientNom} (${categorieLabel(a.categorie)}) ?`)) return
+    // La facture de l'abonnement (et ses éventuels versements) part avec lui : sinon elle resterait comptée dans les totaux.
+    const liees = factures.filter((f) => f.sourceType === 'abonnement' && f.sourceId === a.id)
+    const mentionFactures = liees.length ? `
+
+Sa facture (${liees.map((f) => f.numero).join(', ')}) sera supprimée aussi : les totaux baisseront de ${formatMoney(liees.reduce((t, f) => t + (Number(f.montant) || 0), 0))}.` : ''
+    if (!confirm(`Supprimer l'abonnement de ${a.clientNom} (${categorieLabel(a.categorie)}) ?${mentionFactures}`)) return
     await removeItem('gym_abonnements', a.id)
+    for (const f of liees) await removeItem('gym_factures', f.id, { sansMotif: true })
+    if (liees.length) await audit('gym', 'FACTURE_SUPPRIMEE', `${liees.map((f) => f.numero).join(', ')} : supprimée avec l'abonnement de ${a.clientNom}`)
     await audit('gym', 'ABONNEMENT_DELETE', `${a.clientNom} : ${categorieLabel(a.categorie)} : ${Number(a.montant).toLocaleString('fr-FR')} FCFA`)
     toast.success('Abonnement supprimé')
   }
@@ -408,7 +472,7 @@ export default function Abonnements() {
     setPointageBusy(a.id)
     try {
       await addItem('gym_presences', {
-        clientNom: a.clientNom, abonnementId: a.id, date, createdAt: Date.now(), site,
+        clientNom: a.clientNom, ...(a.clientId ? { clientId: a.clientId } : {}), abonnementId: a.id, date, createdAt: Date.now(), site,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null
       })
       await audit('gym', 'PRESENCE_POINTEE', `${a.clientNom} : arrivée pointée (${formatDateShort(date)})`)
@@ -492,10 +556,12 @@ export default function Abonnements() {
             { key: 'clientNom', label: 'Client', render: (r) => {
               const n = nbParClient.get(cleNom(r.clientNom)) || 1
               return (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span>{r.clientNom}</span>
-                  {(passagesParClient.get(cleNom(r.clientNom)) || 0) > 0 && <span title="Arrivées pointées : cliquez sur la ligne pour le détail" className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-extrabold text-orange-700"><Dumbbell size={10} /> {passagesParClient.get(cleNom(r.clientNom))} passage{passagesParClient.get(cleNom(r.clientNom)) > 1 ? 's' : ''}</span>}
-                  {n > 1 && <span title={`${n} abonnements enregistrés : voir la fiche du client`} className="inline-flex items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700"><Repeat size={10} /> ×{n - 1}</span>}
+                <div className="flex flex-col items-start gap-1">
+                  <span className="whitespace-nowrap">{r.clientNom}</span>
+                  <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap empty:hidden">
+                  {(passagesParClient.get(cleNom(r.clientNom)) || 0) > 0 && <span title="Arrivées pointées : cliquez sur la ligne pour le détail" className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-extrabold text-orange-700"><Dumbbell size={10} /> {passagesParClient.get(cleNom(r.clientNom))} passage{passagesParClient.get(cleNom(r.clientNom)) > 1 ? 's' : ''}</span>}
+                  {n > 1 && <span title={`${n} abonnements enregistrés : voir la fiche du client`} className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700"><Repeat size={10} /> ×{n - 1}</span>}
+                  </div>
                 </div>
               )
             } },
@@ -563,6 +629,7 @@ export default function Abonnements() {
         {modal && (() => {
           const libre = modal.categorie === 'classique' && !classiqueFixe
           const tarifPlancher = libre ? null : tarifs[modal.categorie]
+          const prixFixe = modal.categorie !== 'perso' && tarifPlancher > 0 // seul « Personnalisé » a un montant libre
           const differe = (modal.dateDebut || modal.date) > todayStr()
           const entree = (i) => ({ animation: `ab-entree 0.4s ease-out ${i * 0.06}s both` })
           return (
@@ -647,7 +714,7 @@ export default function Abonnements() {
               <div className="col-span-2" style={entree(4)}>
                 <FormGroup label={<Etiq icone={Tag} couleur="#0ea5e9">Catégorie</Etiq>} className="!mb-0" hint={categorieDesc(modal.categorie)}>
                   <div className="grid grid-cols-3 gap-2">
-                    {CATEGORIES_GYM.map((c) => {
+                    {[CATEGORIES_GYM.find((x) => x.id === 'simple'), CATEGORIE_PERSO, CATEGORIES_GYM.find((x) => x.id === 'vip')].map((c) => {
                       const actif = modal.categorie === c.id
                       const coul = COULEUR_CATEGORIE[c.id]
                       const Ic = ICONE_CATEGORIE[c.id]
@@ -656,6 +723,7 @@ export default function Abonnements() {
                         <button key={c.id} type="button" onClick={() => {
                           setModal((f) => {
                             const dureeJours = dureeJoursInitiale(c.id, f.dateDebut || f.date, classiqueFixe, dureeMin)
+                            if (c.id === 'perso') return appliquerPeriode({ ...f, categorie: 'perso', montant: '' }, f.unite || 'mois', Number(f.quantite) || 1)
                             return recalculerDateFin({ ...f, categorie: c.id, dureeJours, montant: tarif != null ? String(tarif) : f.montant })
                           })
                         }}
@@ -667,12 +735,48 @@ export default function Abonnements() {
                           </span>
                           <span className="relative">{c.label}</span>
                           {tarif != null && tarif > 0 && <span className={`relative text-[10px] font-semibold ${actif ? 'text-white/85' : 'text-gray-400'}`}>{formatMoney(tarif)}</span>}
+                          {c.id === 'perso' && <span className={`relative text-[10px] font-semibold ${actif ? 'text-white/85' : 'text-gray-400'}`}>Libre</span>}
                         </button>
                       )
                     })}
                   </div>
                 </FormGroup>
               </div>
+
+              {modal.categorie === 'perso' && (
+                <div className="col-span-2" style={entree(4.5)}>
+                  <FormGroup label={<Etiq icone={Hourglass} couleur="#8b5cf6">Type d'abonnement</Etiq>} required className="!mb-0"
+                    hint={modal.unite ? `= ${modal.dureeJours} jour${Number(modal.dureeJours) > 1 ? 's' : ''}${modal.dateFin ? `, jusqu'au ${formatDateShort(modal.dateFin)}` : ''}` : 'Durée saisie à la main ci-dessous.'}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Commutateur compact : trois segments en verre, celui choisi se teinte et fait un petit « pop ». */}
+                      <div className="inline-flex gap-0.5 rounded-xl border border-white/70 bg-white/50 p-0.5 shadow-inner backdrop-blur-md">
+                        {UNITES_PERIODE.map((u) => {
+                          const actif = modal.unite === u.id
+                          const Ic = u.icone
+                          return (
+                            <button key={u.id} type="button" onClick={() => setModal((f) => appliquerPeriode(f, u.id, Number(f.quantite) || 1))} aria-pressed={actif}
+                              className={`group relative inline-flex items-center gap-1 overflow-hidden rounded-[10px] px-2.5 py-1 text-xs font-extrabold transition-all duration-200 active:scale-95 ${actif ? 'text-white shadow-[0_6px_12px_-6px_rgba(109,40,217,0.8),inset_0_1px_0_rgba(255,255,255,0.45)]' : 'text-gray-500 hover:bg-white/80 hover:text-violet-700'}`}
+                              style={actif ? { background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', animation: 'ab-pop 0.3s ease-out' } : undefined}>
+                              {actif && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />}
+                              {/* Petit voyant : éteint (gris) tant que le segment n'est pas choisi, allumé et qui respire une fois choisi. */}
+                              <span aria-hidden="true" className={`relative h-1.5 w-1.5 shrink-0 rounded-full transition-all ${actif ? 'animate-pulse bg-white shadow-[0_0_6px_2px_rgba(255,255,255,0.95)]' : 'bg-gray-300'}`} />
+                              <Ic size={12} className="relative transition-transform duration-300 group-hover:scale-110" />
+                              <span className="relative">{u.label}</span>
+                              {actif && <Check size={12} strokeWidth={3} className="relative" style={{ animation: 'ab-pop 0.3s ease-out' }} />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500">
+                        Nombre
+                        <input type="number" min="1" inputMode="numeric" aria-label="Nombre de périodes" value={modal.quantite || ''} placeholder="1"
+                          className="w-14 rounded-lg border border-white/80 bg-white/80 px-2 py-1 text-center text-xs font-extrabold text-gray-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
+                          onChange={(e) => setModal((f) => { const n = Math.max(1, parseInt(e.target.value, 10) || 1); return appliquerPeriode(f, f.unite || 'mois', e.target.value === '' ? 1 : n) })} />
+                      </span>
+                    </div>
+                  </FormGroup>
+                </div>
+              )}
 
               <div style={entree(5)}>
                 <FormGroup label={<Etiq icone={CalendarDays} couleur="#f59e0b">Souscription</Etiq>} className="!mb-0" hint="Jour de l'enregistrement : compte dans le chiffre d'affaires du mois.">
@@ -689,7 +793,7 @@ export default function Abonnements() {
                   hint={modal.dateDebutManuelle ? 'Le client commence à cette date.' : 'Par défaut le jour de la souscription.'}>
                   <div className="flex items-center gap-2">
                     <Input type="date" value={modal.dateDebut || modal.date} min={modal.date}
-                      onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dateDebut: e.target.value, dateDebutManuelle: true }))} />
+                      onChange={(e) => setModal((f) => { const g = { ...f, dateDebut: e.target.value, dateDebutManuelle: true }; return f.categorie === 'perso' && f.unite ? appliquerPeriode(g, f.unite, Number(f.quantite) || 1) : recalculerDateFin(g) })} />
                     {modal.dateDebutManuelle && (
                       <button type="button" title="Revenir au jour même" onClick={() => setModal((f) => recalculerDateFin({ ...f, dateDebut: f.date, dateDebutManuelle: false }))}
                         className="shrink-0 rounded-lg border border-white/70 bg-white/70 px-2 py-2 text-xs font-semibold text-gray-500 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white">🔄</button>
@@ -704,10 +808,10 @@ export default function Abonnements() {
               )}
 
               <div style={entree(7)}>
-                <FormGroup label={<Etiq icone={Hourglass} couleur="#8b5cf6">Durée (jours)</Etiq>} required={libre} className="!mb-0"
-                  hint={libre ? `Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. 7 = une semaine, 14 = deux semaines.` : 'Un mois calendaire par défaut, modifiable.'}>
+                <FormGroup label={<Etiq icone={Hourglass} couleur="#8b5cf6">Durée (jours)</Etiq>} required={libre || modal.categorie === 'perso'} className="!mb-0"
+                  hint={modal.categorie === 'perso' ? 'Libre : 7 = une semaine, 30 = un mois, 90 = trois mois.' : libre ? `Minimum ${dureeMin} jour${dureeMin > 1 ? 's' : ''}. 7 = une semaine, 14 = deux semaines.` : 'Un mois calendaire par défaut, modifiable.'}>
                   <Input type="number" min={libre ? dureeMin : 1} value={modal.dureeJours}
-                    onChange={(e) => setModal((f) => recalculerDateFin({ ...f, dureeJours: e.target.value }))}
+                    onChange={(e) => setModal((f) => recalculerDateFin(f.categorie === 'perso' ? { ...f, dureeJours: e.target.value, unite: null, quantite: '', categorieNom: Number(e.target.value) > 0 ? `${Number(e.target.value)} jour${Number(e.target.value) > 1 ? 's' : ''}` : '' } : { ...f, dureeJours: e.target.value }))}
                     placeholder={libre ? `ex : ${dureeMin}` : 'ex : 30'} />
                 </FormGroup>
               </div>
@@ -727,11 +831,30 @@ export default function Abonnements() {
 
               <div className="col-span-2" style={entree(9)}>
                 <FormGroup label={<Etiq icone={Wallet} couleur="#16a34a">Montant (FCFA)</Etiq>} required className="!mb-0"
-                  hint={tarifPlancher > 0 ? `Minimum ${formatMoney(tarifPlancher)} pour cette catégorie : modifiable au-delà.` : undefined}>
-                  <Input type="number" min={tarifPlancher || 0} value={modal.montant} placeholder="ex : 15000"
+                  hint={modal.categorie === 'perso' ? 'Montant libre : à fixer pour cet abonnement.' : prixFixe ? 'Tarif fixe de la catégorie (Paramètres) : non modifiable.' : undefined}>
+                  <Input type="number" min={tarifPlancher || 0} value={modal.montant} placeholder="ex : 15000" readOnly={prixFixe} className={prixFixe ? 'cursor-not-allowed bg-gray-100/80 font-bold text-gray-600' : ''}
                     onChange={(e) => setModal((f) => ({ ...f, montant: e.target.value }))} />
                 </FormGroup>
               </div>
+              <div className="col-span-2" style={entree(9.6)}>
+                <FormGroup label={<Etiq icone={Wallet} couleur="#f59e0b">Mode de paiement</Etiq>} className="!mb-0" hint="Espèces ou Mobile Money">
+                  <ModesPaiement value={modal.modePaiement} onChange={(m) => setModal((f) => ({ ...f, modePaiement: m }))} />
+                </FormGroup>
+              </div>
+              {modal.categorie === 'perso' && (
+                <div className="col-span-2" style={entree(9.8)}>
+                  <FormGroup label={<Etiq icone={SlidersHorizontal} couleur="#8b5cf6">Motif du montant</Etiq>} required className="!mb-0" hint="Obligatoire : la direction est prévenue de ce montant libre.">
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {['Étudiant', 'Couple', 'Tarif négocié', 'Offre / promotion', 'Parrainage'].map((m) => (
+                        <button key={m} type="button" onClick={() => setModal((f) => ({ ...f, motifPrix: m }))}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition-all hover:-translate-y-0.5 ${modal.motifPrix === m ? 'border-transparent text-white shadow-md' : 'border-gray-200 bg-white text-gray-600'}`}
+                          style={modal.motifPrix === m ? { background: '#8b5cf6' } : undefined}>{m}</button>
+                      ))}
+                    </div>
+                    <Input value={modal.motifPrix || ''} placeholder="ou précisez le motif" onChange={(e) => setModal((f) => ({ ...f, motifPrix: e.target.value }))} />
+                  </FormGroup>
+                </div>
+              )}
               <div className="col-span-2" style={entree(10)}>
                 <FormGroup label={<Etiq icone={StickyNote} couleur="#64748b">Notes</Etiq>} className="!mb-0" hint="Optionnel">
                   <Input value={modal.notes} onChange={(e) => setModal((f) => ({ ...f, notes: e.target.value }))} />
@@ -744,7 +867,7 @@ export default function Abonnements() {
               <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-gray-600">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={icone3D('#7c3aed')}><User size={14} /></span>
                 <span className="truncate">{modal.clientNom || 'Client à saisir'}</span>
-                <Badge tone={categorieTone(modal.categorie)}>{categorieLabel(modal.categorie)}</Badge>
+                <Badge tone={modal.categorie === 'perso' ? 'primary' : categorieTone(modal.categorie)}>{modal.categorie === 'perso' ? ((modal.categorieNom || '').trim() || 'Personnalisé') : categorieLabel(modal.categorie)}</Badge>
               </div>
               <span key={modal.montant} className="shrink-0 text-lg font-black" style={{ color: COULEUR2, animation: 'ab-montant 0.25s ease-out' }}>{formatMoney(Number(modal.montant) || 0)}</span>
               <span className="w-full shrink-0 text-[11px] text-gray-500">

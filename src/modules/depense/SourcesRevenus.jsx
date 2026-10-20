@@ -336,7 +336,7 @@ export default function SourcesRevenus() {
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold uppercase" style={{ color: secteurColor }}>{secteur?.label || l.secteurId}{l.site ? <span className="block text-[10px] font-bold normal-case text-gray-500">{libelleLieu(l.site)}</span> : null}</td>
                       <td className="px-3 py-2 align-top"><Badge tone={source.tone}>{source.label}</Badge></td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right align-top font-extrabold text-emerald-700">+{Number(l.montant).toLocaleString('fr-FR')}</td>
+                      <td className={`whitespace-nowrap px-3 py-2 text-right align-top font-extrabold ${Number(l.montant) < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{Number(l.montant) < 0 ? '' : '+'}{Number(l.montant).toLocaleString('fr-FR')}</td>
                       <td className="px-2 py-2 align-top" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setDetail(l)} title="Voir les détails" className="rounded-lg border border-gray-200 bg-white p-1 text-gray-500 shadow-sm transition-all hover:-translate-y-0.5 hover:text-gray-800"><Eye size={14} /></button>
                       </td>
