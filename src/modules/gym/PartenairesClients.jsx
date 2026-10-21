@@ -241,7 +241,7 @@ export default function PartenairesClients() {
         }}>
           <Handshake size={28} color="white" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h2 className="text-lg font-extrabold">Clients partenaires</h2>
           <p className="text-sm text-white/80">
             {groupes.length} structure(s), {nbSeancesDues} séance(s) à régler, {formatMoney(totalDu)} dû

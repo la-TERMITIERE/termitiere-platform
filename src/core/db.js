@@ -7,7 +7,7 @@
 // garde-fous (sanitize, rateLimit) sont appliqués dans chaque implémentation.
 import * as firebaseImpl from './db.firebase'
 import * as supabaseImpl from './db.supabase'
-import { isReadOnlyRole, peutEcrireGym } from './roles'
+import { isReadOnlyRole, peutEcrireGym, moduleDeCollection, moduleEnLecture } from './roles'
 import { demanderMotif, SuppressionAnnulee } from './motifSuppression'
 
 const useSupabase = import.meta.env.VITE_USE_SUPABASE === 'true'
@@ -36,6 +36,8 @@ if (useSupabase) console.info('[db] Backend de données : PostgreSQL / Supabase 
 // une importation statique créerait un cycle.
 let _lireRole = () => null
 export function _brancherRoleCourant(fn) { _lireRole = fn }
+let _lireDroits = () => null
+export function _brancherDroitsCourants(fn) { _lireDroits = fn }
 
 const ECRITURES = ['addItem', 'setItem', 'updateItem', 'removeItem', 'claimOnce', 'updateAtomic']
 
@@ -55,6 +57,14 @@ function protegerEcriture(nom, fn) {
       const err = new Error('MAXI-GYM : seuls les agents, Info et Assistant PAU peuvent modifier ces données, votre profil est en lecture seule.')
       err.code = 'LECTURE_SEULE'
       console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents, à Info et à Assistant PAU) : ${nom}`, args[0])
+      return Promise.reject(err)
+    }
+    // Droit « lecture seule » accordé à ce compte sur un module précis (Utilisateurs, détail d'accès).
+    const moduleCible = moduleDeCollection(collection)
+    if (role && moduleCible && moduleEnLecture(_lireDroits(), moduleCible)) {
+      const err = new Error('Votre accès à ce module est en lecture seule : aucune modification n’est autorisée.')
+      err.code = 'LECTURE_SEULE'
+      console.warn(`[db] écriture refusée (module ${moduleCible} en lecture seule pour ce compte) : ${nom}`, args[0])
       return Promise.reject(err)
     }
     return fn(...args)
@@ -85,7 +95,10 @@ const libelleDe = (rec, id) => {
 
 export async function removeItem(collection, id, options = {}) {
   const role = _lireRole()
-  if (options.sansMotif || COLLECTIONS_TECHNIQUES.has(collection) || (role && isReadOnlyRole(role))) {
+  // Profil ou module en lecture seule : on laisse le garde central refuser tout de suite, sans demander de motif pour rien.
+  const moduleCible = moduleDeCollection(collection)
+  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && moduleEnLecture(_lireDroits(), moduleCible)) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireGym(role)))
+  if (options.sansMotif || COLLECTIONS_TECHNIQUES.has(collection) || refuse) {
     return supprimerSansMotif(collection, id)
   }
   // Règle générale : un agent ne supprime JAMAIS (aucun bouton ne lui est montré ; ce refus couvre

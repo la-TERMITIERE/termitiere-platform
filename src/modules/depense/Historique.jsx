@@ -218,7 +218,7 @@ export default function Historique() {
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge tone="neutral">{secteur?.label || d.secteurId}</Badge>
-                        {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse commune</Badge>}
+                        {d.financePar === 'caisse_commune' && <Badge tone="warning">💰 Caisse courante</Badge>}
                         {(d.secteursConcernes || []).length > 0 && (
                           <span title={`Concerne aussi : ${d.secteursConcernes.map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ')}`}>
                             <Badge tone="info">+{d.secteursConcernes.length}</Badge>

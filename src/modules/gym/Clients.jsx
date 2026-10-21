@@ -170,7 +170,7 @@ export default function Clients() {
         }}>
           <Users size={28} color="white" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h2 className="text-lg font-extrabold">Clients</h2>
           <p className="text-sm text-white/80">Répertoire des deux salles : cliquer une ligne pour voir la fiche</p>
         </div>

@@ -20,7 +20,7 @@ export function vocabulaire(secteurId) {
   return { pluriel: 'Ventes', moyenne: 'Moyenne par vente', facture: 'Factures et ventes' }
 }
 
-// Domaine affiché (comme la colonne DOMAINE du fichier Excel des agents) : la caisse commune s'appelle
+// Domaine affiché (comme la colonne DOMAINE du fichier Excel des agents) : la caisse courante s'appelle
 // « SIÈGE » ; MAXI LOGISTIQUE et MAXI-GYM précisent leur site.
 export function domaineLibelle(secteurId, site) {
   const base = secteurId === 'divers' ? 'SIÈGE' : (secteurDe(secteurId)?.label || secteurId || 'AUTRE')
@@ -33,7 +33,7 @@ export const couleurDomaine = (secteurId) => secteurDe(secteurId)?.color || '#64
 const montant = (v) => Number(v) || 0
 const jour = (d) => (d ? String(d).slice(0, 10) : '')
 
-// Secteurs proposés au filtre : ceux d'E-DÉPENSES, la caisse commune étant présentée comme le siège.
+// Secteurs proposés au filtre : ceux d'E-DÉPENSES, la caisse courante étant présentée comme le siège.
 export const DOMAINES = SECTEURS.map((s) => ({ id: s.id, label: s.id === 'divers' ? 'SIÈGE' : s.label, color: s.color }))
 
 // Lignes de RECETTES uniquement (les dépenses relèvent de la Caisse) : { id, date, designation, operateur, secteurId, site, entree, sortie, type, source }.
@@ -93,15 +93,15 @@ export function construireLignes({
 // les ventes et le chiffre d'affaires sont dans le volet « Recettes ». `brut` garde l'enregistrement
 // d'origine pour afficher le détail au clic.
 const jourDeMs = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
-const MOTIFS_PAR_DEFAUT = ['Apport à la caisse commune', 'Allocation initiale', 'Dotation de caisse']
+const MOTIFS_PAR_DEFAUT = ['Apport à la caisse courante', 'Allocation initiale', 'Dotation de caisse']
 // Un « report » est le reste du mois précédent que l'agent saisit en premier apport du mois (« reste du solde du mois
 // de septembre », « solde restant du mois précédent »…) : au premier du mois, il constitue le solde initial.
 const EST_REPORT = /(reste|restant|solde|report)/i
 
 export function construireLignesCaisse({ depenses = [], coutsMatieres = [], budgets = [] }) {
   const out = []
-  // La Caisse est la CAISSE COMMUNE d'E-DÉPENSES : son budget (dotations) et ses dépenses, avec la même règle que sa
-  // carte « Caisse commune » (cf. depensesEntrepriseSecteurDates). Les budgets des secteurs restent dans E-DÉPENSES.
+  // La Caisse est la CAISSE COURANTE d'E-DÉPENSES : son budget (dotations) et ses dépenses, avec la même règle que sa
+  // carte « Caisse courante » (cf. depensesEntrepriseSecteurDates). Les budgets des secteurs restent dans E-DÉPENSES.
   budgets.filter((b) => b.secteurId === 'divers').forEach((b) => {
     const site = b.secteurId === 'logistique' ? siteLogistiqueDe(b) : (b.site || null)
     const revisions = b.revisions || []

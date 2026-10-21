@@ -1,8 +1,10 @@
 // Gestion des utilisateurs de la plateforme (portail, admin uniquement).
 // Permet d'attribuer à chaque utilisateur ses droits d'accès aux modules.
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Pencil, ShieldCheck, Eye, UserPlus } from 'lucide-react'
-import { glassModalProps, avatarGradient } from '../utils/color'
+import { Plus, Trash2, Pencil, ShieldCheck, Eye, UserPlus, Users, UserCheck, UserX, Lock } from 'lucide-react'
+import { glassModalProps, avatarGradient, icone3D } from '../utils/color'
+import AccesUtilisateur from './AccesUtilisateur'
+import StatCard from '../shared/ui/StatCard'
 import Card from '../shared/ui/Card'
 import Button from '../shared/ui/Button'
 import Modal from '../shared/ui/Modal'
@@ -13,10 +15,11 @@ import Input from '../shared/forms/Input'
 import Select from '../shared/forms/Select'
 import ChampAutocomplete from '../shared/forms/ChampAutocomplete'
 import { useUsersStore } from '../core/users'
+import { useAuth } from '../hooks/useAuth'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
-import { MODULES, MODULE_NAV } from '../shared/modules'
-import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires } from '../core/roles'
+import { MODULES } from '../shared/modules'
+import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
 import { SITES } from '../modules/logistique/site/useSite'
 import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
@@ -24,22 +27,24 @@ import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
 // De même, un compte Maxi Logistique / MAXI-GYM accède par défaut aux deux sites (Lomé & Kara).
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, secteur: '', poste: '', telephone: '', actif: true })
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, droitsModules: {}, secteur: '', poste: '', telephone: '', actif: true })
 
 // Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
 // Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
 const SECTEURS_DEFAUT = MODULES.map((m) => m.nom)
 const POSTES_DEFAUT = ['Gérant', 'Comptable', 'Responsable RH', 'Chef de projet', 'Chef de chantier', 'Secrétaire', 'Agent de saisie', 'Superviseur', 'Tata', 'Chauffeur', 'Magasinier']
 
-function hexToRgba(hex, alpha) {
-  const n = parseInt(hex.replace('#', ''), 16)
-  return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`
-}
-
 export default function Utilisateurs() {
   const { users, loading, load, saveUser, removeUser } = useUsersStore()
+  const moi = useAuth((s) => s.user)
+  const roleMoi = useAuth((s) => s.role)
+  // Info a la main sur tous les comptes, y compris l'admin principal (suppression, désactivation) ; les autres rôles ne touchent pas à ce compte.
+  const compteAdminProtege = (u) => u.login === 'admin' && roleMoi !== 'info'
+  const [basculeEnCours, setBasculeEnCours] = useState(null) // login dont le statut est en cours de changement
   const [modal, setModal] = useState(null) // { data, isNew }
-  const [detailUser, setDetailUser] = useState(null)
+  const [detailLogin, setDetailLogin] = useState(null)
+  // La fiche d'accès relit toujours l'utilisateur dans la liste : un droit modifié s'affiche aussitôt.
+  const detailUser = useMemo(() => users.find((u) => u.login === detailLogin) || null, [users, detailLogin])
 
   useEffect(() => { load() }, [load])
 
@@ -53,21 +58,6 @@ export default function Utilisateurs() {
 
   function openNew() { setModal({ data: empty(), isNew: true }) }
   function openEdit(u) { setModal({ data: { ...empty(), ...u, pass: u.pass || '' }, isNew: false }) }
-
-  // Volets visibles par cet utilisateur dans un module donné — même règle que la
-  // nav réelle (cf. Sidebar.jsx → canSeeNav) : rôle explicite (`roles`) ou permission
-  // individuelle (`perm`, ex. gerePartenaires) ; sans l'un ou l'autre, ouvert à tous.
-  // Exclut les entrées `{ heading }` (simples séparateurs de section dans la
-  // sidebar, ex. MODULE_NAV.rh — sans `icon` ni `to`) : les compter/afficher ici
-  // comme un volet cliquable faisait planter la fiche détail (<v.icon> undefined).
-  function voletsVisibles(u, moduleId) {
-    const canSee = (item) => {
-      if (item.roles && item.roles.includes(u.role)) return true
-      if (item.perm === 'partenaires' && canManagePartenaires(u.role, u)) return true
-      return !item.roles && !item.perm
-    }
-    return (MODULE_NAV[moduleId] || []).filter((item) => !item.heading).filter(canSee)
-  }
 
   function toggleModule(id) {
     setModal((m) => {
@@ -119,8 +109,47 @@ export default function Utilisateurs() {
     }
   }
 
+  const nbActifs = users.filter((u) => u.actif !== false).length
+  const nbInactifs = users.length - nbActifs
+  const nbLecture = users.filter((u) => isReadOnlyRole(u.role) || Object.values(u.droitsModules || {}).includes('lecture')).length
+
+  // Interrupteur Actif / Inactif d'un compte (petit, en haut à droite de la carte).
+  function statutSwitch(r) {
+    const actif = r.actif !== false
+    const protege = compteAdminProtege(r) || r.login === moi?.login
+    return (
+      <button type="button" role="switch" aria-checked={actif} disabled={protege || basculeEnCours === r.login}
+        onClick={(e) => { e.stopPropagation(); basculerActif(r) }}
+        title={protege ? (r.login === moi?.login ? 'Vous ne pouvez pas désactiver votre propre compte' : 'Seul Info peut désactiver ce compte') : actif ? 'Cliquer pour désactiver le compte' : 'Cliquer pour réactiver le compte'}
+        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border py-0.5 pl-1 pr-2 text-[11px] font-extrabold backdrop-blur-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${actif ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-700' : 'border-red-300/70 bg-red-100/70 text-red-700'}`}>
+        <span className={`relative h-3.5 w-6 rounded-full transition-colors ${actif ? 'bg-emerald-500' : 'bg-red-400'}`}>
+          <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white shadow transition-all ${actif ? 'left-3' : 'left-0.5'}`} />
+        </span>
+        {actif ? 'Actif' : 'Inactif'}
+      </button>
+    )
+  }
+
+  // Active ou désactive un compte : un compte inactif ne peut plus se connecter (et une session ouverte est fermée).
+  // On ne peut pas désactiver le compte admin principal ni son propre compte.
+  async function basculerActif(u) {
+    if (compteAdminProtege(u)) return toast.error("Seul Info peut désactiver le compte admin principal")
+    if (u.login === moi?.login) return toast.error('Vous ne pouvez pas désactiver votre propre compte')
+    const desactiver = u.actif !== false
+    if (desactiver && !confirm(`Désactiver le compte de « ${u.nom} » ?
+Cette personne ne pourra plus se connecter.`)) return
+    setBasculeEnCours(u.login)
+    try {
+      await saveUser({ ...u, actif: !desactiver })
+      toast.success(desactiver ? `Compte de ${u.nom} désactivé` : `Compte de ${u.nom} réactivé ✓`)
+    } catch (e) {
+      toast.error('Échec : ' + (e?.message || e))
+    } finally { setBasculeEnCours(null) }
+  }
+
   async function supprimer(u) {
-    if (u.login === 'admin') return toast.error("Le compte admin principal ne peut pas être supprimé")
+    if (compteAdminProtege(u)) return toast.error("Seul Info peut supprimer le compte admin principal")
+    if (u.login === moi?.login) return toast.error('Vous ne pouvez pas supprimer votre propre compte')
     if (!confirm(`Supprimer l'utilisateur « ${u.nom} » ?`)) return
     // Sans ce try/catch, un refus des règles de la base échouait en SILENCE :
     // ni message d'erreur, ni confirmation — la suppression semblait simplement
@@ -134,7 +163,11 @@ export default function Utilisateurs() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="relative mx-auto max-w-5xl space-y-4">
+      {/* Halos colorés derrière les cartes : donnent au verre dépoli quelque chose à flouter */}
+      <div className="pointer-events-none absolute -left-24 top-40 -z-10 h-72 w-72 rounded-full opacity-30 blur-3xl" style={{ background: '#BC3C31' }} />
+      <div className="pointer-events-none absolute -right-20 top-[28rem] -z-10 h-80 w-80 rounded-full opacity-25 blur-3xl" style={{ background: '#E8850F' }} />
+      <div className="pointer-events-none absolute bottom-10 left-1/3 -z-10 h-64 w-64 rounded-full opacity-20 blur-3xl" style={{ background: '#0ea5e9' }} />
       <div className="relative flex flex-col gap-3 overflow-hidden rounded-[2rem] p-4 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35),0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4)] backdrop-blur-2xl backdrop-saturate-200 sm:flex-row sm:items-center sm:gap-4 sm:p-6"
         style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(90,20,16,0.92) 100%)' }}>
         <div className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full opacity-[0.15]" style={{ background: '#ffffff' }} />
@@ -155,19 +188,28 @@ export default function Utilisateurs() {
       </div>
 
       {isFirebaseConfigured && (
-        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+        <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-2.5 text-xs font-medium text-emerald-700 shadow-sm backdrop-blur-xl dark:bg-emerald-500/10 dark:text-emerald-400">
           🟢 Synchronisation cloud active : les comptes et les droits sont partagés
           en temps réel entre tous les appareils.
         </div>
       )}
 
-      <Card className="p-0">
-        <Table searchBy={['nom', 'login', 'email']}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard glass title="Comptes" value={users.length} icon={Users} accent="#BC3C31" />
+        <StatCard glass title="Actifs" value={nbActifs} icon={UserCheck} accent="#16a34a" />
+        <StatCard glass title="Inactifs" value={nbInactifs} icon={UserX} accent="#dc2626" />
+        <StatCard glass title="Avec lecture seule" value={nbLecture} icon={Lock} accent="#64748b" />
+      </div>
+
+      <p className="w-fit rounded-full border border-white/60 bg-white/50 px-3 py-1 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-xl">Cliquez sur un utilisateur pour voir ses modules, ses volets et régler ses droits (lecture seule ou écriture) module par module.</p>
+
+      <Card className="overflow-hidden !border-white/60 !bg-white/45 p-0 shadow-[0_20px_40px_-20px_rgba(188,60,49,0.35),inset_0_1px_0_0_rgba(255,255,255,0.7)] backdrop-blur-2xl backdrop-saturate-150">
+        <Table searchBy={['nom', 'login', 'email']} onRowClick={(r) => setDetailLogin(r.login)}
           columns={[
             { key: 'nom', label: 'Utilisateur', render: (r) => (
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white shadow-sm ring-2 ring-white dark:ring-white/10"
-                  style={{ background: avatarGradient(r.login || r.nom) }}>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white ring-2 ring-white dark:ring-white/10"
+                  style={{ background: avatarGradient(r.login || r.nom), boxShadow: '0 6px 12px -4px rgba(15,23,42,0.45), inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
                   {(r.nom || '').trim().charAt(0).toUpperCase() || '?'}
                 </div>
                 <div className="min-w-0">
@@ -178,24 +220,33 @@ export default function Utilisateurs() {
             ) },
             { key: 'login', label: 'Identifiant', render: (r) => <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600 dark:bg-white/10 dark:text-gray-300">{r.login}</span> },
             { key: 'role', label: 'Rôle', render: (r) => <Badge tone={roleTone(r.role)}>{roleLabel(r.role)}</Badge> },
-            { key: 'modules', label: 'Accès modules', render: (r) => (
-              <div className="flex flex-wrap gap-1">
-                {isViewAllRole(r.role)
-                  ? <Badge tone="primary">Tous</Badge>
-                  : (r.modules || []).length
-                    ? (r.modules || []).map((id) => {
-                        const m = MODULES.find((x) => x.id === id)
-                        return <span key={id} className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ background: m?.color || '#888' }}>{m?.nom || id}</span>
-                      })
-                    : <span className="text-xs text-gray-400 dark:text-gray-500">Aucun</span>}
-              </div>
-            ) },
-            { key: 'actif', label: 'Statut', align: 'center', render: (r) => r.actif === false ? <Badge tone="danger">Inactif</Badge> : <Badge tone="success">Actif</Badge> },
+            { key: 'modules', label: 'Accès modules', render: (r) => {
+              if (isViewAllRole(r.role)) return <Badge tone="primary">Tous</Badge>
+              const ids = r.modules || []
+              if (!ids.length) return <span className="text-xs text-gray-400 dark:text-gray-500">Aucun</span>
+              const lecture = (id) => r.droitsModules?.[id] === 'lecture'
+              return (
+                <div className="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+                  {ids.slice(0, 3).map((id) => {
+                    const m = MODULES.find((x) => x.id === id)
+                    return (
+                      <span key={id} title={`${m?.nom || id}${lecture(id) ? ' : lecture seule' : ''}`}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/80 bg-white/70 py-0.5 pl-0.5 pr-2 text-[10px] font-bold text-gray-700 shadow-sm backdrop-blur-md">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style={icone3D(m?.color || '#888')}>{m?.icon && <m.icon size={11} />}</span>
+                        {m?.nom || id}{lecture(id) && <Eye size={10} className="text-sky-600" />}
+                      </span>
+                    )
+                  })}
+                  {ids.length > 3 && <span title={ids.slice(3).map((id) => MODULES.find((x) => x.id === id)?.nom || id).join(', ')} className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">+{ids.length - 3}</span>}
+                </div>
+              )
+            } },
+            { key: 'actif', label: 'Statut', align: 'center', render: (r) => statutSwitch(r) },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setDetailUser(r)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200" title="Voir les détails d'accès"><Eye size={16} /></button>
-                <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200"><Pencil size={16} /></button>
-                <button onClick={() => supprimer(r)} className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 size={16} /></button>
+                <button onClick={(e) => { e.stopPropagation(); setDetailLogin(r.login) }} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200" title="Voir les détails d'accès"><Eye size={16} /></button>
+                <button onClick={(e) => { e.stopPropagation(); openEdit(r) }} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200" title="Modifier"><Pencil size={16} /></button>
+                <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10" title="Supprimer"><Trash2 size={16} /></button>
               </div>
             ) }
           ]}
@@ -271,7 +322,7 @@ export default function Utilisateurs() {
               )}
               {isViewAllRole(modal.data.role) ? (
                 <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary-dark">
-                  Ce rôle ({roleLabel(modal.data.role)}) voit tous les modules.
+                  Ce rôle ({roleLabel(modal.data.role)}) voit tous les modules. Pour en retirer un module ou un volet à ce compte, ouvrez sa fiche d'accès (clic sur la ligne).
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -378,89 +429,7 @@ export default function Utilisateurs() {
         )}
       </Modal>
 
-      <Modal
-        open={!!detailUser}
-        onClose={() => setDetailUser(null)}
-        title={detailUser ? `Accès de ${detailUser.nom}` : ''}
-        footer={<Button variant="ghost" onClick={() => setDetailUser(null)}>Fermer</Button>}
-        overlayClassName="bg-gradient-to-br from-[#1A1A1A]/75 via-[#6B1A10]/55 to-[#BC3C31]/45 backdrop-blur-sm"
-        panelClassName="relative overflow-hidden border border-white/60 bg-white/75 backdrop-blur-2xl"
-      >
-        {detailUser && (
-          <div className="relative space-y-4">
-            {/* Halos décoratifs LA TERMITIÈRE — rouge brique + anthracite */}
-            <div className="pointer-events-none absolute -right-16 -top-20 -z-10 h-56 w-56 rounded-full opacity-40 blur-3xl" style={{ background: '#BC3C31' }} />
-            <div className="pointer-events-none absolute -bottom-24 -left-16 -z-10 h-56 w-56 rounded-full opacity-30 blur-3xl" style={{ background: '#1A1A1A' }} />
-
-            {/* En-tête utilisateur — carte verre dépoli */}
-            <div
-              className="flex items-center gap-3 rounded-xl border p-3 shadow-sm backdrop-blur-md"
-              style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35))', borderColor: 'rgba(188,60,49,0.22)' }}
-            >
-              <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white shadow-md ring-2 ring-white/60"
-                style={{ background: avatarGradient(detailUser.login || detailUser.nom) }}
-              >
-                {(detailUser.nom || '').trim().charAt(0).toUpperCase() || '?'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-gray-900">{detailUser.nom}</p>
-                <p className="truncate text-xs text-gray-500">{detailUser.poste || detailUser.login}</p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                <Badge tone={roleTone(detailUser.role)}>{roleLabel(detailUser.role)}</Badge>
-                {isReadOnlyRole(detailUser.role) && <Badge tone="info">Lecture seule</Badge>}
-                {isViewAllRole(detailUser.role) && <Badge tone="primary">Tous les modules</Badge>}
-              </div>
-            </div>
-
-            {(isViewAllRole(detailUser.role) ? MODULES : MODULES.filter((m) => (detailUser.modules || []).includes(m.id))).length === 0 && (
-              <p className="rounded-xl border border-dashed border-gray-200 bg-white/60 p-4 text-center text-sm text-gray-400 backdrop-blur-md">
-                Aucun accès module attribué.
-              </p>
-            )}
-
-            {/* Cartes modules — verre dépoli léger */}
-            {(isViewAllRole(detailUser.role) ? MODULES : MODULES.filter((m) => (detailUser.modules || []).includes(m.id))).map((m) => {
-              const volets = voletsVisibles(detailUser, m.id)
-              return (
-                <div key={m.id} className="overflow-hidden rounded-xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md transition-shadow hover:shadow-md">
-                  <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ background: hexToRgba(m.color, 0.1), borderBottom: `1px solid ${hexToRgba(m.color, 0.18)}` }}>
-                    <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm" style={{ background: m.color }}>
-                      <m.icon size={12} /> {m.nom}
-                    </span>
-                    {m.id === 'logistique' && (
-                      <span className="text-xs font-medium text-gray-500">
-                        {(detailUser.logistiqueSites || []).length ? detailUser.logistiqueSites.join(' · ') : 'aucun site'}
-                      </span>
-                    )}
-                    {m.id === 'gym' && (
-                      <span className="text-xs font-medium text-gray-500">
-                        {(detailUser.gymSites || []).length ? detailUser.gymSites.join(' · ') : 'aucune salle'}
-                      </span>
-                    )}
-                    <span className="ml-auto shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold shadow-sm" style={{ color: m.color }}>
-                      {volets.length} volet{volets.length > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  {volets.length ? (
-                    <ul className="grid grid-cols-2 gap-x-4 gap-y-0.5 p-3">
-                      {volets.map((v) => (
-                        <li key={v.to} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-white">
-                          <v.icon size={14} className="shrink-0 text-gray-400" />
-                          <span className="truncate">{v.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="p-3 text-xs text-gray-400">Aucun volet accessible.</p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Modal>
+      <AccesUtilisateur user={detailUser} onClose={() => setDetailLogin(null)} onSave={saveUser} />
     </div>
   )
 }

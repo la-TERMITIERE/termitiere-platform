@@ -257,7 +257,7 @@ export default function SectorBesoins({ secteurId }) {
       id,
       // `secteurId` doit exister dans SECTEURS (cf. depense/data.js) pour être suivi
       // dans les budgets/Revenus & Budget — E-FONCIER n'y figure pas encore, ses
-      // décaissements sont donc routés en « Caisse commune » comme le reste sans budget dédié.
+      // décaissements sont donc routés en « Caisse courante » comme le reste sans budget dédié.
       secteurId: SECTEURS.some((s) => s.id === secteurId) ? secteurId : 'divers',
       categorie: catLabel(b.categorie),
       montant: Number(b.montant) || 0,

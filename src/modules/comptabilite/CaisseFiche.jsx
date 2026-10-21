@@ -14,7 +14,7 @@ import { STATUTS_DECAISSEMENT, NATURES_FLUX, MODES_PAIEMENT, natureFluxDefaut } 
 import { domaineLibelle, couleurDomaine } from './journalCalculs'
 
 const heure = (ms) => (ms ? new Date(ms).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null)
-const FINANCEMENT = { caisse_commune: 'Caisse commune', pau: 'Apport du PAU' }
+const FINANCEMENT = { caisse_commune: 'Caisse courante', pau: 'Apport du PAU' }
 
 export default function CaisseFiche({ ligne, onClose }) {
   const l = ligne

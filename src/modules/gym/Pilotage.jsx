@@ -202,7 +202,7 @@ export default function Pilotage() {
             <TrendingUp size={28} color="white" />
           </div>
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h2 className="text-lg font-extrabold">Pilotage & Analyses</h2>
           <p className="text-sm text-white/80">Tendances et aide à la décision : MAXI-GYM</p>
         </div>

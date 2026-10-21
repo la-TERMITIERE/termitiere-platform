@@ -86,7 +86,7 @@ export default function Comparatif() {
         }}>
           <Scale size={28} color="white" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <Link to="/gym" className="mb-0.5 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white"><ArrowLeft size={13} /> Choix de la salle</Link>
           <h2 className="text-lg font-extrabold">Comparatif Lomé / Kara</h2>
           <p className="text-sm text-white/80">Les deux salles, côte à côte, sur la même période</p>

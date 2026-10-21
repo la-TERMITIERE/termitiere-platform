@@ -211,7 +211,7 @@ export default function Demandes() {
     setDetail(null)
   }
 
-  // Notifie la direction si le secteur — ou la Caisse commune si la dépense est marquée
+  // Notifie la direction si le secteur — ou la Caisse courante si la dépense est marquée
   // `financePar: 'caisse_commune'` (cf. même logique dans depenseActions.js) — atteint
   // 80%+ de son budget une fois la dépense décaissée.
   async function alerterSiDepassement(d, secteur) {
@@ -226,7 +226,7 @@ export default function Demandes() {
     const pct = Math.round((depenseTotal / alloue) * 100)
     const statut = statutBudget(pct, seuils)
     if (statut.key === 'ok') return
-    const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
+    const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse courante') : libelleSecteurSite(secteur, d)
     await notify({
       type: statut.key === 'depasse' ? 'danger' : 'warning',
       title: statut.key === 'depasse' ? `🔴 Budget dépassé : ${libelle}` : `🟠 Budget en alerte : ${libelle}`,
@@ -315,7 +315,7 @@ export default function Demandes() {
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${couleurSecteur}1a`, color: couleurSecteur }}>{libelleSecteurSite(secteur, d)}</span>
                       {u && (() => { const Ic = u.icone; return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white ${critique ? 'ed-halo' : ''}`} style={{ background: u.couleur }}><Ic size={10} /> {u.label}</span> })()}
-                      {d.financePar === 'caisse_commune' && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700"><PiggyBank size={10} /> Caisse commune</span>}
+                      {d.financePar === 'caisse_commune' && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700"><PiggyBank size={10} /> Caisse courante</span>}
                     </div>
                     <p className="mt-1 line-clamp-2 break-words text-sm font-bold text-gray-800">{d.description || d.categorie || 'Demande'}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-500">
@@ -391,7 +391,7 @@ export default function Demandes() {
                 {d.beneficiaireNom && <Tuile icone={Briefcase} couleur="#d97706" titre="Bénéficiaire">{d.beneficiaireNom}{d.beneficiaireFonction ? ` · ${d.beneficiaireFonction}` : ''}</Tuile>}
                 {d.beneficiaireTelephone && <Tuile icone={Phone} couleur="#0ea5e9" titre="Téléphone">{d.beneficiaireTelephone}</Tuile>}
                 {u && <Tuile icone={u.icone} couleur={u.couleur} titre="Urgence"><span style={{ color: u.couleur }}>{u.label}</span></Tuile>}
-                {d.financePar === 'caisse_commune' && <Tuile icone={PiggyBank} couleur="#7c3aed" titre="Paiement">Depuis la caisse commune</Tuile>}
+                {d.financePar === 'caisse_commune' && <Tuile icone={PiggyBank} couleur="#7c3aed" titre="Paiement">Depuis la caisse courante</Tuile>}
               </div>
 
               {/* Décisions déjà prises */}

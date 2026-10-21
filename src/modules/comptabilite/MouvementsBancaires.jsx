@@ -32,7 +32,7 @@ import { PREFIXE_AUTRE, collectionBanque, moduleAudit, teinteBanque } from '../.
 import BandeauCompta, { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 // Un compte bancaire par secteur : collection `${id}_banque`. Les secteurs sont ceux d'E-DÉPENSES, sans la
-// caisse commune (qui n'est pas un secteur) : E-G.Pro et E-VOYAGE n'en sont pas non plus. MAXI LOGISTIQUE et
+// caisse courante (qui n'est pas un secteur) : E-G.Pro et E-VOYAGE n'en sont pas non plus. MAXI LOGISTIQUE et
 // MAXI-GYM ont deux sites (Lomé, Kara) : le site se choisit à la saisie.
 const SITES_PAR_SECTEUR = { logistique: LOGISTIQUE_SITES, gym: [{ id: 'lome', label: 'Lomé' }, { id: 'kara', label: 'Kara' }] }
 // TRANSPORTS s'y ajoute comme source de revenus à part entière. D'autres sources se créent à la main (« Autre source »).

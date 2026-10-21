@@ -1,5 +1,5 @@
-// Report automatique de la CAISSE COMMUNE : à partir de novembre 2026, le reste du mois précédent (budget alloué moins
-// dépenses de la caisse commune) devient tout seul le premier apport du nouveau mois dans E-DÉPENSES. La Caisse de la
+// Report automatique de la CAISSE COURANTE : à partir de novembre 2026, le reste du mois précédent (budget alloué moins
+// dépenses de la caisse courante) devient tout seul le premier apport du nouveau mois dans E-DÉPENSES. La Caisse de la
 // Comptabilité le reprend comme solde initial. Les agents n'ont plus à le saisir (cf. ressembleAUnReport).
 import { useEffect, useMemo, useRef } from 'react'
 import { setItem } from '../../core/db'
@@ -41,7 +41,7 @@ export function reportsManquants(budgets, depenses, aujourdhui = todayStr()) {
   return out
 }
 
-// Écrit les reports manquants (premier apport du mois, daté du 1er) dans le budget de la caisse commune.
+// Écrit les reports manquants (premier apport du mois, daté du 1er) dans le budget de la caisse courante.
 export async function creerReportsAuto(budgets, depenses) {
   const aFaire = reportsManquants(budgets, depenses)
   for (const r of aFaire) {
@@ -51,7 +51,7 @@ export async function creerReportsAuto(budgets, depenses) {
     const id = doc?.id || `divers_${cle(r.annee, r.mois)}`
     const entree = { id: ID_REPORT_AUTO, ancien, nouveau, motif: MOTIF_REPORT_AUTO, date: new Date(r.annee, r.mois - 1, 1, 0, 0, 1).getTime(), auteur: 'Système' }
     await setItem('depense_budgets', id, { ...(doc || {}), id, secteurId: 'divers', site: null, annee: r.annee, mois: r.mois, montant: nouveau, revisions: [...(doc?.revisions || []), entree], updatedAt: Date.now() })
-    await audit('depense', 'REPORT_AUTO', `Caisse commune : report automatique de ${r.montant.toLocaleString('fr-FR')} FCFA (${cle(r.annee, r.mois)})`, { annee: r.annee, mois: r.mois, montant: r.montant })
+    await audit('depense', 'REPORT_AUTO', `Caisse courante : report automatique de ${r.montant.toLocaleString('fr-FR')} FCFA (${cle(r.annee, r.mois)})`, { annee: r.annee, mois: r.mois, montant: r.montant })
   }
   return aFaire.length
 }

@@ -2,11 +2,11 @@
 
 // Secteurs de l'entreprise — reprend les mêmes couleurs que les modules
 // correspondants pour une cohérence visuelle immédiate.
-// CAISSE COMMUNE en tête : c'est le secteur central (dépenses transverses, apports),
+// CAISSE COURANTE en tête : c'est le secteur central (dépenses transverses, apports),
 // consulté en premier — les listes « Budget par secteur »/« Répartition » suivent
 // simplement cet ordre de déclaration, donc l'ordre ici pilote directement l'affichage.
 export const SECTEURS = [
-  { id: 'divers',       label: 'CAISSE COMMUNE', color: '#64748b' },
+  { id: 'divers',       label: 'CAISSE COURANTE', color: '#64748b' },
   { id: 'agro',         label: 'MAXI-AGRO',          color: '#2EAA3F' },
   { id: 'logistique',   label: 'MAXI LOGISTIQUE',    color: '#BC3C31' },
   { id: 'bat',          label: 'MAXI BAT',           color: '#0d9488' },

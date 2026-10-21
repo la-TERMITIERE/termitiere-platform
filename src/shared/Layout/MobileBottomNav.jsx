@@ -14,7 +14,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, UserCircle, Settings, Grid2x2 } from 'lucide-react'
 import { getModule, MODULE_NAV } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
-import { canManagePartenaires, depenseRoleEffectif } from '../../core/roles'
+import { canManagePartenaires, depenseRoleEffectif, voletRetire } from '../../core/roles'
 import { teinterHex } from '../../utils/color'
 
 const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
@@ -65,6 +65,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
 
   const navRole = activeModule?.id === 'depense' ? depenseRoleEffectif(role) : role
   const canSee = (item) => {
+    if (activeModule && voletRetire(user, activeModule.id, item.to)) return false // retiré à ce compte par Info
     if (item.roles && item.roles.includes(navRole)) return true
     if (item.perm === 'partenaires' && canManagePartenaires(navRole, user)) return true
     return !item.roles && !item.perm

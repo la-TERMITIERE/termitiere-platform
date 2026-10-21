@@ -17,7 +17,7 @@ import { DOMAINES } from './journalCalculs'
 import { COULEUR_DOTATION } from './iconesCaisse'
 
 const VERT = COULEUR_DOTATION
-// La caisse commune s'appelle ici « CAISSE COURANTE » (c'est celle dont on parle pour les dotations).
+// La caisse courante s'appelle ici « CAISSE COURANTE » (c'est celle dont on parle pour les dotations).
 const nomDomaine = (d) => (d.id === 'divers' ? 'CAISSE COURANTE' : d.label)
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
 
@@ -42,7 +42,7 @@ function Choix({ actif, onClick, point, children }) {
   )
 }
 
-// `tousDomaines` : on peut choisir le secteur (E-DÉPENSES, Budget) ; sinon la dotation va à la caisse commune (SIÈGE), comme dans la Caisse.
+// `tousDomaines` : on peut choisir le secteur (E-DÉPENSES, Budget) ; sinon la dotation va à la caisse courante (SIÈGE), comme dans la Caisse.
 export default function DotationModal({ open, onClose, budgets, user, tousDomaines = false, titre }) {
   const { data: users } = useCollection('users')
   const [secteurId, setSecteurId] = useState('divers')

@@ -1,7 +1,7 @@
-// Nouvelle dotation de caisse : un apport au budget du mois d'un domaine (SIÈGE = caisse commune, ou un secteur),
+// Nouvelle dotation de caisse : un apport au budget du mois d'un domaine (SIÈGE = caisse courante, ou un secteur),
 // enregistré exactement comme l'« ajout de budget » d'E-DÉPENSES (collection `depense_budgets`, une révision de plus
 // dans l'historique). La dotation modifie donc le budget alloué dans E-DÉPENSES, et la Caisse la relit depuis là.
-//  - SIÈGE (caisse commune) et MAXI BAT : appliquée tout de suite ;
+//  - SIÈGE (caisse courante) et MAXI BAT : appliquée tout de suite ;
 //  - secteurs avec équipe (Agro, Logistique, Briqueterie, Garderie) : « proposée », puis confirmée reçue par le
 //    secteur (même circuit qu'E-DÉPENSES, cf. validerReceptionBudget dans RecettesDepenses.jsx).
 import { setItem } from '../../core/db'
