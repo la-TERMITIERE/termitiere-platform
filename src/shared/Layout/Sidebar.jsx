@@ -6,7 +6,7 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, Settings, X, ChevronR
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel, canManagePartenaires, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
+import { roleLabel, canManagePartenaires, voletRetire, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
 import { estActif } from '../workflow'
 import { calculerBadges } from '../nouveautes'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from '../../modules/projet/logic'
@@ -266,6 +266,7 @@ export default function Sidebar({ open, onClose }) {
   // complet à ce module. N'affecte que la nav de CE module, pas les autres.
   const navRole = activeModule?.id === 'depense' ? depenseRoleEffectif(role) : role
   const canSeeNav = (item) => {
+    if (activeModule && voletRetire(user, activeModule.id, item.to)) return false // retiré à ce compte par Info
     if (item.roles && item.roles.includes(navRole)) return true
     if (item.perm === 'partenaires' && canManagePartenaires(navRole, user)) return true
     return !item.roles && !item.perm

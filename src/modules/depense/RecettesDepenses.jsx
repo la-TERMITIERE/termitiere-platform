@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2, HandCoins, Layers, CalendarDays, ArrowUpDown, PenLine, Banknote, MessageSquareText, X, Save, Undo2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2, HandCoins, Layers, CalendarDays, ArrowUpDown, PenLine, Banknote, MessageSquareText, X, Save, Undo2, PiggyBank } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -52,7 +52,7 @@ const barColor = (statut) => statut.key === 'depasse' ? 'bg-red-500'
   : statut.key === 'attention' ? 'bg-amber-500' : 'bg-teal-500'
 
 // Secteurs avec une équipe identifiable (via `user.modules`) capable de confirmer la
-// réception d'un budget — les autres (MAXI BAT, Caisse commune) gardent l'allocation
+// réception d'un budget — les autres (MAXI BAT, Caisse courante) gardent l'allocation
 // instantanée d'avant, faute de destinataire clair pour la validation.
 const SECTEURS_AVEC_VALIDATION = ['agro', 'logistique', 'evenementiel', 'garderie']
 const ROUTE_FINANCES_PAR_SECTEUR = {
@@ -160,6 +160,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const [ongletBudget, setOngletBudget] = useState('secteurs')
   const [dotationOuverte, setDotationOuverte] = useState(false) // fenêtre « Nouvelle dotation de caisse »
   const [secteurAjoutChoisi, setSecteurAjoutChoisi] = useState('')
+  const [triLignes, setTriLignes] = useState('date_desc') // tri de la liste des dépenses du mois d'un secteur
   const [triApportsDesc, setTriApportsDesc] = useState(true) // tri par date de l'onglet « Apports & ajouts » : true = plus récent d'abord
   // Détail / édition d'un apport précis (un élément de `revisions`) — cf. apportsTous
   // et l'historique dans la modale d'ajout. `ctx` = { budgetId, secteurId, site,
@@ -196,9 +197,9 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     // entrées `source: 'projet'` historiques.
     const lignes = depensesHorsProjetSecteurMois(depenses, s.secteurId, annee, mois, s.site).sort((a, b) => (a.date < b.date ? 1 : -1))
     const depense = totalDepenses(lignes)
-    // Pour la CAISSE COMMUNE (secteurId `divers`) uniquement : cette liste inclut, en
+    // Pour la CAISSE COURANTE (secteurId `divers`) uniquement : cette liste inclut, en
     // plus de ses propres dépenses, celles d'AUTRES secteurs marquées « payée depuis la
-    // caisse commune » (cf. Depenses.jsx → financePar, et depensesEntrepriseSecteurMois)
+    // caisse courante » (cf. Depenses.jsx → financePar, et depensesEntrepriseSecteurMois)
     // — isolées ci-dessous pour les afficher dans son détail (cf. secteurDetail).
     const consommationBudget = depensesEntrepriseSecteurMois(depenses, s.secteurId, annee, mois, s.site)
     const depenseBudget = totalDepenses(consommationBudget)
@@ -211,7 +212,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       // `soldeAlloue` (alloué - dépense) est celui affiché en résumé sur la carte —
       // ces secteurs reçoivent une enveloppe mensuelle plutôt que de facturer leurs
       // propres clients, c'est donc l'ALLOUÉ, pas le revenu, la référence naturelle.
-      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, lignes, financeesAilleurs, solde: recette - depense, soldeAlloue: alloue - depense,
+      ...s, recette, versementsClient, revenuManuel, revenusManuelsDuMois, depense, depenseBudget, lignes, financeesAilleurs,
+      // Une dépense payée depuis la Caisse courante est comptée dans le TOTAL des dépenses du secteur (`depense`, KPI) mais ne touche ni
+      // son solde ni son budget : seules les dépenses que le secteur finance lui-même (`depenseBudget`) les font bouger.
+      solde: recette - depenseBudget, soldeAlloue: alloue - depenseBudget,
       budgetId, alloue, reste: alloue - depenseBudget, pct, statut: statutBudget(pct, seuils), revisionsBudget: budgetDoc?.revisions || [],
       // Proposition de budget en attente de confirmation par le secteur (cf. confirmerRevision).
       montantPropose: budgetDoc?.statutValidation === 'en_attente' ? budgetDoc.montantPropose : null,
@@ -256,9 +260,10 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const totalAlloue  = parSecteur.reduce((s, x) => s + x.alloue, 0)
   // Solde global = alloué - dépenses : ces secteurs reçoivent une enveloppe mensuelle
   // plutôt que de facturer leurs propres clients (cf. `soldeAlloue` par secteur ci-dessous).
-  const totalReste   = totalAlloue - totalDepense
+  const totalDepenseBudget = parSecteur.reduce((s, x) => s + x.depenseBudget, 0)
+  const totalReste   = totalAlloue - totalDepenseBudget
 
-  // CAISSE COMMUNE (secteur `divers`) : pas de « révision » (on ne redéfinit pas le
+  // CAISSE COURANTE (secteur `divers`) : pas de « révision » (on ne redéfinit pas le
   // total) mais un « ajout » cumulatif — chaque apport de la direction s'additionne au
   // montant déjà présent, plutôt que d'exiger de recalculer et ressaisir le nouveau total.
   const ouvrirRevision = (s) => {
@@ -277,14 +282,14 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     const estCaisseCommune = revision.secteurId === 'divers'
     if (revMontant === '' || Number(revMontant) < 0) return toast.error('Montant requis')
     if (!revDate) return toast.error('Date requise')
-    // CAISSE COMMUNE : le montant saisi s'AJOUTE au total déjà présent (pas de
+    // CAISSE COURANTE : le montant saisi s'AJOUTE au total déjà présent (pas de
     // remplacement) — aucun motif exigé, chaque apport de la direction est cumulatif.
     // Autres secteurs : première allocation (aucun budget encore) → pas de motif exigé ;
     // révision d'un budget existant → motif obligatoire (traçabilité du changement).
     const nouveau = estCaisseCommune ? revision.montantActuel + Number(revMontant) : Number(revMontant)
     const estAllocation = revision.montantActuel === 0
     if (!estCaisseCommune && !estAllocation && !revMotif.trim()) return toast.error('Motif de révision requis')
-    const motif = revMotif.trim() || (estCaisseCommune ? 'Apport à la caisse commune' : 'Allocation initiale')
+    const motif = revMotif.trim() || (estCaisseCommune ? 'Apport à la caisse courante' : 'Allocation initiale')
     if (estCaisseCommune && reportManuelInterdit(revDate.slice(0, 7), motif)) return toast.error('Le report du mois précédent est calculé automatiquement : inutile de le saisir')
     // Jour réel de l'apport (modifiable, cf. revDate) — heure fixée à l'instant présent
     // pour départager plusieurs apports le même jour dans l'historique (tri chronologique).
@@ -297,7 +302,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
       // Secteurs avec équipe identifiable : le montant n'est pas appliqué tout de suite —
       // il reste « proposé » jusqu'à ce que le secteur confirme l'avoir reçu (cf.
-      // validerReceptionBudget). Les autres (MAXI BAT, Caisse commune) gardent l'ancien
+      // validerReceptionBudget). Les autres (MAXI BAT, Caisse courante) gardent l'ancien
       // comportement instantané, faute de destinataire clair pour valider.
       if (SECTEURS_AVEC_VALIDATION.includes(revision.secteurId)) {
         await setItem('depense_budgets', revision.id, {
@@ -341,14 +346,14 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       // Réservé à l'administration : montant alloué/révisé/ajouté pour un secteur.
       await notify({
         type: 'info',
-        title: estCaisseCommune ? `➕ Caisse commune : ${revision.secteurLabel}` : (estAllocation ? `💰 Budget alloué : ${revision.secteurLabel}` : `🔄 Budget révisé : ${revision.secteurLabel}`),
+        title: estCaisseCommune ? `➕ Caisse courante : ${revision.secteurLabel}` : (estAllocation ? `💰 Budget alloué : ${revision.secteurLabel}` : `🔄 Budget révisé : ${revision.secteurLabel}`),
         body: estCaisseCommune
           ? `+${fmt(nouveau - ancien)} FCFA ajoutés : nouveau total ${fmt(nouveau)} FCFA.`
           : estAllocation ? `${fmt(nouveau)} FCFA alloués pour ${MOIS_LABELS[mois - 1]} ${annee}.` : `${fmt(ancien)} → ${fmt(nouveau)} FCFA : ${motif}`,
         module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
         link: '/depense/recettes-depenses', state: { openSecteurId: revision.secteurId, annee, mois }
       }).catch(() => {})
-      toast.success(estCaisseCommune ? 'Ajouté à la caisse commune ✓' : (estAllocation ? 'Budget alloué ✓' : 'Budget révisé ✓'))
+      toast.success(estCaisseCommune ? 'Ajouté à la caisse courante ✓' : (estAllocation ? 'Budget alloué ✓' : 'Budget révisé ✓'))
       setRevision(null)
     } finally {
       setRevSaving(false)
@@ -405,7 +410,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   // Reconstruit la chaîne ancien/nouveau de `revisions` après édition ou
   // suppression d'une entrée au milieu du tableau (ordre = ordre d'ajout, pas
   // forcément l'ordre des dates puisqu'un apport peut être antidaté).
-  // - Caisse commune (cumulatif) : le montant AJOUTÉ (nouveau − ancien) de chaque
+  // - Caisse courante (cumulatif) : le montant AJOUTÉ (nouveau − ancien) de chaque
   //   entrée est préservé, seuls les totaux ancien/nouveau sont recalculés en
   //   cascade.
   // - Autres secteurs (remplacement) : c'est le montant CIBLE (nouveau) de chaque
@@ -537,7 +542,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         const origine = depensesReelles.find((x) => x.id === d.retourDe)
         const sct = SECTEURS.find((x) => x.id === d.secteurId)
         const caisse = d.financePar === 'caisse_commune' || d.secteurId === 'divers'
-        return { ...d, origine, secteurLabel: caisse ? 'CAISSE COMMUNE' : (sct?.label || d.secteurId), secteurColor: caisse ? '#7c3aed' : (sct?.color || '#64748b'), vers: caisse ? 'la caisse commune' : `le budget ${sct?.label || ''}` }
+        return { ...d, origine, secteurLabel: caisse ? 'CAISSE COURANTE' : (sct?.label || d.secteurId), secteurColor: caisse ? '#7c3aed' : (sct?.color || '#64748b'), vers: caisse ? 'la caisse courante' : `le budget ${sct?.label || ''}` }
       })
       .sort((a, b) => ((a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0))))
   }, [depensesReelles, annee, mois])
@@ -701,7 +706,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
       ) : (<>
       {/* KPI globaux */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard title="Dépenses totales" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent="#dc2626" />
+        <StatCard title="Dépenses totales" value={`${fmt(totalDepense)} FCFA`} icon={TrendingDown} accent={secteurId ? (SECTEURS.find((x) => x.id === secteurId)?.color || '#B45309') : '#B45309'} />
         {!masquerRevenu && (
           <StatCard title="Solde global" value={`${fmt(totalReste)} FCFA`} sub={totalReste >= 0 ? 'Excédent' : 'Déficit'}
             icon={Scale} accent={totalReste >= 0 ? '#059669' : '#dc2626'} valueColor={totalReste >= 0 ? '#059669' : '#dc2626'} />
@@ -994,12 +999,29 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
 
             {/* Liste des dépenses du mois — clic → détail de la dépense */}
             <div className="rounded-xl bg-white p-3 shadow-sm">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Dépenses du mois ({secteurDetail.lignes.length})</p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Dépenses du mois ({secteurDetail.lignes.length})</p>
+                {secteurDetail.lignes.length > 1 && (
+                  <select value={triLignes} onChange={(e) => setTriLignes(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-gray-600 outline-none">
+                    <option value="date_desc">Date : récentes d'abord</option>
+                    <option value="date_asc">Date : anciennes d'abord</option>
+                    <option value="montant_desc">Montant : du plus grand</option>
+                    <option value="montant_asc">Montant : du plus petit</option>
+                    <option value="categorie">Catégorie (A à Z)</option>
+                  </select>
+                )}
+              </div>
               {secteurDetail.lignes.length === 0 ? (
                 <p className="py-2 text-center text-xs text-gray-400">Aucune dépense enregistrée ce mois.</p>
               ) : (
                 <div className="max-h-64 space-y-1 overflow-y-auto">
-                  {secteurDetail.lignes.map((d) => (
+                  {[...secteurDetail.lignes].sort({
+                    date_desc: (a, b) => (a.date < b.date ? 1 : -1),
+                    date_asc: (a, b) => (a.date < b.date ? -1 : 1),
+                    montant_desc: (a, b) => (Number(b.montant) || 0) - (Number(a.montant) || 0),
+                    montant_asc: (a, b) => (Number(a.montant) || 0) - (Number(b.montant) || 0),
+                    categorie: (a, b) => (a.categorie || '').localeCompare(b.categorie || '', 'fr')
+                  }[triLignes]).map((d) => (
                     <div key={d.id} onClick={() => { setSecteurDetail(null); setDetail(d) }}
                       className={`group flex cursor-pointer items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs transition-colors ${theme.hover}`}>
                       <span className="whitespace-nowrap text-gray-500">{formatDateShort(d.date)}</span>
@@ -1012,8 +1034,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
               )}
             </div>
 
-            {/* CAISSE COMMUNE uniquement : dépenses d'AUTRES secteurs marquées « payée
-                depuis la caisse commune » — consomment son budget mais restent listées
+            {/* CAISSE COURANTE uniquement : dépenses d'AUTRES secteurs marquées « payée
+                depuis la caisse courante » — consomment son budget mais restent listées
                 sous leur secteur d'origine ci-dessus (cf. Depenses.jsx → financePar). */}
             {secteurDetail.secteurId === 'divers' && secteurDetail.financeesAilleurs.length > 0 && (
               <div className="rounded-xl bg-white p-3 shadow-sm">
@@ -1043,7 +1065,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         )}
       </Modal>
 
-      {/* Allocation (1ère fois) / Révision (budget existant) / Ajout cumulatif (Caisse commune) */}
+      {/* Allocation (1ère fois) / Révision (budget existant) / Ajout cumulatif (Caisse courante) */}
       <Modal open={!!revision} onClose={() => setRevision(null)} size="sm"
         title={revision ? (revision.secteurId === 'divers' ? `Ajouter un apport : ${revision.secteurLabel}` : `${revision.montantActuel > 0 ? 'Réviser' : 'Allouer'} le budget : ${revision.secteurLabel}`) : 'Budget'}
         panelClassName={theme.gradient}>
@@ -1350,14 +1372,13 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
                 </div>
               </div>
-              <label className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-2 text-xs text-gray-700">
-                <input type="checkbox" className="mt-0.5" checked={nouvelleDepense.financePar === 'caisse_commune'}
-                  onChange={(e) => setNouvelleDepense((d) => ({ ...d, financePar: e.target.checked ? 'caisse_commune' : '' }))} />
+              <div className="flex items-start gap-2 rounded-lg border border-violet-100 bg-violet-50/60 px-2.5 py-2 text-xs text-gray-700">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-violet-600 text-white"><PiggyBank size={11} /></span>
                 <span>
-                  💰 Payée depuis la <strong>Caisse commune</strong>
-                  <span className="block text-[11px] text-gray-500">Ne consomme pas le budget de ce secteur : réduit celui de la Caisse commune à la place.</span>
+                  La somme quitte le <strong>Siège</strong> pour ce secteur
+                  <span className="block text-[11px] text-gray-500">Tout passe par le Siège : la dépense est prélevée sur la Caisse courante et rattachée à ce secteur.</span>
                 </span>
-              </label>
+              </div>
               <p className="text-[11px] text-gray-400">
                 Devient une <strong>demande envoyée au PAU</strong> si elle dépasse le budget restant du
                 secteur ce mois-ci ; sinon elle est décaissée immédiatement.

@@ -27,7 +27,7 @@ import { SECTEURS, MOIS_LABELS } from './data'
 
 // Logo/icône de chaque secteur — reprend celui de son module métier (agro, logistique…)
 // pour que la carte KPI soit reconnaissable au premier coup d'œil, pas un pictogramme
-// générique. « Caisse commune » (divers) et « MAXI BAT » n'ont pas de module dédié.
+// générique. « Caisse courante » (divers) et « MAXI BAT » n'ont pas de module dédié.
 const iconeSecteur = (id) => getModule(id)?.icon || Building2
 import { versementsClientVersSecteurs, siteLogistiqueDe } from './logic'
 import { marquerVoletVu } from '../../shared/nouveautes'

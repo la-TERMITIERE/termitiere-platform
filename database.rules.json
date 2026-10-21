@@ -58,6 +58,15 @@
           "actif": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
           },
+          "modulesRetires": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "voletsRetires": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
+          "droitsModules": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+          },
           "gerePartenaires": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
           },

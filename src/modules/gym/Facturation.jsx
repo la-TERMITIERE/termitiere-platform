@@ -139,7 +139,15 @@ export default function Facturation() {
       : f.sourceType === 'seance' ? seances.find((x) => x.id === f.sourceId) : null
     const autres = factures.filter((x) => x.id !== f.id && x.sourceType === f.sourceType && x.sourceId === f.sourceId && !x.avoir && !x.versement)
     if (vente && !f.avoir && !f.versement && autres.length === 0) {
-      toast.error(`Cette facture est celle d'${f.sourceType === 'abonnement' ? 'un abonnement' : 'une séance'} encore enregistré${f.sourceType === 'abonnement' ? '' : 'e'}. Supprimez-${f.sourceType === 'abonnement' ? 'le' : 'la'} depuis ${f.sourceType === 'abonnement' ? 'Abonnements' : 'Séances'} : la facture partira avec.`)
+      // Facture unique d'une vente encore enregistrée (cas d'un doublon saisi par erreur) : on propose de supprimer la vente
+      // ET sa facture d'un coup, sans obliger à chercher la ligne dans Abonnements ou Séances (où un client n'apparaît qu'une fois).
+      const abo = f.sourceType === 'abonnement'
+      const qui = `${abo ? "l'abonnement" : 'la séance'} de ${f.clientNom} du ${formatDateShort(vente.date)}`
+      if (!confirm(`La facture ${f.numero} est celle de ${qui}.\n\nSupprimer ${abo ? "l'abonnement" : 'la séance'} ET sa facture ?\nLes totaux baisseront de ${formatMoney(Number(f.montant) || 0)}.`)) return
+      await removeItem(abo ? 'gym_abonnements' : 'gym_seances', vente.id)
+      await removeItem('gym_factures', f.id, { sansMotif: true })
+      await audit('gym', abo ? 'ABONNEMENT_DELETE' : 'SEANCE_DELETE', `${f.clientNom} : ${Number(f.montant).toLocaleString('fr-FR')} FCFA : supprimé depuis la facture ${f.numero}`)
+      toast.success(`${abo ? 'Abonnement' : 'Séance'} et facture supprimés`)
       return
     }
     if (!confirm(`Supprimer la facture ${f.numero} de ${f.clientNom} ?`)) return
@@ -257,7 +265,7 @@ export default function Facturation() {
         }}>
           <Receipt size={28} color="white" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h2 className="text-lg font-extrabold">Facturation</h2>
           <p className="text-sm text-white/80">{liste.length} facture(s) : {formatMoney(total)} au total</p>
         </div>

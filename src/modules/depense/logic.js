@@ -146,7 +146,7 @@ export function revenuClientSecteurMois(versementsRoutes, secteurId, annee, mois
 }
 
 // Revenu saisi manuellement (collection `depense_revenus_manuels`) — pour les secteurs
-// sans source de facturation automatique (ex. Caisse commune, MAXI BAT) : une rentrée
+// sans source de facturation automatique (ex. Caisse courante, MAXI BAT) : une rentrée
 // d'argent ponctuelle qui ne vient ni d'une facture de module, ni d'un apport du PAU,
 // ni d'un versement client E-G.Pro (ex. subvention, vente ponctuelle, remboursement reçu).
 export function revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, site = null) {
@@ -236,11 +236,11 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois, site = nul
 // ALLOUÉ du secteur. À utiliser partout où l'on calcule « combien reste du budget
 // ALLOUÉ » — pas pour un total « toutes dépenses » (rapports, rentabilité…).
 //
-// CAISSE COMMUNE (secteurId `divers`) — cas particulier : une dépense d'un AUTRE
+// CAISSE COURANTE (secteurId `divers`) — cas particulier : une dépense d'un AUTRE
 // secteur peut être marquée `financePar: 'caisse_commune'` (cf. Depenses.jsx) — elle
 // reste affichée sous son secteur d'origine (traçabilité, cf. depensesSecteurMois),
 // mais ne consomme PLUS le budget de ce secteur (exclue ci-dessous) : c'est le budget
-// de la Caisse commune qui est consommé à la place, comme si elle avait payé directement.
+// de la Caisse courante qui est consommé à la place, comme si elle avait payé directement.
 export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, site = null) {
   if (secteurId === 'divers') {
     const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
@@ -317,7 +317,7 @@ export function budgetSecteurPeriode(budgets, secteurId, moisTouches, site = nul
 }
 
 // Dépenses décaissées d'un secteur financées par l'entreprise (mêmes règles que
-// depensesEntrepriseSecteurMois — caisse commune, PAU, projet exclus le cas échéant),
+// depensesEntrepriseSecteurMois — caisse courante, PAU, projet exclus le cas échéant),
 // mais filtrées par un prédicat de date arbitraire plutôt qu'un mois fixe.
 export function depensesEntrepriseSecteurDates(depenses, secteurId, matchDate, site = null) {
   if (secteurId === 'divers') {

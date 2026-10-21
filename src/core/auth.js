@@ -16,7 +16,7 @@ import {
   signOut as fbSignOut
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
-import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant } from './db'
+import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant, _brancherDroitsCourants } from './db'
 import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole, moduleRoleOk } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 import { oublierAbonnementPush } from './push'
@@ -140,7 +140,7 @@ function sessionFromProfile(p) {
     nom: p.nom || 'Utilisateur',
     role,
     // Les rôles « voit tout » (accès total + superviseur) reçoivent tous les modules.
-    modules: isViewAllRole(role) ? ALL_MODULES : (p.modules || []),
+    modules: isViewAllRole(role) ? ALL_MODULES.filter((id) => !(Array.isArray(p.modulesRetires) && p.modulesRetires.includes(id))) : (p.modules || []),
     // Droits de saisie par catégorie d'animaux (Maxi-Agro). null = aucune restriction
     // (comptes hérités) ; tableau (même vide) = restriction explicite.
     agroCategories: Array.isArray(p.agroCategories) ? p.agroCategories : null,
@@ -151,6 +151,11 @@ function sessionFromProfile(p) {
     gymSites: Array.isArray(p.gymSites) ? p.gymSites : null,
     // Droit de gérer l'onglet « Partenaires » (contacts externes) sur les plateformes.
     gerePartenaires: p.gerePartenaires === true,
+    // Modules sur lesquels ce compte est limité à la lecture : { gym: 'lecture' }. Absent = écriture selon le rôle.
+    droitsModules: p.droitsModules && typeof p.droitsModules === 'object' ? p.droitsModules : {},
+    // Modules et volets retirés individuellement par Info (même pour un rôle « voit tout »).
+    modulesRetires: Array.isArray(p.modulesRetires) ? p.modulesRetires : [],
+    voletsRetires: p.voletsRetires && typeof p.voletsRetires === 'object' ? p.voletsRetires : {},
     secteur: p.secteur || '',
     actif: p.actif !== false
   }
@@ -464,7 +469,7 @@ export const useAuthStore = create((set, get) => ({
     // Restriction dure par rôle (ex. E-VOYAGE réservé admins / PAU / GE) : prime sur
     // l'attribution individuelle ET sur l'accès « voit tout ».
     if (!moduleRoleOk(mod, role)) return false
-    if (isViewAllRole(role)) return true
+    if (isViewAllRole(role)) return !(get().user?.modulesRetires || []).includes(mod)
     return (modules || []).includes(mod)
   },
   // Accès total : super-admin, PDG, GE (+ admin hérité). Donne droit aux pages
@@ -487,3 +492,4 @@ export const useAuthStore = create((set, get) => ({
 // Fait ici (et non par un import direct dans db.js) pour éviter un cycle
 // d'importation : auth.js dépend déjà de db.js.
 _brancherRoleCourant(() => useAuthStore.getState().role)
+_brancherDroitsCourants(() => useAuthStore.getState().user?.droitsModules)

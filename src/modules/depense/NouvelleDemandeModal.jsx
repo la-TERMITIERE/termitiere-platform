@@ -92,7 +92,7 @@ export default function NouvelleDemandeModal({ open, onClose }) {
         description: f.description.trim(), urgence: f.urgence || 'normale', modePaiement: 'espece',
         beneficiaireType: f.beneficiaireType, beneficiaireUid: f.beneficiaireType === 'externe' ? '' : (f.beneficiaireUid || ''), beneficiaireNom: f.beneficiaireNom.trim(),
         beneficiaireFonction: f.beneficiaireFonction || '', beneficiaireTelephone: f.beneficiaireTelephone || '',
-        natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: f.caisseCommune ? 'caisse_commune' : '',
+        natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: f.secteurId && f.secteurId !== 'divers' ? 'caisse_commune' : (f.caisseCommune ? 'caisse_commune' : ''),
         justificatifRequis: true, justificatifRecu: false,
         statut: 'en_attente', demande: true, origineSaisie: 'e_depenses',
         enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
@@ -217,7 +217,9 @@ export default function NouvelleDemandeModal({ open, onClose }) {
               <Etiquette icone={CalendarDays} couleur="#7c3aed">Date</Etiquette>
               <Input type="date" value={f.date} onChange={(e) => maj({ date: e.target.value })} />
             </div>
-            <Choix actif={f.caisseCommune} couleur="#7c3aed" icone={PiggyBank} onClick={() => maj({ caisseCommune: !f.caisseCommune })}>Payée depuis la caisse commune</Choix>
+            {f.secteurId && f.secteurId !== 'divers'
+              ? <p className="flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700"><PiggyBank size={14} className="shrink-0" /> La somme quitte le Siège pour ce secteur : prélevée sur la caisse courante.</p>
+              : <Choix actif={f.caisseCommune} couleur="#7c3aed" icone={PiggyBank} onClick={() => maj({ caisseCommune: !f.caisseCommune })}>Payée depuis la caisse courante</Choix>}
           </div>
         </div>
       )}

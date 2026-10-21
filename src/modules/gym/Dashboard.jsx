@@ -538,7 +538,7 @@ export default function Dashboard() {
               background: 'white', padding: 4, boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
             }} />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h2 className="truncate text-lg font-extrabold sm:text-xl">{salutation()}, {user?.nom || user?.login || ''} 👋</h2>
           <p className="whitespace-nowrap text-sm text-white/80">
             MAXI-GYM {siteLabel(site)} · {heureActuelle.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}

@@ -11,27 +11,37 @@ import { SECTEURS } from './data'
 import { budgetRestantSecteur, budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
+// Il n'y a pas de budget par secteur : tout passe par le Siège (Caisse courante). Une dépense rattachée à un secteur est donc
+// toujours prélevée sur la Caisse courante (`financePar: 'caisse_commune'`) et simplement rattachée à ce secteur pour le suivi.
+// `origineFonds` = secteur d'où part l'argent (le Siège par défaut), `secteurId` = secteur de destination qui bénéficie de la somme.
+// Sans `origineFonds` (anciennes dépenses), on garde la règle d'avant : une dépense de secteur est prélevée sur le Siège.
+export const financementSiege = (d) => {
+  if (!d.secteurId || d.secteurId === 'divers') return d.financePar || ''
+  if (d.origineFonds) return d.origineFonds === 'divers' ? 'caisse_commune' : ''
+  return 'caisse_commune'
+}
+
 // Raison pour laquelle une dépense devient une demande d'autorisation, ou null si aucune.
-// Une dépense « payée depuis la Caisse commune » (cf. financePar) consomme le budget de
-// la Caisse commune, pas celui de son secteur d'origine (cf. depensesEntrepriseSecteurMois,
+// Une dépense « payée depuis la Caisse courante » (cf. financePar) consomme le budget de
+// la Caisse courante, pas celui de son secteur d'origine (cf. depensesEntrepriseSecteurMois,
 // qui l'exclut du secteur et l'attribue à `divers`) — c'est donc SON budget restant qu'il
 // faut vérifier ici, pas celui du secteur affiché sur la dépense.
 export function raisonAutorisation(d, { budgets, depenses }) {
   const montant = Number(d.montant) || 0
   if (d.imprevue) return 'dépense imprévue'
-  const estCaisseCommune = d.financePar === 'caisse_commune'
+  const estCaisseCommune = financementSiege(d) === 'caisse_commune'
   const restant = budgetRestantSecteur(budgets, depenses, estCaisseCommune ? 'divers' : d.secteurId, d.date, estCaisseCommune ? null : d.site)
-  if (restant !== null && montant > restant) return `dépasse le budget restant ${estCaisseCommune ? 'de la Caisse commune' : 'du secteur'} (${restant.toLocaleString('fr-FR')} FCFA)`
+  if (restant !== null && montant > restant) return `dépasse le budget restant ${estCaisseCommune ? 'de la Caisse courante' : 'du secteur'} (${restant.toLocaleString('fr-FR')} FCFA)`
   return null
 }
 
-// Notifie les rôles financiers si le secteur — ou la Caisse commune si la dépense est
+// Notifie les rôles financiers si le secteur — ou la Caisse courante si la dépense est
 // marquée `financePar: 'caisse_commune'` (cf. raisonAutorisation ci-dessus, même logique)
 // — atteint 80%+ de son budget mensuel.
 async function alerterSiDepassement(d, secteur, { user, budgets, depenses, seuils }) {
   const [annee, mois] = (d.date || '').split('-').map(Number)
   if (!annee || !mois) return
-  const estCaisseCommune = d.financePar === 'caisse_commune'
+  const estCaisseCommune = financementSiege(d) === 'caisse_commune'
   const secteurIdAlerte = estCaisseCommune ? 'divers' : d.secteurId
   const siteAlerte = estCaisseCommune ? null : d.site
   const alloue = budgetSecteur(budgets, secteurIdAlerte, annee, mois, siteAlerte)
@@ -40,7 +50,7 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses, seuil
   const pct = Math.round((depenseTotal / alloue) * 100)
   const statut = statutBudget(pct, seuils)
   if (statut.key === 'ok') return
-  const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse commune') : libelleSecteurSite(secteur, d)
+  const libelle = estCaisseCommune ? (SECTEURS.find((s) => s.id === 'divers')?.label || 'Caisse courante') : libelleSecteurSite(secteur, d)
   await notify({
     type: statut.key === 'depasse' ? 'danger' : 'warning',
     title: statut.key === 'depasse' ? `🔴 Budget dépassé : ${libelle}` : `🟠 Budget en alerte : ${libelle}`,
@@ -65,7 +75,7 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
   // (celles gérées depuis E-G.Pro/volet BTP, via `projet_depenses`, ne passent jamais
   // par ce circuit et n'ont donc jamais ce marqueur — cf. le filtre `depenses` de
   // chaque écran E-DÉPENSES).
-  const depenseFinale = { ...d, id, montant, statut: statutInitial, origineSaisie: 'e_depenses', enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
+  const depenseFinale = { ...d, financePar: financementSiege(d), id, montant, statut: statutInitial, origineSaisie: 'e_depenses', enregistrePar: user?.nom || '—', enregistreParUid: user?.uid || null, createdAt: Date.now() }
   await setItem('depense_depenses', id, depenseFinale)
   await audit('depense', 'DEPENSE_CREATE', `${libelle} : ${montant.toLocaleString('fr-FR')} FCFA${raison ? ` (${raison} → demande PAU)` : ''}`, { secteurId: d.secteurId, site: d.site || null, categorie: d.categorie, montant, imprevue: !!d.imprevue, raisonAutorisation: raison })
   if (statutInitial === 'en_attente') {

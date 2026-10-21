@@ -182,7 +182,7 @@ export default function Coachs() {
         }}>
           <UserCog size={28} color="white" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h2 className="text-lg font-extrabold">Coachs</h2>
           <p className="text-sm text-white/80">Planning, pointage d'arrivée et performance : MAXI-GYM {siteLabel(site)}</p>
         </div>

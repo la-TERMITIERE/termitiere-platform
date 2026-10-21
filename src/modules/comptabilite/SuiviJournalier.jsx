@@ -142,7 +142,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
   return (
     <div className="space-y-5">
       <BandeauCompta icone={caisse ? Wallet : TrendingUp} titre={caisse ? 'Caisse' : 'Recettes et chiffre d\'affaires'}
-        sous={caisse ? "La caisse commune d'E-DÉPENSES : solde initial du mois, dotations et dépenses. Touchez une ligne pour son détail." : 'Chiffre d\'affaires et recettes de tous les secteurs. Les dépenses se suivent dans la Caisse.'}>
+        sous={caisse ? "La caisse courante d'E-DÉPENSES : solde initial du mois, dotations et dépenses. Touchez une ligne pour son détail." : 'Chiffre d\'affaires et recettes de tous les secteurs. Les dépenses se suivent dans la Caisse.'}>
         <FiltrePeriode variant="glass" label="" mode={mode} onModeChange={setMode}
           valeurJour={fJour} onJourChange={setFJour} valeurMois={fMois} onMoisChange={setFMois}
           avecAnnee valeurAnnee={fAnnee} onAnneeChange={setFAnnee} avecPlage valeurDebut={fDebut} onDebutChange={setFDebut} valeurFin={fFin} onFinChange={setFFin} />

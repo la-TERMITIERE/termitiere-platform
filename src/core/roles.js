@@ -114,9 +114,25 @@ export const isReadOnlyRole = (r) => READONLY_ROLES.includes(r)
 //   - peutEcrireGym : enregistrer, modifier, pointer, renouveler ;
 //   - peutPurgerClientGym : supprimer un client dont l'abonnement est terminé (les agents y ont droit) ;
 //   - peutAdministrerGym : suppressions ordinaires, forfaits, règlements : Info et Assistant PAU (un agent ne supprime jamais).
+// ── Droits par module (réglés dans Paramètres, Utilisateurs) ──────────────────────────────────────────────────────────
+// Chaque compte peut être limité à la LECTURE sur un module donné (`droitsModules[module] = 'lecture'`) ; sans réglage, il garde
+// l'écriture (CRUD) que son rôle lui donne. Le verrou est posé dans db.js, sur le préfixe de la collection (`gym_*` → gym).
+const PREFIXE_MODULE = { agro: 'agro', logistique: 'logistique', evenementiel: 'evenementiel', foncier: 'foncier', garderie: 'garderie', compta: 'comptabilite', rh: 'rh', projet: 'projet', projets: 'projet', depense: 'depense', gym: 'gym', voyage: 'voyage' }
+export const moduleDeCollection = (collection) => PREFIXE_MODULE[String(collection || '').split('_')[0]] || null
+export const moduleEnLecture = (droitsModules, moduleId) => !!moduleId && droitsModules?.[moduleId] === 'lecture'
+
+// ── Retraits individuels (Utilisateurs, fiche d'accès) ──────────────────────────────────────────────────────────────────
+// Info peut retirer à un compte un module ENTIER (`modulesRetires`, utile pour les rôles « voit tout ») ou seulement certains
+// volets d'un module (`voletsRetires = { module: ['/chemin/du/volet'] }`). Le retrait s'ajoute aux limites du rôle, il ne les lève jamais.
+export const moduleRetire = (user, moduleId) => Array.isArray(user?.modulesRetires) && user.modulesRetires.includes(moduleId)
+export const voletRetire = (user, moduleId, to) => Array.isArray(user?.voletsRetires?.[moduleId]) && user.voletsRetires[moduleId].includes(to)
+
 export const GYM_ECRITURE_ROLES = ['agent', 'info', 'assistant_pau']
 export const peutEcrireGym = (r) => GYM_ECRITURE_ROLES.includes(r)
 export const peutPurgerClientGym = (r) => GYM_ECRITURE_ROLES.includes(r)
+// Le rôle seul impose la lecture sur ce module (superviseur, partenaire ; MAXI-GYM hors agent / Info / Assistant PAU) : le réglage
+// individuel n'y change rien, l'écran des utilisateurs le verrouille donc sur « Lecture seule ».
+export const lectureImposeeParRole = (role, moduleId) => isReadOnlyRole(role) || (moduleId === 'gym' && !GYM_ECRITURE_ROLES.includes(role))
 export const peutAdministrerGym = (r) => r === 'info' || r === 'assistant_pau'
 
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
