@@ -26,6 +26,7 @@ import { notify } from '../../core/notify'
 import { genId, formatDateShort, formatDateTime, todayStr } from '../../utils/formatters'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { teinterHex, shadeHex, COULEUR_MODULE, icone3D, glassModalProps } from '../../utils/color'
+import { iconeCategorie } from '../comptabilite/iconesCaisse'
 import Compteur from '../../shared/ui/Compteur'
 import { SECTEURS, LOGISTIQUE_SITES, MOIS_LABELS, NATURES_FLUX, natureFluxDefaut, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT } from './data'
 import { budgetSecteur, budgetDocSecteur, depensesHorsProjetSecteurMois, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, versementsClientVersSecteurs, revenuClientSecteurMois, revenuManuelSecteurMois, secteursEtSites, libelleSecteurSite, seuilsBudgetDe } from './logic'
@@ -821,6 +822,76 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           </div>
         ))}
       </div>
+
+      {/* Volet Dépenses d'un secteur : toutes les dépenses du mois sont listées ici, sans avoir à ouvrir le détail du secteur. */}
+      {secteurId && parSecteur[0] && (() => {
+        const sct = parSecteur[0]
+        const rows = [...sct.lignes].sort({
+          date_desc: (a, b) => (a.date < b.date ? 1 : -1),
+          date_asc: (a, b) => (a.date < b.date ? -1 : 1),
+          montant_desc: (a, b) => (Number(b.montant) || 0) - (Number(a.montant) || 0),
+          montant_asc: (a, b) => (Number(a.montant) || 0) - (Number(b.montant) || 0),
+          categorie: (a, b) => (a.categorie || '').localeCompare(b.categorie || '', 'fr')
+        }[triLignes])
+        return (
+          <div className="overflow-hidden rounded-2xl border-l-4 bg-white/80 shadow-[0_16px_38px_-18px_rgba(26,26,26,0.20)] ring-1 ring-gray-100 backdrop-blur-xl" style={{ borderLeftColor: sct.color }}>
+            <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: sct.color }} />
+              <p className="text-sm font-extrabold text-gray-800">Dépenses de {MOIS_LABELS[mois - 1]} {annee}</p>
+              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">{rows.length}</span>
+              <span className="text-xs text-gray-500">Total <b className="text-amber-600">{fmt(sct.depense)} FCFA</b></span>
+              {rows.length > 1 && (
+                <select value={triLignes} onChange={(e) => setTriLignes(e.target.value)} className="ml-auto rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-gray-600 outline-none">
+                  <option value="date_desc">Date : récentes d'abord</option>
+                  <option value="date_asc">Date : anciennes d'abord</option>
+                  <option value="montant_desc">Montant : du plus grand</option>
+                  <option value="montant_asc">Montant : du plus petit</option>
+                  <option value="categorie">Catégorie (A à Z)</option>
+                </select>
+              )}
+            </div>
+            {rows.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune dépense enregistrée ce mois pour ce secteur.</p>
+            ) : (
+              <ul className="space-y-2 p-3">
+                <style>{`
+                  @keyframes dsec-entree { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+                  @media (prefers-reduced-motion: reduce) { .dsec-ligne { animation: none !important; } }
+                `}</style>
+                {rows.map((d, i) => {
+                  const statut = STATUTS_DECAISSEMENT[d.statut] || STATUTS_DECAISSEMENT.decaissee
+                  const IconeCat = iconeCategorie(d.categorie)
+                  const depuisSiege = d.financePar === 'caisse_commune'
+                  return (
+                    <li key={d.id} role="button" tabIndex={0} onClick={() => setDetail(d)} onKeyDown={(e) => { if (e.key === 'Enter') setDetail(d) }}
+                      title="Voir les détails de cette dépense"
+                      className="dsec-ligne group relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-2xl border border-white/80 px-3 py-2.5 shadow-[0_8px_20px_-14px_rgba(26,26,26,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_26px_-14px_rgba(26,26,26,0.5)]"
+                      style={{ background: `linear-gradient(135deg, #ffffffee 0%, ${sct.color}1c 100%)`, animation: `dsec-entree 0.35s ease-out ${Math.min(i, 10) * 0.04}s both` }}>
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1" style={{ background: sct.color }} />
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl" style={icone3D(sct.color)}><IconeCat size={13} /></span>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 break-words text-sm font-extrabold leading-snug text-gray-800">{d.description || d.categorie || '—'}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold text-gray-600 ring-1 ring-gray-100"><CalendarDays size={10} /> {formatDateShort(d.date)}</span>
+                          {d.categorie && <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${sct.color}22`, color: shadeHex(sct.color, -35) }}>{d.categorie}</span>}
+                          {d.beneficiaireNom && <span className="max-w-[10rem] truncate rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 ring-1 ring-gray-100">{d.beneficiaireNom}</span>}
+                          {depuisSiege && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700"><PiggyBank size={10} /> Caisse courante</span>}
+                          {d.statut && d.statut !== 'decaissee' && <Badge tone={statut.tone}>{statut.label}</Badge>}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-base font-black leading-none text-gray-900">{fmt(d.montant)}</p>
+                        <p className="mt-0.5 text-[10px] font-bold text-gray-400">FCFA</p>
+                      </div>
+                      <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/80 text-gray-400 ring-1 ring-gray-100 transition-colors group-hover:text-gray-700 sm:flex"><Eye size={14} /></span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )
+      })()}
       </>)}
 
       {/* Détail d'une dépense — lecture seule */}

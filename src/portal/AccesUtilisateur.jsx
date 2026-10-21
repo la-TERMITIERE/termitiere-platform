@@ -2,7 +2,7 @@
 // petit interrupteur « Lecture » / « CRUD ». Le réglage est enregistré tout de suite
 // (`droitsModules` sur le profil) et appliqué par la couche de données (core/db.js).
 import { useMemo, useState } from 'react'
-import { Eye, EyeOff, Pencil, Lock, ShieldCheck, Layers, LayoutGrid, Phone, BadgeCheck, Ban, X, Plus, Check } from 'lucide-react'
+import { Eye, EyeOff, Pencil, Lock, ShieldCheck, Layers, LayoutGrid, Phone, BadgeCheck, Ban, X, Plus, Check, Trash2 } from 'lucide-react'
 import Modal from '../shared/ui/Modal'
 import Button from '../shared/ui/Button'
 import Badge from '../shared/ui/Badge'
@@ -10,7 +10,7 @@ import { avatarGradient } from '../utils/color'
 import { toast } from '../core/notifications'
 import { useAuth } from '../hooks/useAuth'
 import { MODULES, MODULE_NAV } from '../shared/modules'
-import { isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire } from '../core/roles'
+import { isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire, ACTIONS_DROIT, actionAutorisee, actionImposeeInterdite } from '../core/roles'
 
 const rgba = (hex, a) => {
   const n = parseInt(hex.replace('#', ''), 16)
@@ -28,29 +28,18 @@ function voletsVisibles(u, moduleId) {
   return (MODULE_NAV[moduleId] || []).filter((item) => !item.heading).filter(canSee)
 }
 
-// Petit interrupteur à deux positions, dans l'en-tête du module : « Lecture » ou « CRUD » (créer, modifier, supprimer).
-// Un curseur de verre coloré glisse d'une position à l'autre (gris pour Lecture, couleur du module pour CRUD).
-function InterrupteurDroit({ ecriture, verrouille, couleur, onChange, occupe }) {
-  const bouton = (id, Icone, texte, aide) => {
-    const actif = ecriture === id
-    return (
-      <button type="button" disabled={verrouille || occupe} onClick={() => onChange(id)} aria-pressed={actif} title={aide}
-        className={`relative z-10 flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] font-extrabold transition-colors duration-300 disabled:cursor-not-allowed ${actif ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}>
-        <Icone size={11} /> {texte}
-      </button>
-    )
-  }
-  const fond = ecriture ? `linear-gradient(135deg, ${couleur}, ${rgba(couleur, 0.78)})` : 'linear-gradient(135deg, #64748b, #94a3b8)'
-  const lueur = ecriture ? rgba(couleur, 0.55) : 'rgba(100,116,139,0.5)'
+// Une bascule (interrupteur) : une action, un petit rail qui passe du gris à la couleur du module quand elle est accordée.
+function Bascule({ icone: Icone, label, actif, verrouille, couleur, onClick, occupe, aide }) {
   return (
-    <div className={`relative ml-auto flex w-[9.5rem] shrink-0 items-center rounded-full border border-white/80 bg-white/55 p-0.5 shadow-[inset_0_1px_3px_rgba(15,23,42,0.1)] backdrop-blur-md ${verrouille ? 'opacity-60' : ''}`}>
-      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] overflow-hidden rounded-full transition-all duration-300 ease-out"
-        style={{ background: fond, transform: ecriture ? 'translateX(100%)' : 'translateX(0)', boxShadow: `0 4px 10px -3px ${lueur}, inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 3px rgba(0,0,0,0.15)` }}>
-        <span className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent" />
+    <button type="button" role="switch" aria-checked={actif} disabled={verrouille || occupe} onClick={onClick} title={aide}
+      className={`flex items-center gap-1.5 rounded-full border py-1 pl-2 pr-1.5 text-[11px] font-extrabold backdrop-blur-md transition-all disabled:cursor-not-allowed ${verrouille ? 'opacity-50' : 'hover:-translate-y-0.5'} ${actif ? 'text-gray-800' : 'text-gray-400'}`}
+      style={{ borderColor: actif ? rgba(couleur, 0.45) : 'rgba(209,213,219,0.9)', background: actif ? `linear-gradient(135deg, #ffffffee, ${rgba(couleur, 0.16)})` : 'rgba(255,255,255,0.5)' }}>
+      <Icone size={12} style={actif ? { color: couleur } : undefined} />
+      {label}
+      <span className="relative ml-0.5 h-4 w-7 shrink-0 rounded-full transition-colors duration-300" style={{ background: actif ? couleur : '#cbd5e1' }}>
+        <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all duration-300 ${actif ? 'left-[14px]' : 'left-0.5'}`} />
       </span>
-      {bouton(false, Eye, 'Lecture', 'Lecture seule : consulter sans rien modifier')}
-      {bouton(true, Pencil, 'CRUD', 'Lecture et écriture : créer, modifier, supprimer')}
-    </div>
+    </button>
   )
 }
 
@@ -70,9 +59,10 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
     [user, modules]
   )
   const droits = user?.droitsModules || {}
-  const enEcriture = (m) => !lectureImposeeParRole(user.role, m.id) && droits[m.id] !== 'lecture'
+  // Action réellement permise à ce compte : ni interdite par son rôle, ni refusée par le réglage individuel.
+  const permise = (m, action) => !actionImposeeInterdite(user.role, m.id, action) && actionAutorisee(droits, m.id, action)
   const nbVolets = useMemo(() => (user ? modules.reduce((t, m) => t + voletsVisibles(user, m.id).filter((v) => !voletRetire(user, m.id, v.to)).length, 0) : 0), [user, modules])
-  const nbLecture = user ? modules.filter((m) => !enEcriture(m)).length : 0
+  const nbLecture = user ? modules.filter((m) => ACTIONS_DROIT.every((a) => !permise(m, a))).length : 0
 
   // Enregistre le nouveau jeu de droits. On ne garde que les modules à « lecture » : absent = écriture selon le rôle.
   async function appliquer(nouveauxDroits, cle, message) {
@@ -116,17 +106,24 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
     modifierAcces({ voletsRetires: suite }, `${m.id}:${v.to}`, retire ? `${v.label} rendu ✓` : `${v.label} retiré ✓`)
   }
 
-  function changerModule(m, ecriture) {
+  // Accorde ou refuse UNE action (créer, modifier, supprimer) sur un module. On ne garde que ce qui est refusé : tout refusé = « lecture ».
+  const ETIQUETTE_ACTION = { creer: 'Créer', modifier: 'Modifier', supprimer: 'Supprimer' }
+  function basculerAction(m, action) {
+    if (actionImposeeInterdite(user.role, m.id, action)) return
+    const refusees = ACTIONS_DROIT.filter((a) => !actionAutorisee(droits, m.id, a))
+    const refuse = refusees.includes(action)
+    const suivant = refuse ? refusees.filter((a) => a !== action) : [...refusees, action]
     const suite = { ...droits }
-    if (ecriture) delete suite[m.id]
-    else suite[m.id] = 'lecture'
-    appliquer(suite, m.id, ecriture ? `${m.nom} : lecture et écriture ✓` : `${m.nom} : lecture seule ✓`)
+    if (!suivant.length) delete suite[m.id]
+    else if (suivant.length === ACTIONS_DROIT.length) suite[m.id] = 'lecture'
+    else suite[m.id] = Object.fromEntries(suivant.map((a) => [a, false]))
+    appliquer(suite, `${m.id}:${action}`, `${m.nom} : ${ETIQUETTE_ACTION[action]} ${refuse ? 'accordé' : 'refusé'} ✓`)
   }
 
   function toutChanger(ecriture) {
     const suite = {}
     if (!ecriture) modules.forEach((m) => { suite[m.id] = 'lecture' })
-    appliquer(suite, 'tout', ecriture ? 'Tous les modules : lecture et écriture ✓' : 'Tous les modules : lecture seule ✓')
+    appliquer(suite, 'tout', ecriture ? 'Tous les modules : toutes les actions accordées ✓' : 'Tous les modules : lecture seule ✓')
   }
 
   return (
@@ -171,7 +168,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
               <div className="flex flex-col items-end gap-1.5">
                 <Badge tone={roleTone(user.role)}>{roleLabel(user.role)}</Badge>
                 {isReadOnlyRole(user.role) && <Badge tone="info">Lecture seule</Badge>}
-                {tousModules && <Badge tone="primary">Tous les modules</Badge>}
+                {tousModules && !(user.modulesRetires || []).length && <Badge tone="primary">Tous les modules</Badge>}
               </div>
             </div>
           </div>
@@ -222,7 +219,6 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
           {modules.map((m, i) => {
             const volets = voletsVisibles(user, m.id)
             const verrouille = lectureImposeeParRole(user.role, m.id)
-            const ecriture = enEcriture(m)
             const sites = m.id === 'logistique' ? user.logistiqueSites : m.id === 'gym' ? user.gymSites : null
             return (
               <div key={m.id} className="acc-anim overflow-hidden rounded-2xl border border-white/70 bg-white/70 shadow-sm backdrop-blur-md transition-shadow hover:shadow-lg"
@@ -239,14 +235,23 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
                       {sites.length ? sites.join(' · ') : m.id === 'gym' ? 'aucune salle' : 'aucun site'}
                     </span>
                   )}
-                  <InterrupteurDroit ecriture={ecriture} verrouille={verrouille} couleur={m.color} occupe={occupe === m.id || occupe === 'tout'}
-                    onChange={(e) => changerModule(m, e)} />
                   <button type="button" onClick={() => retirerModule(m)} disabled={!!occupe} title="Retirer ce module à ce compte"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 bg-white/70 text-red-500 backdrop-blur-md transition-colors hover:bg-red-50 disabled:opacity-50">
+                    className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-200 bg-white/70 text-red-500 backdrop-blur-md transition-colors hover:bg-red-50 disabled:opacity-50">
                     <X size={13} />
                   </button>
                 </div>
                 <div className="space-y-3 p-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Bascule icone={Eye} label="Lire" actif couleur={m.color} occupe={!!occupe}
+                      aide="Lire : accès au module. Désactiver retire le module à ce compte."
+                      onClick={() => retirerModule(m)} />
+                    {[['creer', Plus, 'Créer'], ['modifier', Pencil, 'Modifier'], ['supprimer', Trash2, 'Supprimer']].map(([action, Icone, label]) => (
+                      <Bascule key={action} icone={Icone} label={label} actif={permise(m, action)} couleur={m.color}
+                        verrouille={actionImposeeInterdite(user.role, m.id, action)} occupe={!!occupe}
+                        aide={actionImposeeInterdite(user.role, m.id, action) ? (action === 'supprimer' && user.role === 'agent' ? 'Un agent ne supprime jamais' : 'Interdit par le rôle de ce compte') : `${label} : accorder ou refuser cette action sur ${m.nom}`}
+                        onClick={() => basculerAction(m, action)} />
+                    ))}
+                  </div>
                   {verrouille && (
                     <p className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
                       <Lock size={11} className="shrink-0" />

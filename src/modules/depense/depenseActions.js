@@ -17,7 +17,7 @@ import { FULL_ACCESS_ROLES } from '../../core/roles'
 // Sans `origineFonds` (anciennes dépenses), on garde la règle d'avant : une dépense de secteur est prélevée sur le Siège.
 export const financementSiege = (d) => {
   if (!d.secteurId || d.secteurId === 'divers') return d.financePar || ''
-  if (d.origineFonds) return d.origineFonds === 'divers' ? 'caisse_commune' : ''
+  if (d.origineFonds === 'banque') return '' // payée par la banque : ne consomme pas la Caisse courante
   return 'caisse_commune'
 }
 

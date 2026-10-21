@@ -1,7 +1,7 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2, Undo2, CalendarDays, FileText, UserRound, PenLine, Banknote, ShieldCheck, Tag, ArrowLeftRight, Phone, CreditCard, ClipboardList, Wrench, MapPin, Briefcase, X, Save, Sparkles, MessageSquareText, Send } from 'lucide-react'
+import { Plus, Landmark, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2, Undo2, CalendarDays, FileText, UserRound, PenLine, Banknote, ShieldCheck, Tag, ArrowLeftRight, Phone, CreditCard, ClipboardList, Wrench, MapPin, Briefcase, X, Save, Sparkles, MessageSquareText, Send } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -53,9 +53,15 @@ const libelleChoixSecteur = (s) => (s.id === 'divers' ? 'SIÈGE (Caisse courante
 // rattachée au Siège → le Siège ; sinon le secteur finançait lui-même). Aucune donnée n'est réécrite : c'est un simple affichage.
 // Une dépense est « affectée » quand sa destination et son origine ont été renseignées (à la saisie ou après coup par un agent).
 // Les dépenses reprises d'un autre module (besoins, Briqueterie, projets) tiennent leur secteur de leur module : elles sont hors suivi.
-const estAffectee = (d) => !!d.origineFonds || !!d.affecteeLe
-const affecteurDe = (d) => d.affecteePar || (d.origineFonds ? d.enregistrePar : '') || ''
-const origineDe = (d) => d.origineFonds || ((d.financePar === 'caisse_commune' || d.secteurId === 'divers') ? 'divers' : d.secteurId)
+// Origine des fonds : il n'y en a que deux, la Caisse courante (Siège) ou la Banque.
+const ORIGINES_FONDS = [{ id: 'divers', label: 'Caisse courante' }, { id: 'banque', label: 'Banque' }]
+const origineValide = (id) => ORIGINES_FONDS.some((o) => o.id === id)
+const libelleOrigine = (id) => ORIGINES_FONDS.find((o) => o.id === id)?.label || ''
+// Secteurs qui ont leur propre volet Dépenses dans un module ; les autres (Siège, Communication, Autre) restent dans E-DÉPENSES.
+const SECTEURS_AVEC_VOLET = ['agro', 'logistique', 'evenementiel', 'garderie', 'gym', 'bat']
+const estAffectee = (d) => origineValide(d.origineFonds) || !!d.affecteeLe
+const affecteurDe = (d) => d.affecteePar || (origineValide(d.origineFonds) ? d.enregistrePar : '') || ''
+const origineDe = (d) => (origineValide(d.origineFonds) ? d.origineFonds : ((d.financePar === 'caisse_commune' || d.secteurId === 'divers') ? 'divers' : ''))
 const infoSource = (d) => SOURCE_INFO[d.source] || { label: 'Saisie E-DÉPENSES', tone: 'neutral' }
 
 // Glassmorphism — bandeau de filtres (recherche, mois, secteur, catégorie, nature
@@ -407,7 +413,7 @@ export default function Depenses() {
         montant: Number(d.montant) || 0,
         agreeur: agreeur || '—',
         secteur: libelleSecteurSite(secteur, d),
-        origine: origineDe(d) === 'divers' ? 'Siège (Caisse courante)' : (SECTEURS.find((x) => x.id === origineDe(d))?.label || origineDe(d)),
+        origine: libelleOrigine(origineDe(d)) || 'Non renseignée',
         autresSecteurs: (d.secteursConcernes || []).map((id) => SECTEURS.find((s) => s.id === id)?.label || id).join(', ') || '—',
         financement: d.financePar === 'caisse_commune' ? 'Caisse courante' : 'Secteur'
       }
@@ -447,7 +453,7 @@ export default function Depenses() {
   )
 
   function openCreate() { setModal({ data: empty(), isNew: true }) }
-  function openEdit(d)  { setModal({ data: { ...empty(), ...d, origineFonds: d.origineFonds || '', secteurId: (d.origineFonds || d.affecteeLe || d.secteurId !== 'divers') ? d.secteurId : '', concerneAutreSecteur: (d.secteursConcernes || []).length > 0 }, isNew: false, id: d.id }) }
+  function openEdit(d)  { setModal({ data: { ...empty(), ...d, origineFonds: origineValide(d.origineFonds) ? d.origineFonds : '', secteurId: (origineValide(d.origineFonds) || d.affecteeLe || d.secteurId !== 'divers') ? d.secteurId : '', concerneAutreSecteur: (d.secteursConcernes || []).length > 0 }, isNew: false, id: d.id }) }
 
   // ── Ajout multiple (lot) ──
   const ligneVide = () => ({ secteurId: '', origineFonds: 'divers', site: '', categorie: '', montant: '', date: todayStr(), description: '', natureFlux: natureFluxDefaut, sourceFinancement: 'entreprise', financePar: '', imprevue: false })
@@ -481,7 +487,8 @@ export default function Depenses() {
     if (saving) return
     const d = modal.data
     if (!d.secteurId) return toast.error('Destination requise : choisissez le secteur que la somme va servir')
-    if (!d.origineFonds) return toast.error('Origine des fonds requise : choisissez le secteur d\'où part l\'argent')
+    if (!origineValide(d.origineFonds)) return toast.error('Origine des fonds requise : Caisse courante ou Banque')
+    if (d.secteurId === 'autre' && !(d.secteurAutre || '').trim()) return toast.error('Précisez le nom du secteur')
     if (d.secteurId === 'logistique' && !d.site) return toast.error('Site requis (Lomé ou Kara)')
     if (!d.categorie) return toast.error('Catégorie requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
@@ -817,8 +824,8 @@ export default function Depenses() {
                         {!importe && (estAffectee(d)
                           ? <span className="mt-0.5 block text-[9px] font-bold normal-case tracking-normal text-emerald-600">✓ affectée{affecteurDe(d) ? ` par ${affecteurDe(d)}` : ''}</span>
                           : <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold normal-case tracking-normal text-amber-700">À affecter</span>)}
-                        {origineDe(d) !== d.secteurId && (
-                          <span className="mt-0.5 block text-[9px] font-bold normal-case tracking-normal text-gray-400">depuis {origineDe(d) === 'divers' ? 'le Siège' : (SECTEURS.find((x) => x.id === origineDe(d))?.label || origineDe(d))}</span>
+                        {!importe && origineDe(d) && (
+                          <span className="mt-0.5 block text-[9px] font-bold normal-case tracking-normal text-gray-400">depuis {origineDe(d) === 'banque' ? 'la banque' : 'la caisse courante'}</span>
                         )}
                       </td>
 
@@ -923,11 +930,22 @@ export default function Depenses() {
                   somme qui LUI est allouée (son propre budget). */}
               <div className="grid grid-cols-2 gap-3">
                 <FormGroup label={<EtiqD icone={PiggyBank} couleur="#7c3aed">Origine des fonds *</EtiqD>}
-                  hint="Le secteur d'où part l'argent : le Siège ou un secteur.">
-                  <Select value={modal.data.origineFonds || ''} onChange={(e) => set('origineFonds', e.target.value)}>
-                    <option value="">Choisir</option>
-                    {SECTEURS.map((s) => <option key={s.id} value={s.id}>{libelleChoixSecteur(s)}</option>)}
-                  </Select>
+                  hint="D'où part l'argent : de la Caisse courante ou de la Banque.">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[{ id: 'divers', label: 'Caisse courante', icone: PiggyBank, couleur: '#7c3aed' }, { id: 'banque', label: 'Banque', icone: Landmark, couleur: '#0369a1' }].map((o) => {
+                      const actif = modal.data.origineFonds === o.id
+                      return (
+                        <button key={o.id} type="button" aria-pressed={actif} onClick={() => set('origineFonds', actif ? '' : o.id)} title={actif ? 'Cliquer pour annuler ce choix' : undefined}
+                          className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border py-1 pl-1 pr-3 text-[11px] font-extrabold backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${actif ? 'border-white/70 text-white shadow-md' : 'text-gray-700 hover:brightness-95'}`}
+                          style={actif ? { background: `linear-gradient(135deg, ${o.couleur}, ${o.couleur}cc)`, boxShadow: `0 8px 16px -8px ${o.couleur}` } : { background: `linear-gradient(135deg, #ffffffee 0%, ${o.couleur}2e 100%)`, borderColor: `${o.couleur}55` }}>
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full" style={actif ? { background: 'rgba(255,255,255,0.28)', color: '#fff' } : icone3D(o.couleur)}>
+                            {actif ? <Check size={10} strokeWidth={3.5} /> : <o.icone size={10} />}
+                          </span>
+                          {o.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </FormGroup>
                 <FormGroup label={<EtiqD icone={Tag} couleur="#0ea5e9">Catégorie *</EtiqD>}>
                   <ChampAutocomplete
@@ -943,24 +961,29 @@ export default function Depenses() {
                 <FormGroup className="col-span-2" label={<EtiqD icone={Building2} couleur="#B45309">Destination de la somme *</EtiqD>}
                   hint={!modal.data.secteurId
                     ? 'Aucune destination choisie : cliquez sur un secteur (un second clic annule le choix).'
-                    : modal.data.secteurId === 'divers'
-                    ? 'Le Siège : la dépense reste seulement dans E-DÉPENSES. Un second clic annule le choix.'
+                    : !SECTEURS_AVEC_VOLET.includes(modal.data.secteurId)
+                    ? 'Cette destination n\'a pas de volet Dépenses propre : la dépense reste seulement dans E-DÉPENSES. Un second clic annule le choix.'
                     : `Elle apparaît dans E-DÉPENSES et dans le volet Dépense de ${SECTEURS.find((s) => s.id === modal.data.secteurId)?.label || 'ce secteur'}.`}>
                   <div className="flex flex-wrap gap-1">
                     {SECTEURS.map((sct) => {
                       const actif = modal.data.secteurId === sct.id
                       return (
-                        <button key={sct.id} type="button" onClick={() => { set('secteurId', actif ? '' : sct.id); if (actif || sct.id !== 'logistique') set('site', '') }} aria-pressed={actif} title={actif ? 'Cliquer pour annuler ce choix' : undefined}
-                          className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border py-0.5 pl-0.5 pr-2 text-[10px] font-extrabold backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${actif ? 'border-white/70 text-white shadow-md' : 'text-gray-700 hover:brightness-95'}`}
-                          style={actif ? { background: `linear-gradient(135deg, ${sct.color}, ${sct.color}cc)`, boxShadow: `0 8px 16px -8px ${sct.color}` } : { background: `linear-gradient(135deg, #ffffffee 0%, ${sct.color}2e 100%)`, borderColor: `${sct.color}55` }}>
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full" style={actif ? { background: 'rgba(255,255,255,0.28)', color: '#fff' } : icone3D(sct.color)}>
-                            {actif ? <Check size={9} strokeWidth={3.5} /> : <Building2 size={8} />}
+                        <button key={sct.id} type="button" onClick={() => { set('secteurId', actif ? '' : sct.id); if (actif || sct.id !== 'logistique') set('site', ''); if (actif || sct.id !== 'autre') set('secteurAutre', '') }} aria-pressed={actif} title={actif ? 'Cliquer pour annuler ce choix' : undefined}
+                          className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border py-0.5 pl-0.5 pr-2 text-[10px] font-extrabold backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${sct.id === 'autre' ? 'border-dashed border-2' : ''} ${actif ? 'border-white/70 text-white shadow-md' : 'text-gray-700 hover:brightness-95'}`}
+                          style={actif ? { background: `linear-gradient(135deg, ${sct.color}, ${sct.color}cc)`, boxShadow: `0 8px 16px -8px ${sct.color}` } : sct.id === 'autre' ? { background: 'transparent', borderColor: `${sct.color}99` } : { background: `linear-gradient(135deg, #ffffffee 0%, ${sct.color}2e 100%)`, borderColor: `${sct.color}55` }}>
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full" style={actif ? { background: 'rgba(255,255,255,0.28)', color: '#fff' } : sct.id === 'autre' ? { background: 'transparent', color: sct.color, border: `1.5px dashed ${sct.color}` } : icone3D(sct.color)}>
+                            {actif ? <Check size={9} strokeWidth={3.5} /> : sct.id === 'autre' ? <Plus size={9} strokeWidth={3} /> : <Building2 size={8} />}
                           </span>
-                          {sct.id === 'divers' ? 'SIÈGE' : sct.label}
+                          {sct.id === 'divers' ? 'SIÈGE' : sct.id === 'autre' ? 'Autre secteur…' : sct.label}
                         </button>
                       )
                     })}
                   </div>
+                  {modal.data.secteurId === 'autre' && (
+                    <div className="mt-2 max-w-sm">
+                      <Input value={modal.data.secteurAutre || ''} onChange={(e) => set('secteurAutre', e.target.value)} placeholder="Nom du secteur *" />
+                    </div>
+                  )}
                   {modal.data.secteurId === 'logistique' && (
                     <div className="mt-2 max-w-[12rem]">
                       <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>
@@ -984,12 +1007,12 @@ export default function Depenses() {
                   placeholder="Décrivez précisément la dépense : quoi, pourquoi, pour qui, dans quel contexte…"
                 />
               </FormGroup>
-              {!!modal.data.secteurId && !!modal.data.origineFonds && modal.data.origineFonds !== modal.data.secteurId && (
+              {!!modal.data.secteurId && origineValide(modal.data.origineFonds) && (
                 <div className="mt-2 flex items-start gap-2 rounded-2xl border border-violet-200/70 bg-violet-50/60 px-3 py-2 text-sm text-gray-700 backdrop-blur-md">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D('#7c3aed')}><PiggyBank size={13} /></span>
                   <span>
-                    La somme quitte <strong>{modal.data.origineFonds === 'divers' ? 'le Siège' : (SECTEURS.find((x) => x.id === modal.data.origineFonds)?.label || 'ce secteur')}</strong> pour <strong>{modal.data.secteurId === 'divers' ? 'le Siège' : (SECTEURS.find((x) => x.id === modal.data.secteurId)?.label || 'ce secteur')}</strong>
-                    <span className="block text-xs text-gray-500">{modal.data.origineFonds === 'divers' ? 'Elle est prélevée sur la Caisse courante et rattachée au secteur de destination.' : "L'origine est enregistrée avec la dépense."}</span>
+                    La somme quitte <strong>{modal.data.origineFonds === 'banque' ? 'la Banque' : 'la Caisse courante'}</strong> pour <strong>{modal.data.secteurId === 'divers' ? 'le Siège' : (modal.data.secteurId === 'autre' && modal.data.secteurAutre ? modal.data.secteurAutre : (SECTEURS.find((x) => x.id === modal.data.secteurId)?.label || 'ce secteur'))}</strong>
+                    <span className="block text-xs text-gray-500">{modal.data.origineFonds === 'banque' ? 'Payée par la banque : elle ne touche pas la Caisse courante.' : 'Elle est prélevée sur la Caisse courante et rattachée au secteur de destination.'}</span>
                   </span>
                 </div>
               )}
@@ -1322,7 +1345,7 @@ export default function Depenses() {
                   {!detail.source && (estAffectee(detail)
                     ? <Badge tone="success">{`Affectée${affecteurDe(detail) ? ` par ${affecteurDe(detail)}` : ''}${detail.affecteeLe ? ` le ${new Date(detail.affecteeLe).toLocaleDateString('fr-FR')}` : ''}`}</Badge>
                     : <Badge tone="warning">À affecter</Badge>)}
-                  {origineDe(detail) !== detail.secteurId && <Badge tone="info">Origine : {origineDe(detail) === 'divers' ? 'Siège' : (SECTEURS.find((x) => x.id === origineDe(detail))?.label || origineDe(detail))}</Badge>}
+                  {origineDe(detail) && <Badge tone="info">Origine : {libelleOrigine(origineDe(detail))}</Badge>}
                 </div>
               </div>
 

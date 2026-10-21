@@ -12,7 +12,10 @@ export const SECTEURS = [
   { id: 'bat',          label: 'MAXI BAT',           color: '#0d9488' },
   { id: 'evenementiel', label: 'BRIQUETERIE',        color: '#475569' },
   { id: 'garderie',     label: 'GARDERIE',           color: '#E8390E' },
-  { id: 'gym',          label: 'MAXI-GYM',           color: '#E8850F' }
+  { id: 'gym',          label: 'MAXI-GYM',           color: '#E8850F' },
+  // Destinations sans module propre : leurs dépenses restent dans E-DÉPENSES. « Autre » laisse saisir le nom du secteur (`secteurAutre`).
+  { id: 'communication', label: 'COMMUNICATION',     color: '#db2777' },
+  { id: 'autre',         label: 'AUTRE SECTEUR',     color: '#78716c' }
 ]
 
 // MAXI LOGISTIQUE a deux sites indépendants (Lomé/Kara, cf. src/modules/logistique/site/

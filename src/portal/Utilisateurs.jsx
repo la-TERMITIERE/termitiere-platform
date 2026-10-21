@@ -221,8 +221,10 @@ Cette personne ne pourra plus se connecter.`)) return
             { key: 'login', label: 'Identifiant', render: (r) => <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600 dark:bg-white/10 dark:text-gray-300">{r.login}</span> },
             { key: 'role', label: 'Rôle', render: (r) => <Badge tone={roleTone(r.role)}>{roleLabel(r.role)}</Badge> },
             { key: 'modules', label: 'Accès modules', render: (r) => {
-              if (isViewAllRole(r.role)) return <Badge tone="primary">Tous</Badge>
-              const ids = r.modules || []
+              // Rôle « voit tout » : « Tous » tant qu'aucun module ne lui est retiré ; sinon, la liste de ceux qui lui restent.
+              const retires = r.modulesRetires || []
+              if (isViewAllRole(r.role) && !retires.length) return <Badge tone="primary">Tous</Badge>
+              const ids = isViewAllRole(r.role) ? MODULES.map((m) => m.id).filter((id) => !retires.includes(id)) : (r.modules || [])
               if (!ids.length) return <span className="text-xs text-gray-400 dark:text-gray-500">Aucun</span>
               const lecture = (id) => r.droitsModules?.[id] === 'lecture'
               return (

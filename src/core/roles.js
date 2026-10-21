@@ -119,7 +119,16 @@ export const isReadOnlyRole = (r) => READONLY_ROLES.includes(r)
 // l'écriture (CRUD) que son rôle lui donne. Le verrou est posé dans db.js, sur le préfixe de la collection (`gym_*` → gym).
 const PREFIXE_MODULE = { agro: 'agro', logistique: 'logistique', evenementiel: 'evenementiel', foncier: 'foncier', garderie: 'garderie', compta: 'comptabilite', rh: 'rh', projet: 'projet', projets: 'projet', depense: 'depense', gym: 'gym', voyage: 'voyage' }
 export const moduleDeCollection = (collection) => PREFIXE_MODULE[String(collection || '').split('_')[0]] || null
-export const moduleEnLecture = (droitsModules, moduleId) => !!moduleId && droitsModules?.[moduleId] === 'lecture'
+// `droitsModules[module]` : absent = tout est permis (selon le rôle) ; 'lecture' = rien d'autre que lire ; ou un objet qui ne liste que
+// les actions REFUSÉES, par exemple { supprimer: false, modifier: false }. Lire est le socle : le retirer, c'est retirer le module.
+export const ACTIONS_DROIT = ['creer', 'modifier', 'supprimer']
+export const actionAutorisee = (droitsModules, moduleId, action) => {
+  const d = droitsModules?.[moduleId]
+  if (!d) return true
+  if (d === 'lecture') return false
+  return d[action] !== false
+}
+export const moduleEnLecture = (droitsModules, moduleId) => !!moduleId && ACTIONS_DROIT.every((a) => !actionAutorisee(droitsModules, moduleId, a))
 
 // ── Retraits individuels (Utilisateurs, fiche d'accès) ──────────────────────────────────────────────────────────────────
 // Info peut retirer à un compte un module ENTIER (`modulesRetires`, utile pour les rôles « voit tout ») ou seulement certains
@@ -133,6 +142,8 @@ export const peutPurgerClientGym = (r) => GYM_ECRITURE_ROLES.includes(r)
 // Le rôle seul impose la lecture sur ce module (superviseur, partenaire ; MAXI-GYM hors agent / Info / Assistant PAU) : le réglage
 // individuel n'y change rien, l'écran des utilisateurs le verrouille donc sur « Lecture seule ».
 export const lectureImposeeParRole = (role, moduleId) => isReadOnlyRole(role) || (moduleId === 'gym' && !GYM_ECRITURE_ROLES.includes(role))
+// Ce que le rôle interdit déjà, quel que soit le réglage individuel : un agent ne supprime jamais, et les profils en lecture seule ne modifient rien.
+export const actionImposeeInterdite = (role, moduleId, action) => lectureImposeeParRole(role, moduleId) || (action === 'supprimer' && role === 'agent')
 export const peutAdministrerGym = (r) => r === 'info' || r === 'assistant_pau'
 
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
