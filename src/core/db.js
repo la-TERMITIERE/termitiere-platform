@@ -7,7 +7,7 @@
 // garde-fous (sanitize, rateLimit) sont appliqués dans chaque implémentation.
 import * as firebaseImpl from './db.firebase'
 import * as supabaseImpl from './db.supabase'
-import { isReadOnlyRole, peutEcrireGym, moduleDeCollection, moduleEnLecture } from './roles'
+import { isReadOnlyRole, peutEcrireGym, moduleDeCollection, moduleEnLecture, actionAutorisee } from './roles'
 import { demanderMotif, SuppressionAnnulee } from './motifSuppression'
 
 const useSupabase = import.meta.env.VITE_USE_SUPABASE === 'true'
@@ -59,13 +59,31 @@ function protegerEcriture(nom, fn) {
       console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents, à Info et à Assistant PAU) : ${nom}`, args[0])
       return Promise.reject(err)
     }
-    // Droit « lecture seule » accordé à ce compte sur un module précis (Utilisateurs, détail d'accès).
+    // Droits accordés à ce compte sur un module précis (Utilisateurs, fiche d'accès) : créer, modifier, supprimer, chacun à part.
     const moduleCible = moduleDeCollection(collection)
-    if (role && moduleCible && moduleEnLecture(_lireDroits(), moduleCible)) {
-      const err = new Error('Votre accès à ce module est en lecture seule : aucune modification n’est autorisée.')
-      err.code = 'LECTURE_SEULE'
-      console.warn(`[db] écriture refusée (module ${moduleCible} en lecture seule pour ce compte) : ${nom}`, args[0])
-      return Promise.reject(err)
+    if (role && moduleCible) {
+      const droits = _lireDroits()
+      const refus = (action) => {
+        const err = new Error(`Votre accès à ce module ne permet pas de ${action} : demandez à l'administration.`)
+        err.code = 'LECTURE_SEULE'
+        console.warn(`[db] écriture refusée (module ${moduleCible}, action ${action}) : ${nom}`, args[0])
+        return Promise.reject(err)
+      }
+      if (nom === 'setItem') {
+        // `setItem` sert à créer comme à remplacer : si seul l'un des deux est permis, on regarde si le document existe déjà.
+        const peutCreer = actionAutorisee(droits, moduleCible, 'creer')
+        const peutModifier = actionAutorisee(droits, moduleCible, 'modifier')
+        if (!peutCreer && !peutModifier) return refus('créer ni modifier')
+        if (peutCreer !== peutModifier) {
+          return Promise.resolve(impl.getOne(collection, String(args[1]))).then((existe) => (
+            (existe ? peutModifier : peutCreer) ? fn(...args) : refus(existe ? 'modifier' : 'créer')
+          ))
+        }
+      } else {
+        const action = { addItem: 'creer', claimOnce: 'creer', updateItem: 'modifier', updateAtomic: 'modifier', removeItem: 'supprimer' }[nom]
+        const libelle = { creer: 'créer', modifier: 'modifier', supprimer: 'supprimer' }[action]
+        if (action && !actionAutorisee(droits, moduleCible, action)) return refus(libelle)
+      }
     }
     return fn(...args)
   }
@@ -97,7 +115,7 @@ export async function removeItem(collection, id, options = {}) {
   const role = _lireRole()
   // Profil ou module en lecture seule : on laisse le garde central refuser tout de suite, sans demander de motif pour rien.
   const moduleCible = moduleDeCollection(collection)
-  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && moduleEnLecture(_lireDroits(), moduleCible)) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireGym(role)))
+  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && !actionAutorisee(_lireDroits(), moduleCible, 'supprimer')) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireGym(role)))
   if (options.sansMotif || COLLECTIONS_TECHNIQUES.has(collection) || refuse) {
     return supprimerSansMotif(collection, id)
   }
