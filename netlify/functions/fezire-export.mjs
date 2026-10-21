@@ -6,7 +6,8 @@
 // noms de champs canoniques FEZIRE (cf. docs/FEZIRE_CONNECT.md) : chaque règle de
 // correspondance est donc une simple copie à l'identique.
 //
-// PÉRIMÈTRE ACTUEL : MAXI AGRO uniquement. LECTURE SEULE — rien n'est jamais écrit.
+// PÉRIMÈTRE : Maxi Agro, Briqueterie, Logistique, Maxi Gym, Garderie. LECTURE SEULE —
+// rien n'est jamais écrit dans notre base.
 //
 // ADRESSES (cf. redirection dans netlify.toml) :
 //   GET /api/fezire/v1/<ressource>?page=1&per_page=100&since=AAAA-MM-JJ
@@ -287,6 +288,183 @@ export function factures(facturesAgro, referentiel) {
   }))
 }
 
+// ───────────────────────── Autres modules ─────────────────────────
+// Chaque module verse ses données dans les MÊMES listes canoniques que Maxi Agro,
+// sous un préfixe propre (briq-, logi-, gym-, gard-) : aucun doublon, aucune
+// correspondance supplémentaire à créer dans Connect. Pas de niveaux ni de
+// mouvements de stock pour ces modules tant que la sémantique de l'import STOCK
+// de FEZIRE n'est pas clarifiée (cf. docs/FEZIRE_CONNECT.md).
+
+const produit = (prefixe, id, nom, prix, cat, description) => ({
+  external_id: `${prefixe}-art-${id}`,
+  sku: `${prefixe.toUpperCase()}-${String(id).toUpperCase()}`,
+  name: nom || id,
+  description: description || null,
+  price: nombre(prix),
+  currency: DEVISE,
+  category_id: cat ? `${prefixe}-cat-${slug(cat)}` : null,
+  active: true
+})
+const categorie = (prefixe, libelleModule, cat) => ({
+  external_id: `${prefixe}-cat-${slug(cat)}`, name: `${libelleModule} · ${cat}`, parent_id: null
+})
+const client = (prefixe, nom, tel, adresse, email) => ({
+  external_id: `${prefixe}-cli-${slug(nom) || 'inconnu'}`, firstname: null, lastname: String(nom).trim(),
+  company: null, email: email || null, phone: tel || null, country: PAYS, city: null, address: adresse || null
+})
+// Dédoublonne par identifiant ; garde la fiche la plus renseignée.
+function uniques(liste) {
+  const m = new Map()
+  for (const e of liste) {
+    const prec = m.get(e.external_id)
+    if (!prec || Object.values(e).filter(Boolean).length > Object.values(prec).filter(Boolean).length) m.set(e.external_id, e)
+  }
+  return [...m.values()]
+}
+// Une vente « simple » : commande + facture (+ paiement) à partir de lignes déjà canoniques.
+function vente(prefixe, f, { numero, date, clientNom, lignes, total, statutCommande = 'completed' }) {
+  const cliId = (clientNom || '').trim() ? `${prefixe}-cli-${slug(clientNom)}` : null
+  const cmd = lignes.length ? {
+    external_id: `${prefixe}-cmd-${f.id}`, customer_id: cliId, reference: numero || f.id, currency: DEVISE,
+    total: Math.round(nombre(total)), tax_total: 0, status: statutCommande, ordered_at: iso(date), lines: lignes
+  } : null
+  const fac = {
+    external_id: `${prefixe}-fac-${f.id}`, order_id: cmd ? cmd.external_id : null, customer_id: cliId,
+    number: numero || f.id, total: Math.round(nombre(total)), currency: DEVISE, status: 'issued',
+    issued_at: iso(date), due_at: null
+  }
+  return { cmd, fac }
+}
+
+// BRIQUETERIE (module « evenementiel ») : briques et matières, factures au format Maxi Agro.
+const BRIQ = 'briq'
+const briqueterie = {
+  categories: () => ['BRIQUES', 'MATIÈRES'].map((c) => categorie(BRIQ, 'Briqueterie', c)),
+  produits: (ref) => [
+    ...ref.filter((r) => r.type === 'brique').map((b) => produit(BRIQ, b.id, b.nom, b.tarifVente, 'BRIQUES', 'Brique')),
+    ...ref.filter((r) => r.type === 'matiere').map((m) => produit(BRIQ, m.id, m.nom, 0, 'MATIÈRES', ['Matière première', m.unite].filter(Boolean).join(' · ')))
+  ],
+  entrepots: () => [{ external_id: `${BRIQ}-site`, name: 'Briqueterie', location: 'Briqueterie', active: true }],
+  ventes: (facs, ref) => {
+    const articles = new Set(ref.filter((r) => r.type === 'brique' || r.type === 'matiere').map((r) => r.id))
+    return facs.filter((f) => !['brouillon', 'annulee'].includes(f.statut)).map((f) => {
+      const lignes = (f.lignes || []).map((l, i) => ({ l, i })).filter(({ l }) => l.articleId && articles.has(l.articleId))
+        .map(({ l, i }) => ({
+          external_id: `${BRIQ}-cmd-${f.id}-l${i + 1}`, product_id: `${BRIQ}-art-${l.articleId}`,
+          sku: `${BRIQ.toUpperCase()}-${String(l.articleId).toUpperCase()}`, label: l.article || '',
+          quantity: entier(l.qte), unit_price: nombre(l.prixUnit), total: nombre(l.total) || entier(l.qte) * nombre(l.prixUnit)
+        }))
+      return { f, ...vente(BRIQ, f, { numero: f.numero, date: f.date, clientNom: f.client?.nom, lignes, total: f.totalTTC ?? totaux(f).total }) }
+    })
+  },
+  clients: (facs) => facs.filter((f) => (f.client?.nom || '').trim() && !['brouillon', 'annulee'].includes(f.statut))
+    .map((f) => client(BRIQ, f.client.nom, f.client.tel, f.client.adresse, f.client.email))
+}
+
+// LOGISTIQUE : location de matériel (sites Lomé / Kara). Seules les factures APPROUVÉES sont définitives.
+const LOGI = 'logi'
+const logistique = {
+  categories: (ref) => [...new Set(ref.filter((r) => r.type === 'materiel').map((m) => m.cat).filter(Boolean))].sort()
+    .map((c) => categorie(LOGI, 'Logistique', c)),
+  produits: (ref) => ref.filter((r) => r.type === 'materiel')
+    .map((m) => produit(LOGI, m.id, m.nom, m.tarifLocation, m.cat, ['Location', m.unite].filter(Boolean).join(' · '))),
+  entrepots: () => [
+    { external_id: `${LOGI}-lome`, name: 'Logistique · Lomé', location: 'Lomé', active: true },
+    { external_id: `${LOGI}-kara`, name: 'Logistique · Kara', location: 'Kara', active: true }
+  ],
+  ventes: (facs, ref) => {
+    const articles = new Set(ref.filter((r) => r.type === 'materiel').map((r) => r.id))
+    return facs.filter((f) => f.statut === 'approuvee').map((f) => {
+      const lignes = (f.lignes || []).map((l, i) => ({ l, i })).filter(({ l }) => l.materielId && articles.has(l.materielId))
+        .map(({ l, i }) => {
+          const jours = entier(l.nbJours) || 1
+          return {
+            external_id: `${LOGI}-cmd-${f.id}-l${i + 1}`, product_id: `${LOGI}-art-${l.materielId}`,
+            sku: `${LOGI.toUpperCase()}-${String(l.materielId).toUpperCase()}`,
+            label: `${l.materielNom || ''} · ${jours} jour(s)`.trim(),
+            quantity: entier(l.qte), unit_price: nombre(l.tarifUnitaire) * jours,
+            total: nombre(l.montant) || entier(l.qte) * jours * nombre(l.tarifUnitaire)
+          }
+        })
+      return { f, ...vente(LOGI, f, { numero: f.num, date: f.date, clientNom: f.clientNom, lignes, total: f.totalTTC ?? f.totalHT }) }
+    })
+  },
+  clients: (facs, fiches) => facs.filter((f) => f.statut === 'approuvee' && (f.clientNom || '').trim()).map((f) => {
+    const fiche = fiches.find((c) => slug(c.nom) === slug(f.clientNom)) || {}
+    return client(LOGI, f.clientNom, fiche.telephone || fiche.tel, fiche.adresse, fiche.email)
+  })
+}
+
+// MAXI GYM : séances, abonnements et règlements partenaires (reçus encaissés immédiatement).
+const GYM = 'gym'
+const SERVICES_GYM = { seance: 'Séance', abonnement: 'Abonnement', reglement_partenaire: 'Règlement partenaire' }
+const serviceGym = (t) => (SERVICES_GYM[t] ? t : 'seance')
+const maxiGym = {
+  categories: () => [categorie(GYM, 'Maxi Gym', 'SERVICES')],
+  produits: () => Object.entries(SERVICES_GYM).map(([id, nom]) => produit(GYM, id, `Maxi Gym · ${nom}`, 0, 'SERVICES', 'Service')),
+  ventes: (facs) => facs.filter((f) => nombre(f.montant) > 0).map((f) => {
+    const s = serviceGym(f.sourceType)
+    const lignes = [{
+      external_id: `${GYM}-cmd-${f.id}-l1`, product_id: `${GYM}-art-${s}`, sku: `GYM-${s.toUpperCase()}`,
+      label: f.description || SERVICES_GYM[s], quantity: 1, unit_price: nombre(f.montant), total: nombre(f.montant)
+    }]
+    const { cmd, fac } = vente(GYM, f, { numero: f.numero, date: f.date, clientNom: f.clientNom, lignes, total: f.montant })
+    const pay = {
+      external_id: `${GYM}-pay-${f.id}`, order_id: cmd.external_id, amount: Math.round(nombre(f.montant)),
+      currency: DEVISE, method: 'cash', status: 'paid', paid_at: iso(f.date)
+    }
+    return { f, cmd, fac, pay }
+  }),
+  clients: (facs, fiches) => facs.filter((f) => (f.clientNom || '').trim()).map((f) => {
+    const fiche = fiches.find((c) => slug(c.nom) === slug(f.clientNom)) || {}
+    return client(GYM, f.clientNom, f.clientTelephone || fiche.telephone, null, null)
+  })
+}
+
+// GARDERIE : frais encaissés. Le client est le PARENT (aucune donnée d'enfant envoyée).
+const GARD = 'gard'
+const SERVICES_GARD = { inscription: 'Inscription', mensuel: 'Scolarité mensuelle', journalier: 'Garde journalière' }
+const serviceGard = (t) => (SERVICES_GARD[t] ? t : 'mensuel')
+const parentDe = (p, enfants) => {
+  const e = enfants.find((x) => x.id === p.enfantId) || {}
+  return { nom: (e.parentNom || '').trim() || `Parent ${String(p.enfantId || p.id).slice(-6)}`, tel: e.parentContact || null }
+}
+const garderie = {
+  categories: () => [categorie(GARD, 'Garderie', 'SERVICES')],
+  produits: () => Object.entries(SERVICES_GARD).map(([id, nom]) => produit(GARD, id, `Garderie · ${nom}`, 0, 'SERVICES', 'Service')),
+  ventes: (paiements, enfants) => paiements.filter((p) => nombre(p.montantDu) > 0 || nombre(p.montantPaye) > 0).map((p) => {
+    const s = serviceGard(p.type)
+    const du = nombre(p.montantDu) || nombre(p.montantPaye)
+    const periode = p.mois && p.annee ? ` ${String(p.mois).padStart(2, '0')}/${p.annee}` : ''
+    const parent = parentDe(p, enfants)
+    const lignes = [{
+      external_id: `${GARD}-cmd-${p.id}-l1`, product_id: `${GARD}-art-${s}`, sku: `GARD-${s.toUpperCase()}`,
+      label: `${SERVICES_GARD[s]}${periode}`, quantity: 1, unit_price: du, total: du
+    }]
+    const { cmd, fac } = vente(GARD, p, { numero: `GARD-${p.id}`, date: p.date, clientNom: parent.nom, lignes, total: du })
+    const paye = nombre(p.montantPaye)
+    const pay = paye > 0 ? {
+      external_id: `${GARD}-pay-${p.id}`, order_id: cmd.external_id, amount: Math.round(paye), currency: DEVISE,
+      method: p.modePaiement || 'cash', status: paye >= du ? 'paid' : 'partial', paid_at: iso(p.date)
+    } : null
+    return { f: p, cmd, fac, pay }
+  }),
+  clients: (paiements, enfants) => paiements.map((p) => {
+    const parent = parentDe(p, enfants)
+    return client(GARD, parent.nom, parent.tel, null, null)
+  })
+}
+
+// Assemble toutes les ventes des modules non-Agro (calculé une fois par appel).
+function ventesModules(d) {
+  return [
+    ...briqueterie.ventes(d.evenementiel_factures || [], d.evenementiel_referentiel || []),
+    ...logistique.ventes(d.logistique_factures || [], d.logistique_referentiel || []),
+    ...maxiGym.ventes(d.gym_factures || []),
+    ...garderie.ventes(d.garderie_paiements || [], d.garderie_enfants || [])
+  ]
+}
+
 // ───────────────────────── Routage des ressources ─────────────────────────
 
 const RESSOURCES = {
@@ -305,29 +483,56 @@ const PAR_CLE = Object.fromEntries([
 export const codeRessource = (brut) => PAR_CLE[cle(brut)] || null
 
 // Collections RTDB nécessaires par ressource (on ne lit que le strict utile).
+const REFERENTIELS = ['agro_referentiel', 'evenementiel_referentiel', 'logistique_referentiel']
+const VENTES = [
+  'evenementiel_factures', 'evenementiel_referentiel', 'logistique_factures', 'logistique_referentiel',
+  'gym_factures', 'garderie_paiements', 'garderie_enfants'
+]
 const BESOINS = {
-  CATEGORY: ['agro_referentiel'], PRODUCT: ['agro_referentiel'], WAREHOUSE: [],
+  CATEGORY: REFERENTIELS, PRODUCT: REFERENTIELS, WAREHOUSE: [],
   STOCK: ['agro_inventaires'], STOCK_MOVEMENT: ['agro_inventaires', 'agro_demandes'],
-  CUSTOMER: ['agro_factures'], ORDER: ['agro_factures', 'agro_referentiel'], INVOICE: ['agro_factures', 'agro_referentiel'], PAYMENT: []
+  CUSTOMER: ['agro_factures', 'evenementiel_factures', 'logistique_factures', 'logistique_clients',
+    'gym_factures', 'gym_clients', 'garderie_paiements', 'garderie_enfants'],
+  ORDER: ['agro_factures', 'agro_referentiel', ...VENTES],
+  INVOICE: ['agro_factures', 'agro_referentiel', ...VENTES],
+  PAYMENT: ['gym_factures', 'garderie_paiements', 'garderie_enfants']
 }
 
 export function construire(code, d) {
+  const v = (col) => d[col] || []
   switch (code) {
-    case 'CATEGORY': return categories(d.agro_referentiel)
-    case 'PRODUCT': return produits(d.agro_referentiel)
-    case 'WAREHOUSE': return entrepots()
-    case 'STOCK': return stocks(d.agro_inventaires)
-    case 'STOCK_MOVEMENT': return mouvements(d.agro_inventaires, d.agro_demandes)
-    case 'CUSTOMER': return clients(d.agro_factures)
-    case 'ORDER': return commandes(d.agro_factures, d.agro_referentiel)
-    case 'INVOICE': return factures(d.agro_factures, d.agro_referentiel)
-    case 'PAYMENT': return [] // Maxi Agro ne suit pas encore les encaissements
+    case 'CATEGORY': return [
+      ...categories(v('agro_referentiel')), ...briqueterie.categories(),
+      ...logistique.categories(v('logistique_referentiel')), ...maxiGym.categories(), ...garderie.categories()
+    ]
+    case 'PRODUCT': return [
+      ...produits(v('agro_referentiel')), ...briqueterie.produits(v('evenementiel_referentiel')),
+      ...logistique.produits(v('logistique_referentiel')), ...maxiGym.produits(), ...garderie.produits()
+    ]
+    case 'WAREHOUSE': return [...entrepots(), ...briqueterie.entrepots(), ...logistique.entrepots()]
+    case 'STOCK': return stocks(v('agro_inventaires'))
+    case 'STOCK_MOVEMENT': return mouvements(v('agro_inventaires'), v('agro_demandes'))
+    case 'CUSTOMER': return [
+      ...clients(v('agro_factures')),
+      ...uniques([
+        ...briqueterie.clients(v('evenementiel_factures')),
+        ...logistique.clients(v('logistique_factures'), v('logistique_clients')),
+        ...maxiGym.clients(v('gym_factures'), v('gym_clients')),
+        ...garderie.clients(v('garderie_paiements'), v('garderie_enfants'))
+      ])
+    ]
+    case 'ORDER': return [...commandes(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.cmd).filter(Boolean)]
+    case 'INVOICE': return [...factures(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.fac)]
+    case 'PAYMENT': return [
+      ...maxiGym.ventes(v('gym_factures')).map((x) => x.pay),
+      ...garderie.ventes(v('garderie_paiements'), v('garderie_enfants')).map((x) => x.pay)
+    ].filter(Boolean)
     default: return null
   }
 }
 
 // Date de référence d'un élément, pour le filtre incrémental `since`.
-const dateElement = (e) => e.moved_at || e.ordered_at || e.issued_at || e.updated_at || null
+const dateElement = (e) => e.moved_at || e.ordered_at || e.issued_at || e.paid_at || e.updated_at || null
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'Méthode non autorisée' })
