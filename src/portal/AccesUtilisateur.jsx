@@ -171,7 +171,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
               <div className="flex flex-col items-end gap-1.5">
                 <Badge tone={roleTone(user.role)}>{roleLabel(user.role)}</Badge>
                 {isReadOnlyRole(user.role) && <Badge tone="info">Lecture seule</Badge>}
-                {tousModules && <Badge tone="primary">Tous les modules</Badge>}
+                {tousModules && !(user.modulesRetires || []).length && <Badge tone="primary">Tous les modules</Badge>}
               </div>
             </div>
           </div>
