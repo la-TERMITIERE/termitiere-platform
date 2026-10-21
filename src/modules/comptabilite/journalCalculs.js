@@ -128,6 +128,7 @@ export function construireLignesCaisse({ depenses = [], coutsMatieres = [], budg
   ;[...depenses.filter((d) => !d.projetId), ...coutsMatieres]
     .filter(visibleDansEDepenses).filter(estDecaissee)
     .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'remboursement_pau' && d.source !== 'projet')
+    .filter((d) => d.origineFonds !== 'banque') // payée par la banque : ne passe pas par la caisse
     .filter((d) => d.financePar === 'caisse_commune' || d.secteurId === 'divers')
     .forEach((d) => {
       // Un « retour de reliquat » (dépense de montant négatif, source retour_reliquat) ramène de l'argent à la caisse :

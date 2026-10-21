@@ -33,6 +33,7 @@ export function libelleSecteurSite(secteur, d) {
     const s = LOGISTIQUE_SITES.find((x) => x.id === site)
     return `${secteur?.label || d.secteurId} : ${s?.label || site}`
   }
+  if (d?.secteurId === 'autre' && d.secteurAutre) return `${secteur?.label || 'AUTRE'} : ${d.secteurAutre}`
   return secteur?.label || d?.secteurId
 }
 
@@ -247,6 +248,7 @@ export function depensesEntrepriseSecteurMois(depenses, secteurId, annee, mois, 
     return depenses.filter((d) => {
       if (!(d.date || '').startsWith(prefixe)) return false
       if (!estDecaissee(d)) return false
+      if (d.origineFonds === 'banque') return false // payée par la banque : ne touche pas la Caisse courante
       if (d.secteurId === 'divers') return (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'projet' && d.source !== 'remboursement_pau'
       return d.financePar === 'caisse_commune'
     })
@@ -324,6 +326,7 @@ export function depensesEntrepriseSecteurDates(depenses, secteurId, matchDate, s
     return depenses.filter((d) => {
       if (!matchDate(d.date)) return false
       if (!estDecaissee(d)) return false
+      if (d.origineFonds === 'banque') return false // payée par la banque : ne touche pas la Caisse courante
       if (d.secteurId === 'divers') return (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'projet' && d.source !== 'remboursement_pau'
       return d.financePar === 'caisse_commune'
     })

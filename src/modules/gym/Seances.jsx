@@ -270,6 +270,9 @@ export default function Seances() {
         partenaire: estPartenaire, partenaireStructure, regleParPartenaire: false,
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
+      // La séance est enregistrée : on ferme la fenêtre tout de suite. La facture, le ticket et les messages se terminent ensuite
+      // sans bloquer l'écran (et sans laisser la fenêtre ouverte si l'un d'eux échoue).
+      setModal(null)
       await audit('gym', 'SEANCE_CREATE', `${clientNom} : ${categorieLabel(d.categorie)} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA${estPartenaire ? ` : portée au compte ${partenaireStructure}` : ''}`)
       const telephone = telephoneSaisi || client?.telephone
       if (telephone) {
@@ -281,27 +284,30 @@ export default function Seances() {
 
       if (estPartenaire) {
         toast.success(`Séance portée au compte de ${partenaireStructure} : à régler en fin de mois ✓`)
-        setModal(null)
       } else {
         // Une facture est TOUJOURS générée pour un client normal (visible dans le
         // volet Facturation, avec son propre bouton d'impression). Le ticket ne
         // s'imprime que si la case « Imprimer le reçu » est cochée.
-        const facture = await genererFactureGym({
-          sourceType: 'seance', sourceId: id, clientNom, clientId: client?.id, clientTelephone: telephone,
-          categorie: d.categorie, description: `Séance ${categorieLabel(d.categorie)}`, montant: d.montant,
-          user, site, date: d.date, sexe: d.sexe, imprime: d.imprimer, modePaiement
-        })
-        // Montant libre : la direction est prévenue, avec le motif donné par l'agent.
-        if (personnalise) {
-          notify({
-            type: 'info', title: `🎚️ Séance personnalisée : MAXI-GYM ${site === 'kara' ? 'Kara' : 'Lomé'}`,
-            body: `${clientNom} : ${categorieLabel(d.categorie)} : ${formatMoney(Number(d.montant))}. Motif : ${d.motifPrix.trim()}. Par ${user?.nom || user?.login || '—'}.`,
-            module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/seances`
-          }).catch(() => {})
+        try {
+          const facture = await genererFactureGym({
+            sourceType: 'seance', sourceId: id, clientNom, clientId: client?.id, clientTelephone: telephone,
+            categorie: d.categorie, description: `Séance ${categorieLabel(d.categorie)}`, montant: d.montant,
+            user, site, date: d.date, sexe: d.sexe, imprime: d.imprimer, modePaiement
+          })
+          // Montant libre : la direction est prévenue, avec le motif donné par l'agent.
+          if (personnalise) {
+            notify({
+              type: 'info', title: `🎚️ Séance personnalisée : MAXI-GYM ${site === 'kara' ? 'Kara' : 'Lomé'}`,
+              body: `${clientNom} : ${categorieLabel(d.categorie)} : ${formatMoney(Number(d.montant))}. Motif : ${d.motifPrix.trim()}. Par ${user?.nom || user?.login || '—'}.`,
+              module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/seances`
+            }).catch(() => {})
+          }
+          if (d.imprimer) imprimerTicketSeance(facture)
+        } catch (e) {
+          toast.error(`Séance enregistrée, mais sa facture n'a pas pu être créée : elle sera rattrapée automatiquement. (${e?.message || e})`)
+          return
         }
-        if (d.imprimer) imprimerTicketSeance(facture)
         toast.success(d.imprimer ? 'Séance enregistrée : reçu imprimé ✓' : 'Séance enregistrée ✓')
-        setModal(null)
       }
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
       // est encore devant la réception — masqué tant que QR_CARNET_ACTIF est faux.

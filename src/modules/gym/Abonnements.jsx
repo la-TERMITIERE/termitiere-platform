@@ -226,6 +226,7 @@ export default function Abonnements() {
     for (const p of presences) m.set(cleNom(p.clientNom), (m.get(cleNom(p.clientNom)) || 0) + 1)
     return m
   }, [presences])
+  const [choixSuppression, setChoixSuppression] = useState(null) // nom du client dont on choisit l'abonnement à supprimer
   const nbParClient = useMemo(() => {
     const m = new Map()
     for (const a of abonnements) m.set(cleNom(a.clientNom), (m.get(cleNom(a.clientNom)) || 0) + 1)
@@ -352,12 +353,12 @@ export default function Abonnements() {
         const ficheEdit = clients.find((c) => (c.nom || '').trim().toLowerCase() === clientNom.toLowerCase())
         if (d.sexe && ficheEdit && ficheEdit.sexe !== d.sexe) await updateItem('gym_clients', ficheEdit.id, { sexe: d.sexe })
         // La facture déjà générée à la création garde sinon l'ancien montant — le Dashboard/Facturation (sommes des
-        // `gym_factures`) resterait alors désynchronisé. Un abonnement payé en plusieurs fois garde ses montants encaissés.
+        // `gym_factures`) resterait alors désynchronisé.
         const factureLiee = factures.find((f) => f.sourceType === 'abonnement' && f.sourceId === d.id && !f.versement && !f.avoir)
         if (factureLiee) {
           await updateItem('gym_factures', factureLiee.id, {
             date: d.date, clientNom, categorie: d.categorie, modePaiement,
-            description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, ...(partiel ? {} : { montant: total }),
+            description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: total,
             ...(d.sexe ? { sexe: d.sexe } : {})
           })
         }
@@ -398,14 +399,21 @@ export default function Abonnements() {
         ...(d.renouvelleDe ? { renouvelleDe: d.renouvelleDe } : {}),
         enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
       })
-      await audit('gym', d.renouvelleDe ? 'ABONNEMENT_RENOUVELE' : 'ABONNEMENT_CREATE', `${d.renouvelleDe ? 'Renouvellement : ' : ''}${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${total.toLocaleString('fr-FR')} FCFA${paye < total ? ` (payé ${paye.toLocaleString('fr-FR')}, reste ${(total - paye).toLocaleString('fr-FR')})` : ''}`)
+      // L'abonnement est enregistré : on ferme la fenêtre tout de suite. La facture et les messages se terminent ensuite, sans bloquer
+      // l'écran ni laisser la fenêtre ouverte (ce qui poussait à enregistrer deux fois).
+      setModal(null)
+      await audit('gym', d.renouvelleDe ? 'ABONNEMENT_RENOUVELE' : 'ABONNEMENT_CREATE', `${d.renouvelleDe ? 'Renouvellement : ' : ''}${clientNom} : ${categorieLabel(d.categorie)} : ${dateDebut !== d.date ? `du ${dateDebut} ` : ''}jusqu'au ${dateFin} : ${total.toLocaleString('fr-FR')} FCFA`)
       // Une facture est TOUJOURS générée (visible dans le volet Facturation, avec son propre bouton de téléchargement). Elle est
       // créée JUSTE après l'abonnement, avant le WhatsApp : si une étape suivante échoue, l'abonnement reste facturé donc compté.
-      await genererFactureGym({
-        sourceType: 'abonnement', sourceId: id, clientNom, clientId, clientTelephone: telephone,
-        categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}${paye < total ? ` (acompte, reste ${formatMoney(total - paye)})` : ''}`, montant: paye,
-        user, site, date: d.date, sexe: d.sexe, modePaiement
-      })
+      try {
+        await genererFactureGym({
+          sourceType: 'abonnement', sourceId: id, clientNom, clientId, clientTelephone: telephone,
+          categorie: d.categorie, description: `Abonnement ${categorieLabel(d.categorie)} : jusqu'au ${dateFin}`, montant: total,
+          user, site, date: d.date, sexe: d.sexe, modePaiement
+        })
+      } catch (e) {
+        toast.error(`Abonnement enregistré, mais sa facture n'a pas pu être créée : elle sera rattrapée automatiquement. (${e?.message || e})`)
+      }
       // Montant libre : la direction est prévenue, avec le motif donné par l'agent.
       if (personnalise) {
         notify({
@@ -424,7 +432,6 @@ export default function Abonnements() {
         })
       }
       toast.success(d.renouvelleDe ? 'Abonnement renouvelé ✓' : 'Abonnement enregistré ✓')
-      setModal(null)
       // Nouveau client : on propose tout de suite son QR carnet, pendant qu'il
       // est encore devant la réception — masqué tant que QR_CARNET_ACTIF est faux.
       if (nouveauClient && QR_CARNET_ACTIF) setQrNouveauClient(nouveauClient)
@@ -441,6 +448,13 @@ export default function Abonnements() {
       user, site, date: a.date, sexe: sexeDe(a, idxSexe), modePaiement: a.modePaiement || 'especes'
     })
     toast.success('Facture générée ✓')
+  }
+
+  // La liste ne montre qu'une ligne par client (son dernier abonnement). Si le client en a plusieurs, on ouvre la liste de tous ses
+  // abonnements pour choisir celui à supprimer (sa facture part avec lui) ; sinon on supprime directement.
+  function supprimerDepuisLigne(a) {
+    if ((nbParClient.get(cleNom(a.clientNom)) || 1) > 1) setChoixSuppression(a.clientNom)
+    else supprimer(a)
   }
 
   async function supprimer(a) {
@@ -602,7 +616,7 @@ Sa facture (${liees.map((f) => f.numero).join(', ')}) sera supprimée aussi : le
                   )}
                   {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
                   {peutSupprimer && (
-                    <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); supprimerDepuisLigne(r) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                   )}
                   {termine && (
                     <button onClick={(e) => { e.stopPropagation(); setPurge(dossier) }} title="Abonnement terminé : supprimer totalement ce client de la base"
@@ -888,6 +902,37 @@ Sa facture (${liees.map((f) => f.numero).join(', ')}) sera supprimée aussi : le
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
         clients={clients} seances={seances} abonnements={abonnements} presences={presences}
         onRenouveler={(a) => { setClientDetail(null); setModal(renouveler(a)) }} />
+      <Modal open={!!choixSuppression} onClose={() => setChoixSuppression(null)} size="md" title={choixSuppression ? `Abonnements de ${choixSuppression}` : ''}
+        {...glassModalProps(COULEUR_MODULE.gym)}
+        footer={<BoutonGym variante="secondaire" icone={X} onClick={() => setChoixSuppression(null)}>Fermer</BoutonGym>}>
+        {choixSuppression && (() => {
+          const siens = abonnements.filter((x) => cleNom(x.clientNom) === cleNom(choixSuppression)).sort((x, y) => ((y.date || '') > (x.date || '') ? 1 : -1))
+          return (
+            <div className="space-y-2">
+              <p className="rounded-2xl border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs text-gray-700">
+                Ce client a {siens.length} abonnement{siens.length > 1 ? 's' : ''}. La liste n'en montre qu'un : choisissez celui à supprimer, sa facture sera supprimée avec.
+              </p>
+              {siens.length === 0 && <p className="py-4 text-center text-sm text-gray-400">Plus aucun abonnement pour ce client.</p>}
+              {siens.map((x) => {
+                const fact = factures.filter((f) => f.sourceType === 'abonnement' && f.sourceId === x.id)
+                return (
+                  <div key={x.id} className="flex items-center gap-2 rounded-2xl border border-white/70 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-extrabold text-gray-800">{categorieLabel(x.categorie)} : {formatMoney(x.montant)}</p>
+                      <p className="text-[11px] text-gray-500">
+                        Souscrit le {formatDateShort(x.date)}{x.dateFin ? `, jusqu'au ${formatDateShort(x.dateFin)}` : ''}
+                        {' · '}{fact.length ? `facture ${fact.map((f) => f.numero).join(', ')}` : 'sans facture'}
+                      </p>
+                    </div>
+                    <button onClick={() => supprimer(x)} title="Supprimer cet abonnement et sa facture" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-transform hover:-translate-y-0.5 active:scale-95" style={icone3D('#dc2626')}><Trash2 size={14} /></button>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
+      </Modal>
+
       <PurgeClientModal dossier={purge} onClose={() => setPurge(null)} />
       <QrCarnetModal client={qrNouveauClient} onClose={() => setQrNouveauClient(null)} />
 
