@@ -28,7 +28,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_MOUVEMENT_BANQUE, SECTEURS as SECTEURS_DEPENSE, LOGISTIQUE_SITES } from '../depense/data'
-import { PREFIXE_AUTRE, collectionBanque, moduleAudit, teinteBanque } from '../../shared/banque/comptes'
+import { PREFIXE_AUTRE, SECTEUR_SANS, collectionBanque, moduleAudit, teinteBanque } from '../../shared/banque/comptes'
 import BandeauCompta, { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 // Un compte bancaire par secteur : collection `${id}_banque`. Les secteurs sont ceux d'E-DÉPENSES, sans la
@@ -38,7 +38,9 @@ const SITES_PAR_SECTEUR = { logistique: LOGISTIQUE_SITES, gym: [{ id: 'lome', la
 // TRANSPORTS s'y ajoute comme source de revenus à part entière. D'autres sources se créent à la main (« Autre source »).
 const SECTEURS = [
   ...SECTEURS_DEPENSE.filter((x) => x.id !== 'divers').map((x) => ({ id: x.id, nom: x.label, color: x.color, sites: SITES_PAR_SECTEUR[x.id] || null })),
-  { id: 'transport', nom: 'TRANSPORTS', color: '#0891b2', sites: null }
+  { id: 'transport', nom: 'TRANSPORTS', color: '#0891b2', sites: null },
+  // Mouvements saisis sans secteur (le secteur est facultatif) : ils ont leur propre compte.
+  { id: SECTEUR_SANS, nom: 'SANS SECTEUR', color: '#64748b', sites: null }
 ]
 const COULEUR_AUTRE_SOURCE = '#7c3aed'
 
@@ -79,10 +81,11 @@ export default function MouvementsBancaires() {
   const { data: bat } = useCollection('bat_banque')
   const { data: evenementiel } = useCollection('evenementiel_banque')
   const { data: transport } = useCollection('transport_banque')
+  const { data: siege } = useCollection('siege_banque')
   const { data: autres } = useCollection('autres_banque')
   const { data: sourcesPerso } = useCollection(COL.sourcesRevenus)
   const { data: banques } = useCollection(COL.banques)
-  const sources = { agro, logistique, gym, garderie, bat, evenementiel, transport }
+  const sources = { agro, logistique, gym, garderie, bat, evenementiel, transport, [SECTEUR_SANS]: siege }
 
   const [secteur, setSecteur] = useState('') // '' = tous les secteurs
   const [type, setType] = useState('') // '' | 'depot' | 'retrait'
@@ -117,7 +120,7 @@ export default function MouvementsBancaires() {
     const initial = Number(ouvertureRec?.montant) || 0
     const rows = brut.filter((m) => !m.ouverture).map((m) => ({ ...m, secteurId: s.id, secteurNom: s.nom, siteNom: (s.sites || []).find((st) => st.id === m.site)?.label || '' }))
     return { ...s, ouvertureRec, initial, rows, depots: somme(rows, 'depot'), retraits: somme(rows, 'retrait'), solde: initial + somme(rows, 'depot') - somme(rows, 'retrait') }
-  }), [agro, logistique, gym, garderie, bat, evenementiel, transport, autres, comptes]) // eslint-disable-line react-hooks/exhaustive-deps
+  }), [agro, logistique, gym, garderie, bat, evenementiel, transport, siege, autres, comptes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Solde de chaque banque : solde d'ouverture de la banque + dépôts - retraits qui lui sont rattachés (tous secteurs).
   const parBanque = useMemo(() => {
@@ -406,9 +409,9 @@ export default function MouvementsBancaires() {
 
       {/* Ajout et modification d'un mouvement */}
       <ModalMouvement open={ajout} onClose={() => setAjout(false)} user={user} banques={banques} suggestions={suggestions}
-        secteurs={parSecteur.map((x) => ({ id: x.id, nom: x.nom, color: x.color, sites: x.sites }))} secteurId={secteur || ''} />
+        secteurs={parSecteur.filter((x) => x.id !== SECTEUR_SANS).map((x) => ({ id: x.id, nom: x.nom, color: x.color, sites: x.sites }))} secteurId={secteur === SECTEUR_SANS ? '' : (secteur || '')} />
       <ModalMouvement open={!!edition} onClose={() => setEdition(null)} user={user} banques={banques} suggestions={suggestions} fixeSecteur
-        secteurs={parSecteur.map((x) => ({ id: x.id, nom: x.nom, color: x.color, sites: x.sites }))} secteurId={edition?.secteurId} mouvement={edition} />
+        secteurs={parSecteur.filter((x) => x.id !== SECTEUR_SANS).map((x) => ({ id: x.id, nom: x.nom, color: x.color, sites: x.sites }))} secteurId={edition?.secteurId} mouvement={edition} />
 
       {/* Tous les détails d'un mouvement */}
       <MouvementFiche mouvement={fiche} secteur={fiche ? parSecteur.find((x) => x.id === fiche.secteurId) : null} banque={fiche ? nomBanque(fiche) : ''} numero={fiche ? numeroBanque(fiche) : ''}

@@ -25,7 +25,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   // ── E-BRIQUETERIE (code module : evenementiel) ─────────────────────────
   'evenementiel_clients', 'evenementiel_demandes', 'evenementiel_factures',
   'evenementiel_inventaires', 'evenementiel_materiels', 'evenementiel_productions',
-  'evenementiel_transferts', 'evenementiel_transports', 'evenementiel_ventes', 'evenementiel_banque', 'bat_banque', 'transport_banque', 'autres_banque', 'compta_sources_revenus',
+  'evenementiel_transferts', 'evenementiel_transports', 'evenementiel_ventes', 'evenementiel_banque', 'bat_banque', 'transport_banque', 'siege_banque', 'autres_banque', 'compta_sources_revenus',
   // ── E-GARDERIE ──────────────────────────────────────────────────────────
   'garderie_enfants', 'garderie_incidents', 'garderie_journaliers', 'garderie_menus',
   'garderie_nutrition', 'garderie_paiements', 'garderie_personnel', 'garderie_presences',

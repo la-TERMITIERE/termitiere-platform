@@ -4,7 +4,9 @@
 export const PREFIXE_AUTRE = 'autre:'
 export const estAutreSource = (id) => String(id || '').startsWith(PREFIXE_AUTRE)
 export const collectionBanque = (id) => (estAutreSource(id) ? 'autres_banque' : `${id}_banque`)
-export const moduleAudit = (id) => (estAutreSource(id) ? 'comptabilite' : id)
+// Mouvement sans secteur : rangé dans le compte « SANS SECTEUR » (collection `siege_banque`), tracé sous Comptabilité.
+export const SECTEUR_SANS = 'siege'
+export const moduleAudit = (id) => (estAutreSource(id) || id === SECTEUR_SANS ? 'comptabilite' : id)
 export const idSource = (id) => String(id).slice(PREFIXE_AUTRE.length)
 
 // Chaque compte bancaire garde sa teinte (SUNU, NSIA…), pour le repérer d'un coup d'œil partout.

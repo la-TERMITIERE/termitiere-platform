@@ -27,9 +27,10 @@ function useRecapBanques() {
   const { data: bat } = useCollection('bat_banque')
   const { data: evenementiel } = useCollection('evenementiel_banque')
   const { data: transport } = useCollection('transport_banque')
+  const { data: siege } = useCollection('siege_banque')
   const { data: autres } = useCollection('autres_banque')
   return useMemo(() => {
-    const tous = [...agro, ...logistique, ...gym, ...garderie, ...bat, ...evenementiel, ...transport, ...autres].filter((m) => !m.ouverture)
+    const tous = [...agro, ...logistique, ...gym, ...garderie, ...bat, ...evenementiel, ...transport, ...siege, ...autres].filter((m) => !m.ouverture)
     const comptes = banques.map((b) => {
       const rows = tous.filter((m) => m.banqueId === b.id)
       const initial = Number(b.soldeOuverture) || 0
@@ -41,7 +42,7 @@ function useRecapBanques() {
     const connus = new Set(banques.map((b) => b.id))
     const sansCompte = tous.filter((m) => !connus.has(m.banqueId))
     return { comptes: comptes.sort((a, b) => (a.nom || '').localeCompare(b.nom || '')), sansCompte, total: comptes.reduce((t, c) => t + c.solde, 0) }
-  }, [banques, agro, logistique, gym, garderie, bat, evenementiel, transport, autres])
+  }, [banques, agro, logistique, gym, garderie, bat, evenementiel, transport, siege, autres])
 }
 
 function Mini({ icone: Icone, titre, valeur }) {
