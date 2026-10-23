@@ -1,14 +1,13 @@
 // COMPTABILITÉ — registre des immobilisations et amortissements (linéaire SYSCOHADA).
 import { useMemo, useState } from 'react'
-import { Boxes, Plus, Pencil, Trash2, Tag, Banknote, CalendarDays, Hourglass, FileText, MapPin, Check, BookOpen, Sparkles } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { Boxes, Plus, Pencil, Trash2, Tag, Banknote, CalendarDays, Hourglass, FileText, MapPin, Check, BookOpen, Sparkles, Map, Building2, Wrench, Truck, Laptop, Armchair, Tractor, TrendingDown, Scale, BadgeCheck } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
-import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { glassModalProps, icone3D } from '../../utils/color'
+import { ANIMATIONS, CarteVerre, Info as InfoTuile, BoutonAction, EtatVide } from './ui'
 import { MODULES } from '../../shared/modules'
 import { useCompta } from './useCompta'
 import { CATEGORIES_IMMO, getCategorieImmo, COL } from './data'
@@ -16,6 +15,9 @@ import { planAmortissement } from './logic'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const COULEUR_COMPTA = MODULES.find((m) => m.id === 'comptabilite')?.color || '#ea580c'
+// Icône et couleur de chaque catégorie d'actif
+const ICONE_CAT = { terrain: Map, batiment: Building2, materiel: Wrench, vehicule: Truck, informatique: Laptop, mobilier: Armchair, agricole: Tractor }
+const COULEUR_CAT = { terrain: '#16a34a', batiment: '#0d9488', materiel: '#f59e0b', vehicule: '#2563eb', informatique: '#7c3aed', mobilier: '#E8850F', agricole: '#65a30d' }
 const vide = () => ({ libelle: '', categorie: 'materiel', categorieAutre: '', valeur: '', dateAcquisition: todayStr(), dureeAmort: '', reference: '', affectation: '' })
 
 export default function Immobilisations() {
@@ -66,51 +68,69 @@ export default function Immobilisations() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard title="VALEUR BRUTE GLOBALE" value={formatMoney(totaux.brut)} sub="Valeur d'origine (HT) des actifs en service" accent="#0d9488" icon={Boxes} />
-        <StatCard title="AMORTISSEMENTS CUMULÉS" value={formatMoney(totaux.amort)} sub="Perte de valeur totale déjà comptabilisée" accent="#f59e0b" icon={Boxes} />
-        <StatCard title="VALEUR NETTE COMPTABLE (VNC)" value={formatMoney(totaux.vnc)} sub="Valeur comptable nette restante à amortir" accent="#2563eb" icon={Boxes} />
+        <StatCard title="AMORTISSEMENTS CUMULÉS" value={formatMoney(totaux.amort)} sub="Perte de valeur totale déjà comptabilisée" accent="#f59e0b" icon={TrendingDown} />
+        <StatCard title="VALEUR NETTE COMPTABLE (VNC)" value={formatMoney(totaux.vnc)} sub="Valeur comptable nette restante à amortir" accent="#2563eb" icon={Scale} />
       </div>
 
-      <Card className="!p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-white/5">
-                <th className="px-3 py-2.5">Désignation</th>
-                <th className="px-3 py-2.5">Date d'Acquisition</th>
-                <th className="px-3 py-2.5">Méthode</th>
-                <th className="px-3 py-2.5 text-right">Valeur d'Origine</th>
-                <th className="px-3 py-2.5 text-right">Amort. Cumulé</th>
-                <th className="px-3 py-2.5 text-right">Valeur Nette (VNC)</th>
-                <th className="px-3 py-2.5">Statut</th>
-                <th className="w-16"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-white/10">
-              {enrichies.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">Aucun actif immobilisé n'a été enregistré pour le moment.</td></tr>}
-              {enrichies.map((im) => (
-                <tr key={im.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5" onClick={() => setDetail(im)}>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-gray-800 dark:text-gray-100">{im.libelle || <span className="italic text-gray-400">Bien sans désignation</span>}</div>
-                    <div className="text-xs text-gray-400">{im.categorie === 'autre' ? (im.categorieAutre || 'Autre catégorie') : (im.cat?.label || im.categorie)}{im.affectation ? ` · ${im.affectation}` : ''}</div>
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-gray-500">{formatDateShort(im.dateAcquisition)}</td>
-                  <td className="px-3 py-2">{im.amort.amortissable ? <Badge tone="info">Linéaire · {im.amort.duree} ans</Badge> : <Badge tone="neutral">Non amortissable</Badge>}</td>
-                  <td className="px-3 py-2 text-right font-medium">{formatMoney(im.valeur)}</td>
-                  <td className="px-3 py-2 text-right text-amber-600">{formatMoney(im.amort.cumul)}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatMoney(im.amort.vnc)}</td>
-                  <td className="px-3 py-2">{im.amort.vnc > 0 ? <Badge tone="success">En service</Badge> : <Badge tone="neutral">Amorti</Badge>}</td>
-                  <td className="px-2 py-2">
-                    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => setModal({ ...im, valeur: String(im.valeur), dureeAmort: String(im.dureeAmort ?? '') })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"><Pencil size={14} /></button>
-                      <button onClick={() => supprimer(im)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+      <style>{ANIMATIONS}</style>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {enrichies.length === 0 && (
+          <EtatVide icone={Boxes} couleur="#0d9488" titre="Aucun actif enregistré"
+            texte="Matériel, véhicules, mobilier, bâtiments : ajoutez vos actifs pour suivre leur amortissement et leur valeur nette."
+            action={<Button onClick={() => setModal(vide())}><Plus size={15} /> Créer un actif</Button>} />
+        )}
+        {enrichies.map((im, i) => {
+          const couleur = COULEUR_CAT[im.categorie] || '#475569'
+          const IconeCat = ICONE_CAT[im.categorie] || Tag
+          const libCat = im.categorie === 'autre' ? (im.categorieAutre || 'Autre catégorie') : (im.cat?.label || im.categorie || 'Catégorie non précisée')
+          const pct = Number(im.valeur) > 0 ? Math.min(100, Math.round((im.amort.cumul / Number(im.valeur)) * 100)) : 0
+          const enService = im.amort.vnc > 0
+          return (
+            <CarteVerre key={im.id} i={i} couleur={couleur} onClick={() => setDetail(im)}>
+              <div className="relative flex items-start gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" style={icone3D(couleur)}><IconeCat size={22} /></span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-extrabold text-gray-800 dark:text-gray-100">{im.libelle || <span className="italic text-gray-400">Bien sans désignation</span>}</h3>
+                  <p className="truncate text-[11px] text-gray-500">{libCat}{im.affectation ? ` · ${im.affectation}` : ''}</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${enService ? '#16a34a' : '#64748b'}, ${enService ? '#16a34acc' : '#64748bcc'})` }}>
+                      <BadgeCheck size={10} /> {enService ? 'En service' : 'Amorti'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-white/80 bg-white/70 px-2 py-0.5 text-[10px] font-extrabold text-gray-600">
+                      <Hourglass size={10} /> {im.amort.amortissable ? `Linéaire · ${im.amort.duree} ans` : 'Non amortissable'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative rounded-2xl border border-white/70 px-3 py-2 backdrop-blur-md" style={{ background: `linear-gradient(135deg, ${couleur}1f, rgba(255,255,255,0.5))` }}>
+                <p className="flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-wide text-gray-500"><Scale size={11} /> Valeur nette (VNC)</p>
+                <p className="text-xl font-extrabold leading-tight text-gray-900 dark:text-gray-50">{formatMoney(im.amort.vnc)}</p>
+                {im.amort.amortissable && (
+                  <div className="mt-1.5">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/70 shadow-inner">
+                      <div className="cp-barre h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${couleur}, #f59e0b)`, animation: 'cp-barre 0.9s ease-out both' }} />
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    <p className="mt-0.5 text-[10px] font-bold text-gray-500">{pct} % amorti</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="relative grid grid-cols-2 gap-1.5">
+                <InfoTuile icone={Banknote} couleur="#16a34a" label="Valeur d'origine">{formatMoney(im.valeur)}</InfoTuile>
+                <InfoTuile icone={TrendingDown} couleur="#f59e0b" label="Amort. cumulé">{formatMoney(im.amort.cumul)}</InfoTuile>
+                {im.dateAcquisition && <InfoTuile icone={CalendarDays} couleur="#2563eb" label="Acquis le">{formatDateShort(im.dateAcquisition)}</InfoTuile>}
+                {im.reference && <InfoTuile icone={FileText} couleur="#475569" label="Réf.">{im.reference}</InfoTuile>}
+              </div>
+
+              <div className="relative mt-auto flex justify-end gap-1.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                <BoutonAction icone={Pencil} couleur="#2563eb" titre="Modifier" onClick={() => setModal({ ...im, valeur: String(im.valeur), dureeAmort: String(im.dureeAmort ?? '') })} />
+                <BoutonAction icone={Trash2} couleur="#dc2626" titre="Supprimer" onClick={() => supprimer(im)} />
+              </div>
+            </CarteVerre>
+          )
+        })}
+      </div>
 
       {/* Saisie : bento grid en verre, petites icônes 3D. Aucun champ n'est obligatoire. */}
       <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier l\'immobilisation' : 'Nouvelle immobilisation'}
