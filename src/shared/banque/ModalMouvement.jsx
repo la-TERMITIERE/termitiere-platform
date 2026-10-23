@@ -18,7 +18,7 @@ import { lireFichier, formatTaille } from '../../utils/fichiers'
 import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
 import { TYPES_MOUVEMENT_BANQUE } from '../../modules/depense/data'
 import { COL } from '../../modules/comptabilite/data'
-import { PREFIXE_AUTRE, estAutreSource, collectionBanque, moduleAudit, idSource } from './comptes'
+import { PREFIXE_AUTRE, SECTEUR_SANS, estAutreSource, collectionBanque, moduleAudit, idSource } from './comptes'
 
 const COULEUR = COULEUR_MODULE.comptabilite || '#ea580c'
 const COULEUR_BANQUE = '#0f766e' // les banques se distinguent des secteurs (orange du module) par leur teinte
@@ -102,7 +102,6 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
 
   async function enregistrer() {
     if (saving) return
-    if (!d.secteurId) return toast.error('Choisissez le secteur concerné')
     if (secteur?.sites?.length && !d.site) return toast.error(`Choisissez le site de ${secteur.nom}`)
     if (!d.banqueId) return toast.error(banques.length ? 'Précisez la banque du mouvement' : 'Aucune banque enregistrée : ajoutez-en dans Comptabilité, Paramètres')
     if (!d.date) return toast.error('Date requise')
@@ -111,7 +110,8 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
     try {
       const montant = Number(d.montant)
       const banque = banques.find((b) => b.id === d.banqueId)
-      const { secteurId: sid, secteurNom, siteNom, solde, ...champs } = d // champs d'affichage : jamais enregistrés
+      const { secteurId: sidChoisi, secteurNom, siteNom, solde, ...champs } = d // champs d'affichage : jamais enregistrés
+      const sid = sidChoisi || SECTEUR_SANS // aucun secteur choisi : le mouvement va dans le compte « SANS SECTEUR »
       void secteurNom; void siteNom; void solde
       const donnees = { ...champs, site: secteur?.sites?.length ? d.site : '', montant, banqueId: banque?.id || '', banqueNom: banque?.nom || '', banqueNumero: banque?.numero || '', ...(estAutreSource(sid) ? { sourceId: idSource(sid) } : {}) }
       const collection = collectionBanque(sid)
@@ -182,7 +182,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
           </div>
 
           <div>
-            <Etiquette icone={Layers}>Secteur {!fixeSecteur && <span className="text-red-500">*</span>}</Etiquette>
+            <Etiquette icone={Layers}>Secteur {!fixeSecteur && <span className="font-semibold normal-case tracking-normal text-gray-400">(facultatif)</span>}</Etiquette>
             {!fixeSecteur ? (
               <>
               <div className="flex flex-wrap gap-1.5">
@@ -206,7 +206,7 @@ export default function ModalMouvement({ open, onClose, secteurs, secteurId, fix
               )}
               </>
             ) : (
-              <Choix actif onClick={() => {}} point={secteur?.color}>{secteur?.nom || ':'}</Choix>
+              <Choix actif onClick={() => {}} point={secteur?.color || '#64748b'}>{secteur?.nom || (d.secteurId === SECTEUR_SANS ? 'SANS SECTEUR' : ':')}</Choix>
             )}
           </div>
 
