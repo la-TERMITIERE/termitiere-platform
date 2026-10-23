@@ -6,7 +6,7 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, Settings, X, ChevronR
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel, canManagePartenaires, voletRetire, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
+import { roleLabel, peutGererUtilisateurs, canManagePartenaires, voletRetire, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
 import { estActif } from '../workflow'
 import { calculerBadges } from '../nouveautes'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from '../../modules/projet/logic'
@@ -358,7 +358,7 @@ export default function Sidebar({ open, onClose }) {
             <LayoutDashboard size={18} /> Tableau de bord global
           </NavLink>
           {/* Gestion des utilisateurs : portail uniquement, admin seulement */}
-          {isAdmin() && !activeModule && (
+          {peutGererUtilisateurs(role) && !activeModule && (
             <NavLink to="/utilisateurs" className={navClass} onClick={onClose}>
               <Users size={18} /> Utilisateurs
             </NavLink>

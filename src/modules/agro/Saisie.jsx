@@ -366,7 +366,7 @@ export default function Saisie() {
         title: `Saisie enregistrée : ${user.nom}`,
         body: `Saisie du ${formatDateShort(date)} enregistrée · ${totalTetes} têtes au total`,
         module: 'agro',
-        forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])],
+        forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'df', 'pau'])],
         excludeUid: user.uid,
         link: '/agro/saisie'
       })
@@ -379,7 +379,7 @@ export default function Saisie() {
           title: `⚠️ Chiffre d'un jour passé modifié : ${user.nom}`,
           body: `La saisie du ${formatDateShort(date)} a été modifiée après coup · ${totalTetes} têtes au total`,
           module: 'agro',
-          forRoles: ['ge', 'pau'],
+          forRoles: ['ge', 'df', 'pau'],
           excludeUid: user.uid,
           link: '/agro/saisie'
         })

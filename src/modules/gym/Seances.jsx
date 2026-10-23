@@ -299,7 +299,7 @@ export default function Seances() {
             notify({
               type: 'info', title: `🎚️ Séance personnalisée : MAXI-GYM ${site === 'kara' ? 'Kara' : 'Lomé'}`,
               body: `${clientNom} : ${categorieLabel(d.categorie)} : ${formatMoney(Number(d.montant))}. Motif : ${d.motifPrix.trim()}. Par ${user?.nom || user?.login || '—'}.`,
-              module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/seances`
+              module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'df', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/seances`
             }).catch(() => {})
           }
           if (d.imprimer) imprimerTicketSeance(facture)

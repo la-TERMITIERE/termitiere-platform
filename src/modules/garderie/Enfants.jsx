@@ -153,7 +153,7 @@ export default function Enfants() {
       }
       await updateItem('garderie_enfants', e.id, patch)
       audit('garderie', 'ENFANT_BASCULE_MATERNELLE', `${e.prenom} ${e.nom}`, { de: e.groupe, vers: basculeGroupe })
-      notify({ type: 'info', title: '🎓 Passage en maternelle', body: `${e.prenom} ${e.nom} passe de la garderie à la maternelle (${GROUPES_AGE.find((g) => g.id === basculeGroupe)?.label}).`, module: 'garderie', forRoles: ['ge', 'gerante_garderie'], excludeUid: user.uid, link: '/garderie/enfants' })
+      notify({ type: 'info', title: '🎓 Passage en maternelle', body: `${e.prenom} ${e.nom} passe de la garderie à la maternelle (${GROUPES_AGE.find((g) => g.id === basculeGroupe)?.label}).`, module: 'garderie', forRoles: ['ge', 'df', 'gerante_garderie'], excludeUid: user.uid, link: '/garderie/enfants' })
       toast.success(`${e.prenom} ${e.nom} est maintenant en maternelle ✓`)
       setDetail((d) => (d && d.id === e.id ? { ...d, ...patch } : d))
       setBascule(null)
@@ -271,7 +271,7 @@ export default function Enfants() {
         const id = genId()
         await setItem('garderie_enfants', id, { ...d, id })
         audit('garderie', 'ENFANT_CREATE', `${d.prenom} ${d.nom}`, { groupe: d.groupe })
-        notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/enfants' })
+        notify({ type: 'info', title: '🍼 Nouvel enfant inscrit', body: `${d.prenom} ${d.nom} a été inscrit(e) à la garderie`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/enfants' })
 
         // Paiements encaissés en même temps que l'inscription, si renseignés —
         // même logique que le paiement optionnel des journaliers (cf.
@@ -316,7 +316,7 @@ export default function Enfants() {
         }
 
         if (recap.length > 0) {
-          notify({ type: 'info', title: `💰 Paiement(s) reçu(s) : ${enfantNomComplet}`, body: recap.join(' · '), module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+          notify({ type: 'info', title: `💰 Paiement(s) reçu(s) : ${enfantNomComplet}`, body: recap.join(' · '), module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
         }
         toast.success(`${d.prenom} ${d.nom} inscrit(e) ✓${recap.length ? ' : paiement(s) enregistré(s)' : ''}`)
       } else {
@@ -457,7 +457,7 @@ export default function Enfants() {
             notes: ''
           })
           audit('garderie', 'JOURNALIER_PAIEMENT', `${d.prenom} ${d.nom}`, { montant })
-          notify({ type: 'info', title: `💰 Paiement journalier : ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
+          notify({ type: 'info', title: `💰 Paiement journalier : ${d.prenom} ${d.nom}`, body: `${montant.toLocaleString('fr-FR')} FCFA`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/paiements' })
           toast.success(`${d.prenom} ${d.nom} enregistré(e) : paiement de ${montant.toLocaleString('fr-FR')} FCFA encaissé ✓`)
         } else {
           toast.success(`${d.prenom} ${d.nom} enregistré(e) ✓`)

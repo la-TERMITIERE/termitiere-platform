@@ -112,6 +112,9 @@ export const sourceFinancementDefaut = 'entreprise'
 // Circuit d'autorisation de décaissement (2 niveaux) :
 //   en_attente → approuvee → decaissee (argent réellement sorti, compté dans le budget)
 //   ou refusee à n'importe quelle étape.
+// Toute dépense qui dépasse ce montant devient automatiquement une demande à valider (PAU, GE) avant le décaissement.
+export const SEUIL_DEMANDE_FCFA = 20000
+
 export const STATUTS_DECAISSEMENT = {
   en_attente: { label: 'En attente d\'approbation', tone: 'warning' },
   approuvee:  { label: 'Approuvée : à décaisser', tone: 'info' },

@@ -25,7 +25,7 @@ export function useRapportMensuelGym(site) {
       notify({
         type: 'info', title: `📊 Rapport mensuel prêt : MAXI-GYM ${siteLabel(site)}`,
         body: `Le rapport de ${MOIS_LABELS[d.getMonth()]} ${d.getFullYear()} est disponible : Facturation, bouton « Rapport mensuel ».`,
-        module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'pau', 'directeur'], link: `/gym/${site}/facturation`
+        module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'df', 'pau', 'directeur'], link: `/gym/${site}/facturation`
       }).catch(() => {})
     })()
   }, [role, site])

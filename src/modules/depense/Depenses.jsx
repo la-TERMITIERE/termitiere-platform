@@ -984,6 +984,14 @@ export default function Depenses() {
                       <Input value={modal.data.secteurAutre || ''} onChange={(e) => set('secteurAutre', e.target.value)} placeholder="Nom du secteur *" />
                     </div>
                   )}
+                  {modal.data.secteurId === 'gym' && (
+                    <div className="mt-2 max-w-[12rem]">
+                      <Select value={modal.data.site || ''} onChange={(e) => set('site', e.target.value)}>
+                        <option value="">Salle (facultatif)</option>
+                        {LOGISTIQUE_SITES.map((st) => <option key={st.id} value={st.id}>Salle de {st.label}</option>)}
+                      </Select>
+                    </div>
+                  )}
                   {modal.data.secteurId === 'logistique' && (
                     <div className="mt-2 max-w-[12rem]">
                       <Select value={modal.data.site} onChange={(e) => set('site', e.target.value)}>

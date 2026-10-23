@@ -5,8 +5,9 @@
 // Lecture seule : tout est repris d'E-DÉPENSES et des modules, sans nouvelle saisie.
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, CalendarCheck, Wallet, TrendingUp, TrendingDown, Scale, BadgeDollarSign, FileSpreadsheet, Inbox, Receipt } from 'lucide-react'
+import { FileText, Dumbbell, Truck, Leaf, BrickWall, Baby, Bus, Megaphone, Landmark, Layers, ChevronRight, CalendarCheck, Wallet, TrendingUp, TrendingDown, Scale, BadgeDollarSign, FileSpreadsheet, Inbox, Receipt } from 'lucide-react'
 import Card from '../../shared/ui/Card'
+import Modal from '../../shared/ui/Modal'
 import StatCard from '../../shared/ui/StatCard'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
@@ -16,21 +17,37 @@ import { useAuth } from '../../hooks/useAuth'
 import { canExportExcel, isFullAccessRole, isReadOnlyRole } from '../../core/roles'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
-import { coutsMatieresBriqueterie, versementsClientVersSecteurs } from '../depense/logic'
+import { coutsMatieresBriqueterie, versementsClientVersSecteurs, depensesProjetVersSecteurs } from '../depense/logic'
 import BandeauCompta, { OngletsBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 import CaisseFiche from './CaisseFiche'
 import DotationModal from './DotationModal'
 import SecteurDetail from './SecteurDetail'
 import CarteSecteur, { Tendance, STYLES_TENDANCE } from './CarteSecteur'
 import { iconeLigne, ICONE_DOTATION, COULEUR_DOTATION, COULEUR_DEPENSE } from './iconesCaisse'
-import { icone3D } from '../../utils/color'
+import { icone3D, glassModalProps } from '../../utils/color'
+import { genererRapportJournalier } from './rapportJournalierPDF'
+import { toast } from '../../core/notifications'
+import { MOIS_LABELS } from '../depense/data'
 import { useReportAutomatique } from '../depense/reportAuto'
-import { construireLignes, construireLignesCaisse, bornesPeriode, journalPeriode, recapParJour, recapParSecteur, periodePrecedente, vocabulaire, domaineLibelle, couleurDomaine, DOMAINES } from './journalCalculs'
+import { recapPoles, construireLignes, construireLignesCaisse, bornesPeriode, journalPeriode, recapParJour, recapParSecteur, periodePrecedente, vocabulaire, domaineLibelle, couleurDomaine, DOMAINES } from './journalCalculs'
+
+// Parties du rapport PDF que l'utilisateur peut inclure ou retirer
+const SECTIONS_RAPPORT = [
+  { id: 'banques', label: 'Comptes bancaires', Icone: Landmark, couleur: '#2563eb' },
+  { id: 'caisse', label: 'Caisse', Icone: Wallet, couleur: '#16a34a' },
+  { id: 'secteurs', label: 'Détail par secteur', Icone: Layers, couleur: '#ea580c' },
+  { id: 'depenses', label: 'Dépenses', Icone: Receipt, couleur: '#dc2626' },
+  { id: 'operations', label: 'Opérations détaillées', Icone: Inbox, couleur: '#7c3aed' }
+]
 
 const TH = 'sticky top-0 z-10 bg-orange-50 shadow-[0_1px_0_rgba(234,88,12,0.25)] dark:bg-gray-800 px-3 py-2.5'
 const TF = 'sticky bottom-0 z-10 bg-orange-50 px-3 py-2.5 shadow-[0_-1px_0_rgba(234,88,12,0.25)] dark:bg-gray-800'
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
 const signe = (n) => `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}`
+// Couleur d'un pôle : celle de son secteur (cf. couleurDomaine).
+const couleurPole = (id) => couleurDomaine({ gym_kara: 'gym', gym_lome: 'gym', log_kara: 'logistique', log_lome: 'logistique', agro: 'agro', briques: 'evenementiel', garderie: 'garderie', transport: 'transport', com: 'communication', direction: 'divers' }[id] || 'divers')
+// Icône de chaque secteur dans le tableau « Par jour » (celle de son module).
+const ICONE_POLE = { gym_kara: Dumbbell, gym_lome: Dumbbell, log_kara: Truck, log_lome: Truck, agro: Leaf, briques: BrickWall, garderie: Baby, transport: Bus, com: Megaphone, direction: Landmark }
 const VUES_RECETTES = [{ id: 'secteur', label: 'Par secteur' }, { id: 'jour', label: 'Par jour' }]
 
 // page : 'caisse' (journal des mouvements) ou 'recettes' (chiffre d'affaires, par jour et par secteur).
@@ -49,6 +66,9 @@ export default function SuiviJournalier({ page = 'caisse' }) {
   const { data: projets } = useCollection('projets')
   const { data: versements } = useCollection('projet_versements_client')
   const { data: revenusManuels } = useCollection('depense_revenus_manuels')
+  const { data: paiementsGarderie } = useCollection('garderie_paiements')
+  const { data: transports } = useCollection('evenementiel_transports')
+  const { data: depensesProjet } = useCollection('projet_depenses')
   const { data: budgets } = useCollection('depense_budgets')
   const user = useAuth((s) => s.user)
   useReportAutomatique(caisse) // le report du mois est créé tout seul dans E-DÉPENSES, la Caisse le reprend
@@ -65,6 +85,11 @@ export default function SuiviJournalier({ page = 'caisse' }) {
   const [fiche, setFiche] = useState(null) // ligne de la caisse dont on consulte le détail
   const [detailSecteur, setDetailSecteur] = useState(null) // carte de secteur ouverte (volet Recettes)
   const [vue, setVue] = useState('secteur')
+  const [jourVue, setJourVue] = useState(todayStr()) // jour affiché dans « Par jour »
+  const [rapport, setRapport] = useState(null) // fenêtre « Rapport du jour » : { mode, jour, mois, annee, debut, fin, sections }
+  const [rapportEnCours, setRapportEnCours] = useState(false)
+  const [poleOuvert, setPoleOuvert] = useState(null) // pôle dont on consulte le détail des opérations
+  const [periodeDetail, setPeriodeDetail] = useState('jour') // détail d'un pôle : opérations du 'jour' ou du 'mois'
   const vueActive = caisse ? 'journal' : vue
 
   const lignesCaisse = useMemo(() => construireLignesCaisse({ depenses, coutsMatieres: coutsMatieresBriqueterie(inventairesBriq), budgets }), [depenses, inventairesBriq, budgets])
@@ -74,6 +99,83 @@ export default function SuiviJournalier({ page = 'caisse' }) {
     versementsRoutes: versementsClientVersSecteurs(versements, projets), projets, revenusManuels
   }), [facturesAgro, facturesLogistique, facturesEvenementiel, facturesGym, versements, projets, revenusManuels])
   const toutes = caisse ? lignesCaisse : lignesRecettes
+  // Détail d'un jour (clic dans « Par jour ») : une ligne par pôle, recettes et dépenses du jour et du mois jusqu'à ce jour.
+  const tableau = useMemo(() => (jourVue ? recapPoles({
+    jour: jourVue, lignesRecettes, paiementsGarderie, transports,
+    // Toutes les dépenses : celles d'E-DÉPENSES, plus celles saisies directement dans les modules (coûts de matières de la Briqueterie,
+    // dépenses des projets E-G.Pro rangées par secteur). Celles d'E-DÉPENSES liées à un projet sont déjà comptées côté projet.
+    depenses: [...depenses.filter((d) => !d.projetId), ...coutsMatieresBriqueterie(inventairesBriq), ...depensesProjetVersSecteurs(depensesProjet, projets, [])]
+  }) : { rows: [], total: { rj: 0, dj: 0, rm: 0, dm: 0 } }), [jourVue, lignesRecettes, paiementsGarderie, transports, depenses, inventairesBriq, depensesProjet, projets])
+  const decaleJour = (n) => { const d = new Date(`${jourVue || todayStr()}T00:00:00`); d.setDate(d.getDate() + n); setJourVue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`) }
+
+  // Rapport financier en PDF (celui que le DF envoie au PAU) : il SUIT le filtre de période du haut de la page (Jour, Mois, Année ou Plage),
+  // et la période est écrite dans l'en-tête. Pour un seul jour : situation du jour, du mois et de l'année ; sinon : situation de la période choisie.
+  const bornesRapport = () => bornesPeriode(rapport?.mode || 'mois', { jour: rapport?.jour, mois: rapport?.mois, annee: rapport?.annee, debut: rapport?.debut, fin: rapport?.fin })
+  const intituleRapport = (br) => {
+    const [a, m] = br.start.split('-')
+    const court = (d) => d.split('-').reverse().join('/')
+    if (br.start === br.end) return `AU ${court(br.end)}`
+    if (rapport?.mode === 'mois') return `: ${MOIS_LABELS[Number(m) - 1].toUpperCase()} ${a}`
+    if (rapport?.mode === 'annee') return `: ANNÉE ${a}`
+    return `DU ${court(br.start)} AU ${court(br.end)}`
+  }
+  async function genererRapport() {
+    const br = bornesRapport()
+    const debut = br.start
+    const fin = br.end
+    setRapportEnCours(true)
+    try {
+      const depensesToutes = [...depenses.filter((d) => !d.projetId), ...coutsMatieresBriqueterie(inventairesBriq), ...depensesProjetVersSecteurs(depensesProjet, projets, [])]
+      const entrees = { lignesRecettes, paiementsGarderie, transports, depenses: depensesToutes }
+      const surPeriode = recapPoles({ jour: fin, debut, ...entrees }) // recettes et dépenses de début à fin (colonnes « mois » du tableau)
+      const duJour = recapPoles({ jour: fin, ...entrees }) // le dernier jour et le mois en cours jusqu'à ce jour
+      const annee = recapPoles({ jour: fin, debut: `${fin.slice(0, 4)}-01-01`, ...entrees })
+      const debutMois = `${fin.slice(0, 7)}-01`
+      const caissePeriode = journalPeriode(lignesCaisse, { start: debut, end: fin }, { mensuel: true })
+      const caisseMois = journalPeriode(lignesCaisse, { start: debutMois, end: fin }, { mensuel: true })
+      const moisPrec = new Date(Number(fin.slice(0, 4)), Number(fin.slice(5, 7)) - 2, 1)
+      const jourSeul = debut === fin
+      await genererRapportJournalier({
+        debut, fin, intitule: intituleRapport(br),
+        periodes: {
+          jour: { r: duJour.total.rj, d: duJour.total.dj },
+          mois: { r: duJour.total.rm, d: duJour.total.dm },
+          choisie: { r: surPeriode.total.rm, d: surPeriode.total.dm },
+          annee: { r: annee.total.rm, d: annee.total.dm }
+        },
+        secteurs: jourSeul ? duJour : surPeriode,
+        caisse: {
+          moisPrecedent: MOIS_LABELS[moisPrec.getMonth()].toUpperCase(),
+          debutMoisPlusAlimentation: caisseMois.soldeInitial + caisseMois.recettes,
+          soldeVeille: caissePeriode.soldeInitial, alimentation: caissePeriode.recettes, depenses: caissePeriode.depenses, soldeFin: caissePeriode.soldeFinal
+        },
+        depensesPeriode: surPeriode.rows.flatMap((r) => r.details).filter((o) => o.sens === 'depense' && o.date >= debut && o.date <= fin)
+          .sort((x, y) => (x.date < y.date ? -1 : 1)).map((o) => ({ date: o.date, libelle: o.libelle, montant: o.montant })),
+        sections: rapport?.sections
+      })
+      setRapport(null)
+      toast.success('Rapport PDF généré ✓')
+    } catch (e) {
+      console.error('[rapport] échec', e)
+      toast.error('Impossible de générer le rapport : ' + (e?.message || e))
+    } finally { setRapportEnCours(false) }
+  }
+
+  // Export Excel du tableau « Par jour » : le seul export de la page Recettes (l'export du journal est dans la Caisse).
+  function exporterTableau() {
+    exportRapportExcel({
+      filename: `recettes-par-secteur-${jourVue}.xlsx`,
+      sections: [{
+        name: 'Par secteur', title: 'Recettes et dépenses par secteur', subtitle: `Jour : ${formatDateShort(jourVue)} · mois en cours jusqu'à ce jour`,
+        columns: [
+          { key: 'pole', label: 'Secteurs', width: 34 }, { key: 'rj', label: 'Recettes du jour', type: 'money', width: 18 }, { key: 'dj', label: 'Dépenses du jour', type: 'money', width: 18 },
+          { key: 'rm', label: 'Recettes du mois', type: 'money', width: 18 }, { key: 'dm', label: 'Dépenses du mois', type: 'money', width: 18 }
+        ],
+        rows: tableau.rows.map((r) => ({ pole: r.label, rj: r.rj, dj: r.dj, rm: r.rm, dm: r.dm })),
+        totals: { __label: 'TOTAL', rj: tableau.total.rj, dj: tableau.total.dj, rm: tableau.total.rm, dm: tableau.total.dm }
+      }]
+    })
+  }
 
   const bornes = useMemo(() => bornesPeriode(mode, { jour: fJour, mois: fMois, annee: fAnnee, debut: fDebut, fin: fFin }), [mode, fJour, fMois, fAnnee, fDebut, fFin])
   const journal = useMemo(() => journalPeriode(secteur ? toutes.filter((l) => l.secteurId === secteur) : toutes, bornes, { mensuel: caisse }), [toutes, secteur, bornes, caisse])
@@ -156,7 +258,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
         {!caisse && <OngletsBande options={VUES_RECETTES} valeur={vue} onChange={setVue} taille="sm" />}
       </BandeauCompta>
 
-      {(canExportExcel(role) || (caisse && isFullAccessRole(role) && !isReadOnlyRole(role))) && (
+      {caisse && (canExportExcel(role) || (isFullAccessRole(role) && !isReadOnlyRole(role))) && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <style>{`
             @keyframes sj-ondes-vert { 0% { box-shadow: 0 8px 18px -8px rgba(22,163,74,0.7), 0 0 0 0 rgba(22,163,74,0.45); } 70% { box-shadow: 0 8px 18px -8px rgba(22,163,74,0.7), 0 0 0 12px rgba(22,163,74,0); } 100% { box-shadow: 0 8px 18px -8px rgba(22,163,74,0.7), 0 0 0 0 rgba(22,163,74,0); } }
@@ -274,41 +376,79 @@ export default function SuiviJournalier({ page = 'caisse' }) {
 
       {/* ---------- Par jour : recettes et chiffre d'affaires (les dépenses sont dans la Caisse) ---------- */}
       {vueActive === 'jour' && (
-        <Card className="!p-0 overflow-hidden">
-          <div className="max-h-[66vh] overflow-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase text-gray-500">
-                  <th className={TH}>Date</th><th className={`${TH} text-right`}>Recettes</th><th className={`${TH} text-right`}>Chiffre d'affaires</th><th className={`${TH} text-right`}>{vocab.pluriel}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/10">
-                {parJour.length === 0 && <tr><td colSpan={4} className="px-3 py-10 text-center text-gray-400"><Inbox className="mx-auto mb-2" size={28} />Aucune recette sur cette période.</td></tr>}
-                {parJour.map((j) => (
-                  <tr key={j.date} onClick={() => ouvrirJour(j)} className="cursor-pointer hover:bg-orange-50/60 dark:hover:bg-white/5" title="Voir le détail de ce jour">
-                    <td className="whitespace-nowrap px-3 py-2 text-xs font-extrabold text-gray-700 dark:text-gray-200">{formatDateShort(j.date)} <span className="block text-[10px] font-semibold text-gray-400" title="Nombre de recettes enregistrées ce jour">{j.nb} recette{j.nb > 1 ? 's' : ''}</span></td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-bold text-green-700">{j.recettes > 0 ? `+${fmt(j.recettes)}` : <span className="text-gray-300">-</span>}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-bold text-gray-800 dark:text-gray-100">{j.chiffreAffaires > 0 ? fmt(j.chiffreAffaires) : <span className="text-gray-300">-</span>}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right text-gray-600 dark:text-gray-300">{j.ventes > 0 ? fmt(j.ventes) : <span className="text-gray-300">-</span>}</td>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-2xl border border-white/70 bg-white/60 p-1 backdrop-blur-xl">
+              <button type="button" onClick={() => decaleJour(-1)} className="rounded-xl px-2.5 py-1.5 text-sm font-bold text-gray-600 hover:bg-white" title="Jour précédent">‹</button>
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#ea580c')}><CalendarCheck size={12} /></span>
+              <input type="date" value={jourVue} onChange={(e) => setJourVue(e.target.value)} className="rounded-xl border-0 bg-transparent px-1 py-1 text-sm font-bold text-gray-800 outline-none" />
+              <button type="button" onClick={() => decaleJour(1)} className="rounded-xl px-2.5 py-1.5 text-sm font-bold text-gray-600 hover:bg-white" title="Jour suivant">›</button>
+            </div>
+            <button type="button" onClick={() => setJourVue(todayStr())} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 hover:bg-orange-100">Aujourd'hui</button>
+            {canExportExcel(role) && (
+              <button type="button" onClick={exporterTableau} className="ml-auto inline-flex items-center gap-2 rounded-2xl border border-orange-300 bg-white px-3.5 py-2 text-sm font-extrabold text-orange-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-orange-50">
+                <FileSpreadsheet size={16} /> Export Excel
+              </button>
+            )}
+          </div>
+          <Card className="!p-0 overflow-hidden">
+            <div className="max-h-[66vh] overflow-auto">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-gray-500">
+                    <th className={TH}><span className="inline-flex items-center gap-1.5"><Wallet size={12} className="text-orange-400" strokeWidth={2.4} />Secteur</span></th>
+                    <th className={`${TH} text-right`}><span className="inline-flex items-center gap-1.5"><TrendingUp size={12} className="text-green-500" strokeWidth={2.4} />Recettes du jour</span></th>
+                    <th className={`${TH} text-right`}><span className="inline-flex items-center gap-1.5"><TrendingDown size={12} className="text-red-400" strokeWidth={2.4} />Dépenses du jour</span></th>
+                    <th className={`${TH} text-right`}><span className="inline-flex items-center gap-1.5"><TrendingUp size={12} className="text-green-500" strokeWidth={2.4} />Recettes du mois</span></th>
+                    <th className={`${TH} text-right`}><span className="inline-flex items-center gap-1.5"><TrendingDown size={12} className="text-red-400" strokeWidth={2.4} />Dépenses du mois</span></th>
                   </tr>
-                ))}
-              </tbody>
-              {parJour.length > 0 && (
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-white/10">
+                  {tableau.rows.map((r) => {
+                    const couleur = couleurPole(r.id)
+                    const IconePole = ICONE_POLE[r.id] || Layers
+                    return (
+                      <tr key={r.id} onClick={() => { setPeriodeDetail('jour'); setPoleOuvert(r.id) }} className="group cursor-pointer transition-colors hover:brightness-95" style={{ background: `linear-gradient(90deg, ${couleur}1f 0%, ${couleur}0a 55%, transparent 100%)` }} title="Voir le détail de ce secteur">
+                        <td className="px-3 py-3">
+                          <span className="flex items-center gap-2 text-xs font-extrabold uppercase text-gray-700 dark:text-gray-200">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(couleur)}><IconePole size={12} /></span>
+                            {r.label}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-green-700">{r.rj ? `+${fmt(r.rj)}` : <span className="text-gray-300">-</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-red-600">{r.dj ? fmt(r.dj) : <span className="text-gray-300">-</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-green-700">{r.rm ? `+${fmt(r.rm)}` : <span className="text-gray-300">-</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-red-600"><span className="inline-flex items-center gap-1.5">{r.dm ? fmt(r.dm) : <span className="text-gray-300">-</span>}<ChevronRight size={14} className="text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-orange-500" /></span></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
                 <tfoot>
                   <tr>
                     <td className={`${TF} text-xs font-extrabold uppercase tracking-wide text-gray-700 dark:text-gray-200`}>Total</td>
-                    <td className={`${TF} whitespace-nowrap text-right font-black text-green-700`}>+{fmt(journal.recettes)}</td>
-                    <td className={`${TF} whitespace-nowrap text-right font-black text-gray-900 dark:text-gray-50`}>{fmt(journal.chiffreAffaires)}</td>
-                    <td className={`${TF} whitespace-nowrap text-right font-black text-gray-800 dark:text-gray-100`}>{fmt(parJour.reduce((t, j) => t + j.ventes, 0))}</td>
+                    <td className={`${TF} whitespace-nowrap text-right font-black text-green-700`}>+{fmt(tableau.total.rj)}</td>
+                    <td className={`${TF} whitespace-nowrap text-right font-black text-red-600`}>{fmt(tableau.total.dj)}</td>
+                    <td className={`${TF} whitespace-nowrap text-right font-black text-green-700`}>+{fmt(tableau.total.rm)}</td>
+                    <td className={`${TF} whitespace-nowrap text-right font-black text-red-600`}>{fmt(tableau.total.dm)}</td>
                   </tr>
                 </tfoot>
-              )}
-            </table>
-          </div>
-        </Card>
+              </table>
+            </div>
+          </Card>
+          <p className="text-[11px] text-gray-400">Le mois va du 1er du mois au jour choisi. Les dépenses sont rangées sous le secteur de destination. Cliquez sur un secteur pour voir le détail de ses opérations.</p>
+        </div>
       )}
 
       {/* ---------- Par secteur : chiffre d'affaires et recettes ---------- */}
+      {!caisse && canExportExcel(role) && (
+        <div className="flex justify-end">
+          <button type="button" onClick={() => setRapport({ sections: {}, mode, jour: fJour || todayStr(), mois: fMois, annee: fAnnee, debut: fDebut, fin: fFin })}
+            className="inline-flex items-center gap-2 rounded-2xl border border-orange-300 bg-white px-4 py-2.5 text-sm font-extrabold text-orange-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-orange-50">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#ea580c')}><FileText size={13} /></span> Rapport financier (PDF)
+          </button>
+        </div>
+      )}
+
       {vueActive === 'secteur' && (
         <div className="rounded-3xl bg-gradient-to-br from-orange-100/70 via-rose-50/50 to-sky-100/70 p-3 shadow-inner">
           <style>{STYLES_TENDANCE}</style>
@@ -333,6 +473,130 @@ export default function SuiviJournalier({ page = 'caisse' }) {
 
       <CaisseFiche ligne={fiche} onClose={() => setFiche(null)} />
       <DotationModal open={dotation} onClose={() => setDotation(false)} budgets={budgets} user={user} />
+      <Modal open={!!rapport} onClose={() => !rapportEnCours && setRapport(null)} size="md" title="Rapport financier"
+        {...glassModalProps('#ea580c')}
+        footer={<>
+          <Button variant="ghost" onClick={() => setRapport(null)} disabled={rapportEnCours}>Annuler</Button>
+          <Button onClick={genererRapport} loading={rapportEnCours}><FileText size={15} /> Générer le PDF</Button>
+        </>}>
+        {rapport && (
+          <div className="space-y-3">
+            {(() => {
+              const br = bornesRapport()
+              const nbJours = Math.round((new Date(br.end) - new Date(br.start)) / 86400000) + 1
+              const champGlass = 'rounded-xl border border-white/80 bg-white/70 px-3 py-2 text-sm font-bold text-gray-800 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-md outline-none transition-shadow focus:ring-2 focus:ring-orange-300'
+              const maj = (cle) => (v) => setRapport((r) => ({ ...r, [cle]: v }))
+              return (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+                  <div className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/55 p-3.5 shadow-[0_8px_30px_-12px_rgba(234,88,12,0.35)] backdrop-blur-2xl sm:col-span-3">
+                    <span className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-amber-300/40 blur-2xl" />
+                    <p className="relative mb-2.5 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#f59e0b')}><CalendarCheck size={13} /></span>Période du rapport
+                    </p>
+                    <div className="relative mb-2.5 grid grid-cols-4 gap-1 rounded-2xl border border-white/80 bg-white/40 p-1 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-md">
+                      {[['jour', 'Jour'], ['mois', 'Mois'], ['annee', 'Année'], ['plage', 'Plage']].map(([m, lib]) => (
+                        <button key={m} type="button" onClick={() => maj('mode')(m)}
+                          className={`rounded-xl px-2 py-1.5 text-xs font-extrabold transition-all ${rapport.mode === m ? 'text-white shadow-md' : 'text-gray-500 hover:bg-white/70 hover:text-gray-800'}`}
+                          style={rapport.mode === m ? { background: 'linear-gradient(135deg,#f59e0b,#ea580c)', boxShadow: '0 6px 14px -4px rgba(234,88,12,0.55), inset 0 1px 1px rgba(255,255,255,0.5)' } : undefined}>
+                          {lib}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative flex flex-wrap items-center gap-2">
+                      {rapport.mode === 'mois' ? (
+                        <input type="month" value={rapport.mois} onChange={(e) => maj('mois')(e.target.value)} className={`w-full ${champGlass}`} />
+                      ) : rapport.mode === 'annee' ? (
+                        <input type="number" min="2000" max="2100" placeholder="Année" value={rapport.annee} onChange={(e) => maj('annee')(e.target.value)} className={`w-full ${champGlass}`} />
+                      ) : rapport.mode === 'plage' ? (
+                        <>
+                          <input type="date" value={rapport.debut || ''} max={rapport.fin || undefined} onChange={(e) => maj('debut')(e.target.value)} className={`min-w-0 flex-1 ${champGlass}`} />
+                          <span className="text-xs font-extrabold text-gray-400">→</span>
+                          <input type="date" value={rapport.fin || ''} min={rapport.debut || undefined} onChange={(e) => maj('fin')(e.target.value)} className={`min-w-0 flex-1 ${champGlass}`} />
+                        </>
+                      ) : (
+                        <input type="date" value={rapport.jour || ''} onChange={(e) => maj('jour')(e.target.value)} className={`w-full ${champGlass}`} />
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative flex flex-col justify-center overflow-hidden rounded-3xl border border-white/40 p-3.5 text-white shadow-[0_14px_30px_-12px_rgba(234,88,12,0.7)] backdrop-blur-2xl sm:col-span-2"
+                    style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.92), rgba(234,88,12,0.88))' }}>
+                    <span className="pointer-events-none absolute -bottom-10 -left-6 h-24 w-24 rounded-full bg-white/25 blur-2xl" />
+                    <p className="relative text-[10px] font-extrabold uppercase tracking-wide text-white/80">Le rapport couvre</p>
+                    <p className="relative mt-1 text-base font-extrabold leading-tight">
+                      {br.start === br.end ? `Le ${formatDateShort(br.end)}` : <>Du {formatDateShort(br.start)}<br />au {formatDateShort(br.end)}</>}
+                    </p>
+                    <span className="relative mt-2 inline-flex w-fit items-center rounded-full border border-white/50 bg-white/25 px-2.5 py-0.5 text-[11px] font-extrabold backdrop-blur-md">
+                      {nbJours} jour{nbJours > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="rounded-3xl border border-white/80 bg-white/55 p-3.5 shadow-[0_8px_30px_-12px_rgba(71,85,105,0.3)] backdrop-blur-2xl">
+              <p className="mb-2 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-gray-500"><span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#475569')}><FileText size={13} /></span>Contenu du rapport</p>
+              <div className="grid grid-cols-2 gap-2">
+                {SECTIONS_RAPPORT.map(({ id, label, Icone, couleur }) => {
+                  const actif = rapport.sections?.[id] !== false
+                  return (
+                    <button key={id} type="button" aria-pressed={actif}
+                      onClick={() => setRapport((r) => ({ ...r, sections: { ...r.sections, [id]: !actif } }))}
+                      className={`flex items-center gap-2 rounded-2xl border px-2.5 py-2 text-left text-xs font-extrabold backdrop-blur-md transition-all ${actif ? 'border-white/90 bg-white/80 text-gray-800 shadow-md' : 'border-white/60 bg-white/30 text-gray-400'}`}>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={actif ? icone3D(couleur) : { background: 'rgba(148,163,184,0.35)', color: '#fff' }}><Icone size={14} /></span>
+                      <span className="min-w-0 flex-1 leading-tight">{label}</span>
+                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${actif ? 'bg-emerald-500 text-white' : 'border border-gray-300 text-transparent'}`}>✓</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {(() => {
+        const pole = tableau.rows.find((r) => r.id === poleOuvert)
+        const ops = pole ? pole.details.filter((o) => (periodeDetail === 'jour' ? o.date === jourVue : true)).sort((x, y) => (x.date < y.date ? 1 : -1)) : []
+        const rec = ops.filter((o) => o.sens === 'recette').reduce((t, o) => t + o.montant, 0)
+        const dep = ops.filter((o) => o.sens === 'depense').reduce((t, o) => t + o.montant, 0)
+        return (
+          <Modal open={!!pole} onClose={() => setPoleOuvert(null)} size="lg" title={pole ? `${pole.label} : ${formatDateShort(jourVue)}` : ''}
+            {...glassModalProps(pole ? couleurPole(pole.id) : '#ea580c')}
+            footer={<Button variant="ghost" onClick={() => setPoleOuvert(null)}>Fermer</Button>}>
+            {pole && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border border-white/70 bg-white/60 p-3 backdrop-blur-xl">
+                    <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-gray-500"><span className="flex h-5 w-5 items-center justify-center rounded-md" style={icone3D('#16a34a')}><TrendingUp size={11} /></span>Recettes {periodeDetail === 'jour' ? 'du jour' : 'du mois'}</p>
+                    <p className="mt-1 text-xl font-black text-green-700">+{fmt(rec)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/70 bg-white/60 p-3 backdrop-blur-xl">
+                    <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-gray-500"><span className="flex h-5 w-5 items-center justify-center rounded-md" style={icone3D('#dc2626')}><TrendingDown size={11} /></span>Dépenses {periodeDetail === 'jour' ? 'du jour' : 'du mois'}</p>
+                    <p className="mt-1 text-xl font-black text-red-600">{fmt(dep)}</p>
+                  </div>
+                </div>
+                <OngletsBande options={[{ id: 'jour', label: 'Du jour' }, { id: 'mois', label: 'Du mois' }]} valeur={periodeDetail} onChange={setPeriodeDetail} taille="sm" />
+                {ops.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-gray-400"><Inbox className="mx-auto mb-2" size={26} />Aucune opération {periodeDetail === 'jour' ? 'ce jour-là' : 'ce mois-ci'} pour ce secteur.</p>
+                ) : (
+                  <ul className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+                    {ops.map((o, i) => (
+                      <li key={i} className="flex items-center gap-2.5 rounded-2xl border border-white/70 bg-white/60 px-3 py-2 backdrop-blur-xl">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={icone3D(o.sens === 'recette' ? '#16a34a' : '#dc2626')}>{o.sens === 'recette' ? <TrendingUp size={13} /> : <TrendingDown size={13} />}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-800">{o.libelle || (o.sens === 'recette' ? 'Recette' : 'Dépense')}</p>
+                          <p className="text-[11px] text-gray-400">{formatDateShort(o.date)}</p>
+                        </div>
+                        <span className={`shrink-0 text-sm font-extrabold ${o.sens === 'recette' ? 'text-green-700' : 'text-red-600'}`}>{o.sens === 'recette' ? '+' : '-'}{fmt(o.montant)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </Modal>
+        )
+      })()}
+
       <SecteurDetail secteur={detailSecteur} lignes={detailSecteur?.cle === '*' ? journal.lignes.filter((l) => l.date === detailSecteur.date) : journal.lignes} periode={libellePeriode} onClose={() => setDetailSecteur(null)} />
     </div>
   )

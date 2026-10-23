@@ -31,7 +31,7 @@ export default function SurveillanceFinSejour() {
           title: `⏰ Séjour terminé : ${e.prenom} ${e.nom}`,
           body: `Le court séjour de ${e.dureeSemaines} semaine(s) (inscrit le ${e.dateInscription}) est arrivé à échéance.`,
           module: 'garderie',
-          forRoles: ['ge', 'gerante_garderie'],
+          forRoles: ['ge', 'df', 'gerante_garderie'],
           link: '/garderie'
         })
       } catch (err) { /* best effort — un autre client réessaiera au prochain tick */ }

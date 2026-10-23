@@ -22,7 +22,7 @@ import { libelleSecteurSite } from './logic'
 
 // Ceux qui reçoivent l'alerte d'une nouvelle demande et qui peuvent la valider ou la refuser (un seul suffit).
 // Le directeur compte ici, alors que dans le reste d'E-DÉPENSES il est traité comme un agent.
-export const DESTINATAIRES_DEMANDE = ['pau', 'ge', 'info', 'directeur', 'super_admin']
+export const DESTINATAIRES_DEMANDE = ['pau', 'ge', 'df', 'info', 'directeur', 'super_admin']
 
 function Etiquette({ icone: Icone, couleur = '#B45309', children }) {
   return (

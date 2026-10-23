@@ -9,7 +9,7 @@ import { updateItem } from '../core/db'
 import { audit } from '../core/audit'
 import { notify } from '../core/notify'
 import { toast } from '../core/notifications'
-import { VIEW_ALL_ROLES, roleLabel } from '../core/roles'
+import { VIEW_ALL_ROLES, roleLabel, peutGererUtilisateurs } from '../core/roles'
 import Button from '../shared/ui/Button'
 import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
@@ -215,7 +215,7 @@ export default function PortalHome() {
       </div>
 
       {/* Administration : gestion des utilisateurs (admin uniquement) */}
-      {isAdmin() && (
+      {peutGererUtilisateurs(role) && (
         <div className="mt-6">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Administration</p>
           <button

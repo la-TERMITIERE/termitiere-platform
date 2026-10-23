@@ -33,7 +33,7 @@ const fmtFCFA = (v) => fmtMontant(v) + ' FCFA'
 
 // Charge une image → data URL. Cache par chemin.
 const _logoCache = {}
-function chargerLogo(src) {
+export function chargerLogo(src) {
   if (!src) return Promise.resolve(null)
   if (_logoCache[src] !== undefined) return Promise.resolve(_logoCache[src])
   return new Promise((resolve) => {

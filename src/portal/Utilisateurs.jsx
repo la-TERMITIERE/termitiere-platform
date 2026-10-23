@@ -19,7 +19,7 @@ import { useAuth } from '../hooks/useAuth'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
 import { MODULES } from '../shared/modules'
-import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone } from '../core/roles'
+import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, profilVisible } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
 import { SITES } from '../modules/logistique/site/useSite'
 import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
@@ -27,7 +27,7 @@ import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
 // De même, un compte Maxi Logistique / MAXI-GYM accède par défaut aux deux sites (Lomé & Kara).
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, droitsModules: {}, secteur: '', poste: '', telephone: '', actif: true })
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, droitsModules: {}, secteur: '', poste: '', telephone: '', email: '', actif: true })
 
 // Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
 // Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
@@ -109,9 +109,12 @@ export default function Utilisateurs() {
     }
   }
 
-  const nbActifs = users.filter((u) => u.actif !== false).length
-  const nbInactifs = users.length - nbActifs
-  const nbLecture = users.filter((u) => isReadOnlyRole(u.role) || Object.values(u.droitsModules || {}).includes('lecture')).length
+  // Liste par ordre alphabétique du nom (sans tenir compte des accents ni des majuscules).
+  const usersTries = useMemo(() => users.filter((u) => profilVisible(roleMoi, u)).sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr', { sensitivity: 'base' })), [users])
+  const visibles = usersTries
+  const nbActifs = visibles.filter((u) => u.actif !== false).length
+  const nbInactifs = visibles.length - nbActifs
+  const nbLecture = visibles.filter((u) => isReadOnlyRole(u.role) || Object.values(u.droitsModules || {}).includes('lecture')).length
 
   // Interrupteur Actif / Inactif d'un compte (petit, en haut à droite de la carte).
   function statutSwitch(r) {
@@ -181,7 +184,7 @@ Cette personne ne pourra plus se connecter.`)) return
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-extrabold sm:text-xl">Gestion des utilisateurs</h1>
-            <p className="truncate text-sm text-white/80">{users.length} compte{users.length > 1 ? 's' : ''} : rôles et accès aux modules</p>
+            <p className="truncate text-sm text-white/80">{usersTries.length} compte{usersTries.length > 1 ? 's' : ''} : rôles et accès aux modules</p>
           </div>
         </div>
         <Button onClick={openNew} variant="ghost" className="relative w-full hover:opacity-90 sm:ml-auto sm:w-auto" style={{ background: '#ffffff', color: '#BC3C31' }}><Plus size={16} /> Nouvel utilisateur</Button>
@@ -195,7 +198,7 @@ Cette personne ne pourra plus se connecter.`)) return
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard glass title="Comptes" value={users.length} icon={Users} accent="#BC3C31" />
+        <StatCard glass title="Comptes" value={visibles.length} icon={Users} accent="#BC3C31" />
         <StatCard glass title="Actifs" value={nbActifs} icon={UserCheck} accent="#16a34a" />
         <StatCard glass title="Inactifs" value={nbInactifs} icon={UserX} accent="#dc2626" />
         <StatCard glass title="Avec lecture seule" value={nbLecture} icon={Lock} accent="#64748b" />
@@ -252,7 +255,7 @@ Cette personne ne pourra plus se connecter.`)) return
               </div>
             ) }
           ]}
-          rows={users}
+          rows={usersTries}
           rowKey="login"
           loading={loading}
           empty={loading ? 'Chargement…' : 'Aucun utilisateur.'}
@@ -285,7 +288,7 @@ Cette personne ne pourra plus se connecter.`)) return
               <FormGroup label="Identifiant" required>
                 <Input value={modal.data.login} disabled={!modal.isNew} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, login: e.target.value.trim() } }))} />
               </FormGroup>
-              <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES} /></FormGroup>
+              <FormGroup label="Rôle"><Select value={modal.data.role} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, role: e.target.value } }))} options={ROLES.filter((r) => r.value !== 'info' || roleMoi === 'info')} /></FormGroup>
               <FormGroup label="Secteur">
                 <ChampAutocomplete
                   value={modal.data.secteur}
@@ -303,6 +306,9 @@ Cette personne ne pourra plus se connecter.`)) return
               </FormGroup>
               <FormGroup label="Téléphone WhatsApp" className="col-span-2" hint="Format international, ex. 22890094949 : pour les alertes WhatsApp">
                 <Input value={modal.data.telephone} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, telephone: e.target.value } }))} placeholder="22890000000" />
+              </FormGroup>
+              <FormGroup label="Adresse e-mail" className="col-span-2">
+                <Input type="email" value={modal.data.email || ''} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, email: e.target.value.trim() } }))} placeholder="nom@exemple.com" />
               </FormGroup>
               <FormGroup label={modal.isNew ? 'Mot de passe' : 'Réinitialiser le mot de passe'} className="col-span-2" hint={modal.isNew ? '' : 'Laissez vide pour conserver l\'actuel'}>
                 <Input type="text" value={modal.data.pass} onChange={(e) => setModal((m) => ({ ...m, data: { ...m.data, pass: e.target.value } }))} placeholder="••••••" />

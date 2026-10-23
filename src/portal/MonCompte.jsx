@@ -23,6 +23,7 @@ export default function MonCompte() {
 
   const [nom, setNom] = useState('')
   const [telephone, setTelephone] = useState('')
+  const [email, setEmail] = useState('')
   const [passActuel, setPassActuel] = useState('')
   const [passNouveau, setPassNouveau] = useState('')
   const [passConfirm, setPassConfirm] = useState('')
@@ -34,12 +35,14 @@ export default function MonCompte() {
     if (profile) {
       setNom(profile.nom || '')
       setTelephone(profile.telephone || '')
+      setEmail(profile.email || '')
     }
   }, [profile])
 
   async function submit() {
     if (!user || !profile) return toast.error('Profil introuvable')
     if (!nom.trim()) return toast.error('Le nom est requis')
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return toast.error('Adresse e-mail invalide')
 
     const changePass = passNouveau || passActuel || passConfirm
     if (changePass) {
@@ -69,6 +72,7 @@ export default function MonCompte() {
         ...profile,
         nom: nom.trim(),
         telephone: telephone.trim(),
+        email: email.trim(),
         pass: passNouveau || undefined
       })
 
@@ -127,6 +131,9 @@ export default function MonCompte() {
         </FormGroup>
         <FormGroup label="Téléphone" hint="Optionnel">
           <Input value={telephone} onChange={(e) => setTelephone(e.target.value)} placeholder="+225 …" />
+        </FormGroup>
+        <FormGroup label="Adresse e-mail">
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nom@exemple.com" />
         </FormGroup>
         <FormGroup label="Secteur">
           <Input value={profile?.secteur || ''} readOnly className="bg-gray-50 dark:bg-white/5 dark:text-gray-400" />

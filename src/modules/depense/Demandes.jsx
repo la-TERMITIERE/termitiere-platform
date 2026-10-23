@@ -1,6 +1,6 @@
 // Demandes de décaissement : on fait une demande, elle part en alerte au PAU, à la GE, à l'Info et à la direction,
-// et l'un d'eux la valide (elle devient une dépense décaissée, qui compte dans le budget) ou la refuse, en une seule étape.
-//   en_attente (envoyée) → decaissee (validée) ou refusee. L'ancien état « approuvee » reste décidable d'un seul clic.
+// et l'un d'eux la valide ou la refuse. Une demande validée n'est PAS encore décaissée : la caisse reçoit un signalement et décaisse.
+//   en_attente (envoyée) → approuvee (validée : à décaisser) → decaissee (décaissée par la caisse, compte dans le budget) ; ou refusee.
 import { useMemo, useState } from 'react'
 import { Check, X, BadgeCheck, Stamp, Clock, MessageSquare, Trash2, AlertTriangle, Hourglass, CheckCircle2, XCircle, Layers, Phone, PiggyBank, Briefcase, Siren, Send, Plus, HandCoins, Wallet, Tag, CalendarDays, UserRound, FileText, Building2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -14,7 +14,7 @@ import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { FULL_ACCESS_ROLES, depenseRoleEffectif, isReadOnlyRole } from '../../core/roles'
+import { FULL_ACCESS_ROLES, CAISSE_DECAISSEMENT_ROLES, depenseRoleEffectif, isReadOnlyRole } from '../../core/roles'
 import { updateItem, removeItem, setItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
@@ -96,6 +96,8 @@ export default function Demandes() {
 
   // Peut valider ou refuser : PAU, GE, Info, directeur (jamais sa propre demande, cf. estMienne).
   const peutValider = VALIDEURS_DEMANDE.includes(roleReel)
+  // La caisse décaisse une demande validée (secrétaire, Info, Assistant PAU).
+  const peutDecaisser = CAISSE_DECAISSEMENT_ROLES.includes(roleReel)
   const lectureSeule = isReadOnlyRole(roleReel)
 
   // SÉPARATION DES POUVOIRS (audit sécurité 2026-08-04) : une même personne
@@ -121,10 +123,11 @@ export default function Demandes() {
 
   // Une « demande » : tout ce qui est passé par ce circuit (en attente, refusé, ou décaissé après validation).
   const demandes = useMemo(() => depenses.filter((d) => ['en_attente', 'approuvee', 'refusee'].includes(d.statut) || (d.statut === 'decaissee' && (d.demande || d.valideePar || d.certifieePar || d.approuveePar))), [depenses])
-  const estAttente = (d) => d.statut === 'en_attente' || d.statut === 'approuvee'
-  const compteur = (f) => demandes.filter((d) => (f === 'attente' ? estAttente(d) : f === 'validee' ? d.statut === 'decaissee' : d.statut === 'refusee')).length
+  const estAttente = (d) => d.statut === 'en_attente'
+  const estADecaisser = (d) => d.statut === 'approuvee'
+  const compteur = (f) => demandes.filter((d) => (f === 'attente' ? estAttente(d) : f === 'adecaisser' ? estADecaisser(d) : f === 'validee' ? d.statut === 'decaissee' : d.statut === 'refusee')).length
   const filtrees = useMemo(() => {
-    const rows = filtre === 'tous' ? demandes : filtre === 'attente' ? demandes.filter(estAttente) : filtre === 'validee' ? demandes.filter((d) => d.statut === 'decaissee') : demandes.filter((d) => d.statut === 'refusee')
+    const rows = filtre === 'tous' ? demandes : filtre === 'attente' ? demandes.filter(estAttente) : filtre === 'adecaisser' ? demandes.filter(estADecaisser) : filtre === 'validee' ? demandes.filter((d) => d.statut === 'decaissee') : demandes.filter((d) => d.statut === 'refusee')
     return rows.filter((d) => correspond(recherche, d.description, d.beneficiaireNom, d.enregistrePar, d.valideePar, d.categorie))
       .sort((a, b) => (estAttente(b) ? (URGENCES[b.urgence]?.rang || 0) : 0) - (estAttente(a) ? (URGENCES[a.urgence]?.rang || 0) : 0) || (b.createdAt || 0) - (a.createdAt || 0))
   }, [demandes, filtre, recherche])
@@ -183,20 +186,43 @@ export default function Demandes() {
     }, 'Demande refusée')
   }
 
+  // Valider = autoriser le décaissement : la demande passe à « Approuvée : à décaisser » et la caisse en est prévenue. L'argent ne sort
+  // (et la dépense ne compte dans le budget) qu'au moment où la caisse décaisse.
   async function valider(d, texte) {
     const secteur = SECTEURS.find((s) => s.id === d.secteurId)
     await run(async () => {
       const nom = user?.nom || '—'
-      // On renseigne aussi certifieePar/certifieeLe : d'autres écrans (historique, fiches) les lisent encore.
-      await updateItem('depense_depenses', d.id, { statut: 'decaissee', demande: true, valideePar: nom, valideeLe: Date.now(), validationCommentaire: texte || '', certifieePar: nom, certifieeLe: Date.now() })
-      await audit('depense', 'DEMANDE_VALIDEE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`, texte ? { commentaire: texte } : null)
+      await updateItem('depense_depenses', d.id, { statut: 'approuvee', demande: true, valideePar: nom, valideeParUid: user?.uid || null, valideeLe: Date.now(), validationCommentaire: texte || '' })
+      await audit('depense', 'DEMANDE_VALIDEE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA : à décaisser`, texte ? { commentaire: texte } : null)
+      const montantTxt = `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId}`
+      // Signalement à la caisse : elle a maintenant le droit de décaisser.
+      await notify({
+        type: 'warning', title: '💰 Décaissement autorisé : à décaisser',
+        body: `${montantTxt}${d.beneficiaireNom ? ` · pour ${d.beneficiaireNom}` : ''} · validé par ${nom}. Vous pouvez décaisser.`,
+        module: 'depense', forRoles: CAISSE_DECAISSEMENT_ROLES, excludeUid: user?.uid, link: '/depense/demandes'
+      })
       const dest = destinataires(d)
       if (dest.length) {
-        await notify({ type: 'success', title: '✅ Demande validée', body: `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId} : validée par ${nom}`, module: 'depense', forUsers: dest, link: '/depense/demandes' }).catch(() => {})
+        await notify({ type: 'success', title: '✅ Demande validée', body: `${montantTxt} : validée par ${nom}. La caisse va décaisser.`, module: 'depense', forUsers: dest, link: '/depense/demandes' })
+      }
+    }, '✅ Demande validée : la caisse est prévenue')
+  }
+
+  // Décaissement par la caisse, une fois la demande validée.
+  async function decaisser(d) {
+    const secteur = SECTEURS.find((s) => s.id === d.secteurId)
+    await run(async () => {
+      const nom = user?.nom || '—'
+      await updateItem('depense_depenses', d.id, { statut: 'decaissee', decaisseePar: nom, decaisseeParUid: user?.uid || null, decaisseeLe: Date.now(), certifieePar: d.valideePar || nom, certifieeLe: Date.now() })
+      await audit('depense', 'DEMANDE_DECAISSEE', `${secteur?.label || d.secteurId} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA décaissés par ${nom}`)
+      const montantTxt = `${Number(d.montant).toLocaleString('fr-FR')} FCFA : ${secteur?.label || d.secteurId}`
+      const dest = destinataires(d)
+      if (dest.length) {
+        await notify({ type: 'success', title: '💸 Demande décaissée', body: `${montantTxt} : décaissée par ${nom}`, module: 'depense', forUsers: dest, link: '/depense/demandes' })
       }
       await notifierBeneficiaire(d, secteur?.label || d.secteurId)
       await alerterSiDepassement(d, secteur)
-    }, '✅ Demande validée : dépense décaissée')
+    }, '💸 Décaissé : la dépense est enregistrée')
   }
 
   async function confirmerAction() {
@@ -237,7 +263,8 @@ export default function Demandes() {
 
   const filtres = [
     { id: 'attente', label: `En attente (${compteur('attente')})` },
-    { id: 'validee', label: `Validées (${compteur('validee')})` },
+    { id: 'adecaisser', label: `À décaisser (${compteur('adecaisser')})` },
+    { id: 'validee', label: `Décaissées (${compteur('validee')})` },
     { id: 'refusee', label: `Refusées (${compteur('refusee')})` },
     { id: 'tous', label: 'Toutes' }
   ]
@@ -247,7 +274,7 @@ export default function Demandes() {
   return (
     <div className="space-y-4">
       <BandeauVolet couleur="#B45309" icone={Send} titre="Demandes"
-        sous="Faites une demande de décaissement : le PAU, la GE, l'Info et la direction sont alertés, et l'un d'eux la valide ou la refuse.">
+        sous="Toute dépense de plus de 20 000 FCFA devient une demande : le PAU ou la GE la valide, puis la caisse décaisse.">
         <ChampRecherche variant="glass" className="!w-60" value={recherche} onChange={setRecherche} placeholder="Rechercher un bénéficiaire, un libellé…" />
         <OngletsBande options={filtres} valeur={filtre} onChange={setFiltre} />
       </BandeauVolet>
@@ -261,18 +288,20 @@ export default function Demandes() {
       {/* Chiffres clés : ce qui attend une décision, ce qui est validé, refusé, et le plus urgent. */}
       {(() => {
         const attente = demandes.filter(estAttente)
+        const aDecaisser = demandes.filter(estADecaisser)
         const validees = demandes.filter((d) => d.statut === 'decaissee')
         const refusees = demandes.filter((d) => d.statut === 'refusee')
         const urgentes = attente.filter((d) => d.urgence && d.urgence !== 'normale')
         const somme = (l) => l.reduce((t, d) => t + (Number(d.montant) || 0), 0)
         const tuiles = [
-          { icone: Hourglass, couleur: '#d97706', titre: 'En attente', nb: attente.length, montant: somme(attente) },
-          { icone: CheckCircle2, couleur: '#16a34a', titre: 'Validées', nb: validees.length, montant: somme(validees) },
+          { icone: Hourglass, couleur: '#d97706', titre: 'En attente de validation', nb: attente.length, montant: somme(attente) },
+          { icone: HandCoins, couleur: '#0ea5e9', titre: 'À décaisser', nb: aDecaisser.length, montant: somme(aDecaisser) },
+          { icone: CheckCircle2, couleur: '#16a34a', titre: 'Décaissées', nb: validees.length, montant: somme(validees) },
           { icone: XCircle, couleur: '#dc2626', titre: 'Refusées', nb: refusees.length, montant: somme(refusees) },
           { icone: Siren, couleur: '#7c3aed', titre: 'Urgentes en attente', nb: urgentes.length, montant: somme(urgentes) }
         ]
         return (
-          <div className="ed-grille grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="ed-grille grid grid-cols-2 gap-3 lg:grid-cols-5">
             {tuiles.map((t) => {
               const Ic = t.icone
               return (
@@ -425,6 +454,15 @@ export default function Demandes() {
                     <X size={15} /> Refuser
                   </Button>
                 </div>
+              )}
+              {/* Demande validée : la caisse a le droit de décaisser. */}
+              {estADecaisser(d) && peutDecaisser && (
+                <Button variant="success" disabled={busy} onClick={() => decaisser(d)} className="w-full">
+                  <HandCoins size={15} /> Décaisser {Number(d.montant).toLocaleString('fr-FR')} FCFA
+                </Button>
+              )}
+              {estADecaisser(d) && !peutDecaisser && (
+                <p className="flex items-center gap-1 text-xs text-sky-700"><HandCoins size={13} /> Validée : en attente du décaissement par la caisse</p>
               )}
               {/* Messages explicites : l'utilisateur comprend pourquoi il ne peut pas agir. */}
               {estMienne(d) && estAttente(d) && (

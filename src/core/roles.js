@@ -17,6 +17,7 @@ export const ROLES = [
   { value: 'assistant_pau',    label: 'Assistant PAU',     desc: 'Assiste le PAU : accès total, comme Info' },
   { value: 'pau',              label: 'PAU',               desc: 'Direction : contrôle total sur les applications' },
   { value: 'ge',               label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
+  { value: 'df',               label: 'DF',                desc: 'Directeur financier : mêmes droits que la Gérante exécutive' },
   { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction : accès total à tous les modules' },
   { value: 'superviseur',      label: 'Superviseur',       desc: 'Lecture seule : voit uniquement les modules qui lui sont attribués, aucune action' },
   { value: 'gerant',           label: 'Gérant',            desc: 'Approuve les sorties et les demandes' },
@@ -31,14 +32,14 @@ export const ROLES = [
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
 // `info` (informatique) a les mêmes droits qu'un administrateur. `assistant_pau`
 // a exactement les mêmes droits qu'`info` (décision explicite : assiste le PAU).
-export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
+export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin']
 // Voit TOUS les modules automatiquement, sans attribution individuelle.
 // Le superviseur N'EN FAIT PAS PARTIE (décision explicite du 07/09/2026) : bien
 // qu'il soit en lecture seule partout (cf. READONLY_ROLES), il ne voit que les
 // modules qui lui sont explicitement attribués (comme le partenaire) — c'est
 // à l'administration (PAU/Info/GE…) de lui donner accès module par module
 // depuis Utilisateurs, pas un accès automatique à tout.
-export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
+export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin']
 
 // Modules à visibilité RESTREINTE par rôle : même attribué à un utilisateur, un
 // module listé ici n'est accessible qu'aux rôles indiqués (contrôle appliqué dans
@@ -48,9 +49,9 @@ export const MODULE_ROLES = {
 }
 export const moduleRoleOk = (mod, role) => !MODULE_ROLES[mod] || MODULE_ROLES[mod].includes(role)
 // 1er niveau d'approbation d'une demande de sortie (le superviseur n'approuve pas).
-export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'gerant', 'admin', 'controleur']
+export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'gerant', 'admin', 'controleur']
 // 2e niveau : certification définitive (déclenche l'effet métier).
-export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin']
+export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin']
 
 // Rôles autorisés à voir les données FINANCIÈRES (chiffre d'affaires, montants)
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
@@ -60,7 +61,7 @@ export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', '
 // montants et les KPI partout où ils interviennent, mais ne valide jamais seule au
 // niveau final (cf. CERTIFIER_ROLES, dont elle reste exclue) et ne voit jamais
 // l'identité de qui a validé (cf. `logistiqueVoitValidateur`, réutilisé hors logistique).
-export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
+export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
 
 // Volet « Analyses » d'E-DÉPENSES — décision explicite du 09/09/2026 : la
 // secrétaire garde Flux de trésorerie (FINANCE_VIEW_ROLES, inchangé) mais PAS
@@ -74,7 +75,7 @@ export const canViewAnalysesDepense = (r) => ANALYSES_DEPENSE_ROLES.includes(r)
 // de la direction (super_admin, admin, directeur, assistant_pau), ni la hiérarchie
 // opérationnelle (gérant, contrôleur…) n'y ont accès, contrairement à FULL_ACCESS_ROLES
 // et FINANCE_VIEW_ROLES ci-dessus qui sont donc impropres à cet usage précis.
-export const EXCEL_EXPORT_ROLES = ['pau', 'ge', 'info']
+export const EXCEL_EXPORT_ROLES = ['pau', 'ge', 'df', 'info']
 export const canExportExcel = (r) => EXCEL_EXPORT_ROLES.includes(r)
 
 // MAXI-GYM : décision explicite — l'agent a aussi accès aux exports (Excel/PDF)
@@ -88,7 +89,7 @@ export const canExportGym = (r) => canExportExcel(r) || r === 'agent'
 // directeur), ni la hiérarchie opérationnelle n'y ont accès. Différent de
 // EXCEL_EXPORT_ROLES ci-dessus (qui inclut PAU/GE/Info mais PAS Assistant PAU) —
 // à ne pas fusionner, ce sont deux décisions distinctes.
-export const BANQUE_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
+export const BANQUE_ROLES = ['pau', 'assistant_pau', 'ge', 'df', 'info']
 export const peutVoirBanque = (r) => BANQUE_ROLES.includes(r)
 
 // Volet « BTP » d'E-G.Pro — réservé UNIQUEMENT à PAU, Assistant PAU, GE et Info
@@ -96,11 +97,11 @@ export const peutVoirBanque = (r) => BANQUE_ROLES.includes(r)
 // admin, directeur), ni la hiérarchie opérationnelle n'y ont accès. Même liste
 // que BANQUE_ROLES mais gardée comme constante à part (deux décisions distinctes,
 // susceptibles de diverger plus tard — ne pas fusionner).
-export const BTP_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
+export const BTP_ROLES = ['pau', 'assistant_pau', 'ge', 'df', 'info']
 export const peutVoirBtp = (r) => BTP_ROLES.includes(r)
 
 // Graphique « Chiffre d'affaires par mois » du Dashboard Logistique : PAU, Assistant PAU, GE et Info seulement.
-export const CA_MENSUEL_ROLES = ['pau', 'assistant_pau', 'ge', 'info']
+export const CA_MENSUEL_ROLES = ['pau', 'assistant_pau', 'ge', 'df', 'info']
 export const peutVoirCaMensuel = (r) => CA_MENSUEL_ROLES.includes(r)
 
 // Rôles en LECTURE SEULE stricte : consultent, n'écrivent JAMAIS.
@@ -210,6 +211,16 @@ export const canManagePartenaires = (role, user) =>
 // modification supplémentaire.
 export const DEPENSE_ROLES_LIMITES = ['super_admin', 'admin', 'directeur']
 export const depenseRoleEffectif = (r) => (DEPENSE_ROLES_LIMITES.includes(r) ? 'agent' : r)
+
+// Qui tient la caisse : décaisse l'argent d'une demande une fois qu'elle est validée par le PAU ou la GE.
+export const CAISSE_DECAISSEMENT_ROLES = ['secretaire', 'info', 'assistant_pau']
+
+// Gestion des utilisateurs (création, modification, droits) : réservée au PAU, au DF, à la GE, à Info et à l'Administrateur.
+// Personne d'autre n'y accède, pas même les autres rôles à accès total.
+export const GESTION_UTILISATEURS_ROLES = ['pau', 'df', 'ge', 'info', 'admin']
+export const peutGererUtilisateurs = (r) => GESTION_UTILISATEURS_ROLES.includes(r)
+// Les comptes du rôle Info n'existent que pour Info : personne d'autre ne les voit, ni le rôle dans les listes.
+export const profilVisible = (roleDeLObservateur, profil) => profil?.role !== 'info' || roleDeLObservateur === 'info'
 
 export const isFullAccessRole  = (r) => FULL_ACCESS_ROLES.includes(r)
 export const isViewAllRole     = (r) => VIEW_ALL_ROLES.includes(r)

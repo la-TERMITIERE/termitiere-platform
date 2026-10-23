@@ -252,7 +252,7 @@ export default function PresencesEnfants() {
     const heure = heureNow()
     await enregistrer(enfant, { statut: 'present', heureArrivee: heure })
     audit('garderie', 'PRESENCE_ARRIVEE', `${enfant.prenom} ${enfant.nom}`, { date: dateFiltre, heure })
-    notify({ type: 'info', title: `✅ Arrivée : ${enfant.prenom} ${enfant.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/presences' })
+    notify({ type: 'info', title: `✅ Arrivée : ${enfant.prenom} ${enfant.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/presences' })
     toast.success(`Arrivée de ${enfant.prenom} à ${heure} ✓`)
   }
 
@@ -268,7 +268,7 @@ export default function PresencesEnfants() {
   async function marquerAbsent(enfant, statut) {
     await enregistrer(enfant, { statut, heureArrivee: '', heureDepart: '' })
     audit('garderie', 'PRESENCE_STATUT', `${enfant.prenom} ${enfant.nom}`, { statut, date: dateFiltre })
-    notify({ type: 'info', title: `📋 ${enfant.prenom} ${enfant.nom}`, body: statut === 'absent' ? 'Marqué(e) absent(e)' : 'Marqué(e) excusé(e)', module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/presences' })
+    notify({ type: 'info', title: `📋 ${enfant.prenom} ${enfant.nom}`, body: statut === 'absent' ? 'Marqué(e) absent(e)' : 'Marqué(e) excusé(e)', module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/presences' })
     toast.success('Statut mis à jour ✓')
   }
 
