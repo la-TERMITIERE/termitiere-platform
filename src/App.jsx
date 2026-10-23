@@ -10,6 +10,7 @@ import Login from './portal/Login'
 import PortalHome from './portal/PortalHome'
 import GlobalDashboard from './portal/GlobalDashboard'
 import Utilisateurs from './portal/Utilisateurs'
+import { peutGererUtilisateurs } from './core/roles'
 import MonCompte from './portal/MonCompte'
 import Parametres from './portal/Parametres'
 import { getModule } from './shared/modules'
@@ -54,6 +55,13 @@ function ModuleGuard({ moduleId, children }) {
   } else if (!hasModule(moduleId)) {
     return <Navigate to="/" replace />
   }
+  return children
+}
+
+// Garde de la gestion des utilisateurs : PAU, DF, GE, Info et Administrateur seulement.
+function GestionUtilisateursGuard({ children }) {
+  const role = useAuth((s) => s.role)
+  if (!peutGererUtilisateurs(role)) return <Navigate to="/" replace />
   return children
 }
 
@@ -102,7 +110,7 @@ export default function App() {
         >
           <Route index element={<PortalHome />} />
           <Route path="dashboard" element={<GlobalDashboard />} />
-          <Route path="utilisateurs" element={<AdminGuard><Utilisateurs /></AdminGuard>} />
+          <Route path="utilisateurs" element={<GestionUtilisateursGuard><Utilisateurs /></GestionUtilisateursGuard>} />
           <Route path="mon-compte" element={<MonCompte />} />
           <Route path="parametres" element={<Parametres />} />
 

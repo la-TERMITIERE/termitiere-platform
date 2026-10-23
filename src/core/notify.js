@@ -9,6 +9,7 @@
 import { addItem, getAll } from './db'
 import { pushToUsers } from './push'
 import { sendWhatsApp } from './whatsapp'
+import { sendEmail } from './email'
 import { isViewAllRole } from './roles'
 import { peutVoirNotifSiteGym } from './gymSites'
 
@@ -27,6 +28,7 @@ const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
 export async function notify({
   type = 'info', title, body = '', module = '',
   forRoles = [], forUsers = [], excludeUid = null, link = '',
+  emailRoles = [], // rôles qui reçoivent AUSSI un e-mail (si leur fiche a une adresse) : ex. ['pau', 'ge']
   ...extra // ex. { projetId } : conservé sur le document pour un nettoyage ciblé
            // plus tard (ex. suppression des notifs d'un projet supprimé).
            // { site } : salle MAXI-GYM (lome/kara) — restreint les destinataires
@@ -52,7 +54,7 @@ export async function notify({
     // `users` ne sert qu'à résoudre forRoles → uids et, pour les notifications
     // importantes, uid/login → numéro WhatsApp — on ne le charge donc que si l'un
     // des deux est utile (évite une lecture inutile sur la majorité des appels).
-    const besoinUsers = forRoles.length > 0 || TYPES_URGENTS.includes(type)
+    const besoinUsers = forRoles.length > 0 || emailRoles.length > 0 || TYPES_URGENTS.includes(type)
     const users = besoinUsers ? await getAll('users') : []
     if (forRoles.length) {
       // Un rôle correspondant ne suffit pas : il faut aussi posséder LE MODULE
@@ -69,6 +71,11 @@ export async function notify({
     }
     cibles = [...new Set(cibles)].filter((c) => c && c !== excludeUid)
     destinataires = cibles.length
+    // E-mail : aux rôles demandés qui ont une adresse, hors l'auteur de l'action.
+    if (emailRoles.length) {
+      const adresses = users.filter((u) => emailRoles.includes(u.role) && u.email && u.uid !== excludeUid && u.login !== excludeUid).map((u) => u.email)
+      if (adresses.length) await sendEmail(adresses, { subject: title, text: body, link })
+    }
     // `tag` = identifiant de la notification : la notification système affichée
     // par le service worker et celle affichée par l'onglet ouvert se remplacent
     // au lieu de se dédoubler.

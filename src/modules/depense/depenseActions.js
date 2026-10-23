@@ -7,7 +7,7 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { notifierBeneficiaire } from './notifications'
 import { genId } from '../../utils/formatters'
-import { SECTEURS } from './data'
+import { SECTEURS, SEUIL_DEMANDE_FCFA } from './data'
 import { budgetRestantSecteur, budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, libelleSecteurSite } from './logic'
 import { FULL_ACCESS_ROLES } from '../../core/roles'
 
@@ -29,6 +29,8 @@ export const financementSiege = (d) => {
 export function raisonAutorisation(d, { budgets, depenses }) {
   const montant = Number(d.montant) || 0
   if (d.imprevue) return 'dépense imprévue'
+  // Au-delà du seuil, c'est automatiquement une demande : le PAU ou la GE valide avant que la caisse décaisse.
+  if (montant > SEUIL_DEMANDE_FCFA) return `montant supérieur à ${SEUIL_DEMANDE_FCFA.toLocaleString('fr-FR')} FCFA`
   const estCaisseCommune = financementSiege(d) === 'caisse_commune'
   const restant = budgetRestantSecteur(budgets, depenses, estCaisseCommune ? 'divers' : d.secteurId, d.date, estCaisseCommune ? null : d.site)
   if (restant !== null && montant > restant) return `dépasse le budget restant ${estCaisseCommune ? 'de la Caisse courante' : 'du secteur'} (${restant.toLocaleString('fr-FR')} FCFA)`
@@ -84,7 +86,7 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
       type: 'warning',
       title: `💰 Demande de décaissement : ${libelle}`,
       body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` : ${d.description}` : ''} · ${raison}. À valider ou à refuser.`,
-      module: 'depense', forRoles: ['pau', 'ge', 'info', 'directeur', 'super_admin'], excludeUid: user?.uid, link: '/depense/demandes'
+      module: 'depense', forRoles: ['pau', 'ge', 'df', 'info', 'directeur', 'super_admin'], emailRoles: ['pau', 'ge', 'df'], excludeUid: user?.uid, link: '/depense/demandes'
     })
     // Confirme aussi à la personne qui a saisi la dépense que sa demande est bien
     // partie en autorisation, sans quoi elle n'apprend son sort qu'à la décision du PAU.
@@ -104,7 +106,7 @@ export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seu
       type: 'info',
       title: `💸 Dépense effectuée : ${libelle}`,
       body: `${montant.toLocaleString('fr-FR')} FCFA · ${d.categorie}${d.description ? ` : ${d.description}` : ''} · par ${user?.nom || user?.login || '—'}.`,
-      module: 'depense', forRoles: FULL_ACCESS_ROLES, excludeUid: user?.uid,
+      module: 'depense', forRoles: FULL_ACCESS_ROLES, emailRoles: ['pau', 'ge', 'df'], excludeUid: user?.uid,
       link: '/depense/liste', state: { openDepenseId: id }
     }).catch(() => {})
   }

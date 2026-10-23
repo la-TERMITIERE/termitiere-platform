@@ -26,30 +26,30 @@
         ".read": true,
         ".indexOn": ["login"],
         "$uid": {
-          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/))",
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/))",
           "role": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "modules": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "actif": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "gerePartenaires": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "agroCategories": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "logistiqueSites": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "gymSites": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
           "login": {
-            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/) || newData.val() === data.val()"
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           }
         }
       },
@@ -57,12 +57,12 @@
       "users_secret": {
         ".read": true,
         "$uid": {
-          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/))"
+          ".write": "auth != null && (auth.uid === $uid || root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/))"
         }
       },
 
       "audit_global": {
-        ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|directeur|admin|info)$/)",
+        ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info)$/)",
         "$entryId": {
           ".write": "auth != null && !data.exists() && newData.exists()"
         }

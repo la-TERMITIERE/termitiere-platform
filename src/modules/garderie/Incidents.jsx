@@ -179,7 +179,7 @@ export default function Incidents() {
         title: `⚠️ Incident ${graviteLabel} : ${d.enfantNom}`,
         body: d.description?.slice(0, 80) || d.type,
         module: 'garderie',
-        forRoles: d.gravite === 'grave' ? ['ge','gerante_garderie','agent'] : ['ge','gerante_garderie'],
+        forRoles: d.gravite === 'grave' ? ['ge', 'df','gerante_garderie','agent'] : ['ge', 'df','gerante_garderie'],
         excludeUid: user.uid,
         link: '/garderie/incidents'
       })
@@ -195,7 +195,7 @@ export default function Incidents() {
   async function marquerResolu(i) {
     await setItem('garderie_incidents', i.id, { ...i, resolu: true, alarme: 0 })
     audit('garderie', 'INCIDENT_RESOLU', i.enfantNom)
-    notify({ type: 'info', title: `✅ Incident résolu : ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/incidents' })
+    notify({ type: 'info', title: `✅ Incident résolu : ${i.enfantNom}`, body: i.description?.slice(0, 80) || '', module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/incidents' })
     toast.success('Incident résolu : alarme désactivée ✓')
   }
 
@@ -214,7 +214,7 @@ export default function Incidents() {
         title: `${n.badge} Alarme ${n.label} : ${i.enfantNom}`,
         body: i.description?.slice(0, 80) || i.type,
         module: 'garderie',
-        forRoles: niveau === 3 ? ['ge','gerante_garderie','agent'] : ['ge','gerante_garderie'],
+        forRoles: niveau === 3 ? ['ge', 'df','gerante_garderie','agent'] : ['ge', 'df','gerante_garderie'],
         excludeUid: user.uid,
         link: '/garderie/incidents'
       })
@@ -265,7 +265,7 @@ export default function Incidents() {
         title: `🩺 Soin enregistré : ${d.enfantNom}`,
         body: `${TYPES_SOIN.find((t) => t.id === d.type)?.label || d.type} : ${d.description.slice(0, 60)}`,
         module: 'garderie',
-        forRoles: ['ge','gerante_garderie'],
+        forRoles: ['ge', 'df','gerante_garderie'],
         excludeUid: user.uid,
         link: '/garderie/incidents'
       })

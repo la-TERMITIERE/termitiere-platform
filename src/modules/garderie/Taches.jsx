@@ -190,7 +190,7 @@ function OngletTaches() {
         title: `✅ Tâche effectuée : ${t.titre}`,
         body: `Cochée par ${user.nom}`,
         module: 'garderie',
-        forRoles: ['ge','gerante_garderie'],
+        forRoles: ['ge', 'df','gerante_garderie'],
         excludeUid: user.uid,
         link: '/garderie/taches'
       })

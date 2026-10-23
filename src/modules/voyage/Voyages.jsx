@@ -62,7 +62,7 @@ export default function Voyages() {
       await notify({
         type: 'demande', title: `✈️ Nouveau voyage d'achat : ${d.pays}`,
         body: `${d.voyageurNom} part${d.dateDepart ? ' le ' + formatDateShort(d.dateDepart) : ''}${d.motif ? ` · ${d.motif}` : ''}`,
-        module: 'voyage', forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])], excludeUid: user.uid, link: '/voyage/voyages'
+        module: 'voyage', forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'df', 'pau'])], excludeUid: user.uid, link: '/voyage/voyages'
       })
       toast.success('Voyage créé ✓')
       setModal(null)

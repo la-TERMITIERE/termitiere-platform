@@ -76,7 +76,7 @@ const validationDe = (b) => b.validation || 'en_attente'
 const TONE_HEX = { success: '#16a34a', danger: '#dc2626', warning: '#d97706', info: '#0284c7', neutral: '#94a3b8', purple: '#7c3aed' }
 
 // Même liste que côté E-G.Pro (BESOINS_NOTIF_ROLES) et que netlify/functions/besoins-relance.mjs.
-const BESOINS_NOTIF_ROLES = ['pau', 'ge', 'directeur', 'info', 'superviseur']
+const BESOINS_NOTIF_ROLES = ['pau', 'ge', 'df', 'directeur', 'info', 'superviseur']
 const VALIDE_MASQUE_APRES_MS = 24 * 60 * 60 * 1000
 
 const VIDE = {

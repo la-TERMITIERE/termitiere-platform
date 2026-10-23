@@ -160,7 +160,7 @@ export default function Factures() {
           type: 'info',
           title: `Nouvelle facture : ${user.nom}`,
           body: `${payload.numero} · ${payload.client?.nom || ''}${especesFacture ? ` : ${especesFacture}` : ''} · ${formatMoney(totalTTC)}`,
-          module: 'agro', forRoles: ['ge', 'pau'], excludeUid: user.uid || user.login, link: '/agro/factures'
+          module: 'agro', forRoles: ['ge', 'df', 'pau'], excludeUid: user.uid || user.login, link: '/agro/factures'
         })
         toast.success('Brouillon créé ✓')
       }

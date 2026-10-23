@@ -164,7 +164,7 @@ export default function VoyageDetail() {
     await notify({
       type: 'info', title: `🛒 Achat validé : ${voyage.pays}`,
       body: `${article.designation} × ${qte} chez ${f.nom} · ${formatMoney(achat.total)} (prix figé au taux du jour)`,
-      module: 'voyage', forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'pau'])], excludeUid: user.uid, link: `/voyage/voyages/${id}`
+      module: 'voyage', forRoles: [...new Set([...APPROVER_ROLES, 'ge', 'df', 'pau'])], excludeUid: user.uid, link: `/voyage/voyages/${id}`
     })
     toast.success('Achat enregistré : prix figé ✓')
     setAchatModal(null)

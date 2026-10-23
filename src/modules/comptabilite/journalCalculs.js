@@ -86,6 +86,58 @@ export function construireLignes({
   return out.filter((l) => l.date && !(l.entree > 0 && (l.secteurId === 'bat' || l.secteurId === 'garderie')))
 }
 
+// ----- Tableau du jour par pôle : recettes et dépenses du jour et du mois, une ligne par pôle, comme le fichier Excel de la direction -----
+export const POLES = [
+  { id: 'gym_kara', label: 'SALLE DE GYM KARA' }, { id: 'gym_lome', label: 'SALLE DE GYM LOMÉ' },
+  { id: 'log_kara', label: 'MAXI LOGISTIQUE KARA' }, { id: 'log_lome', label: 'MAXI LOGISTIQUE LOMÉ' },
+  { id: 'agro', label: 'MAXI-AGRO' }, { id: 'briques', label: 'BRIQUETERIE' }, { id: 'garderie', label: 'GARDERIE' },
+  { id: 'transport', label: 'MAXI TRANSPORT' }, { id: 'com', label: 'COMMUNICATION' }, { id: 'direction', label: 'DIRECTION/BTP' }
+]
+// Ligne ajoutée seulement si elle a un montant : les secteurs saisis librement.
+const POLES_EXTRA = [{ id: 'autres', label: 'AUTRES SECTEURS' }]
+
+export function poleDe(secteurId, site) {
+  // Sans salle précisée, on rattache à Lomé : même règle que pour tous les enregistrements MAXI-GYM hérités (cf. matchSite).
+  if (secteurId === 'gym') return site === 'kara' ? 'gym_kara' : 'gym_lome'
+  if (secteurId === 'logistique') return site === 'kara' ? 'log_kara' : 'log_lome'
+  if (secteurId === 'agro') return 'agro'
+  if (secteurId === 'evenementiel') return 'briques'
+  if (secteurId === 'garderie') return 'garderie'
+  if (secteurId === 'transport') return 'transport'
+  if (secteurId === 'communication') return 'com'
+  if (secteurId === 'divers' || secteurId === 'bat') return 'direction'
+  return 'autres'
+}
+
+// `jour` : « AAAA-MM-JJ ». Le mois va du 1er du mois au jour choisi inclus. Recettes : factures, versements, saisies manuelles
+// (lignesRecettes), paiements de la garderie et trajets du transport. Dépenses : toutes les dépenses décaissées, rangées sous le pôle de destination.
+export function recapPoles({ jour, debut = '', lignesRecettes = [], depenses = [], paiementsGarderie = [], transports = [] }) {
+  // `debut` : début de la période cumulée (par défaut le 1er du mois ; le 1er janvier pour l'année).
+  const debutMois = debut || `${String(jour).slice(0, 7)}-01`
+  const lignes = new Map()
+  const vide = () => ({ rj: 0, dj: 0, rm: 0, dm: 0, details: [] })
+  const ajoute = (pole, date, montantRecette, montantDepense, libelle = '') => {
+    const d = String(date || '').slice(0, 10)
+    if (!d || d > jour || d < debutMois) return
+    if (!lignes.has(pole)) lignes.set(pole, vide())
+    const l = lignes.get(pole)
+    l.rm += montantRecette; l.dm += montantDepense
+    if (d === jour) { l.rj += montantRecette; l.dj += montantDepense }
+    // Détail des opérations (affiché au clic sur un pôle) : une ligne par recette ou par dépense.
+    l.details.push({ date: d, sens: montantDepense ? 'depense' : 'recette', montant: montantDepense || montantRecette, libelle })
+  }
+  lignesRecettes.forEach((l) => { if (l.entree > 0) ajoute(poleDe(l.secteurId, l.site), l.date, l.entree, 0, l.designation) })
+  paiementsGarderie.forEach((p) => ajoute('garderie', p.date, montant(p.montantPaye), 0, `Paiement${p.enfantNom ? ` : ${p.enfantNom}` : ''}${p.type ? ` (${p.type})` : ''}`))
+  transports.forEach((t) => ajoute('transport', t.date || (t.createdAt ? jourDeMs(t.createdAt) : ''), montant(t.recette), 0, `Trajet${t.plaque ? ` ${t.plaque}` : ''}${t.lieuDepart || t.lieuArrivee ? ` : ${t.lieuDepart || '?'} → ${t.lieuArrivee || '?'}` : ''}`))
+  // Coûts des trajets de transport (saisis dans le module, volet Transport de la Briqueterie) : dépenses du pôle Transport.
+  transports.forEach((t) => { if (montant(t.totalDepenses) > 0) ajoute('transport', t.date || (t.createdAt ? jourDeMs(t.createdAt) : ''), 0, montant(t.totalDepenses), `Coûts du trajet${t.plaque ? ` ${t.plaque}` : ''}`) })
+  depenses.filter((d) => visibleDansEDepenses(d) || d.source === 'projet').filter(estDecaissee).forEach((d) => ajoute(poleDe(d.secteurId, d.secteurId === 'logistique' ? siteLogistiqueDe(d) : d.site), d.date, 0, montant(d.montant), [d.categorie, d.description].filter(Boolean).join(' : ') + (d.beneficiaireNom ? ` (${d.beneficiaireNom})` : '')))
+  const ordre = [...POLES, ...POLES_EXTRA.filter((x) => lignes.has(x.id) && (lignes.get(x.id).rm || lignes.get(x.id).dm))]
+  const rows = ordre.map((p) => ({ ...p, ...(lignes.get(p.id) || vide()) }))
+  const total = rows.reduce((t, r) => ({ rj: t.rj + r.rj, dj: t.dj + r.dj, rm: t.rm + r.rm, dm: t.dm + r.dm }), vide())
+  return { rows, total }
+}
+
 // ----- Caisse : uniquement les DOTATIONS de caisse (entrées) et les DÉPENSES (sorties) -----
 // Comme le journal tenu sur Excel par les agents : une dotation est un apport de budget dans E-DÉPENSES
 // (chaque « révision » d'un budget : montant ajouté = nouveau - ancien), une dépense est une dépense

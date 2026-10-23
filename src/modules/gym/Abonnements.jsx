@@ -419,7 +419,7 @@ export default function Abonnements() {
         notify({
           type: 'info', title: `🎚️ Abonnement personnalisé : MAXI-GYM ${site === 'kara' ? 'Kara' : 'Lomé'}`,
           body: `${clientNom} : ${categorieLabel(d.categorie)} : ${formatMoney(total)}. Motif : ${d.motifPrix.trim()}. Par ${user?.nom || user?.login || '—'}.`,
-          module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/abonnements`
+          module: 'gym', site, forRoles: ['info', 'assistant_pau', 'ge', 'df', 'pau', 'directeur'], excludeUid: user?.uid, link: `/gym/${site}/abonnements`
         }).catch(() => {})
       }
       if (telephone) {

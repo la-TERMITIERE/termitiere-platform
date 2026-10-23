@@ -79,7 +79,7 @@ const TONE_HEX = { success: '#16a34a', danger: '#dc2626', warning: '#d97706', in
 // techniques, pas des rôles métier à solliciter sur des décisions d'achat. Le
 // superviseur (lecture seule) est notifié mais ne peut pas valider/refuser
 // (cf. `estAdmin` plus bas, toujours basé sur FULL_ACCESS_ROLES).
-const BESOINS_NOTIF_ROLES = ['pau', 'ge', 'directeur', 'info', 'superviseur']
+const BESOINS_NOTIF_ROLES = ['pau', 'ge', 'df', 'directeur', 'info', 'superviseur']
 
 // Un besoin VALIDÉ quitte la liste 24h après sa validation — la dépense qu'il a
 // générée reste pleinement consultable dans E-DÉPENSES (source de vérité), donc

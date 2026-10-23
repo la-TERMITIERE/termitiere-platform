@@ -147,7 +147,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
       type: 'info',
       title: `Intervention sanitaire : ${user.nom}`,
       body: `${labelOf(form.type)} · ${esp?.nom || ''} (${produitNom}) : ${fiche.nombreAnimaux} animal(aux)`,
-      module: 'agro', forRoles: ['ge', 'pau'], excludeUid: user.uid, link: '/agro/sante'
+      module: 'agro', forRoles: ['ge', 'df', 'pau'], excludeUid: user.uid, link: '/agro/sante'
     })
 
     toast.success('Intervention enregistrée ✓')

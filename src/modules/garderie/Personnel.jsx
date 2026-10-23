@@ -218,7 +218,7 @@ export default function Personnel() {
       const payload = { id: pid, personnelId: p.id, date: dateFiltre, heureArrivee: heure, heureDepart: '', statut: 'present' }
       await setItem('garderie_presences', pid, payload)
       audit('garderie', 'PERSONNEL_POINTAGE_ARRIVEE', `${p.prenom} ${p.nom}`, { heure, date: dateFiltre })
-      notify({ type: 'info', title: `🟢 Arrivée : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🟢 Arrivée : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Arrivée de ${p.prenom} à ${heure} ✓`)
     } else {
       if (!existing?.heureArrivee) return toast.error('Enregistrez d\'abord l\'arrivée')
@@ -227,7 +227,7 @@ export default function Personnel() {
       const payload = { ...existing, id: pid, heureDepart: heure }
       await setItem('garderie_presences', pid, payload)
       audit('garderie', 'PERSONNEL_POINTAGE_DEPART', `${p.prenom} ${p.nom}`, { heure, date: dateFiltre })
-      notify({ type: 'info', title: `🔴 Départ : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🔴 Départ : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heure}`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Départ de ${p.prenom} à ${heure} ✓`)
     }
   }
@@ -249,7 +249,7 @@ export default function Personnel() {
       majCache(p.id, newData)
       await setItem('garderie_presences', pid, newData)
       audit('garderie', 'PERSONNEL_POINTAGE_ARRIVEE', `${p.prenom} ${p.nom}`, { heure: heureManuelle, date: dateFiltre, manuel: true })
-      notify({ type: 'info', title: `🟢 Arrivée : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🟢 Arrivée : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Arrivée ${pt ? 'corrigée' : 'enregistrée'} à ${heureManuelle} ✓`)
     } else {
       if (!pt?.heureArrivee) return toast.error('Enregistrez d\'abord l\'arrivée')
@@ -257,7 +257,7 @@ export default function Personnel() {
       majCache(p.id, newData)
       await setItem('garderie_presences', pid, newData)
       audit('garderie', 'PERSONNEL_POINTAGE_DEPART', `${p.prenom} ${p.nom}`, { heure: heureManuelle, date: dateFiltre, manuel: true })
-      notify({ type: 'info', title: `🔴 Départ : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: ['ge','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
+      notify({ type: 'info', title: `🔴 Départ : ${p.prenom} ${p.nom}`, body: `${formatDateShort(dateFiltre)} à ${heureManuelle}`, module: 'garderie', forRoles: ['ge', 'df','gerante_garderie'], excludeUid: user.uid, link: '/garderie/personnel' })
       toast.success(`Départ ${pt?.heureDepart ? 'corrigé' : 'enregistré'} à ${heureManuelle} ✓`)
     }
     setPointageModal(null)
