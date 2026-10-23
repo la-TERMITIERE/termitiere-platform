@@ -212,9 +212,6 @@ export const canManagePartenaires = (role, user) =>
 export const DEPENSE_ROLES_LIMITES = ['super_admin', 'admin', 'directeur']
 export const depenseRoleEffectif = (r) => (DEPENSE_ROLES_LIMITES.includes(r) ? 'agent' : r)
 
-// Qui tient la caisse : décaisse l'argent d'une demande une fois qu'elle est validée par le PAU ou la GE.
-export const CAISSE_DECAISSEMENT_ROLES = ['secretaire', 'info', 'assistant_pau']
-
 // Gestion des utilisateurs (création, modification, droits) : réservée au PAU, au DF, à la GE, à Info et à l'Administrateur.
 // Personne d'autre n'y accède, pas même les autres rôles à accès total.
 export const GESTION_UTILISATEURS_ROLES = ['pau', 'df', 'ge', 'info', 'admin']
