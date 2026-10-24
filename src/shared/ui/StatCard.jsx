@@ -2,6 +2,7 @@
 // - `variation` (nombre signé) : si fourni, l'ÉCART devient l'élément dominant
 //   (gros, coloré, fléché) et la valeur globale passe au second plan (gris).
 // - `onClick` : rend la carte cliquable (ouvre un détail) avec chevron + survol.
+// - `pied` (élément) : ligne libre sous le détail (ex. pastille « Ouverture … » des soldes bancaires).
 // - `chip` (texte) + `chipGood` : pastille d'écart déjà formatée (ex. « +12.5 % »).
 // - `glass` (vrai par défaut, `glass={false}` pour l'ancien rendu plat) : verre teinté
 //   + icône 3D, identique dans TOUS les modules.
@@ -9,7 +10,7 @@ import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 
 export default function StatCard({
   title, value, sub, variation, variationLabel,
-  icon: Icon, accent = '#16a34a', onClick, valueColor, glass = true, chip, chipGood = true
+  icon: Icon, accent = '#16a34a', onClick, valueColor, glass = true, chip, chipGood = true, pied
 }) {
   const hasVar = variation !== undefined && variation !== null && variation !== ''
   const up = Number(variation) >= 0
@@ -71,6 +72,7 @@ export default function StatCard({
         {(variationLabel || sub) && (
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-400" title={variationLabel || sub}>{variationLabel || sub}</p>
         )}
+        {pied}
       </div>
       {onClick && (
         <ChevronRight size={16} className="hidden shrink-0 text-gray-300 transition-colors group-hover:text-gray-500 sm:block" />
