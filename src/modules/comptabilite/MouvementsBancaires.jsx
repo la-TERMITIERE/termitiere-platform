@@ -5,7 +5,7 @@
 // « Compte bancaire » des secteurs sont retirés. Réservé à PAU / Assistant PAU / GE / Info (BANQUE_ROLES).
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Landmark, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CalendarDays, Layers, FileText, Wallet, ListOrdered, FileSpreadsheet, Paperclip, Inbox, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Landmark, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CalendarDays, Layers, FileText, Wallet, ListOrdered, FileSpreadsheet, Paperclip, Inbox, Pencil, Trash2, Sparkles, Banknote, Info as IconeInfo } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -23,7 +23,7 @@ import { toast } from '../../core/notifications'
 import ModalMouvement from '../../shared/banque/ModalMouvement'
 import MouvementFiche from './MouvementFiche'
 import { COL } from './data'
-import { glassModalProps } from '../../utils/color'
+import { glassModalProps, icone3D } from '../../utils/color'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
@@ -99,9 +99,11 @@ export default function MouvementsBancaires() {
   const [edition, setEdition] = useState(null) // mouvement en cours de modification
   const [fiche, setFiche] = useState(null) // mouvement dont on consulte tous les détails
   const [detail, setDetail] = useState(null) // 'depot' | 'retrait'
-  const [ouverture, setOuverture] = useState(null) // { montant, date } : solde d'ouverture du secteur filtré
+  const [ouverture, setOuverture] = useState(null) // { secteurId, montant, date } : solde d'ouverture d'un secteur
   const [ouvBanque, setOuvBanque] = useState(null) // { id, nom, montant, date } : solde d'ouverture d'une banque
   const [soldes, setSoldes] = useState(false) // fenêtre « soldes par secteur et par banque »
+  const [ouvDetail, setOuvDetail] = useState(false) // fenêtre « soldes d'ouverture » (détail du KPI)
+  const [ajoutOuv, setAjoutOuv] = useState(null) // { type: 'banque' | 'secteur', id, montant, date } : ajout d'un solde d'ouverture
   const [saving, setSaving] = useState(false)
 
   const secteurComplet = (m) => (m.siteNom ? `${m.secteurNom} · ${m.siteNom}` : m.secteurNom)
@@ -137,7 +139,12 @@ export default function MouvementsBancaires() {
 
   const choisi = parSecteur.find((s) => s.id === secteur) || null
   const soldeTotal = parSecteur.reduce((t, s) => t + s.solde, 0)
-
+  // Solde d'ouverture affiché à côté des boutons : celui de la banque filtrée, sinon celui du secteur filtré, sinon le total des secteurs.
+  const ouvertureAffichee = banqueChoisie
+    ? { valeur: banqueChoisie.initial, date: banqueChoisie.rec?.dateOuverture, nom: banqueChoisie.nom }
+    : choisi
+      ? { valeur: choisi.initial, date: choisi.ouvertureRec?.date, nom: choisi.nom }
+      : { valeur: parSecteur.reduce((t, s) => t + s.initial, 0), date: null, nom: '' }
   // Filtres hors « type » : servent aux chiffres des KPI (Dépôts et Retraits restent toujours affichés).
   const listeHorsType = useMemo(() => {
     let rows = parSecteur.flatMap((s) => s.rows)
@@ -182,15 +189,54 @@ export default function MouvementsBancaires() {
   }
 
   async function enregistrerOuverture() {
-    if (saving || !choisi) return
+    const cible = parSecteur.find((x) => x.id === ouverture?.secteurId)
+    if (saving || !cible) return
     setSaving(true)
     try {
       const m = Number(ouverture.montant) || 0
-      const id = choisi.ouvertureRec?.id || (choisi.custom ? `ouverture_${choisi.sourceId}` : 'ouverture')
-      await setItem(collectionBanque(choisi.id), id, { id, ouverture: true, montant: m, date: ouverture.date, type: 'ouverture', ...(choisi.custom ? { sourceId: choisi.sourceId } : {}) })
-      await audit(moduleAudit(choisi.id), 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${m.toLocaleString('fr-FR')} FCFA au ${formatDateShort(ouverture.date)}`)
+      const id = cible.ouvertureRec?.id || (cible.custom ? `ouverture_${cible.sourceId}` : 'ouverture')
+      await setItem(collectionBanque(cible.id), id, { id, ouverture: true, montant: m, date: ouverture.date, type: 'ouverture', ...(cible.custom ? { sourceId: cible.sourceId } : {}) })
+      await audit(moduleAudit(cible.id), 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${m.toLocaleString('fr-FR')} FCFA au ${formatDateShort(ouverture.date)}`)
       toast.success("Solde d'ouverture mis à jour ✓")
       setOuverture(null)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Écritures du solde d'ouverture (utilisées par la correction d'une ligne comme par l'ajout).
+  async function ecrireOuvertureSecteur(cible, montant, date) {
+    const id = cible.ouvertureRec?.id || (cible.custom ? `ouverture_${cible.sourceId}` : 'ouverture')
+    await setItem(collectionBanque(cible.id), id, { id, ouverture: true, montant, date, type: 'ouverture', ...(cible.custom ? { sourceId: cible.sourceId } : {}) })
+    await audit(moduleAudit(cible.id), 'BANQUE_SOLDE_INITIAL', `Solde d'ouverture fixé à ${montant.toLocaleString('fr-FR')} FCFA au ${formatDateShort(date)}`)
+  }
+  async function ecrireOuvertureBanque(id, nom, montant, date) {
+    await updateItem(COL.banques, id, { soldeOuverture: montant, dateOuverture: date })
+    await audit('comptabilite', 'BANQUE_SOLDE_INITIAL', `${nom} : solde d'ouverture fixé à ${montant.toLocaleString('fr-FR')} FCFA au ${formatDateShort(date)}`)
+  }
+  const ouvrirAjoutOuv = () => {
+    const banque = banqueChoisie?.rec ? banqueChoisie : (choisi ? null : parBanque.find((b) => b.rec))
+    setAjoutOuv(banque ? { type: 'banque', id: banque.id, montant: '', date: todayStr() } : { type: 'secteur', id: choisi?.id || parSecteur[0]?.id || '', montant: '', date: todayStr() })
+  }
+  async function enregistrerAjoutOuv() {
+    if (saving || !ajoutOuv) return
+    if (!ajoutOuv.id) return toast.error('Choisissez le compte')
+    if (ajoutOuv.montant === '' || Number.isNaN(Number(ajoutOuv.montant))) return toast.error('Montant requis')
+    if (!ajoutOuv.date) return toast.error('Date requise')
+    setSaving(true)
+    try {
+      const m = Number(ajoutOuv.montant)
+      if (ajoutOuv.type === 'banque') {
+        const b = parBanque.find((x) => x.id === ajoutOuv.id)
+        if (!b?.rec) return toast.error('Banque introuvable')
+        await ecrireOuvertureBanque(b.id, b.nom, m, ajoutOuv.date)
+      } else {
+        const c = parSecteur.find((x) => x.id === ajoutOuv.id)
+        if (!c) return toast.error('Secteur introuvable')
+        await ecrireOuvertureSecteur(c, m, ajoutOuv.date)
+      }
+      toast.success("Solde d'ouverture enregistré ✓")
+      setAjoutOuv(null)
     } finally {
       setSaving(false)
     }
@@ -282,13 +328,33 @@ export default function MouvementsBancaires() {
         {filtreActif && <BoutonBande plein={false} onClick={() => { setSecteur(''); setType(''); setMois(''); setBanqueFiltre(''); setRecherche('') }}>Tout afficher</BoutonBande>}
       </BandeauCompta>
 
-      {(peutVoirBanque(role) || peutEcrire) && (
+      {(
         <div className="flex flex-wrap items-center justify-end gap-2">
           <style>{`
             @keyframes mb-ondes { 0% { box-shadow: 0 8px 18px -8px rgba(234,88,12,0.7), 0 0 0 0 rgba(234,88,12,0.45); } 70% { box-shadow: 0 8px 18px -8px rgba(234,88,12,0.7), 0 0 0 12px rgba(234,88,12,0); } 100% { box-shadow: 0 8px 18px -8px rgba(234,88,12,0.7), 0 0 0 0 rgba(234,88,12,0); } }
             @keyframes mb-plus { 0%, 70%, 100% { transform: rotate(0deg) scale(1); } 85% { transform: rotate(90deg) scale(1.25); } }
             @keyframes mb-brille { 0% { transform: translateX(-130%) skewX(-20deg); } 55%, 100% { transform: translateX(260%) skewX(-20deg); } }
           `}</style>
+          {/* Solde d'ouverture : même ligne et même gabarit que les boutons. Toucher ouvre le détail par secteur et par banque (le crayon d'édition est dans ce détail). */}
+          <div className="group mr-auto inline-flex min-w-0 items-center rounded-2xl border border-violet-300/70 bg-gradient-to-br from-violet-50/90 to-white/80 shadow-[0_8px_18px_-10px_rgba(124,58,237,0.5),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_22px_-10px_rgba(124,58,237,0.6),inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <button type="button" onClick={() => setOuvDetail(true)} title="Voir le solde d'ouverture de chaque banque et de chaque secteur"
+              className="inline-flex min-w-0 items-center gap-2.5 rounded-2xl py-1.5 pl-1.5 pr-3 text-left">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6" style={icone3D('#7c3aed')}><Sparkles size={15} /></span>
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate text-[9px] font-extrabold uppercase tracking-wide text-violet-700/80">Solde d'ouverture{ouvertureAffichee.nom ? ` : ${ouvertureAffichee.nom}` : ''}</span>
+                <span className="block truncate text-sm font-extrabold text-gray-900">
+                  {formatMoney(ouvertureAffichee.valeur)}
+                  {ouvertureAffichee.date && <span className="ml-1.5 text-[10px] font-bold text-gray-400">au {formatDateShort(ouvertureAffichee.date)}</span>}
+                </span>
+              </span>
+            </button>
+            {/* Ajouter un solde d'ouverture : l'icône est dans le KPI (administration) */}
+            {isFullAccessRole(role) && (
+              <button type="button" onClick={ouvrirAjoutOuv} title="Ajouter un solde d'ouverture" aria-label="Ajouter un solde d'ouverture"
+                className="mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_6px_12px_-4px_rgba(109,40,217,0.6),inset_0_1px_0_rgba(255,255,255,0.45)] transition-all hover:scale-110 hover:rotate-90 active:scale-95"
+                style={{ background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)' }}><Plus size={17} strokeWidth={3} /></button>
+            )}
+          </div>
           {peutVoirBanque(role) && (
             <button type="button" onClick={exporter} disabled={!liste.length}
               className="inline-flex items-center gap-2 rounded-2xl border border-orange-300 bg-white px-4 py-2.5 text-sm font-extrabold text-orange-700 shadow-sm transition-all enabled:hover:-translate-y-0.5 enabled:hover:bg-orange-50 disabled:opacity-50">
@@ -308,27 +374,13 @@ export default function MouvementsBancaires() {
       <div className={`grid grid-cols-2 gap-3 ${banqueChoisie ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         {/* Le solde du secteur n'apparaît que lorsqu'on filtre sur ce secteur. */}
         {choisi ? (
-          <div className="relative">
-            <StatCard title={`SOLDE ${choisi.nom}`} value={formatMoney(choisi.solde)} sub={`${choisi.rows.length} mouvement(s)`} accent={choisi.color} icon={Landmark} onClick={() => setSoldes(true)} />
-            {isFullAccessRole(role) && (
-              <button type="button" title="Modifier le solde d'ouverture" aria-label="Modifier le solde d'ouverture"
-                onClick={() => setOuverture({ montant: choisi.initial, date: choisi.ouvertureRec?.date || todayStr() })}
-                className="absolute right-2 top-2 rounded-lg bg-white/80 p-1.5 shadow-sm hover:bg-white" style={{ color: choisi.color }}><Pencil size={13} /></button>
-            )}
-          </div>
+          <StatCard title={`SOLDE ${choisi.nom}`} value={formatMoney(choisi.solde)} sub={`${choisi.rows.length} mouvement(s)`} accent={choisi.color} icon={Landmark} onClick={() => setSoldes(true)} />
         ) : (
           <StatCard title="SOLDE BANCAIRE TOTAL" value={formatMoney(soldeTotal)} sub="toucher : détail par banque" accent="#ea580c" icon={Landmark} onClick={() => setSoldes(true)} />
         )}
         {/* Le solde d'une banque n'apparaît que lorsqu'on filtre sur cette banque. */}
         {banqueChoisie && (
-          <div className="relative">
-            <StatCard title={`SOLDE ${banqueChoisie.nom}`.toUpperCase()} value={formatMoney(banqueChoisie.solde)} sub={`${banqueChoisie.rec?.numero ? `N° ${banqueChoisie.rec.numero} · ` : ''}${banqueChoisie.rows.length} mouvement(s) · tous secteurs`} accent="#0f766e" icon={Landmark} onClick={() => setSoldes(true)} />
-            {banqueChoisie.rec && isFullAccessRole(role) && (
-              <button type="button" title="Modifier le solde d'ouverture de la banque" aria-label="Modifier le solde d'ouverture de la banque"
-                onClick={() => setOuvBanque({ id: banqueChoisie.id, nom: banqueChoisie.nom, montant: banqueChoisie.initial, date: banqueChoisie.rec.dateOuverture || todayStr() })}
-                className="absolute right-2 top-2 rounded-lg bg-white/80 p-1.5 text-teal-700 shadow-sm hover:bg-white"><Pencil size={13} /></button>
-            )}
-          </div>
+          <StatCard title={`SOLDE ${banqueChoisie.nom}`.toUpperCase()} value={formatMoney(banqueChoisie.solde)} sub={`${banqueChoisie.rec?.numero ? `N° ${banqueChoisie.rec.numero} · ` : ''}${banqueChoisie.rows.length} mouvement(s) · tous secteurs`} accent="#0f766e" icon={Landmark} onClick={() => setSoldes(true)} />
         )}
         <StatCard title={`DÉPÔTS${filtreActif ? ' (FILTRE)' : ''}`} value={`+${formatMoney(totalDepots)}`} sub="toucher pour le détail" accent="#2563eb" icon={ArrowDownCircle} onClick={() => setDetail('depot')} />
         <StatCard title={`RETRAITS${filtreActif ? ' (FILTRE)' : ''}`} value={`-${formatMoney(totalRetraits)}`} sub="toucher pour le détail" accent="#dc2626" icon={ArrowUpCircle} onClick={() => setDetail('retrait')} />
@@ -476,10 +528,13 @@ export default function MouvementsBancaires() {
       </Modal>
 
       {/* Solde d'ouverture du secteur filtré (administration) */}
-      <Modal open={!!ouverture} onClose={() => setOuverture(null)} size="sm" title={`Solde d'ouverture : ${choisi?.nom || ''}`} {...glassModalProps(choisi?.color || '#ea580c')}
-        footer={<><Button variant="outline" onClick={() => setOuverture(null)} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: choisi?.color }} onClick={enregistrerOuverture} loading={saving}>Enregistrer</Button></>}>
+      <Modal open={!!ouverture} onClose={() => setOuverture(null)} size="sm" title={`Solde d'ouverture : ${parSecteur.find((x) => x.id === ouverture?.secteurId)?.nom || ''}`} {...glassModalProps(parSecteur.find((x) => x.id === ouverture?.secteurId)?.color || '#ea580c')}
+        footer={<><Button variant="outline" onClick={() => setOuverture(null)} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: parSecteur.find((x) => x.id === ouverture?.secteurId)?.color }} onClick={enregistrerOuverture} loading={saving}>Enregistrer</Button></>}>
         {ouverture && (
           <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm">
+            <p className="mb-2 rounded-lg bg-violet-50/80 px-2.5 py-1.5 text-xs text-violet-800">
+              Actuellement : ouverture <b>{(parSecteur.find((x) => x.id === ouverture.secteurId) || { initial: 0, depots: 0, retraits: 0, solde: 0 }).initial.toLocaleString('fr-FR')}</b> + dépôts <b>{(parSecteur.find((x) => x.id === ouverture.secteurId) || { initial: 0, depots: 0, retraits: 0, solde: 0 }).depots.toLocaleString('fr-FR')}</b> - retraits <b>{(parSecteur.find((x) => x.id === ouverture.secteurId) || { initial: 0, depots: 0, retraits: 0, solde: 0 }).retraits.toLocaleString('fr-FR')}</b> = solde <b>{(parSecteur.find((x) => x.id === ouverture.secteurId) || { initial: 0, depots: 0, retraits: 0, solde: 0 }).solde.toLocaleString('fr-FR')}</b> FCFA
+            </p>
             <p className="mb-2 text-xs text-gray-500">Solde du compte bancaire avant le premier mouvement enregistré ici. Tous les soldes affichés en découlent.</p>
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Date"><Input type="date" value={ouverture.date} onChange={(e) => setOuverture((s) => ({ ...s, date: e.target.value }))} /></FormGroup>
@@ -493,15 +548,15 @@ export default function MouvementsBancaires() {
       <Modal open={soldes} onClose={() => setSoldes(false)} size="lg" {...glassModalProps('#ea580c')} title="Soldes des comptes bancaires"
         footer={<Button variant="ghost" onClick={() => setSoldes(false)}>Fermer</Button>}>
         <div className="space-y-3">
-          {[['Par secteur', parSecteur.map((x) => ({ id: x.id, nom: x.nom, initial: x.initial, depots: x.depots, retraits: x.retraits, solde: x.solde, nb: x.rows.length })), soldeTotal],
-            ['Par banque', parBanque.map((b) => ({ id: b.id, nom: b.nom, initial: b.initial, depots: b.depots, retraits: b.retraits, solde: b.solde, nb: b.rows.length })), soldeTotalBanques]].map(([titre, lignes, total]) => (
+          {[['Par secteur', parSecteur.map((x) => ({ id: x.id, nom: x.nom, initial: x.initial, depots: x.depots, retraits: x.retraits, solde: x.solde, nb: x.rows.length, modifier: () => { setSoldes(false); setOuverture({ secteurId: x.id, montant: x.initial, date: x.ouvertureRec?.date || todayStr() }) } })), soldeTotal],
+            ['Par banque', parBanque.map((b) => ({ id: b.id, nom: b.nom, initial: b.initial, depots: b.depots, retraits: b.retraits, solde: b.solde, nb: b.rows.length, modifier: b.rec ? () => { setSoldes(false); setOuvBanque({ id: b.id, nom: b.nom, montant: b.initial, date: b.rec.dateOuverture || todayStr() }) } : null })), soldeTotalBanques]].map(([titre, lignes, total]) => (
             <div key={titre} className="overflow-hidden rounded-xl border border-white/60 bg-white/80 shadow-sm">
               <p className="px-3 pt-2.5 text-xs font-bold uppercase tracking-wide text-gray-500">{titre}</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead><tr className="text-left text-xs uppercase text-gray-500"><th className="px-3 py-2">{titre === 'Par banque' ? 'Banque' : 'Secteur'}</th><th className="px-3 py-2 text-right">Ouverture</th><th className="px-3 py-2 text-right">Dépôts</th><th className="px-3 py-2 text-right">Retraits</th><th className="px-3 py-2 text-right">Solde</th></tr></thead>
+                  <thead><tr className="text-left text-xs uppercase text-gray-500"><th className="px-3 py-2">{titre === 'Par banque' ? 'Banque' : 'Secteur'}</th><th className="px-3 py-2 text-right">Ouverture</th><th className="px-3 py-2 text-right">Dépôts</th><th className="px-3 py-2 text-right">Retraits</th><th className="px-3 py-2 text-right">Solde</th><th className="w-8"></th></tr></thead>
                   <tbody className="divide-y divide-gray-100">
-                    {lignes.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-400">Aucune banque enregistrée.</td></tr>}
+                    {lignes.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-400">Aucune banque enregistrée.</td></tr>}
                     {lignes.map((l) => (
                       <tr key={l.id}>
                         <td className="px-3 py-1.5 font-semibold text-gray-800">{l.nom} <span className="text-xs font-normal text-gray-400">({l.nb})</span></td>
@@ -509,10 +564,16 @@ export default function MouvementsBancaires() {
                         <td className="whitespace-nowrap px-3 py-1.5 text-right text-blue-600">+{l.depots.toLocaleString('fr-FR')}</td>
                         <td className="whitespace-nowrap px-3 py-1.5 text-right text-red-600">-{l.retraits.toLocaleString('fr-FR')}</td>
                         <td className="whitespace-nowrap px-3 py-1.5 text-right font-extrabold text-gray-900">{l.solde.toLocaleString('fr-FR')}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          {l.modifier && isFullAccessRole(role) && (
+                            <button type="button" onClick={l.modifier} title="Modifier le solde d'ouverture" aria-label={`Modifier le solde d'ouverture : ${l.nom}`}
+                              className="rounded-lg border border-white/80 bg-white/80 p-1 text-violet-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white"><Pencil size={13} /></button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot><tr className="bg-orange-50"><td colSpan={4} className="px-3 py-2 text-xs font-extrabold uppercase text-gray-700">Total</td><td className="whitespace-nowrap px-3 py-2 text-right font-black text-gray-900">{total.toLocaleString('fr-FR')}</td></tr></tfoot>
+                  <tfoot><tr className="bg-orange-50"><td colSpan={4} className="px-3 py-2 text-xs font-extrabold uppercase text-gray-700">Total</td><td className="whitespace-nowrap px-3 py-2 text-right font-black text-gray-900">{total.toLocaleString('fr-FR')}</td><td /></tr></tfoot>
                 </table>
               </div>
             </div>
@@ -530,6 +591,11 @@ export default function MouvementsBancaires() {
         footer={<><Button variant="outline" onClick={() => setOuvBanque(null)} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: '#0f766e' }} onClick={enregistrerOuvertureBanque} loading={saving}>Enregistrer</Button></>}>
         {ouvBanque && (
           <div className="rounded-xl border border-white/60 bg-white/80 p-3 shadow-sm">
+            {(() => { const b = parBanque.find((x) => x.id === ouvBanque.id); return b ? (
+              <p className="mb-2 rounded-lg bg-violet-50/80 px-2.5 py-1.5 text-xs text-violet-800">
+              Actuellement : ouverture <b>{b.initial.toLocaleString('fr-FR')}</b> + dépôts <b>{b.depots.toLocaleString('fr-FR')}</b> - retraits <b>{b.retraits.toLocaleString('fr-FR')}</b> = solde <b>{b.solde.toLocaleString('fr-FR')}</b> FCFA
+            </p>
+            ) : null })()}
             <p className="mb-2 text-xs text-gray-500">Solde de cette banque avant le premier mouvement qui lui est rattaché ici. Le solde affiché pour la banque en découle.</p>
             <div className="grid grid-cols-2 gap-3">
               <FormGroup label="Date"><Input type="date" value={ouvBanque.date} onChange={(e) => setOuvBanque((x) => ({ ...x, date: e.target.value }))} /></FormGroup>
@@ -538,6 +604,140 @@ export default function MouvementsBancaires() {
           </div>
         )}
       </Modal>
+
+      {/* Détail du KPI : solde d'ouverture de chaque banque et de chaque secteur, avec sa date */}
+      <Modal open={ouvDetail} onClose={() => setOuvDetail(false)} size="md" {...glassModalProps('#7c3aed')} title="Soldes d'ouverture"
+        footer={<>
+          {isFullAccessRole(role) && <Button style={{ backgroundColor: '#7c3aed' }} onClick={() => { setOuvDetail(false); ouvrirAjoutOuv() }}><Plus size={15} /> Ajouter un solde d'ouverture</Button>}
+          <Button variant="ghost" onClick={() => setOuvDetail(false)}>Fermer</Button>
+        </>}>
+        <div className="space-y-3">
+          {[
+            ['Par banque', parBanque.filter((b) => b.rec).map((b) => ({ id: b.id, nom: b.nom, couleur: '#0f766e', valeur: b.initial, date: b.rec.dateOuverture, modifier: () => { setOuvDetail(false); setOuvBanque({ id: b.id, nom: b.nom, montant: b.initial, date: b.rec.dateOuverture || todayStr() }) } }))],
+            ['Par secteur', parSecteur.map((x) => ({ id: x.id, nom: x.nom, couleur: x.color, valeur: x.initial, date: x.ouvertureRec?.date, modifier: () => { setOuvDetail(false); setOuverture({ secteurId: x.id, montant: x.initial, date: x.ouvertureRec?.date || todayStr() }) } }))]
+          ].map(([titre, lignes]) => (
+            <div key={titre} className="rounded-2xl border border-white/70 bg-white/60 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
+              <p className="mb-2 flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wide text-gray-500">
+                <span>{titre}</span>
+                <span className="text-gray-700">Total {formatMoney(lignes.reduce((t, l) => t + l.valeur, 0))}</span>
+              </p>
+              <div className="space-y-1.5">
+                {lignes.length === 0 && <p className="py-2 text-center text-xs text-gray-400">Aucune banque enregistrée.</p>}
+                {lignes.map((l) => {
+                  const renseigne = l.valeur !== 0 || !!l.date
+                  return (
+                    <div key={l.id} className="flex items-center gap-2.5 rounded-xl border border-white/80 bg-white/70 px-2.5 py-1.5 backdrop-blur-md">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={icone3D(l.couleur)}><Landmark size={15} /></span>
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <p className="truncate text-sm font-bold text-gray-800">{l.nom}</p>
+                        <p className="text-[11px] text-gray-400">{l.date ? `au ${formatDateShort(l.date)}` : (renseigne ? 'date non renseignée' : 'non renseigné')}</p>
+                      </div>
+                      <span className={`whitespace-nowrap text-sm font-extrabold ${renseigne ? 'text-gray-900' : 'text-gray-300'}`}>{formatMoney(l.valeur)}</span>
+                      {isFullAccessRole(role) && (
+                        <button type="button" onClick={l.modifier} title="Modifier le solde d'ouverture" aria-label={`Modifier le solde d'ouverture : ${l.nom}`}
+                          className="rounded-lg border border-white/80 bg-white/80 p-1 text-violet-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white"><Pencil size={13} /></button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Modal>
+
+      {/* Ajouter un solde d'ouverture : on choisit la banque ou le secteur, la date et le montant */}
+      <Modal open={!!ajoutOuv} onClose={() => !saving && setAjoutOuv(null)} size="sm" {...glassModalProps('#7c3aed')} title="Ajouter un solde d'ouverture"
+        footer={<><Button variant="outline" onClick={() => setAjoutOuv(null)} disabled={saving}>Annuler</Button><Button style={{ backgroundColor: '#7c3aed' }} onClick={enregistrerAjoutOuv} loading={saving}>Enregistrer</Button></>}>
+        {ajoutOuv && (() => {
+          const cibles = ajoutOuv.type === 'banque' ? parBanque.filter((b) => b.rec) : parSecteur
+          const actuel = cibles.find((c) => c.id === ajoutOuv.id)
+          const choisirType = (type) => setAjoutOuv((a) => ({ ...a, type, id: (type === 'banque' ? parBanque.filter((b) => b.rec) : parSecteur)[0]?.id || '' }))
+          const couleur = ajoutOuv.type === 'banque' ? '#0f766e' : (actuel?.color || '#ea580c')
+          const IconeCompte = ajoutOuv.type === 'banque' ? Landmark : Layers
+          const montant = Number(ajoutOuv.montant) || 0
+          const champ = 'input-base'
+          return (
+            <div className="space-y-2.5">
+              <style>{`
+                @keyframes oa-entree { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+                @keyframes oa-pop { 0% { transform: scale(0.6) rotate(-12deg); } 70% { transform: scale(1.15) rotate(4deg); } 100% { transform: none; } }
+                @keyframes oa-lueur { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }
+                @media (prefers-reduced-motion: reduce) { .oa-anim { animation: none !important; } }
+              `}</style>
+
+              {/* Héro : le compte choisi et le montant saisi, en direct */}
+              <div className="oa-anim relative overflow-hidden rounded-2xl p-3 text-white shadow-[0_12px_24px_-14px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.4)]"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9 60%, #1e1b4b)', animation: 'oa-entree 0.35s ease-out both' }}>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+                <span aria-hidden="true" className="oa-anim pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-fuchsia-300/40 blur-2xl" style={{ animation: 'oa-lueur 3.2s ease-in-out infinite' }} />
+                <div className="relative flex items-center gap-3">
+                  <span key={`${ajoutOuv.type}-${ajoutOuv.id}`} className="oa-anim flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_4px_8px_rgba(0,0,0,0.25)]" style={{ animation: 'oa-pop 0.4s ease-out both' }}>
+                    <IconeCompte size={21} />
+                  </span>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wide text-white/80"><Sparkles size={11} /> Solde d'ouverture</p>
+                    <p className="truncate text-sm font-extrabold">{actuel?.nom || 'Choisissez un compte'}</p>
+                  </div>
+                  <p className="shrink-0 text-right text-lg font-extrabold leading-tight">{formatMoney(montant)}</p>
+                </div>
+              </div>
+
+              {/* Banque ou secteur */}
+              <div className="oa-anim grid grid-cols-2 gap-1 rounded-2xl border border-white/80 bg-white/50 p-1 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-md" style={{ animation: 'oa-entree 0.35s ease-out 0.05s both' }}>
+                {[['banque', 'Une banque', Landmark], ['secteur', 'Un secteur', Layers]].map(([t, lib, Ic]) => (
+                  <button key={t} type="button" aria-pressed={ajoutOuv.type === t} onClick={() => choisirType(t)}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-extrabold transition-all active:scale-95 ${ajoutOuv.type === t ? 'text-white shadow-md' : 'text-gray-500 hover:bg-white/70'}`}
+                    style={ajoutOuv.type === t ? { background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', boxShadow: '0 8px 16px -8px #6d28d9' } : undefined}>
+                    <Ic size={14} /> {lib}
+                  </button>
+                ))}
+              </div>
+
+              <TuileOuv i={2} icone={IconeCompte} couleur={couleur} label={ajoutOuv.type === 'banque' ? 'Banque' : 'Secteur'}>
+                <select className={champ} value={ajoutOuv.id} onChange={(e) => setAjoutOuv((a) => ({ ...a, id: e.target.value }))}>
+                  {cibles.length === 0 && <option value="">Aucun compte</option>}
+                  {cibles.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                </select>
+              </TuileOuv>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <TuileOuv i={3} icone={CalendarDays} couleur="#f59e0b" label="Date">
+                  <input type="date" className={champ} value={ajoutOuv.date} onChange={(e) => setAjoutOuv((a) => ({ ...a, date: e.target.value }))} />
+                </TuileOuv>
+                <TuileOuv i={4} icone={Banknote} couleur="#16a34a" label="Montant (FCFA)">
+                  <input type="number" inputMode="numeric" className={champ} value={ajoutOuv.montant} placeholder="ex. 5000000" onChange={(e) => setAjoutOuv((a) => ({ ...a, montant: e.target.value }))} />
+                </TuileOuv>
+              </div>
+
+              {actuel && actuel.initial > 0 && (
+                <div className="oa-anim flex items-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-800 backdrop-blur-md" style={{ animation: 'oa-entree 0.3s ease-out both' }}>
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D('#f59e0b')}><Wallet size={12} /></span>
+                  Ce compte a déjà un solde d'ouverture de <b>{formatMoney(actuel.initial)}</b> : il sera remplacé.
+                </div>
+              )}
+              <div className="oa-anim flex items-center gap-2 rounded-2xl border border-white/70 bg-white/55 px-3 py-2 text-[11px] text-gray-600 backdrop-blur-xl" style={{ animation: 'oa-entree 0.35s ease-out 0.25s both' }}>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md" style={icone3D('#2563eb')}><IconeInfo size={11} /></span>
+                C'est le solde du compte avant le premier mouvement enregistré ici. Tous les soldes affichés en découlent.
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+    </div>
+  )
+}
+
+// Tuile de la fenêtre d'ajout : verre dépoli, petite icône 3D devant le libellé, entrée en cascade (`i` = rang).
+function TuileOuv({ i = 0, icone: Icone, couleur, label, children }) {
+  return (
+    <div className="oa-anim rounded-2xl border border-white/70 bg-white/55 p-2.5 shadow-[0_8px_20px_-14px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-shadow focus-within:shadow-[0_12px_26px_-12px_rgba(124,58,237,0.5),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      style={{ animation: `oa-entree 0.35s ease-out ${0.05 * i}s both` }}>
+      <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md" style={icone3D(couleur)}><Icone size={11} /></span>
+        {label}
+      </label>
+      {children}
     </div>
   )
 }

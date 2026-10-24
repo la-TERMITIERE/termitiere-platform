@@ -16,6 +16,7 @@ import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import Compteur from '../../shared/ui/Compteur'
 import BoutonVerre from '../../shared/ui/BoutonVerre'
 import NouvelleDemandeModal from './NouvelleDemandeModal'
+import DotationFiche, { supprimerDotation } from './DotationFiche'
 import ChampBeneficiaire from './ChampBeneficiaire'
 import PillTabs from '../../shared/ui/PillTabs'
 import BandeauVolet, { ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
@@ -186,6 +187,8 @@ export default function Depenses() {
   const [lot, setLot] = useState(null)            // ajout multiple : tableau de lignes, ou null si fermé
   const [savingLot, setSavingLot] = useState(false)
   const [detailId, setDetailId] = useState(null)
+  const [dotationVue, setDotationVue] = useState(null) // ligne de dotation dont on consulte la fiche
+  const [dotationEdition, setDotationEdition] = useState(false) // true : la fiche s'ouvre directement en correction
   const [toDelete, setToDelete] = useState(null)
   const [demandeOuverte, setDemandeOuverte] = useState(false) // fenêtre « Nouvelle demande » (onglet Faire une demande)
   const [retourModal, setRetourModal] = useState(null) // retour de reliquat : { d, montant, date, motif }
@@ -733,7 +736,7 @@ export default function Depenses() {
               <thead>
                 <tr className="text-left text-xs uppercase text-gray-500">
                   <th className={TH}>Date</th><th className={TH}>Désignation</th><th className={TH}>Secteur</th><th className={TH}>Bénéficiaire</th>
-                  <th className={`${TH} text-right`}>Montant</th><th className={TH}>Statut</th><th className={`${TH} !right-0 z-20`} style={{ position: 'sticky' }} />
+                  <th className={`${TH} text-right`}>Montant</th><th className={TH}>Statut</th><th className={TH} />
                 </tr>
               </thead>
               <tbody>
@@ -753,8 +756,8 @@ export default function Depenses() {
                     const { icone: IcD, couleur: cD, libelle } = iconeLigne(l)
                     const sD = SECTEURS.find((x) => x.id === 'divers')
                     return (
-                      <tr key={it.id} style={{ background: `${COULEUR_DOTATION}1c`, animationDelay: `${Math.min(idx, 14) * 30}ms` }}
-                        className={`dp-ligne border-t border-gray-100 dark:border-white/10 ${memeJourLigne ? '' : 'border-t-gray-300 dark:border-t-white/25'}`}>
+                      <tr key={it.id} onClick={() => { setDotationEdition(false); setDotationVue(l) }} style={{ background: `${COULEUR_DOTATION}1c`, animationDelay: `${Math.min(idx, 14) * 30}ms` }}
+                        className={`dp-ligne cursor-pointer border-t border-gray-100 transition-colors hover:brightness-95 dark:border-white/10 ${memeJourLigne ? '' : 'border-t-gray-300 dark:border-t-white/25'}`}>
                         <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold text-gray-700 dark:text-gray-200">{memeJourLigne ? '' : formatDateShort(l.date)}</td>
                         <td className="px-3 py-2 align-top">
                           <span className="flex items-start gap-2">
@@ -769,7 +772,13 @@ export default function Depenses() {
                         <td className="px-3 py-2 align-top text-[11px] uppercase text-gray-600">{l.operateur || ':'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right align-top font-extrabold text-green-700">+{fmtN(l.entree)}</td>
                         <td className="px-3 py-2 align-top"><Badge tone="success">Dotation</Badge></td>
-                        <td className="sticky right-0 z-[5] px-2 py-2" style={{ background: `linear-gradient(${COULEUR_DOTATION}1c, ${COULEUR_DOTATION}1c), #fff` }} />
+                        <td className="px-2 py-2 align-top" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => { setDotationEdition(false); setDotationVue(l) }} title="Voir les détails" className="rounded-lg border border-gray-200 bg-white p-1 text-gray-500 shadow-sm hover:text-gray-800"><Eye size={14} /></button>
+                            {isAdmin && <button onClick={() => { setDotationEdition(true); setDotationVue(l) }} title="Modifier" className="rounded-lg border border-gray-200 bg-white p-1 text-primary shadow-sm hover:bg-gray-50"><FilePen size={14} /></button>}
+                            {isAdmin && <button onClick={() => supprimerDotation(l, budgets)} title="Supprimer" className="rounded-lg border border-red-200 bg-white p-1 text-red-500 shadow-sm hover:bg-red-50"><Trash2 size={14} /></button>}
+                          </div>
+                        </td>
                       </tr>
                     )
                   }
@@ -861,7 +870,7 @@ export default function Depenses() {
                       </td>
 
                       {/* Actions */}
-                      <td className="sticky right-0 z-[5] px-2 py-2 align-top shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.25)]" style={{ background: `linear-gradient(${secteurColor}1c, ${secteurColor}1c), #fff` }} onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 py-2 align-top" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => setDetailId(d.id)} title="Voir les détails" className="rounded-lg border border-gray-200 bg-white p-1 text-gray-500 shadow-sm hover:text-gray-800"><Eye size={14} /></button>
                           {peutRetourner(d) && (
@@ -887,7 +896,7 @@ export default function Depenses() {
                 <tr>
                   <td colSpan={4} className={`${TF} text-xs font-extrabold uppercase tracking-wide text-gray-700 dark:text-gray-200`}>Total : {liste.length} ligne(s)</td>
                   <td className={`${TF} whitespace-nowrap text-right font-black text-red-600`}>{totalListe.toLocaleString('fr-FR')}</td>
-                  <td colSpan={2} className={`${TF} !right-0 z-20`} style={{ position: 'sticky' }} />
+                  <td colSpan={2} className={TF} />
                 </tr>
               </tfoot>
             </table>
@@ -1288,6 +1297,8 @@ export default function Depenses() {
 
       {/* Modal détail (lecture seule) — utile surtout pour les dépenses récupérées d'un besoin validé.
           Design « verre » : héro dégradé avec icône 3D de la catégorie, tuiles bento à icônes 3D, entrée en cascade. */}
+      <DotationFiche ligne={dotationVue} budgets={budgets} peutGerer={isAdmin} editer={dotationEdition} onClose={() => setDotationVue(null)} />
+
       <Modal open={!!detail} onClose={() => setDetailId(null)} size="md" title="Détail de la dépense"
         {...glassModalProps('#B45309')}
         footer={
