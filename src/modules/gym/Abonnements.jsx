@@ -18,7 +18,8 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { sendWhatsApp } from '../../core/whatsapp'
-import { peutEcrireGym, peutAdministrerGym, peutPurgerClientGym, canExportGym } from '../../core/roles'
+import { peutEcrireGym, peutAdministrerGym, peutModifierAbonnementGym, peutSupprimerAbonnementGym, peutPurgerClientGym, canExportGym } from '../../core/roles'
+import { supprimerAbonnementGym } from './abonnementActions'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, formatMoney, formatDateShort } from '../../utils/formatters'
 import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
@@ -126,6 +127,9 @@ export default function Abonnements() {
     return { coachId: p.coachId, coachNom: p.coachNom }
   }
   const peutSupprimer = peutAdministrerGym(role)
+  // Corriger une erreur de saisie : modifier (agents, Info, administration) ; supprimer (Info et administration : PAU, GE, DF…).
+  const peutModifierAbo = peutModifierAbonnementGym(role)
+  const peutSupprimerAbo = peutSupprimerAbonnementGym(role)
   const lectureSeule = !peutEcrireGym(role)
   const peutPurger = peutPurgerClientGym(role)
   const navigate = useNavigate()
@@ -189,6 +193,15 @@ export default function Abonnements() {
     if (!id || !allAbonnements.length) return
     const a = allAbonnements.find((x) => x.id === id)
     if (a) setModal(renouveler(a))
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.state, allAbonnements.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ouverture depuis la fiche client d'une autre page (Dashboard, Pilotage, Clients) : « Modifier » un abonnement du historique.
+  useEffect(() => {
+    const id = location.state?.modifier
+    if (!id || !allAbonnements.length) return
+    const a = allAbonnements.find((x) => x.id === id)
+    if (a) setModal(remplir(a))
     navigate(location.pathname, { replace: true, state: null })
   }, [location.state, allAbonnements.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -351,7 +364,7 @@ export default function Abonnements() {
           ...(d.sexe ? { sexe: d.sexe } : {})
         })
         const ficheEdit = clients.find((c) => (c.nom || '').trim().toLowerCase() === clientNom.toLowerCase())
-        if (d.sexe && ficheEdit && ficheEdit.sexe !== d.sexe) await updateItem('gym_clients', ficheEdit.id, { sexe: d.sexe })
+        if (d.sexe && ficheEdit && ficheEdit.sexe !== d.sexe && peutEcrireGym(role)) await updateItem('gym_clients', ficheEdit.id, { sexe: d.sexe })
         // La facture déjà générée à la création garde sinon l'ancien montant — le Dashboard/Facturation (sommes des
         // `gym_factures`) resterait alors désynchronisé.
         const factureLiee = factures.find((f) => f.sourceType === 'abonnement' && f.sourceId === d.id && !f.versement && !f.avoir)
@@ -457,19 +470,8 @@ export default function Abonnements() {
     else supprimer(a)
   }
 
-  async function supprimer(a) {
-    // La facture de l'abonnement (et ses éventuels versements) part avec lui : sinon elle resterait comptée dans les totaux.
-    const liees = factures.filter((f) => f.sourceType === 'abonnement' && f.sourceId === a.id)
-    const mentionFactures = liees.length ? `
-
-Sa facture (${liees.map((f) => f.numero).join(', ')}) sera supprimée aussi : les totaux baisseront de ${formatMoney(liees.reduce((t, f) => t + (Number(f.montant) || 0), 0))}.` : ''
-    if (!confirm(`Supprimer l'abonnement de ${a.clientNom} (${categorieLabel(a.categorie)}) ?${mentionFactures}`)) return
-    await removeItem('gym_abonnements', a.id)
-    for (const f of liees) await removeItem('gym_factures', f.id, { sansMotif: true })
-    if (liees.length) await audit('gym', 'FACTURE_SUPPRIMEE', `${liees.map((f) => f.numero).join(', ')} : supprimée avec l'abonnement de ${a.clientNom}`)
-    await audit('gym', 'ABONNEMENT_DELETE', `${a.clientNom} : ${categorieLabel(a.categorie)} : ${Number(a.montant).toLocaleString('fr-FR')} FCFA`)
-    toast.success('Abonnement supprimé')
-  }
+  // La facture de l'abonnement (et ses éventuels versements) part avec lui (cf. abonnementActions).
+  const supprimer = (a) => supprimerAbonnementGym(a, factures)
 
   // Pointage d'arrivée — un abonné vient d'arriver à la salle : on l'enregistre (sert
   // à calculer son inactivité pour l'alerte « à relancer » du Dashboard) et on lui
@@ -614,8 +616,8 @@ Sa facture (${liees.map((f) => f.numero).join(', ')}) sera supprimée aussi : le
                     <button onClick={(e) => { e.stopPropagation(); facturer(r) }} title="Générer la facture manquante"
                       className="rounded p-1.5 text-amber-600 hover:bg-amber-50"><Receipt size={16} /></button>
                   )}
-                  {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
-                  {peutSupprimer && (
+                  {peutModifierAbo && <button onClick={(e) => { e.stopPropagation(); setModal(remplir(r)) }} title="Modifier" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>}
+                  {peutSupprimerAbo && (
                     <button onClick={(e) => { e.stopPropagation(); supprimerDepuisLigne(r) }} title="Supprimer" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                   )}
                   {termine && (
@@ -901,7 +903,8 @@ Sa facture (${liees.map((f) => f.numero).join(', ')}) sera supprimée aussi : le
 
       <ClientDetailModal clientNom={clientDetail} onClose={() => setClientDetail(null)}
         clients={clients} seances={seances} abonnements={abonnements} presences={presences}
-        onRenouveler={(a) => { setClientDetail(null); setModal(renouveler(a)) }} />
+        onRenouveler={(a) => { setClientDetail(null); setModal(renouveler(a)) }}
+        onModifier={(a) => { setClientDetail(null); setModal(remplir(a)) }} />
       <Modal open={!!choixSuppression} onClose={() => setChoixSuppression(null)} size="md" title={choixSuppression ? `Abonnements de ${choixSuppression}` : ''}
         {...glassModalProps(COULEUR_MODULE.gym)}
         footer={<BoutonGym variante="secondaire" icone={X} onClick={() => setChoixSuppression(null)}>Fermer</BoutonGym>}>

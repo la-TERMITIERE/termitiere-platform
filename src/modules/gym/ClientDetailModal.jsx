@@ -10,10 +10,12 @@ import Badge from '../../shared/ui/Badge'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import { useAuth } from '../../hooks/useAuth'
+import { useCollection } from '../../hooks/useFirestore'
 import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
-import { peutEcrireGym, peutAdministrerGym } from '../../core/roles'
+import { peutEcrireGym, peutAdministrerGym, peutModifierAbonnementGym, peutSupprimerAbonnementGym } from '../../core/roles'
+import { supprimerAbonnementGym } from './abonnementActions'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
 import { categorieLabel, categorieTone, sexeInfo, statutAbonnement, peutRenouveler, joursRestantsAbonnement, niveauRestant, QR_CARNET_ACTIF } from './data'
 import JoursRestants, { BoutonRenouveler } from './JoursRestants'
@@ -71,11 +73,15 @@ function Chiffre({ i, icone: Icone, couleur, titre, valeur, sous }) {
 
 // `clientNom` (string|null) pilote l'ouverture — null/absent = fermé. `presences`
 // optionnel (les appelants qui ne l'ont pas encore chargé passent [] par défaut).
-export default function ClientDetailModal({ clientNom, onClose, clients, seances, abonnements, presences = [], onRenouveler }) {
+export default function ClientDetailModal({ clientNom, onClose, clients, seances, abonnements, presences = [], onRenouveler, onModifier }) {
   const { role } = useAuth()
   const navigate = useNavigate()
   const lectureSeule = !peutEcrireGym(role)
   const peutSupprimer = peutAdministrerGym(role)
+  // Corriger une erreur d'abonnement depuis l'historique : modifier (agents, Info, administration), supprimer (Info, administration : PAU, GE, DF…).
+  const peutModifierAbo = peutModifierAbonnementGym(role)
+  const peutSupprimerAbo = peutSupprimerAbonnementGym(role)
+  const { data: factures } = useCollection('gym_factures')
   const cle = (clientNom || '').trim().toLowerCase()
   const client = clients.find((c) => (c.nom || '').trim().toLowerCase() === cle)
   const [edit, setEdit] = useState(null)
@@ -106,6 +112,18 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
     if (onRenouveler) return onRenouveler(a)
     fermer()
     navigate(`/gym/${a.site || 'lome'}/abonnements`, { state: { renouveler: a.id } })
+  }
+
+  // Modifier un abonnement : le formulaire de la page Abonnements s'ouvre pré-rempli (directement si l'appelant sait le faire).
+  function modifierAbonnement(a) {
+    if (onModifier) return onModifier(a)
+    fermer()
+    navigate(`/gym/${a.site || 'lome'}/abonnements`, { state: { modifier: a.id } })
+  }
+
+  // Supprimer un abonnement : sa facture part avec lui, un motif est demandé (cf. abonnementActions).
+  async function supprimerAbonnement(a) {
+    await supprimerAbonnementGym(a, factures)
   }
 
   function fermer() {
@@ -317,7 +335,17 @@ export default function ClientDetailModal({ clientNom, onClose, clients, seances
                           <span className="text-xs text-gray-500">{abo ? 'Abonnement' : 'Séance'} · {formatDateShort(h.date)}</span>
                         </div>
                       </div>
-                      <strong className="shrink-0">{formatMoney(h.montant)}</strong>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <strong>{formatMoney(h.montant)}</strong>
+                        {abo && peutModifierAbo && (
+                          <button type="button" onClick={() => modifierAbonnement(h)} title="Modifier cet abonnement (erreur de saisie)" aria-label="Modifier cet abonnement"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-all hover:-translate-y-0.5 hover:bg-white active:scale-95"><Pencil size={14} /></button>
+                        )}
+                        {abo && peutSupprimerAbo && (
+                          <button type="button" onClick={() => supprimerAbonnement(h)} title="Supprimer cet abonnement et sa facture" aria-label="Supprimer cet abonnement"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-red-500 transition-all hover:-translate-y-0.5 hover:bg-red-50 active:scale-95"><Trash2 size={14} /></button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

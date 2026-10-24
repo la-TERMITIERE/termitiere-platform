@@ -7,7 +7,7 @@
 // garde-fous (sanitize, rateLimit) sont appliqués dans chaque implémentation.
 import * as firebaseImpl from './db.firebase'
 import * as supabaseImpl from './db.supabase'
-import { isReadOnlyRole, peutEcrireGym, moduleDeCollection, moduleEnLecture, actionAutorisee } from './roles'
+import { isReadOnlyRole, peutEcrireCollectionGym, moduleDeCollection, moduleEnLecture, actionAutorisee } from './roles'
 import { demanderMotif, SuppressionAnnulee } from './motifSuppression'
 
 const useSupabase = import.meta.env.VITE_USE_SUPABASE === 'true'
@@ -53,7 +53,8 @@ function protegerEcriture(nom, fn) {
     // MAXI-GYM : seuls les agents, Info et l'Assistant PAU écrivent dans les collections `gym_*` (cf. peutEcrireGym).
     // Les mouvements bancaires (`gym_banque`) relèvent de la Comptabilité et de ses propres profils : ils ne sont pas visés.
     const collection = String(args[0] || '')
-    if (role && collection.startsWith('gym_') && !collection.endsWith('_banque') && !peutEcrireGym(role)) {
+    // Exception : la correction d'un abonnement (et de sa facture) est aussi permise à l'administration (cf. peutEcrireCollectionGym).
+    if (role && collection.startsWith('gym_') && !collection.endsWith('_banque') && !peutEcrireCollectionGym(role, collection)) {
       const err = new Error('MAXI-GYM : seuls les agents, Info et Assistant PAU peuvent modifier ces données, votre profil est en lecture seule.')
       err.code = 'LECTURE_SEULE'
       console.warn(`[db] écriture refusée (rôle ${role}, MAXI-GYM réservé aux agents, à Info et à Assistant PAU) : ${nom}`, args[0])
@@ -115,7 +116,7 @@ export async function removeItem(collection, id, options = {}) {
   const role = _lireRole()
   // Profil ou module en lecture seule : on laisse le garde central refuser tout de suite, sans demander de motif pour rien.
   const moduleCible = moduleDeCollection(collection)
-  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && !actionAutorisee(_lireDroits(), moduleCible, 'supprimer')) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireGym(role)))
+  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && !actionAutorisee(_lireDroits(), moduleCible, 'supprimer')) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireCollectionGym(role, String(collection))))
   if (options.sansMotif || COLLECTIONS_TECHNIQUES.has(collection) || refuse) {
     return supprimerSansMotif(collection, id)
   }
