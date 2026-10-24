@@ -146,6 +146,15 @@ export const lectureImposeeParRole = (role, moduleId) => isReadOnlyRole(role) ||
 // Ce que le rôle interdit déjà, quel que soit le réglage individuel : un agent ne supprime jamais, et les profils en lecture seule ne modifient rien.
 export const actionImposeeInterdite = (role, moduleId, action) => lectureImposeeParRole(role, moduleId) || (action === 'supprimer' && role === 'agent')
 export const peutAdministrerGym = (r) => r === 'info' || r === 'assistant_pau'
+// Corriger une erreur de saisie sur un abonnement (donc sa facture) : les agents peuvent le MODIFIER ; Info et l'administration
+// (PAU, GE, DF, Assistant PAU) peuvent le MODIFIER et le SUPPRIMER. Droit limité aux collections `gym_abonnements` et `gym_factures`
+// (le reste de MAXI-GYM reste en lecture pour PAU, GE et DF) ; un agent ne supprime jamais.
+export const GYM_CORRECTION_ADMIN_ROLES = ['pau', 'ge', 'df', 'info', 'assistant_pau']
+export const peutModifierAbonnementGym = (r) => peutEcrireGym(r) || GYM_CORRECTION_ADMIN_ROLES.includes(r)
+export const peutSupprimerAbonnementGym = (r) => GYM_CORRECTION_ADMIN_ROLES.includes(r)
+export const estCollectionCorrectionGym = (collection) => collection === 'gym_abonnements' || collection === 'gym_factures'
+// Écriture permise sur une collection `gym_*` (hors banque) : agents, Info, Assistant PAU, et la correction d'abonnement pour l'administration.
+export const peutEcrireCollectionGym = (r, collection) => peutEcrireGym(r) || (estCollectionCorrectionGym(collection) && peutModifierAbonnementGym(r))
 
 // E-G.Pro : volet Pilotage & Contrôle — vue stratégique, tout le monde SAUF la
 // secrétaire/l'agent (administratif) et le chef de projet (terrain, cloisonné à ses projets).
