@@ -47,7 +47,10 @@ Autres ressources disponibles mais non retenues pour l'instant : `REFUND`, `SHIP
 `https://latermitiere-app.netlify.app/`
 
 **Sens** : toutes les données ci-dessous sont **entrantes** (La Termitière → FEZIRE), lecture par REST.
-Périmètre actuel : **Maxi Agro**.
+Périmètre : **Maxi Agro, Briqueterie, Logistique (location), Maxi Gym, Garderie** — les dépenses
+(E-Dépenses) ne sont pas transmises. Chaque module a son préfixe d'identifiant : `agro-`, `briq-`,
+`logi-`, `gym-`, `gard-`. Garderie : le client est le parent, aucune donnée d'enfant n'est envoyée.
+Stock et mouvements : Maxi Agro seulement (sémantique de l'import STOCK à clarifier avec l'éditeur).
 
 **Authentification** : en-tête `X-API-Key: <clé>` (la clé enregistrée à l'étape « Qui se connecte à qui ? »),
 sans préfixe. `Authorization: Bearer <clé>` est aussi accepté.
