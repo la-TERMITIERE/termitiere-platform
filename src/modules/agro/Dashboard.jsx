@@ -10,6 +10,10 @@ import { Line, Doughnut, Bar } from 'react-chartjs-2'
 import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle, AlarmClock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
+import ObjectifKpi, { libelleObjectif } from '../comptabilite/ObjectifKpi'
+import ListeFacturesVerre from '../comptabilite/ListeFacturesVerre'
+import { useObjectifPole } from '../comptabilite/quotas'
+import FelicitationObjectif from '../comptabilite/FelicitationObjectif'
 import Modal from '../../shared/ui/Modal'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
@@ -61,6 +65,7 @@ export default function Dashboard() {
   }, [routineItems, routineChecks, user?.uid])
 
   const [preset, setPreset] = useState('mois')
+  const objAgro = useObjectifPole('agro')
   const [from, setFrom] = useState(todayStr().slice(0, 7) + '-01')
   const [to, setTo] = useState(todayStr())
   const [scope, setScope] = useState(TOUTES)
@@ -430,6 +435,8 @@ export default function Dashboard() {
         ))}
       </div>
 
+      <FelicitationObjectif poleId="agro" secteur="MAXI-AGRO" couleur="#2EAA3F" />
+
       {/* Indicateurs du périmètre */}
       <div>
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs : {scopeLabel}</p>
@@ -442,8 +449,10 @@ export default function Dashboard() {
           <Indic title="Taux de morbidité" value={`${ind.morbidite.toFixed(1)} %`} icon={Stethoscope} color="#d97706" sub={`${ind.malades} malade(s)`} onClick={() => setModalKey('morbidite')} />
           <Indic title="Taux de croissance" value={`${ind.croissance.toFixed(1)} %`} icon={Sprout} color="#16a34a" sub={`${ind.naiss} naissance(s)`} onClick={() => setModalKey('croissance')} />
           <Indic title="Ventes (volume)" value={formatNumber(ventes.courant)} icon={ShoppingCart} color="#0d9488" sub={`${ventes.liste.length} vente(s)`} delta={ventes.courant - ventes.precedent} onClick={() => setModalKey('ventes')} />
+          {showFinance && <ObjectifKpi poleId="agro" couleur="#2EAA3F" lien={{ to: '/agro/factures', label: 'Aller aux factures' }} seulementAvecObjectif masque={preset === 'mois'} />}
           {showFinance && (
-            <Indic title="Chiffre d'affaires" value={formatMoney(ca.courant)} icon={Wallet} color="#7c3aed" sub={`${ca.liste.length} facture(s) certifiée(s)`} delta={ca.courant - ca.precedent} money onClick={() => setModalKey('ca')} />
+            <Indic title={preset === 'mois' ? 'Recettes du mois' : "Chiffre d'affaires"} value={formatMoney(ca.courant)} icon={Wallet} color="#7c3aed" sub={`${ca.liste.length} facture(s) certifiée(s)`} delta={ca.courant - ca.precedent} money onClick={() => setModalKey('ca')}
+              etiquette={preset === 'mois' ? libelleObjectif(objAgro) : undefined} />
           )}
         </div>
         {!showFinance && (
@@ -660,7 +669,9 @@ export default function Dashboard() {
           panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
           <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{formatMoney(ca.courant)} : période préc. : {formatMoney(ca.precedent)}</p>
           <p className="my-2 text-xs italic text-gray-400">CA = factures <strong>certifiées</strong> uniquement{scope !== TOUTES ? ' (montant des lignes de cette catégorie)' : ''}.</p>
-          <DetailTable rows={ca.liste} cols={['Date', 'N°', 'Client', 'Montant']} render={(f) => [formatDateShort(f.date), f.numero || '—', f.client?.nom || '—', formatMoney(scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((s, l) => s + (l.total || 0), 0))]} empty="Aucune facture certifiée sur la période." />
+          <ListeFacturesVerre couleur="#2EAA3F" poleId="agro" avecObjectif={preset === 'mois'} vide="Aucune facture certifiée sur la période."
+            items={ca.liste.map((f) => ({ id: f.id, date: f.date, titre: f.client?.nom || '—', sous: f.numero ? `Facture ${f.numero}` : '',
+              montant: scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((t, l) => t + (l.total || 0), 0) }))} />
         </Modal>
       )}
     </div>
@@ -678,12 +689,13 @@ function ScopeTab({ active, color, onClick, children }) {
 }
 
 // `invert` : une hausse est une MAUVAISE nouvelle (décès) — on inverse le code couleur.
-function Indic({ title, value, icon, color, sub, delta, money, invert, onClick }) {
-  const aDelta = delta !== undefined && delta !== 0
-  const favorable = invert ? delta < 0 : delta > 0
+function Indic({ title, value, icon, color, sub, delta, money, invert, onClick, etiquette }) {
+  // Un montant garde sa pastille même à 0 (« +0 FCFA ») : l'écart avec la période précédente reste toujours visible, comme dans les autres modules.
+  const aDelta = delta !== undefined && (delta !== 0 || money)
+  const favorable = invert ? delta < 0 : delta >= 0
   return (
     <StatCard title={title} value={value} icon={icon} accent={color} onClick={onClick}
-      sub={sub ? `${sub}${onClick ? ' : détails' : ''}` : undefined}
+      sub={sub ? `${sub}${onClick ? ' : détails' : ''}` : undefined} variationLabel={etiquette}
       chip={aDelta ? `${delta > 0 ? '+' : '−'}${money ? formatMoney(Math.abs(delta)) : Math.abs(delta)}` : undefined}
       chipGood={favorable} />
   )

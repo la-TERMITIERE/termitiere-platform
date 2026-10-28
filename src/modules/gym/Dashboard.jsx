@@ -4,7 +4,7 @@ import '../../utils/chartSetup'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
-import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog, X, Clock } from 'lucide-react'
+import { Ticket, CreditCard, Wallet, Users, User, Flame, AlertTriangle, BellRing, UserCog, X, Clock, ChevronRight, Target } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -18,6 +18,9 @@ import { sendWhatsApp } from '../../core/whatsapp'
 import { notify } from '../../core/notify'
 import { ROLES, peutEcrireGym } from '../../core/roles'
 import { todayStr, formatMoney, formatDateShort, addDays } from '../../utils/formatters'
+import { useQuotas, etatAvancement } from '../comptabilite/quotas'
+import { libelleObjectif } from '../comptabilite/ObjectifKpi'
+import FelicitationObjectif from '../comptabilite/FelicitationObjectif'
 import { SEXES, indexSexeClients, sexeDe, statsSexe, CATEGORIES_GYM, CATEGORIES_STATS, dansCategorie, categorieLabel, categorieTone, abonnementActif, statutAbonnement, joursDepuis, SEUIL_RELANCE_JOURS, creneauCoach, niveauRestant, SEUIL_RENOUVELLEMENT_JOURS, minutesRetardCreneau, SEUIL_ALERTE_RETARD_MIN, FIN_ALERTE_RETARD_MIN } from './data'
 import ClientDetailModal from './ClientDetailModal'
 import { BoutonRenouveler } from './JoursRestants'
@@ -26,7 +29,8 @@ import { CoachBoutonsStyles, BoutonPointerMini, BoutonAbsentMini } from './Coach
 import { pointerCoach, marquerCoachAbsent, estAbsent } from './coachPointage'
 import { pointerAbonne } from './pointerAbonne'
 import { SexeDonut, SexeBadge } from './SexeUI'
-import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex } from '../../utils/color'
+import { ParamsCarte } from '../../shared/ui/ParamsVerre'
+import { glassModalProps, COULEUR_MODULE, avatarGradient, teinterHex, icone3D } from '../../utils/color'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 import { useGymParams } from './useGymParams'
 import { useAutoSuppressionGym } from './useAutoSuppression'
@@ -212,7 +216,9 @@ export default function Dashboard() {
   // on ne montre que les plus urgents (déjà triés par échéance croissante), avec
   // un bouton pour dérouler le reste au besoin.
   const [voirTousRenouvellements, setVoirTousRenouvellements] = useState(false)
-  const LIMITE_RENOUVELLEMENTS = 5
+  const LIMITE_RENOUVELLEMENTS = 3
+  const [voirTousInactifs, setVoirTousInactifs] = useState(false)
+  const LIMITE_INACTIFS = 3
   const [voirToutActivite, setVoirToutActivite] = useState(false)
   const LIMITE_ACTIVITE = 5
   const [voirTousClients, setVoirTousClients] = useState(false)
@@ -285,7 +291,9 @@ export default function Dashboard() {
   )
   // Progression vs objectif du mois (Paramètres) — n'a de sens que sur « Mois en
   // cours » : comparer un quota mensuel à une période perso ou « Tout » serait trompeur.
-  const objectif = params.objectifMensuel
+  // L'objectif se fixe dans les Paramètres de la salle (collection partagée avec la Comptabilité) ; l'ancien réglage de la salle sert de repli.
+  const { quotas: objectifsSecteurs } = useQuotas()
+  const objectif = objectifsSecteurs[`gym_${site}`] || params.objectifMensuel
   const pctObjectif = objectif > 0 ? Math.round((totalEncaisseMois / objectif) * 100) : null
   const afficherObjectif = modePeriode === 'mois' && filtreMois === todayStr().slice(0, 7) && objectif > 0
 
@@ -628,15 +636,17 @@ export default function Dashboard() {
         </div>
       )}
 
+      <FelicitationObjectif poleId={`gym_${site}`} secteur="de la salle" couleur="#E8850F" />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard glass title="Séances" value={seancesMois.length} icon={Ticket} accent={COULEUR} onClick={() => setDetailModal('seances')}
           variation={comparable ? seancesMois.length - seancesMoisPrecedent.length : undefined} variationLabel="période préc. · cliquer" />
         <StatCard glass title="Abonnements" value={abonnementsMois.length} icon={CreditCard} accent={COULEUR2} onClick={() => setDetailModal('abonnements')}
           variation={comparable ? abonnementsMois.length - abonnementsMoisPrecedent.length : undefined} variationLabel="période préc. · cliquer" />
         <StatCard glass title="Total encaissé" value={formatMoney(totalEncaisseMois)} icon={Wallet} accent={COULEUR} onClick={() => setDetailModal('total')}
-          variation={comparable ? totalEncaisseMois - totalEncaisseMoisPrecedent : undefined}
-          variationLabel={afficherObjectif
-            ? <>🎯 {formatMoney(objectif)} · <strong style={{ color: pctObjectif >= 100 ? '#16a34a' : COULEUR }}>{pctObjectif}%</strong></>
+          chip={comparable ? `${totalEncaisseMois >= totalEncaisseMoisPrecedent ? '+' : '−'}${formatMoney(Math.abs(totalEncaisseMois - totalEncaisseMoisPrecedent))}` : undefined} chipGood={totalEncaisseMois >= totalEncaisseMoisPrecedent}
+          variationLabel={modePeriode === 'mois' && filtreMois === todayStr().slice(0, 7)
+            ? libelleObjectif({ cible: objectif || 0, pct: pctObjectif, etat: etatAvancement(pctObjectif) })
             : (comparable ? `${formatMoney(totalEncaisseMoisPrecedent)} · période préc.` : undefined)} />
         <StatCard glass title="Clients" value={clients.length} icon={Users} accent={COULEUR2} onClick={() => setDetailModal('clients')}
           sub={nouveauxClientsMois > 0 ? `+${nouveauxClientsMois} nouveau${nouveauxClientsMois > 1 ? 'x' : ''} sur la période` : undefined} />
@@ -644,20 +654,19 @@ export default function Dashboard() {
 
 
       {abonnementsARelancer.length > 0 && (
-        <Card title="⏰ Abonnements à renouveler : 10 derniers jours"
-          className="overflow-hidden border-amber-50 bg-gradient-to-br from-amber-50/25 via-white to-white">
+        <ParamsCarte icone={Clock} couleur="#f59e0b" large titre="Abonnements à renouveler" sous="Expirent dans les 10 prochains jours" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#b45309' }}>{abonnementsARelancer.length}</span>}>
           <div className="space-y-2">
-            {(voirTousRenouvellements ? abonnementsARelancer : abonnementsARelancer.slice(0, LIMITE_RENOUVELLEMENTS)).map((a) => {
+            {(voirTousRenouvellements ? abonnementsARelancer : abonnementsARelancer.slice(0, LIMITE_RENOUVELLEMENTS)).map((a, i) => {
               const niveau = niveauRestant(a.joursRestants)
               const rouge = niveau.cle === 'rouge'
               return (
-                <div key={a.id}
-                  className="group relative flex w-full items-center gap-1 overflow-hidden rounded-2xl border border-amber-100/50 bg-white/55 pr-1 shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                <div key={a.id} style={{ animationDelay: `${i * 60}ms` }}
+                  className="ed-entree group relative flex w-full items-center gap-1 overflow-hidden rounded-3xl border border-white/80 bg-gradient-to-r from-amber-50/70 to-white/70 pr-1.5 shadow-[0_10px_22px_-14px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                   <span aria-hidden="true" className="pointer-events-none absolute -inset-x-4 -top-6 h-10 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
                   <button onClick={() => setClientDetail(a.clientNom)}
                     className="relative flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
-                    <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${rouge ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-500'}`}>
-                      {rouge && <span className="absolute inset-0 animate-ping rounded-full bg-red-300 opacity-40" />}
+                    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white" style={icone3D(rouge ? '#ef4444' : '#f97316')}>
+                      {rouge && <span className="absolute inset-0 animate-ping rounded-2xl bg-red-300 opacity-30" />}
                       <AlertTriangle size={16} className="relative" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -688,11 +697,11 @@ export default function Dashboard() {
               {voirTousRenouvellements ? 'Réduire' : `Voir les ${abonnementsARelancer.length - LIMITE_RENOUVELLEMENTS} autres`}
             </button>
           )}
-        </Card>
+        </ParamsCarte>
       )}
 
       {abonnesInactifsAffiches.length > 0 && (
-        <Card title="🔔 Abonnés à relancer : inactifs depuis 7 jours ou plus">
+        <ParamsCarte icone={BellRing} couleur="#ef4444" large titre="Abonnés à relancer" sous="Inactifs depuis 7 jours ou plus" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#b91c1c' }}>{abonnesInactifsAffiches.length}</span>}>
           <style>{`
             @keyframes gym-signal-lumineux {
               0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
@@ -700,17 +709,17 @@ export default function Dashboard() {
             }
           `}</style>
           <div className="space-y-2">
-            {abonnesInactifsAffiches.map((a) => {
+            {(voirTousInactifs ? abonnesInactifsAffiches : abonnesInactifsAffiches.slice(0, LIMITE_INACTIFS)).map((a, i) => {
               const tresInactif = a.jours >= 14
               const cle = a.clientNom.trim().toLowerCase()
               const flashe = flashInactif === cle
               return (
-                <div key={a.clientNom}
-                  className={`group flex w-full items-center gap-1 rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 to-white pr-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${flashe ? 'animate-[gym-signal-lumineux_0.35s_ease-out]' : ''}`}>
+                <div key={a.clientNom} style={{ animationDelay: `${i * 60}ms` }}
+                  className={`ed-entree group flex w-full items-center gap-1 rounded-3xl border border-white/80 bg-gradient-to-r from-red-50/80 to-white/70 pr-1.5 shadow-[0_10px_22px_-14px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${flashe ? 'animate-[gym-signal-lumineux_0.35s_ease-out]' : ''}`}>
                   <button onClick={() => setClientDetail(a.clientNom)}
                     className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
-                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
-                      {tresInactif && <span className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-50" />}
+                    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white" style={icone3D(tresInactif ? '#dc2626' : '#f87171')}>
+                      {tresInactif && <span className="absolute inset-0 animate-ping rounded-2xl bg-red-400 opacity-30" />}
                       <BellRing size={16} className="relative" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -731,11 +740,17 @@ export default function Dashboard() {
               )
             })}
           </div>
-        </Card>
+          {abonnesInactifsAffiches.length > LIMITE_INACTIFS && (
+            <button onClick={() => setVoirTousInactifs((v) => !v)}
+              className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50">
+              {voirTousInactifs ? 'Réduire' : `Voir les ${abonnesInactifsAffiches.length - LIMITE_INACTIFS} autres`}
+            </button>
+          )}
+        </ParamsCarte>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="🕒 Activité récente" className="overflow-hidden border-orange-100/60 bg-gradient-to-br from-orange-50/60 via-white to-white">
+        <ParamsCarte icone={Clock} couleur="#E8850F" titre="Activité récente" sous="Dernières séances et derniers abonnements" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#c2410c' }}>{activiteRecente.length}</span>}>
           {activiteRecente.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100/70 text-orange-300">
@@ -746,9 +761,9 @@ export default function Dashboard() {
           ) : (
             <>
               <div className="space-y-1.5">
-                {(voirToutActivite ? activiteRecente : activiteRecente.slice(0, LIMITE_ACTIVITE)).map((x) => (
-                  <button key={x.id} onClick={() => setClientDetail(x.clientNom)}
-                    className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-white/60 bg-white/65 px-3 py-2 text-left shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                {(voirToutActivite ? activiteRecente : activiteRecente.slice(0, LIMITE_ACTIVITE)).map((x, i) => (
+                  <button key={x.id} onClick={() => setClientDetail(x.clientNom)} style={{ animationDelay: `${i * 50}ms` }}
+                    className="ed-entree group relative flex w-full items-center gap-3 overflow-hidden rounded-3xl border border-white/80 bg-white/70 px-3 py-2.5 text-left shadow-[0_10px_22px_-14px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-md">
                     <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: avatarGradient(x.clientNom), boxShadow: OMBRE_3D }}>
                       <User size={14} />
                     </span>
@@ -759,7 +774,7 @@ export default function Dashboard() {
                         {' '}{categorieLabel(x.categorie)} · {formatDateShort(x.date)}
                       </p>
                     </div>
-                    <span className="shrink-0 font-bold text-gray-700">{formatMoney(x.montant)}</span>
+                    <span className="shrink-0 rounded-full bg-green-50 px-2.5 py-1 text-xs font-extrabold text-green-700 ring-1 ring-green-100">{formatMoney(x.montant)}</span>
                   </button>
                 ))}
               </div>
@@ -771,9 +786,9 @@ export default function Dashboard() {
               )}
             </>
           )}
-        </Card>
+        </ParamsCarte>
 
-        <Card title="Clients les plus fréquents" className="overflow-hidden border-amber-100/60 bg-gradient-to-br from-amber-50/60 via-white to-white">
+        <ParamsCarte icone={Flame} couleur="#f59e0b" titre="Clients les plus fréquents" sous="Classement selon la fréquentation">
           {/* Boutons : ce qui compte pour le classement (tous / séances / abonnements). */}
           <div className="mb-3 flex gap-1 rounded-2xl border border-amber-100 bg-white/70 p-1">
             {[['tous', 'Tous'], ['seances', '🎫 Séances'], ['abonnements', '💳 Abonnements']].map(([v, l]) => (
@@ -856,7 +871,7 @@ export default function Dashboard() {
               )}
             </>
           )}
-        </Card>
+        </ParamsCarte>
       </div>
 
       {/* Bento : deux diagrammes EN BANDE classés (séances / abonnements), jamais
@@ -931,29 +946,58 @@ export default function Dashboard() {
           const Icon = DETAIL_INFO[detailModal].icon
           return (
             <div className="space-y-4">
-              {/* Bandeau héro — même dégradé/badge lumineux que l'en-tête du volet. */}
-              <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(232,133,15,0.35),0_8px_20px_-8px_rgba(232,133,15,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
-                style={{ background: `linear-gradient(135deg, ${COULEUR}e6 0%, ${COULEUR2}e6 100%)` }}>
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-white/80 bg-white/20 shadow-lg backdrop-blur-sm">
-                  <Icon size={22} color="white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-lg font-extrabold leading-tight">{DETAIL_INFO[detailModal].titre}</p>
-                  <p className="text-sm text-white/80">Cliquer un client pour voir sa fiche complète</p>
-                </div>
-              </div>
+              {/* Bandeau héro : dégradé du module, halos flous, icône en verre qui flotte, chiffres clés. */}
+              {(() => {
+                const totalModal = groupesModal.reduce((t, g) => t + g.total, 0)
+                const nbModal = detailModal === 'clients' ? clients.length : groupesModal.reduce((t, g) => t + g.lignes.length, 0)
+                const puces = [
+                  { Ic: Users, texte: `${nbModal} ${detailModal === 'clients' ? 'client' : detailModal === 'seances' ? 'séance' : detailModal === 'abonnements' ? 'abonnement' : 'encaissement'}${nbModal > 1 ? 's' : ''}` },
+                  ...(detailModal !== 'clients' ? [{ Ic: Wallet, texte: formatMoney(totalModal) }] : []),
+                  ...(detailModal === 'total' && objectif > 0 ? [{ Ic: Target, texte: `${Math.round(pctObjectif)}% de l'objectif` }] : [])
+                ]
+                return (
+                  <div className="ed-entree relative overflow-hidden rounded-3xl p-4 text-white shadow-[0_18px_34px_-16px_rgba(166,52,42,0.7),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
+                    style={{ background: `linear-gradient(135deg, ${COULEUR}f2 0%, ${COULEUR2}f2 100%)` }}>
+                    <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-2xl" />
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-amber-200/30 blur-2xl" />
+                    <div className="relative flex items-center gap-4">
+                      <div className="ed-flotte flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/25 shadow-[0_10px_20px_-8px_rgba(0,0,0,0.5),inset_0_2px_2px_rgba(255,255,255,0.6)] backdrop-blur-md">
+                        <Icon size={26} color="white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-extrabold leading-tight">{DETAIL_INFO[detailModal].titre}</p>
+                        <p className="text-sm text-white/85">Touchez un client pour ouvrir sa fiche complète</p>
+                      </div>
+                    </div>
+                    <div className="relative mt-3 flex flex-wrap gap-2">
+                      {puces.map(({ Ic, texte }) => (
+                        <span key={texte} className="inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/20 px-3 py-1 text-xs font-extrabold shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-md">
+                          <Ic size={13} /> {texte}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {detailModal === 'clients' ? (
                 <div className="space-y-2">
                   {clients.length === 0 && (
                     <p className="py-4 text-center text-sm text-gray-400">Aucun client enregistré pour l'instant.</p>
                   )}
-                  {[...clients].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')).map((c) => (
+                  {[...clients].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')).map((c, i) => (
                     <button key={c.id} onClick={() => { setDetailModal(null); setClientDetail(c.nom) }}
-                      className="w-full rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100">
-                      <p className="font-semibold text-gray-800">{c.nom}</p>
-                      <p className="text-sm text-gray-600">📞 {c.telephone || '—'}</p>
-                      {c.notes && <p className="mt-1 text-xs text-gray-500">📝 {c.notes}</p>}
+                      className="ed-entree group flex w-full items-center gap-3 rounded-2xl border border-white/80 bg-white/65 px-3 py-2.5 text-left shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-md"
+                      style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white" style={{ background: avatarGradient(c.nom), boxShadow: OMBRE_3D }}>
+                        {(c.nom || '?').trim().charAt(0).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-gray-800">{c.nom}</span>
+                        <span className="block text-xs text-gray-500">📞 {c.telephone || '—'}</span>
+                        {c.notes && <span className="block truncate text-[11px] text-gray-400">📝 {c.notes}</span>}
+                      </span>
+                      <ChevronRight size={16} className="shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-orange-500" />
                     </button>
                   ))}
                 </div>
@@ -962,44 +1006,65 @@ export default function Dashboard() {
                   {groupesModal.every((g) => g.lignes.length === 0) && (
                     <p className="py-4 text-center text-sm text-gray-400">Rien à afficher pour l'instant.</p>
                   )}
-                  {groupesModal.filter((g) => g.lignes.length > 0).map((g) => {
+                  {groupesModal.filter((g) => g.lignes.length > 0).map((g, gi) => {
+                    const couleurG = COULEUR_BARRE[g.id] || '#94a3b8'
+                    const totalModal = groupesModal.reduce((t, x) => t + x.total, 0)
+                    const part = totalModal > 0 ? Math.round((g.total / totalModal) * 100) : 0
                     const ligneBtn = (l) => (
                       <button key={l.id} onClick={() => { setDetailModal(null); setClientDetail(l.clientNom) }}
-                        className="flex w-full items-center justify-between rounded-md bg-white px-2.5 py-1.5 text-left text-sm shadow-sm transition-colors hover:bg-orange-50">
-                        <div className="min-w-0">
+                        className="group flex w-full items-center gap-3 rounded-2xl border border-white/80 bg-white/70 px-2.5 py-2 text-left text-sm shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/95 hover:shadow-md">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: avatarGradient(l.clientNom), boxShadow: OMBRE_3D }}>
+                          {(l.clientNom || '?').trim().charAt(0).toUpperCase()}
+                        </span>
+                        <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-gray-800">{l.clientNom}</p>
                           <p className="text-[11px] text-gray-400">
                             {formatDateShort(l.date)}
                             {l.dateFin && <> · jusqu'au {formatDateShort(l.dateFin)}</>}
                           </p>
                         </div>
-                        <span className="shrink-0 font-bold text-gray-700">{formatMoney(l.montant)}</span>
+                        <span className="shrink-0 rounded-full bg-green-50 px-2.5 py-1 text-xs font-extrabold text-green-700 ring-1 ring-green-100">{formatMoney(l.montant)}</span>
+                        <ChevronRight size={15} className="shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-orange-500" />
                       </button>
                     )
+                    const sousTitre = (Ic, libelle, couleur, n) => (
+                      <p className="mb-1.5 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D(couleur)}><Ic size={12} /></span>
+                        {libelle} <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] text-gray-500 ring-1 ring-black/5">{n}</span>
+                      </p>
+                    )
                     return (
-                      <div key={g.id} className="overflow-hidden rounded-2xl border-l-4 bg-gray-50 p-3" style={{ borderColor: COULEUR_BARRE[g.id] }}>
-                        <div className="mb-2 flex items-center justify-between">
-                          <Badge tone={g.tone}>{g.label}</Badge>
-                          <span className="text-sm font-bold text-gray-700">{formatMoney(g.total)}</span>
+                      <div key={g.id} className="ed-entree relative overflow-hidden rounded-3xl border border-white/80 p-3.5 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl"
+                        style={{ background: `linear-gradient(135deg, ${couleurG}26 0%, rgba(255,255,255,0.7) 60%)`, animationDelay: `${gi * 80}ms` }}>
+                        <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-25 blur-3xl" style={{ background: couleurG }} />
+                        <div className="relative mb-3 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-2xl" style={icone3D(couleurG)}><CreditCard size={18} /></span>
+                            <div>
+                              <Badge tone={g.tone}>{g.label}</Badge>
+                              <p className="mt-0.5 text-[11px] text-gray-500">{g.lignes.length} ligne{g.lignes.length > 1 ? 's' : ''} · {part}% du total</p>
+                            </div>
+                          </div>
+                          <span className="text-base font-black text-gray-800">{formatMoney(g.total)}</span>
                         </div>
                         {/* Vue « Total » : séances et abonnements classés séparément, jamais mélangés. */}
                         {detailModal === 'total' ? (
-                          <div className="space-y-2.5">
+                          <div className="relative space-y-3">
                             {g.seancesLignes.length > 0 && (
                               <div>
-                                <p className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">🎫 Séances</p>
-                                <div className="space-y-1">{g.seancesLignes.map(ligneBtn)}</div>
+                                {sousTitre(Ticket, 'Séances', '#0ea5e9', g.seancesLignes.length)}
+                                <div className="space-y-1.5">{g.seancesLignes.map(ligneBtn)}</div>
                               </div>
                             )}
                             {g.abonnementsLignes.length > 0 && (
                               <div>
-                                <p className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">💳 Abonnements</p>
-                                <div className="space-y-1">{g.abonnementsLignes.map(ligneBtn)}</div>
+                                {sousTitre(CreditCard, 'Abonnements', '#8b5cf6', g.abonnementsLignes.length)}
+                                <div className="space-y-1.5">{g.abonnementsLignes.map(ligneBtn)}</div>
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="space-y-1">{g.lignes.map(ligneBtn)}</div>
+                          <div className="relative space-y-1.5">{g.lignes.map(ligneBtn)}</div>
                         )}
                       </div>
                     )

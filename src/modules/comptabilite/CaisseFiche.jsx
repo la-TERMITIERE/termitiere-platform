@@ -21,7 +21,7 @@ export default function CaisseFiche({ ligne, onClose }) {
   const dotation = l?.type === 'dotation'
   const retour = l?.type === 'retour'
   const entree = (l?.entree || 0) > 0
-  const couleur = entree ? '#16a34a' : '#dc2626'
+  const couleur = entree ? '#4f46e5' : '#dc2626'
   const montant = entree ? l?.entree : l?.sortie
   const d = !dotation ? l?.brut : null
   const rev = dotation ? l?.brut?.revision : null
@@ -37,7 +37,7 @@ export default function CaisseFiche({ ligne, onClose }) {
         <FicheDetail
           hero={
             <div className="relative flex flex-col items-center gap-2 overflow-hidden rounded-3xl p-5 text-center text-white shadow-[0_16px_28px_-16px_rgba(0,0,0,0.55)]"
-              style={{ background: entree ? 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #14532d 100%)' : 'linear-gradient(135deg, #f87171 0%, #dc2626 55%, #7f1d1d 100%)' }}>
+              style={{ background: entree ? 'linear-gradient(135deg, #818cf8 0%, #4f46e5 55%, #312e81 100%)' : 'linear-gradient(135deg, #f87171 0%, #dc2626 55%, #7f1d1d 100%)' }}>
               <style>{'@keyframes cf-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }'}</style>
               <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
               <span className="relative flex h-14 w-14 items-center justify-center rounded-3xl bg-white/25 shadow-[inset_0_2px_2px_rgba(255,255,255,0.6),0_10px_20px_-8px_rgba(0,0,0,0.5)]">

@@ -1,7 +1,8 @@
 // Paramètres MAXI-AGRO — référentiels, utilisateurs (démo), données, PIN, système.
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Download, Upload, RotateCcw } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { Plus, Trash2, Download, Upload, RotateCcw, Target, Leaf, Wheat, Database, Cpu, AlertTriangle } from 'lucide-react'
+import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
+import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import Table from '../../shared/ui/Table'
@@ -21,22 +22,29 @@ import { toast } from '../../core/notifications'
 import { genId } from '../../utils/formatters'
 import { CAT_ANIMAUX, CAT_ALIMENTS, UNITES_ALIMENT } from './data'
 
+const COULEUR = '#2EAA3F'
 const TABS = [
-  ['especes', 'Espèces'],
-  ['aliments', 'Aliments'],
-  ['donnees', 'Données'],
-  ['systeme', 'Système']
+  ['objectif', 'Objectif', Target],
+  ['especes', 'Espèces', Leaf],
+  ['aliments', 'Aliments', Wheat],
+  ['donnees', 'Données', Database],
+  ['systeme', 'Système', Cpu]
 ]
 
 export default function Params() {
-  const [tab, setTab] = useState('especes')
+  const [tab, setTab] = useState('objectif')
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1">
-        {TABS.map(([v, l]) => (
-          <button key={v} onClick={() => setTab(v)} className={`rounded px-3 py-1.5 text-sm font-semibold ${tab === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>{l}</button>
+      <div className="flex flex-wrap gap-1.5 rounded-3xl border border-white/70 bg-white/55 p-1.5 shadow-[0_14px_34px_-18px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl">
+        {TABS.map(([v, l, Ic]) => (
+          <button key={v} onClick={() => setTab(v)}
+            className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-bold transition-all ${tab === v ? 'text-white shadow-md' : 'text-gray-600 hover:bg-white/80'}`}
+            style={tab === v ? { background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR}cc)` } : undefined}>
+            <Ic size={15} />{l}
+          </button>
         ))}
       </div>
+      {tab === 'objectif' && <ParamsGrille><ObjectifParam poleId="agro" couleur={COULEUR} moduleId="agro" /></ParamsGrille>}
       {tab === 'especes' && <ReferentielTab kind="espece" />}
       {tab === 'aliments' && <ReferentielTab kind="aliment" />}
       {tab === 'donnees' && <DonneesTab />}
@@ -69,8 +77,10 @@ function ReferentielTab({ kind }) {
 
   return (
     <>
-      <div className="flex justify-end"><Button onClick={openNew}><Plus size={16} /> Ajouter</Button></div>
-      <Card className="p-0">
+      <ParamsCarte icone={kind === 'espece' ? Leaf : Wheat} couleur={COULEUR} large titre={kind === 'espece' ? 'Espèces' : 'Aliments'}
+        sous={kind === 'espece' ? "Les espèces d'animaux élevées, utilisées dans les saisies." : "Les aliments distribués, avec leur unité de mesure."}
+        droite={<Button onClick={openNew}><Plus size={16} /> Ajouter</Button>}>
+      <div className="overflow-hidden rounded-2xl border border-white/70 bg-white/60">
         <Table
           columns={[
             { key: 'nom', label: 'Nom' },
@@ -86,7 +96,8 @@ function ReferentielTab({ kind }) {
           rows={items}
           empty="Aucun élément."
         />
-      </Card>
+      </div>
+      </ParamsCarte>
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.isNew ? 'Ajouter' : 'Modifier'}
         footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={submit}>Enregistrer</Button></>}>
@@ -326,15 +337,15 @@ function DonneesTab() {
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <ParamsGrille>
       {!isAdmin && (
-        <div className="md:col-span-2 flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        <div className="flex items-center gap-2 rounded-2xl border border-sky-200/70 bg-sky-50/70 px-4 py-3 text-sm text-sky-800 backdrop-blur-md lg:col-span-2">
           👁️ Les opérations d'import et de réinitialisation des données sont réservées à l'administrateur. Vous pouvez consulter et exporter les données.
         </div>
       )}
 
       {isAdmin && (
-        <Card title="Migration depuis l'ancienne app" className="md:col-span-2">
+        <ParamsCarte icone={Database} couleur="#7c3aed" titre="Migration depuis l'ancienne app" large>
           <p className="mb-3 text-sm text-gray-500">
             Importe les données MAXI-AGRO (saisies, factures, demandes, santé) de l'ancienne application.
           </p>
@@ -343,10 +354,10 @@ function DonneesTab() {
             <Button variant="outline" onClick={() => oldFileRef.current?.click()}><Upload size={16} /> Importer un export de l'ancienne app</Button>
             <input ref={oldFileRef} type="file" accept="application/json" className="hidden" onChange={importOldJSON} />
           </div>
-        </Card>
+        </ParamsCarte>
       )}
 
-      <Card title="Sauvegarde / Export">
+      <ParamsCarte icone={Download} couleur="#0284c7" titre="Sauvegarde / Export">
         <p className="mb-3 text-sm text-gray-500">Exportez les données AGRO{isAdmin ? ' ou restaurez une sauvegarde' : ''}.</p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={exportJSON}><Download size={16} /> Export JSON</Button>
@@ -358,19 +369,19 @@ function DonneesTab() {
             </>
           )}
         </div>
-      </Card>
+      </ParamsCarte>
 
       {isAdmin && (
-        <Card title="Réinitialisation">
+        <ParamsCarte icone={RotateCcw} couleur="#64748b" titre="Réinitialisation">
           <p className="mb-3 text-sm text-gray-500">Restaure les espèces et aliments aux valeurs d'usine.</p>
           <Button variant="outline" onClick={() => { if (confirm('Réinitialiser le référentiel ?')) { useAgroStore.getState().resetReferentiel(); toast.success('Référentiel réinitialisé') } }}>
             <RotateCcw size={16} /> Réinitialiser le référentiel
           </Button>
-        </Card>
+        </ParamsCarte>
       )}
 
       {isAdmin && (
-        <Card title="⚠️ Tout réinitialiser" className="md:col-span-2 border border-red-200">
+        <ParamsCarte icone={AlertTriangle} danger large titre="Tout réinitialiser">
           <p className="mb-3 text-sm text-gray-500">
             Remet <strong>toutes les données à zéro</strong> : saisies, factures, demandes, fiches santé,
             stock de vaccins, journal d'activité et notifications. Le référentiel des espèces/aliments est conservé.
@@ -379,7 +390,7 @@ function DonneesTab() {
           <Button variant="danger" onClick={reinitialiserTout} loading={resetting}>
             <RotateCcw size={16} /> Réinitialiser toutes les données
           </Button>
-        </Card>
+        </ParamsCarte>
       )}
 
       {/* Modal export Excel multi-sections */}
@@ -399,7 +410,7 @@ function DonneesTab() {
         </p>
         <div className="space-y-2">
           {EXPORT_OPTIONS.map((o) => (
-            <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 hover:bg-gray-50">
+            <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 hover:bg-gray-50">
               <input
                 type="checkbox"
                 checked={!!exportChoix[o.id]}
@@ -411,15 +422,15 @@ function DonneesTab() {
           ))}
         </div>
       </Modal>
-    </div>
+    </ParamsGrille>
   )
 }
 
 // ── Système : PIN journal, statut Firebase / EmailJS ──
 function SystemeTab() {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <Card title="Connexions">
+    <ParamsGrille>
+      <ParamsCarte icone={Cpu} couleur="#475569" titre="Connexions">
         <ul className="space-y-2 text-sm">
           <li className="flex items-center justify-between">
             <span>Firebase</span>
@@ -431,7 +442,7 @@ function SystemeTab() {
           </li>
         </ul>
         <p className="mt-3 text-xs text-gray-400">La configuration se fait via les variables d'environnement (fichier .env / Netlify).</p>
-      </Card>
-    </div>
+      </ParamsCarte>
+    </ParamsGrille>
   )
 }

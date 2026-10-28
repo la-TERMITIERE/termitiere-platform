@@ -4,7 +4,8 @@ import { Lock } from 'lucide-react'
 import Dashboard from './Dashboard'
 import Depenses from './Depenses'
 import RecettesDepenses from './RecettesDepenses'
-import SourcesRevenus from './SourcesRevenus'
+import SuiviJournalier from '../comptabilite/SuiviJournalier'
+import { COULEUR_MODULE } from '../../utils/color'
 import Demandes from './Demandes'
 import Analyses from './Analyses'
 import Flux from './Flux'
@@ -46,7 +47,7 @@ export default function DepenseModule() {
       <Route path="liste" element={<Depenses />} />
       <Route path="recettes-depenses" element={canViewFinance(role) ? <RecettesDepenses /> : <AccesRefuse />} />
       {/* Sources de revenus : administration + secrétaire (accès explicitement accordé). */}
-      <Route path="revenus" element={isFullAccessRole(role) || role === 'secretaire' ? <SourcesRevenus /> : <AccesRefuseAdmin />} />
+      <Route path="revenus" element={isFullAccessRole(role) || role === 'secretaire' ? <SuiviJournalier key="revenus" page="recettes" couleur={COULEUR_MODULE.depense} epure /> : <AccesRefuseAdmin />} />
       {/* Ancien écran « Budgets » fusionné dans « Bilan par secteur » — redirige les liens existants. */}
       <Route path="budgets" element={<Navigate to="/depense/recettes-depenses" replace />} />
       <Route path="demandes" element={<Demandes />} />

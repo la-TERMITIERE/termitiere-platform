@@ -1,7 +1,7 @@
 // Paramètres Foncier — export des dossiers + réinitialisation.
 import { useState } from 'react'
-import { FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { FileSpreadsheet, Trash2, AlertTriangle, Gauge, FolderOpen } from 'lucide-react'
+import { ParamsGrille, ParamsCarte, TuileVerre } from '../../shared/ui/ParamsVerre'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
@@ -88,33 +88,30 @@ export default function Params() {
   const isAdmin = isFullAccessRole(role)
 
   return (
-    <div className="space-y-4">
-      <Card title="Export des dossiers">
+    <ParamsGrille>
+      <ParamsCarte icone={FileSpreadsheet} couleur="#16a34a" titre="Export des dossiers">
         <p className="mb-4 text-sm text-gray-500">
           Exporte l'ensemble du portefeuille foncier ({dossiers.length} dossier(s)) en fichier Excel professionnel.
         </p>
         <Button onClick={() => setExportOpen(true)}>
           <FileSpreadsheet size={16} /> Exporter en Excel
         </Button>
-      </Card>
+      </ParamsCarte>
 
-      <Card title="Statistiques rapides">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <ParamsCarte icone={Gauge} couleur="#059669" titre="Statistiques rapides" sous={`${dossiers.length} dossier(s) au total`}>
+        <div className="grid grid-cols-2 gap-3">
           {TYPES_DOSSIER.map((t) => {
             const count = dossiers.filter((d) => d.type === t.id).length
             return (
-              <div key={t.id} className="rounded-lg bg-gray-50 p-3">
-                <p className="text-xl font-extrabold text-gray-800">{count}</p>
-                <p className="text-xs text-gray-500">{t.label}</p>
-              </div>
+              <TuileVerre key={t.id} icone={FolderOpen} couleur="#059669" titre={t.label} valeur={count} />
             )
           })}
         </div>
-      </Card>
+      </ParamsCarte>
 
       {isAdmin && (
-        <Card title="Réinitialisation des données" className="border-red-200">
-          <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
+        <ParamsCarte icone={AlertTriangle} danger large titre="Réinitialisation des données">
+          <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>
               <p className="font-semibold text-red-900">Zone dangereuse</p>
@@ -126,7 +123,7 @@ export default function Params() {
               </Button>
             </div>
           </div>
-        </Card>
+        </ParamsCarte>
       )}
 
       <Modal open={exportOpen} onClose={() => setExportOpen(false)} title="Exporter les dossiers fonciers"
@@ -141,6 +138,6 @@ export default function Params() {
         <p className="text-sm text-red-700 font-semibold">Tous les {dossiers.length} dossiers fonciers seront supprimés définitivement.</p>
         <p className="mt-2 text-sm text-gray-500">Cette action est irréversible.</p>
       </Modal>
-    </div>
+    </ParamsGrille>
   )
 }

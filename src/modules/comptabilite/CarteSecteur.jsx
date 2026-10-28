@@ -1,10 +1,11 @@
 // Carte d'un secteur (volet Recettes) : verre dépoli teinté à la couleur du secteur, icône 3D, barre de chiffre
 // d'affaires qui se remplit, et indicateurs de croissance par rapport à la période précédente (flèche animée :
 // qui monte en cas de hausse, qui descend en cas de baisse). Toucher la carte ouvre le détail du secteur.
-import { ArrowUpRight, ArrowDownRight, Minus, Sparkles, TrendingUp, ShoppingBag, ChevronRight } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Minus, Sparkles, TrendingUp, ShoppingBag, ChevronRight, Target } from 'lucide-react'
 import { icone3D } from '../../utils/color'
 import { iconeDomaine } from './SecteurDetail'
 import { vocabulaire } from './journalCalculs'
+import { avancement, etatAvancement } from './quotas'
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
 const signe = (n) => `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}`
@@ -41,7 +42,8 @@ export function Tendance({ actuel, precedent, inverse = false, petit = false }) 
   )
 }
 
-export default function CarteSecteur({ x, prec, maxCA, libellePrec, onClick }) {
+// `quota` : { cible, realise, periode } : objectif de recettes du secteur (Paramètres comptables) et ce qui est déjà encaissé.
+export default function CarteSecteur({ x, prec, maxCA, libellePrec, onClick, quota }) {
   const Ic = iconeDomaine(x.secteurId)
   const c = x.couleur
   const vocab = vocabulaire(x.secteurId)
@@ -82,6 +84,21 @@ export default function CarteSecteur({ x, prec, maxCA, libellePrec, onClick }) {
           </div>
         ))}
       </div>
+      {quota && quota.cible > 0 && (() => {
+        const pct = avancement(quota.realise, quota.cible)
+        const etat = etatAvancement(pct)
+        return (
+          <div className="relative mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/80 bg-white/60 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-gray-500">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md" style={icone3D(etat.couleur)}><Target size={11} /></span>Objectif {quota.periode}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500"><strong className="text-sm font-extrabold text-green-700">+{fmt(quota.realise)}</strong> sur {fmt(quota.cible)} FCFA</p>
+            </div>
+            <span className="rounded-full px-2.5 py-1 text-xs font-extrabold text-white shadow-sm" style={{ background: etat.couleur }}>{Math.round(pct)} %</span>
+          </div>
+        )
+      })()}
       {libellePrec && <p className="relative mt-2 text-[10px] font-semibold text-gray-400">Évolution comparée à {libellePrec}</p>}
     </button>
   )

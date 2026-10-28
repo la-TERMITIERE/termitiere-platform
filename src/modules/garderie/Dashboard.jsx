@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Baby, Users, CreditCard, AlertTriangle, UserCheck, Clock, ShieldAlert, BellRing, ChevronRight } from 'lucide-react'
+import { Wallet, Baby, Users, CreditCard, AlertTriangle, UserCheck, Clock, ShieldAlert, BellRing, ChevronRight } from 'lucide-react'
 import Badge from '../../shared/ui/Badge'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
@@ -21,8 +21,43 @@ function intervalleBiberon(mois) {
 }
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { useNavigate } from 'react-router-dom'
+import { formatMoney } from '../../utils/formatters'
+import { libelleObjectif } from '../comptabilite/ObjectifKpi'
+import DetailRecettesModal from '../comptabilite/DetailRecettesModal'
+import { useObjectifPole, texteEcart } from '../comptabilite/quotas'
+import FelicitationObjectif from '../comptabilite/FelicitationObjectif'
 
 // modal ouvert : null | 'enfants' | 'presences' | 'impayes' | 'incidents'
+// Recettes du mois sur l'objectif (un clic ouvre le détail) : même taille que les autres tuiles du tableau de bord de la garderie (même hauteur, même typographie).
+function TuileRecettes() {
+  const o = useObjectifPole('garderie')
+  const [ouvert, setOuvert] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setOuvert(true)}
+        className="card group relative flex w-full items-center gap-3 rounded-3xl border border-white/50 bg-white/40 p-4 text-left shadow-[0_24px_48px_-16px_rgba(26,26,26,0.18),0_6px_16px_-6px_rgba(26,26,26,0.08),inset_0_1px_0_0_rgba(255,255,255,0.5)] backdrop-blur-xl backdrop-saturate-150 transition-all hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+          style={{ background: 'linear-gradient(135deg, #E8390E, #E8390Ecc)', boxShadow: '0 6px 14px -4px #E8390E66, inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)' }}>
+          <Wallet size={24} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-1">
+            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-[#1A1A1A]/50">Recettes du mois</p>
+            <span title={`Écart avec le mois précédent à la même date : ${texteEcart(o.ecart)}`}
+              className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${o.ecart >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              {texteEcart(o.ecart, true)}
+            </span>
+          </div>
+          <p className="whitespace-nowrap text-xl font-extrabold text-[#1A1A1A]">{formatMoney(o.realise)}</p>
+          <p className="mt-0.5 truncate pr-5 text-xs text-[#1A1A1A]/40">{libelleObjectif(o, true)}</p>
+        </div>
+        <ChevronRight size={18} className="pointer-events-none absolute bottom-3 right-3 text-[#1A1A1A]/20 transition-colors group-hover:text-[#1A1A1A]/50" />
+      </button>
+      {ouvert && <DetailRecettesModal poleId="garderie" couleur="#E8390E" lien={{ to: '/garderie/paiements', label: 'Aller aux paiements' }} onClose={() => setOuvert(false)} />}
+    </>
+  )
+}
+
 export default function Dashboard() {
   const { data: enfants }    = useCollection('garderie_enfants')
   const { data: presences }  = useCollection('garderie_presences')
@@ -287,6 +322,8 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <FelicitationObjectif poleId="garderie" secteur="de la Garderie" couleur="#E8390E" />
+
       {/* KPIs — verre dépoli, même disposition qu'avant (4 tuiles égales), couleurs du logo + ombres douces */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <button
@@ -352,6 +389,8 @@ export default function Dashboard() {
           </div>
           <ChevronRight size={18} className="shrink-0 text-[#1A1A1A]/20 transition-colors group-hover:text-[#1A1A1A]/50" />
         </button>
+
+        <TuileRecettes />
       </div>
 
       {/* ── Alerte renouvellement paiement (compact) ── */}

@@ -51,7 +51,7 @@ export default function StatCard({
         </div>
       )}
       {/* min-w-0 partout : sans lui, un montant long pousse la carte au lieu d'être tronqué. */}
-      <div className="min-w-0 flex-1">
+      <div className={`min-w-0 flex-1 ${onClick ? 'pr-4 sm:pr-0' : ''}`}>
         <div className="flex items-start justify-between gap-1.5">
           <p className="truncate text-[11px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs" title={title}>{title}</p>
           {/* L'écart est une PASTILLE discrète : la valeur reste l'élément dominant
@@ -70,12 +70,16 @@ export default function StatCard({
             reste TOUJOURS entièrement lisible (demande direction — plus de « 7 M… »). */}
         <p className="break-words text-lg font-extrabold leading-tight sm:text-xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
         {(variationLabel || sub) && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-400" title={variationLabel || sub}>{variationLabel || sub}</p>
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-400" title={typeof (variationLabel || sub) === 'string' ? (variationLabel || sub) : undefined}>{variationLabel || sub}</p>
         )}
         {pied}
       </div>
       {onClick && (
-        <ChevronRight size={16} className="hidden shrink-0 text-gray-300 transition-colors group-hover:text-gray-500 sm:block" />
+        <>
+          <ChevronRight size={16} className="hidden shrink-0 text-gray-300 transition-colors group-hover:text-gray-500 sm:block" />
+          {/* Téléphone : pas de place à droite du texte, la flèche se pose dans le coin pour dire « cliquable ». */}
+          <ChevronRight size={16} className="pointer-events-none absolute bottom-2.5 right-2 text-gray-300 transition-colors group-hover:text-gray-500 sm:hidden" />
+        </>
       )}
     </Comp>
   )

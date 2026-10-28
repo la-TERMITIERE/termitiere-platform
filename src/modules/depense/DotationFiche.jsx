@@ -171,7 +171,7 @@ export default function DotationFiche({ ligne, budgets = [], peutGerer = false, 
             <Tuile icone={PenLine} couleur="#2563eb" label="Saisie par">{ligne.operateur || (rev?.auteur && rev.auteur !== '—' ? rev.auteur : 'Non renseigné')}</Tuile>
             <Tuile icone={FileText} couleur="#475569" label="Motif" large>{motif || 'Dotation de caisse'}</Tuile>
             {rev && <Tuile icone={Wallet} couleur="#7c3aed" label="Caisse avant">{fmt(rev.ancien)} FCFA</Tuile>}
-            {rev && <Tuile icone={TrendingUp} couleur="#16a34a" label="Caisse après">{fmt(rev.nouveau)} FCFA</Tuile>}
+            {rev && <Tuile icone={TrendingUp} couleur={COULEUR_DOTATION} label="Caisse après">{fmt(rev.nouveau)} FCFA</Tuile>}
           </div>
         )}
 

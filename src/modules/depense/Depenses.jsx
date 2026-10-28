@@ -1,7 +1,7 @@
 // Liste des dépenses — saisie, filtres, justificatif.
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Landmark, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2, Undo2, CalendarDays, FileText, UserRound, PenLine, Banknote, ShieldCheck, Tag, ArrowLeftRight, Phone, CreditCard, ClipboardList, Wrench, MapPin, Briefcase, X, Save, Sparkles, MessageSquareText, Send } from 'lucide-react'
+import { ArrowDownUp, Plus, Landmark, Search, FilePen, Trash2, Paperclip, Eye, ChevronDown, Receipt, Layers, FileSpreadsheet, Wallet, Building2, PiggyBank, Check, AlertTriangle, FileCheck2, Undo2, CalendarDays, FileText, UserRound, PenLine, Banknote, ShieldCheck, Tag, ArrowLeftRight, Phone, CreditCard, ClipboardList, Wrench, MapPin, Briefcase, X, Save, Sparkles, MessageSquareText, Send } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
@@ -33,7 +33,7 @@ import { glassModalProps, icone3D } from '../../utils/color'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT, MOIS_LABELS } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, depensesSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
 import { financementSiege, raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -329,20 +329,29 @@ export default function Depenses() {
   }, [modePeriode, filtreJour, filtreMois, filtreAnnee, filtreDebut, filtreFin])
   const periodeTexte = modePeriode === 'mois' ? filtreMois : modePeriode === 'jour' ? filtreJour : modePeriode === 'annee' ? filtreAnnee : [filtreDebut, filtreFin].filter(Boolean).join('_au_')
 
-  // Budget alloué total, tous secteurs métier confondus (hors Caisse courante, comptée
-  // séparément ci-dessous) — Logistique compte ses deux sites (Lomé + Kara).
-  const budgetAutresSecteurs = useMemo(
+  // Budget alloué aux secteurs (Divers inclus, pour que chaque dépense du mois soit comptée) — Logistique compte ses deux sites (Lomé + Kara).
+  // Chaque secteur a ses dépenses bien définies : une dépense rangée sous un secteur compte comme budget alloué à ce secteur. Quand le secteur a un
+  // budget défini, c'est lui qui s'applique ; une dépense payée par la Caisse courante s'y ajoute (la caisse l'a allouée au secteur en la payant).
+  // Un clic sur la carte ouvre le récapitulatif secteur par secteur.
+  const recapAutresSecteurs = useMemo(
     () => secteursEtSites(false)
-      .filter((s) => s.secteurId !== 'divers')
-      .reduce((sum, s) => sum + budgetSecteur(budgets, s.secteurId, anneeKpi, moisKpi, s.site), 0),
-    [budgets, anneeKpi, moisKpi]
+      .map((s) => {
+        const deps = depensesSecteurMois(depenses, s.secteurId, anneeKpi, moisKpi, s.site)
+          .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau' && d.source !== 'projet' && d.source !== 'remboursement_pau')
+        // « Divers » (dépenses sans secteur métier) : son budget défini est celui de la carte Caisse courante, on ne le compte pas deux fois ici ;
+        // chacune de ses dépenses devient simplement du budget alloué.
+        const divers = s.secteurId === 'divers'
+        const defini = divers ? 0 : budgetSecteur(budgets, s.secteurId, anneeKpi, moisKpi, s.site)
+        const viaCaisse = totalDepenses(divers ? deps : deps.filter((d) => d.financePar === 'caisse_commune'))
+        const depense = totalDepenses(deps)
+        const alloue = defini + viaCaisse
+        return { ...s, nb: deps.length, defini, viaCaisse, alloue, depense, reste: alloue - depense }
+      }),
+    [depenses, budgets, anneeKpi, moisKpi]
   )
-  const depenseAutresSecteurs = useMemo(
-    () => secteursEtSites(false)
-      .filter((s) => s.secteurId !== 'divers')
-      .reduce((sum, s) => sum + totalDepenses(depensesEntrepriseSecteurMois(depenses, s.secteurId, anneeKpi, moisKpi, s.site)), 0),
-    [depenses, anneeKpi, moisKpi]
-  )
+  const budgetAutresSecteurs = useMemo(() => recapAutresSecteurs.reduce((sum, x) => sum + x.alloue, 0), [recapAutresSecteurs])
+  const depenseAutresSecteurs = useMemo(() => recapAutresSecteurs.reduce((sum, x) => sum + x.depense, 0), [recapAutresSecteurs])
+  const [recapOuvert, setRecapOuvert] = useState(false) // fenêtre « récap par secteur » (carte Budget alloué : tous secteurs)
   const budgetCaisseCommune = useMemo(() => budgetSecteur(budgets, 'divers', anneeKpi, moisKpi), [budgets, anneeKpi, moisKpi])
   const depenseCaisseCommune = useMemo(
     () => totalDepenses(depensesEntrepriseSecteurMois(depenses, 'divers', anneeKpi, moisKpi)),
@@ -467,8 +476,8 @@ export default function Depenses() {
   const set = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
 
   // Confirme que le justificatif (reçu) demandé à la saisie a bien été rapporté par
-  // le bénéficiaire — fait taire l'alerte correspondante sur le Dashboard (secrétaire,
-  // info, assistant PAU). Mise à jour ciblée (updateItem), pas de remplacement complet.
+  // le bénéficiaire — fait taire l'alerte correspondante sur le Dashboard (réservé à la secrétaire :
+  // les autres membres de l'administration ne participent pas à ce processus). Mise à jour ciblée (updateItem), pas de remplacement complet.
   async function confirmerJustificatif(d) {
     await updateItem('depense_depenses', d.id, {
       justificatifRecu: true, justificatifRecuLe: Date.now(), justificatifRecuPar: user?.nom || user?.login || '—'
@@ -641,23 +650,6 @@ export default function Depenses() {
             </select>
           </ChampBande>
         )}
-        <ChampBande label="Affectation">
-          <select value={filtreAffectation} onChange={(e) => setFiltreAffectation(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-32`}>
-            <option value="">Toutes</option>
-            <option value="a_affecter">À affecter</option>
-            <option value="affectees">Affectées</option>
-          </select>
-        </ChampBande>
-        <ChampBande label="Trier par">
-          <select value={tri} onChange={(e) => setTri(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-40`}>
-            <option value="date_desc">Date : récentes d'abord</option>
-            <option value="date_asc">Date : anciennes d'abord</option>
-            <option value="montant_desc">Montant : du plus grand</option>
-            <option value="montant_asc">Montant : du plus petit</option>
-            <option value="secteur">Secteur (A à Z)</option>
-            <option value="categorie">Catégorie (A à Z)</option>
-          </select>
-        </ChampBande>
         <ChampBande label="Nature du flux">
           <select value={filtreNature} onChange={(e) => setFiltreNature(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-32`}>
             <option value="">Toutes</option>
@@ -680,15 +672,59 @@ export default function Depenses() {
         </div>
       </div>
       <NouvelleDemandeModal open={demandeOuverte} onClose={() => setDemandeOuverte(false)} />
+      <Modal open={recapOuvert} onClose={() => setRecapOuvert(false)} size="lg" title={`Budget alloué : tous secteurs · ${MOIS_LABELS[moisKpi - 1]} ${anneeKpi}`}
+        {...glassModalProps('#0d9488')}
+        footer={<Button variant="ghost" onClick={() => setRecapOuvert(false)}>Fermer</Button>}>
+        {(() => {
+          const actifs = recapAutresSecteurs.filter((x) => x.alloue > 0 || x.depense > 0).sort((a, b) => b.alloue - a.alloue || b.depense - a.depense)
+          const fmt = (n) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`
+          return (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                {[['Alloué', budgetAutresSecteurs, '#0d9488'], ['Dépensé', depenseAutresSecteurs, '#B45309'], ['Reste', resteAutresSecteurs, resteAutresSecteurs < 0 ? '#dc2626' : '#16a34a']].map(([titre, v, c]) => (
+                  <div key={titre} className="rounded-2xl border border-white/70 bg-white/60 p-2.5 backdrop-blur-xl">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wide text-gray-500">{titre}</p>
+                    <p className="mt-0.5 text-sm font-black sm:text-base" style={{ color: c }}>{fmt(v)}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-500">Chaque dépense compte comme budget alloué au secteur auquel elle est rangée. Touchez un secteur pour afficher ses dépenses dans la liste.</p>
+              {actifs.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-400">Aucune dépense rangée sous un secteur pour ce mois.</p>
+              ) : (
+                <ul className="max-h-[50vh] space-y-1.5 overflow-y-auto pr-1">
+                  {actifs.map((x) => (
+                    <li key={x.id}>
+                      <button type="button" onClick={() => { setFiltreSecteur(x.secteurId); setFiltreSite(x.site || ''); setRecapOuvert(false) }}
+                        className="flex w-full items-center gap-3 rounded-2xl border border-white/70 bg-white/60 px-3 py-2.5 text-left backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:bg-white/85"
+                        style={{ background: `linear-gradient(135deg, ${x.color}1f 0%, rgba(255,255,255,0.65) 60%)` }}>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D(x.color)}><Building2 size={16} /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-extrabold uppercase" style={{ color: x.color }}>{x.secteurId === 'divers' ? 'SIÈGE' : x.label}</span>
+                          <span className="block text-[11px] text-gray-500">{x.nb} dépense{x.nb > 1 ? 's' : ''}{x.defini > 0 ? ` · budget défini ${fmt(x.defini)}` : ''}</span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block text-sm font-black text-gray-900">{fmt(x.alloue)}</span>
+                          <span className={`block text-[11px] font-bold ${x.reste < 0 ? 'text-red-600' : 'text-gray-400'}`}>Dépensé {fmt(x.depense)}{x.reste < 0 ? ` · dépassé ${fmt(-x.reste)}` : ''}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* KPI — récap de la liste affichée + budget alloué (mois du filtre, ou mois
           courant si aucun filtre de mois n'est posé), autres secteurs vs Caisse courante. */}
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard title="Total dépenses (liste affichée)" value={`${totalListe.toLocaleString('fr-FR')} FCFA`}
           sub={`${liste.length} dépense(s)`} icon={Receipt} accent="#B45309" />
-        <StatCard title="Budget alloué : autres secteurs" value={`${budgetAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
+        <StatCard title="Budget alloué : tous secteurs" value={`${budgetAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
           sub={`Dépensé ${depenseAutresSecteurs.toLocaleString('fr-FR')} FCFA · Reste ${resteAutresSecteurs.toLocaleString('fr-FR')} FCFA`}
-          icon={Building2} accent={resteAutresSecteurs < 0 ? '#dc2626' : '#0d9488'} valueColor={resteAutresSecteurs < 0 ? '#dc2626' : undefined} />
+          icon={Building2} accent={resteAutresSecteurs < 0 ? '#dc2626' : '#0d9488'} valueColor={resteAutresSecteurs < 0 ? '#dc2626' : undefined} onClick={() => setRecapOuvert(true)} />
         <StatCard title="Budget alloué : Caisse courante" value={`${budgetCaisseCommune.toLocaleString('fr-FR')} FCFA`}
           sub={`Dépensé ${depenseCaisseCommune.toLocaleString('fr-FR')} FCFA · Reste ${resteCaisseCommune.toLocaleString('fr-FR')} FCFA`}
           icon={PiggyBank} accent={resteCaisseCommune < 0 ? '#dc2626' : '#7c3aed'} valueColor={resteCaisseCommune < 0 ? '#dc2626' : undefined} />
@@ -721,6 +757,18 @@ export default function Depenses() {
           )}
         </div>
       )}
+
+      {/* Un seul bouton pour renverser l'ordre de la liste : récentes d'abord ou anciennes d'abord. */}
+      <div className="flex justify-end">
+        <button type="button" onClick={() => setTri((t) => (t === 'date_asc' ? 'date_desc' : 'date_asc'))}
+          title="Renverser l'ordre de la liste"
+          className="group inline-flex items-center gap-2 rounded-2xl border border-white/80 bg-white/70 px-3.5 py-2 text-xs font-extrabold text-amber-800 shadow-[0_10px_20px_-12px_rgba(180,83,9,0.6),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:bg-white/90 active:scale-[0.97]">
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#B45309')}>
+            <ArrowDownUp size={13} className={`transition-transform duration-300 ${tri === 'date_asc' ? 'rotate-180' : ''}`} />
+          </span>
+          {tri === 'date_asc' ? "Anciennes d'abord" : "Récentes d'abord"}
+        </button>
+      </div>
 
       {lignesTable.length === 0 && !afficherSoldeInitial ? (
         <Card>
@@ -770,8 +818,8 @@ export default function Depenses() {
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold uppercase" style={{ color: sD?.color || '#7c3aed' }}>Caisse courante</td>
                         <td className="px-3 py-2 align-top text-[11px] uppercase text-gray-600">{l.operateur || ':'}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-right align-top font-extrabold text-green-700">+{fmtN(l.entree)}</td>
-                        <td className="px-3 py-2 align-top"><Badge tone="success">Dotation</Badge></td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right align-top font-extrabold" style={{ color: COULEUR_DOTATION }}>+{fmtN(l.entree)}</td>
+                        <td className="px-3 py-2 align-top"><span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset" style={{ background: `${COULEUR_DOTATION}1a`, color: COULEUR_DOTATION, '--tw-ring-color': `${COULEUR_DOTATION}33` }}>Dotation</span></td>
                         <td className="px-2 py-2 align-top" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={() => { setDotationEdition(false); setDotationVue(l) }} title="Voir les détails" className="rounded-lg border border-gray-200 bg-white p-1 text-gray-500 shadow-sm hover:text-gray-800"><Eye size={14} /></button>
@@ -828,13 +876,22 @@ export default function Depenses() {
                         </span>
                       </td>
 
-                      <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-extrabold uppercase" style={{ color: secteurColor }}>
-                        {libelleSecteurSite(secteur, d)}
-                        {!importe && (estAffectee(d)
-                          ? <span className="mt-0.5 block text-[9px] font-bold normal-case tracking-normal text-emerald-600">✓ affectée{affecteurDe(d) ? ` par ${affecteurDe(d)}` : ''}</span>
-                          : <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold normal-case tracking-normal text-amber-700">À affecter</span>)}
-                        {!importe && origineDe(d) && (
-                          <span className="mt-0.5 block text-[9px] font-bold normal-case tracking-normal text-gray-400">depuis {origineDe(d) === 'banque' ? 'la banque' : 'la caisse courante'}</span>
+                      <td className="whitespace-nowrap px-3 py-2 align-top">
+                        {/* Pastille de secteur : verre teinté à la couleur du secteur, icône 3D, nom en capitales */}
+                        <span className="inline-flex items-center gap-1.5 rounded-xl border py-0.5 pl-0.5 pr-2 backdrop-blur-xl"
+                          style={{ borderColor: `${secteurColor}55`, background: `linear-gradient(135deg, ${secteurColor}26 0%, rgba(255,255,255,0.75) 100%)` }}>
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg" style={icone3D(secteurColor)}><Building2 size={11} /></span>
+                          <span className="text-[10px] font-extrabold uppercase tracking-wide" style={{ color: secteurColor }}>{d.secteurId === 'divers' ? 'SIÈGE' : libelleSecteurSite(secteur, d)}</span>
+                        </span>
+                        {!importe && (
+                          <span className="mt-1 flex flex-col items-start gap-0.5">
+                            {estAffectee(d)
+                              ? <span className="inline-flex items-center gap-0.5 text-[9px] font-bold normal-case tracking-normal text-emerald-600"><Check size={9} strokeWidth={3} />affectée{affecteurDe(d) ? ` par ${affecteurDe(d)}` : ''}</span>
+                              : <span className="inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold normal-case tracking-normal text-amber-700">À affecter</span>}
+                            {origineDe(d) && (
+                              <span className="text-[9px] font-bold normal-case tracking-normal text-gray-400">depuis {origineDe(d) === 'banque' ? 'la banque' : 'la caisse courante'}</span>
+                            )}
+                          </span>
                         )}
                       </td>
 
@@ -879,7 +936,7 @@ export default function Depenses() {
                           {modifiable && (
                             <button onClick={() => openEdit(d)} title="Modifier" className="rounded-lg border border-gray-200 bg-white p-1 text-primary shadow-sm hover:bg-gray-50"><FilePen size={14} /></button>
                           )}
-                          {justificatifAConfirmer && !lectureSeule && (
+                          {justificatifAConfirmer && role === 'secretaire' && (
                             <button onClick={() => confirmerJustificatif(d)} title="Confirmer que le justificatif (reçu) a été rapporté"
                               className="rounded-lg border border-green-200 bg-white p-1 text-green-600 shadow-sm hover:bg-green-50"><FileCheck2 size={14} /></button>
                           )}

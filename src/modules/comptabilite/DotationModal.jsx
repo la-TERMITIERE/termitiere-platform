@@ -122,12 +122,12 @@ export default function DotationModal({ open, onClose, budgets, user, tousDomain
         <div className={`${bloc} space-y-3`} style={{ animation: 'dt-entre 0.4s ease-out 0.12s both' }}>
           <div>
             <Etiquette icone={Wallet} couleur="#0d9488">Montant de la dotation <span className="text-red-500">*</span></Etiquette>
-            <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-200">
+            <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200">
               <input type="number" min="0" inputMode="numeric" value={montant} onChange={(e) => setMontant(e.target.value)} placeholder="0" aria-label="Montant de la dotation"
                 className="min-w-0 flex-1 bg-transparent text-2xl font-black text-gray-900 outline-none placeholder:text-gray-300" />
               <span className="text-sm font-bold text-gray-400">FCFA</span>
             </div>
-            {valeur > 0 && <p key={valeur} className="mt-1 text-sm font-extrabold text-green-700" style={{ animation: 'dt-montant 0.25s ease-out' }}>+{fmt(valeur)} FCFA</p>}
+            {valeur > 0 && <p key={valeur} className="mt-1 text-sm font-extrabold text-indigo-700" style={{ animation: 'dt-montant 0.25s ease-out' }}>+{fmt(valeur)} FCFA</p>}
           </div>
           <div className="grid grid-cols-1 gap-3">
             <div>
@@ -142,13 +142,13 @@ export default function DotationModal({ open, onClose, budgets, user, tousDomain
         </div>
 
         {/* Effet sur E-DÉPENSES, avant d'enregistrer */}
-        <div className="rounded-2xl border border-green-200/80 bg-green-50/80 p-3" style={{ animation: 'dt-entre 0.4s ease-out 0.2s both' }}>
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-green-800"><Info size={13} /> Impact sur E-DÉPENSES</p>
+        <div className="rounded-2xl border border-indigo-200/80 bg-indigo-50/80 p-3" style={{ animation: 'dt-entre 0.4s ease-out 0.2s both' }}>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800"><Info size={13} /> Impact sur E-DÉPENSES</p>
           <p className="text-sm font-semibold text-gray-700">
             Budget de {domaine ? nomDomaine(domaine) : ''}{secteurId === 'logistique' && site ? ` ${LOGISTIQUE_SITES.find((x) => x.id === site)?.label}` : ''} pour {mois ? `${MOIS_LABELS[mois - 1]} ${annee}` : ':'} :
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-base font-black text-gray-900">
-            {fmt(avant)} <ArrowRight size={16} className="text-green-600" /> <span className="text-green-700">{fmt(avant + valeur)}</span> <span className="text-xs font-semibold text-gray-400">FCFA</span>
+            {fmt(avant)} <ArrowRight size={16} className="text-indigo-600" /> <span className="text-indigo-700">{fmt(avant + valeur)}</span> <span className="text-xs font-semibold text-gray-400">FCFA</span>
           </p>
           {propose && <p className="mt-1.5 text-xs text-gray-600">Ce secteur doit confirmer la réception : la dotation n'apparaîtra dans la Caisse qu'après sa confirmation, comme pour un budget alloué.</p>}
         </div>

@@ -5,7 +5,7 @@
 // Lecture seule : tout est repris d'E-DÉPENSES et des modules, sans nouvelle saisie.
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { FileText, Dumbbell, Truck, Leaf, BrickWall, Baby, Bus, Megaphone, Landmark, Layers, ChevronRight, CalendarCheck, Wallet, TrendingUp, TrendingDown, Scale, BadgeDollarSign, FileSpreadsheet, Inbox, Receipt } from 'lucide-react'
+import { FileText, Landmark, Layers, ChevronRight, CalendarCheck, Wallet, TrendingUp, TrendingDown, Scale, Target, BadgeDollarSign, FileSpreadsheet, Inbox, Receipt } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import StatCard from '../../shared/ui/StatCard'
@@ -22,6 +22,7 @@ import BandeauCompta, { OngletsBande, ChampBande, CLASSE_CHAMP_BANDE } from './B
 import CaisseFiche from './CaisseFiche'
 import DotationModal from './DotationModal'
 import SecteurDetail from './SecteurDetail'
+import { useQuotas, cibleQuota, avancement, etatAvancement, couleurPole, ICONE_POLE, POLE_SECTEUR } from './quotas'
 import CarteSecteur, { Tendance, STYLES_TENDANCE } from './CarteSecteur'
 import { iconeLigne, ICONE_DOTATION, COULEUR_DOTATION, COULEUR_DEPENSE } from './iconesCaisse'
 import { icone3D, glassModalProps } from '../../utils/color'
@@ -29,7 +30,7 @@ import { genererRapportJournalier } from './rapportJournalierPDF'
 import { toast } from '../../core/notifications'
 import { MOIS_LABELS } from '../depense/data'
 import { useReportAutomatique } from '../depense/reportAuto'
-import { recapPoles, construireLignes, construireLignesCaisse, bornesPeriode, journalPeriode, recapParJour, recapParSecteur, periodePrecedente, vocabulaire, domaineLibelle, couleurDomaine, DOMAINES } from './journalCalculs'
+import { recapPoles, poleDe, POLES, construireLignes, construireLignesCaisse, bornesPeriode, journalPeriode, recapParJour, recapParSecteur, periodePrecedente, vocabulaire, domaineLibelle, couleurDomaine, DOMAINES } from './journalCalculs'
 
 // Parties du rapport PDF que l'utilisateur peut inclure ou retirer
 const SECTIONS_RAPPORT = [
@@ -44,14 +45,27 @@ const TH = 'sticky top-0 z-10 bg-orange-50 shadow-[0_1px_0_rgba(234,88,12,0.25)]
 const TF = 'sticky bottom-0 z-10 bg-orange-50 px-3 py-2.5 shadow-[0_-1px_0_rgba(234,88,12,0.25)] dark:bg-gray-800'
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
 const signe = (n) => `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}`
-// Couleur d'un pôle : celle de son secteur (cf. couleurDomaine).
-const couleurPole = (id) => couleurDomaine({ gym_kara: 'gym', gym_lome: 'gym', log_kara: 'logistique', log_lome: 'logistique', agro: 'agro', briques: 'evenementiel', garderie: 'garderie', transport: 'transport', com: 'communication', direction: 'divers' }[id] || 'divers')
-// Icône de chaque secteur dans le tableau « Par jour » (celle de son module).
-const ICONE_POLE = { gym_kara: Dumbbell, gym_lome: Dumbbell, log_kara: Truck, log_lome: Truck, agro: Leaf, briques: BrickWall, garderie: Baby, transport: Bus, com: Megaphone, direction: Landmark }
-const VUES_RECETTES = [{ id: 'secteur', label: 'Par secteur' }, { id: 'jour', label: 'Par jour' }]
+const VUES_RECETTES = [{ id: 'secteur', label: 'Par secteur' }, { id: 'jour', label: 'Par jour' }, { id: 'detail', label: 'Détail' }]
+
+// Objectif de recettes du mois d'un secteur (Paramètres comptables), affiché sous son nom : recettes du mois sur l'objectif, et pourcentage atteint.
+function ObjectifSecteur({ realise, cible, total = false }) {
+  const pct = avancement(realise, cible)
+  const etat = etatAvancement(pct)
+  return (
+    <span className="mt-2.5 flex w-full min-w-[220px] max-w-[300px] items-center justify-between gap-2 normal-case">
+      <span className="min-w-0 text-[11px] font-semibold leading-snug text-gray-500">
+        <span className="flex items-center gap-1 text-[10px] font-bold"><Target size={10} style={{ color: etat.couleur }} strokeWidth={2.6} />{total ? 'Objectifs du mois' : 'Objectif du mois'}</span>
+        <span className="block whitespace-nowrap"><strong className="text-green-700">+{fmt(realise)}</strong> sur {fmt(cible)} FCFA</span>
+      </span>
+      <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-extrabold text-white" style={{ background: etat.couleur }}>{Math.round(pct)} %</span>
+    </span>
+  )
+}
 
 // page : 'caisse' (journal des mouvements) ou 'recettes' (chiffre d'affaires, par jour et par secteur).
-export default function SuiviJournalier({ page = 'caisse' }) {
+// `couleur` : couleur du bandeau (orange de la Comptabilité par défaut ; E-DÉPENSES réutilise cet écran pour « Sources de revenus »).
+// `epure` (E-DÉPENSES, « Sources de revenus ») : seulement les indicateurs et le tableau « Par jour », sans onglets, sans export Excel ni rapport PDF.
+export default function SuiviJournalier({ page = 'caisse', couleur, epure = false }) {
   const role = useAuth((s) => s.role)
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -70,6 +84,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
   const { data: transports } = useCollection('evenementiel_transports')
   const { data: depensesProjet } = useCollection('projet_depenses')
   const { data: budgets } = useCollection('depense_budgets')
+  const { quotas } = useQuotas() // quotas mensuels de recettes par secteur (Paramètres)
   const user = useAuth((s) => s.user)
   useReportAutomatique(caisse) // le report du mois est créé tout seul dans E-DÉPENSES, la Caisse le reprend
   const [dotation, setDotation] = useState(false) // fenêtre « Nouvelle dotation » (Caisse)
@@ -84,7 +99,8 @@ export default function SuiviJournalier({ page = 'caisse' }) {
   const [recherche, setRecherche] = useState('')
   const [fiche, setFiche] = useState(null) // ligne de la caisse dont on consulte le détail
   const [detailSecteur, setDetailSecteur] = useState(null) // carte de secteur ouverte (volet Recettes)
-  const [vue, setVue] = useState('secteur')
+  const [vue, setVue] = useState(epure ? 'jour' : 'secteur')
+  const [mouvementsOuverts, setMouvementsOuverts] = useState(false) // fenêtre « détail des mouvements » (KPI Mouvements, E-DÉPENSES)
   const [jourVue, setJourVue] = useState(todayStr()) // jour affiché dans « Par jour »
   const [rapport, setRapport] = useState(null) // fenêtre « Rapport du jour » : { mode, jour, mois, annee, debut, fin, sections }
   const [rapportEnCours, setRapportEnCours] = useState(false)
@@ -106,6 +122,10 @@ export default function SuiviJournalier({ page = 'caisse' }) {
     // dépenses des projets E-G.Pro rangées par secteur). Celles d'E-DÉPENSES liées à un projet sont déjà comptées côté projet.
     depenses: [...depenses.filter((d) => !d.projetId), ...coutsMatieresBriqueterie(inventairesBriq), ...depensesProjetVersSecteurs(depensesProjet, projets, [])]
   }) : { rows: [], total: { rj: 0, dj: 0, rm: 0, dm: 0 } }), [jourVue, lignesRecettes, paiementsGarderie, transports, depenses, inventairesBriq, depensesProjet, projets])
+  // Colonnes « Objectif du mois » et « Avancement » du tableau : seulement quand au moins un objectif est fixé.
+  const avecQuotas = Object.keys(quotas).length > 0
+  const totalQuotaTableau = tableau.rows.reduce((s, r) => s + (quotas[r.id] || 0), 0)
+  const recettesAvecQuota = tableau.rows.reduce((s, r) => s + (quotas[r.id] ? r.rm : 0), 0)
   const decaleJour = (n) => { const d = new Date(`${jourVue || todayStr()}T00:00:00`); d.setDate(d.getDate() + n); setJourVue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`) }
 
   // Rapport financier en PDF (celui que le DF envoie au PAU) : il SUIT le filtre de période du haut de la page (Jour, Mois, Année ou Plage),
@@ -189,6 +209,26 @@ export default function SuiviJournalier({ page = 'caisse' }) {
     return { journal: j, parCle: new Map(recapParSecteur(j).map((x) => [x.cle, x])) }
   }, [toutes, secteur, prec, caisse])
 
+  // Objectifs : recettes déjà encaissées par secteur face à l'objectif mensuel, affichées dans chaque carte de secteur (le mois pour un jour ou une
+  // plage, l'année pour une année : douze mois de quota).
+  const quotaMode = mode === 'annee' ? 'annee' : 'mois'
+  const quotaFenetre = useMemo(() => (mode === 'annee' || mode === 'mois' ? { start: bornes.start, end: bornes.end } : { start: `${bornes.end.slice(0, 7)}-01`, end: bornes.end }), [mode, bornes])
+  const realiseParPole = useMemo(() => {
+    if (!Object.keys(quotas).length) return new Map()
+    return new Map(recapPoles({ jour: quotaFenetre.end, debut: quotaFenetre.start, lignesRecettes, paiementsGarderie, transports, depenses: [] }).rows.map((x) => [x.id, x]))
+  }, [quotas, quotaFenetre, lignesRecettes, paiementsGarderie, transports])
+  const quotaDuPole = (poleId) => (quotas[poleId] ? { cible: cibleQuota(quotas[poleId], quotaMode), realise: realiseParPole.get(poleId)?.rm || 0, periode: quotaMode === 'annee' ? "de l'année" : 'du mois' } : null)
+  // Un secteur qui a un objectif mais aucun mouvement dans la période garde sa carte (sans cela, son objectif resterait invisible).
+  const cartesQuotaSeules = useMemo(() => {
+    if (secteur) return []
+    const presents = new Set(parSecteur.map((x) => poleDe(x.secteurId, x.site)))
+    return POLES.filter((pl) => quotas[pl.id] && !presents.has(pl.id)).map((pl) => {
+      const { secteurId, site } = POLE_SECTEUR[pl.id]
+      const r = realiseParPole.get(pl.id)
+      const recettes = r?.rm || 0
+      return { cle: `quota|${pl.id}`, secteurId, site, domaine: pl.label, couleur: couleurPole(pl.id), recettes, depenses: 0, chiffreAffaires: recettes, ventes: (r?.details || []).filter((o) => o.sens === 'recette').length, benefice: recettes, quotaSeul: true }
+    })
+  }, [secteur, parSecteur, quotas, realiseParPole])
   const libellePeriode = bornes.start === bornes.end ? `le ${formatDateShort(bornes.start)}` : `du ${formatDateShort(bornes.start)} au ${formatDateShort(bornes.end)}`
   const totalAffEntrees = lignesAffichees.reduce((s, l) => s + l.entree, 0)
   const totalAffSorties = lignesAffichees.reduce((s, l) => s + l.sortie, 0)
@@ -220,6 +260,15 @@ export default function SuiviJournalier({ page = 'caisse' }) {
           totals: { __label: 'TOTAL', entrees: journal.recettes, sorties: journal.depenses, solde: journal.soldeFinal }
         },
         {
+          name: 'Détail', title: `Détail des recettes${nom ? ` : ${nom}` : ' : tous les secteurs'}`, subtitle: `Période : ${libellePeriode}`,
+          columns: [
+            { key: 'date', label: 'Date', width: 12 }, { key: 'designation', label: 'Recette', width: 50 }, { key: 'operateur', label: 'Opérateur', width: 18 },
+            { key: 'domaine', label: 'Secteur', width: 24 }, { key: 'montant', label: 'Montant', type: 'money', width: 16 }
+          ],
+          rows: journal.lignes.map((l) => ({ date: formatDateShort(l.date), designation: l.designation, operateur: l.operateur, domaine: domaineLibelle(l.secteurId, l.site), montant: l.entree })),
+          totals: { __label: 'TOTAL', montant: journal.recettes }
+        },
+        {
           name: 'Par jour', title: "Recettes et chiffre d'affaires par jour", subtitle: `Période : ${libellePeriode}`,
           columns: [
             { key: 'date', label: 'Date', width: 12 }, { key: 'recettes', label: 'Recettes', type: 'money', width: 16 },
@@ -241,9 +290,60 @@ export default function SuiviJournalier({ page = 'caisse' }) {
     })
   }
 
+  const rendreDetail = () => {
+        const jours = []
+        lignesAffichees.forEach((l) => {
+          let g = jours[jours.length - 1]
+          if (!g || g.date !== l.date) { g = { date: l.date, lignes: [], total: 0 }; jours.push(g) }
+          g.lignes.push(l)
+          g.total += l.entree
+        })
+        if (!lignesAffichees.length) {
+          return <Card><p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-gray-400"><Inbox size={28} />Aucune recette sur cette période.</p></Card>
+        }
+        return (
+          <div className="space-y-4">
+            {jours.map((g, gi) => (
+              <section key={g.date} className="ed-entree" style={{ animationDelay: `${Math.min(gi, 8) * 50}ms` }}>
+                <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+                  <p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={icone3D('#ea580c')}><CalendarCheck size={12} /></span>
+                    {formatDateShort(g.date)}
+                    <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] text-gray-500 ring-1 ring-black/5">{g.lignes.length}</span>
+                  </p>
+                  <span className="text-xs font-extrabold text-green-700">+{fmt(g.total)} FCFA</span>
+                </div>
+                <div className="space-y-1.5">
+                  {g.lignes.map((l) => {
+                    const couleur = couleurDomaine(l.secteurId)
+                    const { icone: Ic, couleur: cc, libelle } = iconeLigne(l)
+                    return (
+                      <button key={l.id} type="button" onClick={() => setFiche(l)} style={{ borderLeftColor: couleur }}
+                        className="group flex w-full items-center gap-3 rounded-2xl border border-l-4 border-white/80 bg-white/70 px-3 py-2.5 text-left shadow-[0_8px_18px_-14px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-md">
+                        <span title={libelle} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D(cc)}><Ic size={16} /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold uppercase text-gray-800">{l.designation}</span>
+                          <span className="block truncate text-[11px] text-gray-500"><strong style={{ color: couleur }}>{domaineLibelle(l.secteurId, l.site)}</strong>{l.operateur ? ` · ${l.operateur}` : ''}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-green-50 px-2.5 py-1 text-xs font-extrabold text-green-700 ring-1 ring-green-100">+{fmt(l.entree)}</span>
+                        <ChevronRight size={15} className="shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-orange-500" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            ))}
+            <div className="flex items-center justify-between rounded-2xl border border-white/80 bg-white/80 px-4 py-2.5 shadow-sm">
+              <span className="text-xs font-extrabold uppercase tracking-wide text-gray-500">Total des recettes</span>
+              <span className="text-base font-black text-green-700">+{fmt(totalAffEntrees)} FCFA</span>
+            </div>
+          </div>
+        )
+  }
+
   return (
     <div className="space-y-5">
-      <BandeauCompta icone={caisse ? Wallet : TrendingUp} titre={caisse ? 'Caisse' : 'Recettes et chiffre d\'affaires'}
+      <BandeauCompta couleur={couleur} icone={caisse ? Wallet : TrendingUp} titre={caisse ? 'Caisse' : 'Recettes et chiffre d\'affaires'}
         sous={caisse ? "La caisse courante d'E-DÉPENSES : solde initial du mois, dotations et dépenses. Touchez une ligne pour son détail." : 'Chiffre d\'affaires et recettes de tous les secteurs. Les dépenses se suivent dans la Caisse.'}>
         <FiltrePeriode variant="glass" label="" mode={mode} onModeChange={setMode}
           valeurJour={fJour} onJourChange={setFJour} valeurMois={fMois} onMoisChange={setFMois}
@@ -254,11 +354,11 @@ export default function SuiviJournalier({ page = 'caisse' }) {
             {DOMAINES.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
         </ChampBande>}
-        {vueActive === 'journal' && <ChampRecherche variant="glass" className="!w-44" value={recherche} onChange={setRecherche} placeholder="Désignation, opérateur…" />}
-        {!caisse && <OngletsBande options={VUES_RECETTES} valeur={vue} onChange={setVue} taille="sm" />}
+        {(vueActive === 'journal' || vueActive === 'detail') && <ChampRecherche variant="glass" className="!w-44" value={recherche} onChange={setRecherche} placeholder="Désignation, opérateur…" />}
+        {!caisse && !epure && <OngletsBande options={VUES_RECETTES} valeur={vue} onChange={setVue} taille="sm" />}
       </BandeauCompta>
 
-      {caisse && (canExportExcel(role) || (isFullAccessRole(role) && !isReadOnlyRole(role))) && (
+      {!epure && (canExportExcel(role) || (caisse && isFullAccessRole(role) && !isReadOnlyRole(role))) && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <style>{`
             @keyframes sj-ondes-vert { 0% { box-shadow: 0 8px 18px -8px rgba(22,163,74,0.7), 0 0 0 0 rgba(22,163,74,0.45); } 70% { box-shadow: 0 8px 18px -8px rgba(22,163,74,0.7), 0 0 0 12px rgba(22,163,74,0); } 100% { box-shadow: 0 8px 18px -8px rgba(22,163,74,0.7), 0 0 0 0 rgba(22,163,74,0); } }
@@ -285,7 +385,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className={epure ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4' : 'grid grid-cols-2 gap-3 lg:grid-cols-4'}>
         {caisse ? (
           <>
             <StatCard title="MONTANT DE LA CAISSE" value={formatMoney(journal.soldeInitial + journal.recettes)} sub="solde initial du mois + dotations" accent={COULEUR_DOTATION} icon={ICONE_DOTATION} />
@@ -293,6 +393,8 @@ export default function SuiviJournalier({ page = 'caisse' }) {
             <StatCard title="RESTE EN CAISSE" value={formatMoney(journal.soldeFinal)} sub="montant moins dépenses" accent={journal.soldeFinal >= 0 ? '#2563eb' : '#dc2626'} icon={Wallet} />
             <StatCard title="MOUVEMENTS" value={journal.lignes.length} sub={libellePeriode} accent="#0d9488" icon={CalendarCheck} />
           </>
+        ) : epure ? (
+          <StatCard title="MOUVEMENTS" value={fmt(journal.lignes.length)} sub={`${libellePeriode} : toucher pour le détail`} accent="#0d9488" icon={CalendarCheck} onClick={() => setMouvementsOuverts(true)} />
         ) : (
           <>
             <StatCard title="CHIFFRE D'AFFAIRES" value={formatMoney(journal.chiffreAffaires)} sub={vocab.facture.toLowerCase()} accent="#ea580c" icon={BadgeDollarSign} />
@@ -308,6 +410,9 @@ export default function SuiviJournalier({ page = 'caisse' }) {
           Contrôle : le report saisi par les agents est de {fmt(journal.controle.saisi)} FCFA, le solde initial calculé est de {fmt(journal.controle.calcule)} FCFA (écart de {fmt(journal.controle.ecart)}). Une dépense ou une dotation du mois précédent est peut-être manquante.
         </div>
       )}
+
+      {/* ---------- Détail des recettes : chaque recette sur une ligne en verre, regroupées par jour ---------- */}
+      {vueActive === 'detail' && rendreDetail()}
 
       {/* ---------- Journal : présenté comme le fichier Excel des agents ---------- */}
       {vueActive === 'journal' && (
@@ -385,7 +490,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
               <button type="button" onClick={() => decaleJour(1)} className="rounded-xl px-2.5 py-1.5 text-sm font-bold text-gray-600 hover:bg-white" title="Jour suivant">›</button>
             </div>
             <button type="button" onClick={() => setJourVue(todayStr())} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 hover:bg-orange-100">Aujourd'hui</button>
-            {canExportExcel(role) && (
+            {!epure && canExportExcel(role) && (
               <button type="button" onClick={exporterTableau} className="ml-auto inline-flex items-center gap-2 rounded-2xl border border-orange-300 bg-white px-3.5 py-2 text-sm font-extrabold text-orange-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-orange-50">
                 <FileSpreadsheet size={16} /> Export Excel
               </button>
@@ -403,29 +508,33 @@ export default function SuiviJournalier({ page = 'caisse' }) {
                     <th className={`${TH} text-right`}><span className="inline-flex items-center gap-1.5"><TrendingDown size={12} className="text-red-400" strokeWidth={2.4} />Dépenses du mois</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-white/10">
+                <tbody className="divide-y-2 divide-white dark:divide-white/20">
                   {tableau.rows.map((r) => {
                     const couleur = couleurPole(r.id)
                     const IconePole = ICONE_POLE[r.id] || Layers
                     return (
                       <tr key={r.id} onClick={() => { setPeriodeDetail('jour'); setPoleOuvert(r.id) }} className="group cursor-pointer transition-colors hover:brightness-95" style={{ background: `linear-gradient(90deg, ${couleur}1f 0%, ${couleur}0a 55%, transparent 100%)` }} title="Voir le détail de ce secteur">
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-3.5">
                           <span className="flex items-center gap-2 text-xs font-extrabold uppercase text-gray-700 dark:text-gray-200">
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg" style={icone3D(couleur)}><IconePole size={12} /></span>
                             {r.label}
                           </span>
+                          {quotas[r.id] && <ObjectifSecteur realise={r.rm} cible={quotas[r.id]} />}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-green-700">{r.rj ? `+${fmt(r.rj)}` : <span className="text-gray-300">-</span>}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-red-600">{r.dj ? fmt(r.dj) : <span className="text-gray-300">-</span>}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-green-700">{r.rm ? `+${fmt(r.rm)}` : <span className="text-gray-300">-</span>}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-red-600"><span className="inline-flex items-center gap-1.5">{r.dm ? fmt(r.dm) : <span className="text-gray-300">-</span>}<ChevronRight size={14} className="text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-orange-500" /></span></td>
+                        <td className="whitespace-nowrap px-3 py-3.5 text-right font-bold text-green-700">{r.rj ? `+${fmt(r.rj)}` : <span className="text-gray-300">-</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3.5 text-right font-bold text-red-600">{r.dj ? fmt(r.dj) : <span className="text-gray-300">-</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3.5 text-right font-bold text-green-700">{r.rm ? `+${fmt(r.rm)}` : <span className="text-gray-300">-</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3.5 text-right font-bold text-red-600"><span className="inline-flex items-center gap-1.5">{r.dm ? fmt(r.dm) : <span className="text-gray-300">-</span>}<ChevronRight size={14} className="text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-orange-500" /></span></td>
                       </tr>
                     )
                   })}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td className={`${TF} text-xs font-extrabold uppercase tracking-wide text-gray-700 dark:text-gray-200`}>Total</td>
+                    <td className={`${TF} text-xs font-extrabold uppercase tracking-wide text-gray-700 dark:text-gray-200`}>
+                      Total
+                      {totalQuotaTableau > 0 && <ObjectifSecteur realise={recettesAvecQuota} cible={totalQuotaTableau} total />}
+                    </td>
                     <td className={`${TF} whitespace-nowrap text-right font-black text-green-700`}>+{fmt(tableau.total.rj)}</td>
                     <td className={`${TF} whitespace-nowrap text-right font-black text-red-600`}>{fmt(tableau.total.dj)}</td>
                     <td className={`${TF} whitespace-nowrap text-right font-black text-green-700`}>+{fmt(tableau.total.rm)}</td>
@@ -440,7 +549,7 @@ export default function SuiviJournalier({ page = 'caisse' }) {
       )}
 
       {/* ---------- Par secteur : chiffre d'affaires et recettes ---------- */}
-      {!caisse && canExportExcel(role) && (
+      {!caisse && !epure && canExportExcel(role) && (
         <div className="flex justify-end">
           <button type="button" onClick={() => setRapport({ sections: {}, mode, jour: fJour || todayStr(), mois: fMois, annee: fAnnee, debut: fDebut, fin: fFin })}
             className="inline-flex items-center gap-2 rounded-2xl border border-orange-300 bg-white px-4 py-2.5 text-sm font-extrabold text-orange-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-orange-50">
@@ -452,12 +561,13 @@ export default function SuiviJournalier({ page = 'caisse' }) {
       {vueActive === 'secteur' && (
         <div className="rounded-3xl bg-gradient-to-br from-orange-100/70 via-rose-50/50 to-sky-100/70 p-3 shadow-inner">
           <style>{STYLES_TENDANCE}</style>
-          {parSecteur.length === 0 ? (
+          {parSecteur.length === 0 && cartesQuotaSeules.length === 0 ? (
             <p className="py-8 text-center text-gray-400"><Inbox className="mx-auto mb-2" size={28} />Aucun mouvement sur cette période.</p>
           ) : (
             <div className="space-y-3">
-              {parSecteur.map((x) => (
-                <CarteSecteur key={x.cle} x={x} prec={parSecteurPrec.parCle.get(x.cle)} maxCA={maxCA} libellePrec={prec.label} onClick={() => setDetailSecteur(x)} />
+              {[...parSecteur, ...cartesQuotaSeules].map((x) => (
+                <CarteSecteur key={x.cle} x={x} prec={parSecteurPrec.parCle.get(x.cle)} maxCA={Math.max(maxCA, x.chiffreAffaires)} libellePrec={x.quotaSeul ? '' : prec.label}
+                  quota={quotaDuPole(poleDe(x.secteurId, x.site))} onClick={x.quotaSeul ? undefined : () => setDetailSecteur(x)} />
               ))}
               <div className="relative flex flex-wrap items-center justify-between gap-2 overflow-hidden rounded-2xl border border-white/70 bg-white/60 px-3 py-2.5 text-sm font-black text-gray-900 backdrop-blur-xl">
                 <span className="uppercase">Total tous secteurs</span>
@@ -472,6 +582,15 @@ export default function SuiviJournalier({ page = 'caisse' }) {
       )}
 
       <CaisseFiche ligne={fiche} onClose={() => setFiche(null)} />
+      {mouvementsOuverts && (
+        <Modal open onClose={() => setMouvementsOuverts(false)} size="lg" title={`Mouvements : ${libellePeriode}`} {...glassModalProps(couleur || '#ea580c')}
+          footer={<Button variant="ghost" onClick={() => setMouvementsOuverts(false)}>Fermer</Button>}>
+          <div className="space-y-3">
+            <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Désignation, opérateur, secteur…" />
+            {rendreDetail()}
+          </div>
+        </Modal>
+      )}
       <DotationModal open={dotation} onClose={() => setDotation(false)} budgets={budgets} user={user} />
       <Modal open={!!rapport} onClose={() => !rapportEnCours && setRapport(null)} size="md" title="Rapport financier"
         {...glassModalProps('#ea580c')}
