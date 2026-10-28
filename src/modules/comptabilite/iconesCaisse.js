@@ -8,7 +8,8 @@ import {
 import { CATEGORIES_DEPENSE } from '../depense/data'
 
 export const ICONE_DOTATION = HandCoins
-export const COULEUR_DOTATION = '#16a34a'
+// Indigo : aucun secteur n'a cette couleur (le vert est celui de MAXI-AGRO, il prêtait à confusion avec les lignes de dotation).
+export const COULEUR_DOTATION = '#4f46e5'
 export const COULEUR_DEPENSE = '#dc2626'
 
 // Famille de dépense : icône et teinte propres (la couleur du domaine reste portée par la ligne).

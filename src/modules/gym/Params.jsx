@@ -1,7 +1,8 @@
 // MAXI-GYM — Paramètres : tarifs, durées et validité, réservé à l'administration.
 import { useEffect, useMemo, useState } from 'react'
-import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Target, Eraser, Archive } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { Settings, Save, AlertTriangle, Trash2, Plus, Pencil, UserCog, Clock3, Ticket, CreditCard, Eraser, Archive } from 'lucide-react'
+import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
+import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -19,7 +20,7 @@ import { candidatsAutoSuppression } from './purgeClient'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { categorieLabel } from './data'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
-import { titreSection, CARD_ACCENT_CLASS, cardAccentStyle, ChampUnite, BoutonGym } from './uiHelpers'
+import { ChampUnite, BoutonGym } from './uiHelpers'
 
 const COULEUR = '#E8850F'
 // Le mot RÉELLEMENT attendu est en minuscules sans accent, alors que l'écran
@@ -242,9 +243,8 @@ export default function Params() {
         Ces réglages sont propres à <strong>{siteLabel(site)}</strong> : l'autre salle a les siens, indépendants.
       </div>
 
-      <Card title={titreSection(Ticket, 'Tarifs des séances (FCFA)')}
-        className={CARD_ACCENT_CLASS}
-        style={cardAccentStyle(COULEUR)}>
+      <ParamsGrille>
+      <ParamsCarte icone={Ticket} couleur={COULEUR} titre="Tarifs des séances (FCFA)">
         <div className="grid grid-cols-2 gap-3">
           <FormGroup label="Simple">
             <ChampUnite unite="FCFA" min="0" value={form.tarifSeanceSimple} onChange={set('tarifSeanceSimple')} />
@@ -254,11 +254,9 @@ export default function Params() {
           </FormGroup>
         </div>
         <p className="mt-1 text-[11px] text-gray-400">Le Classique n'a pas de tarif fixe : prix libre à la saisie.</p>
-      </Card>
+      </ParamsCarte>
 
-      <Card title={titreSection(CreditCard, 'Tarifs des abonnements (FCFA)')}
-        className={CARD_ACCENT_CLASS}
-        style={cardAccentStyle(COULEUR)}>
+      <ParamsCarte icone={CreditCard} couleur={COULEUR} titre="Tarifs des abonnements (FCFA)">
         <div className="grid grid-cols-2 gap-3">
           <FormGroup label="Simple">
             <ChampUnite unite="FCFA" min="0" value={form.tarifAbonnementSimple} onChange={set('tarifAbonnementSimple')} />
@@ -275,11 +273,9 @@ export default function Params() {
             ? 'Classique à prix fixe : durée fixe 1 mois calendaire, comme Simple/VIP.'
             : 'Simple et VIP sont toujours valables 1 mois calendaire. Le Classique n\'a pas de tarif fixe.'}
         </p>
-      </Card>
+      </ParamsCarte>
 
-      <Card title={titreSection(Clock3, 'Durées et validité')}
-        className={CARD_ACCENT_CLASS}
-        style={cardAccentStyle(COULEUR)}>
+      <ParamsCarte icone={Clock3} couleur={COULEUR} titre="Durées et validité">
         <div className="grid grid-cols-2 gap-3">
           <FormGroup label="Validité d'une séance (heures)">
             <ChampUnite unite="heures" min="1" value={form.validiteSeanceHeures} onChange={set('validiteSeanceHeures')} />
@@ -289,25 +285,17 @@ export default function Params() {
             <ChampUnite unite="jours" min="1" value={form.dureeClassiqueMinJours} onChange={set('dureeClassiqueMinJours')} disabled={form.tarifAbonnementClassique != null} />
           </FormGroup>
         </div>
-      </Card>
+      </ParamsCarte>
 
-      <Card title={titreSection(Target, 'Objectif du mois')}
-        className={CARD_ACCENT_CLASS}
-        style={cardAccentStyle(COULEUR)}>
-        <FormGroup label="Quota d'encaissement mensuel" hint="Laisser vide = pas d'objectif, le KPI du Dashboard n'affiche alors pas de %. Comparé au total séances + abonnements du mois en cours.">
-          <ChampUnite unite="FCFA" min="0" value={form.objectifMensuel ?? ''} onChange={setNullable('objectifMensuel')} placeholder="ex : 500000" />
-        </FormGroup>
-      </Card>
+      <ObjectifParam poleId={`gym_${site}`} couleur={COULEUR} moduleId="gym" large={false} />
 
-      <Card title={titreSection(Eraser, 'Suppression automatique des clients')}
-        className={CARD_ACCENT_CLASS}
-        style={cardAccentStyle(COULEUR)}>
+      <ParamsCarte icone={Eraser} couleur={COULEUR} titre="Suppression automatique des clients" large>
         <p className="mb-3 text-xs text-gray-500">
           Libère la base : une fois l'abonnement (ou la séance) terminé depuis plus longtemps que le délai ci-dessous, le client disparaît totalement
           (fiche, abonnements, séances et arrivées pointées). Les factures restent, donc le chiffre d'affaires aussi.
           Elle s'applique quand l'administration ouvre le Dashboard de la salle.
         </p>
-        <label className="mb-3 flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+        <label className="mb-3 flex cursor-pointer items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3 py-2.5">
           <input type="checkbox" checked={!!form.autoSuppressionActive}
             onChange={(e) => setForm((f) => ({ ...f, autoSuppressionActive: e.target.checked }))}
             className="h-4 w-4 shrink-0 accent-orange-600" />
@@ -321,15 +309,15 @@ export default function Params() {
             <ChampUnite unite="jours" min="1" value={form.delaiSuppressionSeanceJours} onChange={set('delaiSuppressionSeanceJours')} />
           </FormGroup>
         </div>
-        <p className={`mt-2 rounded-lg px-3 py-2 text-xs font-semibold ${candidatsSuppression.length ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500'}`}>
+        <p className={`mt-2 rounded-2xl px-3 py-2 text-xs font-semibold ${candidatsSuppression.length ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500'}`}>
           {candidatsSuppression.length
             ? `Avec ces délais, ${candidatsSuppression.length} client(s) seraient supprimés dès maintenant : ${candidatsSuppression.slice(0, 5).map((c) => c.dossier.nom).join(', ')}${candidatsSuppression.length > 5 ? '…' : ''}`
             : 'Avec ces délais, aucun client ne serait supprimé pour le moment.'}
         </p>
-      </Card>
+      </ParamsCarte>
 
       {peutArchiver && (
-        <Card title={titreSection(Archive, 'Archivage des anciennes séances')} className={CARD_ACCENT_CLASS} style={cardAccentStyle(COULEUR)}>
+        <ParamsCarte icone={Archive} couleur={COULEUR} titre="Archivage des anciennes séances">
           <p className="mb-3 text-xs text-gray-500">
             Allège la base : les séances anciennes sont exportées en Excel, résumées par mois, puis retirées. Les <strong>factures restent</strong>, donc les montants encaissés ne changent pas.
             Les séances de partenaires non réglées et les séances sans facture ne sont jamais archivées.
@@ -337,29 +325,27 @@ export default function Params() {
           <FormGroup label="Archiver les séances de plus de" hint="Minimum 6 mois. Par défaut 12 mois.">
             <ChampUnite unite="mois" min="6" value={moisArchive} onChange={(e) => setMoisArchive(e.target.value)} />
           </FormGroup>
-          <p className={`mt-2 rounded-lg px-3 py-2 text-xs font-semibold ${seancesArchivables.length ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500'}`}>
+          <p className={`mt-2 rounded-2xl px-3 py-2 text-xs font-semibold ${seancesArchivables.length ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500'}`}>
             {seancesArchivables.length
               ? `${seancesArchivables.length} séance${seancesArchivables.length > 1 ? 's' : ''} d'avant le ${formatDateShort(limiteArchive)} (${formatMoney(montantArchivable)}) peuvent être archivées${seancesArchivables.length > 300 ? ', 300 à la fois' : ''}.`
               : `Aucune séance à archiver avant le ${formatDateShort(limiteArchive)}.`}
           </p>
           {archivage && <p className="mt-2 text-xs font-semibold text-orange-700">Archivage en cours : {archivage.fait} / {archivage.total}. Ne fermez pas la page.</p>}
           <BoutonGym variante="secondaire" icone={Archive} className="mt-3" onClick={archiverSeances} loading={!!archivage} disabled={!seancesArchivables.length}>Exporter en Excel puis archiver</BoutonGym>
-        </Card>
+        </ParamsCarte>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end lg:col-span-2">
         <BoutonGym icone={Save} onClick={enregistrer} loading={saving} disabled={lectureSeule}>Enregistrer les réglages</BoutonGym>
       </div>
 
-      <Card title={titreSection(UserCog, 'Coachs')}
-        className={CARD_ACCENT_CLASS}
-        style={cardAccentStyle(COULEUR)}>
+      <ParamsCarte icone={UserCog} couleur={COULEUR} titre="Coachs" large>
         <p className="mb-3 text-xs text-gray-500">
           Planning hebdomadaire par coach : jours de présence et heure d'arrivée prévue. Le pointage réel se fait depuis le volet « Coachs ».
         </p>
         <div className="space-y-2">
           {coachs.map((c) => (
-            <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-l-4 border-gray-200 bg-orange-50/40 px-3 py-2.5" style={{ borderLeftColor: COULEUR }}>
+            <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-l-4 border-gray-200 bg-orange-50/40 px-3 py-2.5" style={{ borderLeftColor: COULEUR }}>
               <div className="flex min-w-0 items-center gap-2.5">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `linear-gradient(135deg, ${COULEUR}, #A6342A)` }}>
                   <UserCog size={14} />
@@ -374,21 +360,17 @@ export default function Params() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires }, objectifAbonnements: c.objectifAbonnements ?? '', primeParAbonnement: c.primeParAbonnement ?? '' })} className="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
-                <button onClick={() => supprimerCoach(c)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50" title="Retirer"><Trash2 size={15} /></button>
+                <button onClick={() => setCoachModal({ id: c.id, nom: c.nom, horaires: { ...horairesVides(), ...c.horaires }, objectifAbonnements: c.objectifAbonnements ?? '', primeParAbonnement: c.primeParAbonnement ?? '' })} className="rounded-2xl p-1.5 text-indigo-600 hover:bg-indigo-50" title="Modifier"><Pencil size={15} /></button>
+                <button onClick={() => supprimerCoach(c)} className="rounded-2xl p-1.5 text-red-500 hover:bg-red-50" title="Retirer"><Trash2 size={15} /></button>
               </div>
             </div>
           ))}
           {!coachs.length && <p className="py-4 text-center text-sm text-gray-400">Aucun coach enregistré pour {siteLabel(site)}.</p>}
         </div>
         <BoutonGym variante="secondaire" icone={Plus} className="mt-3" disabled={lectureSeule} onClick={() => setCoachModal({ nom: '', horaires: horairesVides() })}>Ajouter un coach</BoutonGym>
-      </Card>
+      </ParamsCarte>
 
-      <Card className="border-2 border-red-200 bg-red-50/60">
-        <div className="mb-3 flex items-center gap-2">
-          <AlertTriangle size={18} className="text-red-600" />
-          <h3 className="text-base font-extrabold text-red-800">Zone de danger : Réinitialiser MAXI-GYM {siteLabel(site)}</h3>
-        </div>
+      <ParamsCarte icone={AlertTriangle} danger large titre={`Zone de danger : Réinitialiser MAXI-GYM ${siteLabel(site)}`}>
         <p className="mb-3 text-sm text-red-800">
           Supprime <strong>définitivement et sans possibilité de retour</strong> les données de la salle <strong>{siteLabel(site)}</strong> uniquement : l'autre salle n'est pas affectée, de même que les forfaits personnalisés, communs aux deux salles :
         </p>
@@ -411,7 +393,9 @@ export default function Params() {
           loading={resetting} onClick={reinitialiserTout}>
           Réinitialiser définitivement MAXI-GYM {siteLabel(site)}
         </BoutonGym>
-      </Card>
+      </ParamsCarte>
+
+      </ParamsGrille>
 
       <CoachFormModal coachModal={coachModal} setCoachModal={setCoachModal} site={site} />
     </div>

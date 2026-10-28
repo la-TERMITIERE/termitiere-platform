@@ -5,5 +5,6 @@ import { COULEUR_MODULE } from '../../utils/color'
 export { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function BandeauCompta(props) {
-  return <BandeauVolet couleur={COULEUR_MODULE.comptabilite || '#ea580c'} {...props} />
+  const { couleur, ...reste } = props
+  return <BandeauVolet {...reste} couleur={couleur || COULEUR_MODULE.comptabilite || '#ea580c'} />
 }

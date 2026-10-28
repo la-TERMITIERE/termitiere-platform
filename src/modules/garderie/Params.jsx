@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Save, FileSpreadsheet, RotateCcw, AlertTriangle, Settings } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { Save, FileSpreadsheet, RotateCcw, AlertTriangle, Settings, Gauge } from 'lucide-react'
+import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
+import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -228,10 +229,13 @@ export default function Params() {
         </div>
       </div>
 
+      <ParamsGrille>
+      <ObjectifParam poleId="garderie" couleur="#E8390E" moduleId="garderie" large={false} />
+
       {/* Config générale */}
-      <Card title="Configuration de la garderie">
+      <ParamsCarte icone={Settings} couleur="#E8390E" titre="Configuration de la garderie" large>
         {!canEdit && (
-          <div className="mb-3 rounded-lg bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
+          <div className="mb-3 rounded-2xl bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
             Lecture seule : réservé aux administrateurs.
           </div>
         )}
@@ -260,7 +264,7 @@ export default function Params() {
         </div>
 
         {/* Grille tarifaire éditable */}
-        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
+        <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-bold uppercase text-green-700">💰 Grille tarifaire par tranche d'âge</p>
             {canEdit && (
@@ -271,7 +275,7 @@ export default function Params() {
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             {grille.map((t) => (
-              <div key={t.id} className="rounded-lg bg-white border border-green-100 px-3 py-3 shadow-sm">
+              <div key={t.id} className="rounded-2xl bg-white border border-green-100 px-3 py-3 shadow-sm">
                 <p className="text-xs font-semibold text-green-700 mb-2">{t.label}</p>
                 {canEdit ? (
                   <div className="flex items-center gap-1">
@@ -298,34 +302,34 @@ export default function Params() {
             <Button onClick={handleSave} loading={saving}><Save size={16} /> Sauvegarder</Button>
           </div>
         )}
-      </Card>
+      </ParamsCarte>
 
       {/* Statistiques rapides */}
-      <Card title="Statistiques">
+      <ParamsCarte icone={Gauge} couleur="#F5A800" titre="Statistiques" large>
         <div className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
-          <div className="rounded-lg bg-orange-50 p-3 text-center">
+          <div className="rounded-2xl bg-orange-50 p-3 text-center">
             <p className="text-2xl font-extrabold text-orange-700">{enfants.filter((e) => e.statut === 'actif').length}</p>
             <p className="text-xs text-orange-500">Enfants actifs</p>
           </div>
-          <div className="rounded-lg bg-blue-50 p-3 text-center">
+          <div className="rounded-2xl bg-blue-50 p-3 text-center">
             <p className="text-2xl font-extrabold text-blue-700">{personnel.filter((p) => p.statut === 'actif').length}</p>
             <p className="text-xs text-blue-500">Personnel actif</p>
           </div>
-          <div className="rounded-lg bg-green-50 p-3 text-center">
+          <div className="rounded-2xl bg-green-50 p-3 text-center">
             <p className="text-2xl font-extrabold text-green-700">
               {formatMoney(paiements.reduce((s, p) => s + (Number(p.montantPaye) || 0), 0))}
             </p>
             <p className="text-xs text-green-500">Total encaissé</p>
           </div>
-          <div className="rounded-lg bg-orange-50 p-3 text-center">
+          <div className="rounded-2xl bg-orange-50 p-3 text-center">
             <p className="text-2xl font-extrabold text-orange-700">{params.capaciteMax - enfants.filter((e) => e.statut === 'actif').length}</p>
             <p className="text-xs text-orange-500">Places disponibles</p>
           </div>
         </div>
-      </Card>
+      </ParamsCarte>
 
       {/* Exports */}
-      <Card title="Exports">
+      <ParamsCarte icone={FileSpreadsheet} couleur="#16a34a" titre="Exports" large>
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" onClick={exportEnfants}>
             <FileSpreadsheet size={16} /> Exporter les enfants (Excel)
@@ -334,13 +338,11 @@ export default function Params() {
             <FileSpreadsheet size={16} /> Exporter le personnel (Excel)
           </Button>
         </div>
-      </Card>
+      </ParamsCarte>
 
       {/* ── Réinitialisation ── */}
       {canEdit && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Réinitialiser les paramètres seulement */}
-          <Card title="🔄 Réinitialiser les paramètres">
+          <ParamsCarte icone={RotateCcw} couleur="#64748b" titre="Réinitialiser les paramètres">
             <p className="mb-3 text-sm text-gray-500">
               Remet les paramètres de configuration aux valeurs par défaut (nom, horaires, tarifs, capacité).
               Les données des enfants et du personnel ne sont pas affectées.
@@ -350,10 +352,12 @@ export default function Params() {
             }} loading={saving}>
               <RotateCcw size={16} /> Réinitialiser les paramètres
             </Button>
-          </Card>
+          </ParamsCarte>
+      )}
 
-          {/* Tout réinitialiser */}
-          <Card title="⚠️ Tout réinitialiser" className="border border-red-200">
+      {/* Tout réinitialiser */}
+      {canEdit && (
+          <ParamsCarte icone={AlertTriangle} danger titre="Tout réinitialiser">
             <p className="mb-3 text-sm text-gray-500">
               Efface <strong>toutes les données</strong> de la garderie : enfants, parents, présences, paiements,
               incidents, soins, vaccinations, tâches, menus, repas, nutrition et personnel : <strong>ainsi que</strong> les
@@ -376,9 +380,9 @@ export default function Params() {
                 </div>
               </div>
             )}
-          </Card>
-        </div>
+          </ParamsCarte>
       )}
+      </ParamsGrille>
     </div>
   )
 }

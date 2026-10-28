@@ -1,7 +1,8 @@
 // Paramètres Logistique — export/import JSON + export multi-sections + réinitialisation.
 import { useRef, useState } from 'react'
 import { FileSpreadsheet, Trash2, AlertTriangle, Download, Upload, Settings } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
+import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
@@ -218,7 +219,10 @@ export default function Params() {
           <p className="text-sm text-white/80">Sauvegarde, export et réinitialisation : MAXI LOGISTIQUE</p>
         </div>
       </div>
-      <Card title="Sauvegarde / Restauration (JSON)">
+      <ParamsGrille>
+      <ObjectifParam poleId={`log_${site}`} couleur={COULEUR_MODULE.logistique} moduleId="logistique" large={false} />
+
+      <ParamsCarte icone={Download} couleur="#0284c7" titre="Sauvegarde / Restauration (JSON)">
         <p className="mb-3 text-sm text-gray-500">
           Téléchargez une sauvegarde complète des données logistique (saisies, factures, prestations,
           autorisations, retours, clients + référentiel matériel){isAdmin ? ', ou restaurez une sauvegarde en cas de perte' : ''}.
@@ -233,13 +237,13 @@ export default function Params() {
           )}
         </div>
         {!isAdmin && <p className="mt-2 text-xs text-gray-400">L'import est réservé à l'administrateur.</p>}
-      </Card>
+      </ParamsCarte>
 
-      <Card title="Export des données">
+      <ParamsCarte icone={FileSpreadsheet} couleur="#16a34a" titre="Export des données" large>
         <p className="mb-3 text-sm text-gray-500">Sélectionnez les sections à inclure dans l'export Excel.</p>
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {EXPORT_OPTIONS.map((opt) => (
-            <label key={opt.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 p-3 hover:bg-gray-50">
+            <label key={opt.id} className="flex cursor-pointer items-center gap-2 rounded-2xl border border-white/80 bg-white/60 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-md">
               <input type="checkbox" checked={exportChoix.has(opt.id)} onChange={() => toggleExport(opt.id)} className="rounded" />
               <span className="text-sm">{opt.emoji} {opt.label}</span>
             </label>
@@ -248,11 +252,11 @@ export default function Params() {
         <Button onClick={() => setExportOpen(true)} disabled={exportChoix.size === 0}>
           <FileSpreadsheet size={16} /> Exporter en Excel
         </Button>
-      </Card>
+      </ParamsCarte>
 
       {isAdmin && (
-        <Card title={`Réinitialisation des données : ${siteLabel(site)}`} className="border-red-200">
-          <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
+        <ParamsCarte icone={AlertTriangle} danger large titre={`Réinitialisation des données : ${siteLabel(site)}`}>
+          <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>
               <p className="font-semibold text-red-900">Zone dangereuse : réservée au super administrateur / direction</p>
@@ -266,8 +270,9 @@ export default function Params() {
               </Button>
             </div>
           </div>
-        </Card>
+        </ParamsCarte>
       )}
+      </ParamsGrille>
 
       <Modal open={exportOpen} onClose={() => setExportOpen(false)} title="Confirmer l'export"
         footer={<><Button variant="ghost" onClick={() => setExportOpen(false)}>Annuler</Button><Button onClick={exportXLSX} loading={exporting}><FileSpreadsheet size={16} /> Exporter</Button></>}>

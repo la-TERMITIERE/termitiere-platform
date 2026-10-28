@@ -64,7 +64,7 @@ export default function Dashboard() {
   const restreintAgent = role === 'agent'
   // Alerte « justificatif manquant » — réservée à ces trois rôles précis (décision
   // explicite), même si d'autres (pau, ge) voient par ailleurs le reste des alertes.
-  const voitAlerteJustificatif = ['secretaire', 'info', 'assistant_pau'].includes(role)
+  const voitAlerteJustificatif = role === 'secretaire'
 
   // Période affichée par TOUT le Dashboard (KPI, Répartition par secteur, alertes,
   // Dépenses récentes) — un seul sélecteur dans le bandeau, Jour/Mois/Année/Plage,
@@ -169,7 +169,7 @@ export default function Dashboard() {
   // présentation/comportement que le widget « Alertes » d'E-G.Pro : une carte, dismiss
   // (✕) avec réapparition après 2 min (5x/jour max), clic → détail. Réservé à
   // l'administration comme le reste des KPI financiers (l'alerte justificatif, elle,
-  // est en plus restreinte à secrétaire/info/assistant PAU — cf. voitAlerteJustificatif).
+  // est en plus réservée à la secrétaire — cf. voitAlerteJustificatif).
   const alertesCard = useMemo(() => {
     const out = []
     alertes.forEach((s) => {

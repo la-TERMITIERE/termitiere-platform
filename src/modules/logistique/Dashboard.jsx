@@ -3,8 +3,14 @@
 import { useMemo, useState } from 'react'
 import { Boxes, BadgeDollarSign, Send, AlertTriangle, RotateCcw, ChevronRight, PackageX } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
+import ObjectifKpi, { libelleObjectif } from '../comptabilite/ObjectifKpi'
+import ListeFacturesVerre from '../comptabilite/ListeFacturesVerre'
+import { useObjectifPole, texteEcart } from '../comptabilite/quotas'
+import FelicitationObjectif from '../comptabilite/FelicitationObjectif'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
+import Button from '../../shared/ui/Button'
+import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
@@ -15,7 +21,7 @@ import { MaterielDehorsCard, DernieresPrestationsCard, MeilleursClientsCard, CaM
 import { logistiqueVoitMontants, peutVoirCaMensuel } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
-import { formatMoney, formatNumber, formatDateShort, todayStr } from '../../utils/formatters'
+import { formatMoney, formatNumber, formatDateShort, todayStr, addDays } from '../../utils/formatters'
 import { catColor, CAT_MATERIEL } from './data'
 import { STATUTS_DEMANDE, normaliserStatut, estActif } from '../../shared/workflow'
 import { useSite, matchSite, siteLabel } from './site/useSite'
@@ -45,6 +51,7 @@ export default function Dashboard() {
   // Filtre de période — même format Jour/Mois/Année/Plage que le reste de la
   // plateforme, posé en glassmorphism dans le bandeau héro.
   const [modePeriode, setModePeriode] = useState('mois')
+  const objLog = useObjectifPole(`log_${site}`)
   const [filtreJour, setFiltreJour] = useState('')
   const [filtreMois, setFiltreMois] = useState(todayStr().slice(0, 7))
   const [filtreAnnee, setFiltreAnnee] = useState('')
@@ -102,6 +109,15 @@ export default function Dashboard() {
   // CA = factures APPROUVÉES (autorisation de sortie certifiée) de la période.
   const facturesMois = factures.filter((f) => f.statut === 'approuvee' && dansPeriode(f.date) && montantScope(f) > 0)
   const caMois = facturesMois.reduce((s, f) => s + montantScope(f), 0)
+  // Période précédente de même durée (juste avant celle affichée) : sert à l'écart de la carte CA.
+  const nbJoursPeriode = Math.round((new Date(end) - new Date(start)) / 86400000) + 1
+  const finPrec = addDays(start, -1)
+  const debutPrec = addDays(finPrec, -(nbJoursPeriode - 1))
+  const caPrec = factures
+    .filter((f) => f.statut === 'approuvee' && (f.date || '') >= debutPrec && (f.date || '') <= finPrec && montantScope(f) > 0)
+    .reduce((s, f) => s + montantScope(f), 0)
+  // Sur le mois en cours, la carte « CA période » porte l'objectif ; l'autre carte ne revient que pour une autre période.
+  const surMois = modePeriode === 'mois' && filtreMois === todayStr().slice(0, 7)
   const demandesActives = demandes.filter((d) => estActif(d.statut))
   const prestationsActivesList = prestations.filter((p) => ['facturee', 'en_cours'].includes(p.statut))
   // Casse / perte SUR LA PÉRIODE, filtrée par catégorie — pièces + montant + pénalités.
@@ -209,7 +225,10 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <FelicitationObjectif poleId={`log_${site}`} secteur="de MAXI LOGISTIQUE" couleur="#BC3C31" />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <ObjectifKpi poleId={`log_${site}`} couleur="#16a34a" lien={{ to: `/logistique/${site}/factures`, label: 'Aller aux factures' }} seulementAvecObjectif masque={surMois} />
         <StatCard glass title="Stock total" value={formatNumber(stockTotal)} sub="pièces : cliquer" icon={Boxes} accent="#0284c7"
           onClick={() => setDetail({ titre: 'Stock par catégorie', render: detailStock })} />
         <StatCard glass title="Valeur stock" value={formatMoney(valeurStock)} sub="au coût d'achat · cliquer" icon={Boxes} accent="#7c3aed"
@@ -223,17 +242,12 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) })} />
-        <StatCard glass title="CA période" value={formatMoney(caMois)} sub={`${facturesMois.length} facture(s) approuvée(s) · cliquer`} icon={BadgeDollarSign} accent="#16a34a"
-          onClick={() => setDetail({ titre: 'Factures approuvées (CA) : période', render: (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2">N°</th><th className="px-3 py-2">Client</th><th className="px-3 py-2 text-right">Total TTC</th></tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {[...facturesMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f) => (
-                  <tr key={f.id}><td className="px-3 py-1.5 font-mono text-xs">{formatDateShort(f.date)}</td><td className="px-3 py-1.5">{f.num}</td><td className="px-3 py-1.5">{f.clientNom || '—'}</td><td className="px-3 py-1.5 text-right font-bold text-green-700">{formatMoney(f.totalTTC || 0)}</td></tr>
-                ))}
-                {!facturesMois.length && <tr><td colSpan={4} className="py-4 text-center text-gray-400">Aucune facture ce mois.</td></tr>}
-              </tbody>
-            </table>
+        <StatCard glass title={surMois ? 'Recettes du mois' : 'CA période'} value={formatMoney(caMois)}
+          chip={texteEcart(caMois - caPrec)} chipGood={caMois >= caPrec} sub={`${facturesMois.length} facture(s) approuvée(s) · cliquer`}
+          variationLabel={surMois ? libelleObjectif(objLog) : undefined} icon={BadgeDollarSign} accent="#16a34a"
+          onClick={() => setDetail({ titre: surMois ? 'Recettes du mois' : 'Factures approuvées (CA) : période', sansCadre: true, render: (
+            <ListeFacturesVerre couleur="#16a34a" poleId={`log_${site}`} avecObjectif={surMois} vide="Aucune facture approuvée sur la période."
+              items={facturesMois.map((f) => ({ id: f.id, date: f.date, titre: f.clientNom || '—', sous: f.num ? `Facture ${f.num}` : '', montant: montantScope(f) }))} />
           ) })} />
         <StatCard glass title="Autorisations" value={demandesActives.length} sub="à traiter · cliquer" icon={Send} accent={demandesActives.length ? '#d97706' : '#64748b'}
           onClick={() => setDetail({ titre: 'Autorisations à traiter', render: (
@@ -297,9 +311,13 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Fenêtre de détail des KPI : verre dépoli teinté à la couleur du module ; `sansCadre` : le contenu (liste des factures) a déjà son habillage. */}
       <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" title={detail?.titre || ''}
-        panelClassName="bg-gradient-to-br from-red-200/85 via-red-100/75 to-orange-300/75 backdrop-blur-2xl backdrop-saturate-200">
-        <div className="overflow-x-auto rounded-lg border border-gray-100 bg-white">{detail?.render}</div>
+        {...glassModalProps(COULEUR_MODULE.logistique)}
+        footer={<Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>}>
+        {detail?.sansCadre
+          ? detail.render
+          : <div className="table-verre overflow-x-auto">{detail?.render}</div>}
       </Modal>
     </div>
   )

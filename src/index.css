@@ -181,6 +181,51 @@ html:not(.dark) .modal-glass input:not([type="checkbox"]):not([type="radio"]):no
   border-radius: 0.85rem;
 }
 
+/* ── Paramètres des modules : cartes en verre (`.params-verre`, posé par ParamsCarte) ────────────
+   Les groupes de champs deviennent des tuiles arrondies, les champs sont très arrondis, la couleur du module
+   (`--p-accent`) teinte le focus. */
+.params-verre .fg-tuile {
+  margin-bottom: 0;
+  position: relative;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 1.4rem;
+  padding: 0.85rem;
+  box-shadow: 0 10px 22px -16px rgba(26, 26, 26, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.params-verre .fg-tuile:hover { transform: translateY(-1px); box-shadow: 0 14px 26px -16px rgba(26, 26, 26, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.95); }
+.params-verre .fg-tuile:focus-within { z-index: 30; }
+.params-verre .fg-tuile > label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+.params-verre input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.params-verre select,
+.params-verre textarea {
+  border-radius: 1.1rem;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+  padding-left: 1rem;
+  font-weight: 600;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+html:not(.dark) .params-verre input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:disabled):not([readonly]),
+html:not(.dark) .params-verre select:not(:disabled),
+html:not(.dark) .params-verre textarea:not(:disabled):not([readonly]) {
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(26, 26, 26, 0.08);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.params-verre input:not([type="checkbox"]):not([type="radio"]):focus,
+.params-verre select:focus,
+.params-verre textarea:focus {
+  outline: none;
+  border-color: var(--p-accent, #ea580c);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--p-accent, #ea580c) 22%, transparent);
+}
+.params-verre input[type="checkbox"], .params-verre input[type="radio"] { accent-color: var(--p-accent, #ea580c); border-radius: 0.4rem; }
+.params-verre button[class*="rounded-xl"], .params-verre button[class*="rounded-lg"] { border-radius: 1rem; }
+html.dark .params-verre .fg-tuile { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 10px 22px -16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+
 /* Une tuile de verre (backdrop-filter) forme son propre empilement : sans cela, la tuile
    suivante recouvrirait la liste de suggestions d'un champ (client…). La tuile active passe devant. */
 .modal-glass .fg-tuile, .tuile-verre { position: relative; }
@@ -430,4 +475,18 @@ html.dark .barre-defilement-fixe { background: rgba(30, 34, 38, 0.6); border-col
   @keyframes ed-halo-carte { 0%, 100% { box-shadow: 0 14px 30px -18px rgba(220, 38, 38, 0.5), 0 0 0 0 rgba(220, 38, 38, 0.35); } 50% { box-shadow: 0 14px 30px -18px rgba(220, 38, 38, 0.5), 0 0 0 7px rgba(220, 38, 38, 0); } }
   .ed-halo { animation: ed-halo 2s ease-out infinite; }
   .ed-halo-carte { animation: ed-halo-carte 2.4s ease-out infinite; }
+}
+
+/* ── Félicitations d'objectif (50 % et 100 %) : confettis qui tombent, icône qui rebondit, reflet qui balaie ── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fe-entree { from { opacity: 0; transform: translateY(-10px) scale(0.97); } to { opacity: 1; transform: none; } }
+  @keyframes fe-confetti { 0% { transform: translateY(-14px) rotate(0deg); opacity: 0; } 12% { opacity: 1; } 100% { transform: translateY(120px) rotate(540deg); opacity: 0; } }
+  @keyframes fe-rebond { 0%, 100% { transform: translateY(0) rotate(0deg) scale(1); } 20% { transform: translateY(-7px) rotate(-10deg) scale(1.08); } 40% { transform: translateY(0) rotate(8deg) scale(1); } 60% { transform: translateY(-4px) rotate(-5deg); } }
+  @keyframes fe-brille { 0% { transform: translateX(-130%) skewX(-18deg); } 60%, 100% { transform: translateX(420%) skewX(-18deg); } }
+  @keyframes fe-etoile { 0%, 100% { transform: scale(0.6) rotate(0deg); opacity: 0.3; } 50% { transform: scale(1.2) rotate(25deg); opacity: 1; } }
+  .fe-entree { animation: fe-entree 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; }
+  .fe-confetti { animation: fe-confetti 3.4s ease-in infinite; }
+  .fe-rebond { animation: fe-rebond 2.6s ease-in-out infinite; }
+  .fe-brille { animation: fe-brille 3.6s ease-in-out infinite; }
+  .fe-etoile { animation: fe-etoile 1.8s ease-in-out infinite; }
 }

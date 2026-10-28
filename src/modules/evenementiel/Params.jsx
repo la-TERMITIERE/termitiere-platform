@@ -1,7 +1,8 @@
 // Paramètres briqueterie — recettes matières / briques, tarifs, export, reset.
 import { useState, useEffect } from 'react'
-import { Save, FileSpreadsheet, Trash2, AlertTriangle, Settings } from 'lucide-react'
-import Card from '../../shared/ui/Card'
+import { Save, FileSpreadsheet, Trash2, AlertTriangle, Settings, Factory, Tag, Calculator } from 'lucide-react'
+import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
+import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -139,8 +140,12 @@ export default function Params() {
       </p>
       <div className="flex justify-end"><Button onClick={saveAll}><Save size={16} /> Enregistrer</Button></div>
 
-      <Card title="Recettes de production (pour 1000 briques)">
-        <div className="overflow-x-auto">
+      <ParamsGrille>
+      <ObjectifParam poleId="briques" couleur="#475569" moduleId="evenementiel" large={false} titre="Objectif de recettes : Briqueterie" />
+      <ObjectifParam poleId="transport" couleur="#0891b2" moduleId="evenementiel" large={false} titre="Objectif de recettes : Transport" />
+
+      <ParamsCarte icone={Factory} couleur="#475569" titre="Recettes de production (pour 1000 briques)" large>
+        <div className="table-verre overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
@@ -164,9 +169,9 @@ export default function Params() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </ParamsCarte>
 
-      <Card title="Tarifs de vente">
+      <ParamsCarte icone={Tag} couleur="#0284c7" titre="Tarifs de vente" large>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {briques.map((b) => (
             <FormGroup key={b.id} label={b.nom}>
@@ -176,9 +181,9 @@ export default function Params() {
             </FormGroup>
           ))}
         </div>
-      </Card>
+      </ParamsCarte>
 
-      <Card title="Marge : coût du matériel (ciment)">
+      <ParamsCarte icone={Calculator} couleur="#b45309" titre="Marge : coût du matériel (ciment)" large>
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <FormGroup label="Prix d'un sac de ciment (FCFA)">
             <Input type="number" min="0" className="w-40" value={prixCiment} onChange={(e) => setPrixCiment(e.target.value)} />
@@ -188,7 +193,7 @@ export default function Params() {
             Le <strong>rendement</strong> = nombre de briques faites avec un sac de ciment. Utilisé dans l'onglet <strong>Marge &amp; Bénéfice</strong>.
           </p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-verre overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
@@ -214,16 +219,16 @@ export default function Params() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </ParamsCarte>
 
-      <Card title="Export des données">
+      <ParamsCarte icone={FileSpreadsheet} couleur="#16a34a" titre="Export des données">
         <p className="mb-3 text-sm text-gray-500">Exporter les productions briqueterie en fichier Excel.</p>
         <Button onClick={exportXLSX} loading={exporting}><FileSpreadsheet size={16} /> Exporter les productions</Button>
-      </Card>
+      </ParamsCarte>
 
       {isAdmin && (
-        <Card title="Réinitialisation des données" className="border-red-200">
-          <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
+        <ParamsCarte icone={AlertTriangle} danger titre="Réinitialisation des données">
+          <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-600" />
             <div>
               <p className="font-semibold text-red-900">Zone dangereuse</p>
@@ -236,8 +241,9 @@ export default function Params() {
               </Button>
             </div>
           </div>
-        </Card>
+        </ParamsCarte>
       )}
+      </ParamsGrille>
 
       <Modal open={resetOpen} onClose={() => setResetOpen(false)} title="Confirmer la réinitialisation"
         footer={<><Button variant="ghost" onClick={() => setResetOpen(false)}>Annuler</Button><Button variant="danger" onClick={resetDonnees} loading={resetting}><Trash2 size={15} /> Confirmer</Button></>}>

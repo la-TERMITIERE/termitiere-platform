@@ -163,6 +163,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
   const [secteurAjoutChoisi, setSecteurAjoutChoisi] = useState('')
   const [triLignes, setTriLignes] = useState('date_desc') // tri de la liste des dépenses du mois d'un secteur
   const [triApportsDesc, setTriApportsDesc] = useState(true) // tri par date de l'onglet « Apports & ajouts » : true = plus récent d'abord
+  const [triRetoursDesc, setTriRetoursDesc] = useState(true) // idem pour l'onglet « Retours de reliquat »
   // Détail / édition d'un apport précis (un élément de `revisions`) — cf. apportsTous
   // et l'historique dans la modale d'ajout. `ctx` = { budgetId, secteurId, site,
   // secteurLabel, revisions, estCaisseCommune } : tout ce qu'il faut pour réécrire
@@ -545,8 +546,8 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
         const caisse = d.financePar === 'caisse_commune' || d.secteurId === 'divers'
         return { ...d, origine, secteurLabel: caisse ? 'CAISSE COURANTE' : (sct?.label || d.secteurId), secteurColor: caisse ? '#7c3aed' : (sct?.color || '#64748b'), vers: caisse ? 'la caisse courante' : `le budget ${sct?.label || ''}` }
       })
-      .sort((a, b) => ((a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0))))
-  }, [depensesReelles, annee, mois])
+      .sort((a, b) => (triRetoursDesc ? 1 : -1) * ((a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0))))
+  }, [depensesReelles, annee, mois, triRetoursDesc])
   const totalRetoursMois = retoursMois.reduce((t, d) => t + Math.abs(Number(d.montant) || 0), 0)
 
   return (
@@ -618,6 +619,13 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
             <p className="text-xl font-black text-green-700">+{fmt(totalRetoursMois)} <span className="text-xs font-semibold text-gray-400">FCFA · {retoursMois.length} retour(s)</span></p>
           </div>
         </div>
+        {retoursMois.length > 0 && (
+          <button onClick={() => setTriRetoursDesc((v) => !v)}
+            className="group inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-xs font-bold text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/90">
+            <ArrowUpDown size={13} className={`transition-transform duration-300 ${triRetoursDesc ? '' : 'rotate-180'}`} />
+            Trié par date {triRetoursDesc ? "(plus récent d'abord)" : "(plus ancien d'abord)"} : inverser
+          </button>
+        )}
         {retoursMois.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-3xl border border-white/70 bg-white/60 py-10 text-center text-sm text-gray-400 shadow-[0_14px_30px_-18px_rgba(26,26,26,0.3)] backdrop-blur-xl">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={icone3D('#94a3b8')}><Undo2 size={22} /></span>

@@ -10,6 +10,10 @@ import AvatarNom from '../../shared/ui/AvatarNom'
 import NumDoc from '../../shared/ui/NumDoc'
 import EtatVide from '../../shared/ui/EtatVide'
 import StatCard from '../../shared/ui/StatCard'
+import ObjectifKpi, { libelleObjectif } from '../comptabilite/ObjectifKpi'
+import ListeFacturesVerre from '../comptabilite/ListeFacturesVerre'
+import FelicitationObjectif from '../comptabilite/FelicitationObjectif'
+import { useQuotas, useObjectifPole } from '../comptabilite/quotas'
 import Card from '../../shared/ui/Card'
 import Modal from '../../shared/ui/Modal'
 import Badge from '../../shared/ui/Badge'
@@ -31,6 +35,8 @@ const RANG_PODIUM = [
 ]
 
 export default function Dashboard() {
+  const { quotas: objectifsPoles } = useQuotas()
+  const objBriques = useObjectifPole('briques')
   const briques = useBriqueterieStore((s) => s.briques)
   const prixSacCiment = useBriqueterieStore((s) => s.prixSacCiment)
   const { data: inventaires } = useCollection('evenementiel_inventaires')
@@ -243,7 +249,12 @@ export default function Dashboard() {
       <AlerteVentesAFacturer ventes={role === 'agent' ? ventes.filter((v) => !v.agentId || v.agentId === uid) : ventes} factures={factures} />
       {role === 'agent' && <AlerteVentesBrouillon ventes={ventes} uid={uid} />}
 
+      <FelicitationObjectif poleId="briques" secteur="de la Briqueterie" couleur="#475569" />
+      {objectifsPoles.transport > 0 && <FelicitationObjectif poleId="transport" secteur="du Transport" couleur="#0891b2" />}
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+        <ObjectifKpi poleId="briques" couleur="#16a34a" lien={{ to: '/evenementiel/factures', label: 'Aller aux factures' }} seulementAvecObjectif masque={preset === 'mois'} />
+        {objectifsPoles.transport > 0 && <ObjectifKpi poleId="transport" titre="Transport : recettes du mois" couleur="#0891b2" />}
         <StatCard title="Production période" value={formatNumber(prodMois)} icon={Factory} accent="#475569"
           variation={comparable ? prodMois - prodMoisPrec : undefined} variationLabel={`période préc. : ${formatNumber(prodMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Production de la période', render: (
@@ -310,40 +321,17 @@ export default function Dashboard() {
               </table>
             </div>
           ) })} />
-        <StatCard title="CA période" value={formatMoney(caMois)} icon={Package} accent="#0284c7"
-          variation={comparable ? caMois - caMoisPrec : undefined} variationLabel={`période préc. : ${formatMoney(caMoisPrec)} · cliquer`}
+        <StatCard title={preset === 'mois' ? 'Recettes du mois' : 'CA période'} value={formatMoney(caMois)} icon={Package} accent="#0284c7"
+          chip={comparable ? `${caMois >= caMoisPrec ? '+' : '−'}${formatMoney(Math.abs(caMois - caMoisPrec))}` : undefined} chipGood={caMois >= caMoisPrec}
+          variationLabel={preset === 'mois' ? libelleObjectif(objBriques) : `période préc. : ${formatMoney(caMoisPrec)} · cliquer`}
           onClick={() => setDetail({ titre: 'Chiffre d’affaires : par client & catégorie', render: (
-            <div className="overflow-hidden rounded-2xl border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="border-b border-gray-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                  <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Client</th><th className="px-4 py-3 text-left">Briques achetées (catégorie × qté)</th><th className="px-4 py-3 text-center">Total briques</th><th className="px-4 py-3 text-right">Total TTC</th></tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {[...facturesDuMois].sort((a, b) => (a.date < b.date ? 1 : -1)).map((f, i) => {
-                    const lignes = (f.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0)
-                    const totalBr = lignes.reduce((s, l) => s + (parseInt(l.qte) || 0), 0)
-                    return (
-                    <tr key={f.id} className={`transition-colors hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'}`}>
-                      <td className="whitespace-nowrap px-4 py-2.5 align-top font-mono text-xs text-gray-500">{formatDateShort(f.date)}</td>
-                      <td className="px-4 py-2.5 align-top font-semibold text-gray-800">{f.client?.nom || '—'}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex flex-wrap gap-1.5">
-                          {lignes.map((l, k) => (
-                            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                              {l.article || l.articleId || '—'} <span className="font-extrabold">{formatNumber(l.qte)}</span>
-                            </span>
-                          ))}
-                          {!lignes.length && <span className="text-xs text-gray-400">—</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-center align-top font-bold text-gray-700">{formatNumber(totalBr)}</td>
-                      <td className="px-4 py-2.5 text-right align-top text-base font-extrabold text-sky-700">{formatMoney(f.totalTTC || 0)}</td>
-                    </tr>
-                  )})}
-                  {!facturesDuMois.length && <tr><td colSpan={5} className="bg-white py-8 text-center text-sm text-gray-400">Aucune facture sur la période.</td></tr>}
-                </tbody>
-              </table>
-            </div>
+            <ListeFacturesVerre couleur="#0284c7" poleId="briques" avecObjectif={preset === 'mois'} vide="Aucune facture sur la période."
+              items={facturesDuMois.map((f) => {
+                const lignes = (f.lignes || []).filter((l) => (parseInt(l.qte) || 0) > 0)
+                const totalBr = lignes.reduce((t, l) => t + (parseInt(l.qte) || 0), 0)
+                return { id: f.id, date: f.date, titre: f.client?.nom || '—', sous: f.numero ? `Facture ${f.numero}` : '', extra: `${formatNumber(totalBr)} brique${totalBr > 1 ? 's' : ''}`, montant: f.totalTTC || 0,
+                  pastilles: lignes.map((l) => ({ label: l.article || l.articleId || '—', valeur: formatNumber(l.qte) })) }
+              })} />
           ) })} />
         <StatCard title="Autorisations" value={demandesActives.length} sub={`${caillasses} caillasses · cliquer`} icon={Send}
           accent={demandesActives.length ? '#d97706' : '#64748b'}
