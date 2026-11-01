@@ -343,14 +343,33 @@ const ligneService = (prefixe, f, suffixe, cle, label, montant) => ({
   sku: `${prefixe.toUpperCase()}-${cle.toUpperCase()}`, label: label || '',
   quantity: 1, unit_price: montant, total: montant
 })
-// Ajoute la ligne d'écart qui ramène la somme des lignes au total facturé
-// (négative pour une remise ou un total revu à la baisse).
+// Ramène la somme des lignes au total facturé. Un écart positif devient une ligne
+// « Écart à régulariser ». Une remise (total revu à la baisse) est DÉDUITE des lignes,
+// en commençant par la plus grosse : FEZIRE refuse les prix négatifs (« Prix invalide »).
+// Une ligne réduite passe à la quantité 1 pour que quantité × prix = total, au centime près.
 function equilibrer(prefixe, f, lignes, total) {
   const somme = lignes.reduce((s, l) => s + nombre(l.total), 0)
   const ecart = Math.round((Math.round(nombre(total)) - somme) * 100) / 100
   if (!lignes.length || !ecart) return lignes
-  return [...lignes, ligneService(prefixe, f, 'ajust', ecart > 0 ? DIVERS : AJUSTEMENT,
-    ecart > 0 ? 'Écart à régulariser' : 'Remise accordée', ecart)]
+  if (ecart > 0) return [...lignes, ligneService(prefixe, f, 'ajust', DIVERS, 'Écart à régulariser', ecart)]
+  let reste = -ecart
+  const ordre = lignes.map((l, i) => i).sort((a, b) => nombre(lignes[b].total) - nombre(lignes[a].total))
+  const res = lignes.map((l) => ({ ...l }))
+  for (const i of ordre) {
+    if (reste <= 0) break
+    const l = res[i]
+    const retrait = Math.min(nombre(l.total), reste)
+    if (!retrait) continue
+    const nouveau = Math.round((nombre(l.total) - retrait) * 100) / 100
+    l.label = `${l.label}${l.quantity > 1 ? ` (× ${l.quantity})` : ''} · remise ${retrait}`
+    l.quantity = 1
+    l.unit_price = nouveau
+    l.total = nouveau
+    reste = Math.round((reste - retrait) * 100) / 100
+  }
+  // Ligne entièrement absorbée par la remise : retirée (un prix nul peut être refusé).
+  const nonNulles = res.filter((l) => nombre(l.total) > 0)
+  return nonNulles.length ? nonNulles : res
 }
 
 // FEZIRE refuse deux clients de même nom dans l'organisation : or un même nom peut
