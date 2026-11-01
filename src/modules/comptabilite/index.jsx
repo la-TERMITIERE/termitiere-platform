@@ -19,6 +19,7 @@ import Patrimoine from './Patrimoine'
 import PlanComptable from './PlanComptable'
 import ModelesPlans from './ModelesPlans'
 import Params from './Params'
+import FacturesFournisseurs from './FacturesFournisseurs'
 import TresoDashboard from './tresorerie/TresoDashboard'
 import Creances from './tresorerie/Creances'
 import Recouvrements from './tresorerie/Recouvrements'
@@ -51,6 +52,7 @@ export default function ComptabiliteModule() {
       <Route path="automatisation" element={<Automatisation />} />
       <Route path="supervision" element={<Supervision />} />
       <Route path="tiers" element={<Tiers />} />
+      <Route path="factures-fournisseurs" element={<FacturesFournisseurs />} />
       {/* Mouvements bancaires : réservé à PAU / Assistant PAU / GE / Info (BANQUE_ROLES), comme les comptes bancaires des secteurs. */}
       <Route path="mouvements-bancaires" element={peutVoirBanque(role) ? <ComptesBancaires /> : <Navigate to="/comptabilite" replace />} />
       <Route path="mouvements-bancaires/:banqueId" element={peutVoirBanque(role) ? <MouvementsDuCompte /> : <Navigate to="/comptabilite" replace />} />

@@ -7,7 +7,7 @@ import { COL } from '../data'
 import { ventesUnifiees, avecEncaissements } from '../../../shared/ventes'
 import {
   COL_TRESO, COLLECTIONS_BANQUE, comptesTresorerie, fluxTresorerie, soldesComptes, totauxParType,
-  creances as calculerCreances, paramsEffectifs, compteAffecte, aujourdhui
+  creances as calculerCreances, paramsEffectifs, compteAffecte, aujourdhui, dettesFournisseurs
 } from './logic'
 
 function useBanquesSecteurs() {
@@ -40,6 +40,7 @@ export function useTresorerie() {
   const { data: projets } = useCollection('projets')
   const { data: depenses } = useCollection('depense_depenses')
   const { data: revenusManuels } = useCollection('depense_revenus_manuels')
+  const { data: facturesFournisseurs } = useCollection(COL.facturesFournisseurs)
 
   const params = useMemo(() => paramsEffectifs(paramsDocs.find((d) => d.id === 'config')), [paramsDocs])
   const comptes = useMemo(() => comptesTresorerie({ comptes: comptesTreso, banques }), [comptesTreso, banques])
@@ -52,8 +53,9 @@ export function useTresorerie() {
   const listeCreances = useMemo(() => calculerCreances(ventes, params, aujourdhui()), [ventes, params])
 
   const flux = useMemo(() => fluxTresorerie({
-    comptes, params, mouvements, virements, mvtsBanque, ventes, depenses, revenusManuels
-  }), [comptes, params, mouvements, virements, mvtsBanque, ventes, depenses, revenusManuels])
+    comptes, params, mouvements, virements, mvtsBanque, ventes, depenses, revenusManuels, facturesFournisseurs
+  }), [comptes, params, mouvements, virements, mvtsBanque, ventes, depenses, revenusManuels, facturesFournisseurs])
+  const dettes = useMemo(() => dettesFournisseurs(facturesFournisseurs), [facturesFournisseurs])
 
   const soldes = useMemo(() => soldesComptes(comptes, flux), [comptes, flux])
   const totaux = useMemo(() => totauxParType(soldes), [soldes])
@@ -62,7 +64,7 @@ export function useTresorerie() {
 
   return {
     params, comptes, soldes, totaux, flux, mouvements, virements, releves, banques,
-    ventes, creances: listeCreances, depenses, compteDepenses,
+    ventes, creances: listeCreances, depenses, compteDepenses, facturesFournisseurs, dettes,
     loading: l1 || l2 || l3
   }
 }

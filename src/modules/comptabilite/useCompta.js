@@ -24,6 +24,8 @@ export function useCompta() {
   const { data: depenses, loading: ld } = useCollection('depense_depenses')
   const { data: revenusManuels, loading: lr } = useCollection('depense_revenus_manuels')
   const { data: bulletins } = useCollection('rh_bulletins')
+  const { data: paramsCompta } = useCollection(COL.params)
+  const tva = useMemo(() => paramsCompta.find((d) => d.id === 'tva') || null, [paramsCompta])
   // Ventes de tous les secteurs, encaissements et mouvements de trésorerie (module Trésorerie).
   const treso = useTresorerie()
 
@@ -32,9 +34,10 @@ export function useCompta() {
   const ecrituresAutomatiques = useMemo(
     () => ecrituresAuto({
       depenses, revenusManuels, bulletins,
-      ventes: treso.creances, flux: treso.flux, comptes: treso.comptes, compteDepenses: treso.compteDepenses
+      ventes: treso.creances, flux: treso.flux, comptes: treso.comptes, compteDepenses: treso.compteDepenses,
+      facturesFournisseurs: treso.facturesFournisseurs, tva
     }),
-    [depenses, revenusManuels, bulletins, treso.creances, treso.flux, treso.comptes, treso.compteDepenses]
+    [depenses, revenusManuels, bulletins, treso.creances, treso.flux, treso.comptes, treso.compteDepenses, treso.facturesFournisseurs, tva]
   )
 
   // Toutes les écritures : saisies manuellement + générées automatiquement.
@@ -53,7 +56,7 @@ export function useCompta() {
     comptesPerso, immobilisations, patrimoine, exercices, tiers, centres,
     ecrituresManuelles, ecrituresAutomatiques, ecritures,
     plan, mvtsValides, mvtsTous,
-    treso,
+    treso, tva,
     loading: lc || le || li || lp || ld || lr || treso.loading
   }
 }

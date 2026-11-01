@@ -11,10 +11,10 @@ import { useTresorerie } from './useTresorerie'
 import { prevision } from './logic'
 
 export default function Previsions() {
-  const { creances, depenses, totaux, params, loading } = useTresorerie()
+  const { creances, depenses, dettes, totaux, params, loading } = useTresorerie()
   const [semaines, setSemaines] = useState('12')
   const aVenir = useMemo(() => depenses.filter((d) => d.statut === 'approuvee'), [depenses])
-  const p = useMemo(() => prevision({ soldeDepart: totaux.total, creancesListe: creances, depensesAVenir: aVenir, semaines: Number(semaines) }), [totaux.total, creances, aVenir, semaines])
+  const p = useMemo(() => prevision({ soldeDepart: totaux.total, creancesListe: creances, depensesAVenir: aVenir, dettesFournisseurs: dettes, semaines: Number(semaines) }), [totaux.total, creances, aVenir, dettes, semaines])
   const minimum = p.semaines.reduce((m, s) => (s.solde < m.solde ? s : m), p.semaines[0] || { solde: 0 })
   const seuil = Number(params.seuilAlerte) || 0
   const max = Math.max(1, ...p.semaines.map((s) => Math.abs(s.solde)), Math.abs(totaux.total))
@@ -23,7 +23,7 @@ export default function Previsions() {
   if (loading) return <div className="py-16 text-center text-gray-400">Chargement…</div>
   return (
     <div className="space-y-5">
-      <BandeauCompta icone={TrendingUp} titre="Prévisions de trésorerie" sous="Solde projeté à partir des liquidités du jour, des créances attendues et des dépenses approuvées non décaissées.">
+      <BandeauCompta icone={TrendingUp} titre="Prévisions de trésorerie" sous="Solde projeté à partir des liquidités du jour, des créances attendues, des factures fournisseurs à payer et des dépenses approuvées non décaissées.">
         <OngletsBande options={[{ id: '4', label: '1 mois' }, { id: '12', label: '3 mois' }, { id: '26', label: '6 mois' }]} valeur={semaines} onChange={setSemaines} taille="sm" />
       </BandeauCompta>
 

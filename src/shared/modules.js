@@ -255,6 +255,7 @@ export const MODULE_NAV = {
     { label: 'Automatisation d\'écriture', to: '/comptabilite/automatisation', icon: Wrench },
     { label: 'Supervision du moteur',  to: '/comptabilite/supervision',     icon: Gauge },
     { label: 'Tiers',                  to: '/comptabilite/tiers',           icon: Users },
+    { label: 'Factures fournisseurs',  to: '/comptabilite/factures-fournisseurs', icon: Package },
     { label: 'Balance & Grand Livre',  to: '/comptabilite/grand-livre',     icon: Scale },
     { label: 'Comptabilité Analytique', to: '/comptabilite/analytique',     icon: PieChart },
     { label: 'États Financiers',       to: '/comptabilite/etats',           icon: BarChart2 },

@@ -601,7 +601,7 @@ function mouvementsTresorerie(d) {
   const mvtsBanque = COLLECTIONS_BANQUE.flatMap(({ secteur, col }) => v(col).map((m) => ({ ...m, secteur })))
   const depenses = v('depense_depenses')
   const parDepense = new Map(depenses.map((x) => [`dep-${x.id}`, x]))
-  const flux = fluxTresorerie({ comptes, params, mouvements: v('treso_mouvements'), virements: v('treso_virements'), mvtsBanque, ventes: [], depenses, revenusManuels: v('depense_revenus_manuels') })
+  const flux = fluxTresorerie({ comptes, params, mouvements: v('treso_mouvements'), virements: v('treso_virements'), mvtsBanque, ventes: [], depenses, revenusManuels: v('depense_revenus_manuels'), facturesFournisseurs: v('compta_factures_fournisseurs') })
   const contrepartie = (f) => f.source === 'depense' ? compteDepense(parDepense.get(f.id) || {})
     : (f.source === 'virement' || f.nature === 'VERSEMENT_BANQUE' || f.nature === 'RETRAIT_BANQUE') ? '585000'
     : f.contrepartie || '471000'
@@ -685,7 +685,7 @@ const BESOINS = {
   CASH_MOVEMENT: [
     'treso_comptes', 'treso_mouvements', 'treso_virements', 'treso_params', 'compta_banques',
     ...COLLECTIONS_BANQUE.map((b) => b.col), 'depense_depenses', 'depense_revenus_manuels',
-    'projet_versements_client', 'projets', 'rh_bulletins'
+    'projet_versements_client', 'projets', 'rh_bulletins', 'compta_factures_fournisseurs'
   ]
 }
 

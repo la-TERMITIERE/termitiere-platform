@@ -122,7 +122,7 @@ export function compteAffecte(params, comptes, cle, site = null) {
 // { id, date, compteId, sens:'IN'|'OUT', montant, nature, libelle, contrepartie, source, reference, mode, tiers, secteur, lie }
 export function fluxTresorerie({
   comptes = [], params = {}, mouvements = [], virements = [], mvtsBanque = [], ventes = [],
-  depenses = [], revenusManuels = []
+  depenses = [], revenusManuels = [], facturesFournisseurs = []
 } = {}) {
   const out = []
   const push = (f) => { if (n(f.montant) > 0 && f.date) out.push({ ...f, montant: Math.round(n(f.montant) * 100) / 100 }) }
@@ -169,6 +169,15 @@ export function fluxTresorerie({
     push({ id: `dep-${d.id}`, date: jour(d.dateDecaissement || d.date), compteId: compteAffecte(params, comptes, 'depense', d.site), sens: 'OUT', montant: d.montant,
       nature: 'DEPENSE', libelle: d.description || d.categorie || 'Dépense', contrepartie: null, source: 'depense', reference: d.numero || '',
       mode: modeCanonique(d.modePaiement), tiers: d.beneficiaireNom || d.fournisseur || '', secteur: d.secteurId || '', categorie: d.categorie })
+  }
+  // Règlements des factures fournisseurs (Comptabilité › Factures fournisseurs).
+  for (const ff of facturesFournisseurs) {
+    if (ff.statut !== 'validee') continue
+    for (const r of ff.reglements || []) {
+      push({ id: `ff-${ff.id}-${r.id}`, date: jour(r.date), compteId: r.compteId || compteAffecte(params, comptes, 'depense'), sens: 'OUT', montant: r.montant,
+        nature: 'ACHAT', libelle: `Règlement ${ff.numero || ''} : ${ff.fournisseur || ''}`.trim(), contrepartie: '401100', source: 'fournisseur',
+        reference: r.reference || ff.numero || '', mode: modeCanonique(r.mode), tiers: ff.fournisseur || '', secteur: ff.secteur || '' })
+    }
   }
   // Rentrées saisies à la main (E-DÉPENSES › Sources de revenus).
   for (const r of revenusManuels) {
@@ -302,7 +311,7 @@ export function pilotage(liste, { debut = null, fin = null, ref = aujourdhui() }
 // Solde de départ + encaissements attendus (échéances des créances, termes d'échéancier,
 // promesses) − décaissements attendus (dépenses approuvées non encore décaissées),
 // semaine par semaine.
-export function prevision({ soldeDepart = 0, creancesListe = [], depensesAVenir = [], semaines = 12, ref = aujourdhui() }) {
+export function prevision({ soldeDepart = 0, creancesListe = [], depensesAVenir = [], dettesFournisseurs = [], semaines = 12, ref = aujourdhui() }) {
   const evts = []
   for (const c of creancesListe) {
     if (c.reste <= 0 || c.etat === 'irrecouvrable') continue
@@ -319,6 +328,7 @@ export function prevision({ soldeDepart = 0, creancesListe = [], depensesAVenir 
       evts.push({ date: d < ref ? ref : d, montant: c.etat === 'contestee' ? 0 : c.reste, sens: 'IN', libelle: `${c.numero} : ${c.client?.nom || ''}` })
     }
   }
+  for (const f of dettesFournisseurs) if (f.reste > 0) evts.push({ date: (f.echeance || ref) < ref ? ref : f.echeance, montant: f.reste, sens: 'OUT', libelle: `${f.numero || 'Facture'} : ${f.fournisseur || ''}` })
   for (const d of depensesAVenir) evts.push({ date: (jour(d.date) || ref) < ref ? ref : jour(d.date), montant: n(d.montant), sens: 'OUT', libelle: d.description || d.categorie || 'Dépense approuvée' })
   const res = []
   let solde = soldeDepart
@@ -345,4 +355,21 @@ export function rapprochement(releve, flux, soldeInitial = 0) {
   const nonPointes = duCompte.filter((f) => !pointes.has(f.id))
   const soldePointe = soldeInitial + duCompte.filter((f) => pointes.has(f.id)).reduce((s, f) => s + (f.sens === 'IN' ? f.montant : -f.montant), 0)
   return { soldeComptable: solde, soldeReleve: n(releve.soldeReleve), ecart: n(releve.soldeReleve) - solde, ecartPointe: n(releve.soldeReleve) - soldePointe, nonPointes, nbPointes: pointes.size }
+}
+
+// ── Factures fournisseurs : totaux et reste à payer ──────────────────────────
+export function totauxFactureFournisseur(f) {
+  const lignes = f.lignes || []
+  const ht = lignes.reduce((s, l) => s + n(l.montantHT), 0)
+  const tva = lignes.reduce((s, l) => s + Math.round(n(l.montantHT) * n(l.tauxTva) / 100), 0)
+  const ttc = ht + tva
+  const regle = (f.reglements || []).reduce((s, r) => s + n(r.montant), 0)
+  return { ht, tva, ttc, regle, reste: Math.max(0, ttc - regle) }
+}
+export function dettesFournisseurs(factures = [], ref = aujourdhui()) {
+  return factures.filter((f) => f.statut === 'validee').map((f) => {
+    const t = totauxFactureFournisseur(f)
+    const echeance = f.echeance || f.date
+    return { ...f, ...t, echeance, retard: t.reste > 0 ? Math.max(0, ecartJours(echeance, ref)) : 0 }
+  })
 }
