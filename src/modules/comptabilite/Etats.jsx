@@ -8,9 +8,12 @@ import Badge from '../../shared/ui/Badge'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
 import { balance, compteDeResultat, soldePrefixe } from './logic'
+import { compteDeResultatSyscohada, bilanSyscohada } from './syscohada'
+import Button from '../../shared/ui/Button'
+import { exportRapportExcel } from '../../utils/excelReport'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
-const TABS = ['Bilan', 'Résultat', 'Flux Trésorerie', 'Ratios & Analyses']
+const TABS = ['Bilan', 'Résultat', 'Flux Trésorerie', 'Ratios & Analyses', 'Format SYSCOHADA']
 
 export default function Etats() {
   const { plan, mvtsValides, loading } = useCompta()
@@ -56,6 +59,7 @@ export default function Etats() {
       {tab === 'Résultat' && <Resultat res={res} />}
       {tab === 'Flux Trésorerie' && <Flux mvts={mvtsValides} bornes={bornes} />}
       {tab === 'Ratios & Analyses' && <Ratios res={res} bilan={bilan} />}
+      {tab === 'Format SYSCOHADA' && <FormatSyscohada mvts={mvtsValides} plan={plan} bornes={bornes} exercice={exercice} resAnterieur={resAnterieur} />}
     </div>
   )
 }
@@ -166,4 +170,58 @@ function Ratios({ res, bilan }) {
 
 function Ligne({ label, value }) {
   return <div className="flex items-center justify-between"><span className="text-gray-500">{label}</span><span className="font-semibold">{formatMoney(value)}</span></div>
+}
+
+// États au format SYSCOHADA révisé : compte de résultat en cascade (XA → XI) et bilan par
+// rubriques, avec contrôle d'équilibre et export Excel.
+function FormatSyscohada({ mvts, plan, bornes, exercice, resAnterieur }) {
+  const cr = useMemo(() => compteDeResultatSyscohada(mvts, plan, bornes), [mvts, plan, exercice]) // eslint-disable-line react-hooks/exhaustive-deps
+  const bil = useMemo(() => bilanSyscohada(mvts, plan, { fin: bornes.fin, resultatNet: cr.resultatNet, resultatsAnterieurs: resAnterieur }), [mvts, plan, exercice, cr.resultatNet, resAnterieur]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [ouverte, setOuverte] = useState(null)
+  const exporter = () => exportRapportExcel({
+    filename: `etats-syscohada-${exercice}.xlsx`,
+    sections: [
+      { name: 'Compte de résultat', title: `Compte de résultat SYSCOHADA : exercice ${exercice}`, subtitle: `Du ${bornes.debut} au ${bornes.fin}`,
+        columns: [{ key: 'ref', label: 'Réf.', width: 8 }, { key: 'label', label: 'Libellé', width: 52 }, { key: 'montant', label: 'Montant (XOF)', width: 18 }],
+        rows: cr.lignes.map((l) => ({ ref: l.ref, label: l.label, montant: Math.round(l.montant) })) },
+      { name: 'Bilan', title: `Bilan SYSCOHADA au ${bornes.fin}`, subtitle: bil.equilibre ? 'Bilan équilibré' : 'Écart de bilan',
+        columns: [{ key: 'ref', label: 'Réf.', width: 8 }, { key: 'label', label: 'Libellé', width: 52 }, { key: 'montant', label: 'Montant (XOF)', width: 18 }],
+        rows: [{ ref: '', label: 'ACTIF' }, ...bil.actif, { ref: 'BZ', label: 'TOTAL GÉNÉRAL ACTIF', montant: bil.totalActif }, { ref: '', label: 'PASSIF' }, ...bil.passif, { ref: 'DZ', label: 'TOTAL GÉNÉRAL PASSIF', montant: bil.totalPassif }]
+          .map((l) => ({ ref: l.ref, label: l.label, montant: l.montant === undefined ? '' : Math.round(l.montant) })) }
+    ]
+  })
+  const Ligne = ({ l, i }) => (
+    <>
+      <tr onClick={() => !l.solde && l.detail?.length && setOuverte(ouverte === i ? null : i)} className={l.solde ? 'bg-orange-50/60 font-extrabold' : `${l.detail?.length ? 'cursor-pointer hover:bg-gray-50' : ''}`}>
+        <td className="px-3 py-1.5 font-mono text-xs">{l.ref}</td><td className="px-3 py-1.5">{l.label}</td>
+        <td className={`px-3 py-1.5 text-right ${l.montant < 0 ? 'text-red-600' : ''}`}>{l.montant ? formatMoney(l.montant) : (l.solde ? formatMoney(0) : '—')}</td>
+      </tr>
+      {ouverte === i && l.detail.map((d) => <tr key={d.compte} className="bg-gray-50/60 text-xs text-gray-600"><td /><td className="px-6 py-1"><span className="font-mono">{d.compte}</span> {d.libelle}</td><td className="px-3 py-1 text-right">{formatMoney(d.montant)}</td></tr>)}
+    </>
+  )
+  const Tableau = ({ titre, lignes, total, totalLabel }) => (
+    <Card className="!p-0 overflow-hidden">
+      <div className="border-b border-gray-100 px-4 py-3"><p className="font-bold text-gray-800">{titre}</p></div>
+      <table className="w-full text-sm"><tbody className="divide-y divide-gray-100">
+        {lignes.map((l, i) => <Ligne key={l.ref} l={l} i={`${titre}-${i}`} />)}
+        {totalLabel && <tr className="bg-gray-100 font-extrabold"><td /><td className="px-3 py-2">{totalLabel}</td><td className="px-3 py-2 text-right">{formatMoney(total)}</td></tr>}
+      </tbody></table>
+    </Card>
+  )
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className={`flex flex-1 items-center gap-2 rounded-lg p-3 text-sm ${bil.equilibre ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+          <CheckCircle2 size={16} /> {bil.equilibre ? `Bilan équilibré : ${formatMoney(bil.totalActif)} à l'actif et au passif. Résultat net (XI) : ${formatMoney(cr.resultatNet)}.` : `Écart de bilan : ${formatMoney(bil.totalActif - bil.totalPassif)}.`}
+        </div>
+        <Button variant="ghost" onClick={exporter}>Exporter en Excel</Button>
+      </div>
+      <p className="text-xs text-gray-500">Présentation du système normal SYSCOHADA révisé, établie depuis la balance. Touchez une rubrique pour voir ses comptes. À faire valider par l'expert-comptable avant tout dépôt officiel (DSF).</p>
+      <Tableau titre={`Compte de résultat : exercice ${exercice}`} lignes={cr.lignes} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Tableau titre={`Actif au ${bornes.fin}`} lignes={bil.actif} total={bil.totalActif} totalLabel="TOTAL GÉNÉRAL ACTIF (BZ)" />
+        <Tableau titre={`Passif au ${bornes.fin}`} lignes={bil.passif} total={bil.totalPassif} totalLabel="TOTAL GÉNÉRAL PASSIF (DZ)" />
+      </div>
+    </div>
+  )
 }
