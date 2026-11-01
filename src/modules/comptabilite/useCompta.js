@@ -9,6 +9,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { COL } from './data'
 import { planEffectif, mouvements } from './logic'
 import { ecrituresAuto } from './passerelles'
+import { useTresorerie } from './tresorerie/useTresorerie'
 
 export function useCompta() {
   const { data: comptesPerso, loading: lc } = useCollection(COL.comptes)
@@ -23,12 +24,17 @@ export function useCompta() {
   const { data: depenses, loading: ld } = useCollection('depense_depenses')
   const { data: revenusManuels, loading: lr } = useCollection('depense_revenus_manuels')
   const { data: bulletins } = useCollection('rh_bulletins')
+  // Ventes de tous les secteurs, encaissements et mouvements de trésorerie (module Trésorerie).
+  const treso = useTresorerie()
 
   const plan = useMemo(() => planEffectif(comptesPerso), [comptesPerso])
 
   const ecrituresAutomatiques = useMemo(
-    () => ecrituresAuto({ depenses, revenusManuels, bulletins }),
-    [depenses, revenusManuels, bulletins]
+    () => ecrituresAuto({
+      depenses, revenusManuels, bulletins,
+      ventes: treso.creances, flux: treso.flux, comptes: treso.comptes, compteDepenses: treso.compteDepenses
+    }),
+    [depenses, revenusManuels, bulletins, treso.creances, treso.flux, treso.comptes, treso.compteDepenses]
   )
 
   // Toutes les écritures : saisies manuellement + générées automatiquement.
@@ -47,6 +53,7 @@ export function useCompta() {
     comptesPerso, immobilisations, patrimoine, exercices, tiers, centres,
     ecrituresManuelles, ecrituresAutomatiques, ecritures,
     plan, mvtsValides, mvtsTous,
-    loading: lc || le || li || lp || ld || lr
+    treso,
+    loading: lc || le || li || lp || ld || lr || treso.loading
   }
 }

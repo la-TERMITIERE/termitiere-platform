@@ -19,6 +19,15 @@ import Patrimoine from './Patrimoine'
 import PlanComptable from './PlanComptable'
 import ModelesPlans from './ModelesPlans'
 import Params from './Params'
+import TresoDashboard from './tresorerie/TresoDashboard'
+import Creances from './tresorerie/Creances'
+import Recouvrements from './tresorerie/Recouvrements'
+import BalanceAgee from './tresorerie/BalanceAgee'
+import Pilotage from './tresorerie/Pilotage'
+import Previsions from './tresorerie/Previsions'
+import Rapprochement from './tresorerie/Rapprochement'
+import Avances from './tresorerie/Avances'
+import ParamsTreso from './tresorerie/ParamsTreso'
 import { useAuth } from '../../hooks/useAuth'
 import { peutVoirVoletsAdmin, peutVoirBanque, isFullAccessRole } from '../../core/roles'
 
@@ -45,6 +54,14 @@ export default function ComptabiliteModule() {
       {/* Mouvements bancaires : réservé à PAU / Assistant PAU / GE / Info (BANQUE_ROLES), comme les comptes bancaires des secteurs. */}
       <Route path="mouvements-bancaires" element={peutVoirBanque(role) ? <ComptesBancaires /> : <Navigate to="/comptabilite" replace />} />
       <Route path="mouvements-bancaires/:banqueId" element={peutVoirBanque(role) ? <MouvementsDuCompte /> : <Navigate to="/comptabilite" replace />} />
+      {/* Trésorerie : mêmes rôles que les comptes bancaires (BANQUE_ROLES). */}
+      {[
+        ['tresorerie', TresoDashboard], ['tresorerie/creances', Creances], ['tresorerie/recouvrements', Recouvrements],
+        ['tresorerie/balance-agee', BalanceAgee], ['tresorerie/pilotage', Pilotage], ['tresorerie/previsions', Previsions],
+        ['tresorerie/rapprochement', Rapprochement], ['tresorerie/avances', Avances], ['tresorerie/params', ParamsTreso]
+      ].map(([chemin, Page]) => (
+        <Route key={chemin} path={chemin} element={peutVoirBanque(role) ? <Page /> : <Navigate to="/comptabilite" replace />} />
+      ))}
       <Route path="grand-livre" element={<GrandLivre />} />
       {/* Ancienne route Balance fusionnée dans « Balance & Grand Livre ». */}
       <Route path="balance" element={<Navigate to="/comptabilite/grand-livre" replace />} />
