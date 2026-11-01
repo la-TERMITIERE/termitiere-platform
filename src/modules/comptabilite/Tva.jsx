@@ -6,14 +6,18 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
+import { setItem } from '../../core/db'
+import { audit } from '../../core/audit'
+import Button from '../../shared/ui/Button'
+import { LIBELLE_SECTEUR } from '../../shared/ventes'
 import { syntheseTva, soldePrefixe } from './logic'
-import { MOIS_LABELS, TAUX_TVA, COMPTE_TVA_COLLECTEE, COMPTE_TVA_DEDUCTIBLE } from './data'
+import { MOIS_LABELS, TAUX_TVA, COMPTE_TVA_COLLECTEE, COMPTE_TVA_DEDUCTIBLE, COL } from './data'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const TABS = ['Rapport Direct', 'Déclarations TVA', 'Taux de TVA']
 
 export default function Tva() {
-  const { mvtsValides, loading } = useCompta()
+  const { mvtsValides, ecritures, loading } = useCompta()
   const annee = new Date().getFullYear()
   const [exercice, setExercice] = useState(annee)
   const [tab, setTab] = useState('Rapport Direct')
@@ -24,6 +28,18 @@ export default function Tva() {
     const mois = String(i + 1).padStart(2, '0')
     return { label, ...syntheseTva(mvtsValides, { debut: `${exercice}-${mois}-01`, fin: `${exercice}-${mois}-31` }) }
   }), [mvtsValides, exercice])
+
+  // Bases HT exactes : écritures de la période portant de la TVA (ventes 7x / achats 6x-2x).
+  const bases = useMemo(() => {
+    let ventes = 0, achats = 0
+    for (const e of ecritures) {
+      if (e.statut !== 'validee' || !e.date || e.date < bornes.debut || e.date > bornes.fin) continue
+      const lignes = e.lignes || []
+      if (lignes.some((l) => String(l.compte) === COMPTE_TVA_COLLECTEE)) ventes += lignes.filter((l) => String(l.compte).startsWith('7')).reduce((t, l) => t + (Number(l.credit) || 0) - (Number(l.debit) || 0), 0)
+      if (lignes.some((l) => String(l.compte) === COMPTE_TVA_DEDUCTIBLE)) achats += lignes.filter((l) => /^[26]/.test(String(l.compte))).reduce((t, l) => t + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0)
+    }
+    return { ventes, achats }
+  }, [ecritures, exercice]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Concordance avec le grand livre.
   const glCollectee = useMemo(() => -soldePrefixe(mvtsValides, COMPTE_TVA_COLLECTEE, bornes), [mvtsValides, exercice])
@@ -45,7 +61,7 @@ export default function Tva() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatCard title="TVA COLLECTÉE (VENTES)" value={formatMoney(annuel.collectee)} sub="Générée par les écritures de produits" accent="#16a34a" icon={Receipt} />
             <StatCard title="TVA DÉDUCTIBLE (ACHATS)" value={formatMoney(annuel.recuperable)} sub="Générée par les écritures de charges" accent="#0ea5e9" icon={Receipt} />
-            <StatCard title="CRÉDIT DE TVA RESTANT" value={formatMoney(Math.abs(annuel.due))} sub="Solde net calculé sur la période"
+            <StatCard title={annuel.due >= 0 ? 'TVA À PAYER' : 'CRÉDIT DE TVA RESTANT'} value={formatMoney(Math.abs(annuel.due))} sub="Solde net calculé sur la période"
               valueColor={annuel.due >= 0 ? '#dc2626' : '#16a34a'} accent={annuel.due >= 0 ? '#dc2626' : '#16a34a'} icon={Receipt} />
           </div>
 
@@ -62,8 +78,8 @@ export default function Tva() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-white/10">
                   {TAUX_TVA.map((t) => {
-                    const baseV = t.taux ? Math.round(annuel.collectee / (t.taux / 100)) : 0
-                    const baseA = t.taux ? Math.round(annuel.recuperable / (t.taux / 100)) : 0
+                    const baseV = t.taux ? bases.ventes : 0
+                    const baseA = t.taux ? bases.achats : 0
                     return (
                       <tr key={t.code}>
                         <td className="px-3 py-2 font-mono text-xs">{t.code}</td>
@@ -119,6 +135,7 @@ export default function Tva() {
         </Card>
       )}
 
+      {tab === 'Taux de TVA' && <AssujettissementTva />}
       {tab === 'Taux de TVA' && (
         <Card title="Taux de TVA configurés">
           <div className="divide-y divide-gray-100 dark:divide-white/10">
@@ -146,5 +163,38 @@ function Concordance({ titre, declaree, gl }) {
         <div className="flex justify-between font-semibold"><span>Écart de concordance :</span><span className={Math.abs(ecart) < 1 ? 'text-green-600' : 'text-red-600'}>{formatMoney(ecart)}</span></div>
       </div>
     </div>
+  )
+}
+
+// Assujettissement à la TVA, par secteur : les prix des modules sont TTC ; un secteur
+// assujetti voit chaque vente ventilée en HT (classe 7) + TVA collectée (445710), à partir
+// de la date d'effet. Désactivé par défaut : aucun chiffre ne change tant qu'on n'active pas.
+function AssujettissementTva() {
+  const { tva } = useCompta()
+  const [v, setV] = useState(null)
+  const cur = v || { secteurs: {}, ...(tva || {}) }
+  const majSecteur = (k, p) => setV({ ...cur, secteurs: { ...(cur.secteurs || {}), [k]: { taux: 18, ...(cur.secteurs?.[k] || {}), ...p } } })
+  const enregistrer = async () => {
+    await setItem(COL.params, 'tva', { secteurs: cur.secteurs || {} })
+    await audit('comptabilite', 'TVA', 'Assujettissement TVA modifié')
+    setV(null)
+  }
+  return (
+    <Card title="Assujettissement à la TVA par secteur">
+      <p className="mb-3 text-xs text-gray-500">Les prix saisis dans les modules sont TTC. Pour un secteur assujetti, chaque vente est ventilée en HT + TVA collectée (445710) à partir de la date d'effet. Laissez décoché si l'entreprise ne facture pas la TVA.</p>
+      <div className="divide-y divide-gray-100">
+        {Object.entries(LIBELLE_SECTEUR).map(([k, l]) => {
+          const c = cur.secteurs?.[k] || {}
+          return (
+            <div key={k} className="flex flex-wrap items-center gap-3 py-2">
+              <label className="flex w-48 items-center gap-2 text-sm font-medium"><input type="checkbox" checked={!!c.actif} onChange={(e) => majSecteur(k, { actif: e.target.checked })} /> {l}</label>
+              <select value={c.taux ?? 18} disabled={!c.actif} onChange={(e) => majSecteur(k, { taux: Number(e.target.value) })} className="input-base !w-28"><option value={18}>18 %</option><option value={0}>0 %</option></select>
+              <label className="flex items-center gap-2 text-xs text-gray-500">Depuis le<input type="date" value={c.depuis || ''} disabled={!c.actif} onChange={(e) => majSecteur(k, { depuis: e.target.value })} className="input-base !w-40" /></label>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-3 flex justify-end"><Button onClick={enregistrer} disabled={!v}>Enregistrer</Button></div>
+    </Card>
   )
 }

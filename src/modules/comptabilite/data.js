@@ -17,6 +17,7 @@ export const COL = {
   tiers: 'compta_tiers',                  // clients & fournisseurs (comptabilité tiers)
   centres: 'compta_centres',              // centres analytiques (axes)
   modeles: 'compta_modeles',              // modèles d'écritures (saisies répétitives)
+  facturesFournisseurs: 'compta_factures_fournisseurs', // factures d'achat (dettes fournisseurs, TVA déductible)
   sourcesRevenus: 'compta_sources_revenus', // autres sources de revenus ajoutées à la main dans « Mouvements bancaires » (au-delà des secteurs)
   banques: 'compta_banques',              // banques de l'entreprise (SUNU Banque, NSIA Banque…), choisies à chaque mouvement bancaire
   params: 'compta_params'                 // paramètres — doc id 'config'
@@ -77,6 +78,7 @@ export const PLAN_COMPTABLE_DEFAUT = [
   { num: '321000', label: 'Matières premières', type: 'ASSET' },
   { num: '322000', label: 'Matières consommables (ciment, sable…)', type: 'ASSET' },
   { num: '361000', label: 'Produits finis (briques, appâts…)', type: 'ASSET' },
+  { num: '362000', label: 'Cheptel : animaux d\'élevage en stock', type: 'ASSET' },
 
   // Classe 4 — Tiers
   { num: '401100', label: 'Fournisseurs d\'exploitation', type: 'LIABILITY', fezire: true },
@@ -99,6 +101,7 @@ export const PLAN_COMPTABLE_DEFAUT = [
 
   // Classe 6 — Charges
   { num: '601000', label: 'Achats de matières premières', type: 'EXPENSE' },
+  { num: '603200', label: 'Variation des stocks de matières et fournitures', type: 'EXPENSE' },
   { num: '605000', label: 'Autres achats (eau, électricité, carburant)', type: 'EXPENSE' },
   { num: '605300', label: 'Carburant et lubrifiants', type: 'EXPENSE' },
   { num: '607000', label: 'Achats de marchandises', type: 'EXPENSE', fezire: true },
@@ -123,6 +126,7 @@ export const PLAN_COMPTABLE_DEFAUT = [
   { num: '707000', label: 'Ventes de marchandises', type: 'INCOME', fezire: true },
   { num: '708000', label: 'Produits annexes / Prestations de services', type: 'INCOME', fezire: true },
   { num: '718000', label: 'Subventions d\'exploitation', type: 'INCOME' },
+  { num: '736000', label: 'Variation des stocks de produits (cheptel)', type: 'INCOME' },
   { num: '758000', label: 'Produits divers', type: 'INCOME' },
   { num: '752000', label: 'Revenus des immeubles (loyers perçus)', type: 'INCOME' },
   { num: '781000', label: 'Reprises d\'amortissements et provisions', type: 'INCOME' },

@@ -171,7 +171,16 @@ export function ecrituresPaiementSalaires(bulletins = [], { compteTresorerie = '
 // Irrécouvrable : D 651000 Pertes sur créances  C 411100 Clients              (journal OD)
 // `ventes` = sortie de creances() (Trésorerie) ; `flux` retrouve le compte de trésorerie
 // qui a reçu chaque encaissement ; `comptes` = comptes de trésorerie.
-export function ecrituresDepuisVentes(ventes = [], { flux = [], comptes = [] } = {}) {
+// TVA sur les ventes : paramétrable par secteur (Fiscalité & TVA › Taux de TVA). Les prix
+// des modules sont TTC : la facture est ventilée en HT + TVA collectée (445710).
+export function tvaVente(v, tva) {
+  const conf = tva?.secteurs?.[v.secteur]
+  if (!conf?.actif || (conf.depuis && v.date < conf.depuis)) return 0
+  const taux = Number(conf.taux ?? 18) || 0
+  return taux ? Math.round(v.total - v.total / (1 + taux / 100)) : 0
+}
+
+export function ecrituresDepuisVentes(ventes = [], { flux = [], comptes = [], tva = null } = {}) {
   const parId = new Map(comptes.map((c) => [c.id, c]))
   const compteDuFlux = new Map(flux.filter((f) => f.venteCle).map((f) => [f.id, parId.get(f.compteId)]))
   const out = []
@@ -181,10 +190,14 @@ export function ecrituresDepuisVentes(ventes = [], { flux = [], comptes = [] } =
     out.push({
       id: `auto_ve_${v.cle}`, date: v.date, journal: 'VE', libelle: lib, piece: v.numero, statut: 'validee', source: 'auto',
       module: v.secteur, secteur: v.secteur, tiers,
-      lignes: [
-        { compte: '411100', libelle: lib, debit: v.total, credit: 0, tiers },
-        { compte: v.compteProduit, libelle: lib, debit: 0, credit: v.total }
-      ]
+      lignes: (() => {
+        const taxe = tvaVente(v, tva)
+        return [
+          { compte: '411100', libelle: lib, debit: v.total, credit: 0, tiers },
+          { compte: v.compteProduit, libelle: lib, debit: 0, credit: v.total - taxe },
+          ...(taxe ? [{ compte: '445710', libelle: `TVA collectée ${v.numero}`, debit: 0, credit: taxe }] : [])
+        ]
+      })()
     })
     for (const e of v.encaissements || []) {
       const c = compteDuFlux.get(`enc-${e.id}`)
@@ -230,7 +243,7 @@ export function ecrituresDepuisTresorerie(flux = [], { comptes = [] } = {}) {
   for (const f of flux) {
     const base = { date: f.date, statut: 'validee', source: 'auto', module: 'tresorerie', secteur: f.secteur || '', libelle: f.libelle, piece: f.reference || f.id }
     const ligne = (compte, debit, credit, tiers) => ({ compte, libelle: f.libelle, debit, credit, ...(tiers ? { tiers } : {}) })
-    if (f.source === 'tresorerie') {
+    if (f.source === 'tresorerie' || f.source === 'fournisseur') {
       const treso = compteDe(f.compteId)
       const lignes = f.sens === 'IN'
         ? [ligne(treso, f.montant, 0), ligne(f.contrepartie, 0, f.montant, f.tiers)]
@@ -278,15 +291,38 @@ export function ecrituresSoldesInitiaux(comptes = []) {
     })
 }
 
+// ── Factures fournisseurs (journal HA) ────────────────────────────────────────
+//   D 6xxxxx charges (HT, par ligne)   D 445660 TVA déductible   C 401100 Fournisseurs (TTC)
+// Leurs règlements passent par la Trésorerie (flux source 'fournisseur') :
+//   D 401100 Fournisseurs   C 5xxxxx compte de trésorerie
+export function ecrituresDepuisFacturesFournisseurs(factures = []) {
+  return factures.filter((f) => f.statut === 'validee').map((f) => {
+    const lib = `${f.numero || 'Facture'} : ${f.fournisseur || ''}`.trim()
+    const lignes = []
+    let tva = 0
+    for (const l of f.lignes || []) {
+      const ht = Number(l.montantHT) || 0
+      if (!ht) continue
+      lignes.push({ compte: String(l.compte || '605000'), libelle: l.libelle || lib, debit: ht, credit: 0, axe: l.axe || '' })
+      tva += Math.round(ht * (Number(l.tauxTva) || 0) / 100)
+    }
+    if (tva) lignes.push({ compte: '445660', libelle: `TVA déductible ${f.numero || ''}`.trim(), debit: tva, credit: 0 })
+    const ttc = lignes.reduce((s, l) => s + l.debit, 0)
+    lignes.push({ compte: '401100', libelle: lib, debit: 0, credit: ttc, tiers: f.fournisseur || '' })
+    return { id: `auto_ff_${f.id}`, date: String(f.date || '').slice(0, 10), journal: 'HA', libelle: lib, piece: f.numero || f.id, statut: 'validee', source: 'auto', module: 'fournisseurs', secteur: f.secteur || '', tiers: f.fournisseur || '', lignes }
+  })
+}
+
 // ── Agrégat : toutes les écritures automatiques ───────────────────────────────
 // `ventes`, `flux`, `comptes` et `compteDepenses` viennent de la Trésorerie (cf. useCompta).
-export function ecrituresAuto({ depenses = [], revenusManuels = [], bulletins = [], ventes = [], flux = [], comptes = [], compteDepenses = null } = {}) {
+export function ecrituresAuto({ depenses = [], revenusManuels = [], bulletins = [], ventes = [], flux = [], comptes = [], compteDepenses = null, facturesFournisseurs = [], tva = null } = {}) {
   return [
     ...ecrituresDepuisDepenses(depenses, { compteTresorerie: compteDepenses }),
     ...ecrituresDepuisRevenusManuels(revenusManuels),
     ...ecrituresDepuisBulletins(bulletins),
     ...ecrituresPaiementSalaires(bulletins, { compteTresorerie: compteDepenses || '530000' }),
-    ...ecrituresDepuisVentes(ventes, { flux, comptes }),
+    ...ecrituresDepuisVentes(ventes, { flux, comptes, tva }),
+    ...ecrituresDepuisFacturesFournisseurs(facturesFournisseurs),
     ...ecrituresDepuisTresorerie(flux, { comptes }),
     ...ecrituresSoldesInitiaux(comptes)
   ]

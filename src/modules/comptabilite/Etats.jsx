@@ -19,8 +19,12 @@ export default function Etats() {
   const [tab, setTab] = useState('Bilan')
   const bornes = { debut: `${exercice}-01-01`, fin: `${exercice}-12-31` }
 
-  const bal = useMemo(() => balance(mvtsValides, plan, bornes), [mvtsValides, plan, exercice])
-  const res = useMemo(() => compteDeResultat(mvtsValides, bornes), [mvtsValides, exercice])
+  // Le bilan est un état de STOCK : il cumule tous les mouvements jusqu'à la fin de l'exercice
+  // (les soldes d'ouverture des années précédentes y figurent, comme des à-nouveaux).
+  const bal = useMemo(() => balance(mvtsValides, plan, { fin: bornes.fin }), [mvtsValides, plan, exercice]) // eslint-disable-line react-hooks/exhaustive-deps
+  const res = useMemo(() => compteDeResultat(mvtsValides, bornes), [mvtsValides, exercice]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Résultats des exercices antérieurs, non encore affectés : report à nouveau.
+  const resAnterieur = useMemo(() => compteDeResultat(mvtsValides, { fin: `${exercice - 1}-12-31` }).resultat, [mvtsValides, exercice])
 
   // Répartition des postes du bilan par type de compte.
   const bilan = useMemo(() => {
@@ -34,8 +38,8 @@ export default function Etats() {
     const totalActif = actif.reduce((s, p) => s + p.net, 0)
     const totalPassifHorsResultat = passif.reduce((s, p) => s + p.net, 0)
     const resultatNet = res.resultat
-    return { actif, passif, totalActif, totalPassif: totalPassifHorsResultat + resultatNet, resultatNet }
-  }, [bal, plan, res])
+    return { actif, passif, totalActif, totalPassif: totalPassifHorsResultat + resAnterieur + resultatNet, resultatNet, resAnterieur }
+  }, [bal, plan, res, resAnterieur])
 
   if (loading) return <div className="py-16 text-center text-gray-400">Chargement…</div>
 
@@ -69,13 +73,14 @@ function Bilan({ bilan }) {
           postes={bilan.actif} total={bilan.totalActif} totalLabel="TOTAL DE L'ACTIF" />
         <PosteBloc titre="PASSIF & CAPITAUX (Liabilities & Equity)" sousTitre="Origine des financements et capitaux de l'organisation." colonne="Montant (XOF)"
           postes={bilan.passif} total={bilan.totalPassif} totalLabel="TOTAL DU PASSIF & CAPITAUX"
-          extra={{ code: '120/129', label: "Résultat Net de l'exercice", net: bilan.resultatNet }} />
+          extra={{ code: '120/129', label: "Résultat Net de l'exercice", net: bilan.resultatNet }}
+          extraAvant={bilan.resAnterieur ? { code: '110/119', label: 'Résultats antérieurs (report à nouveau)', net: bilan.resAnterieur } : null} />
       </div>
     </div>
   )
 }
 
-function PosteBloc({ titre, sousTitre, colonne, postes, total, totalLabel, extra }) {
+function PosteBloc({ titre, sousTitre, colonne, postes, total, totalLabel, extra, extraAvant }) {
   return (
     <Card className="!p-0 overflow-hidden">
       <div className="border-b border-gray-100 px-4 py-3 dark:border-white/10">
@@ -92,6 +97,9 @@ function PosteBloc({ titre, sousTitre, colonne, postes, total, totalLabel, extra
           {postes.map((p) => (
             <tr key={p.compte}><td className="px-3 py-2 font-mono text-xs">{p.compte}</td><td className="px-3 py-2">{p.libelle}</td><td className="px-3 py-2 text-right">{formatMoney(p.net)}</td></tr>
           ))}
+          {extraAvant && (
+            <tr className="bg-gray-50/60"><td className="px-3 py-2 font-mono text-xs">{extraAvant.code}</td><td className="px-3 py-2 font-semibold">{extraAvant.label}</td><td className="px-3 py-2 text-right font-semibold">{formatMoney(extraAvant.net)}</td></tr>
+          )}
           {extra && (
             <tr className="bg-orange-50/40 dark:bg-orange-500/10"><td className="px-3 py-2 font-mono text-xs">{extra.code}</td><td className="px-3 py-2 font-semibold">{extra.label}</td><td className="px-3 py-2 text-right font-semibold">{formatMoney(extra.net)}</td></tr>
           )}

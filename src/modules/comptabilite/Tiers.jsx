@@ -57,8 +57,16 @@ export default function Tiers() {
       const dt = String(d.date || '').slice(0, 10); if (dt > f.derniere) f.derniere = dt
       m.set(k, f)
     }
+    // Factures fournisseurs validées : réglé = payé, reste = à payer.
+    for (const f of treso.dettes || []) {
+      const k = cleNom(f.fournisseur)
+      const e = m.get(k) || { nom: f.fournisseur, paye: 0, aPayer: 0, nb: 0, derniere: '', depenses: [] }
+      e.paye += f.regle; e.aPayer += f.reste; e.nb += 1
+      const dt = String(f.date || '').slice(0, 10); if (dt > e.derniere) e.derniere = dt
+      m.set(k, e)
+    }
     return [...m.values()].sort((a, b) => b.aPayer - a.aPayer || b.paye - a.paye)
-  }, [treso.depenses])
+  }, [treso.depenses, treso.dettes])
 
   const fiches = useMemo(() => (tiers || []), [tiers])
   const listeClients = clients.filter((c) => correspond(recherche, c.nom))
@@ -124,12 +132,12 @@ export default function Tiers() {
       {tab === 'fournisseur' && (
         <>
           <div className="grid grid-cols-3 gap-3">
-            <StatCard title="Dettes : à payer" value={formatMoney(fournisseurs.reduce((s, f) => s + f.aPayer, 0))} sub="Dépenses approuvées, pas encore décaissées." accent="#dc2626" icon={Users} />
+            <StatCard title="Dettes : à payer" value={formatMoney(fournisseurs.reduce((s, f) => s + f.aPayer, 0))} sub="Dépenses approuvées non décaissées et factures fournisseurs non réglées." accent="#dc2626" icon={Users} />
             <StatCard title="Payé" value={formatMoney(fournisseurs.reduce((s, f) => s + f.paye, 0))} accent="#16a34a" icon={Users} />
             <StatCard title="Fournisseurs / bénéficiaires" value={fournisseurs.length} accent="#0d9488" icon={Users} />
           </div>
           <Card className="!p-0 overflow-hidden">
-            <div className="border-b border-gray-100 px-4 py-3"><p className="font-bold text-gray-800">Registre des dettes fournisseurs</p><p className="text-xs text-gray-500">Bénéficiaires des dépenses d'E-DÉPENSES.</p></div>
+            <div className="border-b border-gray-100 px-4 py-3"><p className="font-bold text-gray-800">Registre des dettes fournisseurs</p><p className="text-xs text-gray-500">Bénéficiaires des dépenses d'E-DÉPENSES et factures fournisseurs validées.</p></div>
             <table className="w-full text-sm">
               <thead><tr className="bg-gray-50 text-left text-xs uppercase text-gray-500"><th className="px-3 py-2">Fournisseur / bénéficiaire</th><th className="px-3 py-2 text-right">Dépenses</th><th className="px-3 py-2">Dernière</th><th className="px-3 py-2 text-right">Payé</th><th className="px-3 py-2 text-right">À payer</th></tr></thead>
               <tbody className="divide-y divide-gray-100">

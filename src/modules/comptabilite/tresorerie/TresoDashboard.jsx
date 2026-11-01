@@ -98,7 +98,7 @@ export default function TresoDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                <th className="px-3 py-2.5">Nom du compte / caisse</th><th className="px-3 py-2.5">Type</th><th className="px-3 py-2.5">Compte</th>
+                <th className="px-3 py-2.5">Nom du compte / caisse</th><th className="px-3 py-2.5">Type</th><th className="px-3 py-2.5">Compte</th><th className="px-3 py-2.5" title="Code d'intégration à renseigner sur le compte FEZIRE correspondant (Trésorerie → Comptes)">Code FEZIRE</th>
                 <th className="px-3 py-2.5 text-right">Entrées période</th><th className="px-3 py-2.5 text-right">Sorties période</th>
                 <th className="px-3 py-2.5 text-right">Solde {fin ? `au ${formatDateShort(fin)}` : 'actuel'}</th><th className="px-3 py-2.5">Statut</th><th className="w-20"></th>
               </tr></thead>
@@ -113,6 +113,7 @@ export default function TresoDashboard() {
                         {c.source === 'virtuel' && <span className="ml-1 text-[11px] text-gray-400">(par défaut)</span>}</td>
                       <td className="px-3 py-2"><PastilleType type={c.type} /></td>
                       <td className="px-3 py-2 font-mono text-xs">{c.compteComptable}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-gray-500 select-all">{c.codeFezire || c.id}</td>
                       <td className="px-3 py-2 text-right text-green-700">{e ? formatMoney(e) : '—'}</td>
                       <td className="px-3 py-2 text-right text-red-600">{s ? formatMoney(s) : '—'}</td>
                       <td className={`px-3 py-2 text-right font-bold ${c.solde < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMoney(c.solde)}</td>
@@ -125,7 +126,7 @@ export default function TresoDashboard() {
                   )
                 })}
               </tbody>
-              <tfoot><tr className="bg-gray-50 font-bold"><td className="px-3 py-2" colSpan={5}>Liquidités totales</td><td className="px-3 py-2 text-right">{formatMoney(soldesFin.reduce((t, c) => t + c.solde, 0))}</td><td colSpan={2}></td></tr></tfoot>
+              <tfoot><tr className="bg-gray-50 font-bold"><td className="px-3 py-2" colSpan={6}>Liquidités totales</td><td className="px-3 py-2 text-right">{formatMoney(soldesFin.reduce((t, c) => t + c.solde, 0))}</td><td colSpan={2}></td></tr></tfoot>
             </table>
           </div>
         </Card>
@@ -199,6 +200,7 @@ function CompteModal({ valeur, onClose, user }) {
     if (!cur.nom?.trim()) return
     const doc = {
       nom: cur.nom.trim(), type: cur.type, numero: cur.numero || '', compteComptable: cur.compteComptable || TYPES_COMPTE_TRESO[cur.type]?.compte,
+      codeFezire: (cur.codeFezire || '').trim() || null,
       soldeInitial: Number(cur.soldeInitial) || 0, dateSoldeInitial: cur.dateSoldeInitial || todayStr(), seuilAlerte: Number(cur.seuilAlerte) || 0, actif: cur.actif !== false
     }
     if (cur.id && cur.source === 'treso') await updateItem(COL_TRESO.comptes, cur.id, doc)
@@ -217,6 +219,7 @@ function CompteModal({ valeur, onClose, user }) {
               {Object.entries(TYPES_COMPTE_TRESO).filter(([k]) => k !== 'BANQUE').map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
             </select></Champ>
             <Champ label="Compte comptable"><input value={cur.compteComptable || TYPES_COMPTE_TRESO[cur.type]?.compte} onChange={(e) => maj({ compteComptable: e.target.value.replace(/[^0-9]/g, '') })} className="input-base font-mono" /></Champ>
+            <Champ label="Code FEZIRE" aide="Code d'intégration du compte FEZIRE qui reçoit ces mouvements. Vide : identifiant interne."><input value={cur.codeFezire && cur.codeFezire !== cur.id ? cur.codeFezire : ''} onChange={(e) => maj({ codeFezire: e.target.value.replace(/\s/g, '') })} className="input-base font-mono" placeholder={cur.id || 'ex. CAISSE-AGRO'} /></Champ>
             <Champ label="Numéro (facultatif)"><input value={cur.numero || ''} onChange={(e) => maj({ numero: e.target.value })} className="input-base" /></Champ>
             <Champ label="Seuil d'alerte" aide="Alerte si le solde passe dessous."><input type="number" min="0" value={cur.seuilAlerte || 0} onChange={(e) => maj({ seuilAlerte: e.target.value })} className="input-base" /></Champ>
             <Champ label="Solde initial"><input type="number" value={cur.soldeInitial || 0} onChange={(e) => maj({ soldeInitial: e.target.value })} className="input-base" /></Champ>

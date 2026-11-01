@@ -25,7 +25,8 @@ export default function Dashboard() {
   const bornes = { debut: `${exercice}-01-01`, fin: `${exercice}-12-31` }
 
   const resultat = useMemo(() => compteDeResultat(mvtsValides, bornes), [mvtsValides, exercice])
-  const masses = useMemo(() => grandesMasses(mvtsValides, bornes), [mvtsValides, exercice])
+  // Grandes masses du bilan : cumulées jusqu'à la fin de l'exercice (état de stock).
+  const masses = useMemo(() => grandesMasses(mvtsValides, { fin: bornes.fin }), [mvtsValides, exercice]) // eslint-disable-line react-hooks/exhaustive-deps
   const bal = useMemo(() => balance(mvtsValides, plan, bornes), [mvtsValides, plan, exercice])
   const tva = useMemo(() => syntheseTva(mvtsValides, bornes), [mvtsValides, exercice])
 
