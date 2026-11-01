@@ -91,16 +91,18 @@ export function comptesTresorerie({ comptes = [], banques = [] } = {}) {
     id: c.id, nom: c.nom, type: c.type || 'CAISSE_SECTEUR', devise: c.devise || 'XOF',
     compteComptable: c.compteComptable || TYPES_COMPTE_TRESO[c.type || 'CAISSE_SECTEUR']?.compte || '530000',
     soldeInitial: n(c.soldeInitial), dateSoldeInitial: jour(c.dateSoldeInitial), actif: c.actif !== false,
-    numero: c.numero || '', secteur: c.secteur || '', seuilAlerte: n(c.seuilAlerte), source: 'treso'
+    numero: c.numero || '', secteur: c.secteur || '', seuilAlerte: n(c.seuilAlerte), source: 'treso',
+    // Code d'intégration attendu par FEZIRE sur le compte de trésorerie correspondant.
+    codeFezire: c.codeFezire || c.id
   }))
   const banquesCompta = banques.map((b) => ({
     id: idBanque(b.id), nom: b.nom, type: 'BANQUE', devise: 'XOF', compteComptable: '512000',
     // Le solde d'ouverture d'une banque est porté par ses mouvements « ouverture » (cf. fluxTresorerie).
-    soldeInitial: 0, dateSoldeInitial: '', actif: b.actif !== false, numero: b.numero || '', secteur: '', seuilAlerte: 0, source: 'banque', banqueId: b.id
+    soldeInitial: 0, dateSoldeInitial: '', actif: b.actif !== false, numero: b.numero || '', secteur: '', seuilAlerte: 0, source: 'banque', banqueId: b.id, codeFezire: b.codeFezire || idBanque(b.id)
   }))
   const liste = [...propres, ...banquesCompta]
   if (!liste.some((c) => c.id === CAISSE_CENTRALE_ID || c.type === 'CAISSE_CENTRALE')) {
-    liste.unshift({ id: CAISSE_CENTRALE_ID, nom: 'Caisse centrale', type: 'CAISSE_CENTRALE', devise: 'XOF', compteComptable: '530000', soldeInitial: 0, dateSoldeInitial: '', actif: true, numero: '', secteur: '', seuilAlerte: 0, source: 'virtuel' })
+    liste.unshift({ id: CAISSE_CENTRALE_ID, nom: 'Caisse centrale', type: 'CAISSE_CENTRALE', devise: 'XOF', compteComptable: '530000', soldeInitial: 0, dateSoldeInitial: '', actif: true, numero: '', secteur: '', seuilAlerte: 0, source: 'virtuel', codeFezire: CAISSE_CENTRALE_ID })
   }
   return liste
 }

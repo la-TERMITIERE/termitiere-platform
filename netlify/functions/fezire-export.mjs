@@ -605,9 +605,12 @@ function mouvementsTresorerie(d) {
   const contrepartie = (f) => f.source === 'depense' ? compteDepense(parDepense.get(f.id) || {})
     : (f.source === 'virement' || f.nature === 'VERSEMENT_BANQUE' || f.nature === 'RETRAIT_BANQUE') ? '585000'
     : f.contrepartie || '471000'
+  // Code du compte d'argent attendu par FEZIRE (« code d'intégration » de son compte de trésorerie).
+  const codeDe = new Map(comptes.map((c) => [c.id, c.codeFezire || c.id]))
+  const code = (id) => codeDe.get(id) || id
   const out = flux.map((f) => ({
     external_id: `cash-${f.id}`, direction: f.sens, amount: f.montant, currency: DEVISE, occurred_at: iso(f.date),
-    account: f.compteId, payment_method: f.mode || 'CASH', nature: NATURE_FEZIRE[f.nature] || f.nature,
+    account: code(f.compteId), payment_method: f.mode || 'CASH', nature: NATURE_FEZIRE[f.nature] || f.nature,
     label: f.libelle || 'Mouvement', counterpart_account: contrepartie(f),
     counterparty: f.tiers ? { type: f.sens === 'IN' ? 'CUSTOMER' : 'SUPPLIER', external_id: null, name: f.tiers } : null,
     reference: f.reference || null
@@ -616,7 +619,7 @@ function mouvementsTresorerie(d) {
   for (const c of comptes.filter((x) => x.source === 'treso' && x.soldeInitial > 0)) {
     out.push({
       external_id: `cash-si-${c.id}`, direction: 'IN', amount: c.soldeInitial, currency: DEVISE, occurred_at: iso(c.dateSoldeInitial || '2026-01-01'),
-      account: c.id, payment_method: c.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'CASH', nature: 'SOLDE_OUVERTURE',
+      account: code(c.id), payment_method: c.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'CASH', nature: 'SOLDE_OUVERTURE',
       label: `Solde initial : ${c.nom}`, counterpart_account: '110000', counterparty: null, reference: `SI-${c.id}`
     })
   }
@@ -628,7 +631,7 @@ function mouvementsTresorerie(d) {
     if (montant <= 0) continue
     out.push({
       external_id: `cash-vers-${vers.id}`, direction: 'IN', amount: montant, currency: DEVISE, occurred_at: iso(Number(vers.date) || vers.date),
-      account: caisseProjets, payment_method: modeCanonique(vers.modePaiement), nature: 'VENTE_COMPTANT',
+      account: code(caisseProjets), payment_method: modeCanonique(vers.modePaiement), nature: 'VENTE_COMPTANT',
       label: `Versement client : ${projet?.nom || 'projet'}`, counterpart_account: '704000',
       counterparty: projet?.clientNom ? { type: 'CUSTOMER', external_id: null, name: projet.clientNom } : null, reference: `VERS-${vers.id}`
     })
@@ -640,7 +643,7 @@ function mouvementsTresorerie(d) {
     if (b.statut !== 'paye' || net <= 0) continue
     out.push({
       external_id: `cash-sal-${b.id}`, direction: 'OUT', amount: net, currency: DEVISE,
-      occurred_at: iso(b.datePaiement || (b.mois ? `${b.mois}-28` : null)), account: caisseDepenses, payment_method: 'CASH',
+      occurred_at: iso(b.datePaiement || (b.mois ? `${b.mois}-28` : null)), account: code(caisseDepenses), payment_method: 'CASH',
       nature: 'SALAIRE', label: `Salaire ${b.mois || ''} : ${b.employeNom || ''}`.trim(), counterpart_account: '421000',
       counterparty: b.employeNom ? { type: 'EMPLOYEE', external_id: b.employeId || null, name: b.employeNom } : null, reference: `PAIE-${b.id}`
     })
