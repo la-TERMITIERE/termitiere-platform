@@ -231,23 +231,27 @@ function totaux(f) {
   return { total: Math.round(apresRemise + taxe), tax_total: Math.round(taxe) }
 }
 
-// Une ligne n'est envoyée que si son article existe au référentiel (donc a été importé
-// comme produit) : FEZIRE refuse toute commande dont une ligne ne désigne pas un
-// produit connu (« Chaque ligne doit désigner un produit externe »). Une commande
-// sans aucune ligne valable n'est pas envoyée.
+// FEZIRE refuse toute ligne qui ne désigne pas un produit connu (« Chaque ligne doit
+// désigner un produit externe ») : une ligne dont l'article n'est pas au référentiel
+// passe sur le produit de service « Frais et divers », puis une ligne d'écart ramène
+// la somme au total facturé (remise %, TVA). Commande sans aucune ligne : non envoyée.
 function lignesCommande(f, articles) {
-  return lignesEffectives(f)
-    .map((l, i) => ({ l, i }))
-    .filter(({ l }) => l.articleId && articles.has(l.articleId))
-    .map(({ l, i }) => ({
-      external_id: `agro-cmd-${f.id}-l${i + 1}`,
-      product_id: idProduit(l.articleId),
-      sku: skuProduit(l.articleId),
-      label: l.article || '',
-      quantity: entier(l.qte),
-      unit_price: nombre(l.prixUnit ?? l.prix),
-      total: nombre(l.total) || entier(l.qte) * nombre(l.prixUnit ?? l.prix)
-    }))
+  const lignes = lignesEffectives(f)
+    .map((l, i) => {
+      const total = nombre(l.total) || entier(l.qte) * nombre(l.prixUnit ?? l.prix)
+      if (!(l.articleId && articles.has(l.articleId))) return ligneService('agro', f, `l${i + 1}`, DIVERS, l.article, total)
+      return {
+        external_id: `agro-cmd-${f.id}-l${i + 1}`,
+        product_id: idProduit(l.articleId),
+        sku: skuProduit(l.articleId),
+        label: l.article || '',
+        quantity: entier(l.qte),
+        unit_price: nombre(l.prixUnit ?? l.prix),
+        total
+      }
+    })
+    .filter((l) => l.total || l.product_id !== `agro-art-${DIVERS}`)
+  return equilibrer('agro', f, lignes, totaux(f).total)
 }
 
 const articlesConnus = (referentiel) => new Set(
@@ -321,9 +325,51 @@ function uniques(liste) {
   }
   return [...m.values()]
 }
+// FEZIRE exige total de commande = somme des lignes. Or une facture contient aussi des
+// montants hors référentiel (frais de transport/lieu, matériel « Autre », article
+// supprimé…) et des corrections (remise %, montant modifié à la main) : ils partaient
+// dans le total mais pas dans les lignes → commande refusée (rapport FEZIRE du 29/10).
+// Ces montants passent désormais sur deux produits de service par module.
+const DIVERS = 'frais-divers'
+const AJUSTEMENT = 'remise-ajustement'
+const produitsService = (prefixe, libelleModule) => [
+  produit(prefixe, DIVERS, `${libelleModule} · Frais et divers`, 0, null, 'Service'),
+  produit(prefixe, AJUSTEMENT, `${libelleModule} · Remise / ajustement`, 0, null, 'Ajustement')
+]
+const ligneService = (prefixe, f, suffixe, cle, label, montant) => ({
+  external_id: `${prefixe}-cmd-${f.id}-${suffixe}`, product_id: `${prefixe}-art-${cle}`,
+  sku: `${prefixe.toUpperCase()}-${cle.toUpperCase()}`, label: label || '',
+  quantity: 1, unit_price: montant, total: montant
+})
+// Ajoute la ligne d'écart qui ramène la somme des lignes au total facturé
+// (négative pour une remise ou un total revu à la baisse).
+function equilibrer(prefixe, f, lignes, total) {
+  const somme = lignes.reduce((s, l) => s + nombre(l.total), 0)
+  const ecart = Math.round((Math.round(nombre(total)) - somme) * 100) / 100
+  if (!lignes.length || !ecart) return lignes
+  return [...lignes, ligneService(prefixe, f, 'ajust', ecart > 0 ? DIVERS : AJUSTEMENT,
+    ecart > 0 ? 'Écart à régulariser' : 'Remise accordée', ecart)]
+}
+
+// FEZIRE refuse deux clients de même nom dans l'organisation : or un même nom peut
+// exister dans deux modules (ALEX en Logistique ET en Maxi Gym = deux identifiants).
+// Le premier garde son nom ; les suivants reçoivent le nom du module en suffixe.
+const LIBELLES_MODULES = { agro: 'Maxi Agro', briq: 'Briqueterie', logi: 'Logistique', gym: 'Maxi Gym', gard: 'Garderie' }
+function nomsDistincts(liste) {
+  const premier = new Map() // nom normalisé → external_id qui le porte
+  return liste.map((c) => {
+    const k = slug(c.lastname)
+    if (!premier.has(k)) { premier.set(k, c.external_id); return c }
+    if (premier.get(k) === c.external_id) return c
+    const p = c.external_id.split('-')[0]
+    return { ...c, lastname: `${c.lastname} (${LIBELLES_MODULES[p] || p})` }
+  })
+}
+
 // Une vente « simple » : commande + facture (+ paiement) à partir de lignes déjà canoniques.
 function vente(prefixe, f, { numero, date, clientNom, lignes, total, statutCommande = 'completed' }) {
   const cliId = (clientNom || '').trim() ? `${prefixe}-cli-${slug(clientNom)}` : null
+  lignes = equilibrer(prefixe, f, lignes, total)
   const cmd = lignes.length ? {
     external_id: `${prefixe}-cmd-${f.id}`, customer_id: cliId, reference: numero || f.id, currency: DEVISE,
     total: Math.round(nombre(total)), tax_total: 0, status: statutCommande, ordered_at: iso(date), lines: lignes
@@ -348,12 +394,16 @@ const briqueterie = {
   ventes: (facs, ref) => {
     const articles = new Set(ref.filter((r) => r.type === 'brique' || r.type === 'matiere').map((r) => r.id))
     return facs.filter((f) => !['brouillon', 'annulee'].includes(f.statut)).map((f) => {
-      const lignes = (f.lignes || []).map((l, i) => ({ l, i })).filter(({ l }) => l.articleId && articles.has(l.articleId))
-        .map(({ l, i }) => ({
+      const lignes = (f.lignes || []).map((l, i) => {
+        const montant = nombre(l.total) || entier(l.qte) * nombre(l.prixUnit)
+        // Article absent du référentiel : son montant passe en « Frais et divers ».
+        if (!(l.articleId && articles.has(l.articleId))) return ligneService(BRIQ, f, `l${i + 1}`, DIVERS, l.article, montant)
+        return {
           external_id: `${BRIQ}-cmd-${f.id}-l${i + 1}`, product_id: `${BRIQ}-art-${l.articleId}`,
           sku: `${BRIQ.toUpperCase()}-${String(l.articleId).toUpperCase()}`, label: l.article || '',
-          quantity: entier(l.qte), unit_price: nombre(l.prixUnit), total: nombre(l.total) || entier(l.qte) * nombre(l.prixUnit)
-        }))
+          quantity: entier(l.qte), unit_price: nombre(l.prixUnit), total: montant
+        }
+      }).filter((l) => l.total || l.product_id !== `${BRIQ}-art-${DIVERS}`)
       return { f, ...vente(BRIQ, f, { numero: f.numero, date: f.date, clientNom: f.client?.nom, lignes, total: f.totalTTC ?? totaux(f).total }) }
     })
   },
@@ -375,17 +425,22 @@ const logistique = {
   ventes: (facs, ref) => {
     const articles = new Set(ref.filter((r) => r.type === 'materiel').map((r) => r.id))
     return facs.filter((f) => f.statut === 'approuvee').map((f) => {
-      const lignes = (f.lignes || []).map((l, i) => ({ l, i })).filter(({ l }) => l.materielId && articles.has(l.materielId))
-        .map(({ l, i }) => {
+      const lignes = [
+        ...(f.lignes || []).map((l, i) => {
           const jours = entier(l.nbJours) || 1
+          const montant = nombre(l.montant) || entier(l.qte) * jours * nombre(l.tarifUnitaire)
+          const label = `${l.materielNom || ''} · ${jours} jour(s)`.trim()
+          // Matériel « Autre » (saisie libre) ou retiré du référentiel → « Frais et divers ».
+          if (!(l.materielId && articles.has(l.materielId))) return ligneService(LOGI, f, `l${i + 1}`, DIVERS, label, montant)
           return {
             external_id: `${LOGI}-cmd-${f.id}-l${i + 1}`, product_id: `${LOGI}-art-${l.materielId}`,
-            sku: `${LOGI.toUpperCase()}-${String(l.materielId).toUpperCase()}`,
-            label: `${l.materielNom || ''} · ${jours} jour(s)`.trim(),
-            quantity: entier(l.qte), unit_price: nombre(l.tarifUnitaire) * jours,
-            total: nombre(l.montant) || entier(l.qte) * jours * nombre(l.tarifUnitaire)
+            sku: `${LOGI.toUpperCase()}-${String(l.materielId).toUpperCase()}`, label,
+            quantity: entier(l.qte), unit_price: nombre(l.tarifUnitaire) * jours, total: montant
           }
-        })
+        }),
+        // Frais facturés au client (transport, lieu…) : comptés dans le total de la facture.
+        ...(f.frais || []).map((x, i) => ligneService(LOGI, f, `frais${i + 1}`, DIVERS, x.label || 'Frais', nombre(x.montant)))
+      ].filter((l) => l.total || l.product_id !== `${LOGI}-art-${DIVERS}`)
       return { f, ...vente(LOGI, f, { numero: f.num, date: f.date, clientNom: f.clientNom, lignes, total: f.totalTTC ?? f.totalHT }) }
     })
   },
@@ -507,12 +562,13 @@ export function construire(code, d) {
     ]
     case 'PRODUCT': return [
       ...produits(v('agro_referentiel')), ...briqueterie.produits(v('evenementiel_referentiel')),
-      ...logistique.produits(v('logistique_referentiel')), ...maxiGym.produits(), ...garderie.produits()
+      ...logistique.produits(v('logistique_referentiel')), ...maxiGym.produits(), ...garderie.produits(),
+      ...produitsService('agro', 'Maxi Agro'), ...produitsService(BRIQ, 'Briqueterie'), ...produitsService(LOGI, 'Logistique')
     ]
     case 'WAREHOUSE': return [...entrepots(), ...briqueterie.entrepots(), ...logistique.entrepots()]
     case 'STOCK': return stocks(v('agro_inventaires'))
     case 'STOCK_MOVEMENT': return mouvements(v('agro_inventaires'), v('agro_demandes'))
-    case 'CUSTOMER': return [
+    case 'CUSTOMER': return nomsDistincts([
       ...clients(v('agro_factures')),
       ...uniques([
         ...briqueterie.clients(v('evenementiel_factures')),
@@ -520,7 +576,7 @@ export function construire(code, d) {
         ...maxiGym.clients(v('gym_factures'), v('gym_clients')),
         ...garderie.clients(v('garderie_paiements'), v('garderie_enfants'))
       ])
-    ]
+    ])
     case 'ORDER': return [...commandes(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.cmd).filter(Boolean)]
     case 'INVOICE': return [...factures(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.fac)]
     case 'PAYMENT': return [
