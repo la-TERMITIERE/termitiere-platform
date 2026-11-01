@@ -332,9 +332,11 @@ function uniques(liste) {
 // Ces montants passent désormais sur deux produits de service par module.
 const DIVERS = 'frais-divers'
 const AJUSTEMENT = 'remise-ajustement'
+// FEZIRE refuse un produit sans catégorie : ils vont dans une catégorie SERVICES du module.
+const categorieService = (prefixe, libelleModule) => categorie(prefixe, libelleModule, 'SERVICES')
 const produitsService = (prefixe, libelleModule) => [
-  produit(prefixe, DIVERS, `${libelleModule} · Frais et divers`, 0, null, 'Service'),
-  produit(prefixe, AJUSTEMENT, `${libelleModule} · Remise / ajustement`, 0, null, 'Ajustement')
+  produit(prefixe, DIVERS, `${libelleModule} · Frais et divers`, 0, 'SERVICES', 'Service'),
+  produit(prefixe, AJUSTEMENT, `${libelleModule} · Remise / ajustement`, 0, 'SERVICES', 'Ajustement')
 ]
 const ligneService = (prefixe, f, suffixe, cle, label, montant) => ({
   external_id: `${prefixe}-cmd-${f.id}-${suffixe}`, product_id: `${prefixe}-art-${cle}`,
@@ -556,10 +558,11 @@ const BESOINS = {
 export function construire(code, d) {
   const v = (col) => d[col] || []
   switch (code) {
-    case 'CATEGORY': return [
+    case 'CATEGORY': return uniques([
       ...categories(v('agro_referentiel')), ...briqueterie.categories(),
-      ...logistique.categories(v('logistique_referentiel')), ...maxiGym.categories(), ...garderie.categories()
-    ]
+      ...logistique.categories(v('logistique_referentiel')), ...maxiGym.categories(), ...garderie.categories(),
+      categorieService('agro', 'Maxi Agro'), categorieService(BRIQ, 'Briqueterie'), categorieService(LOGI, 'Logistique')
+    ])
     case 'PRODUCT': return [
       ...produits(v('agro_referentiel')), ...briqueterie.produits(v('evenementiel_referentiel')),
       ...logistique.produits(v('logistique_referentiel')), ...maxiGym.produits(), ...garderie.produits(),
