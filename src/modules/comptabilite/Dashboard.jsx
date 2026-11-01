@@ -10,11 +10,16 @@ import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { formatMoney } from '../../utils/formatters'
 import { useCompta } from './useCompta'
+import { useAuth } from '../../hooks/useAuth'
+import { peutVoirBanque } from '../../core/roles'
+import { LIBELLE_SECTEUR } from '../../shared/ventes'
+import { syntheseCreances } from './tresorerie/logic'
 import { compteDeResultat, grandesMasses, balance, syntheseTva } from './logic'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 export default function Dashboard() {
-  const { plan, mvtsValides, ecritures, immobilisations, patrimoine, loading } = useCompta()
+  const { plan, mvtsValides, ecritures, immobilisations, patrimoine, treso, loading } = useCompta()
+  const role = useAuth((st) => st.role)
   const annee = new Date().getFullYear()
   const [exercice] = useState(annee)
   const bornes = { debut: `${exercice}-01-01`, fin: `${exercice}-12-31` }
@@ -61,6 +66,33 @@ export default function Dashboard() {
         <StatCard title="Stocks (classe 3)" value={formatMoney(masses.stocks)} icon={Boxes} accent="#65a30d" />
         <StatCard title="Créances clients" value={formatMoney(masses.clients)} icon={FileText} accent="#2563eb" />
         <StatCard title="Dettes fournisseurs" value={formatMoney(masses.fournisseurs)} icon={Landmark} accent="#dc2626" />
+      </div>
+
+      {/* Chiffre d'affaires par secteur (ventes de tous les modules) et aperçu de la trésorerie */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title={`Chiffre d'affaires ${exercice} par secteur`}>
+          {(() => {
+            const parSecteur = Object.keys(LIBELLE_SECTEUR).map((k) => ({ k, total: treso.ventes.filter((v) => v.secteur === k && v.date >= bornes.debut && v.date <= bornes.fin).reduce((t, v) => t + v.total, 0) })).filter((x) => x.total > 0).sort((a, b) => b.total - a.total)
+            const max = Math.max(1, ...parSecteur.map((x) => x.total))
+            if (!parSecteur.length) return <p className="py-4 text-center text-sm text-gray-400">Aucune vente sur l'exercice.</p>
+            return <div className="space-y-2">{parSecteur.map((x) => (
+              <div key={x.k}><div className="flex justify-between text-xs"><span className="font-semibold text-gray-700">{LIBELLE_SECTEUR[x.k]}</span><span className="font-bold">{formatMoney(x.total)}</span></div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-red-500" style={{ width: `${x.total / max * 100}%` }} /></div></div>
+            ))}</div>
+          })()}
+        </Card>
+        <Card title="Trésorerie & créances (à ce jour)">
+          {(() => {
+            const c = syntheseCreances(treso.creances)
+            return <div className="space-y-2 text-sm">
+              <Ligne label="Liquidités totales (caisses, banques, Mobile Money)" value={treso.totaux.total} />
+              <Ligne label="Créances clients restantes" value={c.restant} />
+              <Ligne label="Dont échues" value={c.echue} />
+              <Ligne label="Dépenses approuvées à décaisser" value={treso.depenses.filter((d) => d.statut === 'approuvee').reduce((t, d) => t + (Number(d.montant) || 0), 0)} />
+              {peutVoirBanque(role) && <Link to="/comptabilite/tresorerie" className="mt-2 inline-block text-xs font-semibold text-orange-600 hover:underline">Ouvrir la Trésorerie →</Link>}
+            </div>
+          })()}
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

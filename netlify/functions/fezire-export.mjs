@@ -27,6 +27,11 @@
 //   FIREBASE_DB_URL          (optionnel)   défaut = base de production max-agro-83baf
 //   FEZIRE_MOUVEMENTS_DEPUIS (optionnel)   date de départ des mouvements de stock (défaut 2026-10-09)
 import crypto from 'node:crypto'
+// Logique partagée avec l'application (modules purs, empaquetés par esbuild) : mêmes
+// ventes, mêmes encaissements, mêmes flux de trésorerie que la Comptabilité.
+import { ventesUnifiees, avecEncaissements, modeCanonique } from '../../src/shared/ventes.js'
+import { comptesTresorerie, fluxTresorerie, paramsEffectifs, compteAffecte, COLLECTIONS_BANQUE } from '../../src/modules/comptabilite/tresorerie/logic.js'
+import { MAP_CATEGORIE_COMPTE, COMPTE_CHARGE_DEFAUT, COMPTE_IMMO_DEFAUT } from '../../src/modules/comptabilite/passerelles.js'
 
 const DB_URL = process.env.FIREBASE_DB_URL || 'https://max-agro-83baf-default-rtdb.firebaseio.com'
 const ROOT = 'tp' // namespace Termitière (cf. src/core/db.firebase.js)
@@ -541,12 +546,114 @@ function ventesModules(d) {
   ]
 }
 
+// ───────────────────────── Règlements & trésorerie ─────────────────────────
+// Préfixe FEZIRE de chaque secteur (identifiants des commandes : <préfixe>-cmd-<id>).
+const PREFIXE_SECTEUR = { agro: 'agro', evenementiel: 'briq', logistique: 'logi', gym: 'gym', garderie: 'gard' }
+
+function ventesAvecReglements(d) {
+  const v = (col) => d[col] || []
+  return avecEncaissements(ventesUnifiees({
+    facturesAgro: v('agro_factures'), facturesLogistique: v('logistique_factures'), facturesEvenementiel: v('evenementiel_factures'),
+    facturesGym: v('gym_factures'), paiementsGarderie: v('garderie_paiements'), enfantsGarderie: v('garderie_enfants')
+  }), { creances: v('treso_creances'), reglements: v('treso_reglements') })
+}
+
+// PAYMENT : un règlement par encaissement, rattaché à une commande déjà exportée.
+//  - Agro, Briqueterie, Logistique : la facture définitive est encaissée à sa date (règle
+//    de l'application) sauf si la Trésorerie l'a passée « à crédit » → <préfixe>-pay-<id>.
+//  - Gym et Garderie : encaissements immédiats déjà émis plus bas (identifiants inchangés).
+//  - Règlements saisis en Trésorerie sur une créance : treso-reg-<id>, tous secteurs.
+function reglements(d, commandesExportees) {
+  const commandes = new Set(commandesExportees.map((o) => o.external_id))
+  const aCredit = new Set((d.treso_creances || []).filter((c) => c.aCredit).map((c) => c.cle || c.id))
+  const out = []
+  for (const vente of ventesAvecReglements(d)) {
+    const prefixe = PREFIXE_SECTEUR[vente.secteur]
+    const commande = `${prefixe}-cmd-${vente.sourceId}`
+    if (!prefixe || !commandes.has(commande)) continue
+    for (const e of vente.encaissements) {
+      if (e.immediat && (vente.secteur === 'gym' || vente.secteur === 'garderie')) continue
+      out.push({
+        external_id: e.immediat ? `${prefixe}-pay-${vente.sourceId}` : `treso-reg-${e.id}`,
+        order_id: commande, amount: Math.round(e.montant), currency: DEVISE, method: modeCanonique(e.mode),
+        status: 'paid', paid_at: iso(e.date)
+      })
+    }
+  }
+  return { liste: out, aCredit }
+}
+
+// Compte de charge d'une dépense (même correspondance que la Comptabilité).
+const compteDepense = (dep) => ((dep.natureFlux || 'exploitation') === 'investissement'
+  ? COMPTE_IMMO_DEFAUT : (MAP_CATEGORIE_COMPTE[dep.categorie] || COMPTE_CHARGE_DEFAUT))
+const NATURE_FEZIRE = {
+  DEPENSE: 'ACHAT', REVENU: 'AUTRE_PRODUIT', VIREMENT_INTERNE: 'VIREMENT_INTERNE', VERSEMENT_BANQUE: 'VIREMENT_INTERNE',
+  RETRAIT_BANQUE: 'VIREMENT_INTERNE', SOLDE_OUVERTURE: 'SOLDE_OUVERTURE'
+}
+
+// CASH_MOVEMENT : tout l'argent qui entre ou sort hors ventes déjà réglées par PAYMENT —
+// dépenses décaissées, rentrées saisies, mouvements et virements de Trésorerie, dépôts et
+// retraits bancaires, soldes d'ouverture, versements des projets, salaires payés.
+function mouvementsTresorerie(d) {
+  const v = (col) => d[col] || []
+  const params = paramsEffectifs(v('treso_params').find((x) => x.id === 'config'))
+  const comptes = comptesTresorerie({ comptes: v('treso_comptes'), banques: v('compta_banques') })
+  const mvtsBanque = COLLECTIONS_BANQUE.flatMap(({ secteur, col }) => v(col).map((m) => ({ ...m, secteur })))
+  const depenses = v('depense_depenses')
+  const parDepense = new Map(depenses.map((x) => [`dep-${x.id}`, x]))
+  const flux = fluxTresorerie({ comptes, params, mouvements: v('treso_mouvements'), virements: v('treso_virements'), mvtsBanque, ventes: [], depenses, revenusManuels: v('depense_revenus_manuels') })
+  const contrepartie = (f) => f.source === 'depense' ? compteDepense(parDepense.get(f.id) || {})
+    : (f.source === 'virement' || f.nature === 'VERSEMENT_BANQUE' || f.nature === 'RETRAIT_BANQUE') ? '585000'
+    : f.contrepartie || '471000'
+  const out = flux.map((f) => ({
+    external_id: `cash-${f.id}`, direction: f.sens, amount: f.montant, currency: DEVISE, occurred_at: iso(f.date),
+    account: f.compteId, payment_method: f.mode || 'CASH', nature: NATURE_FEZIRE[f.nature] || f.nature,
+    label: f.libelle || 'Mouvement', counterpart_account: contrepartie(f),
+    counterparty: f.tiers ? { type: f.sens === 'IN' ? 'CUSTOMER' : 'SUPPLIER', external_id: null, name: f.tiers } : null,
+    reference: f.reference || null
+  }))
+  // Soldes initiaux des caisses / Mobile Money saisis en Trésorerie (les banques ont leurs « ouverture »).
+  for (const c of comptes.filter((x) => x.source === 'treso' && x.soldeInitial > 0)) {
+    out.push({
+      external_id: `cash-si-${c.id}`, direction: 'IN', amount: c.soldeInitial, currency: DEVISE, occurred_at: iso(c.dateSoldeInitial || '2026-01-01'),
+      account: c.id, payment_method: c.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'CASH', nature: 'SOLDE_OUVERTURE',
+      label: `Solde initial : ${c.nom}`, counterpart_account: '110000', counterparty: null, reference: `SI-${c.id}`
+    })
+  }
+  // Versements des clients de projets (pas de commande FEZIRE) : encaissements directs.
+  const caisseProjets = compteAffecte(params, comptes, 'projet')
+  for (const vers of v('projet_versements_client')) {
+    const projet = v('projets').find((p) => p.id === vers.projetId)
+    const montant = Number(vers.montant) || 0
+    if (montant <= 0) continue
+    out.push({
+      external_id: `cash-vers-${vers.id}`, direction: 'IN', amount: montant, currency: DEVISE, occurred_at: iso(Number(vers.date) || vers.date),
+      account: caisseProjets, payment_method: modeCanonique(vers.modePaiement), nature: 'VENTE_COMPTANT',
+      label: `Versement client : ${projet?.nom || 'projet'}`, counterpart_account: '704000',
+      counterparty: projet?.clientNom ? { type: 'CUSTOMER', external_id: null, name: projet.clientNom } : null, reference: `VERS-${vers.id}`
+    })
+  }
+  // Salaires versés (bulletins payés) : sortent du compte des dépenses.
+  const caisseDepenses = compteAffecte(params, comptes, 'depense')
+  for (const b of v('rh_bulletins')) {
+    const net = Number(b.net) || 0
+    if (b.statut !== 'paye' || net <= 0) continue
+    out.push({
+      external_id: `cash-sal-${b.id}`, direction: 'OUT', amount: net, currency: DEVISE,
+      occurred_at: iso(b.datePaiement || (b.mois ? `${b.mois}-28` : null)), account: caisseDepenses, payment_method: 'CASH',
+      nature: 'SALAIRE', label: `Salaire ${b.mois || ''} : ${b.employeNom || ''}`.trim(), counterpart_account: '421000',
+      counterparty: b.employeNom ? { type: 'EMPLOYEE', external_id: b.employeId || null, name: b.employeNom } : null, reference: `PAIE-${b.id}`
+    })
+  }
+  return out.filter((m) => m.occurred_at && m.amount > 0)
+}
+
 // ───────────────────────── Routage des ressources ─────────────────────────
 
 const RESSOURCES = {
   categories: 'CATEGORY', products: 'PRODUCT', warehouses: 'WAREHOUSE', stocks: 'STOCK',
   'stock-movements': 'STOCK_MOVEMENT', customers: 'CUSTOMER', orders: 'ORDER',
-  invoices: 'INVOICE', payments: 'PAYMENT'
+  invoices: 'INVOICE', payments: 'PAYMENT', 'cash-movements': 'CASH_MOVEMENT'
 }
 // Connect appelle « <adresse de base>/<ressource> » selon sa convention REST standard
 // (vérifié : /categories). On tolère les variantes d'écriture : casse, tirets ou
@@ -571,7 +678,12 @@ const BESOINS = {
     'gym_factures', 'gym_clients', 'garderie_paiements', 'garderie_enfants'],
   ORDER: ['agro_factures', 'agro_referentiel', ...VENTES],
   INVOICE: ['agro_factures', 'agro_referentiel', ...VENTES],
-  PAYMENT: ['gym_factures', 'garderie_paiements', 'garderie_enfants']
+  PAYMENT: ['agro_factures', 'agro_referentiel', ...VENTES, 'treso_creances', 'treso_reglements'],
+  CASH_MOVEMENT: [
+    'treso_comptes', 'treso_mouvements', 'treso_virements', 'treso_params', 'compta_banques',
+    ...COLLECTIONS_BANQUE.map((b) => b.col), 'depense_depenses', 'depense_revenus_manuels',
+    'projet_versements_client', 'projets', 'rh_bulletins'
+  ]
 }
 
 export function construire(code, d) {
@@ -601,16 +713,22 @@ export function construire(code, d) {
     ])
     case 'ORDER': return [...commandes(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.cmd).filter(Boolean)]
     case 'INVOICE': return [...factures(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.fac)]
-    case 'PAYMENT': return [
-      ...maxiGym.ventes(v('gym_factures')).map((x) => x.pay),
-      ...garderie.ventes(v('garderie_paiements'), v('garderie_enfants')).map((x) => x.pay)
-    ].filter(Boolean)
+    case 'PAYMENT': {
+      const { liste, aCredit } = reglements(d, construire('ORDER', d))
+      return [
+        // Gym : un reçu passé « à crédit » en Trésorerie n'est plus réglé d'office.
+        ...maxiGym.ventes(v('gym_factures')).filter((x) => !aCredit.has(`gym-${x.f.id}`)).map((x) => x.pay),
+        ...garderie.ventes(v('garderie_paiements'), v('garderie_enfants')).map((x) => x.pay),
+        ...liste
+      ].filter(Boolean)
+    }
+    case 'CASH_MOVEMENT': return mouvementsTresorerie(d)
     default: return null
   }
 }
 
 // Date de référence d'un élément, pour le filtre incrémental `since`.
-const dateElement = (e) => e.moved_at || e.ordered_at || e.issued_at || e.paid_at || e.updated_at || null
+const dateElement = (e) => e.moved_at || e.ordered_at || e.issued_at || e.paid_at || e.occurred_at || e.updated_at || null
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'Méthode non autorisée' })
