@@ -260,6 +260,7 @@ export const MODULE_NAV = {
     { label: 'Comptabilité Analytique', to: '/comptabilite/analytique',     icon: PieChart },
     { label: 'États Financiers',       to: '/comptabilite/etats',           icon: BarChart2 },
     { label: 'Fiscalité & TVA',        to: '/comptabilite/tva',             icon: Receipt },
+    { label: 'Stocks (valorisation)',  to: '/comptabilite/stocks',          icon: Package },
     { label: 'Immobilisations',        to: '/comptabilite/immobilisations', icon: Boxes },
     { label: 'Immobilier / Patrimoine', to: '/comptabilite/patrimoine',     icon: Landmark },
     { label: 'Plan Comptable',         to: '/comptabilite/plan',            icon: BookOpen },

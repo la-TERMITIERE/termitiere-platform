@@ -10,6 +10,7 @@ import { COL } from './data'
 import { planEffectif, mouvements } from './logic'
 import { ecrituresAuto } from './passerelles'
 import { useTresorerie } from './tresorerie/useTresorerie'
+import { referentielAgro, ecrituresVariationStocks } from './valorisationStocks'
 
 export function useCompta() {
   const { data: comptesPerso, loading: lc } = useCollection(COL.comptes)
@@ -26,6 +27,12 @@ export function useCompta() {
   const { data: bulletins } = useCollection('rh_bulletins')
   const { data: paramsCompta } = useCollection(COL.params)
   const tva = useMemo(() => paramsCompta.find((d) => d.id === 'tva') || null, [paramsCompta])
+  // Stocks (inventaires Maxi Agro) : valorisation et variations de fin de mois.
+  const { data: inventairesAgro } = useCollection('agro_inventaires')
+  const { data: refAgro } = useCollection('agro_referentiel')
+  const referentielStocks = useMemo(() => referentielAgro(refAgro), [refAgro])
+  const coutsStocks = useMemo(() => paramsCompta.find((d) => d.id === 'stocks')?.couts || {}, [paramsCompta])
+  const ecrituresStocks = useMemo(() => ecrituresVariationStocks({ inventaires: inventairesAgro, referentiel: referentielStocks, couts: coutsStocks }), [inventairesAgro, referentielStocks, coutsStocks])
   // Ventes de tous les secteurs, encaissements et mouvements de trésorerie (module Trésorerie).
   const treso = useTresorerie()
 
@@ -42,8 +49,8 @@ export function useCompta() {
 
   // Toutes les écritures : saisies manuellement + générées automatiquement.
   const ecritures = useMemo(
-    () => [...ecrituresManuelles, ...ecrituresAutomatiques],
-    [ecrituresManuelles, ecrituresAutomatiques]
+    () => [...ecrituresManuelles, ...ecrituresAutomatiques, ...ecrituresStocks],
+    [ecrituresManuelles, ecrituresAutomatiques, ecrituresStocks]
   )
 
   // Par défaut, seules les écritures VALIDÉES alimentent les états (balance, grand
@@ -56,7 +63,7 @@ export function useCompta() {
     comptesPerso, immobilisations, patrimoine, exercices, tiers, centres,
     ecrituresManuelles, ecrituresAutomatiques, ecritures,
     plan, mvtsValides, mvtsTous,
-    treso, tva,
+    treso, tva, stocks: { inventaires: inventairesAgro, referentiel: referentielStocks, couts: coutsStocks },
     loading: lc || le || li || lp || ld || lr || treso.loading
   }
 }
