@@ -166,7 +166,7 @@ export function fluxTresorerie({
     if (d.statut && d.statut !== 'decaissee') continue
     push({ id: `dep-${d.id}`, date: jour(d.dateDecaissement || d.date), compteId: compteAffecte(params, comptes, 'depense', d.site), sens: 'OUT', montant: d.montant,
       nature: 'DEPENSE', libelle: d.description || d.categorie || 'Dépense', contrepartie: null, source: 'depense', reference: d.numero || '',
-      mode: modeCanonique(d.modePaiement), tiers: d.fournisseur || d.beneficiaire || '', secteur: d.secteurId || '', categorie: d.categorie })
+      mode: modeCanonique(d.modePaiement), tiers: d.beneficiaireNom || d.fournisseur || '', secteur: d.secteurId || '', categorie: d.categorie })
   }
   // Rentrées saisies à la main (E-DÉPENSES › Sources de revenus).
   for (const r of revenusManuels) {
