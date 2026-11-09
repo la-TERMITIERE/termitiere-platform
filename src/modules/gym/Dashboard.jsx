@@ -654,7 +654,7 @@ export default function Dashboard() {
 
 
       {abonnementsARelancer.length > 0 && (
-        <ParamsCarte icone={Clock} couleur="#f59e0b" large titre="Abonnements à renouveler" sous="Expirent dans les 10 prochains jours" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#b45309' }}>{abonnementsARelancer.length}</span>}>
+        <ParamsCarte icone={Clock} couleur="#f59e0b" large plat titre="Abonnements à renouveler" sous="Expirent dans les 10 prochains jours" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#b45309' }}>{abonnementsARelancer.length}</span>}>
           <div className="space-y-2">
             {(voirTousRenouvellements ? abonnementsARelancer : abonnementsARelancer.slice(0, LIMITE_RENOUVELLEMENTS)).map((a, i) => {
               const niveau = niveauRestant(a.joursRestants)
@@ -665,7 +665,7 @@ export default function Dashboard() {
                   <span aria-hidden="true" className="pointer-events-none absolute -inset-x-4 -top-6 h-10 -rotate-6 bg-gradient-to-b from-white/70 to-transparent" />
                   <button onClick={() => setClientDetail(a.clientNom)}
                     className="relative flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
-                    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white" style={icone3D(rouge ? '#ef4444' : '#f97316')}>
+                    <span className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${rouge ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
                       {rouge && <span className="absolute inset-0 animate-ping rounded-2xl bg-red-300 opacity-30" />}
                       <AlertTriangle size={16} className="relative" />
                     </span>
@@ -701,7 +701,7 @@ export default function Dashboard() {
       )}
 
       {abonnesInactifsAffiches.length > 0 && (
-        <ParamsCarte icone={BellRing} couleur="#ef4444" large titre="Abonnés à relancer" sous="Inactifs depuis 7 jours ou plus" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#b91c1c' }}>{abonnesInactifsAffiches.length}</span>}>
+        <ParamsCarte icone={BellRing} couleur="#ef4444" large plat titre="Abonnés à relancer" sous="Inactifs depuis 7 jours ou plus" droite={<span className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-extrabold shadow-sm" style={{ color: '#b91c1c' }}>{abonnesInactifsAffiches.length}</span>}>
           <style>{`
             @keyframes gym-signal-lumineux {
               0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
@@ -718,7 +718,7 @@ export default function Dashboard() {
                   className={`ed-entree group flex w-full items-center gap-1 rounded-3xl border border-white/80 bg-gradient-to-r from-red-50/80 to-white/70 pr-1.5 shadow-[0_10px_22px_-14px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${flashe ? 'animate-[gym-signal-lumineux_0.35s_ease-out]' : ''}`}>
                   <button onClick={() => setClientDetail(a.clientNom)}
                     className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
-                    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white" style={icone3D(tresInactif ? '#dc2626' : '#f87171')}>
+                    <span className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${tresInactif ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'}`}>
                       {tresInactif && <span className="absolute inset-0 animate-ping rounded-2xl bg-red-400 opacity-30" />}
                       <BellRing size={16} className="relative" />
                     </span>

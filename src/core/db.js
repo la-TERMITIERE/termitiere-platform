@@ -137,6 +137,8 @@ export async function removeItem(collection, id, options = {}) {
     .catch(() => {})
   return resultat
 }
+// Répare les documents dont l'`id` vu par l'appli diffère de la vraie clé de la base (sans quoi supprimer ou modifier vise un chemin inexistant).
+export const repairCustomIds = (collection) => (impl.repairCustomIds ? impl.repairCustomIds(collection) : Promise.resolve({ repaired: 0 }))
 export const claimOnce = protegerEcriture('claimOnce', impl.claimOnce)
 export const updateAtomic = protegerEcriture('updateAtomic', impl.updateAtomic)
 

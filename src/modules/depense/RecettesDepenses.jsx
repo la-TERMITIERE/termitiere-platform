@@ -6,7 +6,7 @@
 // La SAISIE des dépenses reste dans l'écran « Dépenses » ; ici on pilote le bilan.
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2, HandCoins, Layers, CalendarDays, ArrowUpDown, PenLine, Banknote, MessageSquareText, X, Save, Undo2, PiggyBank } from 'lucide-react'
+import { Receipt, ChevronLeft, ChevronRight, TrendingDown, Scale, Eye, Paperclip, History, Wallet, Plus, Pencil, Trash2, Send, CheckCircle2, HandCoins, Layers, CalendarDays, ArrowUpDown, PenLine, Banknote, MessageSquareText, X, Save, Undo2, PiggyBank } from 'lucide-react'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import Button from '../../shared/ui/Button'
@@ -63,7 +63,7 @@ const ROUTE_FINANCES_PAR_SECTEUR = {
 
 // `secteurId` optionnel : quand il est fourni (vue intégrée dans un module métier), l'écran
 // est restreint à ce seul secteur. Sans lui, il affiche tous les secteurs (E-DÉPENSES).
-// `site` optionnel : uniquement pour secteurId="logistique" — restreint en plus au site
+// `site` optionnel : uniquement pour secteurId="logistique" ou "gym" — restreint en plus au site
 // courant (Lomé/Kara, fourni par la route /logistique/:site/finances) ; les dépenses
 // créées depuis cette vue sont automatiquement taguées à ce site, sans le redemander.
 // `masquerRevenu` : vue « Dépense » pure pour les modules intégrés — cache les revenus/solde
@@ -121,10 +121,11 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     if (secteurId) {
       const s = SECTEURS.find((x) => x.id === secteurId)
       if (!s) return []
-      if (secteurId === 'logistique') {
+      // MAXI LOGISTIQUE et MAXI-GYM : une vue par site (Lomé / Kara), qui ne montre que les dépenses, budgets et revenus de ce site.
+      if (secteurId === 'logistique' || secteurId === 'gym') {
         const siteEffectif = site || 'lome'
         const siteLbl = LOGISTIQUE_SITES.find((x) => x.id === siteEffectif)?.label || siteEffectif
-        return [{ ...s, secteurId: 'logistique', site: siteEffectif, label: `${s.label} : ${siteLbl}` }]
+        return [{ ...s, secteurId, site: siteEffectif, label: `${s.label} : ${siteLbl}` }]
       }
       return [{ ...s, secteurId, site: null }]
     }
@@ -325,7 +326,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
             title: `💰 Budget proposé : ${revision.secteurLabel}`,
             body: `${fmt(nouveau)} FCFA pour ${MOIS_LABELS[mois - 1]} ${annee} : confirmez la réception pour l'activer.`,
             module: 'depense', forUsers: destinataires, excludeUid: user?.uid,
-            link: revision.secteurId === 'logistique' && revision.site ? `/logistique/${revision.site}/finances` : (ROUTE_FINANCES_PAR_SECTEUR[revision.secteurId] || '/depense/recettes-depenses')
+            link: (revision.secteurId === 'logistique' || revision.secteurId === 'gym') && revision.site ? `/${revision.secteurId}/${revision.site}/finances` : (ROUTE_FINANCES_PAR_SECTEUR[revision.secteurId] || '/depense/recettes-depenses')
           }).catch(() => {})
         }
         toast.success('Budget proposé : en attente de confirmation du secteur ✓')
@@ -521,7 +522,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
     if (!nouvelleDepense.beneficiaireNom || !nouvelleDepense.beneficiaireNom.trim()) return toast.error('Bénéficiaire requis : identifiez qui reçoit la somme')
     setDepenseSaving(true)
     try {
-      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: secteurId === 'logistique' ? (site || 'lome') : undefined }, { user, budgets, depenses, seuils })
+      const { statutInitial } = await soumettreNouvelleDepense({ ...nouvelleDepense, secteurId, site: (secteurId === 'logistique' || secteurId === 'gym') ? (site || 'lome') : undefined }, { user, budgets, depenses, seuils })
       toast.success(statutInitial === 'en_attente' ? 'Demande de décaissement soumise : en attente d\'autorisation ✓' : 'Dépense enregistrée ✓')
       setNouvelleDepense(null)
     } finally {
@@ -605,7 +606,7 @@ export default function RecettesDepenses({ secteurId = null, site = null, masque
           ici (cf. confirmerNouvelleDepense → depenseActions.js). */}
       {masquerRevenu && secteurId && !lectureSeule && (
         <div className="flex justify-end">
-          <Button onClick={ouvrirNouvelleDepense} size="sm"><Plus size={14} className="mr-1" />Ajouter une dépense</Button>
+          <BoutonVerre couleur={headerColor} icone={Receipt} animation="recu" badgePlus onClick={ouvrirNouvelleDepense}>Ajouter une dépense</BoutonVerre>
         </div>
       )}
 

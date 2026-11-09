@@ -490,3 +490,29 @@ html.dark .barre-defilement-fixe { background: rgba(30, 34, 38, 0.6); border-col
   .fe-brille { animation: fe-brille 3.6s ease-in-out infinite; }
   .fe-etoile { animation: fe-etoile 1.8s ease-in-out infinite; }
 }
+
+/* ── Fenêtres de saisie RH : icône à gauche des champs, champs qui apparaissent l'un après l'autre ── */
+.rh-champ-icone .input-base, .rh-champ-icone select, .rh-champ-icone textarea { padding-left: 2.5rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .rh-champs > * { animation: ed-entree 0.4s ease-out backwards; }
+  .rh-champs > *:nth-child(2) { animation-delay: 60ms; }
+  .rh-champs > *:nth-child(3) { animation-delay: 120ms; }
+  .rh-champs > *:nth-child(4) { animation-delay: 180ms; }
+  .rh-champs > *:nth-child(5) { animation-delay: 240ms; }
+  .rh-champs > *:nth-child(n+6) { animation-delay: 300ms; }
+}
+
+/* Bouton animé du bandeau (BoutonBande `anime`) : aucune animation si l'appareil demande de réduire les mouvements. */
+@media (prefers-reduced-motion: reduce) {
+  .bv-anime, .bv-anime * { animation: none !important; }
+}
+
+/* ── Héros des fenêtres RH : icône qui flotte, reflet qui passe de temps en temps, pastille choisie qui rebondit (comme la fenêtre d'une séance de MAXI-GYM) ── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rh-reflet { 0% { transform: translateX(-120%) skewX(-12deg); } 100% { transform: translateX(520%) skewX(-12deg); } }
+  @keyframes rh-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @keyframes rh-pop { 0% { transform: scale(0.94); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+  .rh-reflet { animation: rh-reflet 4.5s ease-in-out 1s infinite; }
+  .rh-flotte { animation: rh-flotte 2.8s ease-in-out infinite; }
+  .rh-pop { animation: rh-pop 0.3s ease-out; }
+}

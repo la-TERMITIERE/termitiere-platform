@@ -54,11 +54,11 @@ export function OngletsBande({ options, valeur, onChange, taille = 'md' }) {
 }
 
 // Bouton d'action posé sur le bandeau (création, export, actualisation…).
-// `anime` : légère animation (ondes autour du bouton, reflet qui passe, icône qui pivote) pour l'action principale.
+// `anime` : légère animation (ondes autour du bouton, reflet qui passe, icône qui pivote) pour l'action principale ; coupée si l'appareil demande moins de mouvement.
 export function BoutonBande({ icone: Icone, children, onClick, disabled, title, plein = true, anime = false }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} title={title}
-      className={`relative inline-flex items-center gap-1.5 overflow-hidden rounded-2xl border px-3.5 py-2 text-xs font-extrabold transition-all enabled:hover:-translate-y-0.5 disabled:opacity-50 ${plein ? 'border-white bg-white text-[color:var(--bv)] shadow-md' : 'border-white/40 bg-white/15 text-white hover:bg-white/25'}`}
+      className={`${anime ? 'bv-anime ' : ''}relative inline-flex items-center gap-1.5 overflow-hidden rounded-2xl border px-3.5 py-2 text-xs font-extrabold transition-all enabled:hover:-translate-y-0.5 enabled:active:translate-y-0 enabled:active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-50 ${plein ? 'border-white bg-white text-[color:var(--bv)] shadow-md' : 'border-white/40 bg-white/15 text-white hover:bg-white/25'}`}
       style={anime ? { animation: 'bv-ondes 2.4s ease-out infinite' } : undefined}>
       {anime && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent" style={{ animation: 'bv-brille 3.6s ease-in-out infinite' }} />}
       {Icone && <Icone size={15} className="relative" style={anime ? { animation: 'bv-plus 3.6s ease-in-out infinite' } : undefined} />}

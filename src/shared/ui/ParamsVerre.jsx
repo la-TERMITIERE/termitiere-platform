@@ -17,7 +17,8 @@ export function ParamsGrille({ children, className = '' }) {
   return <div className={`grid items-start gap-4 lg:grid-cols-2 ${className}`}>{enfants}</div>
 }
 
-export function ParamsCarte({ icone: Icone, couleur = '#64748b', titre, sous, droite, large = false, danger = false, index = 0, children, className = '' }) {
+// `plat` : l'icône du titre est un simple pavé teinté, sans relief ni animation (au lieu de l'icône 3D).
+export function ParamsCarte({ icone: Icone, couleur = '#64748b', titre, sous, droite, large = false, danger = false, plat = false, index = 0, children, className = '' }) {
   const c = danger ? '#dc2626' : couleur
   return (
     <section className={`ed-entree params-verre relative overflow-hidden rounded-[1.9rem] border p-5 shadow-[0_14px_34px_-18px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-18px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-white/10 dark:bg-white/5 ${large ? 'lg:col-span-2' : ''} ${danger ? 'border-red-200/80 bg-red-50/60' : 'border-white/70 bg-white/55'} ${className}`}
@@ -26,7 +27,9 @@ export function ParamsCarte({ icone: Icone, couleur = '#64748b', titre, sous, dr
       {(titre || droite) && (
         <div className="relative mb-3.5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-3">
-            {Icone && <span className="ed-flotte flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(c)}><Icone size={19} /></span>}
+            {Icone && (plat
+              ? <span className="ed-flotte flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={{ background: `${c}1f`, color: c }}><Icone size={19} /></span>
+              : <span className="ed-flotte flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(c)}><Icone size={19} /></span>)}
             <div className="min-w-0">
               <h2 className="text-base font-extrabold leading-tight text-gray-800 dark:text-gray-100">{titre}</h2>
               {sous && <p className="text-xs text-gray-500">{sous}</p>}

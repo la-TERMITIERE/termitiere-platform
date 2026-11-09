@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { Users } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import { useCollection } from '../../hooks/useFirestore'
-import { DEPARTEMENTS, COL } from './store/rhStore'
+import { COL } from './store/rhStore'
 import { PageHeader } from './rhui'
 
 export default function Organigramme() {
@@ -11,7 +11,7 @@ export default function Organigramme() {
   const { data: departements } = useCollection(COL.departements)
 
   const depts = useMemo(() => {
-    const noms = [...new Set([...DEPARTEMENTS, ...departements.map((d) => d.nom), ...employes.map((e) => e.departement).filter(Boolean)])]
+    const noms = [...new Set([...departements.filter((d) => !d.masque).map((d) => d.nom), ...employes.map((e) => e.departement).filter(Boolean)])]
     return noms.map((nom) => ({
       nom,
       responsable: departements.find((d) => d.nom === nom)?.responsable,

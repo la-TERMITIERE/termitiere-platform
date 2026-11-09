@@ -63,6 +63,11 @@ async function alerterSiDepassement(d, secteur, { user, budgets, depenses, seuil
 // montant > budget restant du secteur → demande envoyée au PAU (statut « en attente »)
 // ; sinon → décaissée immédiatement. Retourne { statutInitial }.
 export async function soumettreNouvelleDepense(d, { user, budgets, depenses, seuils }) {
+  // Garde-fou commun à toutes les saisies : aucune dépense n'est enregistrée sans son secteur (et sa salle ou son site quand le secteur en a).
+  if (!d.secteurId || !SECTEURS.some((s) => s.id === d.secteurId)) throw new Error('Secteur requis : choisissez le secteur que la dépense concerne')
+  if (d.secteurId === 'logistique' && !d.site) throw new Error('Site requis (Lomé ou Kara)')
+  if (d.secteurId === 'gym' && !d.site) throw new Error('Salle requise (Lomé ou Kara)')
+  if (d.secteurId === 'autre' && !(d.secteurAutre || '').trim()) throw new Error('Précisez le nom du secteur')
   const secteur = SECTEURS.find((s) => s.id === d.secteurId)
   const libelle = libelleSecteurSite(secteur, d)
   const id = genId()

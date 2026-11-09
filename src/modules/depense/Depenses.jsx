@@ -33,7 +33,8 @@ import { glassModalProps, icone3D } from '../../utils/color'
 import { ouvrirPiece } from '../../utils/fichiers'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { SECTEURS, LOGISTIQUE_SITES, CATEGORIES_DEPENSE, STATUTS_DECAISSEMENT, NATURES_FLUX, natureFluxDefaut, MODES_PAIEMENT, MOIS_LABELS } from './data'
-import { budgetSecteur, depensesEntrepriseSecteurMois, depensesSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
+import { budgetSecteur, depensesEntrepriseSecteurMois, depensesSecteurMois, totalDepenses, statutBudget, coutsMatieresBriqueterie, libelleSecteurSite, siteLogistiqueDe, siteDe, visibleDansEDepenses, secteursEtSites, seuilsBudgetDe } from './logic'
+import { REPORT_AUTO_DEPUIS } from './reportAuto'
 import { financementSiege, raisonAutorisation as raisonAutorisationPartagee, soumettreNouvelleDepense as soumettreNouvelleDepensePartagee } from './depenseActions'
 import { isFullAccessRole, FULL_ACCESS_ROLES, isReadOnlyRole, depenseRoleEffectif } from '../../core/roles'
 import { marquerVoletVu } from '../../shared/nouveautes'
@@ -276,7 +277,7 @@ export default function Depenses() {
     // (site connu) — une ligne d'un autre secteur qui ne fait que « concerner »
     // Logistique en plus n'a pas de site propre, donc reste visible quel que soit
     // le site choisi.
-    if (filtreSecteur === 'logistique' && filtreSite) rows = rows.filter((d) => d.secteurId !== 'logistique' || siteLogistiqueDe(d) === filtreSite)
+    if ((filtreSecteur === 'logistique' || filtreSecteur === 'gym') && filtreSite) rows = rows.filter((d) => d.secteurId !== filtreSecteur || siteDe(d, filtreSecteur) === filtreSite)
     if (filtreCategorie) rows = rows.filter((d) => d.categorie === filtreCategorie)
     if (filtreAffectation) rows = rows.filter((d) => !d.source && (filtreAffectation === 'affectees' ? estAffectee(d) : !estAffectee(d)))
     if (filtreNature)    rows = rows.filter((d) => (d.natureFlux || natureFluxDefaut) === filtreNature)
@@ -367,8 +368,17 @@ export default function Depenses() {
     const m = `${anneeKpi}-${String(moisKpi).padStart(2, '0')}`
     const j = journalPeriode(lignesCaisse, bornesPeriode('mois', { mois: m }), { mensuel: true })
     const veille = new Date(anneeKpi, moisKpi - 1, 0)
-    return { initial: j.soldeInitial, final: j.soldeFinal, veille: `${String(veille.getDate()).padStart(2, '0')}/${String(veille.getMonth() + 1).padStart(2, '0')}/${veille.getFullYear()}` }
-  }, [lignesCaisse, anneeKpi, moisKpi])
+    // À partir du premier report automatique, le solde initial est le reste du mois précédent calculé comme le report lui-même et comme la
+    // carte « Budget alloué : Caisse courante » (budget alloué moins dépenses de la caisse courante) : les trois affichent ainsi le même montant.
+    // Avant, on garde le calcul du journal de la Caisse (reports saisis à la main).
+    let initial = j.soldeInitial
+    if (m >= REPORT_AUTO_DEPUIS) {
+      const pa = veille.getFullYear()
+      const pm = veille.getMonth() + 1
+      initial = Math.max(0, budgetSecteur(budgets, 'divers', pa, pm) - totalDepenses(depensesEntrepriseSecteurMois(depenses, 'divers', pa, pm)))
+    }
+    return { initial, final: j.soldeFinal, veille: `${String(veille.getDate()).padStart(2, '0')}/${String(veille.getMonth() + 1).padStart(2, '0')}/${veille.getFullYear()}` }
+  }, [lignesCaisse, anneeKpi, moisKpi, budgets, depenses])
   // Dotations de la période affichée (les reports du mois précédent sont le solde initial, pas des dotations).
   const dotationsListe = useMemo(() => {
     if ((filtreSecteur && filtreSecteur !== 'divers') || filtreCategorie || filtreNature) return []
@@ -498,10 +508,11 @@ export default function Depenses() {
   async function handleSave() {
     if (saving) return
     const d = modal.data
-    if (!d.secteurId) return toast.error('Destination requise : choisissez le secteur que la somme va servir')
+    if (!d.secteurId) return toast.error('Secteur requis : choisissez le secteur que cette dépense concerne')
     if (!origineValide(d.origineFonds)) return toast.error('Origine des fonds requise : Caisse courante ou Banque')
     if (d.secteurId === 'autre' && !(d.secteurAutre || '').trim()) return toast.error('Précisez le nom du secteur')
     if (d.secteurId === 'logistique' && !d.site) return toast.error('Site requis (Lomé ou Kara)')
+    if (d.secteurId === 'gym' && !d.site) return toast.error('Salle requise (Lomé ou Kara)')
     if (!d.categorie) return toast.error('Catégorie requise')
     if (!d.montant || Number(d.montant) <= 0) return toast.error('Montant requis')
     if (!d.date) return toast.error('Date requise')
@@ -540,8 +551,8 @@ export default function Depenses() {
   // complète suit le même circuit (décaissée ou demande PAU selon le montant/imprévu).
   async function enregistrerLot() {
     if (savingLot) return
-    const valides = (lot || []).filter((r) => r.secteurId && (r.secteurId !== 'logistique' || r.site) && r.categorie && Number(r.montant) > 0 && r.date)
-    if (valides.length === 0) return toast.error('Aucune ligne complète à enregistrer (secteur, site pour Logistique, catégorie, montant, date)')
+    const valides = (lot || []).filter((r) => r.secteurId && ((r.secteurId !== 'logistique' && r.secteurId !== 'gym') || r.site) && r.categorie && Number(r.montant) > 0 && r.date)
+    if (valides.length === 0) return toast.error('Aucune ligne complète à enregistrer (secteur, site pour Logistique, salle pour MAXI-GYM, catégorie, montant, date)')
     setSavingLot(true)
     try {
       let nbDemandes = 0
@@ -642,8 +653,8 @@ export default function Depenses() {
             {SECTEURS.map((s) => <option key={s.id} value={s.id}>{libelleChoixSecteur(s)}</option>)}
           </select>
         </ChampBande>
-        {filtreSecteur === 'logistique' && (
-          <ChampBande label="Site">
+        {(filtreSecteur === 'logistique' || filtreSecteur === 'gym') && (
+          <ChampBande label={filtreSecteur === 'gym' ? 'Salle' : 'Site'}>
             <select value={filtreSite} onChange={(e) => setFiltreSite(e.target.value)} className={`${CLASSE_CHAMP_BANDE} w-28`}>
               <option value="">Lomé + Kara</option>
               {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -1024,7 +1035,7 @@ export default function Depenses() {
                   />
                 </FormGroup>
                 {/* Destination : tous les secteurs en boutons ; la dépense apparaît dans le volet Dépense du secteur choisi. */}
-                <FormGroup className="col-span-2" label={<EtiqD icone={Building2} couleur="#B45309">Destination de la somme *</EtiqD>}
+                <FormGroup className="col-span-2" label={<EtiqD icone={Building2} couleur="#B45309">Secteur concerné par la dépense *</EtiqD>}
                   hint={!modal.data.secteurId
                     ? 'Aucune destination choisie : cliquez sur un secteur (un second clic annule le choix).'
                     : !SECTEURS_AVEC_VOLET.includes(modal.data.secteurId)
@@ -1053,7 +1064,7 @@ export default function Depenses() {
                   {modal.data.secteurId === 'gym' && (
                     <div className="mt-2 max-w-[12rem]">
                       <Select value={modal.data.site || ''} onChange={(e) => set('site', e.target.value)}>
-                        <option value="">Salle (facultatif)</option>
+                        <option value="">Salle : choisir *</option>
                         {LOGISTIQUE_SITES.map((st) => <option key={st.id} value={st.id}>Salle de {st.label}</option>)}
                       </Select>
                     </div>
@@ -1260,9 +1271,9 @@ export default function Depenses() {
                         <option value="">Secteur</option>
                         {SECTEURS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </Select>
-                      {r.secteurId === 'logistique' && (
+                      {(r.secteurId === 'logistique' || r.secteurId === 'gym') && (
                         <Select value={r.site} onChange={(e) => setLigne(i, 'site', e.target.value)}>
-                          <option value="">Site</option>
+                          <option value="">{r.secteurId === 'gym' ? 'Salle' : 'Site'}</option>
                           {LOGISTIQUE_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                         </Select>
                       )}
