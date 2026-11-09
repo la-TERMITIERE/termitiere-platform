@@ -25,6 +25,12 @@ import {
   ENTREE_TYPES, SORTIE_TYPES_SAISIE, RETOUR_TYPES, sommeType
 } from './logic'
 
+// Ensemble des articles modifiés pour une clé « salle__jour » (créé à la demande).
+const modifsPour = (ref, cle) => {
+  if (!ref.current[cle]) ref.current[cle] = new Set()
+  return ref.current[cle]
+}
+
 export default function SaisieMagasin() {
   const { user, role } = useAuth()
   const site = useSite()
@@ -64,12 +70,25 @@ export default function SaisieMagasin() {
   const lastSaveRef = useRef(0)
   const [draftSavedAt, setDraftSavedAt] = useState(null)
   const markDirty = () => { dirtyRef.current = true }
+  // Articles modifiés à la main mais pas encore enregistrés, par salle et par jour. Sans cette mémoire, chaque mise à jour du référentiel
+  // (ajout d'un matériel) ou des données rechargeait toute la saisie depuis la base et effaçait les quantités déjà tapées.
+  const modifiesRef = useRef({})
+  const cleSaisie = `${site}__${date}`
+  const cleLocale = `logistique_saisie_${cleSaisie}`
+  const modifies = () => (modifsPour(modifiesRef, cleSaisie))
 
   useEffect(() => {
     const inv = getInventaire(inventaires, date) || { materiels: {} }
     const prevDate = previousInventoryDate(inventaires, date)
     const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
     const seeds = seedInit[date] || {}
+
+    // Sauvegarde locale d'une saisie non enregistrée (retour sur la page après être parti) : elle redevient la saisie en cours.
+    let locale = {}
+    try { locale = JSON.parse(localStorage.getItem(cleLocale) || '{}') || {} } catch { locale = {} }
+    const touches = modifies()
+    Object.keys(locale).forEach((id) => touches.add(id))
+    if (Object.keys(locale).length) dirtyRef.current = true
 
     const s = {}
     materiel.forEach((m) => {
@@ -80,8 +99,25 @@ export default function SaisieMagasin() {
       // matériel » (collection logistique_retours), affichés en lecture seule.
       s[m.id] = { init, entrees, sorties, retours: retoursDuJour(m.id) }
     })
-    setStock(s)
-  }, [date, inventaires, materiel, seedInit, retoursCol])
+    setStock((prev) => {
+      const out = { ...s }
+      touches.forEach((id) => {
+        const garde = prev?.[id] && prev[id].__charge === cleSaisie ? prev[id] : locale[id]
+        if (garde && out[id]) out[id] = { ...out[id], init: garde.init, entrees: garde.entrees || [], sorties: garde.sorties || [] }
+      })
+      Object.keys(out).forEach((id) => { out[id] = { ...out[id], __charge: cleSaisie } })
+      return out
+    })
+  }, [date, site, inventaires, materiel, seedInit, retoursCol])
+
+  // Sauvegarde locale des articles modifiés : la saisie survit à un changement de page ou de salle, même sans clic sur « Enregistrer ».
+  useEffect(() => {
+    const ids = modifies()
+    if (!ids.size) return
+    const out = {}
+    ids.forEach((id) => { const x = stock[id]; if (x) out[id] = { init: x.init, entrees: x.entrees || [], sorties: x.sorties || [] } })
+    try { localStorage.setItem(cleLocale, JSON.stringify(out)) } catch { /* sauvegarde locale facultative */ }
+  }, [stock]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Création d'un nouveau matériel (+ éventuelle nouvelle catégorie) depuis la saisie.
   function handleAddMateriel({ nom, cat, unite, coutAchat, initial }) {
@@ -90,6 +126,9 @@ export default function SaisieMagasin() {
     const id = (base || 'materiel') + '_' + genId().slice(0, 3).toLowerCase()
     saveMateriel({ id, nom: nom.trim(), cat: cat.trim().toUpperCase(), unite: unite || 'unités', coutAchat: parseFloat(coutAchat) || 0, tarifLocation: 0 })
     setSeedInit((s) => ({ ...s, [date]: { ...(s[date] || {}), [id]: Math.max(0, parseInt(initial) || 0) } }))
+    // Le stock initial saisi pour ce nouvel article doit lui aussi survivre à un changement de page tant que la saisie n'est pas enregistrée.
+    markDirty()
+    modifies().add(id)
     setAddModal(false)
     toast.success(`${nom.trim()} ajouté ✓ : pensez à enregistrer la saisie`)
   }
@@ -105,12 +144,14 @@ export default function SaisieMagasin() {
 
   const setInit = (id, val) => {
     markDirty()
+    modifies().add(id)
     setStock((s) => ({ ...s, [id]: { ...s[id], init: Math.max(0, parseInt(val) || 0) } }))
   }
 
   const setLignes = (id, dir, lignes) => {
     if (!user) return
     markDirty()
+    modifies().add(id)
     const field = dir === 'entree' ? 'entrees' : dir === 'sortie' ? 'sorties' : 'retours'
     setStock((s) => {
       const prev = s[id]?.[field] || []
@@ -192,6 +233,8 @@ export default function SaisieMagasin() {
         date, site, agentId: user.uid, agentNom: user.nom, savedAt: ts(), materiels
       })
       dirtyRef.current = false
+      modifies().clear()
+      try { localStorage.removeItem(cleLocale) } catch { /* ok */ }
       await audit('logistique', 'SAISIE_MAGASIN', `${site === 'lome' ? 'Lomé' : 'Kara'} : saisie magasin du ${date}${peutEditerInit && !peutSaisir ? ' (stocks initiaux : admin)' : ''}`)
       toast.success('Saisie enregistrée ✓')
     } catch (e) {

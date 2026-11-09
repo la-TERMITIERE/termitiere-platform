@@ -1,6 +1,6 @@
 // RH — Impact Collègue (Vie d'Équipe). Reconnaissances / feedbacks positifs.
 import { useState } from 'react'
-import { Lightbulb, Plus, Heart, Trash2 } from 'lucide-react'
+import { Lightbulb, Plus, Heart, Trash2, UserRound, MessageSquareText } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -9,7 +9,7 @@ import { addItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { COL } from './store/rhStore'
-import { PageHeader, Champ } from './rhui'
+import { PageHeader, Champ, ModalRh } from './rhui'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 export default function Impacts() {
@@ -28,7 +28,7 @@ export default function Impacts() {
     <div className="space-y-5">
       <PageHeader icon={Lightbulb} sousModule="Vie d'Équipe" titre="Impact Collègue"
         sousTitre="Valorisez les réussites et le travail d'équipe au quotidien."
-        action={<BoutonBande icone={Plus} onClick={() => setModal({ deId: '', aId: '', message: '' })}>Publier une reconnaissance</BoutonBande>} />
+        action={<BoutonBande anime icone={Plus} onClick={() => setModal({ deId: '', aId: '', message: '' })}>Publier une reconnaissance</BoutonBande>} />
 
       {recos.length === 0
         ? <Card><p className="py-8 text-center text-sm text-gray-400">Aucune reconnaissance publiée. Envoyez un feedback positif à un collègue.</p></Card>
@@ -49,18 +49,22 @@ export default function Impacts() {
           </div>
         )}
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title="Publier une reconnaissance"
-        footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Publier</Button></>}>
-        {modal && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <Champ label="De"><select value={modal.deId} onChange={(e) => setModal({ ...modal, deId: e.target.value })} className="input-base"><option value="">—</option>{employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}</select></Champ>
-              <Champ label="Pour"><select value={modal.aId} onChange={(e) => setModal({ ...modal, aId: e.target.value })} className="input-base"><option value="">—</option>{employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}</select></Champ>
-            </div>
-            <Champ label="Message"><textarea rows={3} value={modal.message} onChange={(e) => setModal({ ...modal, message: e.target.value })} placeholder="Merci pour ton aide sur…" className="input-base" /></Champ>
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title="Publier une reconnaissance" libelleSave="Publier"
+        icone={Heart} intro="Remerciez un collègue : le message est visible de toute l'équipe." onSave={save}>
+        {modal && (<>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Champ label="De" icone={UserRound}>
+              <select value={modal.deId} onChange={(e) => setModal({ ...modal, deId: e.target.value })} className="input-base"><option value="">Sélectionner…</option>{employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}</select>
+            </Champ>
+            <Champ label="Pour" icone={UserRound}>
+              <select value={modal.aId} onChange={(e) => setModal({ ...modal, aId: e.target.value })} className="input-base"><option value="">Sélectionner…</option>{employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}</select>
+            </Champ>
           </div>
-        )}
-      </Modal>
+          <Champ label="Message" icone={MessageSquareText} haut>
+            <textarea rows={3} value={modal.message} onChange={(e) => setModal({ ...modal, message: e.target.value })} placeholder="Merci pour ton aide sur…" className="input-base" />
+          </Champ>
+        </>)}
+      </ModalRh>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 // RH — Congés & Absences (Temps & Paie). Demande + validation, avec solde.
 import { useMemo, useState } from 'react'
-import { CalendarDays, Plus, Check, X } from 'lucide-react'
+import { CalendarDays, Plus, Check, X, UserRound, AlignLeft, Plane, Clock } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
@@ -12,7 +12,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_CONGE, STATUTS_CONGE, DROIT_CONGE_ANNUEL, COL } from './store/rhStore'
-import { PageHeader } from './rhui'
+import { PageHeader, Champ, ModalRh } from './rhui'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const vide = () => ({ employeId: '', type: 'annuel', dateDebut: todayStr(), dateFin: todayStr(), motif: '' })
@@ -58,7 +58,7 @@ export default function Conges() {
       <PageHeader icon={CalendarDays} sousModule="Temps & Paie" titre="Congés & Absences" sousTitre="Demandes de congé, validation et soldes."
         action={<>
           <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
-          <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Poser une demande</BoutonBande>
+          <BoutonBande anime icone={Plus} onClick={() => setModal(vide())}>Poser une demande</BoutonBande>
         </>} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -103,27 +103,34 @@ export default function Conges() {
         </div>
       </Card>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title="Nouvelle demande de congé"
-        footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Envoyer la demande</Button></>}>
-        {modal && (
-          <div className="space-y-3">
-            <Champ label="Employé"><select value={modal.employeId} onChange={(e) => setModal({ ...modal, employeId: e.target.value })} className="input-base">
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title="Nouvelle demande de congé" libelleSave="Envoyer la demande"
+        icone={Plane} intro="La demande part en attente : un responsable la valide ou la refuse." onSave={save}>
+        {modal && (<>
+          <Champ label="Employé" icone={UserRound} required>
+            <select value={modal.employeId} onChange={(e) => setModal({ ...modal, employeId: e.target.value })} className="input-base">
               <option value="">Sélectionner…</option>{employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
-            </select></Champ>
-            <Champ label="Type de congé"><select value={modal.type} onChange={(e) => setModal({ ...modal, type: e.target.value })} className="input-base">{Object.entries(TYPES_CONGE).map(([k, v]) => <option key={k} value={k}>{v.label} ({v.droit} j)</option>)}</select></Champ>
-            <div className="grid grid-cols-2 gap-3">
-              <Champ label="Du"><input type="date" value={modal.dateDebut} onChange={(e) => setModal({ ...modal, dateDebut: e.target.value })} className="input-base" /></Champ>
-              <Champ label="Au"><input type="date" value={modal.dateFin} onChange={(e) => setModal({ ...modal, dateFin: e.target.value })} className="input-base" /></Champ>
-            </div>
-            <p className="text-sm text-gray-500">Durée : <strong>{nbJours(modal.dateDebut, modal.dateFin)} jour(s)</strong></p>
-            <Champ label="Motif (facultatif)"><textarea rows={2} value={modal.motif} onChange={(e) => setModal({ ...modal, motif: e.target.value })} className="input-base" /></Champ>
+            </select>
+          </Champ>
+          <Champ label="Type de congé" icone={Plane}>
+            <select value={modal.type} onChange={(e) => setModal({ ...modal, type: e.target.value })} className="input-base">{Object.entries(TYPES_CONGE).map(([k, v]) => <option key={k} value={k}>{v.label} ({v.droit} j)</option>)}</select>
+          </Champ>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Champ label="Du" icone={CalendarDays}>
+              <input type="date" value={modal.dateDebut} onChange={(e) => setModal({ ...modal, dateDebut: e.target.value })} className="input-base" />
+            </Champ>
+            <Champ label="Au" icone={CalendarDays}>
+              <input type="date" value={modal.dateFin} onChange={(e) => setModal({ ...modal, dateFin: e.target.value })} className="input-base" />
+            </Champ>
           </div>
-        )}
-      </Modal>
+          <p className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/60 px-3.5 py-2.5 text-sm text-gray-600 backdrop-blur-md">
+            <Clock size={16} className="text-gray-400" aria-hidden="true" /> Durée : <strong className="tabular-nums text-gray-800">{nbJours(modal.dateDebut, modal.dateFin)} jour(s)</strong>
+          </p>
+          <Champ label="Motif (facultatif)" icone={AlignLeft} haut>
+            <textarea rows={2} value={modal.motif} onChange={(e) => setModal({ ...modal, motif: e.target.value })} className="input-base" />
+          </Champ>
+        </>)}
+      </ModalRh>
     </div>
   )
 }
 
-function Champ({ label, children }) {
-  return <div><label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</label>{children}</div>
-}

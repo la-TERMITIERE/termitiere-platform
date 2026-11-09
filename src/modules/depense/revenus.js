@@ -40,10 +40,11 @@ export function revenuLogistique(factures, annee, mois, site = null) {
 }
 
 // MAXI-GYM : les factures (abonnements, séances) de ses salles, comptées comme dans le volet Recettes de la Comptabilité.
-export function revenuGym(factures, annee, mois) {
+export function revenuGym(factures, annee, mois, site = null) {
   const prefixe = `${annee}-${String(mois).padStart(2, '0')}`
   return (factures || [])
     .filter((f) => (f.date || '').startsWith(prefixe))
+    .filter((f) => !site || (f.site || 'lome') === site)
     .reduce((s, f) => s + (Number(f.montant) || 0), 0)
 }
 
@@ -63,7 +64,7 @@ export function revenuSecteur(collections, secteurId, annee, mois, versementsCli
   else if (secteurId === 'agro') revenu = revenuAgro(facturesAgro, annee, mois)
   else if (secteurId === 'logistique') revenu = revenuLogistique(facturesLogistique, annee, mois, site)
   else if (secteurId === 'evenementiel') revenu = revenuFactures(facturesEvenementiel, annee, mois)
-  else if (secteurId === 'gym') revenu = revenuGym(facturesGym, annee, mois)
+  else if (secteurId === 'gym') revenu = revenuGym(facturesGym, annee, mois, site)
   return revenu
     + revenuClientSecteurMois(versementsClientRoutes, secteurId, annee, mois, site)
     + revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, site)

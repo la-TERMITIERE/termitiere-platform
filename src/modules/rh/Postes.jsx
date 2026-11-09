@@ -1,6 +1,6 @@
 // RH — Postes de travail (Structure RH). Fiches de postes & classification.
 import { useState } from 'react'
-import { ClipboardList, Plus, Pencil, Trash2 } from 'lucide-react'
+import { ClipboardList, Plus, Pencil, Trash2, Briefcase, Building2, Layers, Banknote, AlignLeft } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
@@ -9,19 +9,22 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
-import { DEPARTEMENTS, COL } from './store/rhStore'
-import { PageHeader } from './rhui'
+import { COL } from './store/rhStore'
+import { useDepartements } from './useDepartements'
+import { PageHeader, Champ, ModalRh, ChoixBoutons } from './rhui'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const CLASSIFICATIONS = ['Ouvrier', 'Employé', 'Agent de maîtrise', 'Cadre', 'Direction']
-const vide = () => ({ intitule: '', departement: DEPARTEMENTS[0], classification: 'Employé', salaireBase: 0, missions: '' })
+const vide = () => ({ intitule: '', departement: '', classification: '', salaireBase: 0, missions: '' })
 
 export default function Postes() {
+  const departements = useDepartements()
   const { data: postes } = useCollection(COL.postes)
   const { data: employes } = useCollection(COL.employes)
   const [modal, setModal] = useState(null)
 
-  const effectif = (intitule) => employes.filter((e) => e.poste === intitule).length
+  const norme = (t) => String(t || '').trim().toLowerCase()
+  const effectif = (intitule) => employes.filter((e) => norme(e.poste) === norme(intitule)).length
 
   async function save() {
     const intitule = (modal.intitule || '').trim()
@@ -36,7 +39,7 @@ export default function Postes() {
   return (
     <div className="space-y-5">
       <PageHeader icon={ClipboardList} sousModule="Structure RH" titre="Postes de travail" sousTitre="Fiches de postes, classification salariale et effectifs par poste."
-        action={<BoutonBande icone={Plus} onClick={() => setModal(vide())}>Nouveau poste</BoutonBande>} />
+        action={<BoutonBande anime icone={Plus} onClick={() => setModal(vide())}>Nouveau poste</BoutonBande>} />
 
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
@@ -54,7 +57,7 @@ export default function Postes() {
                 <tr key={p.id} className="group hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{p.intitule}</td>
                   <td className="px-3 py-2 text-gray-500">{p.departement}</td>
-                  <td className="px-3 py-2"><Badge tone="info">{p.classification}</Badge></td>
+                  <td className="px-3 py-2">{p.classification ? <Badge tone="info">{p.classification}</Badge> : <span className="text-gray-400">—</span>}</td>
                   <td className="px-3 py-2 text-right">{p.salaireBase ? formatMoney(p.salaireBase) : '—'}</td>
                   <td className="px-3 py-2 text-center">{effectif(p.intitule)}</td>
                   <td className="px-2 py-2"><div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100">
@@ -68,24 +71,28 @@ export default function Postes() {
         </div>
       </Card>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier le poste' : 'Nouveau poste'}
-        footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
-        {modal && (
-          <div className="space-y-3">
-            <Champ label="Intitulé du poste"><input value={modal.intitule} onChange={(e) => setModal({ ...modal, intitule: e.target.value })} className="input-base" /></Champ>
-            <div className="grid grid-cols-2 gap-3">
-              <Champ label="Département"><select value={modal.departement} onChange={(e) => setModal({ ...modal, departement: e.target.value })} className="input-base">{DEPARTEMENTS.map((d) => <option key={d}>{d}</option>)}</select></Champ>
-              <Champ label="Classification"><select value={modal.classification} onChange={(e) => setModal({ ...modal, classification: e.target.value })} className="input-base">{CLASSIFICATIONS.map((c) => <option key={c}>{c}</option>)}</select></Champ>
-            </div>
-            <Champ label="Salaire de base (XOF)"><input type="number" value={modal.salaireBase} onChange={(e) => setModal({ ...modal, salaireBase: e.target.value })} className="input-base" /></Champ>
-            <Champ label="Missions principales"><textarea rows={2} value={modal.missions} onChange={(e) => setModal({ ...modal, missions: e.target.value })} className="input-base" /></Champ>
-          </div>
-        )}
-      </Modal>
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier le poste' : 'Nouveau poste'} titreHero={modal?.intitule?.trim() || undefined}
+        icone={Briefcase} intro="Un poste décrit un emploi : son département, sa classification et son salaire de base." onSave={save}>
+        {modal && (<>
+          <Champ label="Intitulé du poste" icone={Briefcase} required>
+            <input value={modal.intitule} onChange={(e) => setModal({ ...modal, intitule: e.target.value })} className="input-base" placeholder="Ex. Responsable d'élevage" autoFocus />
+          </Champ>
+          <Champ label="Département" icone={Building2} iconeLabel>
+            <ChoixBoutons options={departements} value={modal.departement} onChange={(v) => setModal({ ...modal, departement: v })}
+              placeholderAutre="Nom du département" vide="Aucun département créé : saisissez-en un ci-dessous ou créez-les dans le volet Départements." />
+          </Champ>
+          <Champ label="Classification" icone={Layers} iconeLabel>
+            <ChoixBoutons options={CLASSIFICATIONS} value={modal.classification} onChange={(v) => setModal({ ...modal, classification: v })} placeholderAutre="Autre classification" />
+          </Champ>
+          <Champ label="Salaire de base (XOF)" icone={Banknote}>
+            <input type="number" value={modal.salaireBase} onChange={(e) => setModal({ ...modal, salaireBase: e.target.value })} className="input-base" />
+          </Champ>
+          <Champ label="Missions principales" icone={AlignLeft} haut>
+            <textarea rows={2} value={modal.missions} onChange={(e) => setModal({ ...modal, missions: e.target.value })} className="input-base" />
+          </Champ>
+        </>)}
+      </ModalRh>
     </div>
   )
 }
 
-function Champ({ label, children }) {
-  return <div><label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</label>{children}</div>
-}

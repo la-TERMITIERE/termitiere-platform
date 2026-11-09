@@ -25,7 +25,8 @@ export const COL = {
 }
 
 // Départements par défaut (surchargés par la collection rh_departements).
-export const DEPARTEMENTS = ['Élevage', 'Logistique', 'Événementiel', 'Administration', 'Direction']
+// Plus aucun département écrit en dur : chacun est créé par l'utilisateur dans le volet Départements (collection rh_departements).
+export const DEPARTEMENTS = []
 
 // ── Statut d'un employé ───────────────────────────────────────────────────────
 export const STATUTS_EMPLOYE = {

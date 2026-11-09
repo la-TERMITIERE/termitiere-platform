@@ -4,6 +4,8 @@
 // - `onClick` : rend la carte cliquable (ouvre un détail) avec chevron + survol.
 // - `pied` (élément) : ligne libre sous le détail (ex. pastille « Ouverture … » des soldes bancaires).
 // - `chip` (texte) + `chipGood` : pastille d'écart déjà formatée (ex. « +12.5 % »).
+// - Toutes les cartes ont la même hauteur (celle d'une carte à détail sur une ligne) : un détail trop long est coupé avec « … » (il reste lisible
+//   dans l'infobulle) au lieu d'agrandir la carte.
 // - `glass` (vrai par défaut, `glass={false}` pour l'ancien rendu plat) : verre teinté
 //   + icône 3D, identique dans TOUS les modules.
 import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
@@ -19,7 +21,7 @@ export default function StatCard({
     <Comp
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`card group relative flex w-full items-center gap-2.5 overflow-hidden p-3 text-left transition-all sm:gap-3.5 sm:p-4 ${
+      className={`card group relative flex min-h-[5.3rem] w-full items-center gap-2.5 overflow-hidden p-3 text-left transition-all sm:gap-3.5 sm:p-4 ${
         glass ? 'border-white/50 backdrop-blur-xl' : ''
       } ${
         onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]' : ''
@@ -70,7 +72,7 @@ export default function StatCard({
             reste TOUJOURS entièrement lisible (demande direction — plus de « 7 M… »). */}
         <p className="break-words text-lg font-extrabold leading-tight sm:text-xl" style={{ color: valueColor || '#111827' }} title={String(value ?? '')}>{value}</p>
         {(variationLabel || sub) && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-400" title={typeof (variationLabel || sub) === 'string' ? (variationLabel || sub) : undefined}>{variationLabel || sub}</p>
+          <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-gray-400" title={typeof (variationLabel || sub) === 'string' ? (variationLabel || sub) : undefined}>{variationLabel || sub}</p>
         )}
         {pied}
       </div>

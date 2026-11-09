@@ -44,7 +44,7 @@ export function avatarGradient(seed) {
 // du module plutôt qu'en gris/blanc générique.
 export const COULEUR_MODULE = {
   agro: '#2EAA3F', logistique: '#BC3C31', evenementiel: '#475569',
-  foncier: '#059669', garderie: '#E8390E', rh: '#ea580c',
+  foncier: '#059669', garderie: '#E8390E', rh: '#0284c7',
   projet: '#0d9488', comptabilite: '#ea580c', depense: '#B45309', gym: '#E8850F'
 }
 

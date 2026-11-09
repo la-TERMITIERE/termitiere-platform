@@ -12,6 +12,15 @@ import { METIERS_PRESTATAIRE } from '../projet/prestataire'
 // conventions coexistent volontairement : elles couvrent des historiques différents.
 export const siteLogistiqueDe = (row) => row?.site || 'kara'
 
+// MAXI-GYM a lui aussi deux salles (Kara et Lomé), chacune avec son volet Finances. Une dépense, un budget ou un revenu sans `site`
+// est antérieur à ce découpage : il reste rattaché à LOMÉ, comme toutes les autres données de MAXI-GYM (cf. `matchSite` dans
+// src/modules/gym/site/useSite.jsx). Une dépense qui porte une salle va dans cette salle, et dans celle-là seulement.
+export const siteGymDe = (row) => row?.site || 'lome'
+
+// Secteurs scindés par site dans leur volet Finances, et site d'un enregistrement pour ce secteur.
+export const secteurParSite = (secteurId) => secteurId === 'logistique' || secteurId === 'gym'
+export const siteDe = (row, secteurId) => (secteurId === 'gym' ? siteGymDe(row) : siteLogistiqueDe(row))
+
 // MAXI BAT est un cas particulier : ses dépenses de chantier (tâches, prestataires…)
 // sont gérées depuis E-G.Pro (`projet_depenses`, volet BTP) et n'apparaissent jamais
 // dans E-DÉPENSES. Mais MAXI BAT reste un secteur sélectionnable dans les formulaires
@@ -32,6 +41,10 @@ export function libelleSecteurSite(secteur, d) {
     const site = siteLogistiqueDe(d)
     const s = LOGISTIQUE_SITES.find((x) => x.id === site)
     return `${secteur?.label || d.secteurId} : ${s?.label || site}`
+  }
+  if (d?.secteurId === 'gym' && d.site) {
+    const s = LOGISTIQUE_SITES.find((x) => x.id === d.site)
+    return `${secteur?.label || d.secteurId} : ${s?.label || d.site}`
   }
   if (d?.secteurId === 'autre' && d.secteurAutre) return `${secteur?.label || 'AUTRE'} : ${d.secteurAutre}`
   return secteur?.label || d?.secteurId
@@ -141,7 +154,7 @@ export function revenuClientSecteurMois(versementsRoutes, secteurId, annee, mois
   return totalDepenses(versementsRoutes.filter((v) => {
     if (v.secteurId !== secteurId) return false
     if (!(v.date || '').startsWith(prefixe)) return false
-    if (secteurId === 'logistique' && site) return siteLogistiqueDe(v) === site
+    if (secteurParSite(secteurId) && site) return siteDe(v, secteurId) === site
     return true
   }))
 }
@@ -155,7 +168,7 @@ export function revenuManuelSecteurMois(revenusManuels, secteurId, annee, mois, 
   return totalDepenses(revenusManuels.filter((r) => {
     if (r.secteurId !== secteurId) return false
     if (!(r.date || '').startsWith(prefixe)) return false
-    if (secteurId === 'logistique' && site) return siteLogistiqueDe(r) === site
+    if (secteurParSite(secteurId) && site) return siteDe(r, secteurId) === site
     return true
   }))
 }
@@ -194,10 +207,10 @@ export function coutsMatieresBriqueterie(inventaires = []) {
 // Lomé, elle, n'a aucun historique et démarre donc toujours à « non défini ».
 export function budgetDocSecteur(budgets, secteurId, annee, mois, site = null) {
   const matchMoisSecteur = (x) => x.secteurId === secteurId && Number(x.annee) === Number(annee) && Number(x.mois) === Number(mois)
-  if (secteurId === 'logistique' && site) {
+  if (secteurParSite(secteurId) && site) {
     const tague = budgets.find((x) => matchMoisSecteur(x) && x.site === site)
     if (tague) return tague
-    if (site === 'kara') return budgets.find((x) => matchMoisSecteur(x) && !x.site) || null
+    if (site === (secteurId === 'gym' ? 'lome' : 'kara')) return budgets.find((x) => matchMoisSecteur(x) && !x.site) || null
     return null
   }
   return budgets.find((x) => matchMoisSecteur(x) && !x.site) || null
@@ -224,7 +237,7 @@ export function depensesSecteurMois(depenses, secteurId, annee, mois, site = nul
     if (d.secteurId !== secteurId) return false
     if (!(d.date || '').startsWith(prefixe)) return false
     if (!estDecaissee(d)) return false
-    if (secteurId === 'logistique' && site) return siteLogistiqueDe(d) === site
+    if (secteurParSite(secteurId) && site) return siteDe(d, secteurId) === site
     return true
   })
 }
@@ -335,7 +348,7 @@ export function depensesEntrepriseSecteurDates(depenses, secteurId, matchDate, s
     if (d.secteurId !== secteurId) return false
     if (!matchDate(d.date)) return false
     if (!estDecaissee(d)) return false
-    if (secteurId === 'logistique' && site) return siteLogistiqueDe(d) === site
+    if (secteurParSite(secteurId) && site) return siteDe(d, secteurId) === site
     return true
   })
     .filter((d) => (d.sourceFinancement || 'entreprise') !== 'pau')

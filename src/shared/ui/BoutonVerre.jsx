@@ -21,8 +21,12 @@ const VARIANTES = {
   }
 }
 
-export default function BoutonVerre({ variante = 'ambre', icone: Icone, animation, badgePlus = false, loading = false, disabled = false, className = '', children, onClick, ...props }) {
-  const st = VARIANTES[variante] || VARIANTES.ambre
+// `couleur` : couleur libre (celle d'un secteur) à la place d'une variante : dégradé, ombre et badge « + » prennent cette couleur.
+export default function BoutonVerre({ variante = 'ambre', couleur, icone: Icone, animation, badgePlus = false, loading = false, disabled = false, className = '', children, onClick, ...props }) {
+  const base = VARIANTES[variante] || VARIANTES.ambre
+  const st = couleur
+    ? { ...base, fond: `linear-gradient(135deg, ${couleur}e6 0%, ${couleur} 50%, ${couleur}b3 100%)`, classes: 'border border-white/40 text-white', badge: '' }
+    : base
   const [ondes, setOndes] = useState([]) // ondes de lumière en cours : { id, x, y }
   const [rebond, setRebond] = useState(0) // compteur de clics : la pastille est recréée (clé) et rejoue son rebond
   const compteur = useRef(0)
@@ -39,13 +43,13 @@ export default function BoutonVerre({ variante = 'ambre', icone: Icone, animatio
   return (
     <button type="button" disabled={disabled || loading} onClick={clic} {...props}
       className={`group relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl py-2 pl-2.5 pr-5 text-sm font-extrabold tracking-wide transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 ${st.classes} ${className}`}
-      style={{ background: st.fond }}>
+      style={{ background: st.fond, ...(couleur ? { boxShadow: `0 14px 26px -12px ${couleur}cc, inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.14)` } : {}) }}>
       <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
       <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/4 -skew-x-12 bg-white/30 opacity-0 blur-sm transition-all duration-700 group-hover:left-[120%] group-hover:opacity-100 group-disabled:hidden" />
       {ondes.map((o) => <span key={o.id} aria-hidden="true" className="bv-onde" style={{ left: o.x, top: o.y }} />)}
       <span key={rebond} className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${st.pastille} ${rebond ? 'bv-clic-icone' : ''}`}>
         {loading ? <Loader2 size={16} className="animate-spin" /> : Icone ? <Icone size={16} strokeWidth={2.4} className={animation ? `bg-anim-${animation}` : 'transition-transform duration-300 group-hover:scale-110'} /> : null}
-        {badgePlus && !loading && <span className={`absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-sm ${st.badge}`}><Plus size={9} strokeWidth={4} /></span>}
+        {badgePlus && !loading && <span className={`absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-sm ${st.badge}`} style={couleur ? { color: couleur } : undefined}><Plus size={9} strokeWidth={4} /></span>}
       </span>
       <span className="relative">{children}</span>
     </button>

@@ -2,7 +2,7 @@
 // Configure colonnes et champs ; branche une collection Firebase. Sert aux écrans
 // RH à structure « liste » (formations, évaluations, tâches, missions…).
 import { useState } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserRound, CalendarDays, Hash, Type, AlignLeft, ListFilter } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
@@ -11,8 +11,11 @@ import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
-import { PageHeader, Champ } from './rhui'
+import { PageHeader, Champ, ModalRh } from './rhui'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
+
+// Icône d'un champ selon son type.
+const ICONE_CHAMP = { select: ListFilter, employe: UserRound, textarea: AlignLeft, date: CalendarDays, number: Hash }
 
 export default function CrudList({
   collection, icon, sousModule, titre, sousTitre, boutonLabel = 'Ajouter',
@@ -53,7 +56,7 @@ export default function CrudList({
       <PageHeader icon={icon} sousModule={sousModule} titre={titre} sousTitre={sousTitre}
         action={<>
           <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher par nom…" />
-          <BoutonBande icone={Plus} onClick={() => setModal(vide())}>{boutonLabel}</BoutonBande>
+          <BoutonBande anime icone={Plus} onClick={() => setModal(vide())}>{boutonLabel}</BoutonBande>
         </>} />
 
       {stats && stats(data)}
@@ -84,31 +87,27 @@ export default function CrudList({
         </div>
       </Card>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier' : titre}
-        footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
-        {modal && (
-          <div className="space-y-3">
-            {champs.map((c) => (
-              <Champ key={c.key} label={c.label}>
-                {c.type === 'select' ? (
-                  <select value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base">
-                    {(c.options || []).map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>)}
-                  </select>
-                ) : c.type === 'employe' ? (
-                  <select value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base">
-                    <option value="">Sélectionner…</option>
-                    {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
-                  </select>
-                ) : c.type === 'textarea' ? (
-                  <textarea rows={2} value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base" />
-                ) : (
-                  <input type={c.type || 'text'} value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base" />
-                )}
-              </Champ>
-            ))}
-          </div>
-        )}
-      </Modal>
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier' : titre}
+        icone={icon} intro={sousTitre} onSave={save}>
+        {modal && champs.map((c) => (
+          <Champ key={c.key} label={c.label} icone={ICONE_CHAMP[c.type] || Type} haut={c.type === 'textarea'} required={c.required}>
+            {c.type === 'select' ? (
+              <select value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base">
+                {(c.options || []).map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>)}
+              </select>
+            ) : c.type === 'employe' ? (
+              <select value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base">
+                <option value="">Sélectionner…</option>
+                {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+              </select>
+            ) : c.type === 'textarea' ? (
+              <textarea rows={2} value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base" />
+            ) : (
+              <input type={c.type || 'text'} value={modal[c.key] ?? ''} onChange={(e) => setModal({ ...modal, [c.key]: e.target.value })} className="input-base" />
+            )}
+          </Champ>
+        ))}
+      </ModalRh>
     </div>
   )
 }

@@ -83,7 +83,7 @@ export default function NouvelleDemandeModal({ open, onClose }) {
     if (!f.description.trim()) return toast.error('Indiquez le motif de la demande')
     if (!f.beneficiaireNom.trim()) return toast.error('Indiquez le bénéficiaire')
     const secteur = SECTEURS.find((x) => x.id === f.secteurId)
-    const site = f.secteurId === 'logistique' ? (f.site || 'lome') : undefined
+    const site = (f.secteurId === 'logistique' || f.secteurId === 'gym') ? (f.site || 'lome') : undefined
     const libelle = libelleSecteurSite(secteur, { secteurId: f.secteurId, site })
     const ok = await run(async () => {
       const id = genId()
@@ -157,9 +157,9 @@ export default function NouvelleDemandeModal({ open, onClose }) {
                 {SECTEURS.map((x) => <Choix key={x.id} actif={f.secteurId === x.id} point={x.color} couleur={x.color} onClick={() => maj({ secteurId: x.id, site: '' })}>{x.label}</Choix>)}
               </div>
             </div>
-            {f.secteurId === 'logistique' && (
+            {(f.secteurId === 'logistique' || f.secteurId === 'gym') && (
               <div style={{ animation: 'nd-entre 0.3s ease-out' }}>
-                <Etiquette icone={MapPin} couleur="#E8850F">Site</Etiquette>
+                <Etiquette icone={MapPin} couleur="#E8850F">{f.secteurId === 'gym' ? 'Salle' : 'Site'}</Etiquette>
                 <div className="flex flex-wrap gap-1.5">
                   {LOGISTIQUE_SITES.map((x) => <Choix key={x.id} actif={(f.site || 'lome') === x.id} couleur={sect?.color || COULEUR} onClick={() => maj({ site: x.id })}>{x.label}</Choix>)}
                 </div>

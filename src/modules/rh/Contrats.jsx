@@ -1,6 +1,6 @@
 // RH — Contrats de travail (Collaborateurs & Contrats).
 import { useMemo, useState } from 'react'
-import { FileText, Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { FileText, Plus, Pencil, Trash2, AlertTriangle, UserRound, Banknote, CalendarDays } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
@@ -11,7 +11,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { TYPES_CONTRAT, COL } from './store/rhStore'
-import { PageHeader } from './rhui'
+import { PageHeader, Champ, ModalRh } from './rhui'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const vide = () => ({ employeId: '', type: 'cdi', dateDebut: todayStr(), dateFin: '', salaire: 0, poste: '' })
@@ -52,7 +52,7 @@ export default function Contrats() {
       <PageHeader icon={FileText} sousModule="Collaborateurs & Contrats" titre="Contrats de travail" sousTitre="CDI, CDD et autres contrats, avec suivi des échéances."
         action={<>
           <ChampRecherche variant="glass" value={recherche} onChange={setRecherche} placeholder="Rechercher un employé…" />
-          <BoutonBande icone={Plus} onClick={() => setModal(vide())}>Nouveau contrat</BoutonBande>
+          <BoutonBande anime icone={Plus} onClick={() => setModal(vide())}>Nouveau contrat</BoutonBande>
         </>} />
 
       {alertes > 0 && (
@@ -92,27 +92,34 @@ export default function Contrats() {
         </div>
       </Card>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier le contrat' : 'Nouveau contrat'}
-        footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
-        {modal && (
-          <div className="space-y-3">
-            <Champ label="Employé"><select value={modal.employeId} onChange={(e) => setModal({ ...modal, employeId: e.target.value })} className="input-base">
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier le contrat' : 'Nouveau contrat'}
+        icone={FileText} intro="Le contrat de travail d'un employé : type, salaire et dates." onSave={save}>
+        {modal && (<>
+          <Champ label="Employé" icone={UserRound} required>
+            <select value={modal.employeId} onChange={(e) => setModal({ ...modal, employeId: e.target.value })} className="input-base">
               <option value="">Sélectionner…</option>
               {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
-            </select></Champ>
-            <div className="grid grid-cols-2 gap-3">
-              <Champ label="Type de contrat"><select value={modal.type} onChange={(e) => setModal({ ...modal, type: e.target.value })} className="input-base">{Object.entries(TYPES_CONTRAT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Champ>
-              <Champ label="Salaire (XOF)"><input type="number" value={modal.salaire} onChange={(e) => setModal({ ...modal, salaire: e.target.value })} className="input-base" /></Champ>
-              <Champ label="Date de début"><input type="date" value={modal.dateDebut} onChange={(e) => setModal({ ...modal, dateDebut: e.target.value })} className="input-base" /></Champ>
-              {modal.type === 'cdd' && <Champ label="Date de fin"><input type="date" value={modal.dateFin} onChange={(e) => setModal({ ...modal, dateFin: e.target.value })} className="input-base" /></Champ>}
-            </div>
+            </select>
+          </Champ>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Champ label="Type de contrat" icone={FileText}>
+              <select value={modal.type} onChange={(e) => setModal({ ...modal, type: e.target.value })} className="input-base">{Object.entries(TYPES_CONTRAT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>
+            </Champ>
+            <Champ label="Salaire (XOF)" icone={Banknote}>
+              <input type="number" value={modal.salaire} onChange={(e) => setModal({ ...modal, salaire: e.target.value })} className="input-base" />
+            </Champ>
+            <Champ label="Date de début" icone={CalendarDays}>
+              <input type="date" value={modal.dateDebut} onChange={(e) => setModal({ ...modal, dateDebut: e.target.value })} className="input-base" />
+            </Champ>
+            {modal.type === 'cdd' && (
+              <Champ label="Date de fin" icone={CalendarDays}>
+                <input type="date" value={modal.dateFin} onChange={(e) => setModal({ ...modal, dateFin: e.target.value })} className="input-base" />
+              </Champ>
+            )}
           </div>
-        )}
-      </Modal>
+        </>)}
+      </ModalRh>
     </div>
   )
 }
 
-function Champ({ label, children }) {
-  return <div><label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</label>{children}</div>
-}
