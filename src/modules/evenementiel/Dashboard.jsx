@@ -21,6 +21,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { AlerteVentesAFacturer } from './RelanceVentes'
 import AlerteVentesBrouillon from './AlerteVentesBrouillon'
+import { AlerteAutorisations } from './RelanceAutorisations'
 import { useBriqueterieStore } from './store/referentielStore'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { formatMoney, formatNumber, formatDateShort, addDays, todayStr } from '../../utils/formatters'
@@ -248,6 +249,7 @@ export default function Dashboard() {
       {/* Agent : seulement ses ventes (ou celles sans agent enregistré) ; les autres rôles voient tout. */}
       <AlerteVentesAFacturer ventes={role === 'agent' ? ventes.filter((v) => !v.agentId || v.agentId === uid) : ventes} factures={factures} />
       {role === 'agent' && <AlerteVentesBrouillon ventes={ventes} uid={uid} />}
+      <AlerteAutorisations demandes={demandes} />
 
       <FelicitationObjectif poleId="briques" secteur="de la Briqueterie" couleur="#475569" />
       {objectifsPoles.transport > 0 && <FelicitationObjectif poleId="transport" secteur="du Transport" couleur="#0891b2" />}
