@@ -23,7 +23,7 @@ import Select from '../../shared/forms/Select'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole, canExportExcel, canViewFinance } from '../../core/roles'
+import { isFullAccessRole, canExportExcel, canViewFinance, agirCommeAgent } from '../../core/roles'
 import { useBriqueterieStore } from './store/referentielStore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -45,7 +45,7 @@ export default function Factures() {
   // Seuls les agents créent/modifient des factures ; les autres consultent. La
   // suppression, elle, reste réservée à l'accès total — les agents modifient
   // partout mais ne suppriment jamais (décision explicite).
-  const peutFacturer = () => role === 'agent'
+  const peutFacturer = () => agirCommeAgent(role)
   const peutSupprimer = isFullAccessRole(role)
   const estAdministration = canViewFinance(role)
   const { data: factures } = useCollection('evenementiel_factures')

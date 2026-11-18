@@ -16,6 +16,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useBriqueterieStore } from './store/referentielStore'
 import { updateAtomic, ts, addItem } from '../../core/db'
 import { audit } from '../../core/audit'
+import { agirCommeAgent } from '../../core/roles'
 import { toast } from '../../core/notifications'
 import { todayStr, formatDateShort, formatNumber, formatMoney, genId } from '../../utils/formatters'
 import { ETATS_BRIQUE, DUREE_SECHAGE_JOURS } from './data'
@@ -67,7 +68,7 @@ export default function StockBriques() {
   const [filtreDebutCasses, setFiltreDebutCasses] = useState('')
   const [filtreFinCasses, setFiltreFinCasses] = useState('')
 
-  const peutSaisir = role === 'agent'
+  const peutSaisir = agirCommeAgent(role)
 
   useEffect(() => {
     // Inventaires complétés : une brique absente d'un jour partiel reprend son dernier état connu (rien ne disparaît).

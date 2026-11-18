@@ -104,7 +104,7 @@ export default function Demandes() {
   //  - `estMienne`      : je suis à l'origine de la demande → je ne décide pas.
   //  - `approuveeParMoi`: j'ai déjà approuvé au 1er niveau → la certification
   //                       (2e niveau) revient obligatoirement à quelqu'un d'autre.
-  const estMienne = (d) => !!user && (d.enregistreParUid === user.uid || d.enregistrePar === user.nom)
+  const estMienne = (d) => !!user && roleReel !== 'info' && (d.enregistreParUid === user.uid || d.enregistrePar === user.nom)
   // Suppression réservée à l'administration — seulement tant qu'aucun niveau
   // d'approbation n'a encore statué (sinon c'est un engagement réel, cf. refuser).
   const peutSupprimer = FULL_ACCESS_ROLES.includes(role)

@@ -516,3 +516,131 @@ html.dark .barre-defilement-fixe { background: rgba(30, 34, 38, 0.6); border-col
   .rh-flotte { animation: rh-flotte 2.8s ease-in-out infinite; }
   .rh-pop { animation: rh-pop 0.3s ease-out; }
 }
+
+
+/* ===== Boutons en verre (MAXI-AGRO) : puces de filtre et d'onglet, boutons d'icône, appui qui rebondit ===== */
+.bv-clic { transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s ease, background-color .2s ease, color .2s ease; }
+.bv-clic:hover { transform: translateY(-1px); }
+.bv-clic:active { transform: scale(.93); transition-duration: .08s; }
+.puce-verre, .icone-verre {
+  --puce: #2EAA3F; --ic: #2EAA3F;
+  border: 1px solid rgba(255, 255, 255, .85); background: rgba(255, 255, 255, .62);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: 0 6px 14px -9px rgba(26, 26, 26, .3), inset 0 1px 0 rgba(255, 255, 255, .95);
+  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s ease, background .2s ease, color .2s ease, border-color .2s ease;
+}
+.puce-verre { color: #475569; }
+.puce-verre:hover { background: rgba(255, 255, 255, .92); color: #1f2937; transform: translateY(-1px); }
+.puce-verre:active { transform: scale(.93); transition-duration: .08s; }
+.puce-verre[data-actif="true"] {
+  background: linear-gradient(160deg, var(--puce), color-mix(in srgb, var(--puce) 76%, #000));
+  border-color: color-mix(in srgb, var(--puce) 65%, #fff); color: #fff;
+  box-shadow: 0 10px 18px -10px var(--puce), inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 -2px 0 rgba(0, 0, 0, .12);
+  animation: puce-pop .4s cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes puce-pop { 0% { transform: scale(.9); } 60% { transform: scale(1.07); } 100% { transform: scale(1); } }
+.icone-verre { display: inline-flex; align-items: center; justify-content: center; color: #6b7280; }
+.icone-verre:hover { color: var(--ic); background: color-mix(in srgb, var(--ic) 12%, #fff); border-color: color-mix(in srgb, var(--ic) 35%, #fff); transform: translateY(-1px); }
+.icone-verre:active { transform: scale(.86); transition-duration: .08s; }
+.icone-verre--danger { --ic: #dc2626; color: #ef4444; }
+.puce-verre:focus-visible, .icone-verre:focus-visible, .bv-clic:focus-visible { outline: 2px solid var(--puce, #2EAA3F); outline-offset: 2px; }
+.dark .puce-verre, .dark .icone-verre { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .15); color: #cbd5e1; }
+@media (prefers-reduced-motion: reduce) {
+  .bv-clic, .puce-verre, .icone-verre { transition: none; }
+  .puce-verre[data-actif="true"] { animation: none; }
+  .bv-clic:hover, .puce-verre:hover, .icone-verre:hover, .bv-clic:active, .puce-verre:active, .icone-verre:active { transform: none; }
+}
+
+
+/* ===== MAXI-AGRO : boutons du module (Button partagé) en verre vert, avec relief et onde au clic ===== */
+.agro-boutons [data-bouton] { --ag: #2EAA3F; letter-spacing: .01em; }
+.bv-onde { display: none; }
+.agro-boutons .bv-onde {
+  display: block; position: absolute; border-radius: 9999px; pointer-events: none; transform: scale(0); opacity: .55;
+  background: radial-gradient(circle, rgba(255,255,255,.85) 0%, rgba(255,255,255,.35) 45%, transparent 70%);
+  animation: bv-onde-clic .65s ease-out forwards;
+}
+@keyframes bv-onde-clic { to { transform: scale(1); opacity: 0; } }
+/* Pleins : le dégradé de verre se pose SUR la couleur (une couleur imposée par le module reste respectée) */
+.agro-boutons [data-bouton="primary"], .agro-boutons [data-bouton="success"], .agro-boutons [data-bouton="danger"],
+.agro-boutons [data-bouton="warning"], .agro-boutons [data-bouton="secondary"] {
+  background-image: linear-gradient(165deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.06) 48%, rgba(0,0,0,.16) 100%);
+  border-color: rgba(255,255,255,.55); border-radius: 14px;
+  box-shadow: 0 14px 24px -12px color-mix(in srgb, var(--ag) 80%, #000), 0 2px 0 rgba(255,255,255,.4) inset, 0 -2px 0 rgba(0,0,0,.16) inset;
+}
+.agro-boutons [data-bouton="primary"] { background-color: var(--ag); }
+.agro-boutons [data-bouton="primary"]:hover:not(:disabled) { background-color: color-mix(in srgb, var(--ag) 88%, #fff); box-shadow: 0 18px 30px -12px var(--ag), 0 2px 0 rgba(255,255,255,.5) inset, 0 -2px 0 rgba(0,0,0,.16) inset; }
+/* Contours : verre dépoli, filet vert, icône verte */
+.agro-boutons [data-bouton="outline"] {
+  border: 1px solid rgba(46,170,63,.38); border-radius: 14px; color: #166534;
+  background: linear-gradient(160deg, rgba(255,255,255,.82), rgba(236,253,240,.55));
+  -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: 0 10px 20px -12px rgba(46,170,63,.65), 0 1px 0 rgba(255,255,255,1) inset;
+}
+.agro-boutons [data-bouton="outline"] svg { color: var(--ag); }
+.agro-boutons [data-bouton="outline"]:hover:not(:disabled) { background: linear-gradient(160deg, rgba(255,255,255,.95), rgba(220,252,231,.8)); border-color: rgba(46,170,63,.6); }
+.agro-boutons [data-bouton="ghost"] { border-radius: 12px; color: #166534; }
+.agro-boutons [data-bouton="ghost"]:hover:not(:disabled) { background: rgba(46,170,63,.12); }
+/* Clic : le bouton s'écrase puis revient avec un petit rebond */
+.agro-boutons [data-bouton] { transition: transform .26s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s ease, background-color .2s ease, border-color .2s ease; }
+.agro-boutons [data-bouton]:active:not(:disabled) { transform: scale(.92); transition-duration: .08s; }
+.agro-boutons [data-bouton]:focus-visible { outline: 3px solid rgba(46,170,63,.45); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .agro-boutons .bv-onde { display: none; }
+  .agro-boutons [data-bouton], .agro-boutons [data-bouton]:active:not(:disabled) { transition: none; transform: none; }
+}
+
+
+/* ===== MAXI-AGRO : fenêtres en verre vert, entrée animée, tuiles bento ===== */
+@keyframes agro-modal-entree { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes agro-voile-entree { from { opacity: 0; } to { opacity: 1; } }
+.agro-boutons [role="dialog"] { animation: agro-voile-entree .25s ease-out; }
+.agro-boutons .modal-glass { animation: agro-modal-entree .4s cubic-bezier(.34, 1.3, .64, 1); }
+.agro-boutons .modal-glass .fg-tuile {
+  background: linear-gradient(160deg, rgba(255,255,255,.8), rgba(236,253,240,.5));
+  border: 1px solid rgba(46,170,63,.18); border-radius: 20px;
+  box-shadow: 0 10px 22px -16px rgba(22,101,52,.5), inset 0 1px 0 rgba(255,255,255,.95);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.agro-boutons .modal-glass .fg-tuile:hover { transform: translateY(-1px); box-shadow: 0 14px 26px -16px rgba(22,101,52,.55), inset 0 1px 0 rgba(255,255,255,1); }
+.agro-boutons .modal-glass .fg-tuile:focus-within { border-color: rgba(46,170,63,.6); box-shadow: 0 0 0 3px rgba(46,170,63,.16), 0 14px 26px -16px rgba(22,101,52,.55); }
+.agro-boutons .modal-glass .fg-tuile > label { color: #166534; font-weight: 800; }
+html.dark .agro-boutons .modal-glass .fg-tuile { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.1); }
+@media (prefers-reduced-motion: reduce) {
+  .agro-boutons [role="dialog"], .agro-boutons .modal-glass { animation: none; }
+  .agro-boutons .modal-glass .fg-tuile { transition: none; }
+}
+
+/* Boutons posés SUR une bande colorée (btn-glass) : verre blanc translucide, texte et icône blancs (le vert plein ne s'y voyait pas) */
+.agro-boutons .btn-glass[data-bouton] {
+  background: rgba(255, 255, 255, .22) !important; background-image: linear-gradient(165deg, rgba(255,255,255,.3), rgba(255,255,255,.04)) !important;
+  border: 1px solid rgba(255, 255, 255, .6) !important; color: #fff !important; border-radius: 1rem !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4);
+  box-shadow: 0 10px 20px -12px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .55) !important;
+}
+.agro-boutons .btn-glass[data-bouton] svg { color: #fff !important; }
+.agro-boutons .btn-glass[data-bouton]:hover:not(:disabled) { background: rgba(255, 255, 255, .36) !important; border-color: #fff !important; }
+
+
+/* Barres de jauge (santé animale) : elles se remplissent depuis la gauche à l'affichage */
+@keyframes agro-barre { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.agro-barre { transform-origin: left; animation: agro-barre .9s cubic-bezier(.22, 1, .36, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .agro-barre { animation: none; } }
+
+/* Boutons de création (« Nouveau… », « Ajouter… », icône +) : toujours bien visibles, en vert plein avec relief fort */
+.agro-boutons [data-bouton]:has(.lucide-plus):not(.btn-glass) {
+  background-color: #2EAA3F !important;
+  background-image: linear-gradient(165deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.05) 50%, rgba(0,0,0,.18) 100%) !important;
+  color: #fff !important; border: 1px solid rgba(255,255,255,.6) !important; border-radius: 14px;
+  box-shadow: 0 16px 26px -12px rgba(22, 120, 40, .85), 0 2px 0 rgba(255,255,255,.45) inset, 0 -2px 0 rgba(0,0,0,.18) inset !important;
+}
+.agro-boutons [data-bouton]:has(.lucide-plus):not(.btn-glass) svg { color: #fff !important; }
+.agro-boutons [data-bouton]:has(.lucide-plus):not(.btn-glass):hover:not(:disabled) { background-color: #34bd47 !important; }
+/* Sur une bande colorée : blanc plein, texte vert foncé */
+.agro-boutons .btn-glass[data-bouton]:has(.lucide-plus) {
+  background: #fff !important; background-image: none !important; color: #166534 !important; border-color: #fff !important;
+  box-shadow: 0 14px 24px -12px rgba(0, 0, 0, .6), 0 0 0 4px rgba(255, 255, 255, .22) !important;
+}
+.agro-boutons .btn-glass[data-bouton]:has(.lucide-plus) svg { color: #16a34a !important; }
+.agro-boutons .btn-glass[data-bouton]:has(.lucide-plus):hover:not(:disabled) { background: #f0fdf4 !important; }
+

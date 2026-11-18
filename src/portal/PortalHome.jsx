@@ -1,7 +1,7 @@
 // Page d'accueil du portail : grille de cartes de modules cliquables.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, ChevronRight, CheckCircle2 } from 'lucide-react'
+import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon } from 'lucide-react'
 import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
@@ -13,6 +13,7 @@ import { VIEW_ALL_ROLES, roleLabel, peutGererUtilisateurs } from '../core/roles'
 import Button from '../shared/ui/Button'
 import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
+import { projetsVisibles } from '../modules/projet/logic'
 
 // Certains logos ont beaucoup de marge transparente autour du symbole utile — on les
 // agrandit et on les recadre au centre (via un overflow-hidden sur le badge parent) au
@@ -25,6 +26,8 @@ const LOGOS_ZOOM = {
 export default function PortalHome() {
   const navigate = useNavigate()
   const { user, role, hasModule, isAdmin } = useAuth()
+  const [maintenant, setMaintenant] = useState(() => new Date())
+  useEffect(() => { const t = setInterval(() => setMaintenant(new Date()), 20000); return () => clearInterval(t) }, [])
 
   // Paiements décaissés dont je suis le bénéficiaire, pas encore confirmés — visible
   // quel que soit l'accès au module Dépenses (le bénéficiaire n'y a pas forcément accès).
@@ -60,6 +63,8 @@ export default function PortalHome() {
   const { data: demandesBriq }  = useCollection(hasModule('evenementiel')? 'evenementiel_demandes'   : null)
   const { data: dossiersFoncier}= useCollection(hasModule('foncier')     ? 'foncier_dossiers'        : null)
   const { data: garderieEnfants}= useCollection(hasModule('garderie')    ? 'garderie_enfants'        : null)
+  const { data: projets }       = useCollection(hasModule('projet')      ? 'projets'                 : null)
+  const { data: employesRh }    = useCollection(hasModule('rh')          ? 'rh_employes'             : null)
   const { data: seancesGym }    = useCollection(hasModule('gym')         ? 'gym_seances'             : null)
   const { data: abonnementsGym }= useCollection(hasModule('gym')         ? 'gym_abonnements'         : null)
 
@@ -75,54 +80,91 @@ export default function PortalHome() {
   const seancesGymMois = (seancesGym||[]).filter((s) => (s.date || '').startsWith(moisEnCours)).length
   const abonnementsGymMois = (abonnementsGym||[]).filter((a) => (a.date || '').startsWith(moisEnCours)).length
 
+  const depensesEnAttente = depensesTous.filter((d) => d.statut === 'en_attente' || d.statut === 'approuvee').length
+  const projetsEnCours = projetsVisibles(projets || [], user, role).filter((p) => p.statut === 'en_cours').length
+
   const kpi = {
+    depense: depensesEnAttente ? `${depensesEnAttente} dépense(s) en attente` : 'Aucune dépense en attente',
+    projet: projetsEnCours ? `${projetsEnCours} projet(s) en cours` : 'Aucun projet en cours',
     agro: `${totalAnimaux} têtes`,
     logistique: autorisationsAttente ? `${autorisationsAttente} autorisation(s) en attente` : `${prestationsMois} prestation(s) ce mois`,
     evenementiel: autorisationsBriq ? `${autorisationsBriq} autorisation(s) en attente` : `${prodMois} briques produites ce mois`,
     foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
-    rh: 'En développement',
+    rh: (employesRh || []).length ? `${employesRh.length} employé(s)` : 'Aucun employé',
     garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit',
     gym: (seancesGymMois || abonnementsGymMois) ? `${seancesGymMois} séance(s) · ${abonnementsGymMois} abonnement(s) ce mois` : 'Aucune activité ce mois'
   }
 
-  const heure = new Date().getHours()
+  const mots = (user?.nom || '').trim().split(/\s+/).filter(Boolean)
+  const prenom = mots.length > 1 && (mots[0].length <= 3 || mots[0].endsWith('.')) ? `${mots[0]} ${mots[1]}` : (mots[0] || '')
+  const heure = maintenant.getHours()
+  const IconeMoment = heure < 5 || heure >= 20 ? Moon : heure >= 17 ? Sunset : Sun
+  const heureTxt = maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   const salutation = heure < 5 ? 'Bonne nuit' : heure < 18 ? 'Bonjour' : 'Bonsoir'
-  const dateLongue = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const dateLongue = maintenant.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="relative mb-6 overflow-hidden rounded-[2rem] p-4 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25),inset_0_1px_0_0_rgba(255,255,255,0.35),0_20px_40px_-16px_rgba(0,0,0,0.5),0_36px_72px_-20px_rgba(188,60,49,0.4)] backdrop-blur-2xl backdrop-saturate-200 sm:p-6 lg:p-8"
-        style={{ background: 'linear-gradient(135deg, rgba(188,60,49,0.92) 0%, rgba(90,20,16,0.92) 100%)' }}>
-        {/* Halos décoratifs — même motif que les cartes de module juste en dessous */}
-        <div className="pointer-events-none absolute -right-10 -top-14 h-56 w-56 rounded-full opacity-[0.15]" style={{ background: '#ffffff' }} />
-        <div className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full opacity-[0.08]" style={{ background: '#ffffff' }} />
+      {/* Bandeau d'accueil : verre rouge profond en couches (lumières, points, reflet), logo à double anneau,
+          salutation avec le moment de la journée, horloge vivante et accès rapide au rôle. */}
+      <div className="ed-entree relative mb-6 overflow-hidden rounded-[2rem] p-4 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28),inset_0_1px_0_0_rgba(255,255,255,0.45),inset_0_-24px_40px_-24px_rgba(0,0,0,0.45),0_24px_44px_-18px_rgba(0,0,0,0.55),0_40px_80px_-24px_rgba(188,60,49,0.5)] sm:p-6 lg:p-7"
+        style={{ background: 'radial-gradient(120% 140% at 0% 0%, #D9574B 0%, rgba(217,87,75,0) 55%), linear-gradient(135deg, #B93A2F 0%, #7E241D 52%, #3F0E0A 100%)' }}>
+        <style>{`
+          @keyframes portal-balaye { 0% { transform: translateX(-120%) rotate(18deg); } 55%, 100% { transform: translateX(560%) rotate(18deg); } }
+          @keyframes portal-onde { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(1.55); opacity: 0; } }
+          @keyframes portal-pouls { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.7); opacity: 0.35; } }
+          @keyframes portal-descend { 0%, 100% { transform: translateY(-1px); } 50% { transform: translateY(2px); } }
+          @media (prefers-reduced-motion: reduce) { .portal-anim { animation: none !important; } }
+        `}</style>
+        {/* Matière : halo clair en haut à droite, points fins qui s'estompent, reflet du haut et balayage lent */}
+        <span aria-hidden="true" className="pointer-events-none absolute -right-14 -top-20 h-64 w-64 rounded-full bg-white/20 blur-2xl" />
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-1/4 h-48 w-48 rounded-full bg-[#FF8A7A]/20 blur-3xl" />
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.28) 1px, transparent 1.4px)', backgroundSize: '16px 16px', WebkitMaskImage: 'linear-gradient(100deg, transparent 25%, #000 100%)', maskImage: 'linear-gradient(100deg, transparent 25%, #000 100%)' }} />
+        <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent" />
+        <span aria-hidden="true" className="portal-anim pointer-events-none absolute inset-y-0 -left-1/4 w-12 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+          style={{ animation: 'portal-balaye 8s ease-in-out infinite' }} />
 
-        <div className="relative flex flex-wrap items-center gap-3 sm:gap-5">
-          {/* Anneau qui clignote doucement — même animation que le logo de la barre latérale */}
-          <style>{`
-            @keyframes portal-logo-glow {
-              0%   { box-shadow: 0 0 0 2px #ffffffaa, 0 0 8px 2px #ffffff55; }
-              50%  { box-shadow: 0 0 0 4px #ffffff,   0 0 22px 8px #ffffffb0; }
-              100% { box-shadow: 0 0 0 2px #ffffffaa, 0 0 8px 2px #ffffff55; }
-            }
-          `}</style>
-          <img src="/termitiere-logo.png" alt="La Termitière"
-            onError={(e) => { e.target.src = '/logo-mark.png' }}
-            className="h-12 w-12 shrink-0 rounded-full bg-white object-cover p-2 sm:h-20 sm:w-20 sm:p-3"
-            style={{ animation: 'portal-logo-glow 2.5s ease-in-out infinite' }} />
+        <div className="relative flex items-center gap-3.5 sm:gap-6">
+          {/* Logo : disque blanc, anneau translucide et onde qui s'étend doucement */}
+          <span className="relative shrink-0">
+            <span aria-hidden="true" className="portal-anim absolute inset-0 rounded-full border-2 border-white/60" style={{ animation: 'portal-onde 2.8s ease-out infinite' }} />
+            <span className="relative flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-white/25 p-1.5 ring-1 ring-white/50 backdrop-blur-sm sm:h-24 sm:w-24 sm:p-2">
+              <img src="/termitiere-logo.png" alt="La Termitière"
+                onError={(e) => { e.target.src = '/logo-mark.png' }}
+                className="h-full w-full rounded-full bg-white object-cover p-2 shadow-[0_8px_18px_-6px_rgba(0,0,0,0.5)] sm:p-3" />
+            </span>
+          </span>
+
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60 sm:text-xs sm:tracking-[0.2em]">{dateLongue}</p>
-            <h1 className="mt-0.5 truncate text-xl font-extrabold leading-tight sm:mt-1 sm:text-3xl lg:text-4xl">
-              {salutation}, {user?.nom?.split(' ')[0]} 👋
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/80 sm:text-xs">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/20 px-2.5 py-1">
+                <CalendarDays size={12} aria-hidden="true" />{dateLongue}<span className="tabular-nums sm:hidden">· {heureTxt}</span>
+              </span>
+            </p>
+            <h1 className="mt-1.5 flex items-center gap-2 truncate text-[1.7rem] font-extrabold leading-none sm:text-3xl lg:text-4xl" style={{ textShadow: '0 2px 14px rgba(0,0,0,0.3)' }}>
+              <span className="truncate">{salutation}, {prenom}</span>
+              <IconeMoment aria-hidden="true" className="shrink-0 text-amber-200" size={28} strokeWidth={2.2} />
             </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:mt-2.5">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {role && (
-                <span className="rounded-full border border-white/30 bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur-sm sm:px-3 sm:py-1 sm:text-xs">
-                  {roleLabel(role)}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white py-1 pl-2 pr-3 text-[11px] font-extrabold text-[#7E241D] shadow-[0_6px_14px_-6px_rgba(0,0,0,0.5)] sm:text-xs">
+                  <ShieldCheck size={14} aria-hidden="true" />{roleLabel(role)}
                 </span>
               )}
-              <span className="text-xs text-white/75 sm:text-sm">Sélectionnez un module pour commencer</span>
+              <span className="inline-flex items-center gap-1 text-xs text-white/85 sm:text-sm">
+                Sélectionnez un module
+                <ChevronDown size={15} aria-hidden="true" className="portal-anim" style={{ animation: 'portal-descend 1.8s ease-in-out infinite' }} />
+              </span>
             </div>
+          </div>
+
+          {/* Horloge : visible dès la tablette, avec un point « en ligne » qui pulse */}
+          <div className="hidden shrink-0 flex-col items-end rounded-2xl border border-white/25 bg-black/20 px-3.5 py-2.5 sm:flex">
+            <span className="text-3xl font-extrabold leading-none tabular-nums lg:text-4xl">{heureTxt}</span>
+            <span className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/80">
+              <span aria-hidden="true" className="portal-anim h-2 w-2 rounded-full bg-green-300" style={{ animation: 'portal-pouls 2s ease-in-out infinite' }} />En ligne
+            </span>
           </div>
         </div>
       </div>
@@ -144,69 +186,57 @@ export default function PortalHome() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {MODULES.filter((m) => hasModule(m.id)).map((m) => {
+      {/* Modules en tuiles pleines : chaque module porte sa couleur, le logo repose sur un badge blanc,
+          le nom et l'indicateur du moment sont en bas, sur la partie la plus sombre du dégradé (lisible en blanc). */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        {MODULES.filter((m) => hasModule(m.id)).map((m, i) => {
           const enPreparation = m.statut === 'bientot' || m.statut === 'en_developpement'
           // Le développeur (rôle `info`) peut entrer dans un module pas encore ouvert
-          // pour continuer à le construire — tout le monde d'autre le voit non
-          // cliquable, comme aujourd'hui pour Comptabilité.
+          // pour continuer à le construire : tout le monde d'autre le voit non cliquable.
           const clickable = !enPreparation || role === 'info'
+          const Filigrane = m.icon
           return (
             <button
               key={m.id}
               disabled={!clickable}
               onClick={() => clickable && navigate(m.path)}
-              className={`group relative overflow-hidden rounded-3xl border p-5 text-left backdrop-blur-2xl backdrop-saturate-200 transition-all
-                ${clickable
-                  ? 'cursor-pointer bg-white/40 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5),inset_0_1px_0_0_rgba(255,255,255,0.7),inset_0_-14px_20px_-16px_rgba(26,26,26,0.12),0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)] hover:-translate-y-1 hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6),inset_0_1px_0_0_rgba(255,255,255,0.7),inset_0_-14px_20px_-16px_rgba(26,26,26,0.14),0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1)] dark:bg-white/[0.05] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.15),0_24px_48px_-16px_rgba(0,0,0,0.5)] dark:hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1),inset_0_1px_0_0_rgba(255,255,255,0.15),0_32px_60px_-16px_rgba(0,0,0,0.6)]'
-                  : 'cursor-not-allowed bg-white/20 opacity-70 shadow-[0_12px_24px_-12px_rgba(26,26,26,0.1)] dark:bg-white/[0.02]'}`}
-              style={{ borderColor: clickable ? m.color + '40' : undefined }}
+              className={`ed-entree group relative flex min-h-[10.5rem] flex-col justify-between overflow-hidden rounded-[1.75rem] p-4 text-left text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70 sm:min-h-[12rem] sm:p-5
+                ${clickable ? 'cursor-pointer hover:-translate-y-1 active:scale-[0.98]' : 'cursor-not-allowed opacity-60 saturate-50'}`}
+              style={{
+                background: `linear-gradient(155deg, ${m.color} 0%, color-mix(in srgb, ${m.color} 62%, #000) 100%)`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.14), 0 22px 36px -20px ${m.color}`,
+                animationDelay: `${Math.min(i, 10) * 45}ms`
+              }}
             >
-              {/* Teinte douce sur tout le fond — le verre porte la couleur du module, pas juste le coin */}
-              {clickable && (
-                <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ background: `radial-gradient(circle at 15% 100%, ${m.color}, transparent 70%)` }} />
-              )}
-              {/* Reflet diagonal — lumière qui balaie la carte, comme un vrai verre incliné */}
-              <div className="pointer-events-none absolute -inset-x-6 -top-10 h-20 rotate-[-8deg] bg-gradient-to-b from-white/40 via-white/10 to-transparent dark:from-white/10" />
-              {/* Halo teinté de la couleur du module — adouci pour se fondre dans le verre */}
-              <div
-                className="absolute -right-4 -top-4 h-28 w-28 rounded-full opacity-20 blur-2xl"
-                style={{ background: m.color }}
-              />
-              <div className="flex items-start gap-4">
-                <div
-                  className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),0_2px_6px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-white/10"
-                  style={{ background: `linear-gradient(160deg, ${m.color}33, ${m.color}14)`, color: m.color }}
-                >
-                  {/* Ces logos ont beaucoup de marge transparente autour du symbole utile
-                      (texte ou icône) — les agrandir et les recadrer au centre (au lieu de
-                      les faire tenir en entier) garde ce symbole bien plus lisible. */}
+              {/* Filigrane : l'icône du module en grand, coupée par le coin, pour donner de la matière sans bruit */}
+              <Filigrane aria-hidden="true" size={150} strokeWidth={1.25}
+                className="pointer-events-none absolute -bottom-6 -right-6 rotate-[-12deg] text-white opacity-[0.13] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[-6deg]" />
+              {/* Reflet : lumière qui tombe du haut, comme sur du verre */}
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+
+              <div className="relative flex items-start justify-between gap-2">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-[0_8px_16px_-8px_rgba(0,0,0,0.5)] sm:h-14 sm:w-14" style={{ color: m.color }}>
+                  {/* Certains logos ont beaucoup de marge transparente : on les agrandit et on les recadre au centre. */}
                   {m.logo
-                    ? <img src={m.logo} alt={m.nom} className={LOGOS_ZOOM[m.id] || 'h-9 w-9 object-contain'} />
-                    : <m.icon size={28} />
-                  }
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className="min-w-0 break-words text-base font-extrabold text-gray-900 sm:text-lg dark:text-gray-100">{m.nom}</h3>
-                    {m.statut === 'en_developpement' ? (
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
-                        En développement
-                      </span>
-                    ) : m.statut === 'bientot' ? (
-                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-500 dark:bg-white/10 dark:text-gray-400">
-                        Bientôt
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-500/15 dark:text-green-400">
-                        Actif
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{m.description}</p>
-                  <p className="mt-2 text-sm font-semibold" style={{ color: m.color }}>
-                    {kpi[m.id]}
-                  </p>
+                    ? <img src={m.logo} alt="" className={LOGOS_ZOOM[m.id] || 'h-9 w-9 object-contain'} />
+                    : <m.icon size={26} />}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-black/15 px-2 py-0.5 text-[10px] font-bold">
+                  <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${m.statut === 'actif' ? 'bg-green-300' : 'bg-white/70'}`} />
+                  {m.statut === 'en_developpement' ? 'En développement' : m.statut === 'bientot' ? 'Bientôt' : 'Actif'}
+                </span>
+              </div>
+
+              <div className="relative mt-4">
+                <h3 className="break-words text-[15px] font-extrabold leading-tight sm:text-lg" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.25)' }}>{m.nom}</h3>
+                <p className={`mt-0.5 text-xs text-white/85 ${kpi[m.id] ? 'line-clamp-1' : 'line-clamp-2'}`}>{m.description}</p>
+                <div className="mt-2.5 flex items-end justify-between gap-2">
+                  {kpi[m.id]
+                    ? <span className="line-clamp-2 rounded-xl border border-white/25 bg-black/15 px-2.5 py-1 text-[11px] font-bold leading-snug">{kpi[m.id]}</span>
+                    : <span />}
+                  <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/25 transition-all duration-200 group-hover:translate-x-0.5 group-hover:bg-white group-hover:text-gray-900">
+                    <ChevronRight size={16} />
+                  </span>
                 </div>
               </div>
             </button>

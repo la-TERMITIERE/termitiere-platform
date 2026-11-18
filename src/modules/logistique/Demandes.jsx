@@ -449,7 +449,7 @@ export default function Demandes() {
               const voitCeDetail = peutVoirDetail(d)
               const acts = actionsDemande(d.statut, {
                 canManage: gereCetteDemande, canCertify: isCertifier,
-                estAuteur: estAuteurDemande(d, user), dejaApprouvePar: d.approuveN1Par, moiNom: user?.nom
+                estAuteur: estAuteurDemande(d, user), dejaApprouvePar: d.approuveN1Par, moiNom: user?.role === 'info' ? null : user?.nom
               })
               const totalQte = (d.lignes || []).reduce((s, l) => s + (parseInt(l.qte) || 0), 0) || d.qte || 0
               const enCorrectif = correctifEnCours(d)
@@ -648,7 +648,7 @@ export default function Demandes() {
             ) : decision && actionsDemande(decision.demande.statut, {
               canManage: peutGererDemande(decision.demande), canCertify: isCertifier,
               estAuteur: estAuteurDemande(decision.demande, user),
-              dejaApprouvePar: decision.demande.approuveN1Par, moiNom: user?.nom
+              dejaApprouvePar: decision.demande.approuveN1Par, moiNom: user?.role === 'info' ? null : user?.nom
             }).map((a) => (
               <Button key={a.id} onClick={() => appliquerDecision(a)} style={{ background: a.tone === 'danger' ? '#dc2626' : '#16a34a' }}>
                 {a.label}

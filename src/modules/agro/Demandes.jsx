@@ -3,12 +3,12 @@
 // la hiérarchie approuve (décompte stock) ; l'agent certifie ou signale un écart ;
 // la hiérarchie ajuste les quantités réelles (vendus / morts / retournés).
 import { useMemo, useState } from 'react'
-import { Plus, Check, X, BadgeCheck, AlertTriangle, Package, FileText, Timer, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, Check, X, BadgeCheck, AlertTriangle, Package, FileText, Timer, Trash2, RotateCcw, Send } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
@@ -23,7 +23,9 @@ import {
   CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts, changementsArticle
 } from '../../shared/demandes/correctif'
 import { useAgroStore } from './store/agroStore'
-import { logistiquePeutApprouver, logistiqueVoitValidateur } from '../../core/roles'
+import BandeAgro, { usePeriodeBande } from './BandeAgro'
+import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
+import { logistiquePeutApprouver, logistiqueVoitValidateur, agirCommeAgent } from '../../core/roles'
 import {
   factureTotaux, lignesEffectives,
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
@@ -39,7 +41,7 @@ const SUPPRIMABLES = ['brouillon', 'sortie_demandee', 'refusee']
 
 export default function Demandes() {
   const { user, role, canManage } = useAuth()
-  const isAgent = role === 'agent'
+  const isAgent = agirCommeAgent(role)
   const peutApprouver = canManage()
   // La secrétaire valide au 1er niveau (approuver/refuser) UNIQUEMENT tant que la
   // demande est encore « sortie_demandee » — écarts, correctifs et suppression
@@ -75,12 +77,14 @@ export default function Demandes() {
   )
   const compteur = (st) => enCircuit.filter((f) => factureStatut(f) === st).length
   const nbCorrectifs = useMemo(() => enCircuit.filter(correctifEnCours).length, [enCircuit])
+  const periode = usePeriodeBande()
   const filtrees = useMemo(
     () => enCircuit
+      .filter((f) => periode.dansPeriode(f.date))
       .filter((f) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(f) : factureStatut(f) === filtre))
       .filter((f) => correspond(recherche, f.client?.nom, f.numero))
       .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [enCircuit, filtre]
+    [enCircuit, filtre, recherche, periode.cle]
   )
   const estAuteur = (f) => f.createdBy === user.nom
 
@@ -135,7 +139,7 @@ export default function Demandes() {
       a.push({ id: 'ref', label: 'Refuser', icon: X, tone: 'danger', on: () => refuser(f) })
     } else if (st === 'sortie_approuvee' && isAgent) {
       a.push({ id: 'cert', label: 'Certifier (tout vendu)', icon: BadgeCheck, tone: 'success', on: () => certifier(f) })
-      a.push({ id: 'ec', label: 'Signaler un écart', icon: AlertTriangle, tone: 'warning', on: () => signaler(f) })
+      a.push({ id: 'ec', label: 'Signaler un écart', icon: AlertTriangle, tone: 'warning', compact: true, on: () => signaler(f) })
     } else if (st === 'modif_demandee' && peutApprouver) {
       a.push({ id: 'adj', label: 'Ajuster les quantités', icon: AlertTriangle, tone: 'primary', on: () => setEcart(f) })
     }
@@ -160,6 +164,14 @@ export default function Demandes() {
 
   return (
     <div className="space-y-4">
+      <BandeAgro icone={Send} titre="Autorisations de sortie" sous="Demandes de sortie de stock : approbation puis certification">
+        {periode.node}
+        <ChampBande label="Client">
+          <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un client…" className={CLASSE_CHAMP_BANDE} />
+        </ChampBande>
+        {isAgent && <BoutonBande anime icone={Plus} onClick={() => { setPick(brouillons[0]?.id || ''); setCreateOpen(true) }}>Nouvelle demande de sortie</BoutonBande>}
+      </BandeAgro>
+
       <div className="flex items-start gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
         <Package size={18} className="mt-0.5 shrink-0" />
         <p>
@@ -170,16 +182,14 @@ export default function Demandes() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1">
+        <div className="flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
           {filtres.map(([v, l]) => (
             <button key={v} onClick={() => setFiltre(v)}
-              className={`rounded px-3 py-1.5 text-sm font-semibold ${filtre === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              data-actif={filtre === v} aria-pressed={filtre === v} className="puce-verre rounded-xl px-3 py-1.5 text-sm font-bold">
               {l}
             </button>
           ))}
         </div>
-        <ChampRecherche value={recherche} onChange={setRecherche} placeholder="Rechercher un client…" />
-        {isAgent && <Button className="ml-auto" onClick={() => { setPick(brouillons[0]?.id || ''); setCreateOpen(true) }}><Plus size={16} /> Nouvelle demande de sortie</Button>}
       </div>
 
       {filtrees.length === 0 ? (
@@ -241,7 +251,10 @@ export default function Demandes() {
                 {st === 'refusee' && f.refusMotif && <p className="text-[11px] text-red-500">Refus : {f.refusMotif}</p>}
                 {actions(f).length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {actions(f).map((act) => (
+                    {actions(f).map((act) => act.compact ? (
+                      <button key={act.id} type="button" title={act.label} aria-label={act.label} disabled={busy} onClick={act.on}
+                        style={{ '--ic': '#d97706', color: '#b45309' }} className="icone-verre bv-clic shrink-0 rounded-xl p-2 disabled:opacity-50"><act.icon size={17} /></button>
+                    ) : (
                       <Button key={act.id} size="sm" variant={act.tone} disabled={busy} onClick={act.on} className="flex-1">
                         <act.icon size={15} /> {act.label}
                       </Button>
@@ -255,7 +268,7 @@ export default function Demandes() {
       )}
 
       {/* Modal : nouvelle demande de sortie à partir d'une facture brouillon */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Nouvelle demande de sortie"
+      <ModalAgro open={createOpen} onClose={() => setCreateOpen(false)} title="Nouvelle demande de sortie" intro="La demande reprend toutes les informations de la facture choisie."
         footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button><Button onClick={soumettre} loading={busy} disabled={!brouillons.length}><Timer size={15} /> Soumettre à la hiérarchie</Button></>}>
         {brouillons.length === 0 ? (
           <div className="rounded-lg bg-amber-50 px-3 py-4 text-center text-sm text-amber-800">
@@ -284,7 +297,7 @@ export default function Demandes() {
             })()}
           </>
         )}
-      </Modal>
+      </ModalAgro>
 
       {/* Modal écart (hiérarchie) */}
       <EcartModal facture={ecart} onClose={() => setEcart(null)} onSubmit={ajuster} busy={busy} />
@@ -304,7 +317,7 @@ export default function Demandes() {
       )}
 
       {/* Arbitrage du correctif par la hiérarchie */}
-      <Modal open={!!correctif} onClose={() => setCorrectif(null)} size="lg" title="Trancher le correctif"
+      <ModalAgro open={!!correctif} onClose={() => setCorrectif(null)} size="lg" title="Trancher le correctif"
         footer={<>
           <Button variant="ghost" onClick={() => setCorrectif(null)}>Annuler</Button>
           <Button variant="danger" loading={busy} onClick={() => trancher(false)}>Refuser le correctif</Button>
@@ -326,7 +339,7 @@ export default function Demandes() {
             </p>
           </>
         )}
-      </Modal>
+      </ModalAgro>
     </div>
   )
 }

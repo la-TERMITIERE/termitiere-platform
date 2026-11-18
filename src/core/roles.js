@@ -81,6 +81,10 @@ export const canExportExcel = (r) => EXCEL_EXPORT_ROLES.includes(r)
 // MAXI-GYM : décision explicite — l'agent a aussi accès aux exports (Excel/PDF)
 // du module, en plus de EXCEL_EXPORT_ROLES ci-dessus. Propre à gym, ne touche
 // pas la règle globale canExportExcel réutilisée ailleurs.
+// Le rôle `info` est UNIVERSEL : il fait tout ce que fait chaque autre rôle, y compris les actions réservées aux agents
+// (saisie du jour, facturation, demandes de sortie). Les écrans testent `agirCommeAgent(role)` à la place de `role === 'agent'`
+// pour ces droits d'action. Les LIMITES propres à l'agent (pas de suppression, fenêtre du mois courant) ne s'appliquent pas à Info.
+export const agirCommeAgent = (r) => r === 'agent' || r === 'info'
 export const canExportGym = (r) => canExportExcel(r) || r === 'agent'
 
 // Volet « Compte bancaire » (par secteur : MAXI-AGRO, MAXI LOGISTIQUE, MAXI-GYM,

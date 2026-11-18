@@ -11,11 +11,11 @@
 //  - L'EF Final du jour devient l'EF Initial du jour suivant.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Save, Send, CheckCircle2, Plus, Trash2, Lock, Pencil, History } from 'lucide-react'
+import { Save, Send, CheckCircle2, Plus, Trash2, Lock, Pencil, History, ClipboardList } from 'lucide-react'
 import { COULEUR_MODULE } from '../../utils/color'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import PillTabs from '../../shared/ui/PillTabs'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
@@ -36,7 +36,9 @@ import {
   ENTREE_TYPES_ANIMAL, SORTIE_TYPES_SAISIE_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_SAISIE_ALIMENT,
   labelRequis, nouvellesSortiesNotifiable, nouvellesEntreesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
 } from './logic'
-import { APPROVER_ROLES, isFullAccessRole } from '../../core/roles'
+import BandeAgro from './BandeAgro'
+import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
+import { APPROVER_ROLES, isFullAccessRole, agirCommeAgent } from '../../core/roles'
 
 export default function Saisie() {
   const { user, role } = useAuth()
@@ -65,8 +67,8 @@ export default function Saisie() {
   const [draftSavedAt, setDraftSavedAt] = useState(null) // pour l'affichage du bandeau
   const markDirty = () => { dirtyRef.current = true }
 
-  // Seuls les agents peuvent saisir ; admins et contrôleurs sont en lecture seule.
-  const peutSaisir = role === 'agent'
+  // Seuls les agents (et Info, rôle universel) peuvent saisir ; admins et contrôleurs sont en lecture seule.
+  const peutSaisir = agirCommeAgent(role)
   // EF Initial : reporté automatiquement de la veille, donc verrouillé en saisie.
   // MAIS la direction (accès total) peut le RÉAJUSTER après un audit — l'app et le
   // réel divergent parfois — via un ajustement tracé et signalé (cf. ajusterInit).
@@ -447,7 +449,7 @@ export default function Saisie() {
                           {peutAjusterInit && (
                             <button type="button" onClick={() => setInitModal({ kind, id: a.id, nom: a.nom, ancien: d.init ?? 0 })}
                               title="Réajuster l'effectif initial (après audit)"
-                              className="rounded p-1 text-gray-400 hover:bg-amber-100 hover:text-amber-700">
+                              style={{ '--ic': '#b45309' }} className="icone-verre rounded-lg p-1" aria-label="Réajuster l'effectif initial">
                               <Pencil size={13} />
                             </button>
                           )}
@@ -493,21 +495,16 @@ export default function Saisie() {
 
   return (
     <div className="space-y-4">
-      {/* Barre d'en-tête */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
-          <input type="date" className="input-base w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Agent</label>
-          <input className="input-base w-auto bg-gray-100" value={user?.nom || ''} readOnly />
-        </div>
-        <div className="ml-auto flex gap-2">
-          {peutSaisir && <Link to="/agro/demandes"><Button variant="outline"><Send size={16} /> Demander une sortie</Button></Link>}
-          {peutSaisir && <Button onClick={save} loading={saving}><Save size={16} /> Enregistrer</Button>}
-        </div>
-      </div>
+      <BandeAgro icone={ClipboardList} titre="Saisie du jour" sous="Effectifs, mouvements, aliments et divers">
+        <ChampBande label="Date">
+          <input type="date" className={CLASSE_CHAMP_BANDE} value={date} onChange={(e) => setDate(e.target.value)} />
+        </ChampBande>
+        <ChampBande label="Agent">
+          <input className={CLASSE_CHAMP_BANDE + ' w-36 cursor-default'} value={user?.nom || ''} readOnly />
+        </ChampBande>
+        {peutSaisir && <Link to="/agro/demandes"><BoutonBande icone={Send} plein={false}>Demander une sortie</BoutonBande></Link>}
+        {peutSaisir && <BoutonBande anime icone={Save} onClick={save} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</BoutonBande>}
+      </BandeAgro>
 
       {!peutSaisir && (
         <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 font-semibold">
@@ -688,7 +685,7 @@ function MvtCell({ total, dir, onClick, sub }) {
       <button
         type="button"
         onClick={onClick}
-        className="mx-auto flex min-w-[4rem] flex-col items-center justify-center rounded-lg border border-gray-200 px-2 py-1 hover:border-primary hover:bg-primary/5"
+        className="puce-verre mx-auto flex min-w-[4rem] flex-col items-center justify-center rounded-xl px-2 py-1"
         title="Cliquer pour détailler les mouvements par type"
       >
         <span className={`font-bold ${tone}`}>{total}</span>
@@ -727,7 +724,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
   const total = sommeMouvements(lignes) + (dir === 'entree' ? (mutIn || 0) : 0)
 
   return (
-    <Modal
+    <ModalAgro
       open
       onClose={onClose}
       title={`${dir === 'entree' ? '⬇️ Entrées' : '⬆️ Sorties'} : ${nom}`}
@@ -777,7 +774,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
               <Input type="number" min="0" className="w-20" value={l.qte} readOnly={locked}
                 onChange={(e) => setLigne(i, { qte: Math.max(0, parseInt(e.target.value) || 0) })} />
               {!locked && (
-                <button onClick={() => delLigne(i)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 size={16} /></button>
+                <button onClick={() => delLigne(i)} className="icone-verre icone-verre--danger rounded-xl p-1.5" title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button>
               )}
             </div>
             {/* Mutation (sortie animale) : choisir l'espèce de destination → +1 auto là-bas */}
@@ -805,7 +802,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
       </div>
 
       {peutSaisir && <Button variant="outline" size="sm" className="mt-3" onClick={addLigne}><Plus size={15} /> Ajouter une ligne</Button>}
-    </Modal>
+    </ModalAgro>
   )
 }
 
@@ -829,7 +826,7 @@ function AjustInitModal({ modal, date, onClose, onSave }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={`Réajuster l'effectif initial : ${modal.nom}`}
+    <ModalAgro open onClose={onClose} title={`Réajuster l'effectif initial : ${modal.nom}`}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button variant="warning" onClick={submit}>Réajuster & signaler</Button></>}>
       <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
         Réservé à la direction. À utiliser lorsque l'<strong>effectif réel constaté</strong> (audit, comptage) diffère de l'app.
@@ -851,7 +848,7 @@ function AjustInitModal({ modal, date, onClose, onSave }) {
       <FormGroup label="Motif de l'ajustement" required hint="Visible dans le journal et la notification envoyée à l'équipe.">
         <Input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex. : comptage d'audit du 12/08 : 2 décès non saisis" />
       </FormGroup>
-    </Modal>
+    </ModalAgro>
   )
 }
 
@@ -876,7 +873,7 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
   }
 
   return (
-    <Modal
+    <ModalAgro
       open={open}
       onClose={onClose}
       title={`Ajouter un ${kind === 'animal' ? 'animal' : 'aliment / divers'}`}
@@ -915,6 +912,6 @@ function AddArticleModal({ open, kind, existingCats = [], onClose, onSave }) {
           La nouvelle catégorie « {(catNew || '…').toUpperCase()} » apparaîtra automatiquement dans le Dashboard et les analyses.
         </p>
       )}
-    </Modal>
+    </ModalAgro>
   )
 }
