@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import { useAgroStore } from './store/agroStore'
 import { CAT_ANIMAUX, catColor } from './data'
 import { agregerAchatsVentes, mouvementsCategorie, ventesFactureesParEspece } from './logic'
@@ -619,7 +619,7 @@ function CategoriePeriodeModal({ cat, onClose, especes, invPeriode, dernier, sta
   }, [cat, especes, invPeriode, dernier])
 
   return (
-    <Modal open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} : détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}
+    <ModalAgro hero={false} open={!!cat} onClose={onClose} size="lg" title={`${cat || ''} : détail période (${formatDateShort(start)} → ${formatDateShort(end)})`}
       panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
       {data && (
         data.lignes.length === 0 ? (
@@ -666,7 +666,7 @@ function CategoriePeriodeModal({ cat, onClose, especes, invPeriode, dernier, sta
           </div>
         )
       )}
-    </Modal>
+    </ModalAgro>
   )
 }
 
@@ -740,7 +740,7 @@ function EvolutionCategorieCard({ cat, especes, evolutionDetail }) {
             key={m.id}
             type="button"
             onClick={() => setMetric(m.id)}
-            className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${metric === m.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            data-actif={metric === m.id} aria-pressed={metric === m.id} className="puce-verre rounded-full px-3 py-1 text-xs font-bold"
           >
             {m.label}
           </button>
@@ -941,18 +941,18 @@ function KpiDetailModal({ id, onClose, data }) {
   }
 
   return (
-    <Modal open onClose={onClose} size="lg" title={titles[id] || 'Détail'}
+    <ModalAgro hero={false} open onClose={onClose} size="lg" title={titles[id] || 'Détail'}
       panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
       <div className="max-h-[60vh] overflow-auto rounded-lg bg-white">{content}</div>
-    </Modal>
+    </ModalAgro>
   )
 }
 
 function ScopeTab({ active, color, onClick, children }) {
   return (
-    <button onClick={onClick} type="button"
-      className="rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors"
-      style={active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' }}>
+    <button onClick={onClick} type="button" aria-pressed={!!active} data-actif={!!active}
+      className="puce-verre rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide"
+      style={{ '--puce': color }}>
       {children}
     </button>
   )

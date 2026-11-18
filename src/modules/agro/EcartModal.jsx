@@ -2,7 +2,7 @@
 // quantités réellement vendues + mortes au marché ; le reliquat est retourné au stock.
 import { useState } from 'react'
 import { Check, Clock } from 'lucide-react'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import Button from '../../shared/ui/Button'
 import Input from '../../shared/forms/Input'
 import { toast } from '../../core/notifications'
@@ -29,7 +29,7 @@ export default function EcartModal({ facture, onClose, onSubmit, busy }) {
   }
 
   return (
-    <Modal open={!!facture} onClose={onClose} size="lg"
+    <ModalAgro open={!!facture} onClose={onClose} size="lg"
       title={facture ? `Ajuster l'écart : ${facture.numero}` : ''}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={submit} loading={busy}><Check size={15} /> Appliquer & réajuster le stock</Button></>}>
       {facture && (
@@ -63,6 +63,6 @@ export default function EcartModal({ facture, onClose, onSubmit, busy }) {
           <p className="text-[11px] text-gray-400">Le CA sera calculé sur les quantités <strong>vendues</strong> lors de la certification par l'agent.</p>
         </div>
       )}
-    </Modal>
+    </ModalAgro>
   )
 }

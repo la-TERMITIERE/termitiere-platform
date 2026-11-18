@@ -1,10 +1,10 @@
 // Paramètres MAXI-AGRO — référentiels, utilisateurs (démo), données, PIN, système.
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Download, Upload, RotateCcw, Target, Leaf, Wheat, Database, Cpu, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, RotateCcw, Target, Leaf, Wheat, Database, Cpu, AlertTriangle, Settings } from 'lucide-react'
 import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
 import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -31,19 +31,16 @@ const TABS = [
   ['systeme', 'Système', Cpu]
 ]
 
+import BandeAgro from './BandeAgro'
+import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
+
 export default function Params() {
   const [tab, setTab] = useState('objectif')
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-1.5 rounded-3xl border border-white/70 bg-white/55 p-1.5 shadow-[0_14px_34px_-18px_rgba(26,26,26,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl">
-        {TABS.map(([v, l, Ic]) => (
-          <button key={v} onClick={() => setTab(v)}
-            className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-bold transition-all ${tab === v ? 'text-white shadow-md' : 'text-gray-600 hover:bg-white/80'}`}
-            style={tab === v ? { background: `linear-gradient(135deg, ${COULEUR}, ${COULEUR}cc)` } : undefined}>
-            <Ic size={15} />{l}
-          </button>
-        ))}
-      </div>
+      <BandeAgro icone={Settings} titre="Paramètres" sous="Objectif, espèces, aliments, données et système">
+        <OngletsBande valeur={tab} onChange={setTab} options={TABS.map(([id, label]) => ({ id, label }))} />
+      </BandeAgro>
       {tab === 'objectif' && <ParamsGrille><ObjectifParam poleId="agro" couleur={COULEUR} moduleId="agro" /></ParamsGrille>}
       {tab === 'especes' && <ReferentielTab kind="espece" />}
       {tab === 'aliments' && <ReferentielTab kind="aliment" />}
@@ -88,8 +85,8 @@ function ReferentielTab({ kind }) {
             ...(kind === 'aliment' ? [{ key: 'unite', label: 'Unité', render: (r) => <span className="text-xs font-semibold text-gray-600">{r.unite || 'kg'}</span> }] : []),
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1">
-                <button onClick={() => setModal({ ...r, isNew: false })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
-                <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) remove(r.id) }} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                <button onClick={() => setModal({ ...r, isNew: false })} className="icone-verre rounded-xl p-1.5" aria-label="Modifier">✏️</button>
+                <button onClick={() => { if (confirm(`Supprimer ${r.nom} ?`)) remove(r.id) }} className="icone-verre icone-verre--danger rounded-xl p-1.5" aria-label="Supprimer"><Trash2 size={16} /></button>
               </div>
             ) }
           ]}
@@ -99,7 +96,7 @@ function ReferentielTab({ kind }) {
       </div>
       </ParamsCarte>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal?.isNew ? 'Ajouter' : 'Modifier'}
+      <ModalAgro open={!!modal} onClose={() => setModal(null)} title={modal?.isNew ? 'Ajouter' : 'Modifier'}
         footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={submit}>Enregistrer</Button></>}>
         {modal && (
           <>
@@ -114,7 +111,7 @@ function ReferentielTab({ kind }) {
             )}
           </>
         )}
-      </Modal>
+      </ModalAgro>
     </>
   )
 }
@@ -394,7 +391,7 @@ function DonneesTab() {
       )}
 
       {/* Modal export Excel multi-sections */}
-      <Modal
+      <ModalAgro
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         title="Export Excel : Choisir les sections"
@@ -421,7 +418,7 @@ function DonneesTab() {
             </label>
           ))}
         </div>
-      </Modal>
+      </ModalAgro>
     </ParamsGrille>
   )
 }

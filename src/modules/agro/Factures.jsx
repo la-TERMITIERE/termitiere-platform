@@ -6,10 +6,10 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye, Wallet } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye, Wallet, Receipt, Package } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
 import StatCard from '../../shared/ui/StatCard'
@@ -21,13 +21,15 @@ import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
+import BandeAgro, { usePeriodeBande } from './BandeAgro'
+import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { usePDF } from '../../hooks/usePDF'
 import { exportRapportExcel } from '../../utils/excelReport'
-import { canExportExcel, canViewFinance } from '../../core/roles'
+import { canExportExcel, canViewFinance, agirCommeAgent } from '../../core/roles'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
 import EcartModal from './EcartModal'
@@ -56,7 +58,7 @@ const emptyFacture = () => ({
 
 export default function Factures() {
   const { user, role, canManage } = useAuth()
-  const isAgent = role === 'agent'
+  const isAgent = agirCommeAgent(role)
   const peutApprouver = canManage()      // hiérarchie : approuve / ajuste
   const estAdministration = canViewFinance(role)
   const { data: factures } = useCollection('agro_factures')
@@ -80,13 +82,15 @@ export default function Factures() {
   const [detail, setDetail] = useState(null)      // facture consultée (lecture seule)
   const [busy, setBusy] = useState(false)
 
+  const periode = usePeriodeBande()
   const liste = useMemo(
     () =>
       [...factures]
         .filter((f) => (f.client?.nom || '').toLowerCase().includes(recherche.toLowerCase()))
+        .filter((f) => periode.dansPeriode(f.date))
         .filter((f) => (filtre === 'tous' ? true : factureStatut(f) === filtre))
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [factures, recherche, filtre]
+    [factures, recherche, filtre, periode.cle]
   )
 
   // Cumul de facturation — réservé à l'administration, recalculé selon la recherche
@@ -243,7 +247,7 @@ export default function Factures() {
     } else if (st === 'sortie_approuvee') {
       if (isAgent) {
         a.push({ id: 'cert', label: 'Certifier (tout vendu)', icon: BadgeCheck, tone: 'success', on: () => certifier(f) })
-        a.push({ id: 'ec', label: 'Signaler un écart', icon: AlertTriangle, tone: 'ghost', on: () => signalerEcart(f) })
+        a.push({ id: 'ec', label: 'Signaler un écart', icon: AlertTriangle, tone: 'ghost', compact: true, on: () => signalerEcart(f) })
       }
     } else if (st === 'modif_demandee') {
       if (peutApprouver) a.push({ id: 'adj', label: 'Ajuster les quantités', icon: Pencil, tone: 'primary', on: () => setEcart(f) })
@@ -301,6 +305,15 @@ export default function Factures() {
 
   return (
     <div className="space-y-4">
+      <BandeAgro icone={Receipt} titre="Facturation" sous="Factures clients, sorties de stock et certification">
+        {periode.node}
+        <ChampBande label="Client">
+          <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un client…" className={CLASSE_CHAMP_BANDE} />
+        </ChampBande>
+        {canExportExcel(role) && <BoutonBande icone={FileSpreadsheet} plein={false} onClick={exportXLSX}>Export Excel</BoutonBande>}
+        {isAgent && <BoutonBande anime icone={Plus} onClick={openCreate}>Nouvelle facture</BoutonBande>}
+      </BandeAgro>
+
       <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
         <strong>Sortie de stock en 4 étapes :</strong> ① l'agent crée une facture <em>brouillon</em> → ② il demande la sortie →
         ③ la hiérarchie l'approuve (décompte du stock) → ④ l'agent <em>certifie</em> (CA enregistré, impression). En cas d'écart, l'agent signale et la hiérarchie ajuste les quantités réelles.
@@ -318,18 +331,10 @@ export default function Factures() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input className="max-w-xs" placeholder="🔍 Rechercher un client…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-        {canExportExcel(role) && (
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Export Excel</Button>
-        )}
-        {isAgent && <Button className="ml-auto" onClick={openCreate}><Plus size={16} /> Nouvelle facture</Button>}
-      </div>
-
-      <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1">
+      <div className="flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
         {filtres.map(([v, l]) => (
           <button key={v} onClick={() => setFiltre(v)}
-            className={`rounded px-3 py-1.5 text-sm font-semibold ${filtre === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+            data-actif={filtre === v} aria-pressed={filtre === v} className="puce-verre rounded-xl px-3 py-1.5 text-sm font-bold">
             {l}
           </button>
         ))}
@@ -389,8 +394,11 @@ export default function Factures() {
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         {/* Consultation ouverte à tous, quel que soit le statut. */}
                         <button onClick={() => setDetail(f)} title="Voir le détail"
-                          className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Eye size={16} /></button>
-                        {actions(f).map((act) => (
+                          className="icone-verre bv-clic rounded-xl p-1.5" aria-label="Voir le détail"><Eye size={16} /></button>
+                        {actions(f).map((act) => act.compact ? (
+                          <button key={act.id} type="button" title={act.label} aria-label={act.label} disabled={busy} onClick={act.on}
+                        style={{ '--ic': '#d97706', color: '#b45309' }} className="icone-verre bv-clic shrink-0 rounded-xl p-2 disabled:opacity-50"><act.icon size={17} /></button>
+                        ) : (
                           <Button key={act.id} size="sm" variant={act.tone} disabled={busy} onClick={act.on}>
                             <act.icon size={14} /> {act.label}
                           </Button>
@@ -407,14 +415,14 @@ export default function Factures() {
       </Card>
 
       {/* Modal création / édition (brouillon) */}
-      <Modal open={!!modal} onClose={() => setModal(null)} size="xl"
+      <ModalAgro open={!!modal} onClose={() => setModal(null)} size="xl" intro="Client, articles, remise et TVA : le brouillon part ensuite en demande de sortie."
         title={modal?.editId ? 'Modifier le brouillon' : 'Nouvelle facture (brouillon)'}
         footer={<><Button variant="ghost" onClick={() => setModal(null)}>Annuler</Button><Button onClick={save}>Enregistrer le brouillon</Button></>}>
         {modal && (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <FormGroup label="Date"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
-              <FormGroup label="Client" required hint="Client existant ou nouveau nom">
+            <div className="grid grid-cols-2 gap-x-3 md:grid-cols-6">
+              <FormGroup label="Date" className="col-span-2 md:col-span-2"><Input type="date" value={modal.facture.date} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, date: e.target.value } }))} /></FormGroup>
+              <FormGroup label="Client" required hint="Client existant ou nouveau nom" className="col-span-2 md:col-span-4">
                 <ChampAutocomplete
                   value={modal.facture.client.nom}
                   suggestions={clientsConnus}
@@ -423,8 +431,8 @@ export default function Factures() {
                   onSelect={(connu) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, nom: connu.nom, tel: connu.tel, email: connu.email, adresse: connu.adresse } } }))}
                 />
               </FormGroup>
-              <FormGroup label="Téléphone"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
-              <FormGroup label="Email"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
+              <FormGroup label="Téléphone" className="md:col-span-3"><Input value={modal.facture.client.tel} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, tel: e.target.value } } }))} /></FormGroup>
+              <FormGroup label="Email" className="md:col-span-3"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
             </div>
             <div className="mt-2">
               <FormGroup label="Apporté / recommandé par (membre de l'entreprise)" hint="Laissez vide si le client est venu en direct.">
@@ -437,9 +445,10 @@ export default function Factures() {
               </FormGroup>
             </div>
 
-            <div className="mb-2 mt-2 overflow-x-auto rounded-lg border border-gray-100">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <div className="fg-tuile mb-3 !p-0 overflow-x-auto">
+              <p className="flex items-center gap-1.5 px-3 pt-3 text-[11px] font-extrabold uppercase tracking-wide text-green-800"><Package size={14} aria-hidden="true" />Articles de la facture</p>
+              <table className="mt-1 w-full text-sm">
+                <thead className="bg-green-50/60 text-xs uppercase text-green-900/70">
                   <tr><th className="px-2 py-2 text-left">Article</th><th className="px-2 py-2">Qté</th><th className="px-2 py-2">Prix unit.</th><th className="px-2 py-2 text-right">Total</th><th></th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -454,7 +463,7 @@ export default function Factures() {
                       <td className="px-2 py-1.5"><Input type="number" min="1" className="w-20" value={l.qte} onChange={(e) => setLigne(i, { qte: e.target.value })} /></td>
                       <td className="px-2 py-1.5"><Input type="number" min="0" className="w-28" value={l.prixUnit} onChange={(e) => setLigne(i, { prixUnit: e.target.value })} /></td>
                       <td className="px-2 py-1.5 text-right font-semibold">{formatMoney(l.total)}</td>
-                      <td className="px-2 py-1.5"><button onClick={() => removeLigne(i)} className="text-red-500 hover:text-red-700"><Trash2 size={15} /></button></td>
+                      <td className="px-2 py-1.5"><button onClick={() => removeLigne(i)} className="icone-verre icone-verre--danger rounded-xl p-1" aria-label="Supprimer la ligne"><Trash2 size={15} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -462,23 +471,24 @@ export default function Factures() {
             </div>
             <Button variant="outline" size="sm" onClick={addLigne}><Plus size={14} /> Ajouter une ligne</Button>
 
-            <div className="mt-3 flex flex-col items-end gap-2">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-600">Remise %</label>
-                <Input type="number" min="0" max="100" className="w-20" value={modal.facture.remise} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, remise: parseFloat(e.target.value) || 0 } }))} />
-                <label className="text-sm text-gray-600">TVA %</label>
-                <Input type="number" min="0" max="100" className="w-20" value={modal.facture.tva} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, tva: parseFloat(e.target.value) || 0 } }))} />
+            <div className="mt-3 grid grid-cols-2 gap-x-3 md:grid-cols-4">
+              <FormGroup label="Remise %" className="md:col-span-1"><Input type="number" min="0" max="100" value={modal.facture.remise} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, remise: parseFloat(e.target.value) || 0 } }))} /></FormGroup>
+              <FormGroup label="TVA %" className="md:col-span-1"><Input type="number" min="0" max="100" value={modal.facture.tva} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, tva: parseFloat(e.target.value) || 0 } }))} /></FormGroup>
+              <div className="relative col-span-2 mb-3 flex flex-col justify-center overflow-hidden rounded-3xl border border-white/40 p-4 text-white shadow-[0_16px_30px_-14px_rgba(22,101,52,0.7),inset_0_1px_0_rgba(255,255,255,0.45)]"
+                style={{ background: 'linear-gradient(135deg, #2EAA3Ff2 0%, #14532dee 100%)' }}>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+                <p className="relative text-xs text-white/85">Total HT : <strong>{formatMoney(totaux.totalHT)}</strong></p>
+                <p className="relative text-[11px] font-bold uppercase tracking-wide text-white/80">Total TTC</p>
+                <p className="relative text-2xl font-extrabold tabular-nums">{formatMoney(totaux.totalTTC)}</p>
               </div>
-              <p className="text-sm text-gray-600">Total HT : <strong>{formatMoney(totaux.totalHT)}</strong></p>
-              <p className="text-lg font-extrabold text-primary-dark">TOTAL TTC : {formatMoney(totaux.totalTTC)}</p>
             </div>
           </>
         )}
-      </Modal>
+      </ModalAgro>
 
       {/* Modal écart : ajustement des quantités réelles par la hiérarchie */}
       {/* Consultation d'une facture — lecture seule */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} size="lg" {...glassModalProps(COULEUR_MODULE.agro)}
+      <ModalAgro open={!!detail} onClose={() => setDetail(null)} size="lg" {...glassModalProps(COULEUR_MODULE.agro)}
         title={detail ? `Facture ${detail.numero}` : ''}
         footer={<>
           <Button variant="ghost" onClick={() => setDetail(null)}>Fermer</Button>
@@ -536,7 +546,7 @@ export default function Factures() {
             </FicheDetail>
           )
         })()}
-      </Modal>
+      </ModalAgro>
 
       <EcartModal facture={ecart} onClose={() => setEcart(null)} onSubmit={appliquerAjustement} busy={busy} />
 

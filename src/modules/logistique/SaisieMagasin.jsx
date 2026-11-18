@@ -11,7 +11,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { isFullAccessRole } from '../../core/roles'
+import { isFullAccessRole, agirCommeAgent } from '../../core/roles'
 import { useLogistiqueStore } from './store/referentielStore'
 import { setItem, ts } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -59,7 +59,7 @@ export default function SaisieMagasin() {
     .map((r) => ({ type: r.type, qte: parseInt(r.qte) || 0, motif: r.motif, prestationNum: r.prestationNum, agentNom: r.agentNom }))
   const [seedInit, setSeedInit] = useState({}) // stock initial des articles fraîchement créés : { date: { id } }
 
-  const peutSaisir = role === 'agent'
+  const peutSaisir = agirCommeAgent(role)
   // L'ADMINISTRATEUR (accès total) peut renseigner les STOCKS INITIAUX de départ
   // (mise en route de l'app / recalage sur le stock physique) et enregistrer.
   const peutEditerInit = isFullAccessRole(role)

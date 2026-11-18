@@ -4,14 +4,18 @@
 //   • Stock vaccins & produits : entrées/sorties de stock + alertes (bas / périmé).
 //   • Rendez-vous : suivis à venir + rappels envoyés à celui qui a enregistré.
 //   • Bilan : synthèse (interventions par type, animaux traités, alertes).
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, FileDown, FileSpreadsheet, Trash2, Syringe, Boxes, CalendarClock, BarChart3, AlertTriangle, CheckCircle2, Bell } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import BandeAgro from './BandeAgro'
+import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Syringe, Boxes, CalendarClock, BarChart3, AlertTriangle, CheckCircle2, Bell, HeartPulse, Pill, Bug, Stethoscope, CalendarDays, CalendarCheck, PawPrint, Package } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import Table from '../../shared/ui/Table'
 import Badge from '../../shared/ui/Badge'
-import StatCard from '../../shared/ui/StatCard'
+import { TuileVerre } from '../../shared/ui/ParamsVerre'
+import { icone3D } from '../../utils/color'
 import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
@@ -36,6 +40,53 @@ const TYPES = [
 const toneOf = (t) => TYPES.find((x) => x.value === t)?.tone || 'neutral'
 const labelOf = (t) => TYPES.find((x) => x.value === t)?.label || t
 
+// Style par type d'intervention : icône et couleur (pastille 3D, filigrane, puces).
+const TYPE_STYLE = {
+  vaccination: { icone: Syringe, c: '#0284c7' },
+  traitement: { icone: Pill, c: '#d97706' },
+  deparasitage: { icone: Bug, c: '#16a34a' },
+  autre: { icone: Stethoscope, c: '#64748b' }
+}
+const styleType = (t) => TYPE_STYLE[t] || TYPE_STYLE.autre
+const sansEmoji = (t) => String(t || '').replace(/^\S+\s/, '')
+const COUL_TONE = { danger: '#dc2626', warning: '#d97706', success: '#16a34a', info: '#0284c7', neutral: '#64748b' }
+
+// Boutons d'action du volet : rendus dans la bande verte du haut (emplacement #agro-sante-actions) pour que
+// chaque onglet y pose ses actions (export, création) sans quitter la bande.
+function ActionsBande({ children }) {
+  const [cible, setCible] = useState(null)
+  useLayoutEffect(() => { setCible(document.getElementById('agro-sante-actions')) }, [])
+  return cible ? createPortal(children, cible) : null
+}
+
+// Carte de verre d'une fiche (intervention, produit, rendez-vous) : halo de la couleur, entrée en cascade.
+function CarteSante({ couleur, i = 0, children, className = '' }) {
+  return (
+    <article className={`ed-entree group relative overflow-hidden rounded-3xl border border-white/80 bg-white/65 p-4 shadow-[0_14px_28px_-18px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_34px_-18px_rgba(26,26,26,0.45),inset_0_1px_0_rgba(255,255,255,1)] ${className}`}
+      style={{ animationDelay: `${Math.min(i, 9) * 45}ms`, borderColor: `${couleur}33` }}>
+      <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-25 blur-2xl transition-opacity group-hover:opacity-40" style={{ background: couleur }} />
+      <div className="relative">{children}</div>
+    </article>
+  )
+}
+
+function Puce({ icone: Ic, children, couleur = '#475569' }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-white/80 bg-white/75 px-2 py-0.5 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]" style={{ color: couleur }}>
+      {Ic && <Ic size={12} aria-hidden="true" />}{children}
+    </span>
+  )
+}
+
+function VideSante({ icone: Ic, texte }) {
+  return (
+    <div className="ed-entree flex flex-col items-center gap-2 rounded-3xl border border-white/80 bg-white/60 px-6 py-10 text-center backdrop-blur-xl">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={icone3D('#2EAA3F')}><Ic size={22} /></span>
+      <p className="max-w-sm text-sm text-gray-500">{texte}</p>
+    </div>
+  )
+}
+
 const PRODUIT_TYPES = ['Vaccin', 'Médicament', 'Antiparasitaire', 'Vitamine', 'Autre']
 
 export default function Sante() {
@@ -52,24 +103,22 @@ export default function Sante() {
 
   return (
     <div className="space-y-4">
-      {/* Onglets */}
-      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-white p-1">
-        {[
-          ['interventions', 'Interventions', Syringe],
-          ['stock', 'Stock vaccins', Boxes],
-          ['rdv', 'Rendez-vous', CalendarClock],
-          ['bilan', 'Bilan', BarChart3]
-        ].map(([v, l, Icon]) => (
-          <button
-            key={v}
-            onClick={() => setTab(v)}
-            className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold ${
-              tab === v ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Icon size={15} /> {l}
-          </button>
-        ))}
+      <BandeAgro icone={HeartPulse} titre="Santé du cheptel" sous="Interventions, stock de vaccins, rendez-vous et bilan">
+        <OngletsBande valeur={tab} onChange={setTab} options={[
+          { id: 'interventions', label: 'Interventions' },
+          { id: 'stock', label: 'Stock vaccins' },
+          { id: 'rdv', label: 'Rendez-vous' },
+          { id: 'bilan', label: 'Bilan' }
+        ]} />
+        <div id="agro-sante-actions" className="flex flex-wrap items-end gap-2" />
+      </BandeAgro>
+
+      {/* Chiffres du moment : toujours visibles, quel que soit l'onglet */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <TuileVerre icone={Syringe} couleur="#0284c7" titre="Interventions" valeur={statsSante(fiches, stock).totalFiches} sous="enregistrées" />
+        <TuileVerre icone={PawPrint} couleur="#16a34a" titre="Animaux traités" valeur={statsSante(fiches, stock).totalAnimaux} sous="cumul" />
+        <TuileVerre icone={CalendarClock} couleur="#7c3aed" titre="RDV à venir" valeur={statsSante(fiches, stock).rdvAVenir} sous="suivis programmés" />
+        <TuileVerre icone={AlertTriangle} couleur={statsSante(fiches, stock).rdvRetard + statsSante(fiches, stock).stockBas ? '#dc2626' : '#64748b'} titre="À surveiller" valeur={statsSante(fiches, stock).rdvRetard + statsSante(fiches, stock).stockBas} sous={`${statsSante(fiches, stock).rdvRetard} RDV en retard · ${statsSante(fiches, stock).stockBas} produit(s)`} />
       </div>
 
       {tab === 'interventions' && <Interventions fiches={fiches} stock={stock} especes={especes} user={user} generateRapportPDF={generateRapportPDF} />}
@@ -81,6 +130,19 @@ export default function Sante() {
 }
 
 // ─────────── Onglet INTERVENTIONS ───────────
+function statsSante(fiches, stock) {
+  const parType = {}
+  let totalAnimaux = 0
+  fiches.forEach((f) => { parType[f.type] = (parType[f.type] || 0) + 1; totalAnimaux += f.nombreAnimaux || 0 })
+  const rdvAVenir = fiches.filter((f) => f.prochainRdv && !f.rdvFait && f.prochainRdv >= todayStr()).length
+  const rdvRetard = fiches.filter((f) => f.prochainRdv && !f.rdvFait && f.prochainRdv < todayStr()).length
+  const stockBas = stock.filter((x) => {
+    const perime = x.peremption && x.peremption < todayStr()
+    return perime || (x.quantite || 0) <= 0 || (x.seuilAlerte && (x.quantite || 0) <= x.seuilAlerte)
+  }).length
+  return { parType, totalAnimaux, rdvAVenir, rdvRetard, stockBas, totalFiches: fiches.length }
+}
+
 function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
   const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
   const [filtreType, setFiltreType] = useState('')
@@ -213,37 +275,55 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Select className="max-w-xs" value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
-          <option value="">Tous les types</option>
-          {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </Select>
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" onClick={exportXLSX}><FileSpreadsheet size={16} /> Rapport Excel</Button>
-          <Button variant="outline" onClick={exportPDF}><FileDown size={16} /> Rapport PDF</Button>
-          {!lectureSeule && <Button onClick={openCreate}><Plus size={16} /> Nouvelle intervention</Button>}
-        </div>
+      <ActionsBande>
+        <BoutonBande icone={FileSpreadsheet} plein={false} onClick={exportXLSX}>Rapport Excel</BoutonBande>
+        <BoutonBande icone={FileDown} plein={false} onClick={exportPDF}>Rapport PDF</BoutonBande>
+        {!lectureSeule && <BoutonBande anime icone={Plus} onClick={openCreate}>Nouvelle intervention</BoutonBande>}
+      </ActionsBande>
+
+      {/* Filtre par type : puces de verre à la couleur du type */}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setFiltreType('')} data-actif={!filtreType} aria-pressed={!filtreType} className="puce-verre rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide" style={{ '--puce': '#475569' }}>Tous</button>
+        {TYPES.map((t) => {
+          const Ic = styleType(t.value).icone
+          return (
+            <button key={t.value} type="button" onClick={() => setFiltreType(filtreType === t.value ? '' : t.value)} data-actif={filtreType === t.value} aria-pressed={filtreType === t.value}
+              className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide" style={{ '--puce': styleType(t.value).c }}>
+              <Ic size={13} aria-hidden="true" />{sansEmoji(t.label)}
+            </button>
+          )
+        })}
       </div>
 
-      <Card className="p-0">
-        <Table
-          columns={[
-            { key: 'date', label: 'Date', render: (r) => formatDateShort(r.date) },
-            { key: 'especeNom', label: 'Espèce' },
-            { key: 'type', label: 'Type', render: (r) => <Badge tone={toneOf(r.type)}>{labelOf(r.type)}</Badge> },
-            { key: 'produit', label: 'Produit' },
-            { key: 'nombreAnimaux', label: 'Nb', align: 'center' },
-            { key: 'animauxIds', label: 'N° animaux', render: (r) => r.animauxIds ? <span className="font-mono text-xs">{r.animauxIds}</span> : <span className="text-gray-300">—</span> },
-            { key: 'veterinaire', label: 'Vétérinaire', render: (r) => r.veterinaire || '—' },
-            { key: 'prochainRdv', label: 'Prochain RDV', render: (r) => r.prochainRdv ? <span className="text-sky-700">📅 {formatDateShort(r.prochainRdv)}</span> : <span className="text-gray-300">—</span> },
-            { key: 'actions', label: '', align: 'right', render: (r) => <button onClick={() => supprimer(r)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button> }
-          ]}
-          rows={liste}
-          empty="Aucune intervention enregistrée."
-        />
-      </Card>
+      {liste.length === 0 ? <VideSante icone={Syringe} texte="Aucune intervention enregistrée. Ajoutez une vaccination, un traitement ou un déparasitage." /> : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {liste.map((r, i) => {
+            const st = styleType(r.type)
+            const Ic = st.icone
+            return (
+              <CarteSante key={r.id} couleur={st.c} i={i}>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(st.c)}><Ic size={20} /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-extrabold text-gray-900">{r.produit}</p>
+                    <p className="text-xs font-semibold" style={{ color: st.c }}>{sansEmoji(labelOf(r.type))} · {r.especeNom}</p>
+                  </div>
+                  {!lectureSeule && <button onClick={() => supprimer(r)} aria-label="Supprimer" className="icone-verre icone-verre--danger rounded-xl p-1.5"><Trash2 size={15} /></button>}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <Puce icone={CalendarDays}>{formatDateShort(r.date)}</Puce>
+                  <Puce icone={PawPrint}>{r.nombreAnimaux || 0} animal(aux)</Puce>
+                  {r.veterinaire && <Puce icone={Stethoscope}>{r.veterinaire}</Puce>}
+                  {r.prochainRdv && <Puce icone={CalendarClock} couleur="#0369a1">RDV {formatDateShort(r.prochainRdv)}</Puce>}
+                </div>
+                {r.animauxIds && <p className="mt-2 truncate font-mono text-[11px] text-gray-500">N° {r.animauxIds}</p>}
+              </CarteSante>
+            )
+          })}
+        </div>
+      )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Nouvelle intervention sanitaire" size="lg"
+      <ModalAgro open={open} onClose={() => setOpen(false)} title="Nouvelle intervention sanitaire" size="lg" intro="Soin ou vaccination : le produit du stock est décompté automatiquement."
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
         {form && (
           <>
@@ -294,7 +374,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
             </FormGroup>
           </>
         )}
-      </Modal>
+      </ModalAgro>
     </div>
   )
 }
@@ -353,33 +433,51 @@ function StockVaccins({ stock, user }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        {alertes.length > 0 && (
-          <span className="flex items-center gap-1 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
-            <AlertTriangle size={15} /> {alertes.length} produit(s) à réapprovisionner ou périmé(s)
-          </span>
-        )}
-        {!lectureSeule && <Button className="ml-auto" onClick={() => openCreate()}><Plus size={16} /> Ajouter un produit</Button>}
-      </div>
+      <ActionsBande>
+        {!lectureSeule && <BoutonBande anime icone={Plus} onClick={() => openCreate()}>Ajouter un produit</BoutonBande>}
+      </ActionsBande>
 
-      <Card className="p-0">
-        <Table
-          columns={[
-            { key: 'nom', label: 'Produit', render: (r) => <button onClick={() => openCreate(r)} className="font-semibold text-primary hover:underline">{r.nom}</button> },
-            { key: 'type', label: 'Type' },
-            { key: 'quantite', label: 'Quantité', align: 'center', render: (r) => <strong>{r.quantite ?? 0}</strong> },
-            { key: 'unite', label: 'Unité' },
-            { key: 'seuilAlerte', label: 'Seuil alerte', align: 'center', render: (r) => r.seuilAlerte || '—' },
-            { key: 'peremption', label: 'Péremption', render: (r) => r.peremption ? formatDateShort(r.peremption) : '—' },
-            { key: 'etat', label: 'État', align: 'center', render: (r) => { const e = etatStock(r); return <Badge tone={e.tone}>{e.label}</Badge> } },
-            { key: 'actions', label: '', align: 'right', render: (r) => <button onClick={() => supprimer(r)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button> }
-          ]}
-          rows={liste}
-          empty="Aucun produit en stock. Ajoutez vos vaccins et médicaments."
-        />
-      </Card>
+      {alertes.length > 0 && (
+        <div className="ed-entree flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 to-white/70 px-4 py-3 text-sm font-semibold text-amber-900 backdrop-blur-md">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl" style={icone3D('#d97706')}><AlertTriangle size={16} /></span>
+          {alertes.length} produit(s) à réapprovisionner ou périmé(s)
+        </div>
+      )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={form?.id ? 'Modifier le produit' : 'Nouveau produit'}
+      {liste.length === 0 ? <VideSante icone={Package} texte="Aucun produit en stock. Ajoutez vos vaccins et médicaments." /> : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {liste.map((r, i) => {
+            const e = etatStock(r)
+            const c = COUL_TONE[e.tone] || '#64748b'
+            const q = r.quantite ?? 0
+            const base = Math.max((r.seuilAlerte || 0) * 3, q, 1)
+            const pct = Math.max(q > 0 ? 6 : 0, Math.min(100, Math.round((q / base) * 100)))
+            return (
+              <CarteSante key={r.id} couleur={c} i={i}>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(c)}><Package size={20} /></span>
+                  <div className="min-w-0 flex-1">
+                    <button onClick={() => openCreate(r)} className="block max-w-full truncate text-left font-extrabold text-gray-900 hover:underline">{r.nom}</button>
+                    <p className="text-xs text-gray-500">{r.type || 'Produit'}</p>
+                  </div>
+                  <Badge tone={e.tone}>{e.label}</Badge>
+                  {!lectureSeule && <button onClick={() => supprimer(r)} aria-label="Supprimer" className="icone-verre icone-verre--danger rounded-xl p-1.5"><Trash2 size={15} /></button>}
+                </div>
+                <div className="mt-3 flex items-end justify-between">
+                  <p className="text-2xl font-black tabular-nums text-gray-900">{q}<span className="ml-1 text-sm font-bold text-gray-500">{r.unite || ''}</span></p>
+                  {r.seuilAlerte ? <span className="text-[11px] font-semibold text-gray-500">alerte à {r.seuilAlerte}</span> : null}
+                </div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/5">
+                  <div className="agro-barre h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${c}, ${c}bb)` }} />
+                </div>
+                {r.peremption && <div className="mt-2"><Puce icone={CalendarClock} couleur={r.peremption < todayStr() ? '#dc2626' : '#475569'}>Péremption {formatDateShort(r.peremption)}</Puce></div>}
+              </CarteSante>
+            )
+          })}
+        </div>
+      )}
+
+      <ModalAgro open={open} onClose={() => setOpen(false)} title={form?.id ? 'Modifier le produit' : 'Nouveau produit'}
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
         {form && (
           <>
@@ -400,7 +498,7 @@ function StockVaccins({ stock, user }) {
             <FormGroup label="Note"><Input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} /></FormGroup>
           </>
         )}
-      </Modal>
+      </ModalAgro>
     </div>
   )
 }
@@ -422,44 +520,57 @@ function RendezVous({ fiches, user }) {
     toast.success('Rendez-vous clôturé ✓')
   }
 
-  const Item = ({ r, retard }) => (
-    <Card key={r.id} className="flex items-start justify-between gap-3">
-      <div>
-        <p className="font-bold text-gray-800">📅 {formatDateShort(r.prochainRdv)} : {r.especeNom}</p>
-        <p className="text-xs text-gray-500">{labelOf(r.type)} · {r.produit}{r.animauxIds ? ` · N° ${r.animauxIds}` : ''}</p>
-        {r.rdvNote && <p className="mt-1 text-xs italic text-gray-600">« {r.rdvNote} »</p>}
-        <p className="mt-1 text-xs text-gray-400">Programmé par {r.creeParNom || '—'}</p>
-        {retard && <Badge tone="danger" className="mt-1">En retard</Badge>}
-      </div>
-      {!lectureSeule && <Button size="sm" variant="outline" onClick={() => marquerFait(r)}><CheckCircle2 size={15} /> Fait</Button>}
-    </Card>
-  )
+  const Item = ({ r, retard, i = 0 }) => {
+    const d = new Date(r.prochainRdv + 'T00:00:00')
+    const c = retard ? '#dc2626' : '#16a34a'
+    return (
+      <CarteSante couleur={c} i={i}>
+        <div className="flex items-center gap-3">
+          <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl text-white" style={icone3D(c)}>
+            <span className="text-xl font-black leading-none">{d.getDate()}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide">{d.toLocaleDateString('fr-FR', { month: 'short' })}</span>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-extrabold text-gray-900">{r.especeNom} : {r.produit}</p>
+            <p className="text-xs text-gray-500">{sansEmoji(labelOf(r.type))}{r.animauxIds ? ` · N° ${r.animauxIds}` : ''}</p>
+            {r.rdvNote && <p className="mt-0.5 truncate text-xs italic text-gray-600">« {r.rdvNote} »</p>}
+            <p className="mt-0.5 text-[11px] text-gray-400">Programmé par {r.creeParNom || '—'}</p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            {retard && <Badge tone="danger">En retard</Badge>}
+            {!lectureSeule && <Button size="sm" variant="outline" onClick={() => marquerFait(r)}><CheckCircle2 size={15} /> Fait</Button>}
+          </div>
+        </div>
+      </CarteSante>
+    )
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">
-        <Bell size={16} /> Un rappel automatique est envoyé à l'auteur d'un rendez-vous dès qu'il arrive à échéance (la veille / le jour même).
+      <div className="ed-entree flex items-center gap-2.5 rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 to-white/70 px-4 py-3 text-sm text-sky-900 backdrop-blur-md">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#0284c7')}><Bell size={16} /></span>
+        Un rappel automatique est envoyé à l'auteur d'un rendez-vous dès qu'il arrive à échéance (la veille ou le jour même).
       </div>
 
       {enRetard.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wide text-red-500">⏰ En retard ({enRetard.length})</p>
-          {enRetard.map((r) => <Item key={r.id} r={r} retard />)}
+          <p className="text-xs font-extrabold uppercase tracking-wide text-red-600">En retard ({enRetard.length})</p>
+          {enRetard.map((r, i) => <Item key={r.id} r={r} i={i} retard />)}
         </div>
       )}
 
       <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">À venir ({aVenir.length})</p>
-        {aVenir.length === 0 ? <Card><p className="py-6 text-center text-sm text-gray-400">Aucun rendez-vous à venir.</p></Card>
-          : aVenir.map((r) => <Item key={r.id} r={r} />)}
+        <p className="text-xs font-extrabold uppercase tracking-wide text-gray-500">À venir ({aVenir.length})</p>
+        {aVenir.length === 0 ? <VideSante icone={CalendarCheck} texte="Aucun rendez-vous à venir." />
+          : aVenir.map((r, i) => <Item key={r.id} r={r} i={i} />)}
       </div>
 
       {faits.length > 0 && (
-        <details className="rounded-lg bg-white p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-gray-400">Clôturés ({faits.length})</summary>
+        <details className="rounded-2xl border border-white/80 bg-white/60 p-3 backdrop-blur-md">
+          <summary className="cursor-pointer text-xs font-extrabold uppercase tracking-wide text-gray-500">Clôturés ({faits.length})</summary>
           <div className="mt-2 space-y-1">
             {faits.map((r) => (
-              <p key={r.id} className="text-sm text-gray-500">✔️ {formatDateShort(r.prochainRdv)} : {r.especeNom} ({r.produit})</p>
+              <p key={r.id} className="flex items-center gap-1.5 text-sm text-gray-500"><CalendarCheck size={14} className="text-green-600" /> {formatDateShort(r.prochainRdv)} : {r.especeNom} ({r.produit})</p>
             ))}
           </div>
         </details>
@@ -488,13 +599,6 @@ function Bilan({ fiches, stock }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title="Interventions" value={stats.totalFiches} accent="#0284c7" />
-        <StatCard title="Animaux traités (cumul)" value={stats.totalAnimaux} accent="#16a34a" />
-        <StatCard title="RDV à venir" value={stats.rdvAVenir} accent="#7c3aed" />
-        <StatCard title="RDV en retard" value={stats.rdvRetard} accent="#dc2626" />
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Interventions par type">
           {stats.totalFiches === 0 ? <p className="py-4 text-center text-sm text-gray-400">Aucune intervention.</p> : (
@@ -504,8 +608,8 @@ function Bilan({ fiches, stock }) {
                 const pct = stats.totalFiches ? Math.round((n / stats.totalFiches) * 100) : 0
                 return (
                   <div key={t.value}>
-                    <div className="flex justify-between text-sm"><span>{t.label}</span><span className="font-semibold">{n}</span></div>
-                    <div className="h-2 rounded-full bg-gray-100"><div className="h-2 rounded-full bg-primary" style={{ width: `${pct}%` }} /></div>
+                    <div className="mb-1 flex items-center justify-between text-sm"><span className="inline-flex items-center gap-1.5 font-semibold text-gray-700">{(() => { const Ic = styleType(t.value).icone; return <Ic size={14} style={{ color: styleType(t.value).c }} aria-hidden="true" /> })()}{sansEmoji(t.label)}</span><span className="font-extrabold tabular-nums">{n}</span></div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-black/5"><div className="agro-barre h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${styleType(t.value).c}, ${styleType(t.value).c}aa)` }} /></div>
                   </div>
                 )
               })}

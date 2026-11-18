@@ -442,20 +442,25 @@ export default function Sidebar({ open, onClose }) {
           )}
         </nav>
 
-        {/* Footer utilisateur */}
-        <div className="border-t border-white/15 p-3">
-          <div className="mb-2 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 font-bold">
+        {/* Pied de la barre : carte de verre dépoli (utilisateur + déconnexion), même matière que l'en-tête marque */}
+        <div className="relative mx-3 mb-3 mt-2 overflow-hidden rounded-2xl border border-white/25 p-3 backdrop-blur-xl backdrop-saturate-150"
+          style={{
+            background: 'linear-gradient(160deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 100%)',
+            boxShadow: '0 16px 28px -14px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -10px 18px -14px rgba(0,0,0,0.25)'
+          }}>
+          <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent" />
+          <div className="relative mb-2.5 flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/50 bg-white/25 text-base font-extrabold shadow-[inset_0_2px_2px_rgba(255,255,255,0.55),inset_0_-3px_5px_rgba(0,0,0,0.2),0_6px_12px_-6px_rgba(0,0,0,0.5)]">
               {(user?.nom || '').trim().charAt(0).toUpperCase() || '?'}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{user?.nom}</p>
-              <p className="truncate text-xs text-white/70">{roleLabel(role)}</p>
+              <p className="truncate text-sm font-bold leading-tight">{user?.nom}</p>
+              <p className="mt-0.5 inline-block max-w-full truncate rounded-full border border-white/30 bg-white/15 px-2 py-px text-[11px] font-semibold text-white/90">{roleLabel(role)}</p>
             </div>
           </div>
           <button
             onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-2 text-sm font-semibold shadow-[0_10px_20px_-10px_rgba(0,0,0,0.4)] transition-all hover:bg-white/25"
+            className="relative flex w-full items-center justify-center gap-2 rounded-xl border border-white/35 bg-white/20 px-3 py-2 text-sm font-bold shadow-[0_10px_18px_-10px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/30 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
             <LogOut size={16} /> Déconnexion
           </button>

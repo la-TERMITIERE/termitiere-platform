@@ -47,6 +47,8 @@ export const estActif = (s) => STATUTS_ACTIFS.includes(s)
 // de sortie, `enregistreParUid` (uid) côté E-DÉPENSES.
 export function estAuteurDemande(demande, user) {
   if (!demande || !user) return false
+  // Le rôle `info` est universel : il peut tout valider, y compris ses propres demandes (décision du 2026-11-18).
+  if (user.role === 'info') return false
   return (
     (!!demande.demandeur && demande.demandeur === user.login) ||
     (!!demande.demandeurUid && demande.demandeurUid === user.uid) ||

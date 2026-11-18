@@ -50,7 +50,7 @@ export default function AgroModule() {
   useEffect(() => { init() }, [init])
 
   return (
-    <>
+    <div className="agro-boutons">
     <AutoCarryForward />
     <Routes>
       <Route index element={<Dashboard />} />
@@ -68,6 +68,6 @@ export default function AgroModule() {
       <Route path="journal" element={peutVoirVoletsAdmin(role) ? <Journal /> : <AccesRefuseAdmin />} />
       <Route path="params" element={peutVoirVoletsAdmin(role) ? <Params /> : <AccesRefuseAdmin />} />
     </Routes>
-    </>
+    </div>
   )
 }

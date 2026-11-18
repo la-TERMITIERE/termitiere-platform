@@ -14,11 +14,11 @@ import { historiqueMouvements } from './logic'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateShort } from '../../utils/formatters'
 
-export default function Historique() {
+export default function Historique({ periode }) {
   const { data: inventaires } = useCollection('agro_inventaires')
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
-  const { start, end, node: periodNode } = usePeriodSelect('mois')
+  const { start, end } = periode
 
   const [sens, setSens] = useState('tous')   // tous | entree | sortie
   const [type, setType] = useState('')        // type de mouvement
@@ -96,7 +96,6 @@ export default function Historique() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        {periodNode}
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Sens</label>
           <Select className="w-auto" value={sens} onChange={(e) => setSens(e.target.value)}

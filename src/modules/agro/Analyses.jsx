@@ -3,11 +3,13 @@ import { useMemo, useState } from 'react'
 import { FileSpreadsheet, LayoutDashboard, Table2 } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import Table from '../../shared/ui/Table'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAgroStore } from './store/agroStore'
+import BandeAgro from './BandeAgro'
+import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
 import { usePeriodSelect } from '../../shared/ui/PeriodSelect'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { toast } from '../../core/notifications'
@@ -78,33 +80,13 @@ export default function Analyses() {
 
   return (
     <div className="space-y-4">
-      {/* Barre de pilotage */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 p-3 text-white shadow-lg">
-        <div className="flex gap-1 rounded-lg bg-white/10 p-1">
-          <button
-            onClick={() => setVue('pilotage')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold ${vue === 'pilotage' ? 'bg-white text-slate-900' : 'text-white/80 hover:bg-white/10'}`}
-          >
-            <LayoutDashboard size={15} /> Pilotage décisionnel
-          </button>
-          <button
-            onClick={() => setVue('tableaux')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold ${vue === 'tableaux' ? 'bg-white text-slate-900' : 'text-white/80 hover:bg-white/10'}`}
-          >
-            <Table2 size={15} /> Tableaux détaillés
-          </button>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="[&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:text-white [&_.input-base]:font-semibold [&_label]:text-white [&_label]:font-bold">
-            {periodNode}
-          </div>
-          <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => setExportOpen(true)}>
-            <FileSpreadsheet size={16} /> Exporter Excel
-          </Button>
-        </div>
-      </div>
+      <BandeAgro icone={LayoutDashboard} titre="Pilotage et analyses" sous="Indicateurs décisionnels et tableaux détaillés">
+        <OngletsBande valeur={vue} onChange={setVue} options={[{ id: 'pilotage', label: 'Pilotage décisionnel' }, { id: 'tableaux', label: 'Tableaux détaillés' }]} />
+        <div className="[&_.input-base]:rounded-xl [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:font-semibold [&_.input-base]:text-white [&_label]:font-bold [&_label]:text-white">{periodNode}</div>
+        <BoutonBande icone={FileSpreadsheet} plein={false} onClick={() => setExportOpen(true)}>Exporter Excel</BoutonBande>
+      </BandeAgro>
 
-      <Modal
+      <ModalAgro
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         title="Exporter un rapport Excel"
@@ -126,7 +108,7 @@ export default function Analyses() {
           <option value="semaine">Hebdomadaire</option>
           <option value="mois">Mensuelle</option>
         </Select>
-      </Modal>
+      </ModalAgro>
 
       {vue === 'pilotage' && (
         <DecisionBI

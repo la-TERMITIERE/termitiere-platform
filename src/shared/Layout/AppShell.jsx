@@ -11,6 +11,7 @@ import ActiverAlertes from './ActiverAlertes'
 import AutoApproveDemandes from '../AutoApproveDemandes'
 import AutoApproveSortiesFacture from '../AutoApproveSortiesFacture'
 import AutoApproveWorkflow from '../AutoApproveWorkflow'
+import RelanceAutorisations from '../../modules/evenementiel/RelanceAutorisations'
 import RelanceFacturesBrouillon from '../../modules/logistique/RelanceFacturesBrouillon'
 import RelancePrestationsBrouillon from '../../modules/logistique/RelancePrestationsBrouillon'
 import RelanceRetoursEnRetard from '../../modules/logistique/RelanceRetoursEnRetard'
@@ -68,7 +69,8 @@ export default function AppShell() {
       {hasModule('evenementiel') && role === 'agent' && <RelanceVentesAFacturer />}
       {hasModule('evenementiel') && <RelanceVentesBrouillon />}
       {hasModule('garderie') && <SurveillanceFinSejour />}
-      {hasModule('evenementiel') && <AutoApproveWorkflow collection="evenementiel_demandes" module="evenementiel" />}
+      {/* Briqueterie : plus de certification automatique. Les validateurs sont alertés et relancés jusqu'à leur décision. */}
+      {hasModule('evenementiel') && <RelanceAutorisations />}
       {hasModule('projet') && <ProjetAlerteWatcher />}
       {hasModule('projet') && <ProjetPurgeWatcher />}
       {hasModule('projet') && <ProjetAutoDemarrage />}

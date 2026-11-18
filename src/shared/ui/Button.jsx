@@ -24,6 +24,19 @@ const SIZES = {
   lg: 'rounded-xl px-5 py-2.5 text-base'
 }
 
+// Onde au clic : un disque qui part du point de contact. Seul MAXI-AGRO l'affiche (.agro-boutons .bv-onde, cf. index.css).
+function onde(e) {
+  const el = e.currentTarget
+  if (el.disabled) return
+  const r = el.getBoundingClientRect()
+  const d = Math.max(r.width, r.height) * 2.2
+  const s = document.createElement('span')
+  s.className = 'bv-onde'
+  s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`
+  el.appendChild(s)
+  setTimeout(() => s.remove(), 650)
+}
+
 export default function Button({
   children,
   variant = 'primary',
@@ -32,12 +45,15 @@ export default function Button({
   disabled = false,
   className = '',
   type = 'button',
+  onPointerDown,
   ...props
 }) {
   const plein = PLEINS.includes(variant) || !VARIANTS[variant]
   return (
     <button
       type={type}
+      data-bouton={variant}
+      onPointerDown={(e) => { onde(e); onPointerDown?.(e) }}
       disabled={disabled || loading}
       className={`group relative inline-flex items-center justify-center gap-2 overflow-hidden font-bold tracking-wide
         transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97]

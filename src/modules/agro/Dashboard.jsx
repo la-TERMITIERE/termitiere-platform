@@ -7,19 +7,20 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle, AlarmClock } from 'lucide-react'
+import { TrendingUp, TrendingDown, Boxes, HeartPulse, Skull, Stethoscope, Sprout, ShoppingCart, Wallet, Egg, HeartCrack, CheckCircle2, AlertTriangle, AlarmClock, CalendarDays } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import ObjectifKpi, { libelleObjectif } from '../comptabilite/ObjectifKpi'
 import ListeFacturesVerre from '../comptabilite/ListeFacturesVerre'
 import { useObjectifPole } from '../comptabilite/quotas'
 import FelicitationObjectif from '../comptabilite/FelicitationObjectif'
-import Modal from '../../shared/ui/Modal'
+import ModalAgro from './ModalAgro'
 import LoadingSpinner from '../../shared/ui/LoadingSpinner'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { canViewFinance } from '../../core/roles'
 import { useAgroStore } from './store/agroStore'
+import AnneauRepartition from './AnneauRepartition'
 import { CAT_ANIMAUX, catColor, serieColor, factureStatut } from './data'
 import { agregerAchatsVentes, previsionSerie, ventesFactureesParEspece } from './logic'
 import { formatNumber, formatMoney, todayStr, addDays, formatDateShort, formatDateTime, nowHM } from '../../utils/formatters'
@@ -357,7 +358,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(46,170,63,0.35),0_8px_20px_-8px_rgba(46,170,63,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
+      <div className="relative flex flex-wrap items-center gap-x-4 gap-y-3 overflow-hidden rounded-3xl p-4 text-white shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45),0_28px_56px_-18px_rgba(46,170,63,0.35),0_8px_20px_-8px_rgba(46,170,63,0.2),inset_0_1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-xl backdrop-saturate-150"
         style={{ background: 'linear-gradient(135deg, rgba(46,170,63,0.85) 0%, rgba(26,110,39,0.8) 100%)' }}>
         <div style={{ position: 'relative', flexShrink: 0, width: 64, height: 64 }}>
           <img src="/maxi-agro-logo.png" alt="Maxi Agro"
@@ -371,6 +372,27 @@ export default function Dashboard() {
         <div>
           <h2 className="text-lg font-extrabold drop-shadow">MAXI AGRO</h2>
           <p className="text-sm text-green-50/90">Élevage · Stock · Facturation · Analyses</p>
+        </div>
+        {/* Période : dans la bande, en verre dépoli. « Plage personnalisée » ajoute les deux dates. */}
+        <div className="ml-auto flex flex-col items-end gap-1.5 max-sm:w-full max-sm:items-stretch">
+          <div className="flex flex-wrap items-center gap-2 max-sm:justify-between">
+            <label htmlFor="agro-periode" className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-white/85">
+              <CalendarDays size={13} aria-hidden="true" />Période
+            </label>
+            <select id="agro-periode" value={preset} onChange={(e) => setPreset(e.target.value)}
+              className="rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 [&_option]:text-gray-900">
+              {PRESETS.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
+            </select>
+          </div>
+          {preset === 'custom' && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/90">
+              <label className="flex items-center gap-1.5">Du <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
+                className="rounded-xl border border-white/40 bg-white/20 px-2 py-1.5 text-sm text-white backdrop-blur-md [color-scheme:dark] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80" /></label>
+              <label className="flex items-center gap-1.5">Au <input type="date" value={to} min={from} max={todayStr()} onChange={(e) => setTo(e.target.value)}
+                className="rounded-xl border border-white/40 bg-white/20 px-2 py-1.5 text-sm text-white backdrop-blur-md [color-scheme:dark] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80" /></label>
+            </div>
+          )}
+          <span className="text-[11px] font-medium text-white/80">{formatDateShort(start)} → {formatDateShort(end)} · {invPeriode.length} saisie(s)</span>
         </div>
       </div>
 
@@ -410,23 +432,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Période */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Période</label>
-          <select className="input-base w-auto font-semibold" value={preset} onChange={(e) => setPreset(e.target.value)}>
-            {PRESETS.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
-          </select>
-        </div>
-        {preset === 'custom' && (
-          <div className="flex items-end gap-2">
-            <div><label className="mb-1 block text-xs font-semibold text-gray-600">Du</label><input type="date" className="input-base w-auto" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div><label className="mb-1 block text-xs font-semibold text-gray-600">Au</label><input type="date" className="input-base w-auto" value={to} min={from} max={todayStr()} onChange={(e) => setTo(e.target.value)} /></div>
-          </div>
-        )}
-        <span className="ml-auto text-xs text-gray-400">{formatDateShort(start)} → {formatDateShort(end)} · {invPeriode.length} saisie(s)</span>
-      </div>
-
       {/* Onglets par espèce / catégorie */}
       <div className="flex flex-wrap gap-1.5">
         <ScopeTab active={scope === TOUTES} color="#374151" onClick={() => setScope(TOUTES)}>Toutes</ScopeTab>
@@ -440,7 +445,7 @@ export default function Dashboard() {
       {/* Indicateurs du périmètre */}
       <div>
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Indicateurs : {scopeLabel}</p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-6">
           <Indic title="Effectif en stock" value={formatNumber(ind.effectif)} icon={Boxes} color="#2563eb" sub={`${especesScope.length} espèce(s)`} />
           <Indic title="Naissances" value={formatNumber(ind.naiss)} icon={Egg} color="#16a34a" sub={`${naissancesDetail.length} enregistrement(s)`} delta={ind.naiss - indPrec.naiss} onClick={() => setModalKey('naissances')} />
           <Indic title="Décès" value={formatNumber(ind.dec)} icon={HeartCrack} color="#dc2626" sub={`${decesDetail.length} enregistrement(s)`} delta={ind.dec - indPrec.dec} invert onClick={() => setModalKey('deces')} />
@@ -462,7 +467,7 @@ export default function Dashboard() {
 
       {/* Graphiques */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <button onClick={() => setModalKey('morbidite')} className="card lg:col-span-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <button onClick={() => setModalKey('morbidite')} className="card bv-clic lg:col-span-2 p-4 text-left hover:shadow-md">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité : {scopeLabel}</p>
@@ -478,11 +483,9 @@ export default function Dashboard() {
           </div>
         </button>
         <Card title={repartition.parEspece ? `Répartition par espèce : ${scopeLabel}` : 'Répartition par catégorie'}>
-          <div className="h-72">
-            {repartition.rows.some((r) => r.total > 0)
-              ? <Doughnut data={repartition.data} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} />
-              : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif.</p>}
-          </div>
+          {repartition.rows.some((r) => r.total > 0)
+            ? <AnneauRepartition rows={repartition.rows} />
+            : <p className="py-10 text-center text-sm text-gray-400">Aucun effectif.</p>}
         </Card>
       </div>
 
@@ -608,46 +611,46 @@ export default function Dashboard() {
       </Card>
 
       {/* ─────── Modales détaillées (scope courant) ─────── */}
-      <Modal open={modalKey === 'naissances'} onClose={() => setModalKey(null)} size="lg" title={`Naissances : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'naissances'} onClose={() => setModalKey(null)} size="lg" title={`Naissances : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
           <strong>{formatNumber(ind.naiss)}</strong> naissance(s) sur la période : période préc. : {formatNumber(indPrec.naiss)}
         </p>
         <p className="my-2 text-xs italic text-gray-400">Détail des naissances saisies, de la plus récente à la plus ancienne.</p>
         <DetailTable rows={naissancesDetail} cols={['Date', 'Espèce', 'Nés', 'Agent']} render={(n) => [formatDateShort(n.date), n.espece, n.qte, n.agent]} empty="Aucune naissance sur la période." />
-      </Modal>
+      </ModalAgro>
 
-      <Modal open={modalKey === 'deces'} onClose={() => setModalKey(null)} size="lg" title={`Décès : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'deces'} onClose={() => setModalKey(null)} size="lg" title={`Décès : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
           <strong>{formatNumber(ind.dec)}</strong> décès sur la période : période préc. : {formatNumber(indPrec.dec)}
         </p>
         <p className="my-2 text-xs italic text-gray-400">Détail des décès saisis, avec leur motif quand il a été renseigné.</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
-      </Modal>
+      </ModalAgro>
 
-      <Modal open={modalKey === 'mortalite'} onClose={() => setModalKey(null)} size="lg" title={`Mortalité : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'mortalite'} onClose={() => setModalKey(null)} size="lg" title={`Mortalité : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Taux : <strong>{ind.mortalite.toFixed(1)} %</strong> : {ind.dec} décès / {formatNumber(ind.base)} têtes (effectif initial)</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Effectif initial) × 100</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
-      </Modal>
+      </ModalAgro>
 
-      <Modal open={modalKey === 'letalite'} onClose={() => setModalKey(null)} size="lg" title={`Létalité : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'letalite'} onClose={() => setModalKey(null)} size="lg" title={`Létalité : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900">Taux : <strong>{ind.letalite.toFixed(1)} %</strong> : {ind.dec} décès / {ind.casMaladie} cas de maladie (malades + décès)</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : (Décès / Cas de maladie) × 100 : part des animaux tombés malades qui n'ont pas survécu (≠ mortalité, rapportée à tout l'effectif).</p>
         <DetailTable rows={decesDetail} cols={['Date', 'Espèce', 'Qté', 'Motif', 'Agent']} render={(d) => [formatDateShort(d.date), d.espece, d.qte, d.motif, d.agent]} empty="Aucun décès sur la période." />
-      </Modal>
+      </ModalAgro>
 
-      <Modal open={modalKey === 'croissance'} onClose={() => setModalKey(null)} size="lg" title={`Croissance & naissances : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'croissance'} onClose={() => setModalKey(null)} size="lg" title={`Croissance & naissances : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Taux : <strong>{ind.croissance.toFixed(1)} %</strong> : {ind.naiss} naissance(s)</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : ((Naissances − Décès) / Effectif initial) × 100</p>
         <DetailTable rows={naissancesDetail} cols={['Date', 'Espèce', 'Nés', 'Agent']} render={(n) => [formatDateShort(n.date), n.espece, n.qte, n.agent]} empty="Aucune naissance sur la période." />
-      </Modal>
+      </ModalAgro>
 
-      <Modal open={modalKey === 'morbidite'} onClose={() => setModalKey(null)} size="lg" title={`Morbidité : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'morbidite'} onClose={() => setModalKey(null)} size="lg" title={`Morbidité : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Taux : <strong>{ind.morbidite.toFixed(1)} %</strong> : {ind.malades} malade(s) / {formatNumber(ind.effectif)} têtes</p>
         <p className="my-2 text-xs italic text-gray-400">Formule : (Malades / Effectif) × 100 : prévision : tendance + moyenne mobile (7 jours)</p>
@@ -656,23 +659,23 @@ export default function Dashboard() {
             {morbiditePrevision.map((v, i) => <span key={i} className="rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">J+{i + 1} : {v.toFixed(1)} %</span>)}
           </div>
         )}
-      </Modal>
+      </ModalAgro>
 
-      <Modal open={modalKey === 'ventes'} onClose={() => setModalKey(null)} size="lg" title={`Ventes (volume) : ${scopeLabel}`}
+      <ModalAgro hero={false} open={modalKey === 'ventes'} onClose={() => setModalKey(null)} size="lg" title={`Ventes (volume) : ${scopeLabel}`}
         panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
         <p className="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">{formatNumber(ventes.courant)} unité(s) vendue(s) : période préc. : {formatNumber(ventes.precedent)}</p>
         <DetailTable rows={ventes.liste} cols={['Date', 'Article', 'Catégorie', 'Qté', 'Source']} render={(v) => [formatDateShort(v.date), v.article, v.cat, v.qte, v.source === 'demande' ? 'Demande/Facture' : 'Saisie']} empty="Aucune vente sur la période." />
-      </Modal>
+      </ModalAgro>
 
       {showFinance && (
-        <Modal open={modalKey === 'ca'} onClose={() => setModalKey(null)} size="lg" title={`Chiffre d'affaires : ${scopeLabel}`}
+        <ModalAgro hero={false} open={modalKey === 'ca'} onClose={() => setModalKey(null)} size="lg" title={`Chiffre d'affaires : ${scopeLabel}`}
           panelClassName="bg-gradient-to-br from-green-200/85 via-green-100/75 to-emerald-300/75 backdrop-blur-2xl backdrop-saturate-200">
           <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{formatMoney(ca.courant)} : période préc. : {formatMoney(ca.precedent)}</p>
           <p className="my-2 text-xs italic text-gray-400">CA = factures <strong>certifiées</strong> uniquement{scope !== TOUTES ? ' (montant des lignes de cette catégorie)' : ''}.</p>
           <ListeFacturesVerre couleur="#2EAA3F" poleId="agro" avecObjectif={preset === 'mois'} vide="Aucune facture certifiée sur la période."
             items={ca.liste.map((f) => ({ id: f.id, date: f.date, titre: f.client?.nom || '—', sous: f.numero ? `Facture ${f.numero}` : '',
               montant: scope === TOUTES ? (f.totalTTC || 0) : (f.lignes || []).filter((l) => ligneCat(l) === scope).reduce((t, l) => t + (l.total || 0), 0) }))} />
-        </Modal>
+        </ModalAgro>
       )}
     </div>
   )
@@ -680,9 +683,9 @@ export default function Dashboard() {
 
 function ScopeTab({ active, color, onClick, children }) {
   return (
-    <button onClick={onClick}
-      className="rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors"
-      style={active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' }}>
+    <button onClick={onClick} type="button" aria-pressed={!!active} data-actif={!!active}
+      className="puce-verre rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide"
+      style={{ '--puce': color }}>
       {children}
     </button>
   )

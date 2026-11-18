@@ -1,8 +1,9 @@
 // Auto-certification des demandes d'autorisation (workflow 2 niveaux partagé
 // en_attente → approuvé N1 → certifié) restées sans décision plus de 10 minutes.
-// Utilisé pour Logistique (autorisations de sortie matériel) et Briqueterie (ventes) :
-// à la certification, la facture passe « approuvée » (logistique) / la vente passe
-// « autorisée » (briqueterie). Le stock, lui, est calculé (aucune écriture ici).
+// Utilisé pour Logistique (autorisations de sortie matériel). La Briqueterie n'en fait PLUS usage :
+// ses autorisations attendent une décision humaine (cf. evenementiel/RelanceAutorisations). Le code
+// « evenementiel » ci-dessous reste disponible mais n'est plus monté. À la certification, la facture
+// passe « approuvée » (logistique). Le stock, lui, est calculé (aucune écriture ici).
 //
 // Composant « headless » (aucun rendu), monté dans AppShell : la vérification tourne
 // tant que l'application est ouverte, même si aucun administrateur n'est sur la page.

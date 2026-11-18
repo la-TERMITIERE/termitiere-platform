@@ -6,7 +6,7 @@
 // (ci-dessous, inchangé) ; « Historique » = historique des mouvements de stock
 // (entrées/sorties/décès), importé tel quel depuis ./Historique.jsx.
 import { Fragment, useMemo, useState } from 'react'
-import { FileSpreadsheet, ChevronRight, ChevronDown } from 'lucide-react'
+import { FileSpreadsheet, ChevronRight, ChevronDown, BookOpen } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Badge from '../../shared/ui/Badge'
@@ -16,6 +16,8 @@ import { useCollection } from '../../hooks/useFirestore'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { formatDateTime, formatDateShort, extraireMontantFCFA } from '../../utils/formatters'
 import Historique from './Historique'
+import BandeAgro from './BandeAgro'
+import { OngletsBande } from '../../shared/ui/BandeauVolet'
 
 // Libellé + icône par type d'événement.
 const EVENTS = {
@@ -57,11 +59,11 @@ const moduleLabel = (m) => MODULES_LBL[m] || m || '—'
 const tsOf = (e) => (typeof e.timestamp === 'number' ? e.timestamp : (e.createdAt || 0))
 const dayOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '')
 
-function OngletJournal({ evenements }) {
+function OngletJournal({ evenements, periode }) {
   const [type, setType] = useState('')      // filtre type d'événement
   const [who, setWho] = useState('')         // filtre utilisateur
   const [openRow, setOpenRow] = useState(null) // ligne dépliée (détails)
-  const { start, end, node: periodNode } = usePeriodSelect('mois')
+  const { start, end } = periode
 
   // Types présents dans les données (pour alimenter le filtre).
   const typesPresents = useMemo(
@@ -118,7 +120,6 @@ function OngletJournal({ evenements }) {
     <div className="space-y-4">
       {/* Filtres : période + type d'événement + utilisateur */}
       <div className="flex flex-wrap items-end gap-3">
-        {periodNode}
         <div>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Type d'événement</label>
           <Select className="w-auto" value={type} onChange={(e) => setType(e.target.value)}>
@@ -225,6 +226,7 @@ function metaToText(meta) {
 export default function Journal() {
   const { data: events } = useCollection('audit_global')
   const [onglet, setOnglet] = useState('journal')
+  const periode = usePeriodSelect('mois')
 
   // On filtre : uniquement les événements du module AGRO (pas les autres modules).
   // On ignore aussi les connexions (non pertinentes pour le journal métier).
@@ -235,21 +237,14 @@ export default function Journal() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
-        {[
-          { id: 'journal',     label: '📰 Journal' },
-          { id: 'historique',  label: '🕐 Historique' }
-        ].map((o) => (
-          <button key={o.id} onClick={() => setOnglet(o.id)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${onglet === o.id ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <BandeAgro icone={BookOpen} titre="Journal d'activité" sous="Tout ce qui s'est passé dans MAXI AGRO, et l'historique des mouvements de stock">
+        <OngletsBande valeur={onglet} onChange={setOnglet} options={[{ id: 'journal', label: 'Journal' }, { id: 'historique', label: 'Historique' }]} />
+        <div className="[&_.input-base]:rounded-xl [&_.input-base]:border-white/40 [&_.input-base]:bg-white/20 [&_.input-base]:font-semibold [&_.input-base]:text-white [&_label]:font-bold [&_label]:text-white">{periode.node}</div>
+      </BandeAgro>
 
       {onglet === 'journal'
-        ? <OngletJournal evenements={evenements} />
-        : <Historique />
+        ? <OngletJournal evenements={evenements} periode={periode} />
+        : <Historique periode={periode} />
       }
     </div>
   )

@@ -21,7 +21,7 @@ import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance, canExportExcel, isFullAccessRole } from '../../core/roles'
+import { logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance, canExportExcel, isFullAccessRole, agirCommeAgent } from '../../core/roles'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
@@ -46,7 +46,7 @@ const nomValideur = (f) => {
 export default function Factures() {
   const { user, role } = useAuth()
   const site = useSite()
-  const peutFacturer = role === 'agent'
+  const peutFacturer = agirCommeAgent(role)
   // Modification (corriger un doublon, une date erronée…) : l'agent (auteur), la secrétaire ET le
   // reste du personnel d'administration peuvent agir. Suppression : réservée à
   // l'administration (admin/PAU/GE/direction/Info) — jamais à l'agent seul, pour
