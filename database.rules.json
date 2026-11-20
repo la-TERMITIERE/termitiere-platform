@@ -70,6 +70,9 @@
           "gerePartenaires": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
+          "accesBilanGlobal": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
+          },
           "agroCategories": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
@@ -154,6 +157,9 @@
       "rh_conges":         { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },
       "rh_bulletins":      { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },
       "rh_autorisations_salaire": { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|assistant_pau|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|assistant_pau|superviseur)$/)" },
+      "rh_primes": { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },
+      "rh_types_primes": { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },
+      "rh_dotations": { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },
       "rh_avances": { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|assistant_pau|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|assistant_pau|superviseur)$/)" },
       "rh_recrutements":   { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },
       "rh_candidatures":   { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info|superviseur)$/)" },

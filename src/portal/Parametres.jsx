@@ -57,7 +57,7 @@ function Interrupteur({ actif, onChange, label, aide }) {
 
 export default function Parametres() {
   const navigate = useNavigate()
-  const { user, role, logout } = useAuth()
+  const { user, roleReel: role, logout } = useAuth()
   const { mode, setMode } = useTheme()
   const { taille, reglerTaille, sansAnimations, reglerAnimations } = usePreferences()
   const maj = useMajStore()

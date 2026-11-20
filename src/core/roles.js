@@ -25,6 +25,8 @@ export const ROLES = [
   { value: 'gerante_garderie', label: 'Gérante Garderie',  desc: 'Gestion complète de la garderie (sauf paramètres et journal)' },
   { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie : présences, cantine, incidents' },
   { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif : E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
+  { value: 'assistant_comptable', label: 'Assistant(e) comptable', desc: 'Mêmes droits que la Secrétaire' },
+  { value: 'assistant_ge',     label: 'Assistant(e) GE',   desc: 'Mêmes droits que la Secrétaire, plus le tableau de bord global avec ses exports' },
   { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro : accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },
   { value: 'partenaire',       label: 'Partenaire',        desc: 'Externe : lecture seule sur SES modules uniquement (sectorisé) ; voit le pilotage, ne modifie rien' },
 ]
@@ -249,6 +251,25 @@ export const garderieCanEdit   = (r) => !['tata', 'superviseur', 'partenaire'].i
 export const garderieCanManage = (r) => [...FULL_ACCESS_ROLES, 'gerante_garderie'].includes(r)
 
 const LEGACY_LABEL = { admin: 'Administrateur', controleur: 'Contrôleur' }
+
+// Rôles qui ont EXACTEMENT les droits d'un autre rôle : l'Assistant(e) GE est une secrétaire (tous les contrôles du type `role === 'secretaire'`
+// s'appliquent à elle). La session garde le rôle réel (`roleReel`) pour l'affichage et pour ce qui la distingue (le bilan global).
+export const ROLES_ASSIMILES = { assistant_ge: 'secretaire', assistant_comptable: 'secretaire' }
+export const roleEffectif = (r) => ROLES_ASSIMILES[r] || r
+
+// Tableau de bord global (Bilan global) : trois niveaux.
+//  - 'finance' : PAU, GE, DF, Info et Assistant(e) GE voient tout : l'argent, les secteurs et les exports Excel et PDF ;
+//  - 'admin'   : le reste de l'administration voit l'activité et les alertes, jamais l'argent ;
+//  - 'jour'    : un autre compte à qui Info a donné l'accès (`accesBilanGlobal`) ne voit que le récap du jour des secteurs, sans aucun montant ;
+//  - null      : pas d'accès (le cas par défaut des employés).
+export const ROLES_BILAN_FINANCE = ['pau', 'ge', 'df', 'info', 'assistant_ge']
+export function niveauBilanGlobal(roleReel, user) {
+  if (ROLES_BILAN_FINANCE.includes(roleReel)) return 'finance'
+  if (FULL_ACCESS_ROLES.includes(roleReel)) return 'admin'
+  return user?.accesBilanGlobal === true ? 'jour' : null
+}
+// Accès par défaut (sans réglage individuel) : administration et Assistant(e) GE.
+export const bilanParDefaut = (roleReel) => ROLES_BILAN_FINANCE.includes(roleReel) || FULL_ACCESS_ROLES.includes(roleReel)
 
 export const roleLabel = (r) =>
   ROLES.find((x) => x.value === r)?.label || LEGACY_LABEL[r] || r || '—'

@@ -14,7 +14,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, UserCircle, Settings, Grid2x2 } from 'lucide-react'
 import { getModule, MODULE_NAV } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
-import { canManagePartenaires, depenseRoleEffectif, voletRetire } from '../../core/roles'
+import { canManagePartenaires, depenseRoleEffectif, voletRetire, niveauBilanGlobal } from '../../core/roles'
 import { teinterHex } from '../../utils/color'
 
 const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
@@ -49,7 +49,7 @@ const GRAIN_VERRE = 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2
 
 export default function MobileBottomNav({ onOpenMenu }) {
   const location = useLocation()
-  const { user, role } = useAuth()
+  const { user, role, roleReel } = useAuth()
   const itemRefs = useRef(new Map())
   const [pill, setPill] = useState({ left: 0, width: 0, visible: false })
   const scrollRef = useRef(null)
@@ -78,7 +78,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
   if (!activeModule) {
     items = [
       { label: 'Accueil', to: '/', icon: Home, end: true },
-      { label: 'Bilan global', to: '/dashboard', icon: LayoutDashboard },
+      ...(niveauBilanGlobal(roleReel, user) ? [{ label: 'Bilan global', to: '/dashboard', icon: LayoutDashboard }] : []),
       { label: 'Mon compte', to: '/mon-compte', icon: UserCircle },
       { label: 'Paramètres', to: '/parametres', icon: Settings }
     ]

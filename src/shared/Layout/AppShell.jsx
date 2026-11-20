@@ -12,6 +12,7 @@ import AutoApproveDemandes from '../AutoApproveDemandes'
 import AutoApproveSortiesFacture from '../AutoApproveSortiesFacture'
 import AutoApproveWorkflow from '../AutoApproveWorkflow'
 import RelanceAutorisations from '../../modules/evenementiel/RelanceAutorisations'
+import RelanceEcheancesRh from '../../modules/rh/echeances'
 import RelanceFacturesBrouillon from '../../modules/logistique/RelanceFacturesBrouillon'
 import RelancePrestationsBrouillon from '../../modules/logistique/RelancePrestationsBrouillon'
 import RelanceRetoursEnRetard from '../../modules/logistique/RelanceRetoursEnRetard'
@@ -71,6 +72,8 @@ export default function AppShell() {
       {hasModule('garderie') && <SurveillanceFinSejour />}
       {/* Briqueterie : plus de certification automatique. Les validateurs sont alertés et relancés jusqu'à leur décision. */}
       {hasModule('evenementiel') && <RelanceAutorisations />}
+      {/* RH : contrats à échéance, fins d'essai, évaluations et formations en retard, notifiés à l'administration RH (une seule fois par échéance). */}
+      {hasModule('rh') && <RelanceEcheancesRh />}
       {hasModule('projet') && <ProjetAlerteWatcher />}
       {hasModule('projet') && <ProjetPurgeWatcher />}
       {hasModule('projet') && <ProjetAutoDemarrage />}

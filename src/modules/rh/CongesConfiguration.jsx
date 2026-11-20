@@ -36,7 +36,7 @@ export default function CongesConfiguration() {
       <ParamsGrille>
         <ParamsCarte icone={CalendarDays} couleur="#0284c7" titre="Droit annuel" sous="Jours de congé par an et par employé" large>
           <div className="grid items-end gap-3 sm:grid-cols-2">
-            <Champ label="Jours de congé par an" icone={Hash} aide="Le solde de chaque employé se calcule sur ce nombre : jours pris sur l'année, jours restants." erreur={invalide ? 'Entre 1 et 366 jours.' : undefined}>
+            <Champ iconeLabel label="Jours de congé par an" icone={Hash} aide="Le solde de chaque employé se calcule sur ce nombre : jours pris sur l'année, jours restants." erreur={invalide ? 'Entre 1 et 366 jours.' : undefined}>
               <input type="number" min="1" max="366" value={droit} onChange={(e) => setDroit(e.target.value)} className="input-base" placeholder={`Ex. ${DROIT_CONGE_ANNUEL}`} />
             </Champ>
             <div className="flex justify-end pb-3">

@@ -11,6 +11,9 @@ export const COL = {
   presences: 'rh_presences',
   conges: 'rh_conges',
   bulletins: 'rh_bulletins',
+  dotations: 'rh_dotations',
+  primes: 'rh_primes',
+  typesPrimes: 'rh_types_primes',
   autorisationsSalaire: 'rh_autorisations_salaire',
   avances: 'rh_avances',
   recrutements: 'rh_recrutements',
@@ -91,6 +94,19 @@ export const PAIE_CONFIG_DEFAUT = {
   ],
   devise: 'XOF'
 }
+// Dotations : matériel remis à un employé (uniforme, téléphone, clés…), à restituer à son départ.
+export const STATUTS_DOTATION = {
+  en_possession: { label: 'En possession', tone: 'info' },
+  restituee:     { label: 'Restituée', tone: 'success' },
+  perdue:        { label: 'Perdue ou non rendue', tone: 'danger' }
+}
+// Primes : un type (transport, rendement…) réglé dans les paramètres, attribué à un employé, un secteur ou toute l'équipe, approuvé par la GE.
+export const STATUTS_PRIME = {
+  en_attente: { label: 'En circuit', tone: 'warning' },
+  autorise: { label: 'Autorisée', tone: 'success' },
+  refuse: { label: 'Refusée', tone: 'danger' }
+}
+export const ARTICLES_DOTATION = ['Uniforme', 'Téléphone', 'Clés', 'Ordinateur', "Badge d'accès", 'Équipement de sécurité', 'Moto ou véhicule', 'Outils']
 export const STATUTS_BULLETIN = {
   brouillon: { label: 'Brouillon', tone: 'warning' },
   valide:    { label: 'Validé', tone: 'success' },
@@ -145,8 +161,11 @@ export const MOIS_LABELS = [
 
 // ── Calcul d'un bulletin de paie (à partir du salaire brut) ───────────────────
 // `retenues` : total des mensualités d'avances et de prêts retenues ce mois-ci sur le net (cf. avancesCircuit.js).
-export function calculerBulletin(brut, primes = 0, config = PAIE_CONFIG_DEFAUT, retenues = 0) {
-  const brutTotal = (Number(brut) || 0) + (Number(primes) || 0)
+// `retenuePresence` : retenue pour absences non justifiées et retards (cf. retenuesPresence.js). Ces jours ne sont pas payés : elle réduit le brut,
+// donc aussi la CNSS, l'IRPP et les charges patronales.
+export function calculerBulletin(brut, primes = 0, config = PAIE_CONFIG_DEFAUT, retenues = 0, retenuePresence = 0) {
+  const retenueAbsences = Math.max(0, Math.round(Number(retenuePresence) || 0))
+  const brutTotal = Math.max(0, (Number(brut) || 0) + (Number(primes) || 0) - retenueAbsences)
   const cnssSalarie = Math.round(brutTotal * config.tauxCnssSalarie)
   const baseImposable = brutTotal - cnssSalarie
   const its = calculerITS(baseImposable, config.bareme)
@@ -155,7 +174,7 @@ export function calculerBulletin(brut, primes = 0, config = PAIE_CONFIG_DEFAUT, 
   const cnssEmployeur = Math.round(brutTotal * config.tauxCnssEmployeur)
   const amuEmployeur = Math.round(brutTotal * (config.tauxAmuEmployeur ?? PAIE_CONFIG_DEFAUT.tauxAmuEmployeur))
   const coutEmployeur = brutTotal + cnssEmployeur + amuEmployeur
-  return { brutTotal, cnssSalarie, baseImposable, its, retenueAvances, net, cnssEmployeur, amuEmployeur, coutEmployeur }
+  return { brutTotal, cnssSalarie, baseImposable, its, retenueAvances, retenuePresence: retenueAbsences, net, cnssEmployeur, amuEmployeur, coutEmployeur }
 }
 
 function calculerITS(base, bareme = PAIE_CONFIG_DEFAUT.bareme) {
