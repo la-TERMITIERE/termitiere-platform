@@ -22,8 +22,8 @@ export default function Taches() {
         { key: 'statut', label: 'Statut', badge: (v) => ({ tone: tone(v), label: STATUTS.find((s) => s.value === v)?.label || v }) }
       ]}
       champs={[
-        { key: 'titre', label: 'Intitulé', required: true },
-        { key: 'assigneId', label: 'Assignée à', type: 'employe' },
+        { key: 'titre', label: 'Intitulé', required: true, placeholder: "Ex. Préparer le planning de la semaine" },
+        { key: 'assigneId', label: 'Assignée à', type: 'employe', placeholder: "Choisissez la personne chargée de la tâche" },
         { key: 'echeance', label: 'Échéance', type: 'date' },
         { key: 'priorite', label: 'Priorité', type: 'select', options: PRIO },
         { key: 'statut', label: 'Statut', type: 'select', options: STATUTS }

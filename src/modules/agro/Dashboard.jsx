@@ -467,7 +467,7 @@ export default function Dashboard() {
 
       {/* Graphiques */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <button onClick={() => setModalKey('morbidite')} className="card bv-clic lg:col-span-2 p-4 text-left hover:shadow-md">
+        <button onClick={() => setModalKey('morbidite')} className="card bv-clic flex flex-col justify-start lg:col-span-2 p-4 text-left hover:shadow-md">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Taux de morbidité : {scopeLabel}</p>
@@ -476,10 +476,12 @@ export default function Dashboard() {
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Stethoscope size={22} /></div>
           </div>
-          <div className="mt-2 h-52">
+          <div className="relative mt-2 min-h-[13rem] flex-1">
+            <div className="absolute inset-0">
             {morbiditeSerie.labels.length
               ? <Line data={morbiditeChart} options={{ maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + ' %' } } } }} />
               : <p className="py-10 text-center text-sm text-gray-400">Aucune saisie sur la période.</p>}
+            </div>
           </div>
         </button>
         <Card title={repartition.parEspece ? `Répartition par espèce : ${scopeLabel}` : 'Répartition par catégorie'}>

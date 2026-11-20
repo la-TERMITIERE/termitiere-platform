@@ -1,7 +1,8 @@
 // RH : cartes détaillées du tableau de bord (listes courtes et anneau d'effectif), au même gabarit que les autres tableaux de bord
 // de l'application : carte en verre, icône 3D en titre, entrée en fondu. Chaque liste montre cinq lignes au plus puis « + N autres ».
 import { Doughnut } from 'react-chartjs-2'
-import { PieChart } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { PieChart, ChevronRight } from 'lucide-react'
 import '../../utils/chartSetup'
 import Card from '../../shared/ui/Card'
 import { icone3D } from '../../utils/color'
@@ -20,7 +21,7 @@ const TitreCarte = ({ icone: Icone, couleur = BLEU, titre, sous }) => (
 )
 
 // lignes : [{ id, libelle, detail }] ; `vide` : texte affiché quand il n'y a rien.
-export function ListeCarte({ icone, couleur, titre, sous, lignes, vide, rang = 0, max = 5 }) {
+export function ListeCarte({ icone, couleur, titre, sous, lignes, vide, rang = 0, max = 5, lien }) {
   const visibles = lignes.slice(0, max)
   return (
     <Card className="ed-entree" style={{ animationDelay: `${rang * 70}ms` }}>
@@ -38,6 +39,7 @@ export function ListeCarte({ icone, couleur, titre, sous, lignes, vide, rang = 0
         </ul>
       )}
       {lignes.length > max && <p className="mt-2 text-xs font-semibold text-gray-400">+ {lignes.length - max} autre{lignes.length - max > 1 ? 's' : ''}</p>}
+      {lien && <Link to={lien.to} className="mt-2 inline-flex items-center gap-1 text-xs font-bold hover:underline" style={{ color: couleur }}>{lien.label} <ChevronRight size={13} /></Link>}
     </Card>
   )
 }

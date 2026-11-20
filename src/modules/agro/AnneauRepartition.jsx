@@ -46,7 +46,7 @@ export default function AnneauRepartition({ rows, unite = 'têtes', titreCentre 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="relative mx-auto h-56 w-full max-w-[15rem]" onMouseLeave={() => setActif(null)}>
         <Doughnut data={data} options={options} />
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
@@ -56,20 +56,12 @@ export default function AnneauRepartition({ rows, unite = 'têtes', titreCentre 
         </div>
       </div>
 
-      <ul className="space-y-1.5" onMouseLeave={() => setActif(null)}>
-        {lignes.map((r, i) => (
+      {/* Légende réduite : couleur et nom seulement (les effectifs et les pourcentages sont dans l'infobulle au survol) */}
+      <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1" onMouseLeave={() => setActif(null)}>
+        {lignes.map((r) => (
           <li key={r.label} onMouseEnter={() => r.total > 0 && setActif(r.label)}
-            className={`ed-entree rounded-2xl border px-3 py-2 transition-all ${actif === r.label ? 'border-white bg-white shadow-[0_10px_20px_-12px_rgba(0,0,0,0.35)]' : 'border-white/70 bg-white/55'} ${r.total === 0 ? 'opacity-55' : ''}`}
-            style={{ animationDelay: `${i * 45}ms` }}>
-            <div className="flex items-center gap-2 text-sm">
-              <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]" style={{ background: r.color }} />
-              <span className="min-w-0 flex-1 truncate font-bold text-gray-800">{r.label}</span>
-              <span className="font-extrabold tabular-nums text-gray-900">{formatNumber(r.total)}</span>
-              <span className="w-10 text-right text-xs font-bold tabular-nums text-gray-500">{pct(r.total)} %</span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/5">
-              <div className="agro-barre h-full rounded-full" style={{ width: `${pct(r.total)}%`, background: r.color }} />
-            </div>
+            className={`inline-flex items-center gap-1.5 text-[11px] font-semibold transition-opacity ${r.total === 0 ? 'opacity-50' : ''} ${actif && actif !== r.label ? 'opacity-40' : 'text-gray-700'}`}>
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: r.color }} />{r.label}
           </li>
         ))}
       </ul>

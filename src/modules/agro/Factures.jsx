@@ -22,6 +22,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useAgroStore } from './store/agroStore'
 import BandeAgro, { usePeriodeBande } from './BandeAgro'
+import FriseVente from './FriseVente'
 import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
@@ -88,7 +89,7 @@ export default function Factures() {
       [...factures]
         .filter((f) => (f.client?.nom || '').toLowerCase().includes(recherche.toLowerCase()))
         .filter((f) => periode.dansPeriode(f.date))
-        .filter((f) => (filtre === 'tous' ? true : factureStatut(f) === filtre))
+        .filter((f) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(f) : factureStatut(f) === filtre))
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
     [factures, recherche, filtre, periode.cle]
   )
@@ -314,31 +315,22 @@ export default function Factures() {
         {isAgent && <BoutonBande anime icone={Plus} onClick={openCreate}>Nouvelle facture</BoutonBande>}
       </BandeAgro>
 
-      <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-        <strong>Sortie de stock en 4 étapes :</strong> ① l'agent crée une facture <em>brouillon</em> → ② il demande la sortie →
-        ③ la hiérarchie l'approuve (décompte du stock) → ④ l'agent <em>certifie</em> (CA enregistré, impression). En cas d'écart, l'agent signale et la hiérarchie ajuste les quantités réelles.
-      </div>
+      <FriseVente filtre={filtre} onFiltre={setFiltre}
+        compte={{ brouillon: compteur('brouillon'), sortie_demandee: compteur('sortie_demandee'), sortie_approuvee: compteur('sortie_approuvee'), certifiee: compteur('certifiee'),
+          refusee: compteur('refusee'), modif_demandee: compteur('modif_demandee'), correctif: factures.filter(correctifEnCours).length }} />
 
       {/* Cumul de facturation — réservé à l'administration (masqué à l'agent, cf.
           canViewFinance), recalculé selon la recherche + le filtre de statut ci-dessous. */}
       {estAdministration && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
-            title={`Cumul facturation${filtre !== 'tous' ? ` (${filtres.find(([v]) => v === filtre)?.[1]})` : ''}`}
+            title={`Cumul facturation${filtre !== 'tous' ? ` (${(filtres.find(([v]) => v === filtre)?.[1] || filtre).replace(/ \(\d+\)$/, "")})` : ''}`}
             value={formatMoney(cumulFacturation)}
             sub={`${liste.length} facture${liste.length > 1 ? 's' : ''}${recherche ? ' · recherche filtrée' : ''}`}
             icon={Wallet} accent={COULEUR_MODULE.agro} />
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
-        {filtres.map(([v, l]) => (
-          <button key={v} onClick={() => setFiltre(v)}
-            data-actif={filtre === v} aria-pressed={filtre === v} className="puce-verre rounded-xl px-3 py-1.5 text-sm font-bold">
-            {l}
-          </button>
-        ))}
-      </div>
 
       <Card className="p-0">
         <div className="max-h-[calc(100vh-16rem)] overflow-auto">

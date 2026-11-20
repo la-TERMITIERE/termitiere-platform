@@ -20,11 +20,11 @@ export default function TitresBadges() {
         { key: 'dateObtention', label: 'Obtenu le', render: (r) => r.dateObtention ? formatDateShort(r.dateObtention) : '—' }
       ]}
       champs={[
-        { key: 'employeId', label: 'Employé', type: 'employe', required: true },
-        { key: 'intitule', label: 'Intitulé', required: true },
-        { key: 'type', label: 'Type', type: 'select', options: TYPES },
-        { key: 'organisme', label: 'Organisme délivrant' },
-        { key: 'dateObtention', label: "Date d'obtention", type: 'date' }
+        { key: 'employeId', label: 'Employé', type: 'employe', required: true, placeholder: "Choisissez l'employé concerné" },
+        { key: 'intitule', label: 'Intitulé', required: true, placeholder: "Ex. Licence en comptabilité, Permis poids lourd" },
+        { key: 'type', label: 'Type', type: 'select', options: TYPES, aide: "Diplôme, certification, badge de compétence ou habilitation." },
+        { key: 'organisme', label: 'Organisme délivrant', placeholder: "Ex. Université de Lomé, Croix-Rouge, ministère" },
+        { key: 'dateObtention', label: "Date d'obtention", type: 'date', aide: "Date à laquelle le titre a été obtenu." }
       ]} />
   )
 }

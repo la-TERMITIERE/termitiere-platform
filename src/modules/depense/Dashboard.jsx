@@ -10,6 +10,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { setItem } from '../../core/db'
+import DecaissementsRhAlertes from './decaissementsRh'
 import { depenseRoleEffectif } from '../../core/roles'
 import { SECTEURS, MOIS_LABELS, STATUTS_DECAISSEMENT } from './data'
 import { totalDepenses, statutBudget, depensesEnCircuit, coutsMatieresBriqueterie, secteursEtSites, visibleDansEDepenses, seuilsBudgetDe, moisTouchesPeriode, dateDansPeriode, budgetSecteurPeriode, depensesEntrepriseSecteurDates } from './logic'
@@ -270,6 +271,9 @@ export default function Dashboard() {
           )}
         </div>
       </BandeauVolet>
+
+      {/* Missions et avances approuvées par la GE : décaisser de la Caisse courante, ou non. */}
+      <DecaissementsRhAlertes />
 
       {/* ── Alertes (budget, décaissements en attente, reconduction) ── */}
       {!restreintAgent && alertesVisibles.length > 0 && (() => {

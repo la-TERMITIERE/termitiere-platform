@@ -9,6 +9,7 @@ import { ChevronDown } from 'lucide-react'
 // concaténation de chaîne) — on ne peut donc pas construire "focus:ring-${accent}-400"
 // dynamiquement. On passe par cette table pour que chaque teinte reste bien générée.
 const ACCENTS = {
+  sky:    { ring: 'focus:ring-sky-400',    hoverText: 'hover:text-sky-600',    hoverBg: 'hover:bg-sky-50' },
   teal:   { ring: 'focus:ring-teal-400',   hoverText: 'hover:text-teal-600',   hoverBg: 'hover:bg-teal-50' },
   amber:  { ring: 'focus:ring-amber-400',  hoverText: 'hover:text-amber-600',  hoverBg: 'hover:bg-amber-50' },
   green:  { ring: 'focus:ring-green-400',  hoverText: 'hover:text-green-600',  hoverBg: 'hover:bg-green-50' },
@@ -56,6 +57,7 @@ export default function ChampAutocomplete({
           value={value || ''}
           onChange={(e) => { onChange(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
         />
         {suggestions.length > 0 && (
           <button type="button" onClick={() => setOpen((o) => !o)}
@@ -65,7 +67,7 @@ export default function ChampAutocomplete({
         )}
       </div>
       {open && suggestions.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-2xl border border-white/80 bg-white/90 shadow-[0_18px_36px_-14px_rgba(0,0,0,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1d2226]/95">
+        <div className="ac-ouvert absolute z-50 mt-1 w-full overflow-hidden rounded-2xl border border-white/80 bg-white/90 shadow-[0_18px_36px_-14px_rgba(0,0,0,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1d2226]/95">
           {!filtrees.length
             ? <p className="px-3 py-2 text-xs text-gray-400">{emptyLabel}</p>
             : <ul className="max-h-64 overflow-y-auto py-1">

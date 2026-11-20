@@ -3,6 +3,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import './core/preferences' // applique tout de suite la taille du texte et les animations réduites choisies sur cet appareil
 import { toast } from './core/notifications'
 import './utils/chartSetup' // enregistre Chart.js une seule fois
 

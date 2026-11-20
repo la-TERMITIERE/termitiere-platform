@@ -6,6 +6,7 @@ import {
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
   Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
 } from 'lucide-react'
+import { cheminsDuGroupe } from '../modules/rh/groupes'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES, ANALYSES_DEPENSE_ROLES } from '../core/roles'
 
 export const MODULES = [
@@ -198,36 +199,22 @@ export const MODULE_NAV = {
   ],
   rh: [
     { label: 'Tableau de bord', to: '/rh', icon: LayoutDashboard, end: true },
-    { heading: 'Structure RH' },
-    { label: 'Départements', to: '/rh/departements', icon: Factory },
-    { label: 'Postes de travail', to: '/rh/postes', icon: ClipboardList },
-    { label: 'Organigramme', to: '/rh/organigramme', icon: Users },
-    { heading: 'Collaborateurs & Contrats' },
-    { label: 'Employés & Annuaire', to: '/rh/employes', icon: UserCircle },
-    { label: 'Contrats de travail', to: '/rh/contrats', icon: FileText },
-    { label: 'Onboarding / Offboarding', to: '/rh/onboarding', icon: Repeat },
-    { label: 'Rattachement des comptes', to: '/rh/rattachements', icon: Handshake },
-    { label: 'Diplômes & badges', to: '/rh/titres-badges', icon: Tag },
+    { heading: 'Personnel' },
+    { label: 'Équipe', to: '/rh/employes', icon: UserCircle, groupe: cheminsDuGroupe('equipe') },
+    { label: 'Contrats et dossiers', to: '/rh/contrats', icon: FileText, groupe: cheminsDuGroupe('contrats') },
     { heading: 'Temps & Paie' },
-    { label: 'Congés & Absences', to: '/rh/conges', icon: CalendarDays },
-    { label: 'Présences & Pointages', to: '/rh/presences', icon: CalendarCheck },
-    { label: 'Paie & Bulletins', to: '/rh/paie', icon: Receipt },
-    { label: 'Configuration de la paie', to: '/rh/paie-configuration', icon: Settings },
-    { label: 'État des salaires', to: '/rh/etat-salaires', icon: BarChart2 },
-    { heading: 'Talent & Développement' },
-    { label: 'Recrutement & Offres', to: '/rh/recrutement', icon: Send },
-    { label: 'Formulaires & candidature', to: '/rh/formulaires', icon: ClipboardList },
-    { label: 'Formations', to: '/rh/formations', icon: BookOpen },
-    { label: 'Évaluations', to: '/rh/evaluations', icon: Gauge },
-    { label: 'Compétences & GPEC', to: '/rh/competences', icon: TrendingUp },
-    { heading: 'Pilotage & Conformité' },
-    { label: 'Conformité & Alertes RH', to: '/rh/conformite', icon: Scale },
-    { heading: "Vie d'Équipe" },
-    { label: "Tâches d'équipe", to: '/rh/taches', icon: ListChecks },
-    { label: 'Impact Collègue', to: '/rh/impacts', icon: Lightbulb },
-    { heading: 'Missions & Frais' },
-    { label: 'Missions & frais', to: '/rh/missions', icon: Plane },
-    { label: 'Configuration missions', to: '/rh/missions-configuration', icon: Settings }
+    { label: 'Présences', to: '/rh/presences', icon: CalendarCheck },
+    { label: 'Congés et absences', to: '/rh/conges', icon: CalendarDays },
+    { label: 'Paie', to: '/rh/paie', icon: Receipt, groupe: cheminsDuGroupe('paie') },
+    { label: 'Avances et prêts', to: '/rh/avances', icon: HandCoins },
+    { heading: 'Talents' },
+    { label: 'Recrutement', to: '/rh/recrutement', icon: Send, groupe: cheminsDuGroupe('recrutement') },
+    { label: 'Développement', to: '/rh/formations', icon: TrendingUp, groupe: cheminsDuGroupe('developpement') },
+    { heading: "Vie de l'entreprise" },
+    { label: 'Missions et frais', to: '/rh/missions', icon: Plane, groupe: cheminsDuGroupe('missions') },
+    // Les alertes de conformité sont dans le tableau de bord (carte « Contrats à surveiller »). Les réglages sont ici, pour l'administration.
+    { heading: 'Administration' },
+    { label: 'Paramètres', to: '/rh/paie-configuration', icon: Settings, roles: FULL_ACCESS_ROLES, groupe: cheminsDuGroupe('parametres') }
   ],
   comptabilite: [
     { label: 'Tableau de bord',        to: '/comptabilite',                 icon: LayoutDashboard, end: true },

@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { RefreshCw } from 'lucide-react'
+import { useMajStore } from '../core/maj'
 
 const POLL_MS = 60 * 1000      // fréquence de vérification d'une nouvelle version
 const COUNTDOWN_S = 5          // délai avant rechargement automatique
@@ -22,6 +23,8 @@ export default function UpdateManager() {
     immediate: true,
     onRegisteredSW(swUrl, registration) {
       if (!registration) return
+      // Partagé avec Paramètres : le bouton « Vérifier les mises à jour » interroge ce même service worker.
+      useMajStore.setState({ enregistrement: registration, appliquerSW: updateServiceWorker })
       // Vérifie périodiquement le serveur : capte les mises à jour même sans
       // rechargement manuel de la page.
       setInterval(() => {
@@ -34,6 +37,12 @@ export default function UpdateManager() {
       console.warn('[pwa] enregistrement du service worker échoué :', err)
     }
   })
+
+  // Paramètres sait ainsi qu'une version est prête (et peut l'appliquer d'un clic).
+  useEffect(() => {
+    useMajStore.setState({ appliquerSW: updateServiceWorker })
+    if (needRefresh) useMajStore.setState({ swPret: true, disponible: true })
+  }, [needRefresh, updateServiceWorker])
 
   // Compte à rebours puis application automatique de la mise à jour pour tous.
   useEffect(() => {

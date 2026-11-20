@@ -20,7 +20,7 @@ const TONS = {
 export default function DetailKpiModal({ fiche, onClose, pied }) {
   const navigate = useNavigate()
   if (!fiche) return null
-  const { icone: Icone, couleur = '#0284c7', titre, sous, tuiles = [], lignes = [], vide = 'Rien à afficher pour le moment.', lien } = fiche
+  const { icone: Icone, couleur = '#0284c7', titre, sous, tuiles = [], lignes = [], vide = 'Rien à afficher pour le moment.', lien, logo } = fiche
   return (
     <Modal open onClose={onClose} size="lg" title={titre} {...glassModalProps(couleur)}
       footer={<>
@@ -31,7 +31,9 @@ export default function DetailKpiModal({ fiche, onClose, pied }) {
       <div className="space-y-3">
         {sous && (
           <p className="flex items-center gap-2.5 text-sm text-gray-600">
-            {Icone && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleur)}><Icone size={16} /></span>}
+            {logo
+              ? <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-[0_8px_16px_-8px_rgba(0,0,0,0.4)]"><img src={logo} alt="" className="h-full w-full object-contain p-1" /></span>
+              : Icone && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D(couleur)}><Icone size={16} /></span>}
             {sous}
           </p>
         )}

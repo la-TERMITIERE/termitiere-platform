@@ -34,7 +34,8 @@ const ESSENTIELS = {
   logistique: ['/logistique/saisie'],
   evenementiel: ['/evenementiel/production'],
   foncier: ['/foncier/dossiers'],
-  rh: [],
+  // RH : l'équipe, le pointage du jour et la paie sont les gestes de tous les jours ; le reste est dans Plus.
+  rh: ['/rh/employes', '/rh/presences', '/rh/paie'],
   projet: ['/projet/projets'],
   garderie: ['/garderie/presences'],
   depense: ['/depense/liste', '/depense/recettes-depenses', '/depense/demandes'],
@@ -107,7 +108,9 @@ export default function MobileBottomNav({ onOpenMenu }) {
     showMenuButton = true
   }
 
-  const activeTo = (items.find((it) => (it.end ? location.pathname === it.to : location.pathname.startsWith(it.to))) || {}).to
+  // Un onglet « groupe » (ex. RH, Équipe) reste actif sur tous les volets de son groupe (Départements, Postes…).
+  const dansGroupe = (it) => (it.groupe || []).some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`))
+  const activeTo = (items.find((it) => (it.end ? location.pathname === it.to : location.pathname.startsWith(it.to) || dansGroupe(it))) || {}).to
   // La pastille active se teinte légèrement de la couleur du module en cours.
   const accentColor = activeModule?.color || '#BC3C31'
 
@@ -175,12 +178,13 @@ export default function MobileBottomNav({ onOpenMenu }) {
               to={item.to}
               end={item.end}
               ref={(el) => { if (el) itemRefs.current.set(item.to, el); else itemRefs.current.delete(item.to) }}
-              className={({ isActive }) =>
-                `relative z-10 flex shrink-0 flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[10px] font-semibold transition-all active:scale-90 ${
+              className={({ isActive: actifNav }) => {
+                const isActive = actifNav || item.to === activeTo
+                return `relative z-10 flex shrink-0 flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[10px] font-semibold transition-all active:scale-90 ${
                   isActive ? 'font-bold' : 'text-gray-900 hover:text-black dark:text-white/80 dark:hover:text-white'
                 }`
-              }
-              style={({ isActive }) => (isActive ? { color: accentColor } : undefined)}
+              }}
+              style={({ isActive }) => (isActive || item.to === activeTo ? { color: accentColor } : undefined)}
             >
               <span className="flex h-7 w-7 items-center justify-center">
                 <item.icon size={18} />

@@ -644,3 +644,132 @@ html.dark .agro-boutons .modal-glass .fg-tuile { background: rgba(255,255,255,.0
 .agro-boutons .btn-glass[data-bouton]:has(.lucide-plus) svg { color: #16a34a !important; }
 .agro-boutons .btn-glass[data-bouton]:has(.lucide-plus):hover:not(:disabled) { background: #f0fdf4 !important; }
 
+/* Une liste de suggestions ouverte passe au-dessus des tuiles voisines de la fenêtre (sinon la tuile suivante la recouvre). */
+.modal-glass .fg-tuile:has(.ac-ouvert), .tuile-verre:has(.ac-ouvert) { z-index: 60; }
+
+/* ===== RH : barre d'onglets en capsule de verre dépoli bleu (compacte, à la largeur de ses onglets) ===== */
+.rh-onglets {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(186,230,253,.42) 50%, rgba(125,211,252,.3) 100%);
+  border: 1px solid rgba(255,255,255,.85);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8); backdrop-filter: blur(26px) saturate(1.8);
+  box-shadow: 0 14px 30px -16px rgba(2,132,199,.65), 0 2px 6px -2px rgba(2,132,199,.25), inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -10px 16px -12px rgba(2,132,199,.35), inset 0 0 0 1px rgba(255,255,255,.25);
+}
+/* Reflet du haut et balayage de lumière lent : l'effet verre posé sur la page. */
+.rh-onglets::before { content: ''; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255,255,255,.65), rgba(255,255,255,0)); pointer-events: none; z-index: -1; }
+.rh-onglets::after { content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); transform: skewX(-18deg); animation: rh-onglets-balaye 7s ease-in-out infinite; pointer-events: none; z-index: -1; }
+@keyframes rh-onglets-balaye { 0%, 60% { left: -40%; } 100% { left: 140%; } }
+.rh-onglet {
+  position: relative; color: #334155; background: transparent; border: 1px solid transparent;
+  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), background .2s ease, box-shadow .2s ease, color .2s ease;
+}
+.rh-onglet:hover { background: rgba(255,255,255,.6); color: #0c4a6e; box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 6px 12px -8px rgba(2,132,199,.5); }
+.rh-onglet:active { transform: scale(.94); transition-duration: .08s; }
+.rh-onglet:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
+.rh-onglet[data-actif="true"] {
+  color: #fff; border-color: rgba(255,255,255,.8);
+  background: linear-gradient(165deg, rgba(125,211,252,.98) 0%, rgba(2,132,199,.98) 50%, rgba(3,105,161,.98) 100%);
+  box-shadow: 0 10px 18px -8px rgba(2,132,199,.9), inset 0 1.5px 0 rgba(255,255,255,.8), inset 0 -2px 0 rgba(0,0,0,.14);
+  animation: puce-pop .4s cubic-bezier(.34, 1.56, .64, 1);
+}
+html.dark .rh-onglets { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+html.dark .rh-onglet:not([data-actif="true"]) { color: #cbd5e1; }
+html.dark .rh-onglet:not([data-actif="true"]):hover { background: rgba(255,255,255,.12); color: #fff; }
+@media (prefers-reduced-motion: reduce) {
+  .rh-onglet { transition: none; }
+  .rh-onglet[data-actif="true"] { animation: none; }
+  .rh-onglet:hover, .rh-onglet:active { transform: none; }
+  .rh-onglets::after { animation: none; }
+}
+
+/* ===== RH : pastilles de choix en verre dépoli (département, contrat, statut, étape…) ===== */
+.rh-pastille {
+  position: relative; overflow: hidden; color: #334155;
+  background: linear-gradient(160deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.38) 100%);
+  border: 1px solid rgba(255,255,255,.85);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
+  box-shadow: 0 8px 16px -12px rgba(2,132,199,.55), inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -6px 10px -8px rgba(2,132,199,.25);
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), background .2s ease, box-shadow .2s ease, color .2s ease, border-color .2s ease;
+}
+.rh-pastille::before { content: ''; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255,255,255,.7), transparent); pointer-events: none; }
+.rh-pastille:hover { transform: translateY(-1px); color: #0c4a6e; background: linear-gradient(160deg, rgba(255,255,255,.95) 0%, rgba(224,242,254,.6) 100%); box-shadow: 0 12px 20px -12px rgba(2,132,199,.7), inset 0 1.5px 0 rgba(255,255,255,1); }
+.rh-pastille:active { transform: scale(.95); transition-duration: .08s; }
+.rh-pastille[data-actif="true"] {
+  color: #fff; border-color: rgba(255,255,255,.75);
+  background: linear-gradient(165deg, rgba(125,211,252,.97) 0%, rgba(2,132,199,.97) 52%, rgba(3,105,161,.97) 100%);
+  box-shadow: 0 12px 20px -8px rgba(2,132,199,.85), inset 0 1.5px 0 rgba(255,255,255,.75), inset 0 -2px 0 rgba(0,0,0,.14);
+  animation: puce-pop .35s cubic-bezier(.34, 1.56, .64, 1);
+}
+.rh-pastille[data-actif="true"]::before { background: linear-gradient(180deg, rgba(255,255,255,.45), transparent); }
+.rh-pastille > * { position: relative; }
+html.dark .rh-pastille:not([data-actif="true"]) { color: #e2e8f0; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); }
+@media (prefers-reduced-motion: reduce) { .rh-pastille { transition: none; } .rh-pastille[data-actif="true"] { animation: none; } .rh-pastille:hover, .rh-pastille:active { transform: none; } }
+
+/* ===== RH : boutons de fenêtre (Enregistrer / Annuler) en verre ===== */
+.rh-btn-valider {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: inline-flex; align-items: center; gap: .55rem;
+  padding: .6rem 1.15rem .6rem .7rem; border-radius: 1rem;
+  font-size: .875rem; font-weight: 800; letter-spacing: .01em; color: #fff;
+  background: linear-gradient(165deg, #7dd3fc 0%, #0ea5e9 34%, #0284c7 62%, #0369a1 100%);
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: 0 16px 26px -12px rgba(2,132,199,.95), 0 5px 10px -5px rgba(2,132,199,.55), inset 0 1.5px 0 rgba(255,255,255,.85), inset 0 -3px 0 rgba(3,60,100,.28);
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s ease, filter .2s ease;
+}
+.rh-btn-valider::before { content: ''; position: absolute; inset: 0 0 52% 0; background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0)); z-index: -1; pointer-events: none; }
+.rh-btn-valider::after { content: ''; position: absolute; top: -20%; bottom: -20%; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent); transform: skewX(-20deg); transition: left .7s ease; z-index: -1; pointer-events: none; }
+.rh-btn-valider:hover { transform: translateY(-2px); filter: saturate(1.1) brightness(1.04); box-shadow: 0 20px 30px -12px rgba(2,132,199,1), 0 6px 12px -5px rgba(2,132,199,.6), inset 0 1.5px 0 rgba(255,255,255,.9), inset 0 -3px 0 rgba(3,60,100,.28); }
+.rh-btn-valider:hover::after { left: 130%; }
+.rh-btn-valider:active { transform: translateY(0) scale(.96); transition-duration: .08s; }
+.rh-btn-valider:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 4px rgba(2,132,199,.5); }
+.rh-btn-valider-ico { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 9999px; background: rgba(255,255,255,.28); border: 1px solid rgba(255,255,255,.6); box-shadow: inset 0 1px 1px rgba(255,255,255,.7), 0 3px 6px -2px rgba(3,60,100,.5); }
+.rh-btn-annuler {
+  position: relative; display: inline-flex; align-items: center; padding: .6rem 1rem; border-radius: 1rem;
+  font-size: .875rem; font-weight: 700; color: #334155;
+  background: linear-gradient(160deg, rgba(255,255,255,.6), rgba(255,255,255,.25));
+  border: 1px solid rgba(255,255,255,.75);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: 0 8px 16px -12px rgba(15,23,42,.5), inset 0 1.5px 0 rgba(255,255,255,.95);
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), background .2s ease, color .2s ease;
+}
+.rh-btn-annuler:hover { transform: translateY(-1px); color: #0f172a; background: linear-gradient(160deg, rgba(255,255,255,.9), rgba(255,255,255,.5)); }
+.rh-btn-annuler:active { transform: scale(.96); transition-duration: .08s; }
+.rh-btn-annuler:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .rh-btn-valider, .rh-btn-annuler { transition: none; } .rh-btn-valider::after { display: none; } .rh-btn-valider:hover, .rh-btn-annuler:hover { transform: none; } }
+
+/* ===== Préférences de l'appareil (Paramètres) : taille du texte et animations réduites ===== */
+html.texte-petit { font-size: 93.75%; }
+html.texte-grand { font-size: 112.5%; }
+html.sans-animations *, html.sans-animations *::before, html.sans-animations *::after {
+  animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important;
+}
+
+/* ===== Filtres par statut en verre dépoli : une capsule translucide, des onglets qui s'illuminent à la couleur de l'écran (--puce) ===== */
+.onglets-verre {
+  position: relative; display: flex; flex-wrap: wrap; gap: .25rem; width: fit-content; max-width: 100%; padding: .3rem; border-radius: 1.6rem; isolation: isolate; overflow: hidden;
+  background: linear-gradient(135deg, rgba(255,255,255,.66) 0%, rgba(186,230,253,.34) 55%, rgba(255,255,255,.22) 100%);
+  border: 1px solid rgba(255,255,255,.88);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8); backdrop-filter: blur(26px) saturate(1.8);
+  box-shadow: 0 16px 30px -18px rgba(15,23,42,.45), inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -10px 16px -12px rgba(2,132,199,.28);
+}
+.onglets-verre::before { content: ''; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,0)); pointer-events: none; z-index: -1; }
+.onglet-verre {
+  position: relative; display: inline-flex; align-items: center; gap: .4rem; padding: .46rem .95rem; border-radius: 9999px; border: 1px solid transparent; background: transparent;
+  font-size: .78rem; font-weight: 800; color: #475569; letter-spacing: .005em;
+  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), background .2s ease, box-shadow .2s ease, color .2s ease;
+}
+.onglet-verre:hover { color: #0f172a; background: rgba(255,255,255,.7); box-shadow: inset 0 1px 0 #fff, 0 8px 14px -10px color-mix(in srgb, var(--puce, #0284c7) 75%, transparent); transform: translateY(-1px); }
+.onglet-verre:active { transform: scale(.94); transition-duration: .08s; }
+.onglet-verre:focus-visible { outline: 2px solid var(--puce, #0284c7); outline-offset: 2px; }
+.onglet-verre[data-actif="true"] {
+  color: #fff; border-color: rgba(255,255,255,.8);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--puce, #0284c7) 50%, white) 0%, var(--puce, #0284c7) 48%, color-mix(in srgb, var(--puce, #0284c7) 78%, black) 100%);
+  box-shadow: 0 12px 22px -8px color-mix(in srgb, var(--puce, #0284c7) 85%, transparent), inset 0 1.5px 0 rgba(255,255,255,.8), inset 0 -2px 0 rgba(0,0,0,.16);
+  animation: puce-pop .35s cubic-bezier(.34, 1.56, .64, 1);
+}
+.onglet-verre-n { display: inline-flex; min-width: 1.15rem; height: 1.15rem; align-items: center; justify-content: center; padding: 0 .3rem; border-radius: 9999px; font-size: .65rem; font-weight: 900; background: rgba(15,23,42,.1); font-variant-numeric: tabular-nums; }
+.onglet-verre[data-actif="true"] .onglet-verre-n { background: rgba(255,255,255,.3); box-shadow: inset 0 1px 1px rgba(255,255,255,.4); }
+html.dark .onglets-verre { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+html.dark .onglet-verre:not([data-actif="true"]) { color: #cbd5e1; }
+html.dark .onglet-verre:not([data-actif="true"]):hover { background: rgba(255,255,255,.12); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .onglet-verre { transition: none; } .onglet-verre[data-actif="true"] { animation: none; } .onglet-verre:hover, .onglet-verre:active { transform: none; } }

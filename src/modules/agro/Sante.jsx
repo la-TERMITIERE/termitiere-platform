@@ -60,9 +60,10 @@ function ActionsBande({ children }) {
 }
 
 // Carte de verre d'une fiche (intervention, produit, rendez-vous) : halo de la couleur, entrée en cascade.
-function CarteSante({ couleur, i = 0, children, className = '' }) {
+function CarteSante({ couleur, i = 0, children, className = '', onOuvrir }) {
   return (
-    <article className={`ed-entree group relative overflow-hidden rounded-3xl border border-white/80 bg-white/65 p-4 shadow-[0_14px_28px_-18px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_34px_-18px_rgba(26,26,26,0.45),inset_0_1px_0_rgba(255,255,255,1)] ${className}`}
+    <article {...(onOuvrir ? { role: 'button', tabIndex: 0, onClick: onOuvrir, onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOuvrir() } }, 'aria-label': 'Voir les détails' } : {})}
+      className={`${onOuvrir ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 ' : ''}ed-entree group relative overflow-hidden rounded-3xl border border-white/80 bg-white/65 p-4 shadow-[0_14px_28px_-18px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_34px_-18px_rgba(26,26,26,0.45),inset_0_1px_0_rgba(255,255,255,1)] ${className}`}
       style={{ animationDelay: `${Math.min(i, 9) * 45}ms`, borderColor: `${couleur}33` }}>
       <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-25 blur-2xl transition-opacity group-hover:opacity-40" style={{ background: couleur }} />
       <div className="relative">{children}</div>
@@ -122,7 +123,7 @@ export default function Sante() {
       </div>
 
       {tab === 'interventions' && <Interventions fiches={fiches} stock={stock} especes={especes} user={user} generateRapportPDF={generateRapportPDF} />}
-      {tab === 'stock' && <StockVaccins stock={stock} user={user} />}
+      {tab === 'stock' && <StockVaccins stock={stock} user={user} fiches={fiches} />}
       {tab === 'rdv' && <RendezVous fiches={fiches} user={user} />}
       {tab === 'bilan' && <Bilan fiches={fiches} stock={stock} />}
     </div>
@@ -130,6 +131,48 @@ export default function Sante() {
 }
 
 // ─────────── Onglet INTERVENTIONS ───────────
+const joursJusqua = (d) => Math.round((new Date(d + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 86400000)
+
+// Fenêtre « fiche » : en-tête coloré, chiffres clés en tuiles, puis lignes libellé / valeur, note et liste liée éventuelles.
+function FicheSante({ ouvert, onClose, icone, couleur, titre, sous, tuiles = [], lignes = [], puces = [], puceTitre, note, liee, pied }) {
+  const lignesVisibles = lignes.filter(([, v]) => v !== undefined && v !== null && v !== '')
+  return (
+    <ModalAgro open={ouvert} onClose={onClose} title={titre} titreHero={titre} icone={icone} intro={sous} size="lg"
+      footer={<>{pied}<Button variant="ghost" onClick={onClose}>Fermer</Button></>}>
+      <div className="space-y-3">
+        {tuiles.length > 0 && (
+          <div className={`grid gap-2.5 ${tuiles.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
+            {tuiles.map((t) => <TuileVerre key={t.titre} icone={t.icone} couleur={t.couleur || couleur} titre={t.titre} valeur={t.valeur} sous={t.sous} />)}
+          </div>
+        )}
+        {lignesVisibles.length > 0 && (
+          <dl className="divide-y divide-white/70 overflow-hidden rounded-2xl border border-white/80 bg-white/60 backdrop-blur-md">
+            {lignesVisibles.map(([k, v]) => (
+              <div key={k} className="flex items-baseline justify-between gap-4 px-3.5 py-2.5">
+                <dt className="text-[11px] font-extrabold uppercase tracking-wide text-gray-500">{k}</dt>
+                <dd className="min-w-0 text-right text-sm font-semibold text-gray-800">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {puces.length > 0 && (
+          <div className="rounded-2xl border border-white/80 bg-white/60 p-3 backdrop-blur-md">
+            <p className="mb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500">{puceTitre}</p>
+            <div className="flex flex-wrap gap-1.5">{puces.map((p) => <span key={p} className="rounded-full border border-white/80 bg-white/80 px-2 py-0.5 font-mono text-[11px] font-bold text-gray-700">{p}</span>)}</div>
+          </div>
+        )}
+        {note && (
+          <div className="rounded-2xl border border-white/80 bg-white/60 p-3 backdrop-blur-md">
+            <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Notes</p>
+            <p className="whitespace-pre-line text-sm text-gray-700">{note}</p>
+          </div>
+        )}
+        {liee}
+      </div>
+    </ModalAgro>
+  )
+}
+
 function statsSante(fiches, stock) {
   const parType = {}
   let totalAnimaux = 0
@@ -148,6 +191,7 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
   const [filtreType, setFiltreType] = useState('')
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
+  const [detailId, setDetailId] = useState(null)
 
   const liste = useMemo(
     () => [...fiches].filter((f) => !filtreType || f.type === filtreType).sort((a, b) => (a.date < b.date ? 1 : -1)),
@@ -301,14 +345,14 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
             const st = styleType(r.type)
             const Ic = st.icone
             return (
-              <CarteSante key={r.id} couleur={st.c} i={i}>
+              <CarteSante key={r.id} couleur={st.c} i={i} onOuvrir={() => setDetailId(r.id)}>
                 <div className="flex items-start gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(st.c)}><Ic size={20} /></span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-extrabold text-gray-900">{r.produit}</p>
                     <p className="text-xs font-semibold" style={{ color: st.c }}>{sansEmoji(labelOf(r.type))} · {r.especeNom}</p>
                   </div>
-                  {!lectureSeule && <button onClick={() => supprimer(r)} aria-label="Supprimer" className="icone-verre icone-verre--danger rounded-xl p-1.5"><Trash2 size={15} /></button>}
+                  {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} aria-label="Supprimer" className="icone-verre icone-verre--danger rounded-xl p-1.5"><Trash2 size={15} /></button>}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   <Puce icone={CalendarDays}>{formatDateShort(r.date)}</Puce>
@@ -322,6 +366,30 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
           })}
         </div>
       )}
+
+      {(() => {
+        const r = fiches.find((x) => x.id === detailId)
+        if (!r) return null
+        const st = styleType(r.type)
+        const prod = stock.find((x) => x.id === r.produitStockId)
+        const j = r.prochainRdv ? joursJusqua(r.prochainRdv) : null
+        return (
+          <FicheSante ouvert onClose={() => setDetailId(null)} icone={st.icone} couleur={st.c} titre={r.produit || 'Intervention'}
+            sous={`${sansEmoji(labelOf(r.type))} · ${r.especeNom || 'espèce non précisée'} · ${formatDateShort(r.date)}`}
+            tuiles={[
+              { icone: PawPrint, titre: 'Animaux traités', valeur: r.nombreAnimaux || 0, sous: r.especeNom || '', couleur: '#16a34a' },
+              { icone: Syringe, titre: 'Produit utilisé', valeur: r.produitStockId ? `${r.quantiteUtilisee || 0} ${prod?.unite || ''}` : (r.dosage || 'Saisie libre'), sous: prod ? `Stock : ${prod.nom}` : (r.dosage ? 'Dosage' : ''), couleur: st.c },
+              { icone: CalendarClock, titre: 'Prochain RDV', valeur: r.prochainRdv ? formatDateShort(r.prochainRdv) : 'Aucun', sous: r.prochainRdv ? (r.rdvFait ? 'Clôturé' : j < 0 ? `En retard de ${-j} j` : j === 0 ? "Aujourd'hui" : `Dans ${j} j`) : '', couleur: r.prochainRdv && !r.rdvFait && j < 0 ? '#dc2626' : '#7c3aed' }
+            ]}
+            lignes={[
+              ['Date', formatDateShort(r.date)], ['Type', sansEmoji(labelOf(r.type))], ['Espèce', r.especeNom], ['Produit', r.produit],
+              ['Dosage', r.dosage], ['Vétérinaire', r.veterinaire], ['Note du rendez-vous', r.rdvNote], ['Enregistré par', r.creeParNom]
+            ]}
+            puces={String(r.animauxIds || '').split(',').map((x) => x.trim()).filter(Boolean)} puceTitre="Numéros des animaux"
+            note={r.description}
+            pied={!lectureSeule && <Button variant="danger" onClick={() => { setDetailId(null); supprimer(r) }}><Trash2 size={15} /> Supprimer</Button>} />
+        )
+      })()}
 
       <ModalAgro open={open} onClose={() => setOpen(false)} title="Nouvelle intervention sanitaire" size="lg" intro="Soin ou vaccination : le produit du stock est décompté automatiquement."
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
@@ -380,10 +448,11 @@ function Interventions({ fiches, stock, especes, user, generateRapportPDF }) {
 }
 
 // ─────────── Onglet STOCK VACCINS ───────────
-function StockVaccins({ stock, user }) {
+function StockVaccins({ stock, user, fiches = [] }) {
   const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(null)
+  const [detailId, setDetailId] = useState(null)
 
   const liste = useMemo(() => [...stock].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')), [stock])
 
@@ -453,15 +522,15 @@ function StockVaccins({ stock, user }) {
             const base = Math.max((r.seuilAlerte || 0) * 3, q, 1)
             const pct = Math.max(q > 0 ? 6 : 0, Math.min(100, Math.round((q / base) * 100)))
             return (
-              <CarteSante key={r.id} couleur={c} i={i}>
+              <CarteSante key={r.id} couleur={c} i={i} onOuvrir={() => setDetailId(r.id)}>
                 <div className="flex items-start gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={icone3D(c)}><Package size={20} /></span>
                   <div className="min-w-0 flex-1">
-                    <button onClick={() => openCreate(r)} className="block max-w-full truncate text-left font-extrabold text-gray-900 hover:underline">{r.nom}</button>
+                    <span className="block max-w-full truncate text-left font-extrabold text-gray-900">{r.nom}</span>
                     <p className="text-xs text-gray-500">{r.type || 'Produit'}</p>
                   </div>
                   <Badge tone={e.tone}>{e.label}</Badge>
-                  {!lectureSeule && <button onClick={() => supprimer(r)} aria-label="Supprimer" className="icone-verre icone-verre--danger rounded-xl p-1.5"><Trash2 size={15} /></button>}
+                  {!lectureSeule && <button onClick={(e) => { e.stopPropagation(); supprimer(r) }} aria-label="Supprimer" className="icone-verre icone-verre--danger rounded-xl p-1.5"><Trash2 size={15} /></button>}
                 </div>
                 <div className="mt-3 flex items-end justify-between">
                   <p className="text-2xl font-black tabular-nums text-gray-900">{q}<span className="ml-1 text-sm font-bold text-gray-500">{r.unite || ''}</span></p>
@@ -476,6 +545,44 @@ function StockVaccins({ stock, user }) {
           })}
         </div>
       )}
+
+      {(() => {
+        const r = liste.find((x) => x.id === detailId)
+        if (!r) return null
+        const e = etatStock(r)
+        const c = COUL_TONE[e.tone] || '#64748b'
+        const jp = r.peremption ? joursJusqua(r.peremption) : null
+        const emplois = fiches.filter((f) => f.produitStockId === r.id || (f.produit || '').trim().toLowerCase() === (r.nom || '').trim().toLowerCase())
+          .sort((a, b) => (a.date < b.date ? 1 : -1))
+        return (
+          <FicheSante ouvert onClose={() => setDetailId(null)} icone={Package} couleur={c} titre={r.nom}
+            sous={`${r.type || 'Produit'} · ${e.label}`}
+            tuiles={[
+              { icone: Package, titre: 'En stock', valeur: `${r.quantite ?? 0} ${r.unite || ''}`, sous: r.seuilAlerte ? `Alerte à ${r.seuilAlerte}` : 'Pas de seuil', couleur: c },
+              { icone: CalendarClock, titre: 'Péremption', valeur: r.peremption ? formatDateShort(r.peremption) : 'Non renseignée', sous: r.peremption ? (jp < 0 ? `Périmé depuis ${-jp} j` : jp === 0 ? "Périme aujourd'hui" : `Dans ${jp} j`) : '', couleur: r.peremption && jp < 0 ? '#dc2626' : '#475569' },
+              { icone: Syringe, titre: 'Utilisations', valeur: emplois.length, sous: emplois.length ? `Dernière : ${formatDateShort(emplois[0].date)}` : 'Jamais utilisé', couleur: '#0284c7' }
+            ]}
+            lignes={[['Type', r.type], ['Unité', r.unite], ["Seuil d'alerte", r.seuilAlerte || ''], ['État', e.label]]}
+            note={r.note}
+            liee={emplois.length > 0 && (
+              <div className="rounded-2xl border border-white/80 bg-white/60 p-3 backdrop-blur-md">
+                <p className="mb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Dernières interventions avec ce produit</p>
+                <ul className="space-y-1">
+                  {emplois.slice(0, 5).map((f) => (
+                    <li key={f.id} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate font-semibold text-gray-800">{f.especeNom || 'Espèce non précisée'} · {sansEmoji(labelOf(f.type))}</span>
+                      <span className="shrink-0 text-xs text-gray-500">{formatDateShort(f.date)} · {f.nombreAnimaux || 0} animal(aux)</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            pied={!lectureSeule && <>
+              <Button variant="danger" onClick={() => { setDetailId(null); supprimer(r) }}><Trash2 size={15} /> Supprimer</Button>
+              <Button variant="outline" onClick={() => { setDetailId(null); openCreate(r) }}>Modifier</Button>
+            </>} />
+        )
+      })()}
 
       <ModalAgro open={open} onClose={() => setOpen(false)} title={form?.id ? 'Modifier le produit' : 'Nouveau produit'}
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button onClick={save}>Enregistrer</Button></>}>
@@ -506,6 +613,7 @@ function StockVaccins({ stock, user }) {
 // ─────────── Onglet RENDEZ-VOUS ───────────
 function RendezVous({ fiches, user }) {
   const lectureSeule = isReadOnlyRole(useAuth((s) => s.role))
+  const [detailId, setDetailId] = useState(null)
   const rdvs = useMemo(
     () => fiches.filter((f) => f.prochainRdv).sort((a, b) => (a.prochainRdv < b.prochainRdv ? -1 : 1)),
     [fiches]
@@ -524,7 +632,7 @@ function RendezVous({ fiches, user }) {
     const d = new Date(r.prochainRdv + 'T00:00:00')
     const c = retard ? '#dc2626' : '#16a34a'
     return (
-      <CarteSante couleur={c} i={i}>
+      <CarteSante couleur={c} i={i} onOuvrir={() => setDetailId(r.id)}>
         <div className="flex items-center gap-3">
           <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl text-white" style={icone3D(c)}>
             <span className="text-xl font-black leading-none">{d.getDate()}</span>
@@ -538,7 +646,7 @@ function RendezVous({ fiches, user }) {
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             {retard && <Badge tone="danger">En retard</Badge>}
-            {!lectureSeule && <Button size="sm" variant="outline" onClick={() => marquerFait(r)}><CheckCircle2 size={15} /> Fait</Button>}
+            {!lectureSeule && <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); marquerFait(r) }}><CheckCircle2 size={15} /> Fait</Button>}
           </div>
         </div>
       </CarteSante>
@@ -547,6 +655,28 @@ function RendezVous({ fiches, user }) {
 
   return (
     <div className="space-y-4">
+      {(() => {
+        const r = fiches.find((x) => x.id === detailId)
+        if (!r) return null
+        const j = joursJusqua(r.prochainRdv)
+        const retard = !r.rdvFait && j < 0
+        const c = r.rdvFait ? '#64748b' : retard ? '#dc2626' : '#16a34a'
+        const st = styleType(r.type)
+        return (
+          <FicheSante ouvert onClose={() => setDetailId(null)} icone={CalendarClock} couleur={c} titre={`${r.especeNom || 'Rendez-vous'} : ${r.produit || ''}`}
+            sous={`Suivi ${sansEmoji(labelOf(r.type)).toLowerCase()} · ${formatDateShort(r.prochainRdv)}`}
+            tuiles={[
+              { icone: CalendarClock, titre: 'Date du rendez-vous', valeur: formatDateShort(r.prochainRdv), sous: r.rdvFait ? 'Clôturé' : retard ? `En retard de ${-j} j` : j === 0 ? "Aujourd'hui" : `Dans ${j} j`, couleur: c },
+              { icone: PawPrint, titre: 'Animaux concernés', valeur: r.nombreAnimaux || 0, sous: r.especeNom || '', couleur: '#16a34a' },
+              { icone: st.icone, titre: 'Intervention d\'origine', valeur: sansEmoji(labelOf(r.type)), sous: formatDateShort(r.date), couleur: st.c }
+            ]}
+            lignes={[['Produit', r.produit], ['Dosage', r.dosage], ['Vétérinaire', r.veterinaire], ['Programmé par', r.creeParNom], ['Statut', r.rdvFait ? 'Clôturé' : retard ? 'En retard' : 'À venir']]}
+            puces={String(r.animauxIds || '').split(',').map((x) => x.trim()).filter(Boolean)} puceTitre="Numéros des animaux"
+            note={r.rdvNote}
+            pied={!lectureSeule && !r.rdvFait && <Button variant="success" onClick={() => { setDetailId(null); marquerFait(r) }}><CheckCircle2 size={15} /> Marquer comme fait</Button>} />
+        )
+      })()}
+
       <div className="ed-entree flex items-center gap-2.5 rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 to-white/70 px-4 py-3 text-sm text-sky-900 backdrop-blur-md">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#0284c7')}><Bell size={16} /></span>
         Un rappel automatique est envoyé à l'auteur d'un rendez-vous dès qu'il arrive à échéance (la veille ou le jour même).

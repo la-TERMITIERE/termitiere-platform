@@ -19,8 +19,9 @@ export default function EtatSalaires() {
   const totaux = useMemo(() => b.reduce((s, x) => ({
     brut: s.brut + (Number(x.brutTotal) || 0), net: s.net + (Number(x.net) || 0),
     cnss: s.cnss + (Number(x.cnssSalarie) || 0) + (Number(x.cnssEmployeur) || 0),
+    amu: s.amu + (Number(x.amuEmployeur) || 0),
     its: s.its + (Number(x.its) || 0), cout: s.cout + (Number(x.coutEmployeur) || 0)
-  }), { brut: 0, net: 0, cnss: 0, its: 0, cout: 0 }), [b])
+  }), { brut: 0, net: 0, cnss: 0, amu: 0, its: 0, cout: 0 }), [b])
 
   const parDept = useMemo(() => {
     const acc = {}
@@ -46,7 +47,7 @@ export default function EtatSalaires() {
             { key: 'departement', label: 'Département', width: 18 },
             { key: 'brutTotal', label: 'Brut', type: 'money', width: 15 },
             { key: 'cnssSalarie', label: 'CNSS sal.', type: 'money', width: 14 },
-            { key: 'its', label: 'ITS', type: 'money', width: 14 },
+            { key: 'its', label: 'IRPP', type: 'money', width: 14 },
             { key: 'net', label: 'Net à payer', type: 'money', width: 15 }
           ],
           rows: b,
@@ -78,7 +79,7 @@ export default function EtatSalaires() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard title="Masse brute" value={formatMoney(totaux.brut)} accent="#7c3aed" />
         <StatCard title="Net payé" value={formatMoney(totaux.net)} accent="#16a34a" />
-        <StatCard title="Charges (CNSS+ITS)" value={formatMoney(totaux.cnss + totaux.its)} accent="#f59e0b" />
+        <StatCard title="Charges (CNSS+AMU+IRPP)" value={formatMoney(totaux.cnss + totaux.amu + totaux.its)} accent="#f59e0b" />
         <StatCard title="Coût employeur total" value={formatMoney(totaux.cout)} accent="#0284c7" />
       </div>
 
