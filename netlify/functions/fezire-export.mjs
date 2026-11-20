@@ -6,7 +6,8 @@
 // noms de champs canoniques FEZIRE (cf. docs/FEZIRE_CONNECT.md) : chaque règle de
 // correspondance est donc une simple copie à l'identique.
 //
-// PÉRIMÈTRE ACTUEL : MAXI AGRO uniquement. LECTURE SEULE — rien n'est jamais écrit.
+// PÉRIMÈTRE : Maxi Agro, Briqueterie, Logistique, Maxi Gym, Garderie. LECTURE SEULE —
+// rien n'est jamais écrit dans notre base.
 //
 // ADRESSES (cf. redirection dans netlify.toml) :
 //   GET /api/fezire/v1/<ressource>?page=1&per_page=100&since=AAAA-MM-JJ
@@ -26,6 +27,11 @@
 //   FIREBASE_DB_URL          (optionnel)   défaut = base de production max-agro-83baf
 //   FEZIRE_MOUVEMENTS_DEPUIS (optionnel)   date de départ des mouvements de stock (défaut 2026-10-09)
 import crypto from 'node:crypto'
+// Logique partagée avec l'application (modules purs, empaquetés par esbuild) : mêmes
+// ventes, mêmes encaissements, mêmes flux de trésorerie que la Comptabilité.
+import { ventesUnifiees, avecEncaissements, modeCanonique } from '../../src/shared/ventes.js'
+import { comptesTresorerie, fluxTresorerie, paramsEffectifs, compteAffecte, COLLECTIONS_BANQUE } from '../../src/modules/comptabilite/tresorerie/logic.js'
+import { MAP_CATEGORIE_COMPTE, COMPTE_CHARGE_DEFAUT, COMPTE_IMMO_DEFAUT } from '../../src/modules/comptabilite/passerelles.js'
 
 const DB_URL = process.env.FIREBASE_DB_URL || 'https://max-agro-83baf-default-rtdb.firebaseio.com'
 const ROOT = 'tp' // namespace Termitière (cf. src/core/db.firebase.js)
@@ -230,23 +236,27 @@ function totaux(f) {
   return { total: Math.round(apresRemise + taxe), tax_total: Math.round(taxe) }
 }
 
-// Une ligne n'est envoyée que si son article existe au référentiel (donc a été importé
-// comme produit) : FEZIRE refuse toute commande dont une ligne ne désigne pas un
-// produit connu (« Chaque ligne doit désigner un produit externe »). Une commande
-// sans aucune ligne valable n'est pas envoyée.
+// FEZIRE refuse toute ligne qui ne désigne pas un produit connu (« Chaque ligne doit
+// désigner un produit externe ») : une ligne dont l'article n'est pas au référentiel
+// passe sur le produit de service « Frais et divers », puis une ligne d'écart ramène
+// la somme au total facturé (remise %, TVA). Commande sans aucune ligne : non envoyée.
 function lignesCommande(f, articles) {
-  return lignesEffectives(f)
-    .map((l, i) => ({ l, i }))
-    .filter(({ l }) => l.articleId && articles.has(l.articleId))
-    .map(({ l, i }) => ({
-      external_id: `agro-cmd-${f.id}-l${i + 1}`,
-      product_id: idProduit(l.articleId),
-      sku: skuProduit(l.articleId),
-      label: l.article || '',
-      quantity: entier(l.qte),
-      unit_price: nombre(l.prixUnit ?? l.prix),
-      total: nombre(l.total) || entier(l.qte) * nombre(l.prixUnit ?? l.prix)
-    }))
+  const lignes = lignesEffectives(f)
+    .map((l, i) => {
+      const total = nombre(l.total) || entier(l.qte) * nombre(l.prixUnit ?? l.prix)
+      if (!(l.articleId && articles.has(l.articleId))) return ligneService('agro', f, `l${i + 1}`, DIVERS, l.article, total)
+      return {
+        external_id: `agro-cmd-${f.id}-l${i + 1}`,
+        product_id: idProduit(l.articleId),
+        sku: skuProduit(l.articleId),
+        label: l.article || '',
+        quantity: entier(l.qte),
+        unit_price: nombre(l.prixUnit ?? l.prix),
+        total
+      }
+    })
+    .filter((l) => l.total || l.product_id !== `agro-art-${DIVERS}`)
+  return equilibrer('agro', f, lignes, totaux(f).total)
 }
 
 const articlesConnus = (referentiel) => new Set(
@@ -287,12 +297,366 @@ export function factures(facturesAgro, referentiel) {
   }))
 }
 
+// ───────────────────────── Autres modules ─────────────────────────
+// Chaque module verse ses données dans les MÊMES listes canoniques que Maxi Agro,
+// sous un préfixe propre (briq-, logi-, gym-, gard-) : aucun doublon, aucune
+// correspondance supplémentaire à créer dans Connect. Pas de niveaux ni de
+// mouvements de stock pour ces modules tant que la sémantique de l'import STOCK
+// de FEZIRE n'est pas clarifiée (cf. docs/FEZIRE_CONNECT.md).
+
+const produit = (prefixe, id, nom, prix, cat, description) => ({
+  external_id: `${prefixe}-art-${id}`,
+  sku: `${prefixe.toUpperCase()}-${String(id).toUpperCase()}`,
+  name: nom || id,
+  description: description || null,
+  price: nombre(prix),
+  currency: DEVISE,
+  category_id: cat ? `${prefixe}-cat-${slug(cat)}` : null,
+  active: true
+})
+const categorie = (prefixe, libelleModule, cat) => ({
+  external_id: `${prefixe}-cat-${slug(cat)}`, name: `${libelleModule} · ${cat}`, parent_id: null
+})
+const client = (prefixe, nom, tel, adresse, email) => ({
+  external_id: `${prefixe}-cli-${slug(nom) || 'inconnu'}`, firstname: null, lastname: String(nom).trim(),
+  company: null, email: email || null, phone: tel || null, country: PAYS, city: null, address: adresse || null
+})
+// Dédoublonne par identifiant ; garde la fiche la plus renseignée.
+function uniques(liste) {
+  const m = new Map()
+  for (const e of liste) {
+    const prec = m.get(e.external_id)
+    if (!prec || Object.values(e).filter(Boolean).length > Object.values(prec).filter(Boolean).length) m.set(e.external_id, e)
+  }
+  return [...m.values()]
+}
+// FEZIRE exige total de commande = somme des lignes. Or une facture contient aussi des
+// montants hors référentiel (frais de transport/lieu, matériel « Autre », article
+// supprimé…) et des corrections (remise %, montant modifié à la main) : ils partaient
+// dans le total mais pas dans les lignes → commande refusée (rapport FEZIRE du 29/10).
+// Ces montants passent désormais sur deux produits de service par module.
+const DIVERS = 'frais-divers'
+const AJUSTEMENT = 'remise-ajustement'
+// FEZIRE refuse un produit sans catégorie : ils vont dans une catégorie SERVICES du module.
+const categorieService = (prefixe, libelleModule) => categorie(prefixe, libelleModule, 'SERVICES')
+const produitsService = (prefixe, libelleModule) => [
+  produit(prefixe, DIVERS, `${libelleModule} · Frais et divers`, 0, 'SERVICES', 'Service'),
+  produit(prefixe, AJUSTEMENT, `${libelleModule} · Remise / ajustement`, 0, 'SERVICES', 'Ajustement')
+]
+const ligneService = (prefixe, f, suffixe, cle, label, montant) => ({
+  external_id: `${prefixe}-cmd-${f.id}-${suffixe}`, product_id: `${prefixe}-art-${cle}`,
+  sku: `${prefixe.toUpperCase()}-${cle.toUpperCase()}`, label: label || '',
+  quantity: 1, unit_price: montant, total: montant
+})
+// Ramène la somme des lignes au total facturé. Un écart positif devient une ligne
+// « Écart à régulariser ». Une remise (total revu à la baisse) est DÉDUITE des lignes,
+// en commençant par la plus grosse : FEZIRE refuse les prix négatifs (« Prix invalide »).
+// Une ligne réduite passe à la quantité 1 pour que quantité × prix = total, au centime près.
+function equilibrer(prefixe, f, lignes, total) {
+  const somme = lignes.reduce((s, l) => s + nombre(l.total), 0)
+  const ecart = Math.round((Math.round(nombre(total)) - somme) * 100) / 100
+  if (!lignes.length || !ecart) return lignes
+  if (ecart > 0) return [...lignes, ligneService(prefixe, f, 'ajust', DIVERS, 'Écart à régulariser', ecart)]
+  let reste = -ecart
+  const ordre = lignes.map((l, i) => i).sort((a, b) => nombre(lignes[b].total) - nombre(lignes[a].total))
+  const res = lignes.map((l) => ({ ...l }))
+  for (const i of ordre) {
+    if (reste <= 0) break
+    const l = res[i]
+    const retrait = Math.min(nombre(l.total), reste)
+    if (!retrait) continue
+    const nouveau = Math.round((nombre(l.total) - retrait) * 100) / 100
+    l.label = `${l.label}${l.quantity > 1 ? ` (× ${l.quantity})` : ''} · remise ${retrait}`
+    l.quantity = 1
+    l.unit_price = nouveau
+    l.total = nouveau
+    reste = Math.round((reste - retrait) * 100) / 100
+  }
+  // Ligne entièrement absorbée par la remise : retirée (un prix nul peut être refusé).
+  const nonNulles = res.filter((l) => nombre(l.total) > 0)
+  return nonNulles.length ? nonNulles : res
+}
+
+// FEZIRE refuse deux clients de même nom dans l'organisation : or un même nom peut
+// exister dans deux modules (ALEX en Logistique ET en Maxi Gym = deux identifiants).
+// Le premier garde son nom ; les suivants reçoivent le nom du module en suffixe.
+const LIBELLES_MODULES = { agro: 'Maxi Agro', briq: 'Briqueterie', logi: 'Logistique', gym: 'Maxi Gym', gard: 'Garderie' }
+function nomsDistincts(liste) {
+  const premier = new Map() // nom normalisé → external_id qui le porte
+  return liste.map((c) => {
+    const k = slug(c.lastname)
+    if (!premier.has(k)) { premier.set(k, c.external_id); return c }
+    if (premier.get(k) === c.external_id) return c
+    const p = c.external_id.split('-')[0]
+    return { ...c, lastname: `${c.lastname} (${LIBELLES_MODULES[p] || p})` }
+  })
+}
+
+// Une vente « simple » : commande + facture (+ paiement) à partir de lignes déjà canoniques.
+function vente(prefixe, f, { numero, date, clientNom, lignes, total, statutCommande = 'completed' }) {
+  const cliId = (clientNom || '').trim() ? `${prefixe}-cli-${slug(clientNom)}` : null
+  lignes = equilibrer(prefixe, f, lignes, total)
+  const cmd = lignes.length ? {
+    external_id: `${prefixe}-cmd-${f.id}`, customer_id: cliId, reference: numero || f.id, currency: DEVISE,
+    total: Math.round(nombre(total)), tax_total: 0, status: statutCommande, ordered_at: iso(date), lines: lignes
+  } : null
+  const fac = {
+    external_id: `${prefixe}-fac-${f.id}`, order_id: cmd ? cmd.external_id : null, customer_id: cliId,
+    number: numero || f.id, total: Math.round(nombre(total)), currency: DEVISE, status: 'issued',
+    issued_at: iso(date), due_at: null
+  }
+  return { cmd, fac }
+}
+
+// BRIQUETERIE (module « evenementiel ») : briques et matières, factures au format Maxi Agro.
+const BRIQ = 'briq'
+const briqueterie = {
+  categories: () => ['BRIQUES', 'MATIÈRES'].map((c) => categorie(BRIQ, 'Briqueterie', c)),
+  produits: (ref) => [
+    ...ref.filter((r) => r.type === 'brique').map((b) => produit(BRIQ, b.id, b.nom, b.tarifVente, 'BRIQUES', 'Brique')),
+    ...ref.filter((r) => r.type === 'matiere').map((m) => produit(BRIQ, m.id, m.nom, 0, 'MATIÈRES', ['Matière première', m.unite].filter(Boolean).join(' · ')))
+  ],
+  entrepots: () => [{ external_id: `${BRIQ}-site`, name: 'Briqueterie', location: 'Briqueterie', active: true }],
+  ventes: (facs, ref) => {
+    const articles = new Set(ref.filter((r) => r.type === 'brique' || r.type === 'matiere').map((r) => r.id))
+    return facs.filter((f) => !['brouillon', 'annulee'].includes(f.statut)).map((f) => {
+      const lignes = (f.lignes || []).map((l, i) => {
+        const montant = nombre(l.total) || entier(l.qte) * nombre(l.prixUnit)
+        // Article absent du référentiel : son montant passe en « Frais et divers ».
+        if (!(l.articleId && articles.has(l.articleId))) return ligneService(BRIQ, f, `l${i + 1}`, DIVERS, l.article, montant)
+        return {
+          external_id: `${BRIQ}-cmd-${f.id}-l${i + 1}`, product_id: `${BRIQ}-art-${l.articleId}`,
+          sku: `${BRIQ.toUpperCase()}-${String(l.articleId).toUpperCase()}`, label: l.article || '',
+          quantity: entier(l.qte), unit_price: nombre(l.prixUnit), total: montant
+        }
+      }).filter((l) => l.total || l.product_id !== `${BRIQ}-art-${DIVERS}`)
+      return { f, ...vente(BRIQ, f, { numero: f.numero, date: f.date, clientNom: f.client?.nom, lignes, total: f.totalTTC ?? totaux(f).total }) }
+    })
+  },
+  clients: (facs) => facs.filter((f) => (f.client?.nom || '').trim() && !['brouillon', 'annulee'].includes(f.statut))
+    .map((f) => client(BRIQ, f.client.nom, f.client.tel, f.client.adresse, f.client.email))
+}
+
+// LOGISTIQUE : location de matériel (sites Lomé / Kara). Seules les factures APPROUVÉES sont définitives.
+const LOGI = 'logi'
+const logistique = {
+  categories: (ref) => [...new Set(ref.filter((r) => r.type === 'materiel').map((m) => m.cat).filter(Boolean))].sort()
+    .map((c) => categorie(LOGI, 'Logistique', c)),
+  produits: (ref) => ref.filter((r) => r.type === 'materiel')
+    .map((m) => produit(LOGI, m.id, m.nom, m.tarifLocation, m.cat, ['Location', m.unite].filter(Boolean).join(' · '))),
+  entrepots: () => [
+    { external_id: `${LOGI}-lome`, name: 'Logistique · Lomé', location: 'Lomé', active: true },
+    { external_id: `${LOGI}-kara`, name: 'Logistique · Kara', location: 'Kara', active: true }
+  ],
+  ventes: (facs, ref) => {
+    const articles = new Set(ref.filter((r) => r.type === 'materiel').map((r) => r.id))
+    return facs.filter((f) => f.statut === 'approuvee').map((f) => {
+      const lignes = [
+        ...(f.lignes || []).map((l, i) => {
+          const jours = entier(l.nbJours) || 1
+          const montant = nombre(l.montant) || entier(l.qte) * jours * nombre(l.tarifUnitaire)
+          const label = `${l.materielNom || ''} · ${jours} jour(s)`.trim()
+          // Matériel « Autre » (saisie libre) ou retiré du référentiel → « Frais et divers ».
+          if (!(l.materielId && articles.has(l.materielId))) return ligneService(LOGI, f, `l${i + 1}`, DIVERS, label, montant)
+          return {
+            external_id: `${LOGI}-cmd-${f.id}-l${i + 1}`, product_id: `${LOGI}-art-${l.materielId}`,
+            sku: `${LOGI.toUpperCase()}-${String(l.materielId).toUpperCase()}`, label,
+            quantity: entier(l.qte), unit_price: nombre(l.tarifUnitaire) * jours, total: montant
+          }
+        }),
+        // Frais facturés au client (transport, lieu…) : comptés dans le total de la facture.
+        ...(f.frais || []).map((x, i) => ligneService(LOGI, f, `frais${i + 1}`, DIVERS, x.label || 'Frais', nombre(x.montant)))
+      ].filter((l) => l.total || l.product_id !== `${LOGI}-art-${DIVERS}`)
+      return { f, ...vente(LOGI, f, { numero: f.num, date: f.date, clientNom: f.clientNom, lignes, total: f.totalTTC ?? f.totalHT }) }
+    })
+  },
+  clients: (facs, fiches) => facs.filter((f) => f.statut === 'approuvee' && (f.clientNom || '').trim()).map((f) => {
+    const fiche = fiches.find((c) => slug(c.nom) === slug(f.clientNom)) || {}
+    return client(LOGI, f.clientNom, fiche.telephone || fiche.tel, fiche.adresse, fiche.email)
+  })
+}
+
+// MAXI GYM : séances, abonnements et règlements partenaires (reçus encaissés immédiatement).
+const GYM = 'gym'
+const SERVICES_GYM = { seance: 'Séance', abonnement: 'Abonnement', reglement_partenaire: 'Règlement partenaire' }
+const serviceGym = (t) => (SERVICES_GYM[t] ? t : 'seance')
+const maxiGym = {
+  categories: () => [categorie(GYM, 'Maxi Gym', 'SERVICES')],
+  produits: () => Object.entries(SERVICES_GYM).map(([id, nom]) => produit(GYM, id, `Maxi Gym · ${nom}`, 0, 'SERVICES', 'Service')),
+  ventes: (facs) => facs.filter((f) => nombre(f.montant) > 0).map((f) => {
+    const s = serviceGym(f.sourceType)
+    const lignes = [{
+      external_id: `${GYM}-cmd-${f.id}-l1`, product_id: `${GYM}-art-${s}`, sku: `GYM-${s.toUpperCase()}`,
+      label: f.description || SERVICES_GYM[s], quantity: 1, unit_price: nombre(f.montant), total: nombre(f.montant)
+    }]
+    const { cmd, fac } = vente(GYM, f, { numero: f.numero, date: f.date, clientNom: f.clientNom, lignes, total: f.montant })
+    const pay = {
+      external_id: `${GYM}-pay-${f.id}`, order_id: cmd.external_id, amount: Math.round(nombre(f.montant)),
+      currency: DEVISE, method: 'cash', status: 'paid', paid_at: iso(f.date)
+    }
+    return { f, cmd, fac, pay }
+  }),
+  clients: (facs, fiches) => facs.filter((f) => (f.clientNom || '').trim()).map((f) => {
+    const fiche = fiches.find((c) => slug(c.nom) === slug(f.clientNom)) || {}
+    return client(GYM, f.clientNom, f.clientTelephone || fiche.telephone, null, null)
+  })
+}
+
+// GARDERIE : frais encaissés. Le client est le PARENT (aucune donnée d'enfant envoyée).
+const GARD = 'gard'
+const SERVICES_GARD = { inscription: 'Inscription', mensuel: 'Scolarité mensuelle', journalier: 'Garde journalière' }
+const serviceGard = (t) => (SERVICES_GARD[t] ? t : 'mensuel')
+const parentDe = (p, enfants) => {
+  const e = enfants.find((x) => x.id === p.enfantId) || {}
+  return { nom: (e.parentNom || '').trim() || `Parent ${String(p.enfantId || p.id).slice(-6)}`, tel: e.parentContact || null }
+}
+const garderie = {
+  categories: () => [categorie(GARD, 'Garderie', 'SERVICES')],
+  produits: () => Object.entries(SERVICES_GARD).map(([id, nom]) => produit(GARD, id, `Garderie · ${nom}`, 0, 'SERVICES', 'Service')),
+  ventes: (paiements, enfants) => paiements.filter((p) => nombre(p.montantDu) > 0 || nombre(p.montantPaye) > 0).map((p) => {
+    const s = serviceGard(p.type)
+    const du = nombre(p.montantDu) || nombre(p.montantPaye)
+    const periode = p.mois && p.annee ? ` ${String(p.mois).padStart(2, '0')}/${p.annee}` : ''
+    const parent = parentDe(p, enfants)
+    const lignes = [{
+      external_id: `${GARD}-cmd-${p.id}-l1`, product_id: `${GARD}-art-${s}`, sku: `GARD-${s.toUpperCase()}`,
+      label: `${SERVICES_GARD[s]}${periode}`, quantity: 1, unit_price: du, total: du
+    }]
+    const { cmd, fac } = vente(GARD, p, { numero: `GARD-${p.id}`, date: p.date, clientNom: parent.nom, lignes, total: du })
+    const paye = nombre(p.montantPaye)
+    const pay = paye > 0 ? {
+      external_id: `${GARD}-pay-${p.id}`, order_id: cmd.external_id, amount: Math.round(paye), currency: DEVISE,
+      method: p.modePaiement || 'cash', status: paye >= du ? 'paid' : 'partial', paid_at: iso(p.date)
+    } : null
+    return { f: p, cmd, fac, pay }
+  }),
+  clients: (paiements, enfants) => paiements.map((p) => {
+    const parent = parentDe(p, enfants)
+    return client(GARD, parent.nom, parent.tel, null, null)
+  })
+}
+
+// Assemble toutes les ventes des modules non-Agro (calculé une fois par appel).
+function ventesModules(d) {
+  return [
+    ...briqueterie.ventes(d.evenementiel_factures || [], d.evenementiel_referentiel || []),
+    ...logistique.ventes(d.logistique_factures || [], d.logistique_referentiel || []),
+    ...maxiGym.ventes(d.gym_factures || []),
+    ...garderie.ventes(d.garderie_paiements || [], d.garderie_enfants || [])
+  ]
+}
+
+// ───────────────────────── Règlements & trésorerie ─────────────────────────
+// Préfixe FEZIRE de chaque secteur (identifiants des commandes : <préfixe>-cmd-<id>).
+const PREFIXE_SECTEUR = { agro: 'agro', evenementiel: 'briq', logistique: 'logi', gym: 'gym', garderie: 'gard' }
+
+function ventesAvecReglements(d) {
+  const v = (col) => d[col] || []
+  return avecEncaissements(ventesUnifiees({
+    facturesAgro: v('agro_factures'), facturesLogistique: v('logistique_factures'), facturesEvenementiel: v('evenementiel_factures'),
+    facturesGym: v('gym_factures'), paiementsGarderie: v('garderie_paiements'), enfantsGarderie: v('garderie_enfants')
+  }), { creances: v('treso_creances'), reglements: v('treso_reglements') })
+}
+
+// PAYMENT : un règlement par encaissement, rattaché à une commande déjà exportée.
+//  - Agro, Briqueterie, Logistique : la facture définitive est encaissée à sa date (règle
+//    de l'application) sauf si la Trésorerie l'a passée « à crédit » → <préfixe>-pay-<id>.
+//  - Gym et Garderie : encaissements immédiats déjà émis plus bas (identifiants inchangés).
+//  - Règlements saisis en Trésorerie sur une créance : treso-reg-<id>, tous secteurs.
+function reglements(d, commandesExportees) {
+  const commandes = new Set(commandesExportees.map((o) => o.external_id))
+  const aCredit = new Set((d.treso_creances || []).filter((c) => c.aCredit).map((c) => c.cle || c.id))
+  const out = []
+  for (const vente of ventesAvecReglements(d)) {
+    const prefixe = PREFIXE_SECTEUR[vente.secteur]
+    const commande = `${prefixe}-cmd-${vente.sourceId}`
+    if (!prefixe || !commandes.has(commande)) continue
+    for (const e of vente.encaissements) {
+      if (e.immediat && (vente.secteur === 'gym' || vente.secteur === 'garderie')) continue
+      out.push({
+        external_id: e.immediat ? `${prefixe}-pay-${vente.sourceId}` : `treso-reg-${e.id}`,
+        order_id: commande, amount: Math.round(e.montant), currency: DEVISE, method: modeCanonique(e.mode),
+        status: 'paid', paid_at: iso(e.date)
+      })
+    }
+  }
+  return { liste: out, aCredit }
+}
+
+// Compte de charge d'une dépense (même correspondance que la Comptabilité).
+const compteDepense = (dep) => ((dep.natureFlux || 'exploitation') === 'investissement'
+  ? COMPTE_IMMO_DEFAUT : (MAP_CATEGORIE_COMPTE[dep.categorie] || COMPTE_CHARGE_DEFAUT))
+const NATURE_FEZIRE = {
+  DEPENSE: 'ACHAT', REVENU: 'AUTRE_PRODUIT', VIREMENT_INTERNE: 'VIREMENT_INTERNE', VERSEMENT_BANQUE: 'VIREMENT_INTERNE',
+  RETRAIT_BANQUE: 'VIREMENT_INTERNE', SOLDE_OUVERTURE: 'SOLDE_OUVERTURE'
+}
+
+// CASH_MOVEMENT : tout l'argent qui entre ou sort hors ventes déjà réglées par PAYMENT —
+// dépenses décaissées, rentrées saisies, mouvements et virements de Trésorerie, dépôts et
+// retraits bancaires, soldes d'ouverture, versements des projets, salaires payés.
+function mouvementsTresorerie(d) {
+  const v = (col) => d[col] || []
+  const params = paramsEffectifs(v('treso_params').find((x) => x.id === 'config'))
+  const comptes = comptesTresorerie({ comptes: v('treso_comptes'), banques: v('compta_banques') })
+  const mvtsBanque = COLLECTIONS_BANQUE.flatMap(({ secteur, col }) => v(col).map((m) => ({ ...m, secteur })))
+  const depenses = v('depense_depenses')
+  const parDepense = new Map(depenses.map((x) => [`dep-${x.id}`, x]))
+  const flux = fluxTresorerie({ comptes, params, mouvements: v('treso_mouvements'), virements: v('treso_virements'), mvtsBanque, ventes: [], depenses, revenusManuels: v('depense_revenus_manuels'), facturesFournisseurs: v('compta_factures_fournisseurs') })
+  const contrepartie = (f) => f.source === 'depense' ? compteDepense(parDepense.get(f.id) || {})
+    : (f.source === 'virement' || f.nature === 'VERSEMENT_BANQUE' || f.nature === 'RETRAIT_BANQUE') ? '585000'
+    : f.contrepartie || '471000'
+  // Code du compte d'argent attendu par FEZIRE (« code d'intégration » de son compte de trésorerie).
+  const codeDe = new Map(comptes.map((c) => [c.id, c.codeFezire || c.id]))
+  const code = (id) => codeDe.get(id) || id
+  const out = flux.map((f) => ({
+    external_id: `cash-${f.id}`, direction: f.sens, amount: f.montant, currency: DEVISE, occurred_at: iso(f.date),
+    account: code(f.compteId), payment_method: f.mode || 'CASH', nature: NATURE_FEZIRE[f.nature] || f.nature,
+    label: f.libelle || 'Mouvement', counterpart_account: contrepartie(f),
+    counterparty: f.tiers ? { type: f.sens === 'IN' ? 'CUSTOMER' : 'SUPPLIER', external_id: null, name: f.tiers } : null,
+    reference: f.reference || null
+  }))
+  // Soldes initiaux des caisses / Mobile Money saisis en Trésorerie (les banques ont leurs « ouverture »).
+  for (const c of comptes.filter((x) => x.source === 'treso' && x.soldeInitial > 0)) {
+    out.push({
+      external_id: `cash-si-${c.id}`, direction: 'IN', amount: c.soldeInitial, currency: DEVISE, occurred_at: iso(c.dateSoldeInitial || '2026-01-01'),
+      account: code(c.id), payment_method: c.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'CASH', nature: 'SOLDE_OUVERTURE',
+      label: `Solde initial : ${c.nom}`, counterpart_account: '110000', counterparty: null, reference: `SI-${c.id}`
+    })
+  }
+  // Versements des clients de projets (pas de commande FEZIRE) : encaissements directs.
+  const caisseProjets = compteAffecte(params, comptes, 'projet')
+  for (const vers of v('projet_versements_client')) {
+    const projet = v('projets').find((p) => p.id === vers.projetId)
+    const montant = Number(vers.montant) || 0
+    if (montant <= 0) continue
+    out.push({
+      external_id: `cash-vers-${vers.id}`, direction: 'IN', amount: montant, currency: DEVISE, occurred_at: iso(Number(vers.date) || vers.date),
+      account: code(caisseProjets), payment_method: modeCanonique(vers.modePaiement), nature: 'VENTE_COMPTANT',
+      label: `Versement client : ${projet?.nom || 'projet'}`, counterpart_account: '704000',
+      counterparty: projet?.clientNom ? { type: 'CUSTOMER', external_id: null, name: projet.clientNom } : null, reference: `VERS-${vers.id}`
+    })
+  }
+  // Salaires versés (bulletins payés) : sortent du compte des dépenses.
+  const caisseDepenses = compteAffecte(params, comptes, 'depense')
+  for (const b of v('rh_bulletins')) {
+    const net = Number(b.net) || 0
+    if (b.statut !== 'paye' || net <= 0) continue
+    out.push({
+      external_id: `cash-sal-${b.id}`, direction: 'OUT', amount: net, currency: DEVISE,
+      occurred_at: iso(b.datePaiement || (b.mois ? `${b.mois}-28` : null)), account: code(caisseDepenses), payment_method: 'CASH',
+      nature: 'SALAIRE', label: `Salaire ${b.mois || ''} : ${b.employeNom || ''}`.trim(), counterpart_account: '421000',
+      counterparty: b.employeNom ? { type: 'EMPLOYEE', external_id: b.employeId || null, name: b.employeNom } : null, reference: `PAIE-${b.id}`
+    })
+  }
+  return out.filter((m) => m.occurred_at && m.amount > 0)
+}
+
 // ───────────────────────── Routage des ressources ─────────────────────────
 
 const RESSOURCES = {
   categories: 'CATEGORY', products: 'PRODUCT', warehouses: 'WAREHOUSE', stocks: 'STOCK',
   'stock-movements': 'STOCK_MOVEMENT', customers: 'CUSTOMER', orders: 'ORDER',
-  invoices: 'INVOICE', payments: 'PAYMENT'
+  invoices: 'INVOICE', payments: 'PAYMENT', 'cash-movements': 'CASH_MOVEMENT'
 }
 // Connect appelle « <adresse de base>/<ressource> » selon sa convention REST standard
 // (vérifié : /categories). On tolère les variantes d'écriture : casse, tirets ou
@@ -305,29 +669,69 @@ const PAR_CLE = Object.fromEntries([
 export const codeRessource = (brut) => PAR_CLE[cle(brut)] || null
 
 // Collections RTDB nécessaires par ressource (on ne lit que le strict utile).
+const REFERENTIELS = ['agro_referentiel', 'evenementiel_referentiel', 'logistique_referentiel']
+const VENTES = [
+  'evenementiel_factures', 'evenementiel_referentiel', 'logistique_factures', 'logistique_referentiel',
+  'gym_factures', 'garderie_paiements', 'garderie_enfants'
+]
 const BESOINS = {
-  CATEGORY: ['agro_referentiel'], PRODUCT: ['agro_referentiel'], WAREHOUSE: [],
+  CATEGORY: REFERENTIELS, PRODUCT: REFERENTIELS, WAREHOUSE: [],
   STOCK: ['agro_inventaires'], STOCK_MOVEMENT: ['agro_inventaires', 'agro_demandes'],
-  CUSTOMER: ['agro_factures'], ORDER: ['agro_factures', 'agro_referentiel'], INVOICE: ['agro_factures', 'agro_referentiel'], PAYMENT: []
+  CUSTOMER: ['agro_factures', 'evenementiel_factures', 'logistique_factures', 'logistique_clients',
+    'gym_factures', 'gym_clients', 'garderie_paiements', 'garderie_enfants'],
+  ORDER: ['agro_factures', 'agro_referentiel', ...VENTES],
+  INVOICE: ['agro_factures', 'agro_referentiel', ...VENTES],
+  PAYMENT: ['agro_factures', 'agro_referentiel', ...VENTES, 'treso_creances', 'treso_reglements'],
+  CASH_MOVEMENT: [
+    'treso_comptes', 'treso_mouvements', 'treso_virements', 'treso_params', 'compta_banques',
+    ...COLLECTIONS_BANQUE.map((b) => b.col), 'depense_depenses', 'depense_revenus_manuels',
+    'projet_versements_client', 'projets', 'rh_bulletins', 'compta_factures_fournisseurs'
+  ]
 }
 
 export function construire(code, d) {
+  const v = (col) => d[col] || []
   switch (code) {
-    case 'CATEGORY': return categories(d.agro_referentiel)
-    case 'PRODUCT': return produits(d.agro_referentiel)
-    case 'WAREHOUSE': return entrepots()
-    case 'STOCK': return stocks(d.agro_inventaires)
-    case 'STOCK_MOVEMENT': return mouvements(d.agro_inventaires, d.agro_demandes)
-    case 'CUSTOMER': return clients(d.agro_factures)
-    case 'ORDER': return commandes(d.agro_factures, d.agro_referentiel)
-    case 'INVOICE': return factures(d.agro_factures, d.agro_referentiel)
-    case 'PAYMENT': return [] // Maxi Agro ne suit pas encore les encaissements
+    case 'CATEGORY': return uniques([
+      ...categories(v('agro_referentiel')), ...briqueterie.categories(),
+      ...logistique.categories(v('logistique_referentiel')), ...maxiGym.categories(), ...garderie.categories(),
+      categorieService('agro', 'Maxi Agro'), categorieService(BRIQ, 'Briqueterie'), categorieService(LOGI, 'Logistique')
+    ])
+    case 'PRODUCT': return [
+      ...produits(v('agro_referentiel')), ...briqueterie.produits(v('evenementiel_referentiel')),
+      ...logistique.produits(v('logistique_referentiel')), ...maxiGym.produits(), ...garderie.produits(),
+      ...produitsService('agro', 'Maxi Agro'), ...produitsService(BRIQ, 'Briqueterie'), ...produitsService(LOGI, 'Logistique')
+    ]
+    case 'WAREHOUSE': return [...entrepots(), ...briqueterie.entrepots(), ...logistique.entrepots()]
+    case 'STOCK': return stocks(v('agro_inventaires'))
+    case 'STOCK_MOVEMENT': return mouvements(v('agro_inventaires'), v('agro_demandes'))
+    case 'CUSTOMER': return nomsDistincts([
+      ...clients(v('agro_factures')),
+      ...uniques([
+        ...briqueterie.clients(v('evenementiel_factures')),
+        ...logistique.clients(v('logistique_factures'), v('logistique_clients')),
+        ...maxiGym.clients(v('gym_factures'), v('gym_clients')),
+        ...garderie.clients(v('garderie_paiements'), v('garderie_enfants'))
+      ])
+    ])
+    case 'ORDER': return [...commandes(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.cmd).filter(Boolean)]
+    case 'INVOICE': return [...factures(v('agro_factures'), v('agro_referentiel')), ...ventesModules(d).map((x) => x.fac)]
+    case 'PAYMENT': {
+      const { liste, aCredit } = reglements(d, construire('ORDER', d))
+      return [
+        // Gym : un reçu passé « à crédit » en Trésorerie n'est plus réglé d'office.
+        ...maxiGym.ventes(v('gym_factures')).filter((x) => !aCredit.has(`gym-${x.f.id}`)).map((x) => x.pay),
+        ...garderie.ventes(v('garderie_paiements'), v('garderie_enfants')).map((x) => x.pay),
+        ...liste
+      ].filter(Boolean)
+    }
+    case 'CASH_MOVEMENT': return mouvementsTresorerie(d)
     default: return null
   }
 }
 
 // Date de référence d'un élément, pour le filtre incrémental `since`.
-const dateElement = (e) => e.moved_at || e.ordered_at || e.issued_at || e.updated_at || null
+const dateElement = (e) => e.moved_at || e.ordered_at || e.issued_at || e.paid_at || e.occurred_at || e.updated_at || null
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'Méthode non autorisée' })

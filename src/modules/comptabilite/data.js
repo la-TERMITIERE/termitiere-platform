@@ -17,6 +17,7 @@ export const COL = {
   tiers: 'compta_tiers',                  // clients & fournisseurs (comptabilité tiers)
   centres: 'compta_centres',              // centres analytiques (axes)
   modeles: 'compta_modeles',              // modèles d'écritures (saisies répétitives)
+  facturesFournisseurs: 'compta_factures_fournisseurs', // factures d'achat (dettes fournisseurs, TVA déductible)
   sourcesRevenus: 'compta_sources_revenus', // autres sources de revenus ajoutées à la main dans « Mouvements bancaires » (au-delà des secteurs)
   banques: 'compta_banques',              // banques de l'entreprise (SUNU Banque, NSIA Banque…), choisies à chaque mouvement bancaire
   params: 'compta_params'                 // paramètres — doc id 'config'
@@ -77,6 +78,7 @@ export const PLAN_COMPTABLE_DEFAUT = [
   { num: '321000', label: 'Matières premières', type: 'ASSET' },
   { num: '322000', label: 'Matières consommables (ciment, sable…)', type: 'ASSET' },
   { num: '361000', label: 'Produits finis (briques, appâts…)', type: 'ASSET' },
+  { num: '362000', label: 'Cheptel : animaux d\'élevage en stock', type: 'ASSET' },
 
   // Classe 4 — Tiers
   { num: '401100', label: 'Fournisseurs d\'exploitation', type: 'LIABILITY', fezire: true },
@@ -84,11 +86,12 @@ export const PLAN_COMPTABLE_DEFAUT = [
   { num: '411100', label: 'Clients d\'exploitation', type: 'ASSET', fezire: true },
   { num: '419000', label: 'Clients créditeurs (avances reçues)', type: 'LIABILITY' },
   { num: '421000', label: 'Personnel, rémunérations dues', type: 'LIABILITY' },
-  { num: '425000', label: 'Personnel, avances et acomptes', type: 'ASSET' },
+  { num: '425000', label: 'Personnel, avances et acomptes (avances de mission, avances sur salaire)', type: 'ASSET' },
   { num: '431000', label: 'Sécurité sociale (CNSS)', type: 'LIABILITY' },
   { num: '445660', label: 'TVA déductible sur biens et services', type: 'ASSET', fezire: true },
   { num: '445710', label: 'TVA collectée (18%)', type: 'LIABILITY', fezire: true },
   { num: '447000', label: 'État, impôts retenus à la source', type: 'LIABILITY' },
+  { num: '471000', label: 'Compte d\'attente (à régulariser)', type: 'ASSET' },
 
   // Classe 5 — Financiers
   { num: '512000', label: 'Banques', type: 'ASSET', fezire: true },
@@ -98,6 +101,7 @@ export const PLAN_COMPTABLE_DEFAUT = [
 
   // Classe 6 — Charges
   { num: '601000', label: 'Achats de matières premières', type: 'EXPENSE' },
+  { num: '603200', label: 'Variation des stocks de matières et fournitures', type: 'EXPENSE' },
   { num: '605000', label: 'Autres achats (eau, électricité, carburant)', type: 'EXPENSE' },
   { num: '605300', label: 'Carburant et lubrifiants', type: 'EXPENSE' },
   { num: '607000', label: 'Achats de marchandises', type: 'EXPENSE', fezire: true },
@@ -110,13 +114,20 @@ export const PLAN_COMPTABLE_DEFAUT = [
   { num: '631000', label: 'Impôts et taxes', type: 'EXPENSE' },
   { num: '641000', label: 'Rémunérations du personnel', type: 'EXPENSE', fezire: true },
   { num: '664000', label: 'Charges sociales (CNSS employeur)', type: 'EXPENSE' },
+  { num: '651000', label: 'Pertes sur créances clients (irrécouvrables)', type: 'EXPENSE' },
+  { num: '658000', label: 'Charges diverses', type: 'EXPENSE' },
   { num: '681000', label: 'Dotations aux amortissements d\'exploitation', type: 'EXPENSE' },
 
   // Classe 7 — Produits
   { num: '701000', label: 'Ventes de produits finis', type: 'INCOME' },
+  { num: '702000', label: 'Ventes de produits intermédiaires (élevage, aliments)', type: 'INCOME' },
+  { num: '704000', label: 'Travaux facturés (projets)', type: 'INCOME' },
   { num: '706000', label: 'Services vendus (prestations, locations)', type: 'INCOME' },
   { num: '707000', label: 'Ventes de marchandises', type: 'INCOME', fezire: true },
   { num: '708000', label: 'Produits annexes / Prestations de services', type: 'INCOME', fezire: true },
+  { num: '718000', label: 'Subventions d\'exploitation', type: 'INCOME' },
+  { num: '736000', label: 'Variation des stocks de produits (cheptel)', type: 'INCOME' },
+  { num: '758000', label: 'Produits divers', type: 'INCOME' },
   { num: '752000', label: 'Revenus des immeubles (loyers perçus)', type: 'INCOME' },
   { num: '781000', label: 'Reprises d\'amortissements et provisions', type: 'INCOME' },
 

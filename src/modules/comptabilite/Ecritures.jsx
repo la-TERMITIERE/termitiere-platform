@@ -14,21 +14,27 @@ import { useAuth } from '../../hooks/useAuth'
 import { JOURNAUX, getJournal, journalDefaut, STATUTS_ECRITURE, COL } from './data'
 import { validerEcriture, totalDebit, totalCredit, ecritureEquilibree, prochainNumeroPiece } from './logic'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
+import { JournauxOnglet, ExercicesOnglet, ModelesOnglet, estVerrouillee } from './EcrituresOnglets'
 
 const ligneVide = () => ({ compte: '', libelle: '', debit: '', credit: '', axe: '' })
 
 export default function Ecritures() {
-  const { plan, ecritures, centres, exercices, loading } = useCompta()
+  const { plan, ecritures, centres, exercices, mvtsValides, loading } = useCompta()
   const { user } = useAuth()
   const [modal, setModal] = useState(null)
   const [filtreJournal, setFiltreJournal] = useState('')
   const [erreurs, setErreurs] = useState([])
+  const [onglet, setOnglet] = useState('ecritures')
+  const [origine, setOrigine] = useState('') // '' toutes | 'manuelle' | 'auto'
+  const [nbAffiche, setNbAffiche] = useState(50)
+  const verrou = (date) => estVerrouillee(date, exercices)
 
   const liste = useMemo(
     () => [...ecritures]
       .filter((e) => !filtreJournal || e.journal === filtreJournal)
+      .filter((e) => !origine || (origine === 'auto' ? e.source === 'auto' : e.source !== 'auto'))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)),
-    [ecritures, filtreJournal]
+    [ecritures, filtreJournal, origine]
   )
 
   const ouvrirNouvelle = () => {
@@ -37,6 +43,15 @@ export default function Ecritures() {
       date: todayStr(), journal: journalDefaut, libelle: '', piece: '',
       exercice: todayStr().slice(0, 4),
       statut: 'brouillon', lignes: [ligneVide(), ligneVide()]
+    })
+  }
+  const appliquerModele = (m) => {
+    setErreurs([])
+    setOnglet('ecritures')
+    setModal({
+      date: todayStr(), journal: m.journal || journalDefaut, libelle: m.libelle || m.nom, piece: '',
+      exercice: todayStr().slice(0, 4), statut: 'brouillon',
+      lignes: (m.lignes || []).map((l) => ({ compte: l.compte, libelle: l.libelle || '', debit: l.debit || '', credit: l.credit || '', axe: '' }))
     })
   }
   const ouvrirEdition = (ec) => {
@@ -57,6 +72,7 @@ export default function Ecritures() {
 
   const enregistrer = async (statutCible) => {
     const candidat = { ...modal, statut: statutCible }
+    if (verrou(modal.date)) { setErreurs(['Cette date tombe dans un exercice clôturé : rouvrez-le (onglet Exercices) pour y saisir.']); return }
     if (statutCible === 'validee') {
       const { ok, erreurs: errs } = validerEcriture(candidat)
       if (!ok) { setErreurs(errs); return }
@@ -79,11 +95,13 @@ export default function Ecritures() {
   }
 
   const valider = async (ec) => {
+    if (verrou(ec.date)) { alert('Exercice clôturé : écriture verrouillée.'); return }
     const { ok, erreurs: errs } = validerEcriture(ec)
     if (!ok) { alert('Écriture non validable :\n' + errs.join('\n')); return }
     await updateItem(COL.ecritures, ec.id, { statut: 'validee' })
   }
   const supprimer = async (ec) => {
+    if (verrou(ec.date)) { alert('Exercice clôturé : écriture verrouillée.'); return }
     if (!confirm('Supprimer définitivement cette écriture ?')) return
     await removeItem(COL.ecritures, ec.id)
   }
@@ -104,19 +122,30 @@ export default function Ecritures() {
   return (
     <div className="space-y-5">
       <BandeauCompta icone={ScrollText} titre="Écritures & journaux" sous={`${ecritures.length} écritures : livre-journal en partie double`}>
-        <ChampBande label="Journal">
+        <OngletsBande options={[{ id: 'ecritures', label: 'Écritures' }, { id: 'journaux', label: 'Journaux' }, { id: 'exercices', label: 'Exercices' }, { id: 'modeles', label: 'Modèles' }]} valeur={onglet} onChange={setOnglet} taille="sm" />
+        {onglet === 'ecritures' && <ChampBande label="Origine">
+          <select value={origine} onChange={(e) => { setOrigine(e.target.value); setNbAffiche(50) }} className={CLASSE_CHAMP_BANDE}>
+            <option value="">Toutes</option><option value="manuelle">Saisies à la main</option><option value="auto">Automatiques (autres modules)</option>
+          </select>
+        </ChampBande>}
+        {onglet === 'ecritures' && <ChampBande label="Journal">
           <select value={filtreJournal} onChange={(e) => setFiltreJournal(e.target.value)} className={CLASSE_CHAMP_BANDE}>
             <option value="">Tous les journaux</option>
             {JOURNAUX.map((j) => <option key={j.code} value={j.code}>{j.code} · {j.label}</option>)}
           </select>
-        </ChampBande>
+        </ChampBande>}
         <BoutonBande icone={Plus} onClick={ouvrirNouvelle}>Nouvelle écriture</BoutonBande>
       </BandeauCompta>
 
 
-      <div className="space-y-3">
+      {onglet === 'journaux' && <JournauxOnglet ecritures={ecritures} onFiltrer={(code) => { setFiltreJournal(code); setOnglet('ecritures'); setNbAffiche(50) }} />}
+      {onglet === 'exercices' && <ExercicesOnglet exercices={exercices} mvtsValides={mvtsValides} ecritures={ecritures} user={user} />}
+      {onglet === 'modeles' && <ModelesOnglet plan={plan} onAppliquer={appliquerModele} />}
+
+      {onglet === 'ecritures' && <div className="space-y-3">
+        <p className="text-xs text-gray-500">{liste.length} écriture(s){liste.length > nbAffiche ? `, ${nbAffiche} affichées` : ''}.</p>
         {liste.length === 0 && <Card><p className="py-8 text-center text-gray-400">Aucune écriture. Cliquez sur « Nouvelle écriture ».</p></Card>}
-        {liste.map((ec) => {
+        {liste.slice(0, nbAffiche).map((ec) => {
           const j = getJournal(ec.journal)
           const eq = ecritureEquilibree(ec.lignes)
           return (
@@ -131,8 +160,9 @@ export default function Ecritures() {
                     ? <Badge tone="info" className="capitalize">Auto · {ec.module}</Badge>
                     : <Badge tone={STATUTS_ECRITURE[ec.statut]?.tone || 'warning'}>{STATUTS_ECRITURE[ec.statut]?.label || 'Brouillon'}</Badge>}
                   {!eq && <Badge tone="danger"><AlertTriangle size={12} /> Déséquilibrée</Badge>}
-                  {ec.source === 'auto' ? (
-                    <span title="Générée depuis un autre module : non modifiable ici" className="p-1.5 text-gray-300"><Lock size={15} /></span>
+                  {ec.source !== 'auto' && verrou(ec.date) && <Badge tone="neutral"><Lock size={11} /> Exercice clôturé</Badge>}
+                  {ec.source === 'auto' || verrou(ec.date) ? (
+                    <span title={ec.source === 'auto' ? 'Générée depuis un autre module : non modifiable ici' : 'Exercice clôturé'} className="p-1.5 text-gray-300"><Lock size={15} /></span>
                   ) : (
                     <>
                       {ec.statut !== 'validee' && (
@@ -166,7 +196,10 @@ export default function Ecritures() {
             </Card>
           )
         })}
-      </div>
+        {liste.length > nbAffiche && (
+          <div className="flex justify-center"><Button variant="ghost" onClick={() => setNbAffiche((n) => n + 100)}>Afficher 100 de plus ({liste.length - nbAffiche} restantes)</Button></div>
+        )}
+      </div>}
 
       {/* Saisie */}
       <Modal open={!!modal} onClose={() => setModal(null)} size="xl"
