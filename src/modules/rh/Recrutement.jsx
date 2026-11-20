@@ -3,10 +3,8 @@ import { Send } from 'lucide-react'
 import { formatDateShort } from '../../utils/formatters'
 import CrudList from './CrudList'
 import { STATUTS_OFFRE, COL } from './store/rhStore'
-import { useDepartements } from './useDepartements'
 
 export default function Recrutement() {
-  const departements = useDepartements()
   return (
     <CrudList collection={COL.recrutements} icon={Send} sousModule="Talent & Développement"
       titre="Recrutement & Offres" sousTitre="Publiez des offres et suivez le pipeline de candidatures." boutonLabel="Nouvelle offre"
@@ -20,12 +18,12 @@ export default function Recrutement() {
         { key: 'statut', label: 'Statut', badge: (v) => STATUTS_OFFRE[v] }
       ]}
       champs={[
-        { key: 'poste', label: 'Intitulé du poste', required: true },
-        { key: 'departement', label: 'Département', type: 'select', options: [{ value: '', label: departements.length ? 'Choisir un département' : 'Aucun département : créez-en un' }, ...departements] },
-        { key: 'type', label: 'Type de contrat', type: 'select', options: [{ value: 'cdi', label: 'CDI' }, { value: 'cdd', label: 'CDD' }, { value: 'stage', label: 'Stage' }] },
-        { key: 'nbPostes', label: 'Nombre de postes', type: 'number' },
+        { key: 'poste', label: 'Intitulé du poste', required: true, placeholder: "Ex. Comptable, Responsable d'élevage" },
+        { key: 'departement', label: 'Département', type: 'departement' },
+        { key: 'type', label: 'Type de contrat', type: 'boutons', options: [{ value: 'cdi', label: 'CDI' }, { value: 'cdd', label: 'CDD' }, { value: 'stage', label: 'Stage' }] },
+        { key: 'nbPostes', label: 'Nombre de postes', type: 'number', placeholder: "Ex. 1" },
         { key: 'dateLimite', label: 'Date limite de candidature', type: 'date' },
-        { key: 'statut', label: 'Statut', type: 'select', options: Object.entries(STATUTS_OFFRE).map(([value, o]) => ({ value, label: o.label })) }
+        { key: 'statut', label: 'Statut', type: 'boutons', options: Object.entries(STATUTS_OFFRE).map(([value, o]) => ({ value, label: o.label })) }
       ]} />
   )
 }

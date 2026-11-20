@@ -84,6 +84,7 @@ export const PLAN_COMPTABLE_DEFAUT = [
   { num: '411100', label: 'Clients d\'exploitation', type: 'ASSET', fezire: true },
   { num: '419000', label: 'Clients créditeurs (avances reçues)', type: 'LIABILITY' },
   { num: '421000', label: 'Personnel, rémunérations dues', type: 'LIABILITY' },
+  { num: '425000', label: 'Personnel, avances et acomptes', type: 'ASSET' },
   { num: '431000', label: 'Sécurité sociale (CNSS)', type: 'LIABILITY' },
   { num: '445660', label: 'TVA déductible sur biens et services', type: 'ASSET', fezire: true },
   { num: '445710', label: 'TVA collectée (18%)', type: 'LIABILITY', fezire: true },

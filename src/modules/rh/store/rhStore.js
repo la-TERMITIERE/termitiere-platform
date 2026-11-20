@@ -1,6 +1,6 @@
 // Socle de données du module RESSOURCES HUMAINES.
 // Aligné sur la structure du module RH de FEZIRE (7 sous-modules) — relevé 28/08/2026.
-// Contexte Togo : CNSS (sécurité sociale), ITS (impôt sur les traitements et salaires).
+// Contexte Togo : CNSS (sécurité sociale), IRPP (impôt sur le revenu des personnes physiques).
 
 // ── Collections Firebase (namespace tp/) ──────────────────────────────────────
 export const COL = {
@@ -11,6 +11,8 @@ export const COL = {
   presences: 'rh_presences',
   conges: 'rh_conges',
   bulletins: 'rh_bulletins',
+  autorisationsSalaire: 'rh_autorisations_salaire',
+  avances: 'rh_avances',
   recrutements: 'rh_recrutements',
   candidatures: 'rh_candidatures',
   formations: 'rh_formations',
@@ -73,11 +75,13 @@ export const STATUTS_CONGE = {
 export const DROIT_CONGE_ANNUEL = 25
 
 // ── Paie (Togo) ───────────────────────────────────────────────────────────────
-// Taux CNSS salarié 4 %, employeur 17,5 %. ITS = barème progressif simplifié ici.
+// Taux CNSS salarié 4 %, employeur 17,5 % (pensions, prestations familiales, risques professionnels) + AMU employeur 5 % (Assurance Maladie Universelle) = 22,5 % de charges patronales.
+// IRPP = barème progressif simplifié ici.
 export const PAIE_CONFIG_DEFAUT = {
   tauxCnssSalarie: 0.04,
   tauxCnssEmployeur: 0.175,
-  // Barème ITS simplifié (tranches mensuelles, XOF) — paramétrable dans Configuration.
+  tauxAmuEmployeur: 0.05,
+  // Barème IRPP simplifié (tranches mensuelles, XOF) — paramétrable dans Configuration.
   bareme: [
     { plafond: 25000, taux: 0 },
     { plafond: 50000, taux: 0.05 },
@@ -117,9 +121,19 @@ export const STATUTS_FORMATION = {
 export const NIVEAUX_COMPETENCE = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert']
 
 // ── Missions & frais ──────────────────────────────────────────────────────────
+// Avances sur salaire et prêts : demandée → approuvée (GE) → versée → remboursée (retenues sur les bulletins de paie) ; ou refusée.
+export const STATUTS_AVANCE = {
+  demandee:  { label: 'Demandée', tone: 'warning' },
+  approuvee: { label: 'Approuvée : à décaisser', tone: 'info' },
+  versee:    { label: 'Décaissée : retenue sur la paie', tone: 'primary' },
+  remboursee:{ label: 'Remboursée', tone: 'success' },
+  refusee:   { label: 'Refusée', tone: 'danger' },
+  annulee:   { label: 'Non décaissée', tone: 'neutral' }
+}
 export const STATUTS_MISSION = {
   demandee:  { label: 'Demandée', tone: 'warning' },
   approuvee: { label: 'Approuvée', tone: 'info' },
+  refusee:   { label: 'Refusée', tone: 'danger' },
   terminee:  { label: 'Terminée', tone: 'success' },
   remboursee:{ label: 'Remboursée', tone: 'primary' }
 }
@@ -130,15 +144,18 @@ export const MOIS_LABELS = [
 ]
 
 // ── Calcul d'un bulletin de paie (à partir du salaire brut) ───────────────────
-export function calculerBulletin(brut, primes = 0, config = PAIE_CONFIG_DEFAUT) {
+// `retenues` : total des mensualités d'avances et de prêts retenues ce mois-ci sur le net (cf. avancesCircuit.js).
+export function calculerBulletin(brut, primes = 0, config = PAIE_CONFIG_DEFAUT, retenues = 0) {
   const brutTotal = (Number(brut) || 0) + (Number(primes) || 0)
   const cnssSalarie = Math.round(brutTotal * config.tauxCnssSalarie)
   const baseImposable = brutTotal - cnssSalarie
   const its = calculerITS(baseImposable, config.bareme)
-  const net = brutTotal - cnssSalarie - its
+  const retenueAvances = Math.max(0, Math.round(Number(retenues) || 0))
+  const net = brutTotal - cnssSalarie - its - retenueAvances
   const cnssEmployeur = Math.round(brutTotal * config.tauxCnssEmployeur)
-  const coutEmployeur = brutTotal + cnssEmployeur
-  return { brutTotal, cnssSalarie, baseImposable, its, net, cnssEmployeur, coutEmployeur }
+  const amuEmployeur = Math.round(brutTotal * (config.tauxAmuEmployeur ?? PAIE_CONFIG_DEFAUT.tauxAmuEmployeur))
+  const coutEmployeur = brutTotal + cnssEmployeur + amuEmployeur
+  return { brutTotal, cnssSalarie, baseImposable, its, retenueAvances, net, cnssEmployeur, amuEmployeur, coutEmployeur }
 }
 
 function calculerITS(base, bareme = PAIE_CONFIG_DEFAUT.bareme) {

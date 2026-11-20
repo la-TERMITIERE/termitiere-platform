@@ -1,11 +1,30 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'node:fs'
+
+// Identité de la version construite : lue par l'application (Paramètres, Vérifier les mises à jour) et publiée dans /version.json,
+// ce qui permet de savoir si la page ouverte est la dernière version publiée.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+const ID_CONSTRUCTION = String(Date.now())
+const DATE_CONSTRUCTION = new Date().toISOString()
+const versionJson = () => ({
+  name: 'termitiere-version-json',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: ID_CONSTRUCTION, date: DATE_CONSTRUCTION, version: pkg.version }) })
+  }
+})
 
 // Configuration Vite + PWA (Workbox) pour LA TERMITIÈRE
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_ID__: JSON.stringify(ID_CONSTRUCTION),
+    __BUILD_DATE__: JSON.stringify(DATE_CONSTRUCTION)
+  },
   plugins: [
     react(),
+    versionJson(),
     VitePWA({
       // 'prompt' : on contrôle nous-mêmes l'application de la mise à jour via
       // <UpdateManager/> (polling périodique + rechargement forcé pour tous).

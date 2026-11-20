@@ -272,6 +272,7 @@ export default function Sidebar({ open, onClose }) {
     return !item.roles && !item.perm
   }
   let moduleNav = (activeModule ? MODULE_NAV[activeModule.id] || [] : []).filter(canSeeNav)
+    .filter((item, i, tout) => !item.heading || (tout[i + 1] && !tout[i + 1].heading)) // pas de titre de section sans entrée dessous
 
   // Modules multi-sites : la nav intra-module n'a de sens qu'à l'intérieur d'un site.
   // On préfixe alors chaque destination par /<module>/<site>/… — SAUF les entrées
@@ -428,7 +429,8 @@ export default function Sidebar({ open, onClose }) {
                     currentSearch={location.search}
                     onNavigate={onClose} />
                 ) : (
-                  <NavLink key={item.to} to={item.to} end={item.end} className={navClass} onClick={onClose}>
+                  <NavLink key={item.to} to={item.to} end={item.end} onClick={onClose}
+                    className={(etat) => navClass({ isActive: etat.isActive || (item.groupe || []).some((g) => location.pathname === g || location.pathname.startsWith(g + '/')) })}>
                     <item.icon size={18} /> {item.label}
                     {item.badgeKey && badges[item.badgeKey] > 0 && (
                       <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold">

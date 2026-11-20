@@ -24,6 +24,7 @@ import {
 } from '../../shared/demandes/correctif'
 import { useAgroStore } from './store/agroStore'
 import BandeAgro, { usePeriodeBande } from './BandeAgro'
+import FriseVente from './FriseVente'
 import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
 import { logistiquePeutApprouver, logistiqueVoitValidateur, agirCommeAgent } from '../../core/roles'
 import {
@@ -172,25 +173,10 @@ export default function Demandes() {
         {isAgent && <BoutonBande anime icone={Plus} onClick={() => { setPick(brouillons[0]?.id || ''); setCreateOpen(true) }}>Nouvelle demande de sortie</BoutonBande>}
       </BandeAgro>
 
-      <div className="flex items-start gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        <Package size={18} className="mt-0.5 shrink-0" />
-        <p>
-          <strong>Toute sortie passe par une facture.</strong> L'agent crée d'abord une facture (brouillon) dans <em>Facturation</em>,
-          puis demande ici la sortie en la sélectionnant. La hiérarchie approuve (le stock est décompté), puis l'agent certifie,
-          ou signale un écart que la hiérarchie ajuste (vendus / morts / retournés).
-        </p>
-      </div>
+      <FriseVente filtre={filtre} onFiltre={setFiltre}
+        compte={{ brouillon: brouillons.length, sortie_demandee: compteur('sortie_demandee'), sortie_approuvee: compteur('sortie_approuvee'), certifiee: compteur('certifiee'),
+          refusee: compteur('refusee'), modif_demandee: compteur('modif_demandee'), correctif: nbCorrectifs }} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
-          {filtres.map(([v, l]) => (
-            <button key={v} onClick={() => setFiltre(v)}
-              data-actif={filtre === v} aria-pressed={filtre === v} className="puce-verre rounded-xl px-3 py-1.5 text-sm font-bold">
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {filtrees.length === 0 ? (
         <Card><p className="py-8 text-center text-sm text-gray-400">Aucune facture dans cet état.</p></Card>

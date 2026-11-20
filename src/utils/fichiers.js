@@ -161,3 +161,33 @@ export function ouvrirPiece(piece) {
     }
   }
 }
+
+// Logo (département, entreprise…) : redimensionné à 256 px au plus et gardé en PNG pour conserver la transparence.
+// Si le fichier reste lourd, il est réduit encore (160 px) pour tenir confortablement dans la base.
+export const compresserLogo = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file || !String(file.type).startsWith('image/')) return reject(new Error("Ce fichier n'est pas une image"))
+    const r = new FileReader()
+    r.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const rendre = (dim) => {
+          const ratio = Math.min(1, dim / Math.max(img.width, img.height))
+          const w = Math.max(1, Math.round(img.width * ratio)), h = Math.max(1, Math.round(img.height * ratio))
+          const canvas = document.createElement('canvas')
+          canvas.width = w; canvas.height = h
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+          return canvas.toDataURL('image/png')
+        }
+        try {
+          let url = rendre(256)
+          if (tailleDataURL(url) > 150 * 1024) url = rendre(160)
+          resolve(url)
+        } catch { reject(new Error('Compression du logo impossible')) }
+      }
+      img.onerror = () => reject(new Error('Image illisible'))
+      img.src = r.result
+    }
+    r.onerror = () => reject(new Error('Lecture du fichier impossible'))
+    r.readAsDataURL(file)
+  })

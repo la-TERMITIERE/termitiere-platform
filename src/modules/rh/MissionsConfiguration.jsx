@@ -15,9 +15,9 @@ export default function MissionsConfiguration() {
         { key: 'plafond', label: 'Plafond', align: 'right', render: (r) => r.plafond ? formatMoney(r.plafond) : '—' }
       ]}
       champs={[
-        { key: 'typeFrais', label: 'Type de frais (ex. Hébergement, Transport)', required: true },
-        { key: 'indemniteJour', label: 'Indemnité journalière (XOF)', type: 'number' },
-        { key: 'plafond', label: 'Plafond de remboursement (XOF)', type: 'number' }
+        { key: 'typeFrais', label: 'Type de frais (ex. Hébergement, Transport)', required: true, placeholder: "Ex. Hébergement, Transport, Restauration" },
+        { key: 'indemniteJour', label: 'Indemnité journalière (XOF)', type: 'number', placeholder: "Ex. 15000" },
+        { key: 'plafond', label: 'Plafond de remboursement (XOF)', type: 'number', placeholder: "Ex. 200000" }
       ]} />
   )
 }

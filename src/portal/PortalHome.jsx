@@ -1,7 +1,7 @@
 // Page d'accueil du portail : grille de cartes de modules cliquables.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon } from 'lucide-react'
+import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon, Wallet, Plane, HandCoins } from 'lucide-react'
 import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
@@ -14,6 +14,13 @@ import Button from '../shared/ui/Button'
 import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
 import { projetsVisibles } from '../modules/projet/logic'
+import AlertesAccueil from './AlertesAccueil'
+import { useDecaissementsRh } from '../modules/depense/decaissementsRh'
+import DetailMission from '../modules/rh/DetailMission'
+import { ROLES_APPROBATION, peutApprouverMission } from '../modules/rh/missionsCircuit'
+import DetailAvance from '../modules/rh/DetailAvance'
+import { peutApprouverAvance, libelleType as libelleTypeAvance } from '../modules/rh/avancesCircuit'
+import DetailAutorisationSalaire, { ROLES_RECEPTEURS, peutDeciderAutorisation, etapeCourante, moisLabel as moisAutorisation } from '../modules/rh/DetailAutorisationSalaire'
 
 // Certains logos ont beaucoup de marge transparente autour du symbole utile — on les
 // agrandit et on les recadre au centre (via un overflow-hidden sur le badge parent) au
@@ -37,6 +44,36 @@ export default function PortalHome() {
     [depensesTous, user]
   )
   const [confirmingId, setConfirmingId] = useState(null)
+
+  // Autorisations de salaire demandées par la RH : le destinataire (PAU, GE, DF, direction) les voit ici dès l'accueil, puis ouvre le détail pour autoriser ou refuser.
+  const recoitAutorisations = ROLES_RECEPTEURS.includes(role)
+  const { data: autorisationsSalaire } = useCollection(recoitAutorisations ? 'rh_autorisations_salaire' : null)
+  const autorisationsATraiter = useMemo(
+    () => (autorisationsSalaire || []).filter((d) => peutDeciderAutorisation(d, user, role)).sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? -1 : 1)),
+    [autorisationsSalaire, user, role]
+  )
+  const [autorisationOuverte, setAutorisationOuverte] = useState(null)
+
+  // Ordres de mission à approuver : la GE (et l'Info) les voit ici dès l'accueil, puis ouvre le détail pour approuver ou refuser (motif obligatoire).
+  const recoitMissions = ROLES_APPROBATION.includes(role)
+  const { data: missionsRh } = useCollection(recoitMissions ? 'rh_missions' : null)
+  const { data: employesRh2 } = useCollection(recoitMissions ? 'rh_employes' : null)
+  const missionsAApprouver = useMemo(
+    () => (missionsRh || []).filter((m) => peutApprouverMission(m, role)).sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? -1 : 1)),
+    [missionsRh, role]
+  )
+  const [missionOuverte, setMissionOuverte] = useState(null)
+
+  // Avances sur salaire et prêts à approuver : même circuit que les missions.
+  const { data: avancesRh } = useCollection(recoitMissions ? 'rh_avances' : null)
+  const avancesAApprouver = useMemo(
+    () => (avancesRh || []).filter((a) => peutApprouverAvance(a, role)).sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? -1 : 1)),
+    [avancesRh, role]
+  )
+  const [avanceOuverte, setAvanceOuverte] = useState(null)
+
+  // Missions et avances approuvées à décaisser (finance) : boutons « Décaisser de la caisse » et « Non » directement sur la ligne.
+  const decaissements = useDecaissementsRh()
 
   async function confirmerReception(d) {
     setConfirmingId(d.id)
@@ -64,6 +101,7 @@ export default function PortalHome() {
   const { data: dossiersFoncier}= useCollection(hasModule('foncier')     ? 'foncier_dossiers'        : null)
   const { data: garderieEnfants}= useCollection(hasModule('garderie')    ? 'garderie_enfants'        : null)
   const { data: projets }       = useCollection(hasModule('projet')      ? 'projets'                 : null)
+  const { data: comptes }       = useCollection(peutGererUtilisateurs(role) ? 'users' : null)
   const { data: employesRh }    = useCollection(hasModule('rh')          ? 'rh_employes'             : null)
   const { data: seancesGym }    = useCollection(hasModule('gym')         ? 'gym_seances'             : null)
   const { data: abonnementsGym }= useCollection(hasModule('gym')         ? 'gym_abonnements'         : null)
@@ -90,7 +128,7 @@ export default function PortalHome() {
     logistique: autorisationsAttente ? `${autorisationsAttente} autorisation(s) en attente` : `${prestationsMois} prestation(s) ce mois`,
     evenementiel: autorisationsBriq ? `${autorisationsBriq} autorisation(s) en attente` : `${prodMois} briques produites ce mois`,
     foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
-    rh: (employesRh || []).length ? `${employesRh.length} employé(s)` : 'Aucun employé',
+    rh: (autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length) ? `${autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length} demande(s) RH à traiter` : (employesRh || []).length ? `${employesRh.length} employé(s)` : 'Aucun employé',
     garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit',
     gym: (seancesGymMois || abonnementsGymMois) ? `${seancesGymMois} séance(s) · ${abonnementsGymMois} abonnement(s) ce mois` : 'Aucune activité ce mois'
   }
@@ -169,22 +207,38 @@ export default function PortalHome() {
         </div>
       </div>
 
-      {paiementsAConfirmer.length > 0 && (
-        <div className="mb-6 space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">💸 Paiements à confirmer</p>
-          {paiementsAConfirmer.map((d) => (
-            <div key={d.id} className="flex flex-wrap items-center gap-3 rounded-3xl border border-indigo-200/60 bg-indigo-50/60 p-4 shadow-[0_16px_36px_-16px_rgba(26,26,26,0.14)] backdrop-blur-xl backdrop-saturate-150 dark:border-indigo-400/20 dark:bg-indigo-500/10">
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-indigo-900 dark:text-indigo-300">{Number(d.montant).toLocaleString('fr-FR')} FCFA</p>
-                <p className="text-xs text-indigo-600 dark:text-indigo-400">{d.description || 'Paiement décaissé'}</p>
-              </div>
-              <Button onClick={() => confirmerReception(d)} loading={confirmingId === d.id}>
-                <CheckCircle2 size={16} /> J'ai bien reçu
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* À traiter : une ligne de verre par alerte (autorisations de salaire, missions à approuver, paiements à confirmer). */}
+      <AlertesAccueil items={[
+        ...autorisationsATraiter.map((d) => ({
+          id: `salaire_${d.id}`, icone: Wallet, couleur: '#0284c7',
+          titre: `${d.employeNom} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`,
+          sous: `Salaire de ${moisAutorisation(d.mois)} · ${etapeCourante(d)?.label} (${etapeCourante(d)?.sigle}) · par ${d.creePar || 'la RH'}`,
+          action: { label: 'Voir', onClick: () => setAutorisationOuverte(d.id) }
+        })),
+        ...missionsAApprouver.map((m) => ({
+          id: `mission_${m.id}`, icone: Plane, couleur: '#7c3aed',
+          titre: `${m.employeNom} : ${m.objet}`,
+          sous: `Ordre de mission${m.destination ? ` à ${m.destination}` : ''}${Number(m.montantFrais) > 0 ? ` · frais ${Number(m.montantFrais).toLocaleString('fr-FR')} FCFA` : ''} · par ${m.creePar || 'la RH'}`,
+          action: { label: 'Voir', onClick: () => setMissionOuverte(m.id) }
+        })),
+        ...avancesAApprouver.map((a) => ({
+          id: `avance_${a.id}`, icone: HandCoins, couleur: '#0d9488',
+          titre: `${a.employeNom} : ${libelleTypeAvance(a.type).toLowerCase()} de ${Number(a.montant).toLocaleString('fr-FR')} FCFA`,
+          sous: `${a.nbMensualites > 1 ? `${a.nbMensualites} mensualités` : 'Retenue en une fois'}${a.motif ? ` · ${a.motif}` : ''} · par ${a.creePar || 'la RH'}`,
+          action: { label: 'Voir', onClick: () => setAvanceOuverte(a.id) }
+        })),
+        ...decaissements.items,
+        ...paiementsAConfirmer.map((d) => ({
+          id: `paiement_${d.id}`, icone: CheckCircle2, couleur: '#4f46e5',
+          titre: `${Number(d.montant).toLocaleString('fr-FR')} FCFA reçus ?`,
+          sous: d.description || 'Paiement décaissé : confirmez la réception',
+          action: { label: "J'ai reçu", onClick: () => confirmerReception(d), loading: confirmingId === d.id }
+        }))
+      ]} />
+      <DetailAutorisationSalaire demande={(autorisationsSalaire || []).find((d) => d.id === autorisationOuverte)} onClose={() => setAutorisationOuverte(null)} />
+      {decaissements.modal}
+      <DetailAvance avance={(avancesRh || []).find((a) => a.id === avanceOuverte)} employes={employesRh2 || []} onClose={() => setAvanceOuverte(null)} />
+      <DetailMission mission={(missionsRh || []).find((m) => m.id === missionOuverte)} employes={employesRh2 || []} onClose={() => setMissionOuverte(null)} />
 
       {/* Modules en tuiles pleines : chaque module porte sa couleur, le logo repose sur un badge blanc,
           le nom et l'indicateur du moment sont en bas, sur la partie la plus sombre du dégradé (lisible en blanc). */}
@@ -244,32 +298,36 @@ export default function PortalHome() {
         })}
       </div>
 
-      {/* Administration : gestion des utilisateurs (admin uniquement) */}
+      {/* Administration : gestion des utilisateurs (admin uniquement), dans le langage des tuiles de modules, largeur limitée */}
       {peutGererUtilisateurs(role) && (
-        <div className="mt-6">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Administration</p>
-          <button
-            onClick={() => navigate('/utilisateurs')}
-            className="group relative flex w-full items-center gap-4 overflow-hidden rounded-3xl border bg-white/40 p-4 text-left backdrop-blur-2xl backdrop-saturate-200 transition-all
-              shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5),inset_0_1px_0_0_rgba(255,255,255,0.7),0_24px_48px_-16px_rgba(26,26,26,0.16),0_6px_16px_-6px_rgba(26,26,26,0.07)]
-              hover:-translate-y-1 hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6),inset_0_1px_0_0_rgba(255,255,255,0.7),0_32px_60px_-16px_rgba(26,26,26,0.22),0_10px_20px_-6px_rgba(26,26,26,0.1)]
-              dark:bg-white/[0.05] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.15),0_24px_48px_-16px_rgba(0,0,0,0.5)]"
-            style={{ borderColor: '#BC3C3140' }}
-          >
-            {/* Teinte douce sur tout le fond, cohérente avec les cartes de modules */}
-            <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ background: 'radial-gradient(circle at 15% 100%, #BC3C31, transparent 70%)' }} />
-            {/* Halo adouci dans le coin */}
-            <div className="pointer-events-none absolute -right-4 -top-4 h-28 w-28 rounded-full bg-primary opacity-20 blur-2xl" />
-            {/* Reflet diagonal — cohérent avec les cartes de modules */}
-            <div className="pointer-events-none absolute -inset-x-6 -top-8 h-16 rotate-[-8deg] bg-gradient-to-b from-white/40 via-white/10 to-transparent dark:from-white/10" />
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/50 bg-primary/10 text-primary shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)] backdrop-blur-sm dark:border-white/10 dark:bg-primary/20">
-              <ShieldCheck size={26} />
-            </div>
-            <div className="relative flex-1">
-              <h3 className="font-extrabold text-gray-900 dark:text-gray-100">Gestion des utilisateurs</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Rôles et droits d'accès aux modules</p>
-            </div>
-            <ChevronRight className="relative text-gray-400" />
+        <div className="mt-7">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
+            <span aria-hidden="true" className="h-px w-6 bg-gray-300 dark:bg-white/20" />Administration
+          </p>
+          <button type="button" onClick={() => navigate('/utilisateurs')}
+            className="group relative flex w-full max-w-sm items-center gap-4 overflow-hidden rounded-[1.75rem] p-4 text-left text-white transition-all duration-200 hover:-translate-y-1 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70 sm:p-5"
+            style={{
+              background: 'linear-gradient(135deg, #CF4A3F 0%, #A13026 45%, #4A100C 100%)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.14), 0 22px 36px -20px #BC3C31'
+            }}>
+            <ShieldCheck aria-hidden="true" size={140} strokeWidth={1.2}
+              className="pointer-events-none absolute -bottom-8 right-6 rotate-[-10deg] text-white opacity-[0.12] transition-transform duration-300 group-hover:scale-110" />
+            <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+            <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#A13026] shadow-[0_8px_16px_-8px_rgba(0,0,0,0.5)]">
+              <ShieldCheck size={28} />
+            </span>
+            <span className="relative min-w-0 flex-1">
+              <span className="block text-base font-extrabold leading-tight sm:text-lg" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.25)' }}>Gestion des utilisateurs</span>
+              <span className="mt-0.5 block text-xs text-white/85 sm:text-sm">Rôles et droits d'accès aux modules</span>
+              {(comptes || []).length > 0 && (
+                <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/15 px-2.5 py-1 text-[11px] font-bold">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-green-300" />{comptes.length} compte{comptes.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </span>
+            <span aria-hidden="true" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/25 transition-all duration-200 group-hover:translate-x-0.5 group-hover:bg-white group-hover:text-gray-900">
+              <ChevronRight size={18} />
+            </span>
           </button>
         </div>
       )}

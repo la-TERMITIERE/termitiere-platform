@@ -11,8 +11,10 @@ import { useCollection } from '../../hooks/useFirestore'
 import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, todayStr } from '../../utils/formatters'
-import { TYPES_CONGE, STATUTS_CONGE, DROIT_CONGE_ANNUEL, COL } from './store/rhStore'
+import { TYPES_CONGE, STATUTS_CONGE, COL } from './store/rhStore'
+import { useDroitAnnuel } from './droitConges'
 import { PageHeader, Champ, ModalRh } from './rhui'
+import DetailFiche from './DetailFiche'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 
 const vide = () => ({ employeId: '', type: 'annuel', dateDebut: todayStr(), dateFin: todayStr(), motif: '' })
@@ -23,10 +25,12 @@ const nbJours = (d1, d2) => {
 }
 
 export default function Conges() {
+  const droitAnnuel = useDroitAnnuel()
   const { data: conges } = useCollection(COL.conges)
   const { data: employes } = useCollection(COL.employes)
   const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
+  const [detailId, setDetailId] = useState(null)
 
   const empNom = (id) => employes.find((e) => e.id === id)?.nom || '—'
   const enAttente = conges.filter((c) => (c.statut || 'en_attente') === 'en_attente')
@@ -40,6 +44,21 @@ export default function Conges() {
       .forEach((c) => { acc[c.employeId] = (acc[c.employeId] || 0) + nbJours(c.dateDebut, c.dateFin) })
     return acc
   }, [conges])
+
+  // Détail d'une demande de congé (au clic) : employé, type, période, durée, solde annuel et motif.
+  const congeDetail = conges.find((c) => c.id === detailId)
+  const ficheConge = (c) => ({
+    titre: c.employeNom || empNom(c.employeId), sous: `Demande de congé · ${TYPES_CONGE[c.type]?.label || c.type}`,
+    badge: { label: STATUTS_CONGE[c.statut || 'en_attente']?.label, tone: STATUTS_CONGE[c.statut || 'en_attente']?.tone },
+    tuiles: [
+      { icone: Plane, label: 'Type de congé', valeur: TYPES_CONGE[c.type]?.label || c.type },
+      { icone: Clock, label: 'Durée', valeur: `${c.jours || nbJours(c.dateDebut, c.dateFin)} jour(s)` },
+      { icone: CalendarDays, label: 'Du', valeur: c.dateDebut ? formatDateShort(c.dateDebut) : '' },
+      { icone: CalendarDays, label: 'Au', valeur: c.dateFin ? formatDateShort(c.dateFin) : '' },
+      ...(c.type === 'annuel' ? [{ icone: CalendarDays, label: 'Congé annuel pris cette année', valeur: `${soldeConsomme[c.employeId] || 0} / ${droitAnnuel} jours`, large: true }] : []),
+      { icone: AlignLeft, label: 'Motif', valeur: c.motif, large: true }
+    ]
+  })
 
   async function save() {
     if (!modal.employeId) return toast.error('Sélectionnez un employé')
@@ -64,7 +83,7 @@ export default function Conges() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard title="En attente" value={enAttente.length} accent="#f59e0b" icon={CalendarDays} />
         <StatCard title="Approuvés (à venir)" value={approuves.length} accent="#16a34a" icon={CalendarDays} />
-        <StatCard title="Droit annuel" value={`${DROIT_CONGE_ANNUEL} j`} accent="#0284c7" icon={CalendarDays} />
+        <StatCard title="Droit annuel" value={`${droitAnnuel} j`} accent="#0284c7" icon={CalendarDays} />
       </div>
 
       <Card className="!p-0 overflow-hidden">
@@ -75,20 +94,20 @@ export default function Conges() {
               <tr className="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-white/5">
                 <th className="px-3 py-2.5">Employé</th><th className="px-3 py-2.5">Type</th>
                 <th className="px-3 py-2.5">Période</th><th className="px-3 py-2.5 text-center">Jours</th>
-                <th className="px-3 py-2.5 text-center">Solde conso.</th><th className="px-3 py-2.5">Statut</th><th className="px-3 py-2.5 text-right">Action</th>
+                <th className="px-3 py-2.5 text-center" title="Jours de congé annuel pris cette année, sur le droit annuel">Jours pris / droit</th><th className="px-3 py-2.5">Statut</th><th className="px-3 py-2.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
               {conges.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Aucune demande.</td></tr>}
               {conges.filter((c) => correspond(recherche, c.employeNom, empNom(c.employeId))).map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                <tr key={c.id} onClick={() => setDetailId(c.id)} className="cursor-pointer hover:bg-sky-50/60 dark:hover:bg-white/5">
                   <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{c.employeNom || empNom(c.employeId)}</td>
                   <td className="px-3 py-2"><Badge tone={TYPES_CONGE[c.type]?.tone || 'neutral'}>{TYPES_CONGE[c.type]?.label || c.type}</Badge></td>
                   <td className="px-3 py-2 text-gray-500">{formatDateShort(c.dateDebut)} → {formatDateShort(c.dateFin)}</td>
                   <td className="px-3 py-2 text-center font-semibold">{c.jours || nbJours(c.dateDebut, c.dateFin)}</td>
-                  <td className="px-3 py-2 text-center text-gray-500">{c.type === 'annuel' ? `${soldeConsomme[c.employeId] || 0}/${DROIT_CONGE_ANNUEL}` : '—'}</td>
+                  <td className="px-3 py-2 text-center text-gray-500">{c.type === 'annuel' ? `${soldeConsomme[c.employeId] || 0}/${droitAnnuel}` : '—'}</td>
                   <td className="px-3 py-2"><Badge tone={STATUTS_CONGE[c.statut || 'en_attente']?.tone}>{STATUTS_CONGE[c.statut || 'en_attente']?.label}</Badge></td>
-                  <td className="px-2 py-2 text-right">
+                  <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                     {(c.statut || 'en_attente') === 'en_attente' ? (
                       <div className="flex justify-end gap-1">
                         <button onClick={() => decider(c, 'approuve')} className="rounded p-1.5 text-green-600 hover:bg-green-50" title="Approuver"><Check size={15} /></button>
@@ -102,6 +121,12 @@ export default function Conges() {
           </table>
         </div>
       </Card>
+
+      <DetailFiche fiche={congeDetail ? ficheConge(congeDetail) : null} onClose={() => setDetailId(null)}
+        actions={congeDetail && (congeDetail.statut || 'en_attente') === 'en_attente' ? [
+          { label: 'Refuser', icone: X, tone: 'danger', onClick: () => { decider(congeDetail, 'refuse'); setDetailId(null) } },
+          { label: 'Approuver', icone: Check, tone: 'succes', onClick: () => { decider(congeDetail, 'approuve'); setDetailId(null) } }
+        ] : []} />
 
       <ModalRh open={!!modal} onClose={() => setModal(null)} title="Nouvelle demande de congé" libelleSave="Envoyer la demande"
         icone={Plane} intro="La demande part en attente : un responsable la valide ou la refuse." onSave={save}>

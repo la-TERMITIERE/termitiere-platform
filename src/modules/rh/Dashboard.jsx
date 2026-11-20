@@ -1,14 +1,15 @@
 // RH — Tableau de bord (3 vues : Admin / Manager / Employé), aligné FEZIRE /hr/dashboard.
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Building2, Wallet, Users, CalendarCheck, CalendarDays, Receipt, FileText, BadgeCheck, ListChecks, Award, Clock, LayoutDashboard, UserX, PartyPopper, ShieldAlert, TrendingUp, GraduationCap, Plane } from 'lucide-react'
+import { Building2, Wallet, Users, CalendarCheck, CalendarDays, Receipt, FileText, BadgeCheck, ListChecks, Award, Clock, LayoutDashboard, UserX, PartyPopper, ShieldAlert, TrendingUp, GraduationCap, Plane, LogIn } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import StatCard from '../../shared/ui/StatCard'
 import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
-import { calculerBulletin, DROIT_CONGE_ANNUEL, MOIS_LABELS, PAIE_CONFIG_DEFAUT, TYPES_PRESENCE, TYPES_CONGE } from './store/rhStore'
+import { useDroitAnnuel } from './droitConges'
+import { calculerBulletin, MOIS_LABELS, PAIE_CONFIG_DEFAUT, TYPES_PRESENCE, TYPES_CONGE } from './store/rhStore'
 import DetailKpiModal from './DetailKpiModal'
 import { ListeCarte, EffectifAnneauCarte } from './CartesDashboard'
 import { PageHeader } from './rhui'
@@ -21,6 +22,7 @@ const VUES = [
 ]
 
 export default function Dashboard() {
+  const droitAnnuel = useDroitAnnuel()
   const { data: employes } = useCollection('rh_employes')
   const { data: presences } = useCollection('rh_presences')
   const { data: conges } = useCollection('rh_conges')
@@ -29,6 +31,7 @@ export default function Dashboard() {
   const { data: formations } = useCollection('rh_formations')
   const { data: evaluations } = useCollection('rh_evaluations')
   const { data: taches } = useCollection('rh_taches')
+  const { data: onboarding } = useCollection('rh_onboarding')
   const user = useAuth((s) => s.user)
   const navigate = useNavigate()
   const [vue, setVue] = useState('admin')
@@ -52,7 +55,7 @@ export default function Dashboard() {
     const bulletinsAValider = bulletinsMois.filter((b) => (b.statut || 'brouillon') === 'brouillon').length
     return { actifs: actifs.length, total: employes.length, presToday: presToday.length, retards, absents,
       congesAttente: congesAttente.length, masseSalariale, nbBulletins: bulletinsMois.length,
-      cddProches, bulletinsAValider, coutEmployeur: Math.round(masseSalariale * (1 + PAIE_CONFIG_DEFAUT.tauxCnssEmployeur)) }
+      cddProches, bulletinsAValider, coutEmployeur: Math.round(masseSalariale * (1 + PAIE_CONFIG_DEFAUT.tauxCnssEmployeur + PAIE_CONFIG_DEFAUT.tauxAmuEmployeur)) }
   }, [employes, presences, conges, bulletins, contrats, today, moisCourant])
 
   const perimetre = VUES.find((v) => v.id === vue)?.perimetre
@@ -129,7 +132,7 @@ export default function Dashboard() {
     const retard = [
       ...formations.filter((f) => f.statut === 'planifiee' && f.dateDebut && f.dateDebut < today)
         .map((f) => ({ id: `f_${f.id}`, libelle: f.titre || 'Formation', detail: `Prévue le ${formatDateShort(f.dateDebut)}` })),
-      ...enPoste.filter((e) => !evaluations.some((v) => v.employeId === e.id && String(v.periode || '').includes(annee)))
+      ...enPoste.filter((e) => !evaluations.some((v) => v.employeId === e.id && v.statut !== 'planifiee' && String(v.periode || '').includes(annee)))
         .map((e) => ({ id: `e_${e.id}`, libelle: nom(e), detail: `Évaluation ${annee} à faire` }))
     ]
 
@@ -152,7 +155,7 @@ export default function Dashboard() {
         .reduce((t, c) => t + (Number(c.jours) || 0), 0)
       const dernier = bulletins.filter((b) => b.employeId === moi.id).sort((a, b) => (a.mois < b.mois ? 1 : -1))[0]
       const mesTaches = taches.filter((t) => t.assigneId === moi.id && t.statut !== 'termine' && t.echeance && t.echeance <= today)
-      perso = { pris, solde: Math.max(0, DROIT_CONGE_ANNUEL - pris), dernier, mesTaches: mesTaches.length, enRetard: mesTaches.filter((t) => t.echeance < today).length }
+      perso = { pris, solde: Math.max(0, droitAnnuel - pris), dernier, mesTaches: mesTaches.length, enRetard: mesTaches.filter((t) => t.echeance < today).length }
     }
     const contratsASurveiller = [...cdd, ...essai, ...incomplets]
     // Fiches de détail des KPI (fenêtre au clic). Les listes de l'équipe ne contiennent que le département du manager.
@@ -177,7 +180,7 @@ export default function Dashboard() {
         tuiles: [{ icone: CalendarDays, titre: 'En attente', valeur: congesAttenteListe.length }, { icone: Clock, titre: 'Jours demandés', valeur: congesAttenteListe.reduce((t, c) => t + (Number(c.jours) || 0), 0) }],
         lignes: congesAttenteListe.map(ligneConge), vide: 'Aucune demande en attente.', lien: { to: '/rh/conges', label: 'Ouvrir les congés' } },
       paie: { titre: 'Paie du mois', sous: bulletinsMois.length ? 'Les bulletins générés ce mois-ci.' : 'Aucun bulletin généré : estimation à partir des salaires actifs.', icone: Receipt, couleur: '#7c3aed',
-        tuiles: [{ icone: Receipt, titre: 'Masse brute', valeur: formatMoney(masse) }, { icone: Wallet, titre: 'Coût employeur', valeur: formatMoney(Math.round(masse * (1 + PAIE_CONFIG_DEFAUT.tauxCnssEmployeur))), sous: 'charges patronales incluses' }, { icone: BadgeCheck, titre: 'Bulletins', valeur: bulletinsMois.length }],
+        tuiles: [{ icone: Receipt, titre: 'Masse brute', valeur: formatMoney(masse) }, { icone: Wallet, titre: 'Coût employeur', valeur: formatMoney(Math.round(masse * (1 + PAIE_CONFIG_DEFAUT.tauxCnssEmployeur + PAIE_CONFIG_DEFAUT.tauxAmuEmployeur))), sous: 'charges patronales incluses' }, { icone: BadgeCheck, titre: 'Bulletins', valeur: bulletinsMois.length }],
         lignes: bulletinsMois.length
           ? bulletinsMois.map((b) => ({ id: b.id || `${b.mois}_${b.employeId}`, libelle: b.employeNom || 'Employé', sous: b.poste || '', detail: formatMoney(b.brutTotal), ton: (b.statut || 'brouillon') === 'brouillon' ? 'orange' : 'vert' }))
           : employes.filter((e) => (e.statut || 'actif') === 'actif').map((e) => ({ id: e.id, libelle: nom(e), sous: 'Estimation', detail: formatMoney(calculerBulletin(e.salaire).brutTotal), ton: 'gris' })),
@@ -200,8 +203,13 @@ export default function Dashboard() {
         tuiles: [{ icone: Clock, titre: 'Retards', valeur: equipe.retards, couleur: '#f59e0b' }, { icone: UserX, titre: 'Absents', valeur: equipe.absents, couleur: '#dc2626' }],
         lignes: presEquipe.filter((p) => p.statut === 'retard' || p.statut === 'absent').map(lignePresence), vide: "Aucune anomalie aujourd'hui.", lien: { to: '/rh/presences', label: 'Ouvrir les présences' } }
     }
-    return { fiches, absents: [...absents.values()], anciennete, contratsASurveiller, congesPrevus, parDepartement, paie5, retard, perso, equipe }
-  }, [employes, presences, conges, bulletins, contrats, formations, evaluations, taches, today, user])
+    // Étapes d'arrivée et de départ à faire : en retard, du jour ou des 7 prochains jours (programmées dans RH, Contrats et dossiers, Arrivées et départs).
+    const dans7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)
+    const etapesRH = onboarding.filter((o) => o.statut !== 'fait' && o.datePrevue && o.datePrevue <= dans7)
+      .sort((a, b) => (a.datePrevue < b.datePrevue ? -1 : 1))
+      .map((o) => ({ id: o.id, libelle: o.employeNom || 'Employé', detail: `${o.type === 'offboarding' ? 'Départ' : 'Arrivée'} : ${o.etape} · ${o.datePrevue < today ? 'en retard' : o.datePrevue === today ? "aujourd'hui" : formatDateShort(o.datePrevue)}` }))
+    return { fiches, etapesRH, absents: [...absents.values()], anciennete, contratsASurveiller, congesPrevus, parDepartement, paie5, retard, perso, equipe }
+  }, [employes, presences, conges, bulletins, contrats, formations, evaluations, taches, onboarding, today, user, droitAnnuel])
 
   return (
     <div className="space-y-5">
@@ -229,10 +237,11 @@ export default function Dashboard() {
           <EffectifAnneauCarte parDepartement={details.parDepartement} rang={0} />
           <ListeCarte rang={1} icone={UserX} couleur="#dc2626" titre="Absents aujourd'hui" sous="Absences et congés en cours" lignes={details.absents} vide="Personne n'est absent aujourd'hui." />
           <ListeCarte rang={2} icone={PartyPopper} couleur="#f59e0b" titre="Ancienneté à fêter" sous="Anniversaires d'embauche des 7 prochains jours" lignes={details.anciennete} vide="Aucun anniversaire d'embauche cette semaine." />
-          <ListeCarte rang={3} icone={ShieldAlert} couleur="#ea580c" titre="Contrats à surveiller" sous="Fins de CDD, essais en cours, dossiers incomplets" lignes={details.contratsASurveiller} vide="Aucun contrat à surveiller." max={6} />
+          <ListeCarte rang={3} icone={ShieldAlert} couleur="#ea580c" lien={{ to: '/rh/conformite', label: 'Voir toutes les alertes de conformité' }} titre="Contrats à surveiller" sous="Fins de CDD, essais en cours, dossiers incomplets" lignes={details.contratsASurveiller} vide="Aucun contrat à surveiller." max={6} />
           <ListeCarte rang={4} icone={Plane} couleur="#0284c7" titre="Congés prévus ce mois-ci" sous="Congés approuvés, en cours ou à venir" lignes={details.congesPrevus} vide="Aucun congé prévu ce mois-ci." />
           <ListeCarte rang={5} icone={TrendingUp} couleur="#0d9488" titre="Paie des mois précédents" sous="Total brut des 5 derniers mois (le mois en cours est dans « Paie du mois »)" lignes={details.paie5} vide="" max={5} />
           <ListeCarte rang={6} icone={GraduationCap} couleur="#16a34a" titre="Formations et évaluations en retard" sous="Formations passées non commencées, évaluations de l'année" lignes={details.retard} vide="Rien en retard." />
+          <ListeCarte rang={7} icone={LogIn} couleur="#7c3aed" lien={{ to: '/rh/onboarding', label: 'Ouvrir les arrivées et départs' }} titre="Arrivées et départs" sous="Étapes à faire : en retard, aujourd'hui et sous 7 jours" lignes={details.etapesRH} vide="Aucune étape programmée à court terme." />
         </div>
       )}
 
@@ -262,7 +271,7 @@ export default function Dashboard() {
       {vue === 'employe' && (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard title="Mon Solde de Congés" value={details.perso ? `${details.perso.solde} j` : '—'} sub={details.perso ? `sur ${DROIT_CONGE_ANNUEL} jours, ${details.perso.pris} pris cette année` : 'Compte non rattaché'} accent="#0284c7" icon={CalendarDays} onClick={() => navigate('/rh/conges')} />
+            <StatCard title="Mon Solde de Congés" value={details.perso ? `${details.perso.solde} j` : '—'} sub={details.perso ? `sur ${droitAnnuel} jours, ${details.perso.pris} pris cette année` : 'Compte non rattaché'} accent="#0284c7" icon={CalendarDays} onClick={() => navigate('/rh/conges')} />
             <StatCard title="Mon Dernier Bulletin" value={details.perso?.dernier ? formatMoney(details.perso.dernier.net) : '—'} sub={details.perso?.dernier ? `Net à payer · ${MOIS_LABELS[Number(details.perso.dernier.mois.slice(5, 7)) - 1]} ${details.perso.dernier.mois.slice(0, 4)}` : 'Aucun bulletin pour le moment'} accent="#7c3aed" icon={Receipt} onClick={() => navigate('/rh/paie')} />
             <StatCard title="Mes Tâches du Jour" value={details.perso ? details.perso.mesTaches : '—'} sub={details.perso ? (details.perso.enRetard ? `dont ${details.perso.enRetard} en retard` : "à faire d'ici ce soir") : 'Compte non rattaché'} accent="#f59e0b" icon={ListChecks} onClick={() => navigate('/rh/taches')} />
           </div>

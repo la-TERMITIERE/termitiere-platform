@@ -27,6 +27,12 @@
   [headers.values]
     Cache-Control = "no-cache"
 
+# Version publiée : lue à chaque « Vérifier les mises à jour », jamais mise en cache.
+[[headers]]
+  for = "/version.json"
+  [headers.values]
+    Cache-Control = "no-store"
+
 [[headers]]
   for = "/*"
   [headers.values]
