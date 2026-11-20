@@ -50,7 +50,7 @@ export default function AppShell() {
       return !!volet && morceaux.includes(volet)
     })
   })()
-  const enLecture = moduleCourant && moduleEnLecture(user?.droitsModules, moduleCourant.id)
+  const enLecture = moduleCourant && moduleEnLecture(user?.droitsModules, moduleCourant.id, role)
   // Rôle posé sur la page : sert à masquer les corbeilles des tableaux pour les agents (index.css).
   useEffect(() => { document.documentElement.dataset.role = role || ''; return () => { delete document.documentElement.dataset.role } }, [role])
 

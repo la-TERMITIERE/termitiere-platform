@@ -16,7 +16,8 @@ const FORMATS = {
   excel: { titre: 'Rapport en Excel', Icone: FileSpreadsheet, couleur: '#16a34a', verbe: 'Générer le fichier Excel', ext: 'xlsx' }
 }
 
-export default function ExportRapportModal({ format = 'pdf', periode, onClose }) {
+// `sansMontant` : compte qui ne voit pas l'argent (Assistant(e) GE) : le fichier ne contient que l'activité des secteurs, aucune somme.
+export default function ExportRapportModal({ format = 'pdf', periode, sansMontant = false, onClose }) {
   const user = useAuth((s) => s.user)
   const f = FORMATS[format] || FORMATS.pdf
   const [mode, setMode] = useState(periode?.mode || 'mois')
@@ -26,7 +27,7 @@ export default function ExportRapportModal({ format = 'pdf', periode, onClose })
   const [debut, setDebut] = useState(periode?.debut || '')
   const [fin, setFin] = useState(periode?.fin || '')
   const [ids, setIds] = useState(TOUS_LES_SECTEURS)
-  const [details, setDetails] = useState(true)
+  const [details, setDetails] = useState(false) // rapport sobre par défaut : le détail des opérations reste un choix
   const [enCours, setEnCours] = useState(false)
 
   const bornes = useMemo(() => bornesPeriode(mode, { jour, mois, annee, debut, fin }), [mode, jour, mois, annee, debut, fin])
@@ -44,8 +45,8 @@ export default function ExportRapportModal({ format = 'pdf', periode, onClose })
       const rapport = calculerRapport(donnees, { ids, mode, bornes })
       const nomFichier = `rapport-global_${bornes.start === bornes.end ? bornes.start : `${bornes.start}_${bornes.end}`}`
       // Les générateurs (jsPDF, xlsx) sont lourds : chargés seulement au moment d'exporter, pas avec le tableau de bord.
-      if (format === 'pdf') await (await import('./rapportGlobalPDF')).genererRapportGlobalPDF({ rapport, libelle, par: user?.nom || '', avecDetails: details, tousLesSecteurs: tous, fichier: `${nomFichier}.pdf` })
-      else (await import('./rapportGlobalExcel')).genererRapportGlobalExcel({ rapport, libelle, par: user?.nom || '', avecDetails: details, fichier: `${nomFichier}.xlsx` })
+      if (format === 'pdf') await (await import('./rapportGlobalPDF')).genererRapportGlobalPDF({ rapport, libelle, par: user?.nom || '', avecDetails: details && !sansMontant, sansMontant, tousLesSecteurs: tous, fichier: `${nomFichier}.pdf` })
+      else (await import('./rapportGlobalExcel')).genererRapportGlobalExcel({ rapport, libelle, par: user?.nom || '', avecDetails: details && !sansMontant, sansMontant, fichier: `${nomFichier}.xlsx` })
       toast.success(`Rapport ${format === 'pdf' ? 'PDF' : 'Excel'} généré ✓`)
       onClose()
     } catch (e) {
@@ -102,7 +103,7 @@ export default function ExportRapportModal({ format = 'pdf', periode, onClose })
           {!ids.length && <p className="mt-2 text-xs font-semibold text-red-600">Choisissez au moins un secteur.</p>}
         </div>
 
-        <button type="button" role="switch" aria-checked={details} onClick={() => setDetails(!details)}
+        {!sansMontant && <button type="button" role="switch" aria-checked={details} onClick={() => setDetails(!details)}
           className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/80 bg-white/60 px-3.5 py-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md transition-all hover:bg-white/80">
           <span className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={icone3D('#7c3aed')}><ListChecks size={15} /></span>
@@ -115,7 +116,8 @@ export default function ExportRapportModal({ format = 'pdf', periode, onClose })
             style={{ background: details ? `linear-gradient(135deg, #e0685c, ${ROUGE})` : 'rgba(148,163,184,0.45)', boxShadow: details ? `0 6px 12px -6px ${ROUGE}` : 'inset 0 1px 3px rgba(0,0,0,0.15)' }}>
             <span className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.3)] transition-all" style={{ left: details ? '1.35rem' : '0.12rem' }} />
           </span>
-        </button>
+        </button>}
+        {sansMontant && <p className="px-1 text-xs text-gray-500">Le rapport présente l'activité de chaque secteur, sans aucun montant.</p>}
       </div>
     </Modal>
   )

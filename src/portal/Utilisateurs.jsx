@@ -19,7 +19,7 @@ import { useAuth } from '../hooks/useAuth'
 import { isFirebaseConfigured } from '../core/firebase'
 import { toast } from '../core/notifications'
 import { MODULES } from '../shared/modules'
-import { ROLES, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, profilVisible } from '../core/roles'
+import { ROLES, ACTIONS_DROIT, ROLES_LECTURE_PAR_DEFAUT, droitEffectif, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, profilVisible } from '../core/roles'
 import { CAT_ANIMAUX } from '../modules/agro/data'
 import { SITES } from '../modules/logistique/site/useSite'
 import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
@@ -114,7 +114,7 @@ export default function Utilisateurs() {
   const visibles = usersTries
   const nbActifs = visibles.filter((u) => u.actif !== false).length
   const nbInactifs = visibles.length - nbActifs
-  const nbLecture = visibles.filter((u) => isReadOnlyRole(u.role) || Object.values(u.droitsModules || {}).includes('lecture')).length
+  const nbLecture = visibles.filter((u) => isReadOnlyRole(u.role) || ROLES_LECTURE_PAR_DEFAUT.includes(u.role) || Object.values(u.droitsModules || {}).includes('lecture')).length
 
   // Interrupteur Actif / Inactif d'un compte (petit, en haut à droite de la carte).
   function statutSwitch(r) {
@@ -229,7 +229,7 @@ Cette personne ne pourra plus se connecter.`)) return
               if (isViewAllRole(r.role) && !retires.length) return <Badge tone="primary">Tous</Badge>
               const ids = isViewAllRole(r.role) ? MODULES.map((m) => m.id).filter((id) => !retires.includes(id)) : (r.modules || [])
               if (!ids.length) return <span className="text-xs text-gray-400 dark:text-gray-500">Aucun</span>
-              const lecture = (id) => r.droitsModules?.[id] === 'lecture'
+              const lecture = (id) => !ACTIONS_DROIT.some((a) => droitEffectif(r, id, a))
               return (
                 <div className="flex flex-nowrap items-center gap-1 whitespace-nowrap">
                   {ids.slice(0, 3).map((id) => {

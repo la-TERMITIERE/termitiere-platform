@@ -10,7 +10,7 @@ import { avatarGradient } from '../utils/color'
 import { toast } from '../core/notifications'
 import { useAuth } from '../hooks/useAuth'
 import { MODULES, MODULE_NAV } from '../shared/modules'
-import { roleEffectif, bilanParDefaut, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire, ACTIONS_DROIT, actionAutorisee, actionImposeeInterdite } from '../core/roles'
+import { roleEffectif, agentEnPlus, bilanParDefaut, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire, ACTIONS_DROIT, ROLES_LECTURE_PAR_DEFAUT, droitEffectif, droitParDefaut, encoderDroits, actionImposeeInterdite } from '../core/roles'
 
 const rgba = (hex, a) => {
   const n = parseInt(hex.replace('#', ''), 16)
@@ -21,7 +21,7 @@ const rgba = (hex, a) => {
 // Les entrées `{ heading }` ne sont que des séparateurs de section : on les écarte.
 function voletsVisibles(u, moduleId) {
   const canSee = (item) => {
-    if (item.roles && item.roles.includes(roleEffectif(u.role))) return true
+    if (item.roles && (item.roles.includes(roleEffectif(u.role)) || (item.roles.includes('agent') && roleEffectif(u.role) === 'secretaire' && agentEnPlus(u.role)))) return true
     if (item.perm === 'partenaires' && canManagePartenaires(roleEffectif(u.role), u)) return true
     return !item.roles && !item.perm
   }
@@ -60,7 +60,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
   )
   const droits = user?.droitsModules || {}
   // Action réellement permise à ce compte : ni interdite par son rôle, ni refusée par le réglage individuel.
-  const permise = (m, action) => !actionImposeeInterdite(roleEffectif(user.role), m.id, action) && actionAutorisee(droits, m.id, action)
+  const permise = (m, action) => droitEffectif(user, m.id, action)
   const nbVolets = useMemo(() => (user ? modules.reduce((t, m) => t + voletsVisibles(user, m.id).filter((v) => !voletRetire(user, m.id, v.to)).length, 0) : 0), [user, modules])
   const nbLecture = user ? modules.filter((m) => ACTIONS_DROIT.every((a) => !permise(m, a))).length : 0
 
@@ -110,19 +110,24 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
   const ETIQUETTE_ACTION = { creer: 'Créer', modifier: 'Modifier', supprimer: 'Supprimer' }
   function basculerAction(m, action) {
     if (actionImposeeInterdite(roleEffectif(user.role), m.id, action)) return
-    const refusees = ACTIONS_DROIT.filter((a) => !actionAutorisee(droits, m.id, a))
-    const refuse = refusees.includes(action)
-    const suivant = refuse ? refusees.filter((a) => a !== action) : [...refusees, action]
+    const etat = Object.fromEntries(ACTIONS_DROIT.map((a) => [a, droitEffectif(user, m.id, a)]))
+    const accorde = !etat[action]
+    etat[action] = accorde
     const suite = { ...droits }
-    if (!suivant.length) delete suite[m.id]
-    else if (suivant.length === ACTIONS_DROIT.length) suite[m.id] = 'lecture'
-    else suite[m.id] = Object.fromEntries(suivant.map((a) => [a, false]))
-    appliquer(suite, `${m.id}:${action}`, `${m.nom} : ${ETIQUETTE_ACTION[action]} ${refuse ? 'accordé' : 'refusé'} ✓`)
+    const code = encoderDroits(user, m.id, etat)
+    if (code === undefined) delete suite[m.id]; else suite[m.id] = code
+    appliquer(suite, `${m.id}:${action}`, `${m.nom} : ${ETIQUETTE_ACTION[action]} ${accorde ? 'accordé' : 'refusé'} ✓`)
   }
 
+  // Tout accorder ou tout passer en lecture, pour tous les modules du compte. Info peut accorder même ce que le rôle ne donne pas par défaut
+  // (écriture au directeur, MAXI-GYM à la GE…) ; seules les interdictions absolues (profil en lecture seule, agent qui ne supprime pas) restent.
   function toutChanger(ecriture) {
-    const suite = {}
-    if (!ecriture) modules.forEach((m) => { suite[m.id] = 'lecture' })
+    const suite = { ...droits }
+    modules.forEach((m) => {
+      const etat = Object.fromEntries(ACTIONS_DROIT.map((a) => [a, ecriture && !actionImposeeInterdite(roleEffectif(user.role), m.id, a)]))
+      const code = encoderDroits(user, m.id, etat)
+      if (code === undefined) delete suite[m.id]; else suite[m.id] = code
+    })
     appliquer(suite, 'tout', ecriture ? 'Tous les modules : toutes les actions accordées ✓' : 'Tous les modules : lecture seule ✓')
   }
 
@@ -237,7 +242,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
           {/* Un module : volets accessibles + interrupteur de droit */}
           {modules.map((m, i) => {
             const volets = voletsVisibles(user, m.id)
-            const verrouille = lectureImposeeParRole(roleEffectif(user.role), m.id)
+            const verrouille = lectureImposeeParRole(roleEffectif(user.role))
             const sites = m.id === 'logistique' ? user.logistiqueSites : m.id === 'gym' ? user.gymSites : null
             return (
               <div key={m.id} className="acc-anim overflow-hidden rounded-2xl border border-white/70 bg-white/70 shadow-sm backdrop-blur-md transition-shadow hover:shadow-lg"
@@ -274,7 +279,13 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
                   {verrouille && (
                     <p className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
                       <Lock size={11} className="shrink-0" />
-                      {isReadOnlyRole(roleEffectif(user.role)) ? `Le rôle ${roleLabel(user.role)} est en lecture seule partout.` : 'Dans MAXI-GYM, seuls les agents, Info et Assistant PAU peuvent écrire.'}
+                      {isReadOnlyRole(roleEffectif(user.role)) ? `Le rôle ${roleLabel(user.role)} est en lecture seule partout.` : ''}
+                    </p>
+                  )}
+                  {!verrouille && ROLES_LECTURE_PAR_DEFAUT.includes(roleEffectif(user.role)) && droitParDefaut(user, m.id, 'modifier') === false && (
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                      <Lock size={11} className="shrink-0" />
+                      Lecture seule par défaut pour ce rôle : activez Créer, Modifier ou Supprimer pour accorder l'écriture sur {m.nom}.
                     </p>
                   )}
                   {volets.length ? (

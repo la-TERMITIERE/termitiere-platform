@@ -23,7 +23,7 @@ import { demanderMotif } from '../../core/motifSuppression'
 import { audit } from '../../core/audit'
 import { toast } from '../../core/notifications'
 import { todayStr, addDays, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { isReadOnlyRole, isFullAccessRole, logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole, agirCommeAgent, logistiqueVoitMontants, logistiqueVoitValidateur, canViewFinance } from '../../core/roles'
 import { glassModalProps, COULEUR_MODULE, icone3D } from '../../utils/color'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
@@ -174,8 +174,8 @@ export default function Prestations() {
   // modifier (la facture liée suit). Les autres rôles voient le bouton, grisé.
   const verrouillee = (p) => p.statut !== 'brouillon' || !!p.approuvee
   // Facturer et demander la sortie d'un coup : agents et administration, sur une prestation en brouillon.
-  const peutFacturerRole = !isReadOnlyRole(role) && (role === 'agent' || isFullAccessRole(role))
-  const peutFacturerSortie = (p) => !isReadOnlyRole(role) && (role === 'agent' || isFullAccessRole(role)) && p.statut === 'brouillon' && !p.factureId
+  const peutFacturerRole = !isReadOnlyRole(role) && (agirCommeAgent(role) || isFullAccessRole(role))
+  const peutFacturerSortie = (p) => !isReadOnlyRole(role) && (agirCommeAgent(role) || isFullAccessRole(role)) && p.statut === 'brouillon' && !p.factureId
   const peutModifier = (p) => !isReadOnlyRole(role) && p.statut !== 'annulee' && (isFullAccessRole(role) || !verrouillee(p))
 
   function openCreate() {

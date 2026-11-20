@@ -62,7 +62,7 @@
       },
 
       "audit_global": {
-        ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|admin|info)$/)",
+        ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|ge|df|directeur|rh|admin|info)$/)",
         "$entryId": {
           ".write": "auth != null && !data.exists() && newData.exists()"
         }
