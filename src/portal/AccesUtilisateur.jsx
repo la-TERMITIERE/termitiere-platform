@@ -2,7 +2,7 @@
 // petit interrupteur « Lecture » / « CRUD ». Le réglage est enregistré tout de suite
 // (`droitsModules` sur le profil) et appliqué par la couche de données (core/db.js).
 import { useMemo, useState } from 'react'
-import { Eye, EyeOff, Pencil, Lock, ShieldCheck, Layers, LayoutGrid, Phone, BadgeCheck, Ban, X, Plus, Check, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Pencil, Lock, ShieldCheck, Layers, LayoutGrid, Phone, BadgeCheck, Ban, X, Plus, Check, Trash2, LayoutDashboard } from 'lucide-react'
 import Modal from '../shared/ui/Modal'
 import Button from '../shared/ui/Button'
 import Badge from '../shared/ui/Badge'
@@ -10,7 +10,7 @@ import { avatarGradient } from '../utils/color'
 import { toast } from '../core/notifications'
 import { useAuth } from '../hooks/useAuth'
 import { MODULES, MODULE_NAV } from '../shared/modules'
-import { isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire, ACTIONS_DROIT, actionAutorisee, actionImposeeInterdite } from '../core/roles'
+import { roleEffectif, bilanParDefaut, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire, ACTIONS_DROIT, actionAutorisee, actionImposeeInterdite } from '../core/roles'
 
 const rgba = (hex, a) => {
   const n = parseInt(hex.replace('#', ''), 16)
@@ -21,8 +21,8 @@ const rgba = (hex, a) => {
 // Les entrées `{ heading }` ne sont que des séparateurs de section : on les écarte.
 function voletsVisibles(u, moduleId) {
   const canSee = (item) => {
-    if (item.roles && item.roles.includes(u.role)) return true
-    if (item.perm === 'partenaires' && canManagePartenaires(u.role, u)) return true
+    if (item.roles && item.roles.includes(roleEffectif(u.role))) return true
+    if (item.perm === 'partenaires' && canManagePartenaires(roleEffectif(u.role), u)) return true
     return !item.roles && !item.perm
   }
   return (MODULE_NAV[moduleId] || []).filter((item) => !item.heading).filter(canSee)
@@ -47,20 +47,20 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
   const [occupe, setOccupe] = useState(null) // id du module en cours d'enregistrement, ou 'tout'
 
   const moi = useAuth((st) => st.user)
-  const tousModules = user ? isViewAllRole(user.role) : false
+  const tousModules = user ? isViewAllRole(roleEffectif(user.role)) : false
   // Rôle « voit tout » : tous les modules sauf ceux que Info lui a retirés. Autres rôles : les modules cochés sur le compte.
   const modules = useMemo(
-    () => (!user ? [] : MODULES.filter((m) => moduleRoleOk(m.id, user.role) && (tousModules ? !moduleRetire(user, m.id) : (user.modules || []).includes(m.id)))),
+    () => (!user ? [] : MODULES.filter((m) => moduleRoleOk(m.id, roleEffectif(user.role)) && (tousModules ? !moduleRetire(user, m.id) : (user.modules || []).includes(m.id)))),
     [user, tousModules]
   )
   // Modules que ce rôle pourrait avoir mais que le compte n'a pas (ou plus) : proposés à l'ajout.
   const nonAttribues = useMemo(
-    () => (!user ? [] : MODULES.filter((m) => moduleRoleOk(m.id, user.role) && !modules.some((x) => x.id === m.id))),
+    () => (!user ? [] : MODULES.filter((m) => moduleRoleOk(m.id, roleEffectif(user.role)) && !modules.some((x) => x.id === m.id))),
     [user, modules]
   )
   const droits = user?.droitsModules || {}
   // Action réellement permise à ce compte : ni interdite par son rôle, ni refusée par le réglage individuel.
-  const permise = (m, action) => !actionImposeeInterdite(user.role, m.id, action) && actionAutorisee(droits, m.id, action)
+  const permise = (m, action) => !actionImposeeInterdite(roleEffectif(user.role), m.id, action) && actionAutorisee(droits, m.id, action)
   const nbVolets = useMemo(() => (user ? modules.reduce((t, m) => t + voletsVisibles(user, m.id).filter((v) => !voletRetire(user, m.id, v.to)).length, 0) : 0), [user, modules])
   const nbLecture = user ? modules.filter((m) => ACTIONS_DROIT.every((a) => !permise(m, a))).length : 0
 
@@ -109,7 +109,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
   // Accorde ou refuse UNE action (créer, modifier, supprimer) sur un module. On ne garde que ce qui est refusé : tout refusé = « lecture ».
   const ETIQUETTE_ACTION = { creer: 'Créer', modifier: 'Modifier', supprimer: 'Supprimer' }
   function basculerAction(m, action) {
-    if (actionImposeeInterdite(user.role, m.id, action)) return
+    if (actionImposeeInterdite(roleEffectif(user.role), m.id, action)) return
     const refusees = ACTIONS_DROIT.filter((a) => !actionAutorisee(droits, m.id, a))
     const refuse = refusees.includes(action)
     const suivant = refuse ? refusees.filter((a) => a !== action) : [...refusees, action]
@@ -167,7 +167,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <Badge tone={roleTone(user.role)}>{roleLabel(user.role)}</Badge>
-                {isReadOnlyRole(user.role) && <Badge tone="info">Lecture seule</Badge>}
+                {isReadOnlyRole(roleEffectif(user.role)) && <Badge tone="info">Lecture seule</Badge>}
                 {tousModules && !(user.modulesRetires || []).length && <Badge tone="primary">Tous les modules</Badge>}
               </div>
             </div>
@@ -189,6 +189,25 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
                 <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">{t.titre}</p>
               </div>
             ))}
+          </div>
+
+          {/* Tableau de bord global : accès par défaut pour l'administration ; pour un autre compte, c'est Info qui l'accorde (récap du jour, sans argent). */}
+          <div className="acc-anim flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-white/70 bg-white/70 px-3.5 py-3 shadow-sm backdrop-blur-md"
+            style={{ animation: 'acc-entree 0.4s ease-out 0.3s both' }}>
+            <span className="relative flex items-center gap-1.5 overflow-hidden rounded-full py-1 pl-1 pr-3 text-[11px] font-extrabold tracking-wide text-white"
+              style={{ background: 'linear-gradient(135deg, #BC3C31, rgba(188,60,49,0.78))', boxShadow: '0 6px 14px -5px rgba(188,60,49,0.6), inset 0 1px 0 rgba(255,255,255,0.45)' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+              <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-white/25"><LayoutDashboard size={11} /></span>
+              <span className="relative">BILAN GLOBAL</span>
+            </span>
+            {bilanParDefaut(user.role)
+              ? <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-500"><BadgeCheck size={13} className="text-emerald-500" /> Accès par défaut ({roleLabel(user.role)})</span>
+              : (<>
+                  <Bascule icone={LayoutDashboard} label="Tableau de bord global" actif={user.accesBilanGlobal === true} couleur="#BC3C31" occupe={!!occupe}
+                    aide="Donne accès au tableau de bord global : le récap du jour de chaque secteur, sans aucun montant. Il repart à zéro chaque jour."
+                    onClick={() => modifierAcces({ accesBilanGlobal: !(user.accesBilanGlobal === true) }, 'bilan', user.accesBilanGlobal === true ? 'Tableau de bord global retiré ✓' : 'Tableau de bord global accordé ✓')} />
+                  <span className="text-[11px] font-medium text-gray-400">Récap du jour des secteurs, sans montant : repart à zéro chaque jour.</span>
+                </>)}
           </div>
 
           {modules.length > 0 && (
@@ -218,7 +237,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
           {/* Un module : volets accessibles + interrupteur de droit */}
           {modules.map((m, i) => {
             const volets = voletsVisibles(user, m.id)
-            const verrouille = lectureImposeeParRole(user.role, m.id)
+            const verrouille = lectureImposeeParRole(roleEffectif(user.role), m.id)
             const sites = m.id === 'logistique' ? user.logistiqueSites : m.id === 'gym' ? user.gymSites : null
             return (
               <div key={m.id} className="acc-anim overflow-hidden rounded-2xl border border-white/70 bg-white/70 shadow-sm backdrop-blur-md transition-shadow hover:shadow-lg"
@@ -247,15 +266,15 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
                       onClick={() => retirerModule(m)} />
                     {[['creer', Plus, 'Créer'], ['modifier', Pencil, 'Modifier'], ['supprimer', Trash2, 'Supprimer']].map(([action, Icone, label]) => (
                       <Bascule key={action} icone={Icone} label={label} actif={permise(m, action)} couleur={m.color}
-                        verrouille={actionImposeeInterdite(user.role, m.id, action)} occupe={!!occupe}
-                        aide={actionImposeeInterdite(user.role, m.id, action) ? (action === 'supprimer' && user.role === 'agent' ? 'Un agent ne supprime jamais' : 'Interdit par le rôle de ce compte') : `${label} : accorder ou refuser cette action sur ${m.nom}`}
+                        verrouille={actionImposeeInterdite(roleEffectif(user.role), m.id, action)} occupe={!!occupe}
+                        aide={actionImposeeInterdite(roleEffectif(user.role), m.id, action) ? (action === 'supprimer' && roleEffectif(user.role) === 'agent' ? 'Un agent ne supprime jamais' : 'Interdit par le rôle de ce compte') : `${label} : accorder ou refuser cette action sur ${m.nom}`}
                         onClick={() => basculerAction(m, action)} />
                     ))}
                   </div>
                   {verrouille && (
                     <p className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
                       <Lock size={11} className="shrink-0" />
-                      {isReadOnlyRole(user.role) ? `Le rôle ${roleLabel(user.role)} est en lecture seule partout.` : 'Dans MAXI-GYM, seuls les agents, Info et Assistant PAU peuvent écrire.'}
+                      {isReadOnlyRole(roleEffectif(user.role)) ? `Le rôle ${roleLabel(user.role)} est en lecture seule partout.` : 'Dans MAXI-GYM, seuls les agents, Info et Assistant PAU peuvent écrire.'}
                     </p>
                   )}
                   {volets.length ? (

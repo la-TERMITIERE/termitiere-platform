@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog
+  Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog, CalendarHeart, Gift
 } from 'lucide-react'
 import { cheminsDuGroupe } from '../modules/rh/groupes'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES, ANALYSES_DEPENSE_ROLES } from '../core/roles'
@@ -206,12 +206,13 @@ export const MODULE_NAV = {
     { label: 'Présences', to: '/rh/presences', icon: CalendarCheck },
     { label: 'Congés et absences', to: '/rh/conges', icon: CalendarDays },
     { label: 'Paie', to: '/rh/paie', icon: Receipt, groupe: cheminsDuGroupe('paie') },
-    { label: 'Avances et prêts', to: '/rh/avances', icon: HandCoins },
+    { label: 'Primes et avances', to: '/rh/primes', icon: Gift, groupe: cheminsDuGroupe('primesavances') },
     { heading: 'Talents' },
     { label: 'Recrutement', to: '/rh/recrutement', icon: Send, groupe: cheminsDuGroupe('recrutement') },
     { label: 'Développement', to: '/rh/formations', icon: TrendingUp, groupe: cheminsDuGroupe('developpement') },
     { heading: "Vie de l'entreprise" },
     { label: 'Missions et frais', to: '/rh/missions', icon: Plane, groupe: cheminsDuGroupe('missions') },
+    { label: 'Anniversaires et dotations', to: '/rh/anniversaires', icon: CalendarHeart, groupe: cheminsDuGroupe('vie') },
     // Les alertes de conformité sont dans le tableau de bord (carte « Contrats à surveiller »). Les réglages sont ici, pour l'administration.
     { heading: 'Administration' },
     { label: 'Paramètres', to: '/rh/paie-configuration', icon: Settings, roles: FULL_ACCESS_ROLES, groupe: cheminsDuGroupe('parametres') }

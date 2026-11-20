@@ -27,7 +27,7 @@ const TYPES_URGENTS = ['demande', 'refus', 'warning', 'alerte']
 //  - link : route ouverte au clic, ex. '/agro/demandes'
 export async function notify({
   type = 'info', title, body = '', module = '',
-  forRoles = [], forUsers = [], excludeUid = null, link = '',
+  forRoles: rolesDemandes = [], forUsers = [], excludeUid = null, link = '',
   emailRoles = [], // rôles qui reçoivent AUSSI un e-mail (si leur fiche a une adresse) : ex. ['pau', 'ge']
   ...extra // ex. { projetId } : conservé sur le document pour un nettoyage ciblé
            // plus tard (ex. suppression des notifs d'un projet supprimé).
@@ -35,6 +35,8 @@ export async function notify({
            // à ceux qui ont accès à cette salle (cf. peutVoirNotifSiteGym).
 }) {
   if (!title) return { id: null, destinataires: 0 }
+  // L'Assistant(e) GE a les droits de la secrétaire : elle reçoit les mêmes notifications.
+  const forRoles = rolesDemandes.includes('secretaire') ? [...new Set([...rolesDemandes, 'assistant_ge', 'assistant_comptable'])] : rolesDemandes
   const site = extra.site || null
   let id = null
   try {

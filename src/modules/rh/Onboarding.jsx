@@ -139,7 +139,7 @@ export default function Onboarding() {
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Repeat} sousModule="Contrats et dossiers" titre="Arrivées et départs" sousTitre="Programmez l'arrivée ou le départ d'un employé et suivez chaque étape, avec sa date et son responsable."
+      <PageHeader icon={Repeat} sousModule="Collaborateurs & Contrats" titre="Onboarding / Offboarding" sousTitre="Parcours d'intégration des nouveaux et de départ des sortants."
         action={<>
           <BoutonBande anime icone={CalendarPlus} onClick={ouvrirProgramme}>Programmer un parcours</BoutonBande>
           <BoutonBande plein={false} icone={Plus} onClick={() => { setTente(false); setSimple({ employeId: '', type: 'onboarding', etape: '', datePrevue: aujourdhui, responsable: '', statut: 'a_faire' }) }}>Nouvelle étape</BoutonBande>

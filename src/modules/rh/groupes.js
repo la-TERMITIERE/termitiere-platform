@@ -2,7 +2,7 @@
 // ses volets restent des pages à part entière (mêmes adresses), reliées par la barre d'onglets de RhOnglets.
 import {
   UserCircle, Factory, ClipboardList, Users, CalendarDays, CalendarCheck, Receipt, BarChart2, Settings,
-  FileText, Repeat, Tag, Send, BookOpen, Gauge, TrendingUp, Plane, ListChecks, Lightbulb, Handshake, Clock3, ShieldCheck
+  FileText, Repeat, Tag, Send, BookOpen, Gauge, TrendingUp, Plane, Handshake, Clock3, ShieldCheck, CalendarHeart, Package, Gift, HandCoins
 } from 'lucide-react'
 
 export const GROUPES_RH = [
@@ -51,6 +51,13 @@ GROUPES_RH.push(
     ]
   },
   {
+    id: 'primesavances',
+    onglets: [
+      { to: '/rh/primes', label: 'Primes', icone: Gift },
+      { to: '/rh/avances', label: 'Avances et prêts', icone: HandCoins }
+    ]
+  },
+  {
     id: 'missions',
     onglets: [
       { to: '/rh/missions', label: 'Missions et frais', icone: Plane }
@@ -60,8 +67,8 @@ GROUPES_RH.push(
   {
     id: 'vie',
     onglets: [
-      { to: '/rh/taches', label: "Tâches d'équipe", icone: ListChecks },
-      { to: '/rh/impacts', label: 'Impact collègue', icone: Lightbulb }
+      { to: '/rh/anniversaires', label: 'Anniversaires', icone: CalendarHeart },
+      { to: '/rh/dotations', label: 'Dotations', icone: Package }
     ]
   },
   {
@@ -69,6 +76,7 @@ GROUPES_RH.push(
     onglets: [
       { to: '/rh/paie-configuration', label: 'Paie', icone: Receipt },
       { to: '/rh/missions-configuration', label: 'Missions', icone: Plane },
+      { to: '/rh/primes-configuration', label: 'Primes', icone: Gift },
       { to: '/rh/presences-configuration', label: 'Présences', icone: Clock3 },
       { to: '/rh/conges-configuration', label: 'Congés', icone: CalendarDays },
       { to: '/rh/rattachements', label: 'Comptes', icone: Handshake }

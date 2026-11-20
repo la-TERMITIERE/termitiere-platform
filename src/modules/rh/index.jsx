@@ -37,6 +37,10 @@ import Conformite from './Conformite'
 // Vie d'Équipe
 import Taches from './Taches'
 import Impacts from './Impacts'
+import Anniversaires from './Anniversaires.jsx'
+import Dotations from './Dotations.jsx'
+import Primes from './Primes.jsx'
+import PrimesConfiguration from './PrimesConfiguration.jsx'
 // Missions & Frais
 import Missions from './Missions'
 import MissionsConfiguration from './MissionsConfiguration'
@@ -84,6 +88,10 @@ export default function RhModule() {
       <Route path="competences" element={<Competences />} />
       <Route path="conformite" element={<Conformite />} />
       <Route path="taches" element={<Taches />} />
+      <Route path="anniversaires" element={<Anniversaires />} />
+      <Route path="dotations" element={<Dotations />} />
+      <Route path="primes" element={<Primes />} />
+      <Route path="primes-configuration" element={<GardeAdmin><PrimesConfiguration /></GardeAdmin>} />
       <Route path="impacts" element={<Impacts />} />
       <Route path="missions" element={<Missions />} />
       <Route path="missions-configuration" element={<GardeAdmin><MissionsConfiguration /></GardeAdmin>} />

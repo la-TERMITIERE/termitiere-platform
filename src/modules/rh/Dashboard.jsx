@@ -11,6 +11,7 @@ import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useDroitAnnuel } from './droitConges'
 import { calculerBulletin, MOIS_LABELS, PAIE_CONFIG_DEFAUT, TYPES_PRESENCE, TYPES_CONGE } from './store/rhStore'
 import DetailKpiModal from './DetailKpiModal'
+import ParSecteurRh from './ParSecteurRh'
 import { ListeCarte, EffectifAnneauCarte } from './CartesDashboard'
 import { PageHeader } from './rhui'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
@@ -101,6 +102,7 @@ export default function Dashboard() {
       if (!contrats.some((c) => c.employeId === e.id)) manque.push('contrat')
       if (!(Number(e.salaire) > 0)) manque.push('salaire')
       if (!e.contact) manque.push('contact')
+      if (!e.dateNaissance) manque.push('date de naissance')
       return manque.length ? { id: `i_${e.id}`, libelle: nom(e), detail: `Manque : ${manque.join(', ')}` } : null
     }).filter(Boolean)
 
@@ -231,6 +233,8 @@ export default function Dashboard() {
           <StatCard title="Bulletins à Valider" value={kpi.bulletinsAValider} sub={`sur ${kpi.nbBulletins} bulletin(s) du mois`} accent="#0d9488" icon={BadgeCheck} onClick={() => setOuvert('bulletins')} />
         </div>
       )}
+
+      {vue === 'admin' && <ParSecteurRh employes={employes} presences={presences} />}
 
       {vue === 'admin' && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

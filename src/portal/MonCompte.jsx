@@ -17,7 +17,7 @@ import { toast } from '../core/notifications'
 import { avatarGradient } from '../utils/color'
 
 export default function MonCompte() {
-  const { user, role, updateSession } = useAuth()
+  const { user, role, roleReel, updateSession } = useAuth()
   const { users, load, saveUser } = useUsersStore()
   const profile = users.find((u) => u.login === user?.login)
 
@@ -111,7 +111,7 @@ export default function MonCompte() {
           <h1 className="truncate text-lg font-extrabold sm:text-xl">{profile?.nom || user?.nom || 'Mon compte'}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span className="rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">
-              {roleLabel(role)}
+              {roleLabel(roleReel || role)}
             </span>
             {profile?.secteur && (
               <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm">

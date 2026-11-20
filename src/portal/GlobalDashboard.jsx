@@ -17,7 +17,8 @@ import FiltrePeriode from '../shared/ui/FiltrePeriode'
 import { ParamsGrille, ParamsCarte } from '../shared/ui/ParamsVerre'
 import { useCollection } from '../hooks/useFirestore'
 import { useAuth } from '../hooks/useAuth'
-import { canExportExcel } from '../core/roles'
+import { niveauBilanGlobal } from '../core/roles'
+import RecapDuJour from './RecapDuJour'
 import { todayStr, formatMoney, formatNumber, formatDateShort } from '../utils/formatters'
 import { glassModalProps, icone3D } from '../utils/color'
 import { ICONE_POLE } from '../modules/comptabilite/quotas'
@@ -61,14 +62,23 @@ function Anneau({ pct, couleur, taille = 74 }) {
   )
 }
 
+// Trois niveaux (voir niveauBilanGlobal) : 'finance' (PAU, GE, DF, Info, Assistant(e) GE : argent et exports), 'admin' (reste de l'administration : activité et alertes,
+// jamais d'argent) et 'jour' (compte à qui Info a donné l'accès : récap du jour des secteurs, sans montant).
 export default function GlobalDashboard() {
-  const { hasModule, role } = useAuth()
+  const roleReel = useAuth((s) => s.roleReel)
+  const user = useAuth((s) => s.user)
+  const niveau = niveauBilanGlobal(roleReel, user)
+  if (niveau === 'jour') return <RecapDuJour />
+  return <TableauComplet voitFinance={niveau === 'finance'} />
+}
+
+function TableauComplet({ voitFinance }) {
+  const { hasModule } = useAuth()
   const navigate = useNavigate()
   const [alerteDetail, setAlerteDetail] = useState(null)
   const [exportFormat, setExportFormat] = useState(null) // 'pdf' | 'excel' | null
-  // Tout ce qui touche à l'argent (recettes, dépenses, bénéfice, objectifs, exports) : PAU, GE, DF et Info seulement. Les autres comptes ne voient que l'activité et les alertes.
-  const voitFinance = canExportExcel(role)
-  const peutExporter = canExportExcel(role)
+  // Tout ce qui touche à l'argent (recettes, dépenses, bénéfice, objectifs, exports) : PAU, GE, DF, Info et Assistant(e) GE seulement.
+  const peutExporter = voitFinance
 
   // Période des chiffres financiers
   const [mode, setMode] = useState('mois')

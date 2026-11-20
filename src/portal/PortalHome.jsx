@@ -1,7 +1,7 @@
 // Page d'accueil du portail : grille de cartes de modules cliquables.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon, Wallet, Plane, HandCoins } from 'lucide-react'
+import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon, Wallet, Plane, HandCoins, Gift } from 'lucide-react'
 import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
@@ -16,6 +16,9 @@ import { estActif } from '../shared/workflow'
 import { projetsVisibles } from '../modules/projet/logic'
 import AlertesAccueil from './AlertesAccueil'
 import { useDecaissementsRh } from '../modules/depense/decaissementsRh'
+import { useEcheancesRh } from '../modules/rh/echeances'
+import DetailPrime from '../modules/rh/DetailPrime'
+import { peutTraiterPrime, etapeCourante as etapePrime, cibleLibelle as cibleLibellePrime, valeurLibelle as valeurLibellePrime } from '../modules/rh/primesCircuit'
 import DetailMission from '../modules/rh/DetailMission'
 import { ROLES_APPROBATION, peutApprouverMission } from '../modules/rh/missionsCircuit'
 import DetailAvance from '../modules/rh/DetailAvance'
@@ -32,7 +35,7 @@ const LOGOS_ZOOM = {
 
 export default function PortalHome() {
   const navigate = useNavigate()
-  const { user, role, hasModule, isAdmin } = useAuth()
+  const { user, role, roleReel, hasModule, isAdmin } = useAuth()
   const [maintenant, setMaintenant] = useState(() => new Date())
   useEffect(() => { const t = setInterval(() => setMaintenant(new Date()), 20000); return () => clearInterval(t) }, [])
 
@@ -57,7 +60,7 @@ export default function PortalHome() {
   // Ordres de mission à approuver : la GE (et l'Info) les voit ici dès l'accueil, puis ouvre le détail pour approuver ou refuser (motif obligatoire).
   const recoitMissions = ROLES_APPROBATION.includes(role)
   const { data: missionsRh } = useCollection(recoitMissions ? 'rh_missions' : null)
-  const { data: employesRh2 } = useCollection(recoitMissions ? 'rh_employes' : null)
+  const { data: employesRh2 } = useCollection(recoitMissions || recoitAutorisations ? 'rh_employes' : null)
   const missionsAApprouver = useMemo(
     () => (missionsRh || []).filter((m) => peutApprouverMission(m, role)).sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? -1 : 1)),
     [missionsRh, role]
@@ -72,8 +75,19 @@ export default function PortalHome() {
   )
   const [avanceOuverte, setAvanceOuverte] = useState(null)
 
+  // Primes à traiter : le même circuit que les salaires (RH, DF, GE, PAU), chacun voit celles de son étape.
+  const { data: primesRh } = useCollection(recoitAutorisations ? 'rh_primes' : null)
+  const primesAApprouver = useMemo(
+    () => (primesRh || []).filter((p) => peutTraiterPrime(p, user, role)).sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? -1 : 1)),
+    [primesRh, user, role]
+  )
+  const [primeOuverte, setPrimeOuverte] = useState(null)
+
   // Missions et avances approuvées à décaisser (finance) : boutons « Décaisser de la caisse » et « Non » directement sur la ligne.
   const decaissements = useDecaissementsRh()
+
+  // Échéances RH (contrats, essais, évaluations, formations) : une ligne par catégorie pour l'administration RH.
+  const echeancesRh = useEcheancesRh()
 
   async function confirmerReception(d) {
     setConfirmingId(d.id)
@@ -128,7 +142,7 @@ export default function PortalHome() {
     logistique: autorisationsAttente ? `${autorisationsAttente} autorisation(s) en attente` : `${prestationsMois} prestation(s) ce mois`,
     evenementiel: autorisationsBriq ? `${autorisationsBriq} autorisation(s) en attente` : `${prodMois} briques produites ce mois`,
     foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
-    rh: (autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length) ? `${autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length} demande(s) RH à traiter` : (employesRh || []).length ? `${employesRh.length} employé(s)` : 'Aucun employé',
+    rh: (autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length + primesAApprouver.length) ? `${autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length + primesAApprouver.length} demande(s) RH à traiter` : (employesRh || []).length ? `${employesRh.length} employé(s)` : 'Aucun employé',
     garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit',
     gym: (seancesGymMois || abonnementsGymMois) ? `${seancesGymMois} séance(s) · ${abonnementsGymMois} abonnement(s) ce mois` : 'Aucune activité ce mois'
   }
@@ -187,7 +201,7 @@ export default function PortalHome() {
             <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {role && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white py-1 pl-2 pr-3 text-[11px] font-extrabold text-[#7E241D] shadow-[0_6px_14px_-6px_rgba(0,0,0,0.5)] sm:text-xs">
-                  <ShieldCheck size={14} aria-hidden="true" />{roleLabel(role)}
+                  <ShieldCheck size={14} aria-hidden="true" />{roleLabel(roleReel || role)}
                 </span>
               )}
               <span className="inline-flex items-center gap-1 text-xs text-white/85 sm:text-sm">
@@ -227,7 +241,14 @@ export default function PortalHome() {
           sous: `${a.nbMensualites > 1 ? `${a.nbMensualites} mensualités` : 'Retenue en une fois'}${a.motif ? ` · ${a.motif}` : ''} · par ${a.creePar || 'la RH'}`,
           action: { label: 'Voir', onClick: () => setAvanceOuverte(a.id) }
         })),
+        ...primesAApprouver.map((p) => ({
+          id: `prime_${p.id}`, icone: Gift, couleur: '#be185d',
+          titre: `${p.typeNom} : ${cibleLibellePrime(p)}`,
+          sous: `${valeurLibellePrime(p)}${p.periodicite === 'ponctuelle' ? '' : ' par mois'} · ${etapePrime(p)?.label} (${etapePrime(p)?.sigle}) · par ${p.creePar || 'la RH'}`,
+          action: { label: 'Voir', onClick: () => setPrimeOuverte(p.id) }
+        })),
         ...decaissements.items,
+        ...echeancesRh.map((e) => ({ id: e.id, icone: e.icone, couleur: e.couleur, titre: e.titre, sous: e.sous, action: { label: 'Voir', onClick: () => navigate(e.lien) } })),
         ...paiementsAConfirmer.map((d) => ({
           id: `paiement_${d.id}`, icone: CheckCircle2, couleur: '#4f46e5',
           titre: `${Number(d.montant).toLocaleString('fr-FR')} FCFA reçus ?`,
@@ -236,6 +257,7 @@ export default function PortalHome() {
         }))
       ]} />
       <DetailAutorisationSalaire demande={(autorisationsSalaire || []).find((d) => d.id === autorisationOuverte)} onClose={() => setAutorisationOuverte(null)} />
+      <DetailPrime prime={(primesRh || []).find((p) => p.id === primeOuverte)} employes={employesRh2 || []} onClose={() => setPrimeOuverte(null)} />
       {decaissements.modal}
       <DetailAvance avance={(avancesRh || []).find((a) => a.id === avanceOuverte)} employes={employesRh2 || []} onClose={() => setAvanceOuverte(null)} />
       <DetailMission mission={(missionsRh || []).find((m) => m.id === missionOuverte)} employes={employesRh2 || []} onClose={() => setMissionOuverte(null)} />

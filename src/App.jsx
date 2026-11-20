@@ -10,7 +10,7 @@ import Login from './portal/Login'
 import PortalHome from './portal/PortalHome'
 import GlobalDashboard from './portal/GlobalDashboard'
 import Utilisateurs from './portal/Utilisateurs'
-import { peutGererUtilisateurs } from './core/roles'
+import { peutGererUtilisateurs, niveauBilanGlobal } from './core/roles'
 import MonCompte from './portal/MonCompte'
 import Parametres from './portal/Parametres'
 import { getModule } from './shared/modules'
@@ -65,6 +65,14 @@ function GestionUtilisateursGuard({ children }) {
   return children
 }
 
+// Garde du tableau de bord global : administration et Assistant(e) GE par défaut ; un autre compte seulement si Info lui en a donné l'accès.
+function BilanGlobalGuard({ children }) {
+  const roleReel = useAuth((s) => s.roleReel)
+  const user = useAuth((s) => s.user)
+  if (!niveauBilanGlobal(roleReel, user)) return <Navigate to="/" replace />
+  return children
+}
+
 // Garde admin : réservé aux rôles à accès total (super-admin, PDG, GE).
 function AdminGuard({ children }) {
   const isAdmin = useAuth((s) => s.isAdmin)
@@ -109,7 +117,7 @@ export default function App() {
           }
         >
           <Route index element={<PortalHome />} />
-          <Route path="dashboard" element={<GlobalDashboard />} />
+          <Route path="dashboard" element={<BilanGlobalGuard><GlobalDashboard /></BilanGlobalGuard>} />
           <Route path="utilisateurs" element={<GestionUtilisateursGuard><Utilisateurs /></GestionUtilisateursGuard>} />
           <Route path="mon-compte" element={<MonCompte />} />
           <Route path="parametres" element={<Parametres />} />

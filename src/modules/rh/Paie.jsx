@@ -1,6 +1,6 @@
 // RH — Paie & Bulletins (Temps & Paie). Génère les bulletins mensuels (CNSS/IRPP Togo).
 import { useMemo, useState } from 'react'
-import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck, HeartPulse } from 'lucide-react'
+import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck, HeartPulse, UserX } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
@@ -14,6 +14,9 @@ import { calculerBulletin, STATUTS_BULLETIN, PAIE_CONFIG_DEFAUT, COMPTA_PAIE, MO
 import { PageHeader } from './rhui'
 import DetailKpiModal from './DetailKpiModal'
 import { retenueDuMois, appliquerRetenues } from './avancesCircuit'
+import { lireRegles } from './horaires'
+import { calculerRetenuePresence } from './retenuesPresence'
+import { primesDuMois } from './primesCircuit'
 import DetailFiche from './DetailFiche'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
@@ -23,6 +26,9 @@ export default function Paie() {
   const { data: bulletins } = useCollection(COL.bulletins)
   const { data: config } = useCollection(COL.config)
   const { data: avances } = useCollection(COL.avances)
+  const { data: presences } = useCollection(COL.presences)
+  const { data: primesDocs } = useCollection(COL.primes)
+  const regles = useMemo(() => lireRegles(config), [config])
   const paieConfig = config.find((c) => c.id === 'paie') || PAIE_CONFIG_DEFAUT
 
   const [recherche, setRecherche] = useState('')
@@ -100,6 +106,7 @@ export default function Paie() {
     tuiles: [
       { icone: Receipt, label: 'Salaire de base', valeur: formatMoney(b.salaireBase || 0), couleur: '#0284c7' },
       { icone: Receipt, label: 'Primes', valeur: formatMoney(b.primes || 0), couleur: '#16a34a' },
+      ...(Number(b.retenuePresence) > 0 ? [{ icone: UserX, label: 'Retenue absences et retards', valeur: `− ${formatMoney(b.retenuePresence)}`, couleur: '#dc2626', large: true }] : []),
       { icone: Receipt, label: 'Brut', valeur: formatMoney(b.brutTotal || 0), couleur: '#7c3aed' },
       { icone: Receipt, label: 'CNSS salarié', valeur: formatMoney(b.cnssSalarie || 0), couleur: '#0284c7' },
       { icone: Landmark, label: 'IRPP retenu', valeur: formatMoney(b.its || 0), couleur: '#f59e0b' },
@@ -109,7 +116,9 @@ export default function Paie() {
       { icone: HeartPulse, label: 'AMU employeur', valeur: formatMoney(b.amuEmployeur || 0), couleur: '#0d9488' },
       { icone: Receipt, label: 'Coût total employeur', valeur: formatMoney(b.coutEmployeur || 0), large: true, couleur: '#7c3aed' }
     ],
-    note: b.departement ? `Département : ${b.departement}.` : ''
+    note: [b.departement ? `Département : ${b.departement}.` : '',
+      (b.primesDetail || []).length ? `Primes : ${b.primesDetail.map((p) => `${p.nom} ${formatMoney(p.montant)}`).join(', ')}.` : '',
+      Number(b.retenuePresence) > 0 ? `Retenue du mois : ${b.absencesNonJustifiees || 0} absence(s) non justifiée(s) et ${b.retardsMois || 0} retard(s), sur la base d'une journée à ${formatMoney(b.salaireJournalier || 0)}.` : ''].filter(Boolean).join(' ')
   })
 
   async function genererPaie() {
@@ -122,10 +131,16 @@ export default function Paie() {
         if (verrouilles.has(e.id)) { saut++; continue }
         // Mensualités d'avances et de prêts à retenir ce mois-ci sur le net (inscrites sur chaque avance à la validation du bulletin).
         const retenue = retenueDuMois(avances, e.id, m)
-        const calc = calculerBulletin(e.salaire, e.primes || 0, paieConfig, retenue.total)
+        // Absences non justifiées et retards du mois : retenus sur le salaire selon les pourcentages des paramètres de présence.
+        const presence = calculerRetenuePresence({ presences, employe: e, mois: m, regles })
+        // Primes approuvées qui couvrent ce mois (attribuées dans Primes) : elles s'ajoutent au brut, en plus d'une éventuelle prime fixe de la fiche.
+        const primesMois = primesDuMois(primesDocs, e, m)
+        const totalPrimes = (Number(e.primes) || 0) + primesMois.total
+        const calc = calculerBulletin(e.salaire, totalPrimes, paieConfig, retenue.total, presence.total)
         await setItem(COL.bulletins, `${m}_${e.id}`, {
           mois: m, employeId: e.id, employeNom: e.nom, poste: e.poste || '', departement: e.departement || '',
-          salaireBase: Number(e.salaire) || 0, primes: Number(e.primes) || 0, statut: 'brouillon', ...calc, avancesRetenues: retenue.details
+          salaireBase: Number(e.salaire) || 0, primes: totalPrimes, primesDetail: primesMois.details, statut: 'brouillon', ...calc, avancesRetenues: retenue.details,
+          absencesNonJustifiees: presence.absencesNonJustifiees, retardsMois: presence.retards, salaireJournalier: presence.salaireJournalier
         })
         n++
       }

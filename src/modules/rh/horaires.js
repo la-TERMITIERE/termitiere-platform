@@ -14,7 +14,25 @@ export function lireHoraires(configs = []) {
   }
 }
 
-export const enMinutes = (hm) => { const [h, m] = String(hm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
+// Règles de retenue sur salaire (réglées dans RH, Paramètres, Présences, même document « presences ») :
+//  - pctAbsence : part du salaire d'une journée retenue pour chaque absence NON justifiée ;
+//  - pctRetard : part du salaire d'une journée retenue pour chaque retard ;
+//  - jours : les jours travaillés de la semaine (0 = dimanche … 6 = samedi). Ils servent à calculer le salaire d'une journée
+//    (salaire du mois divisé par le nombre de jours travaillés du mois) et à repérer les jours « non pointés » du calendrier.
+// Stockés en texte (« 123456 ») : Firebase transforme mal les tableaux à trous.
+export const REGLES_DEFAUT = { pctAbsence: 100, pctRetard: 10, jours: '123456' }
+export function lireRegles(configs = []) {
+  const c = configs.find((x) => x.id === 'presences') || {}
+  const pct = (v, defaut) => (Number.isFinite(Number(v)) && v !== '' && v !== null && v !== undefined ? Math.min(100, Math.max(0, Number(v))) : defaut)
+  const brut = typeof c.joursTravailles === 'string' && c.joursTravailles ? c.joursTravailles : REGLES_DEFAUT.jours
+  return {
+    pctAbsence: pct(c.retenueAbsencePct, REGLES_DEFAUT.pctAbsence),
+    pctRetard: pct(c.retenueRetardPct, REGLES_DEFAUT.pctRetard),
+    jours: [...new Set(brut.split('').map(Number).filter((n) => n >= 0 && n <= 6))]
+  }
+}
+
+export const enMinutes =(hm) => { const [h, m] = String(hm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
 export const heureTexte = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 
 const norme = (t) => String(t || '').trim().toLowerCase()

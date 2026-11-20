@@ -6,7 +6,7 @@ import { Home, LayoutDashboard, LogOut, Users, UserCircle, Settings, X, ChevronR
 import { MODULES, MODULE_NAV, getModule } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
-import { roleLabel, peutGererUtilisateurs, canManagePartenaires, voletRetire, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
+import { niveauBilanGlobal, roleLabel, peutGererUtilisateurs, canManagePartenaires, voletRetire, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
 import { estActif } from '../workflow'
 import { calculerBadges } from '../nouveautes'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from '../../modules/projet/logic'
@@ -187,7 +187,7 @@ function SousMenuNav({ item, pathname, onNavigate }) {
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation()
-  const { user, role, hasModule, isAdmin, logout } = useAuth()
+  const { user, role, roleReel, hasModule, isAdmin, logout } = useAuth()
 
   // Module actif déduit du premier segment de l'URL
   const parts = location.pathname.split('/')
@@ -355,9 +355,11 @@ export default function Sidebar({ open, onClose }) {
           <NavLink to="/" end className={navClass} onClick={onClose}>
             <Home size={18} /> Accueil
           </NavLink>
-          <NavLink to="/dashboard" className={navClass} onClick={onClose}>
-            <LayoutDashboard size={18} /> Tableau de bord global
-          </NavLink>
+          {niveauBilanGlobal(roleReel, user) && (
+            <NavLink to="/dashboard" className={navClass} onClick={onClose}>
+              <LayoutDashboard size={18} /> Tableau de bord global
+            </NavLink>
+          )}
           {/* Gestion des utilisateurs : portail uniquement, admin seulement */}
           {peutGererUtilisateurs(role) && !activeModule && (
             <NavLink to="/utilisateurs" className={navClass} onClick={onClose}>
@@ -457,7 +459,7 @@ export default function Sidebar({ open, onClose }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold leading-tight">{user?.nom}</p>
-              <p className="mt-0.5 inline-block max-w-full truncate rounded-full border border-white/30 bg-white/15 px-2 py-px text-[11px] font-semibold text-white/90">{roleLabel(role)}</p>
+              <p className="mt-0.5 inline-block max-w-full truncate rounded-full border border-white/30 bg-white/15 px-2 py-px text-[11px] font-semibold text-white/90">{roleLabel(roleReel || role)}</p>
             </div>
           </div>
           <button

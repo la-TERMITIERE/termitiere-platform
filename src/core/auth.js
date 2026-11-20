@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant, _brancherDroitsCourants } from './db'
-import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole, moduleRoleOk } from './roles'
+import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole, moduleRoleOk, roleEffectif } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 import { oublierAbonnementPush } from './push'
 import { MODULES } from '../shared/modules'
@@ -151,6 +151,8 @@ function sessionFromProfile(p) {
     gymSites: Array.isArray(p.gymSites) ? p.gymSites : null,
     // Droit de gérer l'onglet « Partenaires » (contacts externes) sur les plateformes.
     gerePartenaires: p.gerePartenaires === true,
+    // Accès au tableau de bord global (récap du jour, sans argent) accordé par Info à un compte qui n'y a pas droit par défaut.
+    accesBilanGlobal: p.accesBilanGlobal === true,
     // Modules sur lesquels ce compte est limité à la lecture : { gym: 'lecture' }. Absent = écriture selon le rôle.
     droitsModules: p.droitsModules && typeof p.droitsModules === 'object' ? p.droitsModules : {},
     // Modules et volets retirés individuellement par Info (même pour un rôle « voit tout »).
@@ -179,18 +181,19 @@ function watchOwnProfile(uid, set, get) {
       // Compte désactivé par l'administrateur pendant que la session était ouverte.
       localStorage.removeItem(DEMO_SESSION_KEY)
       _unsubOwnProfile?.(); _unsubOwnProfile = null
-      set({ user: null, role: null, modules: [] })
+      set({ user: null, role: null, roleReel: null, modules: [] })
       return
     }
     const u = sessionFromProfile(fresh)
     localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
-    set({ user: u, role: u.role, modules: u.modules })
+    set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules })
   })
 }
 
 export const useAuthStore = create((set, get) => ({
   user: null,
-  role: null,
+  role: null,       // rôle EFFECTIF (celui dont les droits s'appliquent : l'Assistant(e) GE compte comme secrétaire)
+  roleReel: null,   // rôle réel du compte, pour l'affichage et le bilan global
   modules: [],
   isLoading: false,
   ready: false,
@@ -207,7 +210,7 @@ export const useAuthStore = create((set, get) => ({
       supabase.auth.getSession().then(({ data }) => {
         if (!data?.session) {
           localStorage.removeItem(DEMO_SESSION_KEY)
-          set({ user: null, role: null, modules: [] })
+          set({ user: null, role: null, roleReel: null, modules: [] })
         }
       }).catch(() => {})
     }
@@ -226,14 +229,14 @@ export const useAuthStore = create((set, get) => ({
         console.warn('[auth] session locale sans session Firebase : reconnexion requise')
         localStorage.removeItem(DEMO_SESSION_KEY)
         _unsubOwnProfile?.(); _unsubOwnProfile = null
-        set({ user: null, role: null, modules: [], ready: true, error: 'Votre session a expiré : reconnectez-vous.' })
+        set({ user: null, role: null, roleReel: null, modules: [], ready: true, error: 'Votre session a expiré : reconnectez-vous.' })
       })
     }
     try {
       const raw = localStorage.getItem(DEMO_SESSION_KEY)
       if (raw) {
         const u = JSON.parse(raw)
-        set({ user: u, role: u.role, modules: u.modules || [], ready: true })
+        set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules || [], ready: true })
         watchOwnProfile(u.uid, set, get)
         return () => _unsubOwnProfile?.()
       }
@@ -272,7 +275,7 @@ export const useAuthStore = create((set, get) => ({
         }
         const u = sessionFromProfile(profile)
         localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
-        set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+        set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules, isLoading: false })
         watchOwnProfile(u.uid, set, get)
         addItem('audit_global', {
           userId: u.uid, userNom: u.nom, module: 'portail', action: 'CONNEXION', details: '', timestamp: Date.now()
@@ -292,7 +295,7 @@ export const useAuthStore = create((set, get) => ({
       if (found.actif === false) { set({ isLoading: false, error: 'Compte désactivé' }); return false }
       const u = sessionFromProfile(found)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
-      set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+      set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules, isLoading: false })
       watchOwnProfile(u.uid, set, get)
       return true
     }
@@ -322,7 +325,7 @@ export const useAuthStore = create((set, get) => ({
         }
         const u = sessionFromProfile(profile)
         localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
-        set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+        set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules, isLoading: false })
         watchOwnProfile(u.uid, set, get)
         setItem('users', profile.uid || profile.id || u.uid, { lastLogin: Date.now() }).catch(() => {})
         addItem('audit_global', {
@@ -395,7 +398,7 @@ export const useAuthStore = create((set, get) => ({
 
       const u = sessionFromProfile(profile)
       localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
-      set({ user: u, role: u.role, modules: u.modules, isLoading: false })
+      set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules, isLoading: false })
       watchOwnProfile(u.uid, set, get)
       // Trace de dernière connexion + entrée au journal d'activité (non bloquant).
       // On écrit avec la CLÉ technique du profil (jamais l'identifiant brut).
@@ -451,7 +454,7 @@ export const useAuthStore = create((set, get) => ({
     } catch (e) { /* best effort */ }
 
     localStorage.removeItem(DEMO_SESSION_KEY)
-    set({ user: null, role: null, modules: [] })
+    set({ user: null, role: null, roleReel: null, modules: [] })
   },
 
   // Met à jour la session locale après modification du profil (nom, etc.).
@@ -460,7 +463,7 @@ export const useAuthStore = create((set, get) => ({
     if (!cur) return
     const u = { ...cur, ...patch }
     localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(u))
-    set({ user: u, role: u.role, modules: u.modules || [] })
+    set({ user: u, role: roleEffectif(u.role), roleReel: u.role, modules: u.modules || [] })
   },
 
   // Helpers de contrôle d'accès
