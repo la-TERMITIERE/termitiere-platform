@@ -16,7 +16,7 @@ import { COL, TYPES_CONTRAT } from './store/rhStore'
 import { evenementsEmployes } from './datesEquipe'
 
 // Ceux qui lisent la base RH et décident : l'administration (le même motif que les règles de la base, sans le superviseur).
-export const ROLES_ECHEANCES_RH = ['super_admin', 'pau', 'ge', 'df', 'directeur', 'admin', 'info']
+export const ROLES_ECHEANCES_RH = ['super_admin', 'pau', 'ge', 'df', 'directeur', 'rh', 'admin', 'info']
 
 const JOUR = 864e5
 const ecartJours = (iso, today) => Math.round((new Date(`${iso}T00:00:00`) - new Date(`${today}T00:00:00`)) / JOUR)

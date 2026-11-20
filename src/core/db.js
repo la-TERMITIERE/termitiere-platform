@@ -72,8 +72,8 @@ function protegerEcriture(nom, fn) {
       }
       if (nom === 'setItem') {
         // `setItem` sert à créer comme à remplacer : si seul l'un des deux est permis, on regarde si le document existe déjà.
-        const peutCreer = actionAutorisee(droits, moduleCible, 'creer')
-        const peutModifier = actionAutorisee(droits, moduleCible, 'modifier')
+        const peutCreer = actionAutorisee(droits, moduleCible, 'creer', role)
+        const peutModifier = actionAutorisee(droits, moduleCible, 'modifier', role)
         if (!peutCreer && !peutModifier) return refus('créer ni modifier')
         if (peutCreer !== peutModifier) {
           return Promise.resolve(impl.getOne(collection, String(args[1]))).then((existe) => (
@@ -83,7 +83,7 @@ function protegerEcriture(nom, fn) {
       } else {
         const action = { addItem: 'creer', claimOnce: 'creer', updateItem: 'modifier', updateAtomic: 'modifier', removeItem: 'supprimer' }[nom]
         const libelle = { creer: 'créer', modifier: 'modifier', supprimer: 'supprimer' }[action]
-        if (action && !actionAutorisee(droits, moduleCible, action)) return refus(libelle)
+        if (action && !actionAutorisee(droits, moduleCible, action, role)) return refus(libelle)
       }
     }
     return fn(...args)
@@ -116,7 +116,7 @@ export async function removeItem(collection, id, options = {}) {
   const role = _lireRole()
   // Profil ou module en lecture seule : on laisse le garde central refuser tout de suite, sans demander de motif pour rien.
   const moduleCible = moduleDeCollection(collection)
-  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && !actionAutorisee(_lireDroits(), moduleCible, 'supprimer')) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireCollectionGym(role, String(collection))))
+  const refuse = role && ((isReadOnlyRole(role)) || (moduleCible && !actionAutorisee(_lireDroits(), moduleCible, 'supprimer', role)) || (String(collection).startsWith('gym_') && !String(collection).endsWith('_banque') && !peutEcrireCollectionGym(role, String(collection))))
   if (options.sansMotif || COLLECTIONS_TECHNIQUES.has(collection) || refuse) {
     return supprimerSansMotif(collection, id)
   }

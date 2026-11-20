@@ -18,7 +18,8 @@ export const ROLES = [
   { value: 'pau',              label: 'PAU',               desc: 'Direction : contrôle total sur les applications' },
   { value: 'ge',               label: 'Gérante exécutive', desc: 'Accès total + certifie les autorisations' },
   { value: 'df',               label: 'DF',                desc: 'Directeur financier : mêmes droits que la Gérante exécutive' },
-  { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction : accès total à tous les modules' },
+  { value: 'directeur',        label: 'Directeur / Directrice', desc: 'Direction : voit tous les modules, en lecture seule par défaut (Info lui accorde l\'écriture module par module)' },
+  { value: 'rh',               label: 'RH (Ressources humaines)', desc: 'Mêmes droits que le Directeur (lecture seule par défaut), avec tous les droits sur le module Ressources humaines' },
   { value: 'superviseur',      label: 'Superviseur',       desc: 'Lecture seule : voit uniquement les modules qui lui sont attribués, aucune action' },
   { value: 'gerant',           label: 'Gérant',            desc: 'Approuve les sorties et les demandes' },
   { value: 'agent',            label: 'Agent',             desc: 'Saisie des données + demandes d\'autorisation' },
@@ -26,7 +27,7 @@ export const ROLES = [
   { value: 'tata',             label: 'Tata',              desc: 'Personnel de terrain garderie : présences, cantine, incidents' },
   { value: 'secretaire',       label: 'Secrétaire',        desc: 'Administratif : E-G.Pro complet sauf Pilotage, Journal et Paramètres' },
   { value: 'assistant_comptable', label: 'Assistant(e) comptable', desc: 'Mêmes droits que la Secrétaire' },
-  { value: 'assistant_ge',     label: 'Assistant(e) GE',   desc: 'Mêmes droits que la Secrétaire, plus le tableau de bord global avec ses exports' },
+  { value: 'assistant_ge',     label: 'Assistant(e) GE',   desc: 'Cumule les droits de l\'Agent et de la Secrétaire ; tableau de bord global sans aucun montant, avec ses exports' },
   { value: 'chef_projet',    label: 'Chef de projet',  desc: 'E-G.Pro : accès complet, limité aux projets dont il est responsable ou collaborateur ; pas de Pilotage ni de suppression' },
   { value: 'partenaire',       label: 'Partenaire',        desc: 'Externe : lecture seule sur SES modules uniquement (sectorisé) ; voit le pilotage, ne modifie rien' },
 ]
@@ -34,14 +35,14 @@ export const ROLES = [
 // Accès total : tous modules + pages Paramètres + gestion des utilisateurs + actions.
 // `info` (informatique) a les mêmes droits qu'un administrateur. `assistant_pau`
 // a exactement les mêmes droits qu'`info` (décision explicite : assiste le PAU).
-export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin']
+export const FULL_ACCESS_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'rh', 'admin']
 // Voit TOUS les modules automatiquement, sans attribution individuelle.
 // Le superviseur N'EN FAIT PAS PARTIE (décision explicite du 07/09/2026) : bien
 // qu'il soit en lecture seule partout (cf. READONLY_ROLES), il ne voit que les
 // modules qui lui sont explicitement attribués (comme le partenaire) — c'est
 // à l'administration (PAU/Info/GE…) de lui donner accès module par module
 // depuis Utilisateurs, pas un accès automatique à tout.
-export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin']
+export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'rh', 'admin']
 
 // Modules à visibilité RESTREINTE par rôle : même attribué à un utilisateur, un
 // module listé ici n'est accessible qu'aux rôles indiqués (contrôle appliqué dans
@@ -51,9 +52,9 @@ export const MODULE_ROLES = {
 }
 export const moduleRoleOk = (mod, role) => !MODULE_ROLES[mod] || MODULE_ROLES[mod].includes(role)
 // 1er niveau d'approbation d'une demande de sortie (le superviseur n'approuve pas).
-export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'gerant', 'admin', 'controleur']
+export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'rh', 'gerant', 'admin', 'controleur']
 // 2e niveau : certification définitive (déclenche l'effet métier).
-export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin']
+export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'rh', 'admin']
 
 // Rôles autorisés à voir les données FINANCIÈRES (chiffre d'affaires, montants)
 // et le menu « Pilotage & Analyses ». = toute la hiérarchie SAUF l'agent de saisie.
@@ -63,7 +64,7 @@ export const CERTIFIER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', '
 // montants et les KPI partout où ils interviennent, mais ne valide jamais seule au
 // niveau final (cf. CERTIFIER_ROLES, dont elle reste exclue) et ne voit jamais
 // l'identité de qui a validé (cf. `logistiqueVoitValidateur`, réutilisé hors logistique).
-export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
+export const FINANCE_VIEW_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'rh', 'admin', 'superviseur', 'gerant', 'controleur', 'partenaire', 'secretaire']
 
 // Volet « Analyses » d'E-DÉPENSES — décision explicite du 09/09/2026 : la
 // secrétaire garde Flux de trésorerie (FINANCE_VIEW_ROLES, inchangé) mais PAS
@@ -86,8 +87,8 @@ export const canExportExcel = (r) => EXCEL_EXPORT_ROLES.includes(r)
 // Le rôle `info` est UNIVERSEL : il fait tout ce que fait chaque autre rôle, y compris les actions réservées aux agents
 // (saisie du jour, facturation, demandes de sortie). Les écrans testent `agirCommeAgent(role)` à la place de `role === 'agent'`
 // pour ces droits d'action. Les LIMITES propres à l'agent (pas de suppression, fenêtre du mois courant) ne s'appliquent pas à Info.
-export const agirCommeAgent = (r) => r === 'agent' || r === 'info'
-export const canExportGym = (r) => canExportExcel(r) || r === 'agent'
+export const agirCommeAgent = (r) => r === 'agent' || r === 'info' || aAussiLesDroitsAgent(r)
+export const canExportGym = (r) => canExportExcel(r) || r === 'agent' || aAussiLesDroitsAgent(r)
 
 // Volet « Compte bancaire » (par secteur : MAXI-AGRO, MAXI LOGISTIQUE, MAXI-GYM,
 // E-GARDERIE) — réservé UNIQUEMENT à PAU, Assistant PAU, GE et Info (décision
@@ -129,13 +130,24 @@ export const moduleDeCollection = (collection) => PREFIXE_MODULE[String(collecti
 // `droitsModules[module]` : absent = tout est permis (selon le rôle) ; 'lecture' = rien d'autre que lire ; ou un objet qui ne liste que
 // les actions REFUSÉES, par exemple { supprimer: false, modifier: false }. Lire est le socle : le retirer, c'est retirer le module.
 export const ACTIONS_DROIT = ['creer', 'modifier', 'supprimer']
-export const actionAutorisee = (droitsModules, moduleId, action) => {
+// Lecture seule PAR DÉFAUT : le directeur sur tous les modules, le RH sur tous sauf Ressources humaines. Info leur accorde l'écriture module par module
+// (fiche d'accès). `droitsModules[module]` vaut alors 'ecriture' (tout), ou un objet { creer, modifier, supprimer } de booléens (true = accordé).
+export const ROLES_LECTURE_PAR_DEFAUT = ['directeur', 'rh']
+const ecritureParDefautDuRole = (role, moduleId) => !(role === 'directeur' || (role === 'rh' && moduleId !== 'rh'))
+// `droitsModules[module]` : absent = ce que le rôle donne par défaut ; 'lecture' = rien d'autre que lire ; 'ecriture' = tout accordé ; ou un objet par action
+// (true accordé, false refusé, absent = le défaut du rôle). Lire est le socle : le retirer, c'est retirer le module.
+// `role` : le rôle effectif du compte ; sans lui, le défaut est l'écriture.
+export const actionAutorisee = (droitsModules, moduleId, action, role) => {
   const d = droitsModules?.[moduleId]
-  if (!d) return true
+  if (d === 'ecriture') return true
   if (d === 'lecture') return false
-  return d[action] !== false
+  if (d && typeof d === 'object') {
+    if (d[action] === true) return true
+    if (d[action] === false) return false
+  }
+  return ecritureParDefautDuRole(role, moduleId)
 }
-export const moduleEnLecture = (droitsModules, moduleId) => !!moduleId && ACTIONS_DROIT.every((a) => !actionAutorisee(droitsModules, moduleId, a))
+export const moduleEnLecture = (droitsModules, moduleId, role) => !!moduleId && ACTIONS_DROIT.every((a) => !actionAutorisee(droitsModules, moduleId, a, role))
 
 // ── Retraits individuels (Utilisateurs, fiche d'accès) ──────────────────────────────────────────────────────────────────
 // Info peut retirer à un compte un module ENTIER (`modulesRetires`, utile pour les rôles « voit tout ») ou seulement certains
@@ -144,13 +156,38 @@ export const moduleRetire = (user, moduleId) => Array.isArray(user?.modulesRetir
 export const voletRetire = (user, moduleId, to) => Array.isArray(user?.voletsRetires?.[moduleId]) && user.voletsRetires[moduleId].includes(to)
 
 export const GYM_ECRITURE_ROLES = ['agent', 'info', 'assistant_pau']
-export const peutEcrireGym = (r) => GYM_ECRITURE_ROLES.includes(r)
-export const peutPurgerClientGym = (r) => GYM_ECRITURE_ROLES.includes(r)
-// Le rôle seul impose la lecture sur ce module (superviseur, partenaire ; MAXI-GYM hors agent / Info / Assistant PAU) : le réglage
-// individuel n'y change rien, l'écran des utilisateurs le verrouille donc sur « Lecture seule ».
-export const lectureImposeeParRole = (role, moduleId) => isReadOnlyRole(role) || (moduleId === 'gym' && !GYM_ECRITURE_ROLES.includes(role))
-// Ce que le rôle interdit déjà, quel que soit le réglage individuel : un agent ne supprime jamais, et les profils en lecture seule ne modifient rien.
-export const actionImposeeInterdite = (role, moduleId, action) => lectureImposeeParRole(role, moduleId) || (action === 'supprimer' && role === 'agent')
+export const peutEcrireGym = (r) => GYM_ECRITURE_ROLES.includes(r) || aAussiLesDroitsAgent(r) || gymAccordeALaSession()
+export const peutPurgerClientGym = (r) => peutEcrireGym(r)
+// Ce que le rôle interdit SANS APPEL, quel que soit le réglage individuel : les profils en lecture seule (superviseur, partenaire) ne modifient rien
+// (on change leur rôle pour cela) et un agent ne supprime jamais. Tout le reste (MAXI-GYM hors agents, directeur, RH) n'est qu'un DÉFAUT : Info le lève.
+export const lectureImposeeParRole = (role) => isReadOnlyRole(role)
+export const actionImposeeInterdite = (role, moduleId, action) => lectureImposeeParRole(role) || (action === 'supprimer' && role === 'agent')
+// Écriture par défaut d'un compte sur un module, avant tout réglage individuel (rôle effectif, rôle réel).
+export const lectureParDefaut = (role, moduleId, roleReel) => {
+  if (!ecritureParDefautDuRole(role, moduleId)) return true
+  if (moduleId === 'gym') return !(GYM_ECRITURE_ROLES.includes(role) || (role === 'secretaire' && ROLES_AGENT_EN_PLUS.includes(roleReel)))
+  return false
+}
+export const droitParDefaut = (user, moduleId, action) => {
+  const role = roleEffectif(user?.role)
+  return !actionImposeeInterdite(role, moduleId, action) && !lectureParDefaut(role, moduleId, user?.role)
+}
+// Droit réel d'un compte sur une action d'un module : interdiction absolue, puis réglage individuel, puis défaut du rôle.
+export function droitEffectif(user, moduleId, action) {
+  if (actionImposeeInterdite(roleEffectif(user?.role), moduleId, action)) return false
+  const d = user?.droitsModules?.[moduleId]
+  if (d === 'ecriture') return true
+  if (d === 'lecture') return false
+  if (d && typeof d === 'object' && typeof d[action] === 'boolean') return d[action]
+  return droitParDefaut(user, moduleId, action)
+}
+// Enregistrement d'un état voulu { creer, modifier, supprimer } : rien si c'est le défaut du rôle, 'lecture', 'ecriture', ou le détail par action.
+export function encoderDroits(user, moduleId, etat) {
+  if (ACTIONS_DROIT.every((a) => etat[a] === droitParDefaut(user, moduleId, a))) return undefined
+  if (ACTIONS_DROIT.every((a) => !etat[a])) return 'lecture'
+  if (ACTIONS_DROIT.every((a) => etat[a])) return 'ecriture'
+  return Object.fromEntries(ACTIONS_DROIT.map((a) => [a, !!etat[a]]))
+}
 export const peutAdministrerGym = (r) => r === 'info' || r === 'assistant_pau'
 // Corriger une erreur de saisie sur un abonnement (donc sa facture) : les agents peuvent le MODIFIER ; Info et l'administration
 // (PAU, GE, DF, Assistant PAU) peuvent le MODIFIER et le SUPPRIMER. Droit limité aux collections `gym_abonnements` et `gym_factures`
@@ -224,7 +261,7 @@ export const canManagePartenaires = (role, user) =>
 // le rôle réel par 'agent' pour ces trois-là ; tout le reste du code d'E-DÉPENSES
 // continue de lire un simple `role` et se comporte donc correctement sans
 // modification supplémentaire.
-export const DEPENSE_ROLES_LIMITES = ['super_admin', 'admin', 'directeur']
+export const DEPENSE_ROLES_LIMITES = ['super_admin', 'admin', 'directeur', 'rh']
 export const depenseRoleEffectif = (r) => (DEPENSE_ROLES_LIMITES.includes(r) ? 'agent' : r)
 
 // Gestion des utilisateurs (création, modification, droits) : réservée au PAU, au DF, à la GE, à Info et à l'Administrateur.
@@ -257,19 +294,41 @@ const LEGACY_LABEL = { admin: 'Administrateur', controleur: 'Contrôleur' }
 export const ROLES_ASSIMILES = { assistant_ge: 'secretaire', assistant_comptable: 'secretaire' }
 export const roleEffectif = (r) => ROLES_ASSIMILES[r] || r
 
-// Tableau de bord global (Bilan global) : trois niveaux.
-//  - 'finance' : PAU, GE, DF, Info et Assistant(e) GE voient tout : l'argent, les secteurs et les exports Excel et PDF ;
+// L'Assistant(e) GE CUMULE deux rôles : secrétaire (rôle effectif ci-dessus) ET agent. Les droits positifs de l'agent (saisie, facturation,
+// MAXI-GYM, exports de MAXI-GYM) lui sont donc ouverts en plus ; ses limites (pas de suppression, pas de restriction de mois) ne lui sont pas
+// imposées plus qu'à la secrétaire. Le rôle réel est lu dans la session, branchée par auth.js (même procédé que db.js).
+export const ROLES_AGENT_EN_PLUS = ['assistant_ge']
+let _lireRoleReel = () => null
+export function _brancherRoleReel(fn) { _lireRoleReel = fn }
+let _lireDroitsSession = () => null
+export function _brancherDroitsSession(fn) { _lireDroitsSession = fn }
+// Info a accordé l'écriture sur MAXI-GYM à la session courante (quel que soit son rôle).
+function gymAccordeALaSession() {
+  const d = _lireDroitsSession()?.gym
+  return d === 'ecriture' || (!!d && typeof d === 'object' && ACTIONS_DROIT.some((a) => d[a] === true))
+}
+// Vrai pour le rôle effectif `secretaire` quand la session courante est celle d'une Assistant(e) GE.
+function aAussiLesDroitsAgent(roleEffectifCourant) {
+  return roleEffectifCourant === 'secretaire' && ROLES_AGENT_EN_PLUS.includes(_lireRoleReel())
+}
+export const agentEnPlus = (roleReel) => ROLES_AGENT_EN_PLUS.includes(roleReel)
+
+// Tableau de bord global (Bilan global) : quatre niveaux.
+//  - 'finance' : PAU, GE, DF et Info voient tout : l'argent, les secteurs et les exports Excel et PDF ;
 //  - 'admin'   : le reste de l'administration voit l'activité et les alertes, jamais l'argent ;
+//  - 'export'  : l'Assistant(e) GE voit comme 'admin' (aucun montant) et garde les boutons d'export, dont les fichiers ne contiennent aucun montant ;
 //  - 'jour'    : un autre compte à qui Info a donné l'accès (`accesBilanGlobal`) ne voit que le récap du jour des secteurs, sans aucun montant ;
 //  - null      : pas d'accès (le cas par défaut des employés).
-export const ROLES_BILAN_FINANCE = ['pau', 'ge', 'df', 'info', 'assistant_ge']
+export const ROLES_BILAN_FINANCE = ['pau', 'ge', 'df', 'info']
+export const ROLES_BILAN_EXPORT_SANS_MONTANT = ['assistant_ge']
 export function niveauBilanGlobal(roleReel, user) {
   if (ROLES_BILAN_FINANCE.includes(roleReel)) return 'finance'
+  if (ROLES_BILAN_EXPORT_SANS_MONTANT.includes(roleReel)) return 'export'
   if (FULL_ACCESS_ROLES.includes(roleReel)) return 'admin'
   return user?.accesBilanGlobal === true ? 'jour' : null
 }
 // Accès par défaut (sans réglage individuel) : administration et Assistant(e) GE.
-export const bilanParDefaut = (roleReel) => ROLES_BILAN_FINANCE.includes(roleReel) || FULL_ACCESS_ROLES.includes(roleReel)
+export const bilanParDefaut = (roleReel) => ROLES_BILAN_FINANCE.includes(roleReel) || ROLES_BILAN_EXPORT_SANS_MONTANT.includes(roleReel) || FULL_ACCESS_ROLES.includes(roleReel)
 
 export const roleLabel = (r) =>
   ROLES.find((x) => x.value === r)?.label || LEGACY_LABEL[r] || r || '—'

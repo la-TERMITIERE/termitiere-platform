@@ -62,23 +62,24 @@ function Anneau({ pct, couleur, taille = 74 }) {
   )
 }
 
-// Trois niveaux (voir niveauBilanGlobal) : 'finance' (PAU, GE, DF, Info, Assistant(e) GE : argent et exports), 'admin' (reste de l'administration : activité et alertes,
-// jamais d'argent) et 'jour' (compte à qui Info a donné l'accès : récap du jour des secteurs, sans montant).
+// Quatre niveaux (voir niveauBilanGlobal) : 'finance' (PAU, GE, DF, Info : argent et exports), 'admin' (reste de l'administration : activité et alertes,
+// jamais d'argent), 'export' (Assistant(e) GE : comme 'admin' avec les boutons d'export, des fichiers sans montant) et 'jour' (compte à qui Info a donné
+// l'accès : récap du jour des secteurs, sans montant).
 export default function GlobalDashboard() {
   const roleReel = useAuth((s) => s.roleReel)
   const user = useAuth((s) => s.user)
   const niveau = niveauBilanGlobal(roleReel, user)
   if (niveau === 'jour') return <RecapDuJour />
-  return <TableauComplet voitFinance={niveau === 'finance'} />
+  return <TableauComplet voitFinance={niveau === 'finance'} exportSansMontant={niveau === 'export'} />
 }
 
-function TableauComplet({ voitFinance }) {
+function TableauComplet({ voitFinance, exportSansMontant = false }) {
   const { hasModule } = useAuth()
   const navigate = useNavigate()
   const [alerteDetail, setAlerteDetail] = useState(null)
   const [exportFormat, setExportFormat] = useState(null) // 'pdf' | 'excel' | null
-  // Tout ce qui touche à l'argent (recettes, dépenses, bénéfice, objectifs, exports) : PAU, GE, DF, Info et Assistant(e) GE seulement.
-  const peutExporter = voitFinance
+  // Tout ce qui touche à l'argent (recettes, dépenses, bénéfice, objectifs) : PAU, GE, DF et Info seulement. L'Assistant(e) GE exporte, sans aucun montant dans les fichiers.
+  const peutExporter = voitFinance || exportSansMontant
 
   // Période des chiffres financiers
   const [mode, setMode] = useState('mois')
@@ -334,7 +335,7 @@ function TableauComplet({ voitFinance }) {
       </ParamsGrille>
 
       {alerteDetail && <AlerteDetailModal alerteId={alerteDetail} alertes={alertes} onClose={() => setAlerteDetail(null)} onNavigate={(path) => { setAlerteDetail(null); navigate(path) }} />}
-      {exportFormat && <ExportRapportModal format={exportFormat} periode={{ mode, jour: fJour, mois: fMois, annee: fAnnee, debut: fDebut, fin: fFin }} onClose={() => setExportFormat(null)} />}
+      {exportFormat && <ExportRapportModal format={exportFormat} periode={{ mode, jour: fJour, mois: fMois, annee: fAnnee, debut: fDebut, fin: fFin }} sansMontant={!voitFinance} onClose={() => setExportFormat(null)} />}
     </div>
   )
 }

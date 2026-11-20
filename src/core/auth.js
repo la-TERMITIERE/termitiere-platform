@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth'
 import { isFirebaseConfigured, auth, loginToEmail } from './firebase'
 import { getAll, getOne, setItem, addItem, subscribeCollection, _brancherRoleCourant, _brancherDroitsCourants } from './db'
-import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole, moduleRoleOk, roleEffectif } from './roles'
+import { isFullAccessRole, isViewAllRole, isApproverRole, isCertifierRole, isReadOnlyRole, moduleRoleOk, roleEffectif, _brancherRoleReel, _brancherDroitsSession } from './roles'
 import { supabase, loginToEmail as loginToEmailSupabase } from './supabaseClient'
 import { oublierAbonnementPush } from './push'
 import { MODULES } from '../shared/modules'
@@ -496,3 +496,5 @@ export const useAuthStore = create((set, get) => ({
 // d'importation : auth.js dépend déjà de db.js.
 _brancherRoleCourant(() => useAuthStore.getState().role)
 _brancherDroitsCourants(() => useAuthStore.getState().user?.droitsModules)
+_brancherRoleReel(() => useAuthStore.getState().roleReel)
+_brancherDroitsSession(() => useAuthStore.getState().user?.droitsModules)

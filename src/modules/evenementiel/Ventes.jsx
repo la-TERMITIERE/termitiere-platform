@@ -33,7 +33,7 @@ import { demanderMotif } from '../../core/motifSuppression'
 import { toast } from '../../core/notifications'
 import { exportRapportExcel } from '../../utils/excelReport'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
-import { isReadOnlyRole, isFullAccessRole, canViewFinance, canExportExcel } from '../../core/roles'
+import { isReadOnlyRole, isFullAccessRole, agirCommeAgent, canViewFinance, canExportExcel } from '../../core/roles'
 import { dernierStockBriques, appliquerDeltasStockBriques } from './logic'
 
 const PROFESSIONS = ['Maçon', 'Architecte', 'Entrepreneur BTP', 'Ingénieur', 'Promoteur immobilier', 'Particulier', 'Revendeur', 'Autre']
@@ -71,7 +71,7 @@ export default function Ventes() {
   const [saving, setSaving] = useState(false)
   const [busyAction, setBusyAction] = useState(null)
   // Agents et administration : demandent l'autorisation et facturent depuis la vente.
-  const peutAgir = !lectureSeule && (role === 'agent' || isFullAccessRole(role))
+  const peutAgir = !lectureSeule && (agirCommeAgent(role) || isFullAccessRole(role))
   const stockDe = (briqueId) => dernierStockBriques(inventaires, briqueId, briqueId === 'caillasses' ? 'caillasses' : 'pret')
   // Suggestions de clients : les fiches strictement identiques (même nom, même téléphone) ne comptent qu'une fois.
   const clientsUniques = useMemo(() => {
