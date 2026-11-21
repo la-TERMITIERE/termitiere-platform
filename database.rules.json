@@ -184,6 +184,10 @@
       "treso_releves":     { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|assistant_pau|ge|df|directeur|rh|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|assistant_pau|ge|df|info)$/)" },
       "treso_params":      { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|assistant_pau|ge|df|directeur|rh|admin|info|superviseur)$/)", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|assistant_pau|ge|df|info)$/)" },
 
+      // Annonces de la RH : lues par tout compte connecté, publiées seulement par la RH et l'administration (accès total).
+      // Les lectures (« qui a lu quoi ») et les fichiers joints suivent la règle générale ci-dessous.
+      "annonces": { ".read": "auth != null", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|assistant_pau|ge|df|directeur|rh|admin|info)$/)" },
+
       // Collections métier : authentification exigée.
       "$other": {
         ".read": "auth != null",

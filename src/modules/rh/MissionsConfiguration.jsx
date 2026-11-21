@@ -9,6 +9,7 @@ import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
 import { icone3D } from '../../utils/color'
 import { PageHeader, Champ, ModalRh } from './rhui'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 
 const COLLECTION = 'rh_bareme_missions'
 const COULEUR = '#7c3aed'
@@ -23,10 +24,14 @@ export default function MissionsConfiguration() {
     setTente(true)
     if (!modal.typeFrais.trim()) return toast.error('Indiquez le type de frais')
     const data = { typeFrais: modal.typeFrais.trim(), indemniteJour: Number(modal.indemniteJour) || 0, plafond: Number(modal.plafond) || 0 }
-    if (modal.id) await updateItem(COLLECTION, modal.id, data); else await addItem(COLLECTION, data)
-    toast.success('Barème enregistré ✓'); setModal(null)
+    try {
+      if (modal.id) await updateItem(COLLECTION, modal.id, data); else await addItem(COLLECTION, data)
+      toast.success(modal.id ? 'Barème corrigé ✓' : 'Barème enregistré ✓'); setModal(null)
+    } catch (err) { toast.error(err?.message || 'Enregistrement impossible : réessayez') }
   }
-  async function supprimer(b) { if (confirm(`Supprimer le barème « ${b.typeFrais} » ?`)) { await removeItem(COLLECTION, b.id); toast.success('Supprimé') } }
+  // Suppression réservée à l'administration ; la fenêtre « Motif » sert de confirmation.
+  const peutSupprimer = usePeutSupprimerRh()
+  const supprimer = (b) => supprimerAvecRetour(() => removeItem(COLLECTION, b.id))
 
   return (
     <div className="space-y-5">
@@ -47,7 +52,7 @@ export default function MissionsConfiguration() {
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button type="button" onClick={() => { setTente(false); setModal({ id: b.id, typeFrais: b.typeFrais || '', indemniteJour: b.indemniteJour || '', plafond: b.plafond || '' }) }} aria-label={`Modifier ${b.typeFrais}`} className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-gray-700"><Pencil size={15} /></button>
-                  <button type="button" onClick={() => supprimer(b)} aria-label={`Supprimer ${b.typeFrais}`} className="rounded-full p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                  {peutSupprimer && <button type="button" onClick={() => supprimer(b)} aria-label={`Supprimer ${b.typeFrais}`} className="rounded-full p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>}
                 </div>
               </div>
               <div className="relative mt-3 grid grid-cols-2 gap-2 text-center">

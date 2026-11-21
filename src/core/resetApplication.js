@@ -42,9 +42,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'gym_abonnements', 'gym_clients', 'gym_coachs', 'gym_factures', 'gym_forfaits', 'gym_params',
   'gym_pointages_coach', 'gym_presences', 'gym_seances', 'gym_banque', 'gym_reglements_partenaires',
   // ── Ressources humaines ─────────────────────────────────────────────────
-  'rh_employes', 'rh_presences',
-  // ── E-VOYAGE ────────────────────────────────────────────────────────────
-  'voyage_articles', 'voyage_depenses', 'voyage_voyages'
+  'rh_employes', 'rh_presences'
 ]
 
 // Collections d'identité : on y préserve UNIQUEMENT le compte de la personne

@@ -5,7 +5,7 @@ import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun
 import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
-import { updateItem } from '../core/db'
+import { updateItem, setItem } from '../core/db'
 import { audit } from '../core/audit'
 import { notify } from '../core/notify'
 import { toast } from '../core/notifications'
@@ -15,8 +15,9 @@ import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
 import { projetsVisibles } from '../modules/projet/logic'
 import AlertesAccueil from './AlertesAccueil'
+import AnnoncesAccueil from '../modules/rh/AnnoncesAccueil'
 import { useDecaissementsRh } from '../modules/depense/decaissementsRh'
-import { useEcheancesRh } from '../modules/rh/echeances'
+import { useEcheancesRh, ROLES_ECHEANCES_RH } from '../modules/rh/echeances'
 import DetailPrime from '../modules/rh/DetailPrime'
 import { peutTraiterPrime, etapeCourante as etapePrime, cibleLibelle as cibleLibellePrime, valeurLibelle as valeurLibellePrime } from '../modules/rh/primesCircuit'
 import DetailMission from '../modules/rh/DetailMission'
@@ -88,6 +89,12 @@ export default function PortalHome() {
 
   // Échéances RH (contrats, essais, évaluations, formations) : une ligne par catégorie pour l'administration RH.
   const echeancesRh = useEcheancesRh()
+  // Alertes d'échéance que la RH a marquées « effectuées » : elles ne sont plus rappelées (une nouvelle composition de la même alerte, elle, revient).
+  const peutMarquerEcheance = ROLES_ECHEANCES_RH.includes(role) && hasModule('rh')
+  const { data: echeancesFaites } = useCollection(peutMarquerEcheance ? 'rh_alertes_faites' : null)
+  const signatureEcheance = (e) => `${e.id}|${e.titre}|${e.sous}`
+  const cleFaite = (e) => signatureEcheance(e).replace(/[.#$/\[\]]/g, '_').slice(0, 180)
+  const faitesSet = new Set((echeancesFaites || []).map((f) => f.id))
 
   async function confirmerReception(d) {
     setConfirmingId(d.id)
@@ -248,7 +255,10 @@ export default function PortalHome() {
           action: { label: 'Voir', onClick: () => setPrimeOuverte(p.id) }
         })),
         ...decaissements.items,
-        ...echeancesRh.map((e) => ({ id: e.id, icone: e.icone, couleur: e.couleur, titre: e.titre, sous: e.sous, action: { label: 'Voir', onClick: () => navigate(e.lien) } })),
+        ...echeancesRh.filter((e) => !faitesSet.has(cleFaite(e))).map((e) => ({
+          id: e.id, icone: e.icone, couleur: e.couleur, titre: e.titre, sous: e.sous, action: { label: 'Voir', onClick: () => navigate(e.lien) },
+          fait: peutMarquerEcheance ? { label: 'Effectué', onClick: () => setItem('rh_alertes_faites', cleFaite(e), { signature: signatureEcheance(e), parNom: user?.nom || '', ts: Date.now() }).catch(() => {}) } : undefined
+        })),
         ...paiementsAConfirmer.map((d) => ({
           id: `paiement_${d.id}`, icone: CheckCircle2, couleur: '#4f46e5',
           titre: `${Number(d.montant).toLocaleString('fr-FR')} FCFA reçus ?`,
@@ -256,6 +266,8 @@ export default function PortalHome() {
           action: { label: "J'ai reçu", onClick: () => confirmerReception(d), loading: confirmingId === d.id }
         }))
       ]} />
+      {/* Annonces de la RH et de la direction adressées à cette personne, tant qu'elle ne les a pas lues. */}
+      <AnnoncesAccueil />
       <DetailAutorisationSalaire demande={(autorisationsSalaire || []).find((d) => d.id === autorisationOuverte)} onClose={() => setAutorisationOuverte(null)} />
       <DetailPrime prime={(primesRh || []).find((p) => p.id === primeOuverte)} employes={employesRh2 || []} onClose={() => setPrimeOuverte(null)} />
       {decaissements.modal}

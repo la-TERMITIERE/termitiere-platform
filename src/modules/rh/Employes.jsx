@@ -11,7 +11,7 @@ import FormGroup from '../../shared/forms/FormGroup'
 import Input from '../../shared/forms/Input'
 import Select from '../../shared/forms/Select'
 import { useCollection } from '../../hooks/useFirestore'
-import { addItem, updateItem, removeItem } from '../../core/db'
+import { addItem, updateItem, removeItem, repairCustomIds } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { useDepartements } from './useDepartements'
@@ -22,6 +22,7 @@ import { postesProposes } from './postesSuggeres'
 import { visuelDepartement } from './departementsVisuel'
 import { COL, TYPES_CONTRAT } from './store/rhStore'
 import { PageHeader, Champ, ModalRh, ChoixBoutons } from './rhui'
+import { usePeutSupprimerRh } from './suppression'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 import { UserCircle as IconeEmployes } from 'lucide-react'
 
@@ -53,6 +54,8 @@ export default function Employes() {
     ...m, data: { ...m.data, nom: u.nom || u.login, userId: u.id, userLogin: u.login, contact: m.data.contact || u.email || u.telephone || '' }
   }))
   const [modal, setModal] = useState(null)
+  const [enregistrement, setEnregistrement] = useState(false)
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
   const [filtreLoc, setFiltreLoc] = useState('') // '' (toutes), 'Lomé', 'Kara' ou 'autre'
   const [texteLoc, setTexteLoc] = useState('') // saisie du filtre « Autre » : une localité autre que Lomé et Kara
   // Détail d'un employé (au clic sur sa ligne) : fiche, localité, ancienneté, contrat en cours et compte rattaché.
@@ -128,18 +131,40 @@ export default function Employes() {
     if (poste && !postes.some((p) => nom(p.intitule) === nom(poste))) {
       await addItem(COL.postes, { intitule: poste, departement: dep, classification: '', salaireBase: Number(e.salaire) || 0, missions: '' })
     }
-    if (modal.id) await updateItem('rh_employes', modal.id, fiche)
-    else await addItem('rh_employes', fiche)
-    toast.success('Enregistré ✓'); setModal(null)
+    // Une erreur (droit refusé, réseau…) est affichée au lieu d'échouer sans rien dire ; la fenêtre reste ouverte pour réessayer.
+    if (enregistrement) return
+    setEnregistrement(true)
+    try {
+      const { id: _id, ...donnees } = fiche // l'identifiant est la clé du document : on ne le réécrit pas dans ses données
+      if (modal.id) await updateItem('rh_employes', modal.id, donnees)
+      else await addItem('rh_employes', donnees)
+      toast.success(modal.id ? 'Fiche corrigée ✓' : 'Employé ajouté ✓'); setModal(null)
+    } catch (err) {
+      console.error('Enregistrement de la fiche employé impossible', err)
+      toast.error(err?.message || "Enregistrement impossible : réessayez")
+    } finally { setEnregistrement(false) }
   }
-  async function supprimer(e) { if (confirm(`Supprimer ${e.nom} ?`)) { await removeItem('rh_employes', e.id); toast.success('Supprimé') } }
+  // La fenêtre « Motif de la suppression » sert de confirmation. Une erreur est affichée ; annuler la fenêtre n'est pas une erreur.
+  async function supprimer(e) {
+    if (!e?.id) return toast.error('Cet employé est introuvable : rechargez la page.')
+    try {
+      // Une fiche dont l'identifiant ne correspond pas à sa clé en base ne se supprimait pas (rien ne se passait) : on la remet d'abord en ordre.
+      await repairCustomIds('rh_employes').catch(() => {})
+      await removeItem('rh_employes', e.id)
+      toast.success(`${e.nom} supprimé(e)`)
+    } catch (err) {
+      if (err?.name === 'SuppressionAnnulee' || err?.code === 'SUPPRESSION_ANNULEE') return
+      console.error('Suppression de la fiche employé impossible', err)
+      toast.error(err?.message || 'Suppression impossible')
+    }
+  }
 
   return (
     <div className="space-y-4">
       <DetailFiche fiche={employeDetail ? ficheEmploye(employeDetail) : null} onClose={() => setDetailId(null)}
         actions={employeDetail ? [
           { label: 'Modifier', icone: Pencil, tone: 'primaire', onClick: () => { setModal({ data: { ...empty(), ...employeDetail }, id: employeDetail.id }); setDetailId(null) } },
-          { label: 'Supprimer', icone: Trash2, tone: 'danger', onClick: () => { const e = employeDetail; setDetailId(null); supprimer(e) } }
+          ...(peutSupprimer ? [{ label: 'Supprimer', icone: Trash2, tone: 'danger', onClick: () => { const e = employeDetail; setDetailId(null); supprimer(e) } }] : [])
         ] : []} />
       <PageHeader icon={IconeEmployes} sousModule="Collaborateurs & Contrats" titre="Employés & Annuaire" sousTitre="Fiches des employés, postes, départements et contacts."
         action={<BoutonBande anime icone={Plus} onClick={() => setModal({ data: empty(), id: null })}>Ajouter un employé</BoutonBande>} />
@@ -177,8 +202,8 @@ export default function Employes() {
             { key: 'contact', label: 'Contact' },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
-                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100">✏️</button>
-                <button onClick={() => supprimer(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
+                <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} title="Corriger la fiche" aria-label="Corriger la fiche" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
+                {peutSupprimer && <button onClick={() => supprimer(r)} title="Supprimer la fiche" aria-label="Supprimer la fiche" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>}
               </div>
             ) }
           ]}
@@ -204,13 +229,11 @@ export default function Employes() {
                   placeholderAutre="Nom du département" vide="Aucun département créé : saisissez-en un ci-dessous ou créez-les dans l'onglet Départements." />
               </Champ>
             </div>
-            {(modal.data.departement || modal.data.localite) && (
-            <div className="ed-entree sm:col-span-2">
-                <Champ label="Localité" icone={MapPin} iconeLabel aide="Lomé ou Kara pour un même poste sur deux sites (ex. DS Lomé, DS Kara) ; « Autre » pour une autre localité.">
-                  <ChoixBoutons options={localitesOptions} value={modal.data.localite || ''} onChange={(v) => maj('localite', v)} placeholderAutre="Nom de la localité" />
-                </Champ>
-              </div>
-            )}
+            <div className="sm:col-span-2">
+              <Champ label="Localité d'intervention" icone={MapPin} iconeLabel aide="Où cette personne travaille : Lomé ou Kara, ou « Autre » pour écrire une autre localité. Touchez de nouveau la localité choisie pour la retirer.">
+                <ChoixBoutons options={localitesOptions} value={modal.data.localite || ''} onChange={(v) => maj('localite', v)} placeholderAutre="Nom de la localité" />
+              </Champ>
+            </div>
             <div className="sm:col-span-2">
               <Champ label="Poste" icone={Briefcase} aide="Touchez le champ : des postes sont proposés. Un poste nouveau est ajouté à l'onglet Postes à l'enregistrement.">
                 <ChampAutocomplete accent="sky" className="input-base" value={modal.data.poste} onChange={(v) => maj('poste', v)}

@@ -18,6 +18,7 @@ import { lireRegles } from './horaires'
 import { calculerRetenuePresence } from './retenuesPresence'
 import { primesDuMois } from './primesCircuit'
 import DetailFiche from './DetailFiche'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 
@@ -158,8 +159,9 @@ export default function Paie() {
   }
   async function supprimer(b) {
     if (b.statut !== 'brouillon') return toast.error('Un bulletin validé ne peut pas être supprimé.')
-    if (confirm(`Supprimer le bulletin de ${b.employeNom} ?`)) await removeItem(COL.bulletins, b.id)
+    await supprimerAvecRetour(() => removeItem(COL.bulletins, b.id), `Bulletin de ${b.employeNom} supprimé : régénérez-le pour le corriger`)
   }
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
 
   return (
     <div className="space-y-5">
@@ -215,7 +217,7 @@ export default function Paie() {
                   <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1">
                     {b.statut === 'brouillon' && <button onClick={() => valider(b)} title="Valider (comptabiliser)" className="rounded p-1.5 text-green-600 hover:bg-green-50"><CheckCircle2 size={15} /></button>}
                     {b.statut === 'valide' && <button onClick={() => marquerPaye(b)} title="Marquer payé" className="rounded p-1.5 text-sky-600 hover:bg-sky-50"><BadgeCheck size={15} /></button>}
-                    {b.statut === 'brouillon' && <button onClick={() => supprimer(b)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
+                    {b.statut === 'brouillon' && peutSupprimer && <button onClick={() => supprimer(b)} title="Supprimer le brouillon (puis régénérer pour le corriger)" aria-label="Supprimer le brouillon" className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
                   </div></td>
                 </tr>
               ))}

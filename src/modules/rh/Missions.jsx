@@ -14,6 +14,7 @@ import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
 import { avatarGradient } from '../../utils/color'
 import { STATUTS_MISSION, COL } from './store/rhStore'
 import { PageHeader, Champ, ModalRh } from './rhui'
+import { supprimerAvecRetour } from './suppression'
 import DetailMission, { MiniatureMission, PastilleDecaissement } from './DetailMission'
 import { demanderApprobation, peutApprouverMission, dureeMission } from './missionsCircuit'
 
@@ -70,7 +71,7 @@ export default function Missions() {
     }
     setModal(null); setTente(false)
   }
-  async function supprimer(m) { setDetailId(null); await removeItem(COL.missions, m.id); toast.success('Mission supprimée') }
+  async function supprimer(m) { setDetailId(null); await supprimerAvecRetour(() => removeItem(COL.missions, m.id), 'Mission supprimée') }
 
   return (
     <div className="space-y-5">

@@ -15,6 +15,7 @@
 // sont pilotées entièrement depuis la Facturation.
 import { getAll, addItem, updateItem, setItem } from '../../core/db'
 import { appliquerDemandeAuStock } from './applyDemande'
+import { propagerSuite } from './propagation'
 import { getInventaire, autoSorties, mutationsEntrantes, agregerAnimal } from './logic'
 
 // Lignes « stockables » d'une facture : article identifié. Les lignes à quantité
@@ -124,4 +125,5 @@ async function appliquerEcartInventaire(facture, ligneIdx, articleId, dead, ret)
   const agg = agregerAnimal({ init: node.init || 0, entrees, sorties }, autoSor, mutIn)
   const newNode = { ...node, ...agg, entrees, sorties, autoSor }
   await setItem('agro_inventaires', facture.date, { animaux: { ...(inv.animaux || {}), [articleId]: newNode } })
+  await propagerSuite(facture.date) // les jours suivants repartent du nouvel EF Final
 }

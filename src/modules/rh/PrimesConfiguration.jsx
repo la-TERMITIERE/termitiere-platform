@@ -13,6 +13,7 @@ import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
 import { COL } from './store/rhStore'
 import { PageHeader, Champ, ModalRh, ChoixSimple } from './rhui'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import { PERIODICITES_PRIME, TYPES_PRIME_COURANTS } from './primesCircuit'
 
 const nombre = (v) => Number(v) || 0
@@ -54,10 +55,14 @@ export default function PrimesConfiguration() {
     if (!modal.nom.trim()) return toast.error('Donnez un nom à la prime')
     if (!(valeur > 0)) return toast.error('Indiquez un pourcentage ou un montant')
     const data = { nom: modal.nom.trim(), mode: modal.source, valeur, periodicite: modal.periodicite, plafondPct: nombre(modal.plafondPct), salaireRef: nombre(modal.ref), description: modal.description.trim() }
-    if (modal.id) await updateItem(COL.typesPrimes, modal.id, data); else await addItem(COL.typesPrimes, data)
-    toast.success('Type de prime enregistré ✓'); setModal(null)
+    try {
+      if (modal.id) await updateItem(COL.typesPrimes, modal.id, data); else await addItem(COL.typesPrimes, data)
+      toast.success(modal.id ? 'Type de prime corrigé ✓' : 'Type de prime enregistré ✓'); setModal(null)
+    } catch (err) { toast.error(err?.message || 'Enregistrement impossible : réessayez') }
   }
-  async function supprimer(t) { if (confirm(`Supprimer le type « ${t.nom} » ? Les primes déjà attribuées ne changent pas.`)) { await removeItem(COL.typesPrimes, t.id); toast.success('Supprimé') } }
+  // Suppression réservée à l'administration ; la fenêtre « Motif » sert de confirmation. Les primes déjà attribuées ne changent pas.
+  const peutSupprimer = usePeutSupprimerRh()
+  const supprimer = (t) => supprimerAvecRetour(() => removeItem(COL.typesPrimes, t.id))
   async function ajouterCourants() {
     setEnvoi(true)
     try { for (const t of TYPES_PRIME_COURANTS) await addItem(COL.typesPrimes, { ...t, salaireRef: moyenne }); toast.success('Types de primes courants ajoutés ✓') } finally { setEnvoi(false) }
@@ -92,7 +97,7 @@ export default function PrimesConfiguration() {
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button type="button" onClick={() => ouvrir(t)} aria-label={`Modifier ${t.nom}`} className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-gray-700"><Pencil size={15} /></button>
-                  <button type="button" onClick={() => supprimer(t)} aria-label={`Supprimer ${t.nom}`} className="rounded-full p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                  {peutSupprimer && <button type="button" onClick={() => supprimer(t)} aria-label={`Supprimer ${t.nom}`} className="rounded-full p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>}
                 </div>
               </div>
               <div className="relative mt-3 grid grid-cols-2 gap-2 text-center">

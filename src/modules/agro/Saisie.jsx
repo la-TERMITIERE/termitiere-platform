@@ -34,8 +34,10 @@ import {
   agregerAnimal, agregerAliment, sommeMouvements, mouvementsDepuisSaisie,
   mutationsEntrantes, mutationsEntrantesDetail,
   ENTREE_TYPES_ANIMAL, SORTIE_TYPES_SAISIE_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_SAISIE_ALIMENT,
+  mutationAuDessusDuStock, stockPourMutation, totalMutations,
   labelRequis, nouvellesSortiesNotifiable, nouvellesEntreesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
 } from './logic'
+import { propagerSuite } from './propagation'
 import BandeAgro from './BandeAgro'
 import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
 import { APPROVER_ROLES, isFullAccessRole, agirCommeAgent } from '../../core/roles'
@@ -171,6 +173,7 @@ export default function Saisie() {
 
     try {
       await setItem('agro_inventaires', date, { date, [collKey]: collMap })
+      await propagerSuite(date) // les jours suivants repartent du nouvel EF Final
       await audit('agro', 'AJUST_EF_INITIAL',
         `EF Initial ${nom} (${date}) : ${ancien} → ${val}${marqueur.motif ? ` : ${marqueur.motif}` : ''}`,
         { date, article: nom, ancien, nouveau: val, motif: marqueur.motif })
@@ -313,6 +316,10 @@ export default function Saisie() {
     )
     if (mutSansCible) return toast.error(`Choisissez l'espèce de destination de la mutation : ${mutSansCible.nom}`)
 
+    // Blocage : on ne peut pas muter plus d'animaux qu'il n'y en a en stock.
+    const mutTropGrande = mutationAuDessusDuStock(especes, anim, autoSorOf, mutIn)
+    if (mutTropGrande) return toast.error(`Mutation impossible : ${mutTropGrande.nom} n'a que ${mutTropGrande.stock} en stock, vous voulez en muter ${mutTropGrande.demande}`)
+
     setSaving(true)
     try {
       const { animaux, aliments: alimentsOut, totEnt, totSor } =
@@ -322,6 +329,9 @@ export default function Saisie() {
         date, agentId: user.uid, agentNom: user.nom, savedAt: ts(), animaux, aliments: alimentsOut
       })
       dirtyRef.current = false // saisie validée → plus de brouillon en attente
+      // Les jours suivants déjà enregistrés reprennent l'EF Final de ce jour (sinon l'effectif « revient » au nombre d'avant).
+      const joursCorriges = await propagerSuite(date)
+      if (joursCorriges > 0) toast.info(`${joursCorriges} jour(s) suivant(s) mis à jour avec les nouveaux effectifs`)
       const totalTetes = Object.values(animaux).reduce((s, a) => s + (a.fin || 0), 0)
       await audit('agro', 'SAISIE', `Saisie du ${date} : ${totEnt} entrée(s), ${totSor} sortie(s) : ${totalTetes} têtes au total`, {
         date, totalEntrees: totEnt, totalSorties: totSor, totalTetes,
@@ -745,6 +755,19 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
           {autoSor} vente(s) issue(s) de demandes approuvées : consultez l'onglet Demandes (non modifiable ici).
         </p>
       )}
+
+      {/* Blocage : une mutation ne peut pas dépasser le stock de l'espèce */}
+      {dir === 'sortie' && kind === 'animaux' && (() => {
+        const demande = totalMutations(src[id]?.sorties)
+        if (demande <= 0) return null
+        const stock = Math.max(0, stockPourMutation(src[id], autoSor || 0, mutIn || 0))
+        if (demande <= stock) return <p className="mb-3 text-xs text-gray-500">Stock disponible pour la mutation : <strong>{stock}</strong></p>
+        return (
+          <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+            Mutation impossible : {nom} n'a que {stock} en stock, vous voulez en muter {demande}. Réduisez la quantité pour pouvoir enregistrer.
+          </p>
+        )
+      })()}
 
       {/* Mutations entrantes (générées par les mutations d'autres espèces) — lecture seule */}
       {dir === 'entree' && mutInDetail.length > 0 && (

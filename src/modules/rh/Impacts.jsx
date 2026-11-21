@@ -1,11 +1,12 @@
 // RH — Impact Collègue (Vie d'Équipe). Reconnaissances / feedbacks positifs.
 import { useState } from 'react'
-import { Lightbulb, Plus, Heart, Trash2, UserRound, MessageSquareText } from 'lucide-react'
+import { Lightbulb, Plus, Heart, Trash2, Pencil, UserRound, MessageSquareText } from 'lucide-react'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import Modal from '../../shared/ui/Modal'
 import { useCollection } from '../../hooks/useFirestore'
-import { addItem, removeItem } from '../../core/db'
+import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatDateShort, todayStr } from '../../utils/formatters'
 import { COL } from './store/rhStore'
@@ -20,9 +21,15 @@ export default function Impacts() {
 
   async function save() {
     if (!modal.message.trim()) return toast.error('Message requis')
-    await addItem(COL.reconnaissances, { deId: modal.deId, aId: modal.aId, message: modal.message.trim(), date: todayStr() })
-    toast.success('Reconnaissance publiée ✓'); setModal(null)
+    try {
+      if (modal.id) await updateItem(COL.reconnaissances, modal.id, { deId: modal.deId, aId: modal.aId, message: modal.message.trim() })
+      else await addItem(COL.reconnaissances, { deId: modal.deId, aId: modal.aId, message: modal.message.trim(), date: todayStr() })
+      toast.success(modal.id ? 'Reconnaissance corrigée ✓' : 'Reconnaissance publiée ✓'); setModal(null)
+    } catch (err) { toast.error(err?.message || 'Enregistrement impossible : réessayez') }
   }
+  // Suppression réservée à l'administration ; la fenêtre « Motif » sert de confirmation.
+  const peutSupprimer = usePeutSupprimerRh()
+  const supprimer = (r) => supprimerAvecRetour(() => removeItem(COL.reconnaissances, r.id))
 
   return (
     <div className="space-y-5">
@@ -42,14 +49,17 @@ export default function Impacts() {
                     <p className="text-sm text-gray-700 dark:text-gray-200">« {r.message} »</p>
                     <p className="mt-1 text-xs text-gray-400"><strong>{nom(r.deId)}</strong> → <strong>{nom(r.aId)}</strong> · {r.date ? formatDateShort(r.date) : ''}</p>
                   </div>
-                  <button onClick={() => removeItem(COL.reconnaissances, r.id)} className="rounded p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-600"><Trash2 size={13} /></button>
+                  <div className="flex shrink-0 gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
+                    <button onClick={() => setModal({ id: r.id, deId: r.deId || '', aId: r.aId || '', message: r.message || '' })} title="Corriger" aria-label="Corriger" className="rounded p-1 text-gray-500 hover:text-sky-700"><Pencil size={13} /></button>
+                    {peutSupprimer && <button onClick={() => supprimer(r)} title="Supprimer" aria-label="Supprimer" className="rounded p-1 text-gray-500 hover:text-red-600"><Trash2 size={13} /></button>}
+                  </div>
                 </div>
               </Card>
             ))}
           </div>
         )}
 
-      <ModalRh open={!!modal} onClose={() => setModal(null)} title="Publier une reconnaissance" libelleSave="Publier"
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Corriger la reconnaissance' : 'Publier une reconnaissance'} libelleSave={modal?.id ? 'Enregistrer' : 'Publier'}
         icone={Heart} intro="Remerciez un collègue : le message est visible de toute l'équipe." onSave={save}>
         {modal && (<>
           <div className="grid gap-3 sm:grid-cols-2">

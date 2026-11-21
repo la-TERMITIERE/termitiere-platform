@@ -13,6 +13,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { PageHeader, Champ, ModalRh, ChoixBoutons, ChoixSimple, ChoixEmployes, GrilleCriteres, ResumeCriteres, ChoixPeriode, libellePeriodeEval } from './rhui'
 import DetailFiche from './DetailFiche'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import { formatDateShort } from '../../utils/formatters'
 import { useChoixDepartement } from './departementsChoix'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
@@ -58,12 +59,16 @@ export default function CrudList({
     const req = champs.find((c) => c.required && !String(modal[c.key] || '').trim())
     if (req) return toast.error(`${req.label} requis`)
     let id = modal.id
-    if (modal.id) await updateItem(collection, modal.id, out)
-    else id = await addItem(collection, out)
-    toast.success('Enregistré ✓'); setModal(null)
+    try {
+      if (modal.id) await updateItem(collection, modal.id, out)
+      else id = await addItem(collection, out)
+    } catch (err) { return toast.error(err?.message || 'Enregistrement impossible : réessayez') }
+    toast.success(modal.id ? 'Corrigé ✓' : 'Enregistré ✓'); setModal(null)
     await apresSauvegarde?.({ ...out, id }, ancien)
   }
-  async function supprimer(row) { if (confirm('Supprimer cet élément ?')) { await removeItem(collection, row.id); toast.success('Supprimé') } }
+  // Suppression réservée à l'administration ; la fenêtre « Motif » sert de confirmation.
+  const peutSupprimer = usePeutSupprimerRh()
+  const supprimer = (row) => supprimerAvecRetour(() => removeItem(collection, row.id))
 
   // Détail d'une ligne (au clic) : chaque champ du formulaire, avec sa valeur lisible (libellé du choix, nom de l'employé, date).
   const valeurChamp = (c, row) => {
@@ -121,9 +126,9 @@ export default function CrudList({
               {lignes.map((row) => (
                 <tr key={row.id} onClick={() => setDetailId(row.id)} className="group cursor-pointer hover:bg-sky-50/60 dark:hover:bg-white/5">
                   {colonnes.map((c) => <td key={c.key} className={`px-3 py-2 ${c.align === 'right' ? 'text-right' : ''} ${c.strong ? 'font-medium text-gray-800 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300'}`}>{renderCell(c, row)}</td>)}
-                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100">
-                    <button onClick={() => setModal({ ...row })} className="rounded p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"><Pencil size={14} /></button>
-                    <button onClick={() => supprimer(row)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1 opacity-60 transition-opacity group-hover:opacity-100">
+                    <button onClick={() => setModal({ ...row })} title="Corriger" aria-label="Corriger" className="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"><Pencil size={14} /></button>
+                    {peutSupprimer && <button onClick={() => supprimer(row)} title="Supprimer" aria-label="Supprimer" className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
                   </div></td>
                 </tr>
               ))}
@@ -136,7 +141,7 @@ export default function CrudList({
         actions={ligneDetail ? [
           ...(actionsLigne ? actionsLigne(ligneDetail, () => setDetailId(null)) : []),
           { label: 'Modifier', icone: Pencil, tone: 'primaire', onClick: () => { setModal({ ...ligneDetail }); setDetailId(null) } },
-          { label: 'Supprimer', icone: Trash2, tone: 'danger', onClick: () => { const r = ligneDetail; setDetailId(null); supprimer(r) } }
+          ...(peutSupprimer ? [{ label: 'Supprimer', icone: Trash2, tone: 'danger', onClick: () => { const r = ligneDetail; setDetailId(null); supprimer(r) } }] : [])
         ] : []} />
 
       <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier' : titre}

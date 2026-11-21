@@ -469,7 +469,7 @@ export const useAuthStore = create((set, get) => ({
   // Helpers de contrôle d'accès
   hasModule: (mod) => {
     const { role, modules } = get()
-    // Restriction dure par rôle (ex. E-VOYAGE réservé admins / PAU / GE) : prime sur
+    // Restriction dure par rôle (ex. un module réservé à certains rôles) : prime sur
     // l'attribution individuelle ET sur l'accès « voit tout ».
     if (!moduleRoleOk(mod, role)) return false
     if (isViewAllRole(role)) return !(get().user?.modulesRetires || []).includes(mod)

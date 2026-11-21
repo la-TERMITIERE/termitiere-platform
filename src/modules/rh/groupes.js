@@ -2,7 +2,7 @@
 // ses volets restent des pages à part entière (mêmes adresses), reliées par la barre d'onglets de RhOnglets.
 import {
   UserCircle, Factory, ClipboardList, Users, CalendarDays, CalendarCheck, Receipt, BarChart2, Settings,
-  FileText, Repeat, Tag, Send, BookOpen, Gauge, TrendingUp, Plane, Handshake, Clock3, ShieldCheck, CalendarHeart, Package, Gift, HandCoins
+  FileText, Repeat, Tag, Send, BookOpen, Gauge, TrendingUp, Plane, Handshake, Clock3, ShieldCheck, CalendarHeart, Package, Gift, HandCoins, Megaphone
 } from 'lucide-react'
 
 export const GROUPES_RH = [
@@ -67,6 +67,7 @@ GROUPES_RH.push(
   {
     id: 'vie',
     onglets: [
+      { to: '/rh/annonces', label: 'Annonces', icone: Megaphone },
       { to: '/rh/anniversaires', label: 'Anniversaires', icone: CalendarHeart },
       { to: '/rh/dotations', label: 'Dotations', icone: Package }
     ]

@@ -1,4 +1,4 @@
-// RH : Départements. Les départements sont les modules de l'entreprise (sauf E-DÉPENSES, E-G.Pro et E-VOYAGE) :
+// RH : Départements. Les départements sont les modules de l'entreprise (sauf E-DÉPENSES et E-G.Pro) :
 // en tapant ou en touchant le nom, on choisit un module disponible, dont le logo est repris. Un logo propre peut être ajouté ;
 // sans choix ni logo, une icône est utilisée. CRUD sur rh_departements + effectifs.
 import { useMemo, useRef, useState } from 'react'
@@ -11,6 +11,7 @@ import { compresserLogo } from '../../utils/fichiers'
 import { COL, STATUTS_EMPLOYE } from './store/rhStore'
 import DetailKpiModal from './DetailKpiModal'
 import { PageHeader, Champ, ModalRh } from './rhui'
+import { usePeutSupprimerRh } from './suppression'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { MODULES_DEPARTEMENTS, CATEGORIES_DEPARTEMENT, categorieAuto, visuelDepartement, LogoDepartement } from './departementsVisuel'
@@ -18,6 +19,7 @@ import { MODULES_DEPARTEMENTS, CATEGORIES_DEPARTEMENT, categorieAuto, visuelDepa
 const vide = () => ({ nom: '', responsable: '', description: '', moduleId: '', logo: '', categorie: '', categorieLibelle: '' })
 
 export default function Departements() {
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
   const { data: departements } = useCollection(COL.departements)
   const { data: employes } = useCollection(COL.employes)
   const { data: postes } = useCollection(COL.postes)
@@ -162,8 +164,8 @@ export default function Departements() {
                 <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => ouvrir({ ...vide(), ...d })} aria-label={`Modifier ${d.nom}`} title="Modifier"
                     className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/70 text-gray-500 shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white hover:text-sky-700 active:scale-90"><Pencil size={14} /></button>
-                  <button type="button" onClick={() => supprimer(d)} aria-label={`Supprimer ${d.nom}`} title="Supprimer"
-                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-white/70 text-red-500 shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-700 active:scale-90"><Trash2 size={14} /></button>
+                  {peutSupprimer && <button type="button" onClick={() => supprimer(d)} aria-label={`Supprimer ${d.nom}`} title="Supprimer"
+                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-white/70 text-red-500 shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-700 active:scale-90"><Trash2 size={14} /></button>}
                   <span className="ml-0.5 inline-flex items-center text-xs font-semibold text-gray-500 transition-transform group-hover:translate-x-0.5">Détails <ChevronRight size={14} aria-hidden="true" /></span>
                 </span>
               </div>
@@ -201,7 +203,7 @@ export default function Departements() {
             }}
             pied={<>
               <Button variant="ghost" onClick={() => { const d = detail; setDetail(null); ouvrir({ ...vide(), ...d }) }}><Pencil size={15} /> Modifier</Button>
-              <Button variant="ghost" onClick={() => supprimer(detail)} style={{ color: '#dc2626' }}><Trash2 size={15} /> Supprimer</Button>
+              {peutSupprimer && <Button variant="ghost" onClick={() => supprimer(detail)} style={{ color: '#dc2626' }}><Trash2 size={15} /> Supprimer</Button>}
             </>} />
         )
       })()}

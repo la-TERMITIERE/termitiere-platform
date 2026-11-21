@@ -247,7 +247,7 @@ export default function Params() {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={icone3D('#0ea5e9')}><Info size={17} /></span>
         <div className="space-y-1">
           <p className="font-extrabold text-gray-800">Prochaine étape : passerelles automatiques</p>
-          <p>Les achats/dépenses saisis dans les autres modules (MAXI-AGRO, LOGISTIQUE, BRIQUETERIE, E-DÉPENSES, E-VOYAGE…) seront convertis automatiquement en écritures comptables (journal Achats/Caisse/Banque) selon le plan comptable ci-dessus : sur le modèle des passerelles déjà en place dans E-DÉPENSES.</p>
+          <p>Les achats/dépenses saisis dans les autres modules (MAXI-AGRO, LOGISTIQUE, BRIQUETERIE, E-DÉPENSES…) seront convertis automatiquement en écritures comptables (journal Achats/Caisse/Banque) selon le plan comptable ci-dessus : sur le modèle des passerelles déjà en place dans E-DÉPENSES.</p>
         </div>
       </div>
     </div>

@@ -18,6 +18,7 @@ import { icone3D, glassModalProps } from '../../utils/color'
 import { TYPES_CONTRAT, COL } from './store/rhStore'
 import { PageHeader, Champ, ModalRh } from './rhui'
 import DetailFiche from './DetailFiche'
+import { usePeutSupprimerRh } from './suppression'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 
 const BLEU = '#0284c7'
@@ -36,6 +37,7 @@ export default function Contrats() {
   const [prolonge, setProlonge] = useState(null) // { contrat, dateFin }
   const [resilie, setResilie] = useState(null)   // { contrat, motif, date }
   const [detailId, setDetailId] = useState(null)
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
   const today = todayStr()
   const dans30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
 
@@ -58,11 +60,17 @@ export default function Contrats() {
       dateDebut: modal.dateDebut, dateFin: modal.type === 'cdi' ? '' : (modal.dateFin || ''),
       salaire: Number(modal.salaire) || 0, poste: modal.poste || emp?.poste || ''
     }
-    if (modal.id) await updateItem(COL.contrats, modal.id, data)
-    else await addItem(COL.contrats, data)
-    toast.success('Contrat enregistré ✓'); setModal(null)
+    try {
+      if (modal.id) await updateItem(COL.contrats, modal.id, data)
+      else await addItem(COL.contrats, data)
+      toast.success(modal.id ? 'Contrat corrigé ✓' : 'Contrat enregistré ✓'); setModal(null)
+    } catch (err) { toast.error(err?.message || 'Enregistrement impossible : réessayez') }
   }
-  async function supprimer(c) { if (confirm('Supprimer ce contrat ?')) { await removeItem(COL.contrats, c.id); toast.success('Supprimé') } }
+  // La fenêtre « Motif de la suppression » sert de confirmation ; une erreur est affichée, annuler n'en est pas une.
+  async function supprimer(c) {
+    try { await removeItem(COL.contrats, c.id); toast.success('Contrat supprimé') }
+    catch (err) { if (err?.name !== 'SuppressionAnnulee' && err?.code !== 'SUPPRESSION_ANNULEE') toast.error(err?.message || 'Suppression impossible') }
+  }
 
   async function prolonger() {
     const { contrat: c, dateFin } = prolonge
@@ -76,9 +84,11 @@ export default function Contrats() {
     const { contrat: c, date } = resilie
     const motif = resilie.motif.trim()
     if (motif.length < MIN_MOTIF) return
-    await updateItem(COL.contrats, c.id, { statut: 'resilie', motifResiliation: motif, dateResiliation: date || today, resiliePar: user?.nom || '', resilieLe: new Date().toISOString() })
-    await audit('rh', 'CONTRAT_RESILIE', `${c.employeNom || empNom(c.employeId)} (${TYPES_CONTRAT[c.type]?.label || c.type}) résilié : ${motif}`)
-    toast.success('Contrat résilié'); setResilie(null)
+    try {
+      await updateItem(COL.contrats, c.id, { statut: 'resilie', motifResiliation: motif, dateResiliation: date || today, resiliePar: user?.nom || '', resilieLe: new Date().toISOString() })
+      await audit('rh', 'CONTRAT_RESILIE', `${c.employeNom || empNom(c.employeId)} (${TYPES_CONTRAT[c.type]?.label || c.type}) résilié : ${motif}`)
+      toast.success('Contrat résilié'); setResilie(null)
+    } catch (err) { toast.error(err?.message || 'Résiliation impossible : réessayez') }
   }
 
   const alertes = enrichis.filter((c) => c.echeanceProche).length
@@ -146,9 +156,9 @@ export default function Contrats() {
                     {c.resiliee && c.motifResiliation && <p className="mt-0.5 max-w-[14rem] truncate text-[11px] text-gray-400" title={c.motifResiliation}>{c.motifResiliation}</p>}
                   </td>
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    {c.valide && (
+                    {!c.resiliee && (
                       <div className="flex justify-end gap-1.5">
-                        {c.dateFin && (
+                        {c.valide && c.dateFin && (
                           <button type="button" onClick={() => setProlonge({ contrat: c, dateFin: '' })}
                             className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-gradient-to-b from-white/90 to-sky-50/70 px-2.5 py-1 text-xs font-bold text-sky-700 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_12px_-8px_rgba(2,132,199,0.6)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-sky-300 active:scale-95">
                             <CalendarPlus size={13} aria-hidden="true" /> Prolonger
@@ -161,9 +171,9 @@ export default function Contrats() {
                       </div>
                     )}
                   </td>
-                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100">
-                    <button onClick={() => setModal({ ...c })} className="rounded p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"><Pencil size={14} /></button>
-                    <button onClick={() => supprimer(c)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1 opacity-60 transition-opacity group-hover:opacity-100">
+                    <button onClick={() => setModal({ ...c })} title="Corriger le contrat" aria-label="Corriger le contrat" className="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"><Pencil size={14} /></button>
+                    {peutSupprimer && <button onClick={() => supprimer(c)} title="Supprimer le contrat" aria-label="Supprimer le contrat" className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>}
                   </div></td>
                 </tr>
               ))}
@@ -175,8 +185,9 @@ export default function Contrats() {
       <DetailFiche fiche={contratDetail ? ficheContrat(contratDetail) : null} onClose={() => setDetailId(null)}
         actions={contratDetail ? [
           ...(contratDetail.valide && contratDetail.dateFin ? [{ label: 'Prolonger', icone: CalendarPlus, tone: 'succes', onClick: () => { setProlonge({ contrat: contratDetail, dateFin: '' }); setDetailId(null) } }] : []),
-          ...(contratDetail.valide ? [{ label: 'Résilier', icone: Ban, tone: 'danger', onClick: () => { setResilie({ contrat: contratDetail, motif: '', date: today }); setDetailId(null) } }] : []),
-          { label: 'Modifier', icone: Pencil, tone: 'primaire', onClick: () => { setModal({ ...contratDetail }); setDetailId(null) } }
+          ...(!contratDetail.resiliee ? [{ label: 'Résilier', icone: Ban, tone: 'danger', onClick: () => { setResilie({ contrat: contratDetail, motif: '', date: today }); setDetailId(null) } }] : []),
+          { label: 'Modifier', icone: Pencil, tone: 'primaire', onClick: () => { setModal({ ...contratDetail }); setDetailId(null) } },
+          ...(peutSupprimer ? [{ label: 'Supprimer', icone: Trash2, tone: 'danger', onClick: () => { const c = contratDetail; setDetailId(null); supprimer(c) } }] : [])
         ] : []} />
 
       <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier le contrat' : 'Nouveau contrat'}
@@ -204,6 +215,12 @@ export default function Contrats() {
               </Champ>
             )}
           </div>
+          {modal.id && modal.statut !== 'resilie' && (
+            <button type="button" onClick={() => { setResilie({ contrat: { ...modal }, motif: '', date: today }); setModal(null) }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-gradient-to-b from-white/90 to-red-50/70 px-3.5 py-1.5 text-xs font-bold text-red-700 transition-all hover:-translate-y-0.5 hover:border-red-300 active:scale-95">
+              <Ban size={14} aria-hidden="true" /> Résilier ce contrat
+            </button>
+          )}
         </>)}
       </ModalRh>
 

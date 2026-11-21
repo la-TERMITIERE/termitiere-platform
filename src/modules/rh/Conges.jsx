@@ -1,6 +1,7 @@
 // RH — Congés & Absences (Temps & Paie). Demande + validation, avec solde.
 import { useMemo, useState } from 'react'
-import { CalendarDays, Plus, Check, X, UserRound, AlignLeft, Plane, Clock } from 'lucide-react'
+import { CalendarDays, Plus, Check, X, UserRound, AlignLeft, Plane, Clock, Pencil, Trash2 } from 'lucide-react'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
@@ -31,6 +32,7 @@ export default function Conges() {
   const [recherche, setRecherche] = useState('')
   const [modal, setModal] = useState(null)
   const [detailId, setDetailId] = useState(null)
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
 
   const empNom = (id) => employes.find((e) => e.id === id)?.nom || '—'
   const enAttente = conges.filter((c) => (c.statut || 'en_attente') === 'en_attente')
@@ -63,14 +65,23 @@ export default function Conges() {
   async function save() {
     if (!modal.employeId) return toast.error('Sélectionnez un employé')
     const emp = employes.find((e) => e.id === modal.employeId)
+    if (modal.dateFin < modal.dateDebut) return toast.error('La date de fin doit être après la date de début')
     const data = { employeId: modal.employeId, employeNom: emp?.nom || '', type: modal.type,
       dateDebut: modal.dateDebut, dateFin: modal.dateFin, jours: nbJours(modal.dateDebut, modal.dateFin),
-      motif: modal.motif || '', statut: 'en_attente' }
-    await addItem(COL.conges, data)
-    toast.success('Demande enregistrée ✓'); setModal(null)
+      motif: modal.motif || '' }
+    try {
+      // Corriger une demande garde son statut (en attente, approuvée ou refusée) ; une nouvelle demande part en attente.
+      if (modal.id) await updateItem(COL.conges, modal.id, data)
+      else await addItem(COL.conges, { ...data, statut: 'en_attente' })
+      toast.success(modal.id ? 'Demande corrigée ✓' : 'Demande enregistrée ✓'); setModal(null)
+    } catch (err) { toast.error(err?.message || 'Enregistrement impossible : réessayez') }
   }
-  async function decider(c, statut) { await updateItem(COL.conges, c.id, { statut }); toast.success(statut === 'approuve' ? 'Approuvé ✓' : 'Refusé') }
-  async function supprimer(c) { if (confirm('Supprimer cette demande ?')) await removeItem(COL.conges, c.id) }
+  async function decider(c, statut) {
+    try { await updateItem(COL.conges, c.id, { statut }); toast.success(statut === 'approuve' ? 'Approuvé ✓' : 'Refusé') }
+    catch (err) { toast.error(err?.message || 'Action impossible : réessayez') }
+  }
+  // Suppression réservée à l'administration ; la fenêtre « Motif » sert de confirmation.
+  const supprimer = (c) => supprimerAvecRetour(() => removeItem(COL.conges, c.id), 'Demande supprimée')
 
   return (
     <div className="space-y-5">
@@ -108,12 +119,14 @@ export default function Conges() {
                   <td className="px-3 py-2 text-center text-gray-500">{c.type === 'annuel' ? `${soldeConsomme[c.employeId] || 0}/${droitAnnuel}` : '—'}</td>
                   <td className="px-3 py-2"><Badge tone={STATUTS_CONGE[c.statut || 'en_attente']?.tone}>{STATUTS_CONGE[c.statut || 'en_attente']?.label}</Badge></td>
                   <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                    {(c.statut || 'en_attente') === 'en_attente' ? (
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => decider(c, 'approuve')} className="rounded p-1.5 text-green-600 hover:bg-green-50" title="Approuver"><Check size={15} /></button>
-                        <button onClick={() => decider(c, 'refuse')} className="rounded p-1.5 text-red-600 hover:bg-red-50" title="Refuser"><X size={15} /></button>
-                      </div>
-                    ) : <button onClick={() => supprimer(c)} className="text-xs text-gray-400 hover:text-red-600">Suppr.</button>}
+                    <div className="flex justify-end gap-1">
+                      {(c.statut || 'en_attente') === 'en_attente' && (<>
+                        <button onClick={() => decider(c, 'approuve')} className="rounded p-1.5 text-green-600 hover:bg-green-50" title="Approuver" aria-label="Approuver"><Check size={15} /></button>
+                        <button onClick={() => decider(c, 'refuse')} className="rounded p-1.5 text-red-600 hover:bg-red-50" title="Refuser" aria-label="Refuser"><X size={15} /></button>
+                      </>)}
+                      <button onClick={() => setModal({ ...c })} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" title="Corriger la demande" aria-label="Corriger la demande"><Pencil size={14} /></button>
+                      {peutSupprimer && <button onClick={() => supprimer(c)} className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600" title="Supprimer la demande" aria-label="Supprimer la demande"><Trash2 size={14} /></button>}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -123,13 +136,17 @@ export default function Conges() {
       </Card>
 
       <DetailFiche fiche={congeDetail ? ficheConge(congeDetail) : null} onClose={() => setDetailId(null)}
-        actions={congeDetail && (congeDetail.statut || 'en_attente') === 'en_attente' ? [
-          { label: 'Refuser', icone: X, tone: 'danger', onClick: () => { decider(congeDetail, 'refuse'); setDetailId(null) } },
-          { label: 'Approuver', icone: Check, tone: 'succes', onClick: () => { decider(congeDetail, 'approuve'); setDetailId(null) } }
+        actions={congeDetail ? [
+          ...((congeDetail.statut || 'en_attente') === 'en_attente' ? [
+            { label: 'Refuser', icone: X, tone: 'danger', onClick: () => { decider(congeDetail, 'refuse'); setDetailId(null) } },
+            { label: 'Approuver', icone: Check, tone: 'succes', onClick: () => { decider(congeDetail, 'approuve'); setDetailId(null) } }
+          ] : []),
+          { label: 'Corriger', icone: Pencil, tone: 'primaire', onClick: () => { setModal({ ...congeDetail }); setDetailId(null) } },
+          ...(peutSupprimer ? [{ label: 'Supprimer', icone: Trash2, tone: 'danger', onClick: () => { const c = congeDetail; setDetailId(null); supprimer(c) } }] : [])
         ] : []} />
 
-      <ModalRh open={!!modal} onClose={() => setModal(null)} title="Nouvelle demande de congé" libelleSave="Envoyer la demande"
-        icone={Plane} intro="La demande part en attente : un responsable la valide ou la refuse." onSave={save}>
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Corriger la demande de congé' : 'Nouvelle demande de congé'} libelleSave={modal?.id ? 'Enregistrer' : 'Envoyer la demande'}
+        icone={Plane} intro={modal?.id ? 'Corrigez les informations : le statut de la demande ne change pas.' : 'La demande part en attente : un responsable la valide ou la refuse.'} onSave={save}>
         {modal && (<>
           <Champ label="Employé" icone={UserRound} required>
             <select value={modal.employeId} onChange={(e) => setModal({ ...modal, employeId: e.target.value })} className="input-base">

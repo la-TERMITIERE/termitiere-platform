@@ -16,6 +16,7 @@
 import { getAll, updateAtomic } from '../../core/db'
 import { getInventaire, previousInventoryDate, autoSorties } from './logic'
 import { estCertifie } from '../../shared/workflow'
+import { propagerSuite } from './propagation'
 
 export async function appliquerDemandeAuStock(demande) {
   try {
@@ -65,6 +66,7 @@ export async function appliquerDemandeAuStock(demande) {
       }
       return { ...cur, [kind]: { ...(cur[kind] || {}), [articleId]: node } }
     })
+    await propagerSuite(dateSortie) // les jours suivants repartent du nouvel EF Final
   } catch (e) {
     // best effort : ne jamais bloquer l'approbation à cause du décompte stock.
     console.warn('[applyDemande] échec application au stock :', e)

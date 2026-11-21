@@ -12,6 +12,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
 import { avatarGradient } from '../../utils/color'
+import { supprimerAvecRetour } from './suppression'
 import { STATUTS_AVANCE, COL } from './store/rhStore'
 import { PageHeader, Champ, ModalRh, ChoixSimple } from './rhui'
 import DetailAvance, { BarreRemboursement, moisEnClair } from './DetailAvance'
@@ -70,7 +71,7 @@ export default function Avances() {
     }
     setModal(null); setTente(false)
   }
-  async function supprimer(a) { setDetailId(null); await removeItem(COL.avances, a.id); toast.success('Demande supprimée') }
+  async function supprimer(a) { setDetailId(null); await supprimerAvecRetour(() => removeItem(COL.avances, a.id), 'Demande supprimée') }
 
   return (
     <div className="space-y-5">

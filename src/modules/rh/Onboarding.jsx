@@ -1,6 +1,7 @@
 // RH : Arrivées et départs (onboarding / offboarding). La RH programme un parcours à une date précise (ex. l'employé arrive lundi) :
 // les étapes types sont proposées avec leurs dates (J-3, J0, J+7…), modifiables, puis suivies une à une (À faire, En cours, Fait).
 // Les étapes du jour et en retard sont signalées à la RH ici et sur le tableau de bord.
+import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useMemo, useState } from 'react'
 import { Repeat, Plus, CalendarPlus, LogIn, LogOut, Trash2, Check, Clock3, CalendarClock, AlertTriangle, ListChecks, UserRound, FileText, CalendarDays } from 'lucide-react'
 import { useCollection } from '../../hooks/useFirestore'
@@ -10,6 +11,7 @@ import { todayStr, addDays, formatDateShort } from '../../utils/formatters'
 import { avatarGradient } from '../../utils/color'
 import { COL } from './store/rhStore'
 import { PageHeader, Champ, ModalRh } from './rhui'
+import { usePeutSupprimerRh } from './suppression'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 import { TuileVerre } from '../../shared/ui/ParamsVerre'
 
@@ -52,7 +54,10 @@ const jourLong = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR
 const jourCourt = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Sans date')
 
 export default function Onboarding() {
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
   const { data: employes } = useCollection(COL.employes)
+  // Personnes proposées pour « Responsable » : les employés de l'annuaire RH.
+  const personnes = useMemo(() => employes.filter((e) => (e.statut || 'actif') !== 'sorti').map((e) => ({ nom: e.nom, detail: [e.poste, e.departement].filter(Boolean).join(' · ') })), [employes])
   const { data: etapes } = useCollection(COL.onboarding)
   const aujourdhui = todayStr()
   const [filtreType, setFiltreType] = useState('')
@@ -228,8 +233,8 @@ export default function Onboarding() {
                           className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-extrabold transition-all hover:-translate-y-0.5 active:scale-95 ${st.classe}`}>
                           {e.statut === 'fait' && <Check size={11} className="mr-0.5 inline" aria-hidden="true" />}{st.label}
                         </button>
-                        <button type="button" onClick={() => supprimer(e)} aria-label={`Supprimer l'étape ${e.etape}`} title="Supprimer"
-                          className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
+                        {peutSupprimer && <button type="button" onClick={() => supprimer(e)} aria-label={`Supprimer l'étape ${e.etape}`} title="Supprimer"
+                          className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>}
                       </li>
                     )
                   })}
@@ -267,7 +272,7 @@ export default function Onboarding() {
             </div>
           </Champ>
           <Champ label="Responsable RH" icone={UserRound} aide="Facultatif : la personne chargée de suivre ces étapes.">
-            <input value={programme.responsable} onChange={(e) => setProgramme({ ...programme, responsable: e.target.value })} className="input-base" placeholder="Nom du responsable RH" />
+            <ChampAutocomplete accent="sky" className="input-base" value={programme.responsable} onChange={(v) => setProgramme({ ...programme, responsable: v })} suggestions={personnes} getLabel={(e) => e.nom} getDetail={(e) => e.detail} maxSuggestions={10} placeholder="Choisissez un employé de l'Annuaire" emptyLabel="Aucun employé correspondant : votre saisie sera utilisée." />
           </Champ>
           <div className="fg-tuile">
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500"><ListChecks size={13} aria-hidden="true" /> Étapes proposées : décochez, renommez ou changez la date</p>
@@ -310,7 +315,7 @@ export default function Onboarding() {
               <input type="date" value={simple.datePrevue} onChange={(e) => setSimple({ ...simple, datePrevue: e.target.value })} className="input-base" />
             </Champ>
             <Champ label="Responsable" icone={UserRound}>
-              <input value={simple.responsable} onChange={(e) => setSimple({ ...simple, responsable: e.target.value })} className="input-base" placeholder="Personne chargée de cette étape" />
+              <ChampAutocomplete accent="sky" className="input-base" value={simple.responsable} onChange={(v) => setSimple({ ...simple, responsable: v })} suggestions={personnes} getLabel={(e) => e.nom} getDetail={(e) => e.detail} maxSuggestions={10} placeholder="Choisissez un employé de l'Annuaire" emptyLabel="Aucun employé correspondant : votre saisie sera utilisée." />
             </Champ>
           </div>
         </>)}
