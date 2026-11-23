@@ -1,5 +1,5 @@
 // RH : Arrivées et départs (onboarding / offboarding). La RH programme un parcours à une date précise (ex. l'employé arrive lundi) :
-// les étapes types sont proposées avec leurs dates (J-3, J0, J+7…), modifiables, puis suivies une à une (À faire, En cours, Fait).
+// elle saisit elle-même chaque étape et sa date (rien n'est proposé d'office), puis les étapes sont suivies une à une (À faire, En cours, Fait).
 // Les étapes du jour et en retard sont signalées à la RH ici et sur le tableau de bord.
 import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { useMemo, useState } from 'react'
@@ -26,29 +26,8 @@ const STATUTS = {
 }
 const SUIVANT = { a_faire: 'en_cours', en_cours: 'fait', fait: 'a_faire' }
 
-// Étapes types : j = décalage en jours par rapport à la date d'arrivée (ou de départ).
-const MODELES = {
-  onboarding: [
-    { j: -3, etape: 'Préparer le poste de travail et le matériel' },
-    { j: -2, etape: 'Créer les accès et le compte' },
-    { j: -1, etape: 'Préparer le contrat et les documents à signer' },
-    { j: 0, etape: "Accueil et arrivée de l'employé" },
-    { j: 0, etape: 'Signature du contrat et des documents' },
-    { j: 0, etape: 'Remise du matériel' },
-    { j: 0, etape: "Présentation à l'équipe" },
-    { j: 7, etape: 'Point de la première semaine' },
-    { j: 30, etape: 'Bilan du premier mois' }
-  ],
-  offboarding: [
-    { j: -14, etape: 'Notification et préavis' },
-    { j: -7, etape: 'Transmission des dossiers en cours' },
-    { j: 0, etape: 'Restitution du matériel et des clés' },
-    { j: 0, etape: 'Retrait des accès' },
-    { j: 0, etape: 'Entretien de départ' },
-    { j: 0, etape: 'Solde de tout compte et certificat de travail' }
-  ]
-}
-const lignesModele = (type, date) => MODELES[type].map((m) => ({ etape: m.etape, date: addDays(date, m.j), coche: true }))
+// Une ligne d'étape vide : la RH saisit elle-même chaque étape et sa date (aucune étape n'est proposée d'office).
+const ligneVide = (date) => ({ etape: '', date: date || '' })
 
 const jourLong = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '')
 const jourCourt = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Sans date')
@@ -79,7 +58,7 @@ export default function Onboarding() {
     const m = new Map()
     etapes.forEach((e) => {
       const cle = `${e.employeId || e.employeNom}|${e.type}|${e.dateParcours || ''}`
-      if (!m.has(cle)) m.set(cle, { cle, employeId: e.employeId, nom: e.employeNom || employes.find((x) => x.id === e.employeId)?.nom || 'Employé', type: e.type, date: e.dateParcours || '', etapes: [] })
+      if (!m.has(cle)) m.set(cle, { cle, employeId: e.employeId, dateParcours: e.dateParcours || '', nom: e.employeNom || employes.find((x) => x.id === e.employeId)?.nom || 'Employé', type: e.type, date: e.dateParcours || '', etapes: [] })
       m.get(cle).etapes.push(e)
     })
     return [...m.values()].map((p) => {
@@ -114,17 +93,15 @@ export default function Onboarding() {
   }
 
   // ----- Programmer un parcours -----
-  const ouvrirProgramme = () => { setTente(false); setProgramme({ employeId: '', type: 'onboarding', date: addDays(aujourdhui, 1), responsable: '', lignes: lignesModele('onboarding', addDays(aujourdhui, 1)) }) }
-  const majProgramme = (champs) => setProgramme((p) => {
-    const suivant = { ...p, ...champs }
-    // changer le parcours ou la date recalcule les dates des étapes types
-    return ('type' in champs || 'date' in champs) && suivant.date ? { ...suivant, lignes: lignesModele(suivant.type, suivant.date) } : suivant
-  })
+  const ouvrirProgramme = () => { setTente(false); setProgramme({ employeId: '', type: 'onboarding', date: addDays(aujourdhui, 1), responsable: '', lignes: [ligneVide(addDays(aujourdhui, 1))] }) }
+  const majProgramme = (champs) => setProgramme((p) => ({ ...p, ...champs }))
   const majLigne = (i, champs) => setProgramme((p) => ({ ...p, lignes: p.lignes.map((l, k) => (k === i ? { ...l, ...champs } : l)) }))
+  const ajouterLigne = () => setProgramme((p) => ({ ...p, lignes: [...p.lignes, ligneVide(p.lignes[p.lignes.length - 1]?.date || p.date)] }))
+  const retirerLigne = (i) => setProgramme((p) => ({ ...p, lignes: p.lignes.length > 1 ? p.lignes.filter((_, k) => k !== i) : [ligneVide(p.date)] }))
   async function enregistrerProgramme() {
     const emp = employes.find((x) => x.id === programme.employeId)
-    const retenues = programme.lignes.filter((l) => l.coche && l.etape.trim())
-    if (!emp || !programme.date || !retenues.length) { setTente(true); return toast.error(!emp ? "Choisissez l'employé" : !programme.date ? 'Indiquez la date' : 'Gardez au moins une étape') }
+    const retenues = programme.lignes.filter((l) => l.etape.trim())
+    if (!emp || !programme.date || !retenues.length) { setTente(true); return toast.error(!emp ? "Choisissez l'employé" : !programme.date ? 'Indiquez la date' : 'Saisissez au moins une étape') }
     await Promise.all(retenues.map((l) => addItem(COL.onboarding, {
       employeId: emp.id, employeNom: emp.nom, type: programme.type, etape: l.etape.trim(), responsable: programme.responsable.trim(),
       statut: 'a_faire', datePrevue: l.date || programme.date, dateParcours: programme.date
@@ -133,12 +110,20 @@ export default function Onboarding() {
     setProgramme(null)
   }
 
-  // ----- Une étape isolée -----
+  // ----- Ajouter une ou plusieurs étapes à un employé (nouveau parcours ou parcours existant) -----
+  const ouvrirAjout = (champs = {}) => { setTente(false); setSimple({ employeId: '', type: 'onboarding', responsable: '', dateParcours: '', fige: false, lignes: [ligneVide(aujourdhui)], ...champs }) }
+  const majAjoutLigne = (i, champs) => setSimple((p) => ({ ...p, lignes: p.lignes.map((l, k) => (k === i ? { ...l, ...champs } : l)) }))
+  const ajouterAjoutLigne = () => setSimple((p) => ({ ...p, lignes: [...p.lignes, ligneVide(p.lignes[p.lignes.length - 1]?.date || aujourdhui)] }))
+  const retirerAjoutLigne = (i) => setSimple((p) => ({ ...p, lignes: p.lignes.length > 1 ? p.lignes.filter((_, k) => k !== i) : [ligneVide(aujourdhui)] }))
   async function enregistrerSimple() {
     const emp = employes.find((x) => x.id === simple.employeId)
-    if (!emp || !simple.etape.trim()) { setTente(true); return toast.error(!emp ? "Choisissez l'employé" : "Indiquez l'étape") }
-    await addItem(COL.onboarding, { employeId: emp.id, employeNom: emp.nom, type: simple.type, etape: simple.etape.trim(), responsable: simple.responsable.trim(), statut: simple.statut, datePrevue: simple.datePrevue || '' })
-    toast.success('Étape ajoutée ✓')
+    const retenues = simple.lignes.filter((l) => l.etape.trim())
+    if (!emp || !retenues.length) { setTente(true); return toast.error(!emp ? "Choisissez l'employé" : 'Saisissez au moins une étape') }
+    await Promise.all(retenues.map((l) => addItem(COL.onboarding, {
+      employeId: emp.id, employeNom: emp.nom, type: simple.type, etape: l.etape.trim(), responsable: simple.responsable.trim(),
+      statut: 'a_faire', datePrevue: l.date || '', ...(simple.dateParcours ? { dateParcours: simple.dateParcours } : {})
+    })))
+    toast.success(retenues.length > 1 ? `${retenues.length} étapes ajoutées pour ${emp.nom} ✓` : 'Étape ajoutée ✓')
     setSimple(null)
   }
 
@@ -147,7 +132,7 @@ export default function Onboarding() {
       <PageHeader icon={Repeat} sousModule="Collaborateurs & Contrats" titre="Onboarding / Offboarding" sousTitre="Parcours d'intégration des nouveaux et de départ des sortants."
         action={<>
           <BoutonBande anime icone={CalendarPlus} onClick={ouvrirProgramme}>Programmer un parcours</BoutonBande>
-          <BoutonBande plein={false} icone={Plus} onClick={() => { setTente(false); setSimple({ employeId: '', type: 'onboarding', etape: '', datePrevue: aujourdhui, responsable: '', statut: 'a_faire' }) }}>Nouvelle étape</BoutonBande>
+          <BoutonBande plein={false} icone={Plus} onClick={() => ouvrirAjout()}>Ajouter des étapes</BoutonBande>
         </>} />
 
       {alertes.length > 0 && (
@@ -189,7 +174,7 @@ export default function Onboarding() {
         <div className="ed-entree flex flex-col items-center gap-3 rounded-3xl border border-white/80 bg-white/60 px-6 py-12 text-center backdrop-blur-xl">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl text-white" style={{ background: 'linear-gradient(135deg,#0284c7,#0369a1)' }}><ListChecks size={26} /></span>
           <p className="text-base font-bold text-gray-800">{etapes.length ? 'Aucun parcours dans ce filtre' : 'Aucun parcours programmé'}</p>
-          <p className="max-w-sm text-sm text-gray-500">Programmez l'arrivée ou le départ d'un employé : les étapes types sont proposées avec leurs dates, que vous pouvez adapter.</p>
+          <p className="max-w-sm text-sm text-gray-500">Programmez l'arrivée ou le départ d'un employé : saisissez vous-même chaque étape et sa date, autant d'étapes que nécessaire.</p>
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -239,6 +224,10 @@ export default function Onboarding() {
                     )
                   })}
                 </ol>
+                <button type="button" onClick={() => ouvrirAjout({ employeId: p.employeId || '', type: p.type, dateParcours: p.dateParcours, responsable: p.etapes.find((e) => e.responsable)?.responsable || '', fige: !!p.employeId })}
+                  className="relative mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] transition-all hover:-translate-y-0.5 active:scale-95" style={{ color: t.couleur }}>
+                  <Plus size={13} aria-hidden="true" /> Ajouter une étape
+                </button>
               </section>
             )
           })}
@@ -275,25 +264,27 @@ export default function Onboarding() {
             <ChampAutocomplete accent="sky" className="input-base" value={programme.responsable} onChange={(v) => setProgramme({ ...programme, responsable: v })} suggestions={personnes} getLabel={(e) => e.nom} getDetail={(e) => e.detail} maxSuggestions={10} placeholder="Choisissez un employé de l'Annuaire" emptyLabel="Aucun employé correspondant : votre saisie sera utilisée." />
           </Champ>
           <div className="fg-tuile">
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500"><ListChecks size={13} aria-hidden="true" /> Étapes proposées : décochez, renommez ou changez la date</p>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500"><ListChecks size={13} aria-hidden="true" /> Étapes du parcours : saisissez chaque étape et sa date</p>
             <ul className="space-y-1.5">
               {programme.lignes.map((l, i) => (
                 <li key={i} className="flex flex-wrap items-center gap-2">
-                  <input type="checkbox" checked={l.coche} onChange={(e) => majLigne(i, { coche: e.target.checked })} className="h-4 w-4 shrink-0 accent-sky-600" aria-label={`Garder l'étape ${l.etape}`} />
-                  <input value={l.etape} onChange={(e) => majLigne(i, { etape: e.target.value })} className={`input-base !py-1.5 min-w-0 flex-1 text-sm ${l.coche ? '' : 'opacity-50'}`} />
-                  <input type="date" value={l.date} onChange={(e) => majLigne(i, { date: e.target.value })} className={`input-base !w-auto !py-1.5 text-sm ${l.coche ? '' : 'opacity-50'}`} />
+                  <input value={l.etape} onChange={(e) => majLigne(i, { etape: e.target.value })} className="input-base !py-1.5 min-w-0 flex-1 text-sm" placeholder={programme.type === 'onboarding' ? 'Ex. Remise du matériel, création des accès' : 'Ex. Restitution du matériel, solde de tout compte'} aria-label={`Étape ${i + 1}`} />
+                  <input type="date" value={l.date} onChange={(e) => majLigne(i, { date: e.target.value })} className="input-base !w-auto !py-1.5 text-sm" aria-label={`Date de l'étape ${i + 1}`} />
+                  <button type="button" onClick={() => retirerLigne(i)} title="Retirer cette étape" aria-label="Retirer cette étape" className="rounded-xl p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
                 </li>
               ))}
             </ul>
+            <button type="button" onClick={ajouterLigne} className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50/70 px-3.5 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100"><Plus size={13} aria-hidden="true" /> Ajouter une étape</button>
           </div>
         </>)}
       </ModalRh>
 
-      {/* Une étape isolée */}
-      <ModalRh open={!!simple} onClose={() => setSimple(null)} title="Nouvelle étape" icone={Plus} intro="Une étape à ajouter à un parcours, avec sa date prévue." onSave={enregistrerSimple}>
+      {/* Ajouter une ou plusieurs étapes à un employé */}
+      <ModalRh open={!!simple} onClose={() => setSimple(null)} title="Ajouter des étapes" icone={Plus} size="lg" libelleSave="Enregistrer les étapes"
+        intro="Une ou plusieurs étapes pour un employé, chacune avec sa date. Vous pouvez en ajouter autant que nécessaire." onSave={enregistrerSimple}>
         {simple && (<>
           <Champ label="Employé" icone={UserRound} required erreur={tente && !simple.employeId ? "Choisissez l'employé." : undefined}>
-            <select value={simple.employeId} onChange={(e) => setSimple({ ...simple, employeId: e.target.value })} className="input-base">
+            <select value={simple.employeId} disabled={simple.fige} onChange={(e) => setSimple({ ...simple, employeId: e.target.value })} className="input-base">
               <option value="">Choisissez l'employé concerné</option>
               {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
             </select>
@@ -302,21 +293,26 @@ export default function Onboarding() {
             <div className="flex gap-2" role="group">
               {Object.entries(TYPES).map(([v, t]) => {
                 const Ic = t.icone
-                return <button key={v} type="button" aria-pressed={simple.type === v} onClick={() => setSimple({ ...simple, type: v })} data-actif={simple.type === v}
+                return <button key={v} type="button" aria-pressed={simple.type === v} disabled={simple.fige} onClick={() => setSimple({ ...simple, type: v })} data-actif={simple.type === v}
                   className="puce-verre inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold" style={{ '--puce': t.couleur }}><Ic size={13} aria-hidden="true" />{t.label}</button>
               })}
             </div>
           </Champ>
-          <Champ label="Étape" icone={FileText} required erreur={tente && !simple.etape.trim() ? "Indiquez l'étape." : undefined}>
-            <input value={simple.etape} onChange={(e) => setSimple({ ...simple, etape: e.target.value })} className="input-base" placeholder="Ex. Remise du matériel, Création des accès" autoFocus />
+          <Champ label="Responsable" icone={UserRound} aide="Facultatif : la personne chargée de suivre ces étapes.">
+            <ChampAutocomplete accent="sky" className="input-base" value={simple.responsable} onChange={(v) => setSimple({ ...simple, responsable: v })} suggestions={personnes} getLabel={(e) => e.nom} getDetail={(e) => e.detail} maxSuggestions={10} placeholder="Choisissez un employé de l'Annuaire" emptyLabel="Aucun employé correspondant : votre saisie sera utilisée." />
           </Champ>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Champ label="Date prévue" icone={CalendarDays}>
-              <input type="date" value={simple.datePrevue} onChange={(e) => setSimple({ ...simple, datePrevue: e.target.value })} className="input-base" />
-            </Champ>
-            <Champ label="Responsable" icone={UserRound}>
-              <ChampAutocomplete accent="sky" className="input-base" value={simple.responsable} onChange={(v) => setSimple({ ...simple, responsable: v })} suggestions={personnes} getLabel={(e) => e.nom} getDetail={(e) => e.detail} maxSuggestions={10} placeholder="Choisissez un employé de l'Annuaire" emptyLabel="Aucun employé correspondant : votre saisie sera utilisée." />
-            </Champ>
+          <div className="fg-tuile">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500"><ListChecks size={13} aria-hidden="true" /> Étapes : saisissez chaque étape et sa date</p>
+            <ul className="space-y-1.5">
+              {simple.lignes.map((l, i) => (
+                <li key={i} className="flex flex-wrap items-center gap-2">
+                  <input value={l.etape} onChange={(e) => majAjoutLigne(i, { etape: e.target.value })} className="input-base !py-1.5 min-w-0 flex-1 text-sm" placeholder="Ex. Remise du matériel, création des accès" aria-label={`Étape ${i + 1}`} autoFocus={i === 0} />
+                  <input type="date" value={l.date} onChange={(e) => majAjoutLigne(i, { date: e.target.value })} className="input-base !w-auto !py-1.5 text-sm" aria-label={`Date de l'étape ${i + 1}`} />
+                  <button type="button" onClick={() => retirerAjoutLigne(i)} title="Retirer cette étape" aria-label="Retirer cette étape" className="rounded-xl p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={ajouterAjoutLigne} className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50/70 px-3.5 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100"><Plus size={13} aria-hidden="true" /> Ajouter une étape</button>
           </div>
         </>)}
       </ModalRh>

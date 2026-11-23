@@ -188,6 +188,13 @@
       // Les lectures (« qui a lu quoi ») et les fichiers joints suivent la règle générale ci-dessous.
       "annonces": { ".read": "auth != null", ".write": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(super_admin|pau|assistant_pau|ge|df|directeur|rh|admin|info)$/)" },
 
+      // Demandes d'accès (création de compte en libre-service) : lues par la RH et Info seulement.
+      // AUCUNE écriture depuis un navigateur : tout passe par netlify/functions/acces.js (SDK Admin, qui ignore ces règles).
+      // Le mot de passe haché de la demande et le compteur anti-abus ne sont lisibles par personne.
+      "demandes_acces":        { ".read": "auth != null && root.child('tp/users').child(auth.uid).child('role').val().matches(/^(rh|info)$/)", ".write": false, ".indexOn": ["login"] },
+      "demandes_acces_secret": { ".read": false, ".write": false },
+      "demandes_acces_limite": { ".read": false, ".write": false },
+
       // Collections métier : authentification exigée.
       "$other": {
         ".read": "auth != null",

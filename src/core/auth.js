@@ -140,7 +140,10 @@ function sessionFromProfile(p) {
     nom: p.nom || 'Utilisateur',
     role,
     // Les rôles « voit tout » (accès total + superviseur) reçoivent tous les modules.
-    modules: isViewAllRole(role) ? ALL_MODULES.filter((id) => !(Array.isArray(p.modulesRetires) && p.modulesRetires.includes(id))) : (p.modules || []),
+    // E-TACHES est ouvert à TOUS les employés par défaut (sauf retrait explicite par Info via `modulesRetires`).
+    modules: isViewAllRole(role)
+      ? ALL_MODULES.filter((id) => !(Array.isArray(p.modulesRetires) && p.modulesRetires.includes(id)))
+      : [...new Set([...(p.modules || []), ...(Array.isArray(p.modulesRetires) && p.modulesRetires.includes('taches') ? [] : ['taches'])])],
     // Droits de saisie par catégorie d'animaux (Maxi-Agro). null = aucune restriction
     // (comptes hérités) ; tableau (même vide) = restriction explicite.
     agroCategories: Array.isArray(p.agroCategories) ? p.agroCategories : null,

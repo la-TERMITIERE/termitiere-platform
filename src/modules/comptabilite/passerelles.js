@@ -119,6 +119,7 @@ export function ecrituresDepuisBulletins(bulletins = []) {
       // Part patronale = CNSS (17,5 %) + AMU (5 %).
       const cnssEmp = (Number(b.cnssEmployeur) || 0) + (Number(b.amuEmployeur) || 0)
       const its = Number(b.its) || 0
+      const amuSal = Number(b.amuSalarie) || 0 // AMU retenue sur le salaire : due à l'organisme, l'écriture reste équilibrée
       const retenueAvance = Number(b.retenueAvances) || 0 // avance ou prêt retenu sur le net : l'écriture reste équilibrée
       const libelle = `Paie ${b.mois || ''} : ${b.employeNom || ''}`.trim()
       const lignes = [
@@ -127,6 +128,7 @@ export function ecrituresDepuisBulletins(bulletins = []) {
         { compte: '431000', libelle, debit: 0, credit: cnssSal },
         { compte: '447000', libelle, debit: 0, credit: its }
       ]
+      if (amuSal > 0) lignes.push({ compte: '431000', libelle: `${libelle} : AMU salarié`, debit: 0, credit: amuSal })
       if (retenueAvance > 0) lignes.push({ compte: '425000', libelle, debit: 0, credit: retenueAvance })
       // Part patronale CNSS (charge de l'employeur) — n'impacte pas le net.
       if (cnssEmp > 0) {

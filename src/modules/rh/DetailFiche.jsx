@@ -1,6 +1,7 @@
 // RH : fenêtre de détail d'une fiche (employé, contrat, congé, bulletin, ligne d'une liste…). S'ouvre au clic sur une ligne.
 // Verre dépoli teinté du bleu du module : en-tête (initiale, titre, statut), tuiles d'informations, puis actions (Modifier, Supprimer…).
-//   fiche : { titre, sous, couleur, badge: { label, tone }, tuiles: [{ icone, label, valeur, large }], note }
+//   fiche : { titre, sous, couleur, badge: { label, tone }, tuiles: [{ icone, label, valeur, large } | { section: 'Catégorie' }], note }
+//   Une entrée { section } est un intertitre qui regroupe les tuiles suivantes par catégorie (masqué si aucune tuile ne le suit).
 //   actions : [{ label, icone, onClick, tone: 'primaire' | 'danger' | 'neutre' }]
 import { Info } from 'lucide-react'
 import Modal from '../../shared/ui/Modal'
@@ -13,7 +14,11 @@ const COULEURS_ACTION = { primaire: '#0284c7', danger: '#dc2626', succes: '#16a3
 export default function DetailFiche({ fiche, actions = [], onClose }) {
   if (!fiche) return null
   const { titre, sous, couleur = '#0284c7', badge, tuiles = [], note, enfants } = fiche
-  const visibles = tuiles.filter((t) => t.valeur !== undefined && t.valeur !== null && t.valeur !== '')
+  // Les tuiles vides disparaissent ; un intertitre sans tuile derrière lui disparaît aussi.
+  const visibles = tuiles.filter((t, i) => {
+    if (t.section) { const suiv = tuiles.slice(i + 1).find((x) => x.section || (x.valeur !== undefined && x.valeur !== null && x.valeur !== '')); return !!suiv && !suiv.section }
+    return t.valeur !== undefined && t.valeur !== null && t.valeur !== ''
+  })
   return (
     <Modal open onClose={onClose} size="lg" title="Détails" {...glassModalProps(couleur)}
       footer={<>
@@ -42,7 +47,11 @@ export default function DetailFiche({ fiche, actions = [], onClose }) {
 
         {visibles.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-2">
-            {visibles.map((t, i) => (
+            {visibles.map((t, i) => t.section ? (
+              <p key={`section-${i}`} className="ed-entree mt-1 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-500 sm:col-span-2" style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}>
+                <span className="h-px flex-1 bg-gray-300/60" aria-hidden="true" /><span style={{ color: t.couleur || couleur }}>{t.section}</span><span className="h-px flex-1 bg-gray-300/60" aria-hidden="true" />
+              </p>
+            ) : (
               <div key={t.label} className={`ed-entree flex items-start gap-3 rounded-2xl border border-white/80 bg-white/70 px-3 py-2.5 shadow-[0_8px_18px_-14px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md ${t.large ? 'sm:col-span-2' : ''}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}>
                 {t.icone && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]" style={{ background: `linear-gradient(145deg, color-mix(in srgb, ${t.couleur || couleur} 70%, white), ${t.couleur || couleur})` }}><t.icone size={15} aria-hidden="true" /></span>}

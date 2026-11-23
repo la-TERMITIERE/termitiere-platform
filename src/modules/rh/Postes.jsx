@@ -156,7 +156,7 @@ export default function Postes() {
         </div>
       )}
 
-      {/* Fiche d'un poste : ses chiffres clés et les agents qui l'occupent. */}
+      {/* Fiche d'un poste : ses chiffres clés et les employés qui l'occupent. */}
       {detail && (() => {
         const v = visuelDe(detail)
         const agents = employes.filter((e) => norme(e.poste) === norme(detail.intitule))
@@ -166,7 +166,7 @@ export default function Postes() {
               titre: detail.intitule, icone: v.Icone, logo: v.logo, couleur: v.couleur,
               sous: `${detail.departement || 'Sans département'}${detail.missions ? ' : ' + detail.missions : ''}`,
               tuiles: [
-                { icone: Users, titre: 'Agents', valeur: agents.length },
+                { icone: Users, titre: 'Employés', valeur: agents.length },
                 { icone: Banknote, titre: 'Salaire de base', valeur: detail.salaireBase ? formatMoney(detail.salaireBase) : 'Non défini' },
                 { icone: Layers, titre: 'Classification', valeur: detail.classification || 'Non définie' }
               ],

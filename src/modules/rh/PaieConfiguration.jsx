@@ -15,6 +15,7 @@ export default function PaieConfiguration() {
   const existant = config.find((c) => c.id === 'paie')
   const [form, setForm] = useState(() => ({
     tauxCnssSalarie: (existant?.tauxCnssSalarie ?? PAIE_CONFIG_DEFAUT.tauxCnssSalarie) * 100,
+    tauxAmuSalarie: (existant?.tauxAmuSalarie ?? PAIE_CONFIG_DEFAUT.tauxAmuSalarie) * 100,
     tauxCnssEmployeur: (existant?.tauxCnssEmployeur ?? PAIE_CONFIG_DEFAUT.tauxCnssEmployeur) * 100,
     tauxAmuEmployeur: (existant?.tauxAmuEmployeur ?? PAIE_CONFIG_DEFAUT.tauxAmuEmployeur) * 100,
     bareme: (existant?.bareme ?? PAIE_CONFIG_DEFAUT.bareme).map((t) => ({ plafond: t.plafond === Infinity ? '' : t.plafond, taux: t.taux * 100 }))
@@ -25,6 +26,7 @@ export default function PaieConfiguration() {
     const bareme = form.bareme.map((t) => ({ plafond: t.plafond === '' ? Infinity : Number(t.plafond), taux: Number(t.taux) / 100 }))
     await setItem(COL.config, 'paie', {
       tauxCnssSalarie: Number(form.tauxCnssSalarie) / 100,
+      tauxAmuSalarie: Number(form.tauxAmuSalarie) / 100,
       tauxCnssEmployeur: Number(form.tauxCnssEmployeur) / 100,
       tauxAmuEmployeur: Number(form.tauxAmuEmployeur) / 100,
       bareme, devise: 'XOF'
@@ -34,6 +36,7 @@ export default function PaieConfiguration() {
 
   const configLive = {
     tauxCnssSalarie: Number(form.tauxCnssSalarie) / 100,
+    tauxAmuSalarie: Number(form.tauxAmuSalarie) / 100,
     tauxCnssEmployeur: Number(form.tauxCnssEmployeur) / 100,
     tauxAmuEmployeur: Number(form.tauxAmuEmployeur) / 100,
     bareme: form.bareme.map((t) => ({ plafond: t.plafond === '' ? Infinity : Number(t.plafond), taux: Number(t.taux) / 100 }))
@@ -47,14 +50,24 @@ export default function PaieConfiguration() {
       <PageHeader icon={Settings} sousModule="Paramètres" titre="Configuration de la paie" sousTitre="Taux de cotisation et barème d'imposition appliqués au calcul des bulletins." />
 
       <ParamsGrille>
-        <ParamsCarte icone={Percent} couleur="#0284c7" titre="Cotisations et charges patronales" sous="Taux en % du salaire brut">
+        {/* Catégorie 1 : ce qui est retiré du salaire de l'employé */}
+        <ParamsCarte icone={Percent} couleur="#dc2626" titre="Retenues sur le salaire de l'employé" sous="Retirées du brut avant le versement du net">
           <div className="grid grid-cols-2 gap-3">
-            <Champ iconeLabel icone={Percent} label="Taux salarié (%)"><input type="number" step="0.1" placeholder="Ex. 4" value={form.tauxCnssSalarie} onChange={(e) => setForm({ ...form, tauxCnssSalarie: e.target.value })} className="input-base" /></Champ>
+            <Champ iconeLabel icone={Percent} label="CNSS salarié (%)"><input type="number" step="0.1" placeholder="Ex. 4" value={form.tauxCnssSalarie} onChange={(e) => setForm({ ...form, tauxCnssSalarie: e.target.value })} className="input-base" /></Champ>
+            <Champ iconeLabel icone={Percent} label="AMU salarié (%)"><input type="number" step="0.1" placeholder="Ex. 5" value={form.tauxAmuSalarie} onChange={(e) => setForm({ ...form, tauxAmuSalarie: e.target.value })} className="input-base" /></Champ>
+            <Champ iconeLabel icone={Layers} label="Total cotisations salarié (%)"><div className="flex min-h-[2.6rem] items-center rounded-[1.1rem] border border-white/80 bg-white/60 px-4 text-sm font-extrabold text-gray-700 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-md">{(Number(form.tauxCnssSalarie) || 0) + (Number(form.tauxAmuSalarie) || 0)} %</div></Champ>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">Cotisations sociales de l'employé : 4 % de CNSS (retraite et pensions) et 5 % d'AMU (assurance maladie), soit 9 %. S'y ajoutent l'IRPP (barème ci-dessous), les avances et prêts et les absences ou retards non justifiés.</p>
+        </ParamsCarte>
+
+        {/* Catégorie 2 : ce que l'entreprise paie elle-même, en plus du salaire */}
+        <ParamsCarte icone={Layers} couleur="#7c3aed" titre="Charges patronales payées par l'entreprise" sous="En plus du salaire : rien n'est retiré à l'employé">
+          <div className="grid grid-cols-2 gap-3">
             <Champ iconeLabel icone={Percent} label="CNSS employeur (%)"><input type="number" step="0.1" placeholder="Ex. 17,5" value={form.tauxCnssEmployeur} onChange={(e) => setForm({ ...form, tauxCnssEmployeur: e.target.value })} className="input-base" /></Champ>
             <Champ iconeLabel icone={Percent} label="AMU employeur (%)"><input type="number" step="0.1" placeholder="Ex. 5" value={form.tauxAmuEmployeur} onChange={(e) => setForm({ ...form, tauxAmuEmployeur: e.target.value })} className="input-base" /></Champ>
-            <Champ iconeLabel icone={Layers} label="Charges patronales (%)"><div className="flex min-h-[2.6rem] items-center rounded-[1.1rem] border border-white/80 bg-white/60 px-4 text-sm font-extrabold text-gray-700 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-md">{(Number(form.tauxCnssEmployeur) || 0) + (Number(form.tauxAmuEmployeur) || 0)} %</div></Champ>
+            <Champ iconeLabel icone={Layers} label="Total charges patronales (%)"><div className="flex min-h-[2.6rem] items-center rounded-[1.1rem] border border-white/80 bg-white/60 px-4 text-sm font-extrabold text-gray-700 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-md">{(Number(form.tauxCnssEmployeur) || 0) + (Number(form.tauxAmuEmployeur) || 0)} %</div></Champ>
           </div>
-          <p className="mt-3 text-xs text-gray-500">Les charges patronales sont payées par l'employeur en plus du salaire, sans rien retirer à l'employé. Togo : 22,5 % au total, soit 17,5 % pour la CNSS classique (pensions, prestations familiales et risques professionnels) et 5 % pour l'Assurance Maladie Universelle (AMU). Le salarié cotise à part : 4 % de CNSS.</p>
+          <p className="mt-3 text-xs text-gray-500">Togo : 22,5 % au total, soit 17,5 % pour la CNSS (12,5 % pensions de retraite, 3 % prestations familiales, 2 % accidents du travail et maladies professionnelles) et 5 % pour la participation de l'entreprise à l'AMU.</p>
         </ParamsCarte>
 
         <ParamsCarte icone={Calculator} couleur="#7c3aed" titre="Simulateur de bulletin" sous="Essayez un salaire pour voir le net">
@@ -62,6 +75,7 @@ export default function PaieConfiguration() {
           <div className="mt-3 space-y-1.5 rounded-2xl border border-white/80 bg-white/60 p-3 text-sm backdrop-blur-md">
             <Ligne label="Brut" value={calc.brutTotal} />
             <Ligne label="− CNSS salarié" value={-calc.cnssSalarie} />
+            <Ligne label="− AMU salarié" value={-calc.amuSalarie} />
             <Ligne label="− IRPP" value={-calc.its} />
             <div className="border-t border-white/80 pt-1.5"><Ligne label="Net à payer" value={calc.net} bold /></div>
             <Ligne label="Charges patronales (CNSS + AMU)" value={calc.cnssEmployeur + calc.amuEmployeur} muted />

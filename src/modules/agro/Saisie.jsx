@@ -91,8 +91,15 @@ export default function Saisie() {
     : null
   const agentSansDroit = role === 'agent' && Array.isArray(catsAutorisees) && catsAutorisees.length === 0
 
+  // Jour pour lequel le formulaire a été construit en dernier : tant qu'on reste sur le même jour avec des modifications
+  // NON ENREGISTRÉES, une mise à jour des données (une facture approuvée, la saisie d'un collègue, un article supprimé…) ne doit
+  // JAMAIS les effacer (c'est ainsi qu'une mutation « disparaissait » et que l'effectif revenait au chiffre de départ).
+  const jourConstruitRef = useRef(null)
+
   // (Re)construit l'état du formulaire quand la date / les données / le référentiel changent.
   useEffect(() => {
+    const garderSaisie = dirtyRef.current && jourConstruitRef.current === date
+    jourConstruitRef.current = date
     const inv = getInventaire(inventaires, date) || { animaux: {}, aliments: {} }
     const prevDate = previousInventoryDate(inventaires, date)
     const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
@@ -108,7 +115,8 @@ export default function Saisie() {
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'animaux')
       a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties, malades: saved?.malades || 0, initAjuste: saved?.initAjuste || null }
     })
-    setAnim(a)
+    // Saisie en cours : on garde les mouvements tapés (entrées, sorties, mutations, malades) et on ne rafraîchit que l'EF Initial.
+    setAnim((prev) => (garderSaisie ? Object.fromEntries(Object.entries(a).map(([id, v]) => [id, prev[id] ? { ...v, entrees: prev[id].entrees, sorties: prev[id].sorties, malades: prev[id].malades } : v])) : a))
 
     const al = {}
     aliments.forEach((x) => {
@@ -116,7 +124,7 @@ export default function Saisie() {
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'aliments')
       al[x.id] = { init: initOf(saved, prevInv?.aliments?.[x.id]?.fin, x.id), entrees, sorties, initAjuste: saved?.initAjuste || null }
     })
-    setAlim(al)
+    setAlim((prev) => (garderSaisie ? Object.fromEntries(Object.entries(al).map(([id, v]) => [id, prev[id] ? { ...v, entrees: prev[id].entrees, sorties: prev[id].sorties } : v])) : al))
   }, [date, inventaires, especes, aliments, seedInit])
 
   const existing = getInventaire(inventaires, date)
@@ -796,6 +804,15 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
               </Select>
               <Input type="number" min="0" className="w-20" value={l.qte} readOnly={locked}
                 onChange={(e) => setLigne(i, { qte: Math.max(0, parseInt(e.target.value) || 0) })} />
+              {/* Mutation : « Tout » remplit la quantité avec TOUT le stock restant de l'espèce (évite d'en laisser par une faute de frappe) */}
+              {!locked && kind === 'animaux' && dir === 'sortie' && l.type === 'Mutation' && (() => {
+                const autresMutations = totalMutations(lignes) - (parseInt(l.qte) || 0)
+                const tout = Math.max(0, stockPourMutation(src[id], autoSor || 0, mutIn || 0) - autresMutations)
+                return (
+                  <button type="button" onClick={() => setLigne(i, { qte: tout })} title={`Muter tout le stock restant (${tout})`}
+                    className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-bold text-sky-700 hover:bg-sky-100">Tout ({tout})</button>
+                )
+              })()}
               {!locked && (
                 <button onClick={() => delLigne(i)} className="icone-verre icone-verre--danger rounded-xl p-1.5" title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button>
               )}

@@ -8,8 +8,8 @@ import Button from '../../shared/ui/Button'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
-import { useDroitAnnuel } from './droitConges'
-import { calculerBulletin, MOIS_LABELS, PAIE_CONFIG_DEFAUT, TYPES_PRESENCE, TYPES_CONGE } from './store/rhStore'
+import { useDroitAnnuel, useTypesConge, libelleDemandeConge } from './droitConges'
+import { calculerBulletin, MOIS_LABELS, PAIE_CONFIG_DEFAUT, TYPES_PRESENCE } from './store/rhStore'
 import DetailKpiModal from './DetailKpiModal'
 import ParSecteurRh from './ParSecteurRh'
 import { ListeCarte, EffectifAnneauCarte } from './CartesDashboard'
@@ -24,6 +24,7 @@ const VUES = [
 
 export default function Dashboard() {
   const droitAnnuel = useDroitAnnuel()
+  const typesConge = useTypesConge()
   const { data: employes } = useCollection('rh_employes')
   const { data: presences } = useCollection('rh_presences')
   const { data: conges } = useCollection('rh_conges')
@@ -164,7 +165,7 @@ export default function Dashboard() {
     const jourDe = (iso) => Math.round((new Date(`${iso}T00:00:00`) - auj) / 864e5)
     const lignePresence = (p) => ({ id: p.id || `${p.date}_${p.employeId}`, libelle: p.employeNom || 'Employé', sous: p.heureArrivee ? `Arrivée à ${p.heureArrivee}` : '', detail: TYPES_PRESENCE[p.statut]?.label || p.statut || 'Pointé',
       ton: p.statut === 'absent' ? 'rouge' : p.statut === 'retard' ? 'orange' : p.statut === 'present' ? 'vert' : 'gris' })
-    const ligneConge = (c) => ({ id: c.id, libelle: c.employeNom || 'Employé', sous: TYPES_CONGE[c.type]?.label || c.type || '', detail: `${formatDateShort(c.dateDebut)} au ${formatDateShort(c.dateFin)}${c.jours ? ` · ${c.jours} j` : ''}`, ton: 'orange' })
+    const ligneConge = (c) => ({ id: c.id, libelle: c.employeNom || 'Employé', sous: libelleDemandeConge(typesConge, c) === '—' ? '' : libelleDemandeConge(typesConge, c), detail: `${formatDateShort(c.dateDebut)} au ${formatDateShort(c.dateFin)}${c.jours ? ` · ${c.jours} j` : ''}`, ton: 'orange' })
     const actifsLignes = (ids) => employes.filter((e) => (e.statut || 'actif') === 'actif' && (!ids || ids.has(e.id)))
       .sort((a, b) => (nom(a) < nom(b) ? -1 : 1)).map((e) => ({ id: e.id, libelle: nom(e), sous: e.poste || '', detail: e.departement || 'Sans département', ton: 'gris' }))
     const bulletinsMois = bulletins.filter((b) => b.mois === today.slice(0, 7))
@@ -211,7 +212,7 @@ export default function Dashboard() {
       .sort((a, b) => (a.datePrevue < b.datePrevue ? -1 : 1))
       .map((o) => ({ id: o.id, libelle: o.employeNom || 'Employé', detail: `${o.type === 'offboarding' ? 'Départ' : 'Arrivée'} : ${o.etape} · ${o.datePrevue < today ? 'en retard' : o.datePrevue === today ? "aujourd'hui" : formatDateShort(o.datePrevue)}` }))
     return { fiches, etapesRH, absents: [...absents.values()], anciennete, contratsASurveiller, congesPrevus, parDepartement, paie5, retard, perso, equipe }
-  }, [employes, presences, conges, bulletins, contrats, formations, evaluations, taches, onboarding, today, user, droitAnnuel])
+  }, [employes, presences, conges, bulletins, contrats, formations, evaluations, taches, onboarding, today, user, droitAnnuel, typesConge])
 
   return (
     <div className="space-y-5">

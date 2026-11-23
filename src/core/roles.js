@@ -237,6 +237,12 @@ export const logistiqueVoitValidateur = (r) => r !== 'secretaire'
 // d'une demande en attente.
 export const logistiquePeutApprouver = (r) => isApproverRole(r) || r === 'secretaire'
 
+// Demandes de sortie (Briqueterie, Logistique) : la secrétaire (et l'Assistant(e) GE, qui a ses droits) approuve ET certifie,
+// comme la direction. Propre à ces deux circuits : CERTIFIER_ROLES, lui, ne change pas pour les autres modules.
+export const peutCertifierSortie = (r) => isCertifierRole(r) || r === 'secretaire'
+// Qui est alerté (cloche, push, rappels) quand une sortie attend une décision : jamais un agent.
+export const VALIDATEURS_SORTIE = [...CERTIFIER_ROLES, 'secretaire']
+
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les
 // projets dont ils sont désignés « Responsable » (p.responsableUid) ou « Collaborateur »
 // (p.collaborateurs[]) (cf. logic.js → projetsVisibles).

@@ -50,7 +50,7 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
   const tousModules = user ? isViewAllRole(roleEffectif(user.role)) : false
   // Rôle « voit tout » : tous les modules sauf ceux que Info lui a retirés. Autres rôles : les modules cochés sur le compte.
   const modules = useMemo(
-    () => (!user ? [] : MODULES.filter((m) => moduleRoleOk(m.id, roleEffectif(user.role)) && (tousModules ? !moduleRetire(user, m.id) : (user.modules || []).includes(m.id)))),
+    () => (!user ? [] : MODULES.filter((m) => moduleRoleOk(m.id, roleEffectif(user.role)) && ((tousModules || m.id === 'taches') ? !moduleRetire(user, m.id) : (user.modules || []).includes(m.id)))),
     [user, tousModules]
   )
   // Modules que ce rôle pourrait avoir mais que le compte n'a pas (ou plus) : proposés à l'ajout.
@@ -87,12 +87,12 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
 
   function retirerModule(m) {
     if (!confirm(`Retirer le module ${m.nom} à ${user.nom} ?\nIl ne le verra plus du tout.`)) return
-    if (tousModules) modifierAcces({ modulesRetires: [...(user.modulesRetires || []), m.id] }, m.id, `${m.nom} retiré ✓`)
+    if (tousModules || m.id === 'taches') modifierAcces({ modulesRetires: [...(user.modulesRetires || []), m.id] }, m.id, `${m.nom} retiré ✓`)
     else modifierAcces({ modules: (user.modules || []).filter((x) => x !== m.id) }, m.id, `${m.nom} retiré ✓`)
   }
 
   function ajouterModule(m) {
-    if (tousModules) modifierAcces({ modulesRetires: (user.modulesRetires || []).filter((x) => x !== m.id) }, m.id, `${m.nom} rendu ✓`)
+    if (tousModules || m.id === 'taches') modifierAcces({ modulesRetires: (user.modulesRetires || []).filter((x) => x !== m.id) }, m.id, `${m.nom} rendu ✓`)
     else modifierAcces({ modules: [...(user.modules || []), m.id] }, m.id, `${m.nom} ajouté ✓`)
   }
 

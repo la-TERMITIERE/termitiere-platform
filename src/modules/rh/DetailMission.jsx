@@ -6,7 +6,6 @@ import DetailFiche from './DetailFiche'
 import Modal from '../../shared/ui/Modal'
 import Button from '../../shared/ui/Button'
 import { useAuth } from '../../hooks/useAuth'
-import { useCollection } from '../../hooks/useFirestore'
 import { toast } from '../../core/notifications'
 import { isFullAccessRole } from '../../core/roles'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
@@ -19,8 +18,8 @@ const meler = (c, p) => `color-mix(in srgb, ${c} ${p}%, white)`
 const jourCourt = (iso) => (iso ? formatDateShort(String(iso).slice(0, 10)) : '')
 
 // Noms sous chaque étape : celui qui a agi, sinon la fonction attendue.
-function nomsMission(m, gePrenoms) {
-  return [m.creePar || 'La RH', m.approuvePar || m.refusePar || gePrenoms || 'Gérante exécutive']
+function nomsMission(m) {
+  return [m.creePar || 'La RH', m.approuvePar || m.refusePar || 'GE']
 }
 
 // Pastille de décaissement, posée devant la mission ou l'avance : décaissée de la Caisse courante, non décaissée, ou encore à décaisser.
@@ -39,11 +38,9 @@ export function PastilleDecaissement({ doc, type = 'mission', petite = false }) 
 
 // Le circuit en chapelet : quatre cercles reliés par un fil qui se remplit à mesure que les étapes se cochent.
 export function ChapeletMission({ mission, etapes = ETAPES_MISSION, etats: etatsProp, noms: nomsProp }) {
-  const { data: users } = useCollection('users')
   const etats = etatsProp || etatsMission(mission)
   const dernierFait = etats.reduce((m, s, i) => (s === 'faite' ? i : m), 0)
-  const ge = users.filter((u) => u.role === 'ge').map((u) => u.nom || u.login).join(', ')
-  const noms = nomsProp || nomsMission(mission, ge)
+  const noms = nomsProp || nomsMission(mission)
   return (
     <div className="relative" role="list" aria-label="Circuit">
       <span aria-hidden="true" className="absolute top-[22px] h-1.5 -translate-y-1/2 rounded-full bg-slate-200/90 shadow-[inset_0_1px_2px_rgba(15,23,42,0.18)]" style={{ left: `${50 / etapes.length}%`, right: `${50 / etapes.length}%` }} />
@@ -126,7 +123,9 @@ export function tuilesMission(m) {
     { icone: MapPin, label: 'Destination', valeur: m.destination },
     { icone: CalendarDays, label: 'Période', valeur: m.dateDebut ? `${formatDateShort(m.dateDebut)}${m.dateFin ? ` → ${formatDateShort(m.dateFin)}` : ''}` : '' },
     { icone: Clock, label: 'Durée', valeur: d ? `${d} jour${d > 1 ? 's' : ''}` : '' },
-    { icone: Banknote, label: 'Frais prévus', valeur: Number(m.montantFrais) > 0 ? formatMoney(m.montantFrais) : '', couleur: '#16a34a' },
+    { icone: Banknote, label: 'Frais remboursables', valeur: Number(m.montantFrais) > 0 ? formatMoney(m.montantFrais) : '', couleur: '#16a34a' },
+    { icone: Banknote, label: 'Détail des frais (barème)', large: true, couleur: '#0284c7',
+      valeur: (m.fraisLignes || []).length ? [...m.fraisLignes.map((l) => `${l.typeNom} : ${formatMoney(l.remboursable)}${l.depassement > 0 ? ` (réel ${formatMoney(l.montant)}, plafond ${formatMoney(l.plafond)})` : ''}`), ...(Number(m.fraisAutres) > 0 ? [`Autres frais : ${formatMoney(m.fraisAutres)}`] : [])].join(' · ') : '' },
     { icone: Send, label: 'Demande', valeur: m.creePar ? `Saisie par ${m.creePar}${m.creeLe ? ` le ${jourCourt(m.creeLe)}` : ''}` : '', large: true },
     { icone: Check, label: 'Approbation', valeur: m.approuvePar ? `Approuvée par ${m.approuvePar} le ${jourCourt(m.approuveLe)}` : '', large: true, couleur: '#7e22ce' },
     { icone: X, label: `Refusée par ${m.refusePar || '?'}${m.refuseLe ? ` le ${jourCourt(m.refuseLe)}` : ''}`, valeur: m.statut === 'refusee' ? (m.motifRefus || 'Aucun motif') : '', large: true, couleur: '#dc2626' },

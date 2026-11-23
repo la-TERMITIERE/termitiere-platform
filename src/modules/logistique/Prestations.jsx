@@ -30,7 +30,7 @@ import ChampAutocomplete from '../../shared/forms/ChampAutocomplete'
 import { FX_STYLES, TitreSection, BoutonAjout, TypeHero, TypeBoutons, ChipsEvenement, PrestationHero } from './PrestationFormUI'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
 import { catColor } from './data'
-import { nbJoursInclus, dernierStock } from './logic'
+import { nbJoursInclus, stockDisponible } from './logic'
 import { useSite, matchSite, siteLabel } from './site/useSite'
 
 const STATUTS = {
@@ -701,7 +701,7 @@ export default function Prestations() {
                         placeholder="Précisez le matériel / la prestation (ex : groupe électrogène, podium…)" />
                     )}
                     {l.materielId && l.materielId !== '__autre__' && (() => {
-                      const stock = dernierStock(inventaires, l.materielId)
+                      const stock = stockDisponible(inventaires, demandesTout.filter((d) => matchSite(d, site)), l.materielId)
                       const qte = parseInt(l.qte) || 0
                       const insuffisant = qte > stock
                       return (
@@ -749,7 +749,7 @@ export default function Prestations() {
             )}
 
             {(() => {
-              const manque = form.lignes.filter((l) => l.materielId && l.materielId !== '__autre__' && (parseInt(l.qte) || 0) > dernierStock(inventaires, l.materielId))
+              const manque = form.lignes.filter((l) => l.materielId && l.materielId !== '__autre__' && (parseInt(l.qte) || 0) > stockDisponible(inventaires, demandesTout.filter((d) => matchSite(d, site)), l.materielId))
               return manque.length > 0 ? (
                 <div className="flex items-start gap-3 rounded-2xl border border-red-200/80 bg-red-50/80 px-3 py-2.5 text-xs text-red-800 backdrop-blur-md">
                   <AlertTriangle size={16} className="mt-0.5 shrink-0 animate-pulse text-red-500" />

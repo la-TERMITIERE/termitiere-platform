@@ -1,7 +1,7 @@
 // RH : Missions & frais (Missions & Frais). La RH saisit un ordre de mission ; la Gérante exécutive l'approuve ou le refuse (motif obligatoire) ;
 // une mission approuvée se termine puis se rembourse. Chaque étape laisse une trace et prévient les personnes concernées (cf. missionsCircuit.js).
 import { useMemo, useState } from 'react'
-import { Plane, Plus, UserRound, MapPin, CalendarDays, Banknote, Clock, ChevronRight, ShieldCheck, ClipboardList, Hourglass, Wallet, CircleCheck, Ban } from 'lucide-react'
+import { Plane, Plus, UserRound, MapPin, CalendarDays, Banknote, Clock, ChevronRight, ShieldCheck, ClipboardList, Hourglass, Wallet, CircleCheck, Ban, Gauge, TriangleAlert, Check } from 'lucide-react'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
@@ -17,8 +17,9 @@ import { PageHeader, Champ, ModalRh } from './rhui'
 import { supprimerAvecRetour } from './suppression'
 import DetailMission, { MiniatureMission, PastilleDecaissement } from './DetailMission'
 import { demanderApprobation, peutApprouverMission, dureeMission } from './missionsCircuit'
+import { calculerFrais, montantAuto, recalculerAuto } from './fraisMission'
 
-const vide = () => ({ employeId: '', objet: '', destination: '', dateDebut: todayStr(), dateFin: todayStr(), montantFrais: '' })
+const vide = () => ({ employeId: '', objet: '', destination: '', dateDebut: todayStr(), dateFin: todayStr(), frais: {}, autres: '' })
 // Filtres : le circuit s'arrête à la GE ; ensuite la finance décaisse (E-DÉPENSES) ou non.
 const FILTRES = [
   { id: '', label: 'Toutes' }, { id: 'demandee', label: 'À approuver' }, { id: 'adecaisser', label: 'À décaisser' },
@@ -31,7 +32,8 @@ export default function Missions() {
   const role = useAuth((s) => s.role)
   const { data: missions } = useCollection(COL.missions)
   const { data: employes } = useCollection(COL.employes)
-  const { data: users } = useCollection('users')
+  const { data: baremesBruts } = useCollection('rh_bareme_missions') // barème réglé dans Paramètres, Configuration des missions
+  const baremes = useMemo(() => [...baremesBruts].sort((a, b) => String(a.typeFrais || '').localeCompare(String(b.typeFrais || ''), 'fr')), [baremesBruts])
   const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('')
   const [modal, setModal] = useState(null)
@@ -44,9 +46,18 @@ export default function Missions() {
   const liste = useMemo(() => [...missions].sort((a, b) => ((a.creeLe || a.dateDebut || '') < (b.creeLe || b.dateDebut || '') ? 1 : -1))
     .filter((m) => !filtre || filtreDe(m) === filtre)
     .filter((m) => correspond(recherche, m.employeNom, m.objet, m.destination)), [missions, filtre, recherche])
-  const nomsGe = users.filter((u) => u.role === 'ge').map((u) => u.nom || u.login)
 
   const duree = modal ? dureeMission(modal) : 0
+  // Frais d'après le barème : montant proposé = indemnité par jour × durée, remboursable jusqu'au plafond du type de frais.
+  const calcul = modal ? calculerFrais({ baremes, frais: modal.frais || {}, autres: modal.autres }) : null
+  // Changer les dates recalcule les montants restés automatiques.
+  const majDates = (patch) => setModal((m) => { const n = { ...m, ...patch }; return { ...n, frais: recalculerAuto(baremes, n.frais || {}, dureeMission(n)) } })
+  const basculerFrais = (b) => setModal((m) => {
+    const cur = m.frais?.[b.id]
+    if (cur?.actif) return { ...m, frais: { ...m.frais, [b.id]: { ...cur, actif: false } } }
+    return { ...m, frais: { ...m.frais, [b.id]: { actif: true, auto: Number(b.indemniteJour) > 0, montant: String(montantAuto(b, dureeMission(m)) || '') } } }
+  })
+  const saisirFrais = (b, v) => setModal((m) => ({ ...m, frais: { ...m.frais, [b.id]: { ...m.frais?.[b.id], actif: true, auto: false, montant: v } } }))
   const dateInvalide = modal && modal.dateDebut && modal.dateFin && modal.dateFin < modal.dateDebut
   const nomEmploye = modal?.employeId ? employes.find((e) => e.id === modal.employeId)?.nom : ''
   const erreur = (ok) => tente && !ok
@@ -55,7 +66,7 @@ export default function Missions() {
     setTente(true)
     const emp = employes.find((e) => e.id === modal.employeId)
     if (!emp || !modal.objet.trim() || dateInvalide) return toast.error('Complétez l’employé, l’objet et des dates cohérentes')
-    const data = { employeId: emp.id, employeNom: emp.nom, objet: modal.objet.trim(), destination: (modal.destination || '').trim(), dateDebut: modal.dateDebut, dateFin: modal.dateFin, montantFrais: Number(modal.montantFrais) || 0 }
+    const data = { employeId: emp.id, employeNom: emp.nom, objet: modal.objet.trim(), destination: (modal.destination || '').trim(), dateDebut: modal.dateDebut, dateFin: modal.dateFin, montantFrais: calcul.total, fraisLignes: calcul.lignes, fraisAutres: calcul.autres }
     if (modal.id) {
       const ancien = missions.find((m) => m.id === modal.id)
       // Une mission refusée, une fois corrigée, repart à l'approbation.
@@ -135,7 +146,7 @@ export default function Missions() {
       </section>
 
       <DetailMission mission={missions.find((m) => m.id === detailId)} employes={employes} onClose={() => setDetailId(null)} onSupprimer={supprimer}
-        onModifier={(m) => { setDetailId(null); setTente(false); setModal({ id: m.id, employeId: m.employeId, objet: m.objet || '', destination: m.destination || '', dateDebut: m.dateDebut || todayStr(), dateFin: m.dateFin || m.dateDebut || todayStr(), montantFrais: m.montantFrais || '' }) }} />
+        onModifier={(m) => { setDetailId(null); setTente(false); setModal({ id: m.id, employeId: m.employeId, objet: m.objet || '', destination: m.destination || '', dateDebut: m.dateDebut || todayStr(), dateFin: m.dateFin || m.dateDebut || todayStr(), frais: Object.fromEntries((m.fraisLignes || []).map((l) => [l.typeId, { actif: true, auto: false, montant: String(l.montant) }])), autres: m.fraisLignes ? (m.fraisAutres || '') : (m.montantFrais || '') }) }} />
 
       <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier l’ordre de mission' : 'Nouvel ordre de mission'} libelleSave={modal?.id ? 'Enregistrer' : 'Envoyer à la GE'}
         icone={UserRound} titreHero="Ordre de mission de :"
@@ -157,21 +168,62 @@ export default function Missions() {
           </Champ>
           <div className="grid gap-3 sm:grid-cols-2">
             <Champ label="Départ le" icone={CalendarDays}>
-              <input type="date" value={modal.dateDebut} onChange={(e) => setModal({ ...modal, dateDebut: e.target.value, dateFin: modal.dateFin < e.target.value ? e.target.value : modal.dateFin })} className="input-base" />
+              <input type="date" value={modal.dateDebut} onChange={(e) => majDates({ dateDebut: e.target.value, dateFin: modal.dateFin < e.target.value ? e.target.value : modal.dateFin })} className="input-base" />
             </Champ>
             <Champ label="Retour le" icone={CalendarDays} erreur={dateInvalide ? 'Le retour doit être après le départ.' : undefined}>
-              <input type="date" value={modal.dateFin} min={modal.dateDebut || undefined} onChange={(e) => setModal({ ...modal, dateFin: e.target.value })} className="input-base" />
+              <input type="date" value={modal.dateFin} min={modal.dateDebut || undefined} onChange={(e) => majDates({ dateFin: e.target.value })} className="input-base" />
             </Champ>
           </div>
           <p className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/60 px-3.5 py-2.5 text-sm text-gray-600 backdrop-blur-md">
             <Clock size={16} className="text-gray-400" aria-hidden="true" /> Durée : <strong className="tabular-nums text-gray-800">{duree ? `${duree} jour${duree > 1 ? 's' : ''}` : '-'}</strong>
           </p>
-          <Champ label="Montant des frais prévus (XOF)" icone={Banknote}>
-            <input type="number" min="0" value={modal.montantFrais} onChange={(e) => setModal({ ...modal, montantFrais: e.target.value })} className="input-base" placeholder="Ex. 150000" />
-          </Champ>
+          {/* Frais d'après le barème : une ligne par type de frais, avec son indemnité par jour et son plafond */}
+          <div className="fg-tuile">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-gray-500"><Banknote size={13} aria-hidden="true" /> Frais de la mission : barème réglé dans les Paramètres</p>
+            {baremes.length === 0 ? (
+              <p className="mb-2 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800"><TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden="true" />Aucun barème n'est réglé : saisissez le montant ci-dessous. L'administration peut créer les types de frais dans Paramètres, Configuration des missions.</p>
+            ) : (
+              <ul className="space-y-2">
+                {baremes.map((b) => {
+                  const l = modal.frais?.[b.id]
+                  const actif = !!l?.actif
+                  const ligne = calcul.lignes.find((x) => x.typeId === b.id)
+                  return (
+                    <li key={b.id} className={`rounded-2xl border px-3 py-2 transition-colors ${actif ? 'border-sky-200 bg-sky-50/60' : 'border-white/80 bg-white/50'}`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => basculerFrais(b)} aria-pressed={actif} data-actif={actif} className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold" style={{ '--puce': '#0284c7' }}>
+                          {actif ? <Check size={12} strokeWidth={3} aria-hidden="true" /> : null}{b.typeFrais}
+                        </button>
+                        <span className="text-[11px] font-semibold text-gray-500">
+                          {Number(b.indemniteJour) > 0 ? `${formatMoney(b.indemniteJour)} par jour` : 'pas d\'indemnité journalière'}{Number(b.plafond) > 0 ? ` · plafond ${formatMoney(b.plafond)}` : ' · sans plafond'}
+                        </span>
+                      </div>
+                      {actif && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input type="number" min="0" value={l.montant} onChange={(e) => saisirFrais(b, e.target.value)} className="input-base !w-40 !py-1.5 text-sm" placeholder="Montant (XOF)" aria-label={`Montant des frais : ${b.typeFrais}`} />
+                          {l.auto && duree > 0 && <span className="text-[11px] text-gray-400">{duree} jour{duree > 1 ? 's' : ''} × {formatMoney(b.indemniteJour)}</span>}
+                          {ligne && ligne.depassement > 0
+                            ? <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700"><TriangleAlert size={11} aria-hidden="true" />Remboursé : {formatMoney(ligne.remboursable)} (plafond dépassé de {formatMoney(ligne.depassement)}, à la charge de l'employé)</span>
+                            : ligne && ligne.montant > 0 ? <span className="text-[11px] font-semibold text-emerald-700">Remboursé : {formatMoney(ligne.remboursable)}</span> : null}
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <div className="mt-2">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">{baremes.length ? 'Autres frais (hors barème, sans plafond)' : 'Montant des frais prévus (XOF)'}</label>
+              <input type="number" min="0" value={modal.autres} onChange={(e) => setModal({ ...modal, autres: e.target.value })} className="input-base" placeholder="Ex. 25000" />
+            </div>
+            <p className="mt-2 flex flex-wrap items-center gap-x-2 rounded-xl border border-white/80 bg-white/70 px-3 py-2 text-sm font-bold text-gray-800">
+              <Gauge size={15} className="text-sky-600" aria-hidden="true" /> Total remboursable : <span className="tabular-nums">{formatMoney(calcul.total)}</span>
+              {calcul.depassement > 0 && <span className="text-xs font-semibold text-red-600">({formatMoney(calcul.depassement)} au-dessus des plafonds, non remboursés)</span>}
+            </p>
+          </div>
           <p className="flex items-start gap-2 rounded-2xl border border-violet-200/80 bg-violet-50/70 px-3.5 py-2.5 text-xs text-violet-800 backdrop-blur-md">
             <ShieldCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span>{modal.id ? 'Une mission refusée repart à l’approbation une fois corrigée.' : `La demande part à ${nomsGe.length ? nomsGe.join(', ') : 'la Gérante exécutive'} pour approbation : elle sera alertée, et vous serez prévenu(e) de sa décision.`}</span>
+            <span>{modal.id ? 'Une mission refusée repart à l’approbation une fois corrigée.' : `La demande part à la GE pour approbation : elle sera alertée, et vous serez prévenu(e) de sa décision.`}</span>
           </p>
         </>)}
       </ModalRh>

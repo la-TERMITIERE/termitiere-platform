@@ -29,7 +29,6 @@ export default function Primes() {
   const { data: primes } = useCollection(COL.primes)
   const { data: types } = useCollection(COL.typesPrimes)
   const { data: employes } = useCollection(COL.employes)
-  const { data: users } = useCollection('users')
   const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('')
   const [modal, setModal] = useState(null)
@@ -45,7 +44,6 @@ export default function Primes() {
   const liste = useMemo(() => [...primes].sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? 1 : -1))
     .filter((p) => !filtre || (p.statut || 'en_attente') === filtre)
     .filter((p) => correspond(recherche, p.typeNom, p.employeNom, p.departement, p.motif)), [primes, filtre, recherche])
-  const nomsGe = users.filter((u) => u.role === 'ge').map((u) => u.nom || u.login)
 
   // Aperçu du formulaire : employés concernés, total estimé, dépassement du plafond du type.
   const type = modal ? types.find((t) => t.id === modal.typeId) : null

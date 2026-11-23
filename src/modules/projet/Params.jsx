@@ -19,6 +19,14 @@ const COLLECTIONS_PROJET = [
   { id: 'projet_materiels',  label: 'Matériel & Matériaux' },
   { id: 'projet_documents',   label: 'Documents'          },
   { id: 'projet_prestataires_masques', label: 'Prestataires masqués' },
+  { id: 'projet_commentaires', label: 'Commentaires' },
+  { id: 'projet_depenses_notes', label: 'Notes de dépenses' },
+  { id: 'projet_magasins', label: 'Magasins' },
+  { id: 'projet_propositions', label: 'Propositions' },
+  { id: 'projet_versements_client', label: 'Versements des clients (alimente aussi la Comptabilité)' },
+  { id: 'projet_alertes_dashboard_fermees', label: 'Alertes fermées du tableau de bord' },
+  { id: 'projet_alertes_notif', label: 'Alertes envoyées' },
+  { id: 'projet_purge_log', label: 'Journal des purges' },
 ]
 
 async function viderCollection(name) {
@@ -170,7 +178,8 @@ function SectionConservation() {
 
 export default function Params() {
   const { role } = useAuthStore()
-  const peutReinitialiser = FULL_ACCESS_ROLES.includes(role)
+  // Réinitialisation de la base du module : réservée à Info (rôle invisible des autres, qui ne voient même pas cette carte).
+  const peutReinitialiser = role === 'info'
   const [modal, setModal]   = useState(false)
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -235,13 +244,13 @@ export default function Params() {
 
       <SectionConservation />
 
-      {/* ── Zone danger — réservée à la direction (accès total) ─────────────── */}
+      {/* ── Zone danger : visible par le seul rôle Info ─────────────── */}
       {peutReinitialiser && (
       <Card title={<span className="flex items-center gap-2 text-red-600"><AlertTriangle size={15} />Zone de danger</span>}>
         <div className="rounded-2xl border border-red-200/60 bg-red-50/70 p-4 backdrop-blur-sm">
-          <p className="text-sm font-semibold text-red-700">Réinitialiser toutes les données</p>
+          <p className="text-sm font-semibold text-red-700">Réinitialiser la base de données de Gestion des projets</p>
           <p className="mt-1 text-xs text-red-500">
-            Supprime définitivement tous les projets, tâches, dépenses, commentaires et documents du module.
+            Supprime définitivement tous les projets, tâches, dépenses, besoins, matériel, documents, commentaires et versements clients du module. Les réglages (seuils, conservation) et le journal d'audit sont conservés.
             Cette action est <strong>irréversible</strong>.
           </p>
           <div className="mt-3">

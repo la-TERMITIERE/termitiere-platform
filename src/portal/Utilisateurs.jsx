@@ -27,7 +27,7 @@ import { SITES as GYM_SITES } from '../modules/gym/site/useSite'
 // Par défaut, un agent peut saisir TOUTES les catégories (l'admin restreint en
 // décochant). Un agent hérité (sans ce champ) conserve donc l'accès complet.
 // De même, un compte Maxi Logistique / MAXI-GYM accède par défaut aux deux sites (Lomé & Kara).
-const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: [], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, droitsModules: {}, secteur: '', poste: '', telephone: '', email: '', actif: true })
+const empty = () => ({ nom: '', login: '', pass: '', role: 'agent', modules: ['taches'], agroCategories: [...CAT_ANIMAUX], logistiqueSites: SITES.map((s) => s.id), gymSites: GYM_SITES.map((s) => s.id), gerePartenaires: false, droitsModules: {}, secteur: '', poste: '', telephone: '', email: '', actif: true })
 
 // Suggestions par défaut — complétées par les valeurs déjà utilisées par les autres comptes.
 // Secteurs = noms des modules de la plateforme (reste synchronisé si un module est ajouté/renommé).
@@ -123,7 +123,7 @@ export default function Utilisateurs() {
     return (
       <button type="button" role="switch" aria-checked={actif} disabled={protege || basculeEnCours === r.login}
         onClick={(e) => { e.stopPropagation(); basculerActif(r) }}
-        title={protege ? (r.login === moi?.login ? 'Vous ne pouvez pas désactiver votre propre compte' : 'Seul Info peut désactiver ce compte') : actif ? 'Cliquer pour désactiver le compte' : 'Cliquer pour réactiver le compte'}
+        title={protege ? (r.login === moi?.login ? 'Vous ne pouvez pas désactiver votre propre compte' : 'Ce compte est protégé') : actif ? 'Cliquer pour désactiver le compte' : 'Cliquer pour réactiver le compte'}
         className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border py-0.5 pl-1 pr-2 text-[11px] font-extrabold backdrop-blur-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${actif ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-700' : 'border-red-300/70 bg-red-100/70 text-red-700'}`}>
         <span className={`relative h-3.5 w-6 rounded-full transition-colors ${actif ? 'bg-emerald-500' : 'bg-red-400'}`}>
           <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white shadow transition-all ${actif ? 'left-3' : 'left-0.5'}`} />
@@ -136,7 +136,7 @@ export default function Utilisateurs() {
   // Active ou désactive un compte : un compte inactif ne peut plus se connecter (et une session ouverte est fermée).
   // On ne peut pas désactiver le compte admin principal ni son propre compte.
   async function basculerActif(u) {
-    if (compteAdminProtege(u)) return toast.error("Seul Info peut désactiver le compte admin principal")
+    if (compteAdminProtege(u)) return toast.error('Ce compte est protégé')
     if (u.login === moi?.login) return toast.error('Vous ne pouvez pas désactiver votre propre compte')
     const desactiver = u.actif !== false
     if (desactiver && !confirm(`Désactiver le compte de « ${u.nom} » ?
@@ -151,7 +151,7 @@ Cette personne ne pourra plus se connecter.`)) return
   }
 
   async function supprimer(u) {
-    if (compteAdminProtege(u)) return toast.error("Seul Info peut supprimer le compte admin principal")
+    if (compteAdminProtege(u)) return toast.error('Ce compte est protégé')
     if (u.login === moi?.login) return toast.error('Vous ne pouvez pas supprimer votre propre compte')
     if (!confirm(`Supprimer l'utilisateur « ${u.nom} » ?`)) return
     // Sans ce try/catch, un refus des règles de la base échouait en SILENCE :

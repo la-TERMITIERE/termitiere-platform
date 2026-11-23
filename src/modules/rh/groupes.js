@@ -2,7 +2,7 @@
 // ses volets restent des pages à part entière (mêmes adresses), reliées par la barre d'onglets de RhOnglets.
 import {
   UserCircle, Factory, ClipboardList, Users, CalendarDays, CalendarCheck, Receipt, BarChart2, Settings,
-  FileText, Repeat, Tag, Send, BookOpen, Gauge, TrendingUp, Plane, Handshake, Clock3, ShieldCheck, CalendarHeart, Package, Gift, HandCoins, Megaphone
+  FileText, Repeat, Tag, Send, BookOpen, Gauge, TrendingUp, Plane, Handshake, Clock3, ShieldCheck, KeyRound, CalendarHeart, Package, Gift, HandCoins, Megaphone
 } from 'lucide-react'
 
 export const GROUPES_RH = [
@@ -12,7 +12,8 @@ export const GROUPES_RH = [
       { to: '/rh/employes', label: 'Annuaire', icone: UserCircle },
       { to: '/rh/departements', label: 'Départements', icone: Factory },
       { to: '/rh/postes', label: 'Postes', icone: ClipboardList },
-      { to: '/rh/organigramme', label: 'Organigramme', icone: Users }
+      { to: '/rh/organigramme', label: 'Organigramme', icone: Users },
+      { to: '/rh/acces', label: "Demandes d'accès", icone: KeyRound, roles: ['rh', 'info'] }
     ]
   },
   {

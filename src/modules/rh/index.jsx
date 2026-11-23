@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { isFullAccessRole } from '../../core/roles'
 // Structure RH
 import Departements from './Departements'
+import DemandesAcces from './DemandesAcces'
 import Postes from './Postes'
 import Organigramme from './Organigramme'
 // Collaborateurs & Contrats
@@ -67,6 +68,7 @@ export default function RhModule() {
       <Route index element={<Dashboard />} />
       <Route path="departements" element={<Departements />} />
       <Route path="postes" element={<Postes />} />
+      <Route path="acces" element={<DemandesAcces />} />
       <Route path="organigramme" element={<Organigramme />} />
       <Route path="employes" element={<Employes />} />
       <Route path="contrats" element={<Contrats />} />

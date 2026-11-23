@@ -30,6 +30,7 @@ function lignesStockables(facture) {
 // puis décompte le stock. Idempotent : une seule demande par (factureId, ligneIdx).
 export async function creerDemandesFacture(facture, user) {
   const demandes = await getAll('agro_demandes')
+  const echecs = [] // sorties qui n'ont pas pu être décomptées : levées en erreur à la fin (jamais d'échec muet)
   for (const l of lignesStockables(facture)) {
     const i = l._idx
     const type = l.articleType || 'animal'
@@ -49,9 +50,14 @@ export async function creerDemandesFacture(facture, user) {
     if (exists) await updateItem('agro_demandes', exists.id, payload)
     else if (payload.qte > 0) await addItem('agro_demandes', payload)
     else continue // ligne vide jamais sortie : rien à décompter
-    await appliquerDemandeAuStock({ ...payload, statut: 'certifie' })
-    if (ancien) await appliquerDemandeAuStock({ ...ancien, statut: 'certifie' })
+    const r = await appliquerDemandeAuStock({ ...payload, statut: 'certifie' })
+    if (!r.ok) echecs.push(`${payload.articleNom || payload.articleId} : ${r.raison}`)
+    if (ancien) {
+      const r2 = await appliquerDemandeAuStock({ ...ancien, statut: 'certifie' })
+      if (!r2.ok) echecs.push(`${ancien.articleNom || ancien.articleId} : ${r2.raison}`)
+    }
   }
+  if (echecs.length) throw new Error(`Stock NON décompté (${echecs.join(' ; ')}). Corrigez puis recommencez, ou lancez le Contrôle du stock dans les Paramètres.`)
 }
 
 // Applique un écart. Pour chaque ligne (sortie de `qte` au marché) :
@@ -65,6 +71,7 @@ export async function creerDemandesFacture(facture, user) {
 export async function ajusterFactureEcart(facture, ajustements) {
   const demandes = await getAll('agro_demandes')
   const byIdx = Object.fromEntries((ajustements || []).map((a) => [a.ligneIdx, a]))
+  const echecs = []
 
   for (const l of lignesStockables(facture)) {
     const i = l._idx
@@ -78,7 +85,8 @@ export async function ajusterFactureEcart(facture, ajustements) {
     const link = demandes.find((d) => d.factureId === facture.id && d.ligneIdx === i)
     if (link) {
       await updateItem('agro_demandes', link.id, { qte: sold })
-      await appliquerDemandeAuStock({ ...link, qte: sold, statut: 'certifie' })
+      const r = await appliquerDemandeAuStock({ ...link, qte: sold, statut: 'certifie' })
+      if (!r.ok) echecs.push(`${link.articleNom || link.articleId} : ${r.raison}`)
     }
     // 2) Décès + Retour du marché (animaux uniquement) — lignes explicites & tracées.
     if ((l.articleType || 'animal') === 'animal') {
@@ -86,6 +94,7 @@ export async function ajusterFactureEcart(facture, ajustements) {
     }
   }
 
+  if (echecs.length) throw new Error(`Stock NON réajusté (${echecs.join(' ; ')}). Lancez le Contrôle du stock dans les Paramètres.`)
   return (facture.lignes || []).map((l, i) => {
     const aj = byIdx[i]
     if (!aj || !l.articleId) return l

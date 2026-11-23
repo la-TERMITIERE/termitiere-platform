@@ -91,7 +91,7 @@ export default function Departements() {
       await repairCustomIds(COL.departements).catch(() => {})
       await removeItem(COL.departements, d.id)
       const n = effectif(d.nom)
-      toast.success(n ? `Supprimé : ${n} agent(s) gardent leur fiche` : 'Supprimé')
+      toast.success(n ? `Supprimé : ${n} employé(s) gardent leur fiche` : 'Supprimé')
       setDetail(null)
     } catch (e) {
       if (e?.name === 'SuppressionAnnulee' || e?.code === 'SUPPRESSION_ANNULEE') return
@@ -159,7 +159,7 @@ export default function Departements() {
 
               <div className="relative mt-4 flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/75 px-3 py-1 text-xs font-extrabold tabular-nums shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md" style={{ color: c }}>
-                  <Users size={13} aria-hidden="true" /> {nb} agent{nb > 1 ? 's' : ''}
+                  <Users size={13} aria-hidden="true" /> {nb} employé{nb > 1 ? 's' : ''}
                 </span>
                 <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => ouvrir({ ...vide(), ...d })} aria-label={`Modifier ${d.nom}`} title="Modifier"
@@ -183,7 +183,7 @@ export default function Departements() {
         </div>
       )}
 
-      {/* Fiche d'un département : logo, module lié, postes, agents, avec les actions Modifier et Supprimer. */}
+      {/* Fiche d'un département : logo, module lié, postes, employés, avec les actions Modifier et Supprimer. */}
       {detail && (() => {
         const v = visuelDepartement(detail)
         const agents = employes.filter((e) => e.departement === detail.nom)
@@ -194,12 +194,12 @@ export default function Departements() {
               titre: detail.nom, icone: v.Icone, logo: v.logo, couleur: v.couleur,
               sous: `${v.categorie.label}${v.module ? ` · Module ${v.module.nom}` : ''} : ${detail.description || 'aucune description.'}`,
               tuiles: [
-                { icone: Users, titre: 'Agents', valeur: agents.length },
+                { icone: Users, titre: 'Employés', valeur: agents.length },
                 { icone: ClipboardList, titre: 'Postes', valeur: nbPostes },
                 { icone: UserRound, titre: 'Responsable', valeur: detail.responsable || 'Non défini' }
               ],
               lignes: agents.map((e) => ({ id: e.id, libelle: e.nom || 'Sans nom', sous: [e.poste, e.localite].filter(Boolean).join(' · '), detail: STATUTS_EMPLOYE[e.statut || 'actif']?.label || 'Actif', ton: (e.statut || 'actif') === 'actif' ? 'vert' : 'orange' })),
-              vide: 'Aucun agent dans ce département.', lien: { to: '/rh/employes', label: 'Ouvrir les employés' }
+              vide: 'Aucun employé dans ce département.', lien: { to: '/rh/employes', label: 'Ouvrir les employés' }
             }}
             pied={<>
               <Button variant="ghost" onClick={() => { const d = detail; setDetail(null); ouvrir({ ...vide(), ...d }) }}><Pencil size={15} /> Modifier</Button>

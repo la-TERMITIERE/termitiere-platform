@@ -26,9 +26,26 @@ import { usePeutSupprimerRh } from './suppression'
 import { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from '../../shared/ui/BandeauVolet'
 import { UserCircle as IconeEmployes } from 'lucide-react'
 
-const empty = () => ({ nom: '', poste: '', departement: '', localite: '', dateNaissance: '', dateEmbauche: todayStr(), salaire: 0, contact: '' })
+// Le contrat et le salaire (et donc la date d'arrivée) ne se saisissent plus ici : ils viennent du volet Contrats.
+const empty = () => ({ nom: '', poste: '', departement: '', localite: '', dateNaissance: '', contact: '' })
 // Les sites en deux localités (MAXI-GYM, MAXI LOGISTIQUE) : un même poste existe à Lomé et à Kara (ex. DS Lomé, DS Kara). « Autre » pour une autre localité.
 const LOCALITES_BASE = ['Lomé', 'Kara']
+// Couleur par localité (Lomé bleu, Kara violet, autre ardoise) : distincte des couleurs de secteur (vert agro, rouge logistique…).
+const COULEUR_LOCALITE = { lome: '#0284c7', kara: '#7c3aed' }
+const COULEUR_AUTRE_LOCALITE = '#64748b'
+const cleLoc = (l) => String(l || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
+const couleurLocalite = (l) => COULEUR_LOCALITE[cleLoc(l)] || COULEUR_AUTRE_LOCALITE
+// Pastille teintée : icône + texte à la couleur donnée, fond et bord en verre de la même teinte.
+function Pastille({ couleur, icone: Icone, children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold"
+      style={{ color: couleur, background: `color-mix(in srgb, ${couleur} 12%, transparent)`, borderColor: `color-mix(in srgb, ${couleur} 30%, transparent)` }}>
+      <Icone size={13} aria-hidden="true" />{children}
+    </span>
+  )
+}
+// En-tête de colonne avec son icône.
+const Tete = ({ icone: Icone, children }) => <span className="inline-flex items-center gap-1.5"><Icone size={13} aria-hidden="true" />{children}</span>
 
 export default function Employes() {
   const departements = useDepartements()
@@ -87,6 +104,12 @@ export default function Employes() {
   const localitesOptions = useMemo(() => [...LOCALITES_BASE, ...new Set(employes.map((e) => String(e.localite || '').trim()).filter((l) => l && !LOCALITES_BASE.includes(l)))], [employes])
   const localitesUtilisees = useMemo(() => [...new Set(employes.map((e) => String(e.localite || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')), [employes])
   // Filtre par localité : Lomé et Kara en boutons fixes ; « Autre » pour les localités qui ne sont pas dans les boutons (saisie libre ou choix).
+  // Couleur et icône du secteur de l'employé : celles de son département (vert pour Agro, rouge pour Logistique…).
+  const visuelEmploye = (e) => {
+    const nom = String(e.departement || '').trim().toLowerCase()
+    const doc = departementsDocs.find((d) => String(d.nom || '').trim().toLowerCase() === nom)
+    return visuelDepartement(doc || { nom: e.departement })
+  }
   const sansAccent = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
   const estBase = (e) => LOCALITES_BASE.some((l) => sansAccent(l) === sansAccent(e.localite))
   const autresLocalites = localitesUtilisees.filter((l) => !LOCALITES_BASE.some((b) => sansAccent(b) === sansAccent(l)))
@@ -104,23 +127,20 @@ export default function Employes() {
   }, [modal?.data?.departement, departementsDocs])
   const postesPropose = useMemo(() => postesProposes(postes, modal?.data?.departement, categorieDep), [postes, modal?.data?.departement, categorieDep])
 
-  // Choisir un poste du catalogue reprend son département et son salaire de base, sans écraser ce qui est déjà renseigné.
+  // Choisir un poste du catalogue reprend son département, sans écraser ce qui est déjà renseigné.
   const choisirPoste = (v) => setModal((m) => {
     const p = postes.find((x) => x.intitule === v)
     const data = { ...m.data, poste: v }
     if (p && !data.departement && p.departement) data.departement = p.departement
-    if (p && !(Number(data.salaire) > 0) && Number(p.salaireBase) > 0) data.salaire = Number(p.salaireBase)
     return { ...m, data }
   })
   const maj = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }))
   async function save() {
     const e = modal.data
     if (!e.nom.trim()) return toast.error('Nom requis')
-    // Les deux dates alimentent les alertes d'anniversaire de la RH : elles sont obligatoires.
+    // La date de naissance alimente les alertes d'anniversaire de la RH : elle est obligatoire. La date d'arrivée vient du contrat.
     if (!e.dateNaissance) return toast.error('Date de naissance requise')
-    if (!e.dateEmbauche) return toast.error("Date d'arrivée requise")
     if (e.dateNaissance >= todayStr()) return toast.error('La date de naissance doit être dans le passé')
-    if (e.dateEmbauche < e.dateNaissance) return toast.error("La date d'arrivée doit être après la date de naissance")
     const nom = (t) => String(t || '').trim().toLowerCase()
     const dep = String(e.departement || '').trim()
     const poste = String(e.poste || '').trim()
@@ -170,13 +190,13 @@ export default function Employes() {
         action={<BoutonBande anime icone={Plus} onClick={() => setModal({ data: empty(), id: null })}>Ajouter un employé</BoutonBande>} />
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrer par localité">
-          <button type="button" onClick={() => { setFiltreLoc(''); setTexteLoc('') }} data-actif={!filtreLoc} aria-pressed={!filtreLoc} className="puce-verre rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide" style={{ '--puce': '#0284c7' }}>Toutes ({employes.length})</button>
+          <button type="button" onClick={() => { setFiltreLoc(''); setTexteLoc('') }} data-actif={!filtreLoc} aria-pressed={!filtreLoc} className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide" style={{ '--puce': '#0284c7' }}><UserRound size={13} aria-hidden="true" />Toutes ({employes.length})</button>
           {LOCALITES_BASE.map((l) => (
             <button key={l} type="button" onClick={() => { setFiltreLoc(filtreLoc === l ? '' : l); setTexteLoc('') }} data-actif={filtreLoc === l} aria-pressed={filtreLoc === l}
-              className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold" style={{ '--puce': '#0284c7' }}><MapPin size={13} aria-hidden="true" />{l} ({nbParLoc(l)})</button>
+              className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold" style={{ '--puce': couleurLocalite(l) }}><MapPin size={13} aria-hidden="true" />{l} ({nbParLoc(l)})</button>
           ))}
           <button type="button" onClick={() => { setFiltreLoc(filtreLoc === 'autre' ? '' : 'autre'); setTexteLoc('') }} data-actif={filtreLoc === 'autre'} aria-pressed={filtreLoc === 'autre'}
-            className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold" style={{ '--puce': '#0284c7' }}><Plus size={13} aria-hidden="true" />Autre ({employes.filter((e) => !estBase(e) && String(e.localite || '').trim()).length})</button>
+            className="puce-verre inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold" style={{ '--puce': COULEUR_AUTRE_LOCALITE }}><Plus size={13} aria-hidden="true" />Autre ({employes.filter((e) => !estBase(e) && String(e.localite || '').trim()).length})</button>
         </div>
         {filtreLoc === 'autre' && (
           <div className="ed-entree flex flex-wrap items-center gap-2">
@@ -193,13 +213,26 @@ export default function Employes() {
       <Card className="p-0">
         <Table searchBy={['nom', 'prenom', 'matricule']} onRowClick={(r) => setDetailId(r.id)}
           columns={[
-            { key: 'nom', label: 'Nom' },
-            { key: 'poste', label: 'Poste' },
-            { key: 'departement', label: 'Département' },
-            { key: 'localite', label: 'Localité', render: (r) => r.localite || '—' },
-            { key: 'dateEmbauche', label: 'Arrivée', render: (r) => formatDateShort(r.dateEmbauche) },
-            { key: 'salaire', label: 'Salaire', align: 'right', render: (r) => formatMoney(r.salaire) },
-            { key: 'contact', label: 'Contact' },
+            { key: 'nom', label: <Tete icone={UserRound}>Nom</Tete>, render: (r) => {
+              const v = visuelEmploye(r)
+              return (
+                <span className="inline-flex items-center gap-2.5 font-semibold">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${v.couleur}, color-mix(in srgb, ${v.couleur} 70%, #000))` }} aria-hidden="true">
+                    {String(r.nom || '?').trim().charAt(0).toUpperCase()}
+                  </span>
+                  {r.nom}
+                </span>
+              )
+            } },
+            { key: 'poste', label: <Tete icone={Briefcase}>Poste</Tete>, render: (r) => r.poste ? <span className="inline-flex items-center gap-1.5"><Briefcase size={14} className="shrink-0" style={{ color: visuelEmploye(r).couleur }} aria-hidden="true" />{r.poste}</span> : '—' },
+            { key: 'departement', label: <Tete icone={Building2}>Département</Tete>, render: (r) => {
+              const v = visuelEmploye(r)
+              return r.departement ? <Pastille couleur={v.couleur} icone={v.Icone}>{r.departement}</Pastille> : '—'
+            } },
+            { key: 'localite', label: <Tete icone={MapPin}>Localité</Tete>, render: (r) => r.localite ? <Pastille couleur={couleurLocalite(r.localite)} icone={MapPin}>{r.localite}</Pastille> : '—' },
+            { key: 'dateEmbauche', label: <Tete icone={CalendarDays}>Arrivée</Tete>, render: (r) => <span className="inline-flex items-center gap-1.5"><CalendarDays size={14} className="shrink-0 text-gray-400" aria-hidden="true" />{formatDateShort(r.dateEmbauche)}</span> },
+            { key: 'salaire', label: <Tete icone={Banknote}>Salaire</Tete>, align: 'right', render: (r) => <span className="inline-flex items-center gap-1.5 font-semibold"><Banknote size={14} className="shrink-0 text-emerald-600" aria-hidden="true" />{formatMoney(r.salaire)}</span> },
+            { key: 'contact', label: <Tete icone={Phone}>Contact</Tete>, render: (r) => r.contact ? <span className="inline-flex items-center gap-1.5"><Phone size={14} className="shrink-0 text-gray-400" aria-hidden="true" />{r.contact}</span> : '—' },
             { key: 'actions', label: '', align: 'right', render: (r) => (
               <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
                 <button onClick={() => setModal({ data: { ...empty(), ...r }, id: r.id })} title="Corriger la fiche" aria-label="Corriger la fiche" className="rounded p-1.5 text-gray-500 hover:bg-gray-100"><Pencil size={16} /></button>
@@ -213,7 +246,7 @@ export default function Employes() {
       </Card>
 
       <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? 'Modifier un employé' : 'Nouvel employé'} titreHero={modal?.data?.nom?.trim() || undefined}
-        icone={UserRound} intro="La fiche d'un collaborateur : poste, département, embauche et salaire." onSave={save}>
+        icone={UserRound} intro="La fiche d'un collaborateur : poste, département, localité et contact. Le contrat, le salaire et la date d'arrivée se saisissent dans Contrats." onSave={save}>
         {modal && (<>
           <Champ label="Nom" icone={UserRound} required aide={modal.data.userId ? `Rattaché au compte « ${modal.data.userLogin || 'utilisateur'} ».` : (!modal.id && personnesPlateforme.length ? 'Commencez à écrire : les personnes déjà présentes sur la plateforme sont proposées.' : undefined)}>
             {modal.id
@@ -244,12 +277,6 @@ export default function Employes() {
             </div>
             <Champ label="Date de naissance" icone={Cake} required>
               <input type="date" value={modal.data.dateNaissance || ''} max={todayStr()} onChange={(e) => maj('dateNaissance', e.target.value)} className="input-base" />
-            </Champ>
-            <Champ label="Date d'arrivée" icone={CalendarDays} required>
-              <input type="date" value={modal.data.dateEmbauche || ''} onChange={(e) => maj('dateEmbauche', e.target.value)} className="input-base" />
-            </Champ>
-            <Champ label="Salaire (FCFA)" icone={Banknote}>
-              <input type="number" min="0" value={modal.data.salaire} onChange={(e) => maj('salaire', parseInt(e.target.value) || 0)} className="input-base" />
             </Champ>
           </div>
           <Champ label="Contact" icone={Phone}>
