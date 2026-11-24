@@ -32,7 +32,7 @@ import {
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
   certifier as wfCertifier, signalerEcart as wfSignaler, appliquerAjustement as wfAjuster,
   demanderCorrectif as wfDemanderCorrectif, trancherCorrectif as wfTrancherCorrectif,
-  supprimerFacture as wfSupprimer
+  supprimerFacture as wfSupprimer, supprimerFactureCertifiee as wfSupprimerEngagee, STATUTS_STOCK_ENGAGE
 } from './factureWorkflow'
 
 // Clés identifiant un article dans les lignes d'une facture Maxi-Agro.
@@ -114,6 +114,13 @@ export default function Demandes() {
     run(() => wfSupprimer(f), 'Demande supprimée')
   }
 
+  // Info seul : suppression d'une facture dont le stock est engagé ; le stock sorti revient à la ferme.
+  function supprimerEngagee(f) {
+    if (!confirm(`Supprimer la facture ${f.numero} (${f.client?.nom || ''}) ?\nLe stock sorti sera réintégré au stock de la ferme et son chiffre d'affaires disparaît. Action IRRÉVERSIBLE.`)) return
+    if (!confirm(`Dernière confirmation : supprimer définitivement ${f.numero} ?`)) return
+    run(() => wfSupprimerEngagee(f, user), 'Facture supprimée : stock réintégré')
+  }
+
   // Relance : la facture est certifiée, l'agent corrige les quantités voulues.
   async function envoyerCorrectif({ lignes, motif }) {
     const f = relance
@@ -146,6 +153,9 @@ export default function Demandes() {
     }
     if (SUPPRIMABLES.includes(st) && (estAuteur(f) || peutGererSortie(f))) {
       a.push({ id: 'del', label: 'Supprimer', icon: Trash2, tone: 'danger', on: () => supprimer(f) })
+    }
+    if (STATUTS_STOCK_ENGAGE.includes(st) && user?.role === 'info') {
+      a.push({ id: 'delc', label: 'Supprimer la facture (stock réintégré)', icon: Trash2, tone: 'danger', on: () => supprimerEngagee(f) })
     }
     if (peutRelancer(f, { estCertifiee: st === 'certifiee', isAuteur: estAuteur(f), canManage: peutApprouver })) {
       a.push({ id: 'rel', label: 'Relancer (correctif)', icon: RotateCcw, tone: 'warning', on: () => setRelance(f) })

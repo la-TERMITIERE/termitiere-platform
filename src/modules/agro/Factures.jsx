@@ -25,7 +25,7 @@ import { useAgroStore } from './store/agroStore'
 import BandeAgro, { usePeriodeBande } from './BandeAgro'
 import FriseVente from './FriseVente'
 import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
-import { addItem, updateItem, removeItem } from '../../core/db'
+import { addItem, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
@@ -42,7 +42,7 @@ import {
   lignesEffectives, calcTotaux,
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
   certifier as wfCertifier, signalerEcart as wfSignaler, appliquerAjustement as wfAjuster, rouvrir as wfRouvrir,
-  demanderCorrectif as wfDemanderCorrectif, supprimerFactureCertifiee as wfSupprimerCertifiee
+  demanderCorrectif as wfDemanderCorrectif, supprimerFactureCertifiee as wfSupprimerCertifiee, supprimerFacture as wfSupprimer, STATUTS_STOCK_ENGAGE
 } from './factureWorkflow'
 
 // Clés identifiant un article dans les lignes d'une facture, et statuts encore
@@ -195,19 +195,20 @@ export default function Factures() {
     }
   }
 
-  // Supprimable tant que la sortie n'a pas été approuvée : le stock est intact.
+  // Supprimable tant que la sortie n'a pas été approuvée (le stock n'a pas bougé). Par sécurité, tout stock déjà sorti serait rendu à la ferme.
   async function supprimer(f) {
-    if (!confirm(`Supprimer la facture ${f.numero} ?\nAucun stock n'a encore bougé : l'action est définitive.`)) return
-    await removeItem('agro_factures', f.id)
-    await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`)
-    toast.success('Facture supprimée')
+    if (!confirm(`Supprimer la facture ${f.numero} ?\nL'action est définitive ; si du stock avait été sorti, il est réintégré.`)) return
+    await run(async () => {
+      await wfSupprimer(f)
+      await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`)
+    }, 'Facture supprimée')
   }
 
   // Info seul : supprime une facture certifiée et réintègre le stock sorti.
   async function supprimerCertifiee(f) {
     const lignes = lignesEffectives(f).filter((l) => l.articleId && (parseInt(l.qte) || 0) > 0).map((l) => `${l.qte} ${l.article}`).join(', ')
     const lome = venteHorsFerme(f)
-    if (!confirm(`Supprimer la facture CERTIFIÉE ${f.numero} (${f.client?.nom || ''}, ${formatMoney(calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC)}) ?\n\n${lome ? 'Le stock du point de vente sera recalculé sans cette facture.' : `Le stock sorti (${lignes || 'aucun article'}) sera réintégré au stock de la ferme.`}\nLe chiffre d'affaires de cette facture disparaît. Action IRRÉVERSIBLE.`)) return
+    if (!confirm(`Supprimer la facture ${factureStatut(f) === 'certifiee' ? 'CERTIFIÉE ' : ''}${f.numero} (${f.client?.nom || ''}, ${formatMoney(calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC)}) ?\n\n${lome ? 'Le stock du point de vente sera recalculé sans cette facture.' : `Le stock sorti (${lignes || 'aucun article'}) sera réintégré au stock de la ferme.`}\nLe chiffre d'affaires de cette facture disparaît. Action IRRÉVERSIBLE.`)) return
     if (!confirm(`Dernière confirmation : supprimer définitivement ${f.numero} ?`)) return
     await run(() => wfSupprimerCertifiee(f, user), 'Facture supprimée : stock réintégré')
   }
@@ -288,9 +289,9 @@ export default function Factures() {
     if (SUPPRIMABLES.includes(st) && (isAgent || peutApprouver)) {
       a.push({ id: 'del', label: 'Supprimer', icon: Trash2, tone: 'danger', on: () => supprimer(f) })
     }
-    // Info seul : suppression d'une facture certifiée, avec réintégration du stock sorti.
-    if (st === 'certifiee' && user?.role === 'info') {
-      a.push({ id: 'delc', label: 'Supprimer la facture certifiée', icon: Trash2, tone: 'danger', on: () => supprimerCertifiee(f) })
+    // Info seul : suppression d'une facture dont le stock est engagé (approuvée, écart, certifiée), avec réintégration du stock sorti.
+    if (STATUTS_STOCK_ENGAGE.includes(st) && user?.role === 'info') {
+      a.push({ id: 'delc', label: st === 'certifiee' ? 'Supprimer la facture certifiée' : 'Supprimer la facture (stock réintégré)', icon: Trash2, tone: 'danger', on: () => supprimerCertifiee(f) })
     }
     if (peutRelancer(f, { estCertifiee: st === 'certifiee', isAuteur: f.createdBy === user.nom, canManage: peutApprouver })) {
       a.push({ id: 'rel', label: 'Relancer (correctif)', icon: RotateCcw, tone: 'warning', on: () => setRelance(f) })
