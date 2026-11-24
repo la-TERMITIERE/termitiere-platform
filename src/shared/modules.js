@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog, CalendarHeart, Gift, Target, Archive, Repeat as RoutineIcon, BookUser, Briefcase, Layers, Megaphone
+  Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog, CalendarHeart, Gift, Target, Archive, Repeat as RoutineIcon, BookUser, Briefcase, Layers, Megaphone, Warehouse
 } from 'lucide-react'
 import { cheminsDuGroupe } from '../modules/rh/groupes'
 import { ROLES_PILOTAGE_TACHES, ROLES_PAR_EMPLOYE, ROLES_PAR_DIRECTEUR, ROLES_PAR_NIVEAU, ROLES_ANNUAIRE } from '../modules/taches/data'
@@ -138,6 +138,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
+    { label: 'Points de vente', to: '/agro/points-vente', icon: Warehouse },
     { label: 'Dépense', to: '/agro/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire', 'agent'] },
     { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },

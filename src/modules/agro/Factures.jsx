@@ -6,12 +6,13 @@
 // • La hiérarchie approuve la sortie (décompte du stock) et ajuste les quantités réelles (écart).
 // • Le CA n'est compté (dashboard) qu'à la CERTIFICATION ; le PDF n'est imprimable qu'une fois certifié.
 import { useMemo, useState } from 'react'
-import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Eye, Wallet, Receipt, Package } from 'lucide-react'
+import { Plus, FileDown, FileSpreadsheet, Trash2, Pencil, Send, Check, X, BadgeCheck, AlertTriangle, RotateCcw, Wallet, Receipt, Package } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import Button from '../../shared/ui/Button'
 import ModalAgro from './ModalAgro'
 import { glassModalProps, COULEUR_MODULE } from '../../utils/color'
 import Badge from '../../shared/ui/Badge'
+import BoutonIcone3D from '../../shared/ui/BoutonIcone3D'
 import StatCard from '../../shared/ui/StatCard'
 import FicheDetail from '../../shared/ui/FicheDetail'
 import FormGroup from '../../shared/forms/FormGroup'
@@ -33,6 +34,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { canExportExcel, canViewFinance, agirCommeAgent } from '../../core/roles'
 import { todayStr, genNumero, formatMoney, formatNumber, formatDateShort } from '../../utils/formatters'
 import { FACTURE_STATUTS, factureStatut } from './data'
+import { stockLome, depassementsLome, venteHorsFerme, lieuDeFacture, localitesAutres, filtreDuLieu, COL_AJUSTEMENTS_LOME } from './stockLome'
 import EcartModal from './EcartModal'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
 import { CORRECTIF_STATUTS, correctifEnCours, peutRelancer, deltasLignes, aDesEcarts } from '../../shared/demandes/correctif'
@@ -40,18 +42,22 @@ import {
   lignesEffectives, calcTotaux,
   demanderSortie as wfDemander, approuverSortie as wfApprouver, refuserSortie as wfRefuser,
   certifier as wfCertifier, signalerEcart as wfSignaler, appliquerAjustement as wfAjuster, rouvrir as wfRouvrir,
-  demanderCorrectif as wfDemanderCorrectif
+  demanderCorrectif as wfDemanderCorrectif, supprimerFactureCertifiee as wfSupprimerCertifiee
 } from './factureWorkflow'
 
 // Clés identifiant un article dans les lignes d'une facture, et statuts encore
 // supprimables — au-delà, le stock est engagé (écart ou correctif).
 const CLES = { key: 'articleId', nom: 'article' }
+// Couleur de chaque action (boutons à icône seule, légende dans l'infobulle).
+const COULEURS_ACTION = { primary: '#2EAA3F', success: '#16a34a', danger: '#dc2626', warning: '#d97706', secondary: '#475569', ghost: '#6b7280' }
 const SUPPRIMABLES = ['brouillon', 'sortie_demandee', 'refusee']
 
 const emptyFacture = () => ({
   date: todayStr(),
   client: { nom: '', tel: '', adresse: '', email: '' },
   apporteur: '',
+  lieuVente: 'ferme', // 'ferme' : vendu depuis la ferme (stock de la ferme) ; 'lome' : vendu à Lomé ; 'autre' : vendu dans la localité `localite` (voir stockLome.js)
+  localite: '',
   lignes: [{ articleId: '', article: '', qte: 1, prixUnit: 0, total: 0 }],
   remise: 0,
   tva: 0
@@ -64,6 +70,8 @@ export default function Factures() {
   const estAdministration = canViewFinance(role)
   const { data: factures } = useCollection('agro_factures')
   const { data: users } = useCollection('users')
+  const { data: inventaires } = useCollection('agro_inventaires')
+  const { data: pertesLome } = useCollection(COL_AJUSTEMENTS_LOME)
   const especes = useAgroStore((s) => s.especes)
   const aliments = useAgroStore((s) => s.aliments)
   const getArticle = useAgroStore((s) => s.getArticle)
@@ -77,6 +85,7 @@ export default function Factures() {
   ], [especes, aliments])
   const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('tous')
+  const [lieuFiltre, setLieuFiltre] = useState('tous') // 'tous' | 'ferme' | 'lome' | clé d'une autre localité
   const [modal, setModal] = useState(null)        // { facture, editId }
   const [ecart, setEcart] = useState(null)        // facture en cours d'ajustement (hiérarchie)
   const [relance, setRelance] = useState(null)    // facture certifiée à relancer (correctif)
@@ -89,9 +98,10 @@ export default function Factures() {
       [...factures]
         .filter((f) => (f.client?.nom || '').toLowerCase().includes(recherche.toLowerCase()))
         .filter((f) => periode.dansPeriode(f.date))
+        .filter((f) => (lieuFiltre === 'tous' ? true : lieuFiltre === 'ferme' ? !venteHorsFerme(f) : lieuDeFacture(f)?.cle === lieuFiltre))
         .filter((f) => (filtre === 'tous' ? true : filtre === 'correctif' ? correctifEnCours(f) : factureStatut(f) === filtre))
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [factures, recherche, filtre, periode.cle]
+    [factures, recherche, filtre, lieuFiltre, periode.cle]
   )
 
   // Cumul de facturation — réservé à l'administration, recalculé selon la recherche
@@ -118,6 +128,15 @@ export default function Factures() {
     return Object.values(map).sort((a, b) => a.nom.localeCompare(b.nom))
   }, [factures])
 
+  // Stock de Lomé et lignes du brouillon qui le dépassent (avertissement, jamais un blocage : le stock peut être en retard de saisie).
+  const localites = useMemo(() => localitesAutres({ inventaires, factures, ajustements: pertesLome }), [inventaires, factures, pertesLome])
+  const lieuModal = modal ? lieuDeFacture(modal.facture) : null
+  const stockDuLieu = useMemo(
+    () => (modal && lieuModal ? stockLome({ inventaires, factures, ajustements: pertesLome, especes, filtre: filtreDuLieu(modal.facture) }).lignes : []),
+    [modal, lieuModal?.cle, inventaires, factures, pertesLome, especes] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const depassements = modal && lieuModal ? depassementsLome(modal.facture, stockDuLieu) : []
+
   function openCreate() { setModal({ facture: emptyFacture(), editId: null }) }
   function openEdit(f) { setModal({ facture: structuredClone(f), editId: f.id }) }
 
@@ -143,8 +162,9 @@ export default function Factures() {
     const lignes = (f.lignes || []).filter((l) => l.articleId || (parseInt(l.qte) || 0) > 0 || (parseFloat(l.prixUnit) || 0) > 0)
     if (!lignes.some((l) => l.articleId && (parseInt(l.qte) || 0) > 0)) return toast.error('Ajoutez au moins une ligne avec un article')
     if (lignes.some((l) => (parseInt(l.qte) || 0) > 0 && !l.articleId)) return toast.error('Chaque ligne facturée doit avoir un article sélectionné')
+    if (f.lieuVente === 'autre' && !(f.localite || '').trim()) return toast.error('Indiquez la localité de vente')
     const { totalHT, totalTTC } = calcTotaux(lignes, f.remise, f.tva)
-    const payload = { ...f, lignes, totalHT, totalTTC }
+    const payload = { ...f, lignes, totalHT, totalTTC, localite: f.lieuVente === 'autre' ? f.localite.trim() : '' }
     try {
       if (modal.editId) {
         await updateItem('agro_factures', modal.editId, payload)
@@ -181,6 +201,15 @@ export default function Factures() {
     await removeItem('agro_factures', f.id)
     await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`)
     toast.success('Facture supprimée')
+  }
+
+  // Info seul : supprime une facture certifiée et réintègre le stock sorti.
+  async function supprimerCertifiee(f) {
+    const lignes = lignesEffectives(f).filter((l) => l.articleId && (parseInt(l.qte) || 0) > 0).map((l) => `${l.qte} ${l.article}`).join(', ')
+    const lome = venteHorsFerme(f)
+    if (!confirm(`Supprimer la facture CERTIFIÉE ${f.numero} (${f.client?.nom || ''}, ${formatMoney(calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC)}) ?\n\n${lome ? 'Le stock du point de vente sera recalculé sans cette facture.' : `Le stock sorti (${lignes || 'aucun article'}) sera réintégré au stock de la ferme.`}\nLe chiffre d'affaires de cette facture disparaît. Action IRRÉVERSIBLE.`)) return
+    if (!confirm(`Dernière confirmation : supprimer définitivement ${f.numero} ?`)) return
+    await run(() => wfSupprimerCertifiee(f, user), 'Facture supprimée : stock réintégré')
   }
 
   // ─────────── Transitions du workflow (logique partagée dans factureWorkflow) ───────────
@@ -259,6 +288,10 @@ export default function Factures() {
     if (SUPPRIMABLES.includes(st) && (isAgent || peutApprouver)) {
       a.push({ id: 'del', label: 'Supprimer', icon: Trash2, tone: 'danger', on: () => supprimer(f) })
     }
+    // Info seul : suppression d'une facture certifiée, avec réintégration du stock sorti.
+    if (st === 'certifiee' && user?.role === 'info') {
+      a.push({ id: 'delc', label: 'Supprimer la facture certifiée', icon: Trash2, tone: 'danger', on: () => supprimerCertifiee(f) })
+    }
     if (peutRelancer(f, { estCertifiee: st === 'certifiee', isAuteur: f.createdBy === user.nom, canManage: peutApprouver })) {
       a.push({ id: 'rel', label: 'Relancer (correctif)', icon: RotateCcw, tone: 'warning', on: () => setRelance(f) })
     }
@@ -308,6 +341,14 @@ export default function Factures() {
     <div className="space-y-4">
       <BandeAgro icone={Receipt} titre="Facturation" sous="Factures clients, sorties de stock et certification">
         {periode.node}
+        <ChampBande label="Lieu de vente">
+          <select value={lieuFiltre} onChange={(e) => setLieuFiltre(e.target.value)} className={CLASSE_CHAMP_BANDE} aria-label="Filtrer par lieu de vente">
+            <option value="tous">Tous les lieux</option>
+            <option value="ferme">Ferme</option>
+            <option value="lome">Lomé</option>
+            {localites.map((l) => <option key={l.cle} value={l.cle}>{l.nom}</option>)}
+          </select>
+        </ChampBande>
         <ChampBande label="Client">
           <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un client…" className={CLASSE_CHAMP_BANDE} />
         </ChampBande>
@@ -352,8 +393,9 @@ export default function Factures() {
                 const sd = FACTURE_STATUTS[st] || { label: st, tone: 'neutral' }
                 const tot = calcTotaux(lignesEffectives(f), f.remise, f.tva)
                 return (
-                  <tr key={f.id} className="group hover:bg-gray-50">
-                    <td className="sticky left-0 z-10 bg-white px-3 py-2 font-mono text-xs group-hover:bg-gray-50">{f.numero}</td>
+                  <tr key={f.id} className="group cursor-pointer hover:bg-gray-50" tabIndex={0} title="Cliquer pour voir le détail de la facture"
+                    onClick={() => setDetail(f)} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) setDetail(f) }}>
+                    <td className="sticky left-0 z-10 bg-white px-3 py-2 font-mono text-xs group-hover:bg-gray-50">{f.numero}{venteHorsFerme(f) && <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 font-sans text-[10px] font-bold text-sky-700">{lieuDeFacture(f)?.nom || 'Autre localité'}</span>}</td>
                     <td className="px-3 py-2">{formatDateShort(f.date)}</td>
                     <td className="px-3 py-2">{f.client?.nom || '—'}</td>
                     <td className="px-3 py-2">
@@ -383,17 +425,10 @@ export default function Factures() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-wrap items-center justify-end gap-1">
-                        {/* Consultation ouverte à tous, quel que soit le statut. */}
-                        <button onClick={() => setDetail(f)} title="Voir le détail"
-                          className="icone-verre bv-clic rounded-xl p-1.5" aria-label="Voir le détail"><Eye size={16} /></button>
-                        {actions(f).map((act) => act.compact ? (
-                          <button key={act.id} type="button" title={act.label} aria-label={act.label} disabled={busy} onClick={act.on}
-                        style={{ '--ic': '#d97706', color: '#b45309' }} className="icone-verre bv-clic shrink-0 rounded-xl p-2 disabled:opacity-50"><act.icon size={17} /></button>
-                        ) : (
-                          <Button key={act.id} size="sm" variant={act.tone} disabled={busy} onClick={act.on}>
-                            <act.icon size={14} /> {act.label}
-                          </Button>
+                      {/* Les boutons d'action n'ouvrent pas le détail (le clic ne remonte pas à la ligne). */}
+                      <div className="flex flex-wrap items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        {actions(f).map((act) => (
+                          <BoutonIcone3D key={act.id} icone={act.icon} label={act.label} couleur={COULEURS_ACTION[act.tone] || '#475569'} disabled={busy} onClick={act.on} />
                         ))}
                       </div>
                     </td>
@@ -427,6 +462,28 @@ export default function Factures() {
               <FormGroup label="Email" className="md:col-span-3"><Input value={modal.facture.client.email} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, client: { ...m.facture.client, email: e.target.value } } }))} /></FormGroup>
             </div>
             <div className="mt-2">
+              <FormGroup label="Lieu de vente" hint="Hors de la ferme, la vente décompte le stock du point de vente (animaux envoyés depuis la ferme), pas celui de la ferme.">
+                <Select value={modal.facture.lieuVente || 'ferme'} onChange={(e) => setModal((m) => ({ ...m, facture: { ...m.facture, lieuVente: e.target.value } }))}>
+                  <option value="ferme">Ferme</option>
+                  <option value="lome">Lomé</option>
+                  <option value="autre">Autre localité</option>
+                </Select>
+              </FormGroup>
+              {modal.facture.lieuVente === 'autre' && (
+                <FormGroup label="Localité de vente" required hint="Une localité déjà utilisée se propose en tapant son nom.">
+                  <ChampAutocomplete
+                    value={modal.facture.localite || ''}
+                    suggestions={localites.map((l) => l.nom)}
+                    placeholder="ex : Kara, Kpalimé…"
+                    onChange={(v) => setModal((m) => ({ ...m, facture: { ...m.facture, localite: v } }))}
+                  />
+                </FormGroup>
+              )}
+              {depassements.length > 0 && (
+                <p role="alert" className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Stock de {lieuModal?.nom || 'la localité'} insuffisant : {depassements.map((d) => `${getArticle(d.id)?.nom || d.id} (demandé ${d.demande}, disponible ${d.stock})`).join(' ; ')}. Vérifiez que le transfert depuis la ferme a bien été saisi.
+                </p>
+              )}
               <FormGroup label="Apporté / recommandé par (membre de l'entreprise)" hint="Laissez vide si le client est venu en direct.">
                 <ChampAutocomplete
                   value={modal.facture.apporteur || ''}

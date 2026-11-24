@@ -833,7 +833,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
                 value={l.label || ''}
                 readOnly={locked}
                 onChange={(e) => setLigne(i, { label: e.target.value })}
-                placeholder={l.type === 'Décès' ? 'Motif du décès (maladie, accident, prédateur…)' : 'Précisez (personne, motif…)'}
+                placeholder={l.type === 'Décès' ? 'Motif du décès (maladie, accident, prédateur…)' : l.type === 'Transfert autre localité' ? 'Localité de destination (ex : Kara, Kpalimé…)' : 'Précisez (personne, motif…)'}
                 autoFocus
               />
             )}

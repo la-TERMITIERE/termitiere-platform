@@ -80,7 +80,12 @@ export const finAliment = ({ init, ent, sor }) =>
 // (généré automatiquement lors de l'ajustement d'un écart de facturation).
 export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Retour du marché', 'Dons', 'Autres']
 // Types de SORTIES pour les animaux. La « Mutation » porte une espèce de destination.
-export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', 'Perte', 'Dons', 'Autres']
+// « Transfert Lomé » : les animaux quittent la ferme pour être stockés à Lomé, où ils se vendent (voir stockLome.js). Le stock de la ferme baisse,
+// celui de Lomé augmente. Ce n'est ni une vente ni une perte.
+export const TYPE_TRANSFERT_LOME = 'Transfert Lomé'
+// « Transfert autre localité » : même principe pour une autre localité que l'agent précise en tapant son nom (Kara, Kpalimé…).
+export const TYPE_TRANSFERT_AUTRE = 'Transfert autre localité'
+export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', TYPE_TRANSFERT_LOME, TYPE_TRANSFERT_AUTRE, 'Perte', 'Dons', 'Autres']
 // Saisie directe : Ventes et Dons passent par le workflow « Demande » (approbation).
 export const SORTIE_TYPES_SAISIE_ANIMAL = SORTIE_TYPES_ANIMAL.filter((t) => !['Ventes', 'Dons'].includes(t))
 // Aliments / divers : pas de naissance ni de décès ni de mutation inter-espèces.
@@ -90,7 +95,7 @@ export const SORTIE_TYPES_SAISIE_ALIMENT = SORTIE_TYPES_ALIMENT.filter((t) => ![
 
 // Le type « Autres » exige une précision (personne / motif personnalisé).
 // Le type « Décès » exige un motif (faithful à la règle d'origine).
-export const labelRequis = (type) => type === 'Autres' || type === 'Décès'
+export const labelRequis = (type) => type === 'Autres' || type === 'Décès' || type === TYPE_TRANSFERT_AUTRE
 
 // Somme des quantités d'une liste de mouvements.
 export const sommeMouvements = (lignes) =>

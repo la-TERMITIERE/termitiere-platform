@@ -135,7 +135,7 @@ function DonneesTab() {
   // ajout seul dans les règles de la base (database.rules.json) : la suppression
   // serait refusée par le serveur. Idem pour `notifications`, qui appartient aux
   // autres modules et n'a pas à être vidé depuis Maxi-Agro.
-  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins']
+  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins', 'agro_lome_ajustements']
 
   async function reinitialiserTout() {
     if (!isAdmin) return toast.error('Action réservée à l\'administrateur')

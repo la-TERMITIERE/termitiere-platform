@@ -8,6 +8,7 @@ import Dashboard from './Dashboard'
 import Saisie from './Saisie'
 import TachesRoutinieres from './TachesRoutinieres'
 import Factures from './Factures'
+import PointsVente from './PointsVente'
 import Analyses from './Analyses'
 import Sante from './Sante'
 import Demandes from './Demandes'
@@ -57,6 +58,8 @@ export default function AgroModule() {
       <Route path="routine" element={<TachesRoutinieres />} />
       <Route path="saisie" element={<Saisie />} />
       <Route path="factures" element={<Factures />} />
+      <Route path="points-vente" element={<PointsVente />} />
+      <Route path="lome" element={<Navigate to="/agro/points-vente" replace />} />
       {/* Dépense : administration/hiérarchie + secrétaire (accès explicitement accordé). */}
       <Route path="finances" element={canViewPilotage(role) || role === 'secretaire' || role === 'agent' ? <RecettesDepenses secteurId="agro" masquerRevenu /> : <AccesRefuse />} />
       <Route path="analyses" element={canViewPilotage(role) ? <Analyses /> : <AccesRefuse />} />
