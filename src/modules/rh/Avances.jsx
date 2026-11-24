@@ -12,6 +12,7 @@ import { addItem, updateItem, removeItem } from '../../core/db'
 import { toast } from '../../core/notifications'
 import { formatMoney } from '../../utils/formatters'
 import { avatarGradient } from '../../utils/color'
+import { supprimerAvecRetour } from './suppression'
 import { STATUTS_AVANCE, COL } from './store/rhStore'
 import { PageHeader, Champ, ModalRh, ChoixSimple } from './rhui'
 import DetailAvance, { BarreRemboursement, moisEnClair } from './DetailAvance'
@@ -29,7 +30,6 @@ export default function Avances() {
   const role = useAuth((s) => s.role)
   const { data: avances } = useCollection(COL.avances)
   const { data: employes } = useCollection(COL.employes)
-  const { data: users } = useCollection('users')
   const [recherche, setRecherche] = useState('')
   const [filtre, setFiltre] = useState('')
   const [modal, setModal] = useState(null)
@@ -42,7 +42,6 @@ export default function Avances() {
   const liste = useMemo(() => [...avances].sort((a, b) => ((a.creeLe || '') < (b.creeLe || '') ? 1 : -1))
     .filter((a) => !filtre || (a.statut || 'demandee') === filtre)
     .filter((a) => correspond(recherche, a.employeNom, a.motif, libelleType(a.type))), [avances, filtre, recherche])
-  const nomsGe = users.filter((u) => u.role === 'ge').map((u) => u.nom || u.login)
 
   const emp = modal?.employeId ? employes.find((e) => e.id === modal.employeId) : null
   const montant = Number(modal?.montant) || 0
@@ -70,7 +69,7 @@ export default function Avances() {
     }
     setModal(null); setTente(false)
   }
-  async function supprimer(a) { setDetailId(null); await removeItem(COL.avances, a.id); toast.success('Demande supprimée') }
+  async function supprimer(a) { setDetailId(null); await supprimerAvecRetour(() => removeItem(COL.avances, a.id), 'Demande supprimée') }
 
   return (
     <div className="space-y-5">
@@ -173,7 +172,7 @@ export default function Avances() {
           </Champ>
           <p className="flex items-start gap-2 rounded-2xl border border-violet-200/80 bg-violet-50/70 px-3.5 py-2.5 text-xs text-violet-800 backdrop-blur-md">
             <ShieldCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span>{modal.id ? 'Une demande refusée repart à l’approbation une fois corrigée.' : `La demande part à ${nomsGe.length ? nomsGe.join(', ') : 'la Gérante exécutive'} pour approbation. Une fois versée, la retenue se fait toute seule sur les bulletins de paie.`}</span>
+            <span>{modal.id ? 'Une demande refusée repart à l’approbation une fois corrigée.' : `La demande part à la GE pour approbation. Une fois versée, la retenue se fait toute seule sur les bulletins de paie.`}</span>
           </p>
         </>)}
       </ModalRh>

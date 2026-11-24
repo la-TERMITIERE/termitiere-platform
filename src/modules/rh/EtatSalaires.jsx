@@ -47,6 +47,7 @@ export default function EtatSalaires() {
             { key: 'departement', label: 'Département', width: 18 },
             { key: 'brutTotal', label: 'Brut', type: 'money', width: 15 },
             { key: 'cnssSalarie', label: 'CNSS sal.', type: 'money', width: 14 },
+            { key: 'amuSalarie', label: 'AMU sal.', type: 'money', width: 14 },
             { key: 'its', label: 'IRPP', type: 'money', width: 14 },
             { key: 'net', label: 'Net à payer', type: 'money', width: 15 }
           ],

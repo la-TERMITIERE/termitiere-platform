@@ -17,7 +17,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'depense_revenus_manuels', 'depense_pau_remboursements',
   'depense_alertes_dashboard_fermees', 'depense_purge_log',
   // ── MAXI AGRO ───────────────────────────────────────────────────────────
-  'agro_demandes', 'agro_factures', 'agro_inventaires', 'agro_sante', 'agro_vaccins', 'agro_banque',
+  'agro_demandes', 'agro_factures', 'agro_inventaires', 'agro_sante', 'agro_vaccins', 'agro_banque', 'agro_lome_ajustements',
   // ── MAXI LOGISTIQUE ─────────────────────────────────────────────────────
   'logistique_clients', 'logistique_demandes', 'logistique_factures',
   'logistique_fournisseurs', 'logistique_inventaires', 'logistique_prestations',
@@ -42,9 +42,7 @@ export const COLLECTIONS_A_REINITIALISER = [
   'gym_abonnements', 'gym_clients', 'gym_coachs', 'gym_factures', 'gym_forfaits', 'gym_params',
   'gym_pointages_coach', 'gym_presences', 'gym_seances', 'gym_banque', 'gym_reglements_partenaires',
   // ── Ressources humaines ─────────────────────────────────────────────────
-  'rh_employes', 'rh_presences',
-  // ── E-VOYAGE ────────────────────────────────────────────────────────────
-  'voyage_articles', 'voyage_depenses', 'voyage_voyages'
+  'rh_employes', 'rh_presences'
 ]
 
 // Collections d'identité : on y préserve UNIQUEMENT le compte de la personne

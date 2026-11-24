@@ -8,9 +8,10 @@ import { groupeDeChemin } from './groupes'
 export default function RhOnglets() {
   const { pathname } = useLocation()
   const user = useAuth((s) => s.user)
+  const role = useAuth((s) => s.role)
   const groupe = groupeDeChemin(pathname)
   if (!groupe) return null
-  const onglets = groupe.onglets.filter((o) => !voletRetire(user, 'rh', o.to))
+  const onglets = groupe.onglets.filter((o) => !voletRetire(user, 'rh', o.to) && (!o.roles || o.roles.includes(role)))
   if (onglets.length < 2) return null
   return (
     <nav aria-label="Volets du groupe" className="rh-onglets ed-entree mb-4 flex w-fit max-w-full flex-wrap gap-0.5 rounded-full p-1">

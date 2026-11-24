@@ -1,6 +1,7 @@
 // Paramètres MAXI-AGRO — référentiels, utilisateurs (démo), données, PIN, système.
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Download, Upload, RotateCcw, Target, Leaf, Wheat, Database, Cpu, AlertTriangle, Settings } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, RotateCcw, Target, Leaf, Wheat, Database, Cpu, AlertTriangle, Settings, ShieldCheck } from 'lucide-react'
+import ControleStock from './ControleStock'
 import { ParamsGrille, ParamsCarte } from '../../shared/ui/ParamsVerre'
 import ObjectifParam from '../comptabilite/ObjectifParam'
 import Button from '../../shared/ui/Button'
@@ -28,6 +29,7 @@ const TABS = [
   ['especes', 'Espèces', Leaf],
   ['aliments', 'Aliments', Wheat],
   ['donnees', 'Données', Database],
+  ['controle', 'Contrôle stock', ShieldCheck],
   ['systeme', 'Système', Cpu]
 ]
 
@@ -45,6 +47,7 @@ export default function Params() {
       {tab === 'especes' && <ReferentielTab kind="espece" />}
       {tab === 'aliments' && <ReferentielTab kind="aliment" />}
       {tab === 'donnees' && <DonneesTab />}
+      {tab === 'controle' && <ControleStock />}
       {tab === 'systeme' && <SystemeTab />}
     </div>
   )
@@ -132,7 +135,7 @@ function DonneesTab() {
   // ajout seul dans les règles de la base (database.rules.json) : la suppression
   // serait refusée par le serveur. Idem pour `notifications`, qui appartient aux
   // autres modules et n'a pas à être vidé depuis Maxi-Agro.
-  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins']
+  const RESET_COLS = ['agro_inventaires', 'agro_factures', 'agro_demandes', 'agro_sante', 'agro_vaccins', 'agro_lome_ajustements']
 
   async function reinitialiserTout() {
     if (!isAdmin) return toast.error('Action réservée à l\'administrateur')

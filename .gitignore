@@ -3,6 +3,7 @@ dist
 dist-test
 dist-ssr
 .env
+.env.deploy
 .env.test
 .env.local
 *.local
@@ -31,3 +32,10 @@ tp-*.json
 tp-*.json.enc
 *-export.json
 backups/
+.env.auth
+cert.pem
+*.copi
+
+# Fichiers locaux de déploiement VPS
+deploy/.env.deploy
+deploy/Caddyfile.backup

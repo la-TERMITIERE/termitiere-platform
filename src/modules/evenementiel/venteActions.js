@@ -1,12 +1,12 @@
 // Actions métier d'une vente de briques, partagées par les écrans Ventes, Autorisations et Factures :
 //  - demanderAutorisationVente : envoie l'autorisation de sortie des briques à la hiérarchie
 //  - facturerVente : émet la facture d'une vente déjà autorisée, sans ressaisie
-import { addItem, updateItem } from '../../core/db'
+import { addItem, updateItem, updateAtomic, ts } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { APPROVER_ROLES } from '../../core/roles'
 import { todayStr, nowHM, genNumero, formatMoney } from '../../utils/formatters'
-import { dernierStockBriques } from './logic'
+import { dernierStockBriques, inventairesCompletes } from './logic'
 
 const stockDe = (inventaires, briqueId) => dernierStockBriques(inventaires, briqueId, briqueId === 'caillasses' ? 'caillasses' : 'pret')
 
@@ -65,4 +65,25 @@ export async function facturerVente({ vente, clients, factures, user }) {
   await updateItem('evenementiel_ventes', vente.id, { statut: 'chargee' })
   await audit('evenementiel', 'FACTURE', `${numero} : ${formatMoney(Math.round(totalHT))}`)
   return { numero, total: Math.round(totalHT) }
+}
+
+// Sort les briques du stock (prêtes, ou caillasses) sur le dernier inventaire connu. L'écriture est ATOMIQUE : elle part
+// de la valeur réellement en base, donc une production ou un enregistrement de stock fait au même moment n'est pas écrasé.
+// Lève une Error (message prêt à afficher) si aucun stock n'existe ou si l'écriture échoue : l'appelant ne doit alors
+// PAS certifier la demande.
+export async function sortirDuStock({ inventaires, lignes, user }) {
+  const ref = [...inventairesCompletes(inventaires)].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+  if (!ref) throw new Error("Aucun stock de briques enregistré : saisissez d'abord le stock")
+  const zero = { appatam: 0, sechage: 0, pret: 0, caillasses: 0 }
+  await updateAtomic('evenementiel_inventaires', ref.date, (cur) => {
+    const base = cur || ref
+    const briques = { ...(base.briques || {}) }
+    ;(lignes || []).forEach((l) => {
+      const etat = l.briqueId === 'caillasses' ? 'caillasses' : 'pret'
+      const courant = briques[l.briqueId] || ref.briques?.[l.briqueId] || zero
+      briques[l.briqueId] = { ...zero, ...courant, [etat]: Math.max(0, (parseInt(courant[etat]) || 0) - (parseInt(l.qte) || 0)) }
+    })
+    return { ...base, date: ref.date, briques, savedAt: ts(), agentId: user?.uid || null, agentNom: user?.nom || null }
+  })
+  return ref.date
 }

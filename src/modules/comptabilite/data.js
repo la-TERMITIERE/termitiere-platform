@@ -51,7 +51,7 @@ export const getClasse = (numeroCompte) => CLASSES.find((c) => c.num === classeD
 // ── Plan comptable par défaut (SYSCOHADA Révisé, 6 chiffres) ──────────────────
 // Les 19 comptes marqués `fezire:true` reproduisent EXACTEMENT le plan par défaut du
 // tenant FEZIRE. Les autres complètent le référentiel pour l'activité multi-secteurs
-// (agro, logistique, briqueterie, foncier, garderie, gym, voyage) — même schéma 6 chiffres.
+// (agro, logistique, briqueterie, foncier, garderie, gym) — même schéma 6 chiffres.
 export const PLAN_COMPTABLE_DEFAUT = [
   // Classe 1 — Capitaux
   { num: '101000', label: 'Capital social', type: 'EQUITY', fezire: true },

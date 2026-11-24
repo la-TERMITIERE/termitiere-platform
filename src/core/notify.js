@@ -65,7 +65,7 @@ export async function notify({
       // vraie notification système sur une affaire qui ne le concerne pas.
       cibles.push(...users
         .filter((u) => forRoles.includes(u.role))
-        .filter((u) => !module || isViewAllRole(u.role) || (u.modules || []).includes(module))
+        .filter((u) => !module || isViewAllRole(u.role) || (u.modules || []).includes(module) || (module === 'taches' && !(u.modulesRetires || []).includes('taches')))
         // MAXI-GYM cloisonné par salle : si la notif porte un `site`, seuls les
         // comptes ayant accès à cette salle la reçoivent (push + WhatsApp).
         .filter((u) => module !== 'gym' || peutVoirNotifSiteGym(u, u.role, site))

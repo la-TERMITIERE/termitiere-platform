@@ -173,3 +173,23 @@ export function appliquerDeltasStockBriques(inventaires, deltas) {
   })
   return { date: inv.date, inv, briques }
 }
+
+// Lignes à sortir du stock pour une autorisation : ce qui a été AUTORISÉ (les lignes de la demande), sinon les lignes
+// de la vente, sinon la brique unique de l'ancien format. Ainsi une vente modifiée ou introuvable ne bloque plus la sortie.
+export function lignesASortir(demande, vente) {
+  const l = (demande?.lignes?.length ? demande.lignes : vente?.lignes) || []
+  if (l.length) return l
+  return demande?.briqueId && parseInt(demande?.qte) ? [{ briqueId: demande.briqueId, briqueNom: demande.briqueNom, qte: demande.qte }] : []
+}
+
+// Briques dont la quantité demandée dépasse le stock disponible (prêtes, ou caillasses) : [{ id, nom, voulu, dispo }].
+export function manquesStock(inventaires, lignes) {
+  const voulu = {}
+  ;(lignes || []).forEach((l) => {
+    const e = voulu[l.briqueId] || (voulu[l.briqueId] = { id: l.briqueId, nom: l.briqueNom || l.briqueId, voulu: 0 })
+    e.voulu += parseInt(l.qte) || 0
+  })
+  return Object.values(voulu)
+    .map((e) => ({ ...e, dispo: dernierStockBriques(inventaires, e.id, e.id === 'caillasses' ? 'caillasses' : 'pret') }))
+    .filter((e) => e.voulu > e.dispo)
+}

@@ -60,10 +60,10 @@ export default function PresencesConfiguration() {
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Clock3} sousModule="Paramètres" titre="Horaires de présence" sousTitre="Heures d'arrivée et de départ des employés et des directeurs, et tolérance avant un retard." />
+      <PageHeader icon={Clock3} sousModule="Paramètres" titre="Horaires de présence" sousTitre="Programmez ici les heures de chaque groupe : les employés et les directeurs n'arrivent pas à la même heure." />
 
       <ParamsGrille>
-        <ParamsCarte icone={UserRound} couleur="#16a34a" titre="Employés" sous="Horaires de l'équipe">
+        <ParamsCarte icone={UserRound} couleur="#16a34a" titre="Employés" sous="Horaires de l'équipe : à programmer">
           <div className="grid gap-3 sm:grid-cols-2">
             <Champ iconeLabel label="Heure d'arrivée" icone={LogIn} aide="Passé cette heure, un pointage est un retard et le bouton Absent apparaît.">
               <input type="time" value={form.heureArrivee} onChange={maj('heureArrivee')} className="input-base" />
@@ -74,12 +74,12 @@ export default function PresencesConfiguration() {
           </div>
         </ParamsCarte>
 
-        <ParamsCarte icone={Crown} couleur="#7c3aed" titre="Directeurs" sous="Horaires de la direction">
+        <ParamsCarte icone={Crown} couleur="#7c3aed" titre="Directeurs" sous="Horaires de la direction : à programmer">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Champ iconeLabel label="Heure d'arrivée" icone={LogIn} aide="Laissez vide pour reprendre l'heure des employés.">
+            <Champ iconeLabel label="Heure d'arrivée" icone={LogIn} aide="Heure propre aux directeurs. Tant qu'elle n'est pas programmée, ils suivent celle des employés.">
               <input type="time" value={form.heureArriveeDirection} onChange={maj('heureArriveeDirection')} className="input-base" placeholder={form.heureArrivee} />
             </Champ>
-            <Champ iconeLabel label="Heure de départ" icone={LogOut} aide="Laissez vide pour reprendre l'heure des employés." erreur={departDirectionInvalide ? "Doit être après l'heure d'arrivée." : undefined}>
+            <Champ iconeLabel label="Heure de départ" icone={LogOut} aide="Heure propre aux directeurs. Tant qu'elle n'est pas programmée, ils suivent celle des employés." erreur={departDirectionInvalide ? "Doit être après l'heure d'arrivée." : undefined}>
               <input type="time" value={form.heureDepartDirection} onChange={maj('heureDepartDirection')} className="input-base" placeholder={form.heureDepart} />
             </Champ>
           </div>

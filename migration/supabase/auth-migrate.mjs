@@ -4,14 +4,17 @@
 //
 // Nécessite la clé SERVICE ROLE (admin) — Settings → API → service_role.
 //   SUPABASE_URL=...  SUPABASE_SERVICE_KEY=...  node auth-migrate.mjs
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 import fs from 'node:fs'
+import ws from 'ws'
 import { createClient } from '@supabase/supabase-js'
 
 const URL = process.env.SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_KEY
 if (!URL || !KEY) { console.error('❌ SUPABASE_URL et SUPABASE_SERVICE_KEY requis.'); process.exit(1) }
 
-const admin = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false } })
+const admin = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false }, realtime: {transport: ws} })
 const DOMAIN = 'latermitiere.local'
 
 async function run() {

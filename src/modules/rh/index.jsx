@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { isFullAccessRole } from '../../core/roles'
 // Structure RH
 import Departements from './Departements'
+import DemandesAcces from './DemandesAcces'
 import Postes from './Postes'
 import Organigramme from './Organigramme'
 // Collaborateurs & Contrats
@@ -38,6 +39,7 @@ import Conformite from './Conformite'
 import Taches from './Taches'
 import Impacts from './Impacts'
 import Anniversaires from './Anniversaires.jsx'
+import Annonces from './Annonces.jsx'
 import Dotations from './Dotations.jsx'
 import Primes from './Primes.jsx'
 import PrimesConfiguration from './PrimesConfiguration.jsx'
@@ -66,6 +68,7 @@ export default function RhModule() {
       <Route index element={<Dashboard />} />
       <Route path="departements" element={<Departements />} />
       <Route path="postes" element={<Postes />} />
+      <Route path="acces" element={<DemandesAcces />} />
       <Route path="organigramme" element={<Organigramme />} />
       <Route path="employes" element={<Employes />} />
       <Route path="contrats" element={<Contrats />} />
@@ -88,6 +91,7 @@ export default function RhModule() {
       <Route path="competences" element={<Competences />} />
       <Route path="conformite" element={<Conformite />} />
       <Route path="taches" element={<Taches />} />
+      <Route path="annonces" element={<Annonces />} />
       <Route path="anniversaires" element={<Anniversaires />} />
       <Route path="dotations" element={<Dotations />} />
       <Route path="primes" element={<Primes />} />

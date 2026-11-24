@@ -19,7 +19,7 @@ import NumDoc from '../../shared/ui/NumDoc'
 import EtatVide from '../../shared/ui/EtatVide'
 import SignatureApprobation from '../../shared/ui/SignatureApprobation'
 import AutorisationHero from '../../shared/ui/AutorisationHero'
-import { demanderAutorisationVente } from './venteActions'
+import { demanderAutorisationVente, sortirDuStock } from './venteActions'
 import FormGroup from '../../shared/forms/FormGroup'
 import Select from '../../shared/forms/Select'
 import Input from '../../shared/forms/Input'
@@ -32,8 +32,8 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { dernierStockBriques, retirerVenteDuStock, appliquerDeltasStockBriques } from './logic'
-import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole, logistiquePeutApprouver, logistiqueVoitValidateur } from '../../core/roles'
+import { dernierStockBriques, appliquerDeltasStockBriques, lignesASortir, manquesStock } from './logic'
+import { APPROVER_ROLES, VALIDATEURS_SORTIE, isReadOnlyRole, logistiquePeutApprouver, peutCertifierSortie, logistiqueVoitValidateur } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande, estAuteurDemande, estActif } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
@@ -56,12 +56,11 @@ export default function Demandes() {
   const { data: inventaires } = useCollection('evenementiel_inventaires')
   const briques = useBriqueterieStore((s) => s.briques)
   const isManager = canManage()
-  const isCertifier = canCertify()
+  const isCertifier = canCertify() || peutCertifierSortie(role)
   const lectureSeule = isReadOnlyRole(role)
-  // La secrétaire gère une demande (approuver/refuser/supprimer) au 1er niveau
-  // UNIQUEMENT tant qu'elle est encore « en_attente » — au-delà (correctifs,
-  // certification), c'est réservé à la hiérarchie (même règle qu'en Logistique).
-  const peutGererDemande = (d) => isManager || (logistiquePeutApprouver(role) && normaliserStatut(d.statut) === 'en_attente')
+  // La secrétaire approuve ET certifie (comme la direction) tant que la demande attend une décision (« en_attente » ou
+  // « à certifier ») ; les correctifs et les suppressions restent à la hiérarchie (même règle qu'en Logistique).
+  const peutGererDemande = (d) => isManager || (logistiquePeutApprouver(role) && ['en_attente', 'approuve_n1'].includes(normaliserStatut(d.statut)))
 
   // Onglet 'sortie' (briques) ou 'location' (matériel) — même workflow, données
   // affichées différentes. La création d'une location se fait depuis Materiel.jsx,
@@ -135,8 +134,15 @@ export default function Demandes() {
     } catch (e) { toast.error(e.message) }
   }
 
-  // Applique une action du workflow (approuver / certifier / refuser).
+  // Applique une action du workflow (approuver / certifier / refuser). Toute erreur est affichée (rien ne reste muet).
   async function appliquerDecision(action) {
+    setBusy(true)
+    try { await decider(action) }
+    catch (e) { toast.error('Erreur : ' + (e?.message || e)) }
+    finally { setBusy(false) }
+  }
+
+  async function decider(action) {
     const d = decision.demande
     const statut = action.statut
     const horodate = todayStr() + ' ' + nowHM()
@@ -145,8 +151,21 @@ export default function Demandes() {
     else if (statut === 'certifie') {
       patch.certifiePar = user.nom; patch.certifieLe = horodate
       patch.dateDecision = horodate
-      patch.stockDecremente = true // idempotence : cf. AutoApproveWorkflow
       if (!d.approuveN1Par) { patch.approuveN1Par = user.nom; patch.approuveN1Le = horodate }
+      // Sortie de briques : le stock baisse AVANT que la demande ne passe « certifiée ». Si la baisse échoue (stock
+      // insuffisant, aucun inventaire, droits, réseau), on s'arrête ici : la demande reste à certifier, rien n'est faussé.
+      // `stockDecremente` n'est posé qu'une fois la baisse réellement faite (idempotence : cf. AutoApproveWorkflow).
+      if (typeDe(d) !== 'location' && !d.stockDecremente) {
+        const vente = ventes.find((v) => v.id === d.venteId)
+        const lignes = lignesASortir(d, vente)
+        if (!lignes.length) throw new Error('Cette autorisation ne contient aucune brique à sortir')
+        const manques = manquesStock(inventaires, lignes)
+        if (manques.length) {
+          throw new Error('Stock insuffisant : ' + manques.map((m) => `${m.nom} (${m.voulu} demandées, ${m.dispo} prêtes)`).join(', '))
+        }
+        await sortirDuStock({ inventaires, lignes, user })
+        patch.stockDecremente = true
+      }
     } else { patch.refusePar = user.nom; patch.dateDecision = horodate }
     await updateItem('evenementiel_demandes', d.id, patch)
 
@@ -176,7 +195,7 @@ export default function Demandes() {
         await notify({
           type: 'demande', title: 'Location matériel à certifier 🟡',
           body: `${d.materielNom} : approuvée par ${user.nom}`,
-          module: 'evenementiel', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+          module: 'evenementiel', forRoles: VALIDATEURS_SORTIE, excludeUid: user.uid, link: '/evenementiel/demandes'
         })
       } else { // refuse
         await notify({
@@ -194,17 +213,8 @@ export default function Demandes() {
     }
 
     if (statut === 'certifie') {
-      await updateItem('evenementiel_ventes', d.venteId, { statut: 'autorisee' })
-      // Sortie autorisée : on décrémente le stock prêt (ou caillasses) des briques
-      // vendues — sauf si le système l'a déjà fait (idempotence via stockDecremente).
-      const vente = !d.stockDecremente && ventes.find((v) => v.id === d.venteId)
-      const maj = vente && retirerVenteDuStock(inventaires, vente)
-      if (maj) {
-        await setItem('evenementiel_inventaires', maj.date, {
-          ...maj.inv, date: maj.date, briques: maj.briques, savedAt: ts(),
-          agentId: user.uid, agentNom: user.nom
-        })
-      }
+      if (d.venteId) await updateItem('evenementiel_ventes', d.venteId, { statut: 'autorisee' })
+      // (le stock a déjà baissé plus haut, avant la certification)
       await notify({
         type: 'success', title: 'Sortie briques autorisée ✅',
         body: `${d.qte} × ${d.briqueNom} : chargement ${d.dateSortie}`,
@@ -219,7 +229,7 @@ export default function Demandes() {
       await notify({
         type: 'demande', title: 'Sortie briques à certifier 🟡',
         body: `${d.qte} × ${d.briqueNom} : approuvée par ${user.nom}`,
-        module: 'evenementiel', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: '/evenementiel/demandes'
+        module: 'evenementiel', forRoles: VALIDATEURS_SORTIE, excludeUid: user.uid, link: '/evenementiel/demandes'
       })
     } else { // refuse
       await updateItem('evenementiel_ventes', d.venteId, { statut: 'brouillon' })

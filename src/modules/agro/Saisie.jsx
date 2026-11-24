@@ -34,8 +34,10 @@ import {
   agregerAnimal, agregerAliment, sommeMouvements, mouvementsDepuisSaisie,
   mutationsEntrantes, mutationsEntrantesDetail,
   ENTREE_TYPES_ANIMAL, SORTIE_TYPES_SAISIE_ANIMAL, ENTREE_TYPES_ALIMENT, SORTIE_TYPES_SAISIE_ALIMENT,
+  mutationAuDessusDuStock, stockPourMutation, totalMutations,
   labelRequis, nouvellesSortiesNotifiable, nouvellesEntreesNotifiable, mergeMouvementsUtilisateur, peutModifierLigne, annoterLignesAgent
 } from './logic'
+import { propagerSuite } from './propagation'
 import BandeAgro from './BandeAgro'
 import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
 import { APPROVER_ROLES, isFullAccessRole, agirCommeAgent } from '../../core/roles'
@@ -89,8 +91,15 @@ export default function Saisie() {
     : null
   const agentSansDroit = role === 'agent' && Array.isArray(catsAutorisees) && catsAutorisees.length === 0
 
+  // Jour pour lequel le formulaire a été construit en dernier : tant qu'on reste sur le même jour avec des modifications
+  // NON ENREGISTRÉES, une mise à jour des données (une facture approuvée, la saisie d'un collègue, un article supprimé…) ne doit
+  // JAMAIS les effacer (c'est ainsi qu'une mutation « disparaissait » et que l'effectif revenait au chiffre de départ).
+  const jourConstruitRef = useRef(null)
+
   // (Re)construit l'état du formulaire quand la date / les données / le référentiel changent.
   useEffect(() => {
+    const garderSaisie = dirtyRef.current && jourConstruitRef.current === date
+    jourConstruitRef.current = date
     const inv = getInventaire(inventaires, date) || { animaux: {}, aliments: {} }
     const prevDate = previousInventoryDate(inventaires, date)
     const prevInv = prevDate ? getInventaire(inventaires, prevDate) : null
@@ -106,7 +115,8 @@ export default function Saisie() {
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'animaux')
       a[e.id] = { init: initOf(saved, prevInv?.animaux?.[e.id]?.fin, e.id), entrees, sorties, malades: saved?.malades || 0, initAjuste: saved?.initAjuste || null }
     })
-    setAnim(a)
+    // Saisie en cours : on garde les mouvements tapés (entrées, sorties, mutations, malades) et on ne rafraîchit que l'EF Initial.
+    setAnim((prev) => (garderSaisie ? Object.fromEntries(Object.entries(a).map(([id, v]) => [id, prev[id] ? { ...v, entrees: prev[id].entrees, sorties: prev[id].sorties, malades: prev[id].malades } : v])) : a))
 
     const al = {}
     aliments.forEach((x) => {
@@ -114,7 +124,7 @@ export default function Saisie() {
       const { entrees, sorties } = mouvementsDepuisSaisie(saved, 'aliments')
       al[x.id] = { init: initOf(saved, prevInv?.aliments?.[x.id]?.fin, x.id), entrees, sorties, initAjuste: saved?.initAjuste || null }
     })
-    setAlim(al)
+    setAlim((prev) => (garderSaisie ? Object.fromEntries(Object.entries(al).map(([id, v]) => [id, prev[id] ? { ...v, entrees: prev[id].entrees, sorties: prev[id].sorties } : v])) : al))
   }, [date, inventaires, especes, aliments, seedInit])
 
   const existing = getInventaire(inventaires, date)
@@ -171,6 +181,7 @@ export default function Saisie() {
 
     try {
       await setItem('agro_inventaires', date, { date, [collKey]: collMap })
+      await propagerSuite(date) // les jours suivants repartent du nouvel EF Final
       await audit('agro', 'AJUST_EF_INITIAL',
         `EF Initial ${nom} (${date}) : ${ancien} → ${val}${marqueur.motif ? ` : ${marqueur.motif}` : ''}`,
         { date, article: nom, ancien, nouveau: val, motif: marqueur.motif })
@@ -313,6 +324,10 @@ export default function Saisie() {
     )
     if (mutSansCible) return toast.error(`Choisissez l'espèce de destination de la mutation : ${mutSansCible.nom}`)
 
+    // Blocage : on ne peut pas muter plus d'animaux qu'il n'y en a en stock.
+    const mutTropGrande = mutationAuDessusDuStock(especes, anim, autoSorOf, mutIn)
+    if (mutTropGrande) return toast.error(`Mutation impossible : ${mutTropGrande.nom} n'a que ${mutTropGrande.stock} en stock, vous voulez en muter ${mutTropGrande.demande}`)
+
     setSaving(true)
     try {
       const { animaux, aliments: alimentsOut, totEnt, totSor } =
@@ -322,6 +337,9 @@ export default function Saisie() {
         date, agentId: user.uid, agentNom: user.nom, savedAt: ts(), animaux, aliments: alimentsOut
       })
       dirtyRef.current = false // saisie validée → plus de brouillon en attente
+      // Les jours suivants déjà enregistrés reprennent l'EF Final de ce jour (sinon l'effectif « revient » au nombre d'avant).
+      const joursCorriges = await propagerSuite(date)
+      if (joursCorriges > 0) toast.info(`${joursCorriges} jour(s) suivant(s) mis à jour avec les nouveaux effectifs`)
       const totalTetes = Object.values(animaux).reduce((s, a) => s + (a.fin || 0), 0)
       await audit('agro', 'SAISIE', `Saisie du ${date} : ${totEnt} entrée(s), ${totSor} sortie(s) : ${totalTetes} têtes au total`, {
         date, totalEntrees: totEnt, totalSorties: totSor, totalTetes,
@@ -746,6 +764,19 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
         </p>
       )}
 
+      {/* Blocage : une mutation ne peut pas dépasser le stock de l'espèce */}
+      {dir === 'sortie' && kind === 'animaux' && (() => {
+        const demande = totalMutations(src[id]?.sorties)
+        if (demande <= 0) return null
+        const stock = Math.max(0, stockPourMutation(src[id], autoSor || 0, mutIn || 0))
+        if (demande <= stock) return <p className="mb-3 text-xs text-gray-500">Stock disponible pour la mutation : <strong>{stock}</strong></p>
+        return (
+          <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+            Mutation impossible : {nom} n'a que {stock} en stock, vous voulez en muter {demande}. Réduisez la quantité pour pouvoir enregistrer.
+          </p>
+        )
+      })()}
+
       {/* Mutations entrantes (générées par les mutations d'autres espèces) — lecture seule */}
       {dir === 'entree' && mutInDetail.length > 0 && (
         <div className="mb-3 space-y-1 rounded-lg bg-sky-50 p-2">
@@ -773,6 +804,15 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
               </Select>
               <Input type="number" min="0" className="w-20" value={l.qte} readOnly={locked}
                 onChange={(e) => setLigne(i, { qte: Math.max(0, parseInt(e.target.value) || 0) })} />
+              {/* Mutation : « Tout » remplit la quantité avec TOUT le stock restant de l'espèce (évite d'en laisser par une faute de frappe) */}
+              {!locked && kind === 'animaux' && dir === 'sortie' && l.type === 'Mutation' && (() => {
+                const autresMutations = totalMutations(lignes) - (parseInt(l.qte) || 0)
+                const tout = Math.max(0, stockPourMutation(src[id], autoSor || 0, mutIn || 0) - autresMutations)
+                return (
+                  <button type="button" onClick={() => setLigne(i, { qte: tout })} title={`Muter tout le stock restant (${tout})`}
+                    className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-bold text-sky-700 hover:bg-sky-100">Tout ({tout})</button>
+                )
+              })()}
               {!locked && (
                 <button onClick={() => delLigne(i)} className="icone-verre icone-verre--danger rounded-xl p-1.5" title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button>
               )}
@@ -793,7 +833,7 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
                 value={l.label || ''}
                 readOnly={locked}
                 onChange={(e) => setLigne(i, { label: e.target.value })}
-                placeholder={l.type === 'Décès' ? 'Motif du décès (maladie, accident, prédateur…)' : 'Précisez (personne, motif…)'}
+                placeholder={l.type === 'Décès' ? 'Motif du décès (maladie, accident, prédateur…)' : l.type === 'Transfert autre localité' ? 'Localité de destination (ex : Kara, Kpalimé…)' : 'Précisez (personne, motif…)'}
                 autoFocus
               />
             )}

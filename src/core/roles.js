@@ -47,9 +47,7 @@ export const VIEW_ALL_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'g
 // Modules à visibilité RESTREINTE par rôle : même attribué à un utilisateur, un
 // module listé ici n'est accessible qu'aux rôles indiqués (contrôle appliqué dans
 // hasModule → couvre le portail, la barre latérale ET la garde de route).
-export const MODULE_ROLES = {
-  voyage: FULL_ACCESS_ROLES // E-VOYAGE : réservé aux admins, au PAU et à la GE
-}
+export const MODULE_ROLES = {}
 export const moduleRoleOk = (mod, role) => !MODULE_ROLES[mod] || MODULE_ROLES[mod].includes(role)
 // 1er niveau d'approbation d'une demande de sortie (le superviseur n'approuve pas).
 export const APPROVER_ROLES = ['super_admin', 'info', 'assistant_pau', 'pau', 'ge', 'df', 'directeur', 'rh', 'gerant', 'admin', 'controleur']
@@ -125,7 +123,7 @@ export const isReadOnlyRole = (r) => READONLY_ROLES.includes(r)
 // ── Droits par module (réglés dans Paramètres, Utilisateurs) ──────────────────────────────────────────────────────────
 // Chaque compte peut être limité à la LECTURE sur un module donné (`droitsModules[module] = 'lecture'`) ; sans réglage, il garde
 // l'écriture (CRUD) que son rôle lui donne. Le verrou est posé dans db.js, sur le préfixe de la collection (`gym_*` → gym).
-const PREFIXE_MODULE = { agro: 'agro', logistique: 'logistique', evenementiel: 'evenementiel', foncier: 'foncier', garderie: 'garderie', compta: 'comptabilite', rh: 'rh', projet: 'projet', projets: 'projet', depense: 'depense', gym: 'gym', voyage: 'voyage' }
+const PREFIXE_MODULE = { agro: 'agro', logistique: 'logistique', evenementiel: 'evenementiel', foncier: 'foncier', garderie: 'garderie', compta: 'comptabilite', rh: 'rh', projet: 'projet', projets: 'projet', depense: 'depense', gym: 'gym', taches: 'taches' }
 export const moduleDeCollection = (collection) => PREFIXE_MODULE[String(collection || '').split('_')[0]] || null
 // `droitsModules[module]` : absent = tout est permis (selon le rôle) ; 'lecture' = rien d'autre que lire ; ou un objet qui ne liste que
 // les actions REFUSÉES, par exemple { supprimer: false, modifier: false }. Lire est le socle : le retirer, c'est retirer le module.
@@ -133,7 +131,8 @@ export const ACTIONS_DROIT = ['creer', 'modifier', 'supprimer']
 // Lecture seule PAR DÉFAUT : le directeur sur tous les modules, le RH sur tous sauf Ressources humaines. Info leur accorde l'écriture module par module
 // (fiche d'accès). `droitsModules[module]` vaut alors 'ecriture' (tout), ou un objet { creer, modifier, supprimer } de booléens (true = accordé).
 export const ROLES_LECTURE_PAR_DEFAUT = ['directeur', 'rh']
-const ecritureParDefautDuRole = (role, moduleId) => !(role === 'directeur' || (role === 'rh' && moduleId !== 'rh'))
+// E-TACHES est un outil collaboratif (confier, discuter, rendre compte) : le directeur et le RH y écrivent comme tout le monde.
+const ecritureParDefautDuRole = (role, moduleId) => moduleId === 'taches' || !(role === 'directeur' || (role === 'rh' && moduleId !== 'rh'))
 // `droitsModules[module]` : absent = ce que le rôle donne par défaut ; 'lecture' = rien d'autre que lire ; 'ecriture' = tout accordé ; ou un objet par action
 // (true accordé, false refusé, absent = le défaut du rôle). Lire est le socle : le retirer, c'est retirer le module.
 // `role` : le rôle effectif du compte ; sans lui, le défaut est l'écriture.
@@ -237,6 +236,12 @@ export const logistiqueVoitValidateur = (r) => r !== 'secretaire'
 // à `canManage()` (retours, écarts, correctifs…), au-delà de la simple validation
 // d'une demande en attente.
 export const logistiquePeutApprouver = (r) => isApproverRole(r) || r === 'secretaire'
+
+// Demandes de sortie (Briqueterie, Logistique) : la secrétaire (et l'Assistant(e) GE, qui a ses droits) approuve ET certifie,
+// comme la direction. Propre à ces deux circuits : CERTIFIER_ROLES, lui, ne change pas pour les autres modules.
+export const peutCertifierSortie = (r) => isCertifierRole(r) || r === 'secretaire'
+// Qui est alerté (cloche, push, rappels) quand une sortie attend une décision : jamais un agent.
+export const VALIDATEURS_SORTIE = [...CERTIFIER_ROLES, 'secretaire']
 
 // E-G.Pro : rôles dont la visibilité des projets est cloisonnée — ne voient que les
 // projets dont ils sont désignés « Responsable » (p.responsableUid) ou « Collaborateur »

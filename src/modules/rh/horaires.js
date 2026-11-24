@@ -10,7 +10,10 @@ export function lireHoraires(configs = []) {
     heureArrivee, heureDepart,
     heureArriveeDirection: c.heureArriveeDirection || heureArrivee,
     heureDepartDirection: c.heureDepartDirection || heureDepart,
-    tolerance: Number.isFinite(Number(c.tolerance)) ? Number(c.tolerance) : HORAIRES_DEFAUT.tolerance
+    tolerance: Number.isFinite(Number(c.tolerance)) ? Number(c.tolerance) : HORAIRES_DEFAUT.tolerance,
+    // Chaque groupe a-t-il ses propres heures, programmées dans Paramètres ? (sinon on applique 08:00-17:00 par défaut, ou celles des employés pour la direction)
+    employesProgrammes: !!(c.heureArrivee && c.heureDepart),
+    directionProgrammee: !!(c.heureArriveeDirection && c.heureDepartDirection)
   }
 }
 

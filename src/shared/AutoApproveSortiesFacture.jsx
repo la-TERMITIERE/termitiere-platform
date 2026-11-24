@@ -24,6 +24,7 @@ function sortieDemandeeMs(f) {
 export default function AutoApproveSortiesFacture() {
   const { data: factures } = useCollection('agro_factures')
   const traitees = useRef(new Set())
+  const tentatives = useRef({})
 
   useEffect(() => {
     let annule = false
@@ -36,7 +37,13 @@ export default function AutoApproveSortiesFacture() {
         if (now - sortieDemandeeMs(f) < DELAI_MS) continue // pas encore 10 min
         traitees.current.add(f.id)
         // approuverSortie fait déjà l'écriture + le décompte de stock + l'audit + la notif.
-        if (!annule) approuverSortie(f, SYSTEME).catch(() => { /* best effort — retry au prochain tick */ })
+        // Si le décompte échoue, la facture reste « sortie demandée » : on réessaie (3 fois au plus) au lieu d'abandonner.
+        if (!annule) approuverSortie(f, SYSTEME).catch((e) => {
+          console.warn('[auto-approbation sortie] échec, nouvel essai plus tard :', e)
+          const essais = (tentatives.current[f.id] || 0) + 1
+          tentatives.current[f.id] = essais
+          if (essais < 3) setTimeout(() => traitees.current.delete(f.id), 60000)
+        })
       }
     }
 

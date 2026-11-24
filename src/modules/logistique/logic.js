@@ -61,6 +61,26 @@ export function dernierStock(inventaires, materielId) {
   return tri[0]?.materiels?.[materielId]?.fin || 0
 }
 
+// Stock DISPONIBLE en direct d'un matériel : le dernier « EF Final » enregistré, corrigé de ce que les autorisations CERTIFIÉES
+// ont décompté depuis. Sans cela, une sortie certifiée ne faisait baisser le stock affiché (jauges des demandes et des prestations)
+// qu'une fois la saisie magasin ré-enregistrée.
+//  - jour de l'inventaire : écart entre les sorties certifiées d'aujourd'hui et celles déjà comptées dans l'EF Final enregistré
+//    (signé : un correctif qui réduit une sortie rend du stock) ;
+//  - jours suivants : toutes les sorties certifiées prévues après la date de l'inventaire sont déjà réservées.
+export function stockDisponible(inventaires, demandes, materielId) {
+  const inv = [...(inventaires || [])].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+  const m = inv?.materiels?.[materielId]
+  if (!m) return 0
+  const dejaCompte = parseInt(m.autoSor) || 0
+  const duJour = autoSorties(demandes, materielId, inv.date)
+  const apres = (demandes || [])
+    .filter((d) => estCertifie(d.statut) && d.dateSortie && d.dateSortie > inv.date)
+    .reduce((s, d) => s + (Array.isArray(d.lignes) && d.lignes.length
+      ? d.lignes.filter((l) => l.materielId === materielId).reduce((a, l) => a + (parseInt(l.qte) || 0), 0)
+      : (d.materielId === materielId ? (parseInt(d.qte) || 0) : 0)), 0)
+  return Math.max(0, (parseInt(m.fin) || 0) - (duJour - dejaCompte) - apres)
+}
+
 export function peutModifierLigne(ligne, userId) {
   if (!ligne?.agentId) return true
   return ligne.agentId === userId

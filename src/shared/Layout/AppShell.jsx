@@ -27,6 +27,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { COULEUR_MODULE } from '../../utils/color'
 import { MODULES, MODULE_NAV } from '../modules'
 import { moduleEnLecture } from '../../core/roles'
+import RelanceTaches from '../../modules/taches/RelanceTaches'
 import { Eye } from 'lucide-react'
 import MotifSuppressionHost from '../MotifSuppressionHost'
 
@@ -78,6 +79,8 @@ export default function AppShell() {
       {hasModule('projet') && <ProjetPurgeWatcher />}
       {hasModule('projet') && <ProjetAutoDemarrage />}
       {hasModule('depense') && <DepensePurgeWatcher />}
+      {/* E-TACHES : rappels (démarrage, échéance, retard) en notification push pour la personne connectée. */}
+      {hasModule('taches') && <RelanceTaches />}
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onMenuToggle={() => setSidebarOpen((o) => !o)} />

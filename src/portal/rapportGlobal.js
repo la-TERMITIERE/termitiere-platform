@@ -49,6 +49,7 @@ export async function chargerDonnees() {
 }
 
 const montant = (v) => Number(v) || 0
+const ORIGINE = '2000-01-01' // début du cumul total (avant toute donnée de la plateforme)
 const dansPeriode = (date, { start, end }) => { const d = String(date || '').slice(0, 10); return !!d && d >= start && d <= end }
 
 // Ce que le secteur a fait sur la période, hors argent : { libelle, valeur }.
@@ -93,6 +94,9 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
   const precB = periodePrecedente(bornes)
   const prec = calc(precB)
   const precParId = Object.fromEntries(prec.rows.map((r) => [r.id, r]))
+  // Cumul total : tout ce que le secteur a encaissé et dépensé depuis le début, jusqu'à la fin de la période choisie.
+  const cumul = calc({ start: ORIGINE, end: bornes.end })
+  const cumulParId = Object.fromEntries(cumul.rows.map((r) => [r.id, r]))
 
   const secteurs = SECTEURS_RAPPORT.filter((s) => ids.includes(s.id)).map((s) => {
     const ligne = actuel.rows.find((r) => r.id === s.id) || { rm: 0, dm: 0, details: [] }
@@ -102,6 +106,7 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
     const operations = [...ligne.details].sort((a, b) => (a.date === b.date ? (a.sens === 'recette' ? -1 : 1) : a.date < b.date ? -1 : 1))
     return {
       ...s, recettes, depenses: depensesS, benefice: recettes - depensesS, nbOperations: operations.length,
+      cumulRecettes: cumulParId[s.id]?.rm || 0, cumulDepenses: cumulParId[s.id]?.dm || 0, cumulBenefice: (cumulParId[s.id]?.rm || 0) - (cumulParId[s.id]?.dm || 0),
       recettesPrecedentes: precParId[s.id]?.rm || 0, cible, pct, etat: etatAvancement(pct), operations,
       activite: activite(s, d, bornes)
     }
@@ -109,6 +114,7 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
 
   const somme = (cle) => secteurs.reduce((t, s) => t + s[cle], 0)
   const total = { recettes: somme('recettes'), depenses: somme('depenses'), benefice: somme('benefice'), cible: somme('cible'), recettesPrecedentes: somme('recettesPrecedentes'), nbOperations: somme('nbOperations') }
+  total.cumulRecettes = somme('cumulRecettes'); total.cumulDepenses = somme('cumulDepenses'); total.cumulBenefice = somme('cumulBenefice')
   total.pct = avancement(total.recettes, total.cible)
   total.croissance = total.recettesPrecedentes > 0 ? ((total.recettes - total.recettesPrecedentes) / total.recettesPrecedentes) * 100 : null
 
@@ -120,7 +126,19 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
     parJour.set(o.date, x)
   }))
   const jours = [...parJour.values()].sort((a, b) => (a.date < b.date ? -1 : 1))
-  return { secteurs, total, jours, bornes, precedente: precB }
+
+  // Situation générale : TOUS les secteurs (quels que soient ceux choisis pour le détail), période et cumul total côte à côte.
+  const lignesSituation = SECTEURS_RAPPORT.map((s) => {
+    const p = actuel.rows.find((r) => r.id === s.id) || { rm: 0, dm: 0 }
+    const c = cumulParId[s.id] || { rm: 0, dm: 0 }
+    return { id: s.id, label: s.label, couleur: s.couleur, recettes: p.rm, depenses: p.dm, benefice: p.rm - p.dm, cumulRecettes: c.rm, cumulDepenses: c.dm, cumulBenefice: c.rm - c.dm }
+  })
+  const sommeS = (cle) => lignesSituation.reduce((t, l) => t + l[cle], 0)
+  const situation = {
+    secteurs: lignesSituation,
+    total: { recettes: sommeS('recettes'), depenses: sommeS('depenses'), benefice: sommeS('benefice'), cumulRecettes: sommeS('cumulRecettes'), cumulDepenses: sommeS('cumulDepenses'), cumulBenefice: sommeS('cumulBenefice') }
+  }
+  return { secteurs, total, situation, jours, bornes, precedente: precB }
 }
 
 // « Novembre 2026 », « Année 2026 », « 19/11/2026 » ou « Du 01/11/2026 au 19/11/2026 ».

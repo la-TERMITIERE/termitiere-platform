@@ -4,9 +4,10 @@ import {
   LayoutDashboard, ClipboardList, FileText, TrendingUp, Stethoscope, Send, BookOpen, Settings,
   Boxes, BadgeDollarSign, UserCircle, RotateCcw, Factory, Package,
   Users, CreditCard, CalendarCheck, UtensilsCrossed, BarChart2, ListChecks, CalendarDays, PieChart, Paperclip, Images,
-  Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog, CalendarHeart, Gift
+  Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog, CalendarHeart, Gift, Target, Archive, Repeat as RoutineIcon, BookUser, Briefcase, Layers, Megaphone, Warehouse
 } from 'lucide-react'
 import { cheminsDuGroupe } from '../modules/rh/groupes'
+import { ROLES_PILOTAGE_TACHES, ROLES_PAR_EMPLOYE, ROLES_PAR_DIRECTEUR, ROLES_PAR_NIVEAU, ROLES_ANNUAIRE } from '../modules/taches/data'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES, ANALYSES_DEPENSE_ROLES } from '../core/roles'
 
 export const MODULES = [
@@ -118,13 +119,13 @@ export const MODULES = [
     logo: '/Maxi_Gym.png'
   },
   {
-    id: 'voyage',
-    nom: 'E-VOYAGE',
-    description: 'Voyages d\'achat à l\'étranger, fournisseurs & conversion FCFA',
-    icon: Plane,
-    emoji: '✈️',
-    color: '#4f46e5',
-    path: '/voyage',
+    id: 'taches',
+    nom: 'E-TACHES',
+    description: 'Tâches, routines, objectifs & rapports de l\'équipe',
+    icon: ListChecks,
+    emoji: '✅',
+    color: '#7c3aed',
+    path: '/taches',
     statut: 'actif'
   }
 ]
@@ -137,6 +138,7 @@ export const MODULE_NAV = {
     { label: 'Dashboard', to: '/agro', icon: LayoutDashboard, end: true },
     { label: 'Saisie journalière', to: '/agro/saisie', icon: ClipboardList },
     { label: 'Facturation', to: '/agro/factures', icon: FileText },
+    { label: 'Points de vente', to: '/agro/points-vente', icon: Warehouse },
     { label: 'Dépense', to: '/agro/finances', icon: Scale, roles: [...FINANCE_VIEW_ROLES, 'secretaire', 'agent'] },
     { label: 'Pilotage & Analyses', to: '/agro/analyses', icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
     { label: 'Santé animale', to: '/agro/sante', icon: Stethoscope },
@@ -212,7 +214,7 @@ export const MODULE_NAV = {
     { label: 'Développement', to: '/rh/formations', icon: TrendingUp, groupe: cheminsDuGroupe('developpement') },
     { heading: "Vie de l'entreprise" },
     { label: 'Missions et frais', to: '/rh/missions', icon: Plane, groupe: cheminsDuGroupe('missions') },
-    { label: 'Anniversaires et dotations', to: '/rh/anniversaires', icon: CalendarHeart, groupe: cheminsDuGroupe('vie') },
+    { label: "Annonces et vie de l'équipe", to: '/rh/annonces', icon: Megaphone, groupe: cheminsDuGroupe('vie') },
     // Les alertes de conformité sont dans le tableau de bord (carte « Contrats à surveiller »). Les réglages sont ici, pour l'administration.
     { heading: 'Administration' },
     { label: 'Paramètres', to: '/rh/paie-configuration', icon: Settings, roles: FULL_ACCESS_ROLES, groupe: cheminsDuGroupe('parametres') }
@@ -271,10 +273,19 @@ export const MODULE_NAV = {
     { label: 'Journal et Historique', to: '/gym/journal', icon: BookOpen, roles: ADMIN_VOLETS_ROLES },
     { label: 'Paramètres', to: '/gym/params', icon: Settings, roles: ADMIN_VOLETS_ROLES }
   ],
-  voyage: [
-    { label: 'Dashboard', to: '/voyage', icon: LayoutDashboard, end: true },
-    { label: 'Voyages', to: '/voyage/voyages', icon: Plane },
-    { label: 'Devises & taux', to: '/voyage/devises', icon: Coins }
+  taches: [
+    { label: 'Tableau de bord', to: '/taches', icon: LayoutDashboard, end: true },
+    { label: 'Tâches', to: '/taches/taches', icon: ListChecks },
+    { label: 'Routine journalière', to: '/taches/routine', icon: RoutineIcon },
+    { label: 'Annuaire', to: '/taches/annuaire', icon: BookUser, roles: ROLES_ANNUAIRE },
+    { label: 'Pilotage', to: '/taches/pilotage', icon: Gauge, roles: ROLES_PILOTAGE_TACHES },
+    { label: 'Par employé', to: '/taches/par-employe', icon: UserCircle, roles: ROLES_PAR_EMPLOYE },
+    { label: 'Par directeur', to: '/taches/par-directeur', icon: Briefcase, roles: ROLES_PAR_DIRECTEUR },
+    { label: 'Par niveau', to: '/taches/par-niveau', icon: Layers, roles: ROLES_PAR_NIVEAU },
+    { label: 'Objectifs', to: '/taches/objectifs', icon: Target },
+    { label: 'Rapports', to: '/taches/rapports', icon: FileText },
+    { label: 'Innovation', to: '/taches/innovation', icon: Lightbulb },
+    { label: 'Archives', to: '/taches/archives', icon: Archive }
   ],
   projet: [
     { label: 'Dashboard',   to: '/projet',             icon: LayoutDashboard, end: true },

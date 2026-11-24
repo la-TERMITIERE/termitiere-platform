@@ -23,6 +23,7 @@ services:
     environment:
       DOMAIN_APP: "${DOMAIN_APP}"
       DOMAIN_API: "${DOMAIN_API}"
+      DOMAIN_SITE: "${DOMAIN_SITE}"
     extra_hosts:
       # Permet à Caddy (dans le conteneur) d'atteindre le Kong de Supabase sur l'hôte.
       - "host.docker.internal:host-gateway"

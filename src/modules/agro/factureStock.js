@@ -13,8 +13,10 @@
 //
 // Les demandes liées (source:'facture') sont masquées de la page Demandes : elles
 // sont pilotées entièrement depuis la Facturation.
-import { getAll, addItem, updateItem, setItem } from '../../core/db'
+import { getAll, addItem, updateItem, setItem, removeItem } from '../../core/db'
 import { appliquerDemandeAuStock } from './applyDemande'
+import { propagerSuite } from './propagation'
+import { venteHorsFerme } from './stockLome'
 import { getInventaire, autoSorties, mutationsEntrantes, agregerAnimal } from './logic'
 
 // Lignes « stockables » d'une facture : article identifié. Les lignes à quantité
@@ -28,7 +30,10 @@ function lignesStockables(facture) {
 // Crée (ou met à jour) les demandes de sortie liées à une facture approuvée,
 // puis décompte le stock. Idempotent : une seule demande par (factureId, ligneIdx).
 export async function creerDemandesFacture(facture, user) {
+  // Vente hors de la ferme (Lomé ou autre localité) : les bêtes ne sont plus à la ferme. Le stock du point de vente est calculé à partir de la facture (stockLome.js), la ferme ne bouge pas.
+  if (venteHorsFerme(facture)) return
   const demandes = await getAll('agro_demandes')
+  const echecs = [] // sorties qui n'ont pas pu être décomptées : levées en erreur à la fin (jamais d'échec muet)
   for (const l of lignesStockables(facture)) {
     const i = l._idx
     const type = l.articleType || 'animal'
@@ -48,9 +53,42 @@ export async function creerDemandesFacture(facture, user) {
     if (exists) await updateItem('agro_demandes', exists.id, payload)
     else if (payload.qte > 0) await addItem('agro_demandes', payload)
     else continue // ligne vide jamais sortie : rien à décompter
-    await appliquerDemandeAuStock({ ...payload, statut: 'certifie' })
-    if (ancien) await appliquerDemandeAuStock({ ...ancien, statut: 'certifie' })
+    const r = await appliquerDemandeAuStock({ ...payload, statut: 'certifie' })
+    if (!r.ok) echecs.push(`${payload.articleNom || payload.articleId} : ${r.raison}`)
+    if (ancien) {
+      const r2 = await appliquerDemandeAuStock({ ...ancien, statut: 'certifie' })
+      if (!r2.ok) echecs.push(`${ancien.articleNom || ancien.articleId} : ${r2.raison}`)
+    }
   }
+  if (echecs.length) throw new Error(`Stock NON décompté (${echecs.join(' ; ')}). Corrigez puis recommencez, ou lancez le Contrôle du stock dans les Paramètres.`)
+}
+
+// Annule TOUT l'effet d'une facture sur le stock de la ferme (suppression d'une facture certifiée par Info) : les bêtes vendues rentrent
+// au stock, et les décès, retours et reliquats de l'écart sont effacés des saisies. Les demandes de sortie liées sont supprimées ; la colonne
+// « Sorties » des jours concernés et leurs EF Final sont recalculés, puis les jours suivants repartent du nouvel effectif.
+// Une vente à Lomé n'a rien décompté à la ferme : il n'y a rien à rendre (le stock de Lomé se recalcule seul sans la facture).
+export async function annulerEffetStockFacture(facture) {
+  if (venteHorsFerme(facture)) return
+  const demandes = await getAll('agro_demandes')
+  const liees = demandes.filter((d) => d.factureId === facture.id)
+  const echecs = []
+  // 1) On supprime les demandes liées, puis on recale chaque article/jour : le total des sorties approuvées baisse, le stock remonte.
+  for (const d of liees) await removeItem('agro_demandes', d.id)
+  for (const d of liees) {
+    const r = await appliquerDemandeAuStock({ ...d, statut: 'certifie' })
+    if (!r.ok) echecs.push(`${d.articleNom || d.articleId} : ${r.raison}`)
+  }
+  // 2) On efface les lignes de l'écart (décès au marché, retour, reliquat) de chaque animal de la facture.
+  // (seulement si la saisie porte des lignes de cette facture : une saisie sans écart n'est pas retouchée)
+  const inv = getInventaire(await getAll('agro_inventaires'), facture.date)
+  const marque = `:${facture.id}:`
+  for (const l of lignesStockables(facture)) {
+    if ((l.articleType || 'animal') !== 'animal') continue
+    const node = inv?.animaux?.[l.articleId]
+    const porteEcart = [...(node?.sorties || []), ...(node?.entrees || [])].some((x) => String(x.agentId || '').includes(marque))
+    if (porteEcart) await appliquerEcartInventaire(facture, l._idx, l.articleId, 0, 0)
+  }
+  if (echecs.length) throw new Error(`Stock NON réintégré (${echecs.join(' ; ')}). Lancez le Contrôle du stock dans les Paramètres.`)
 }
 
 // Applique un écart. Pour chaque ligne (sortie de `qte` au marché) :
@@ -62,8 +100,19 @@ export async function creerDemandesFacture(facture, user) {
 // Résultat net sur le stock : −(sold + dead). Toutes les lignes sont VISIBLES.
 // Renvoie les lignes réelles (qté = vendu) pour le calcul du CA.
 export async function ajusterFactureEcart(facture, ajustements) {
+  if (venteHorsFerme(facture)) {
+    // Lomé : seules les lignes changent (quantités vendues). Les morts et retours se déduisent des ajustements enregistrés avec la facture.
+    const parLigne = Object.fromEntries((ajustements || []).map((a) => [a.ligneIdx, a]))
+    return (facture.lignes || []).map((l, i) => {
+      const aj = parLigne[i]
+      if (!aj || !l.articleId) return l
+      const qte = Math.max(0, parseInt(aj.sold) || 0)
+      return { ...l, qte, total: qte * (parseFloat(l.prixUnit) || 0) }
+    })
+  }
   const demandes = await getAll('agro_demandes')
   const byIdx = Object.fromEntries((ajustements || []).map((a) => [a.ligneIdx, a]))
+  const echecs = []
 
   for (const l of lignesStockables(facture)) {
     const i = l._idx
@@ -77,7 +126,8 @@ export async function ajusterFactureEcart(facture, ajustements) {
     const link = demandes.find((d) => d.factureId === facture.id && d.ligneIdx === i)
     if (link) {
       await updateItem('agro_demandes', link.id, { qte: sold })
-      await appliquerDemandeAuStock({ ...link, qte: sold, statut: 'certifie' })
+      const r = await appliquerDemandeAuStock({ ...link, qte: sold, statut: 'certifie' })
+      if (!r.ok) echecs.push(`${link.articleNom || link.articleId} : ${r.raison}`)
     }
     // 2) Décès + Retour du marché (animaux uniquement) — lignes explicites & tracées.
     if ((l.articleType || 'animal') === 'animal') {
@@ -85,6 +135,7 @@ export async function ajusterFactureEcart(facture, ajustements) {
     }
   }
 
+  if (echecs.length) throw new Error(`Stock NON réajusté (${echecs.join(' ; ')}). Lancez le Contrôle du stock dans les Paramètres.`)
   return (facture.lignes || []).map((l, i) => {
     const aj = byIdx[i]
     if (!aj || !l.articleId) return l
@@ -124,4 +175,5 @@ async function appliquerEcartInventaire(facture, ligneIdx, articleId, dead, ret)
   const agg = agregerAnimal({ init: node.init || 0, entrees, sorties }, autoSor, mutIn)
   const newNode = { ...node, ...agg, entrees, sorties, autoSor }
   await setItem('agro_inventaires', facture.date, { animaux: { ...(inv.animaux || {}), [articleId]: newNode } })
+  await propagerSuite(facture.date) // les jours suivants repartent du nouvel EF Final
 }

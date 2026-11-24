@@ -2,13 +2,14 @@
 // 1 Demande (RH) → 2 Validation (DF) → 3 Approbation (GE) → 4 Autorisation (PAU). Chaque étape est cochée quand la personne valide ; à la fin,
 // le bulletin du mois passe à « Payé ». Enregistré dans rh_autorisations_salaire : statut en_attente → autorise ou refuse.
 import { useMemo, useState } from 'react'
-import { ShieldCheck, Plus, UserRound, CalendarDays, Wallet, AlignLeft, Clock3, BadgeCheck, Ban, ChevronRight, Trash2 } from 'lucide-react'
+import { ShieldCheck, Plus, UserRound, CalendarDays, Wallet, AlignLeft, Clock3, BadgeCheck, Ban, ChevronRight, Trash2, Pencil } from 'lucide-react'
+import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
 import Badge from '../../shared/ui/Badge'
 import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
-import { addItem, removeItem } from '../../core/db'
+import { addItem, updateItem, removeItem } from '../../core/db'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { formatMoney, formatDateShort, todayStr } from '../../utils/formatters'
@@ -59,6 +60,14 @@ export default function AutorisationsSalaire() {
     const montant = Number(modal.montant)
     if (!emp || !(montant > 0) || !modal.mois) return toast.error("Choisissez l'employé, le mois et le montant")
     const bulletin = bulletins.find((b) => b.employeId === emp.id && b.mois === modal.mois)
+    // Correction d'une demande qui n'a encore reçu aucune validation : on met à jour la demande, sans la renvoyer ni avertir de nouveau.
+    if (modal.id) {
+      try {
+        await updateItem(COL.autorisationsSalaire, modal.id, { employeId: emp.id, employeNom: emp.nom, mois: modal.mois, montant, bulletinId: bulletin?.id || '', message: (modal.message || '').trim() })
+        toast.success('Demande corrigée ✓'); setModal(null); setTente(false)
+      } catch (err) { toast.error(err?.message || 'Correction impossible : réessayez') }
+      return
+    }
     await addItem(COL.autorisationsSalaire, {
       employeId: emp.id, employeNom: emp.nom, mois: modal.mois, montant, bulletinId: bulletin?.id || '',
       message: (modal.message || '').trim(), statut: 'en_attente', validations: {},
@@ -74,7 +83,11 @@ export default function AutorisationsSalaire() {
     setModal(null); setTente(false)
   }
 
-  async function supprimer(d) { if (confirm('Supprimer cette demande ?')) await removeItem(COL.autorisationsSalaire, d.id) }
+  // Suppression réservée à l'administration ; la fenêtre « Motif » sert de confirmation.
+  const peutSupprimer = usePeutSupprimerRh()
+  const supprimer = (d) => supprimerAvecRetour(() => removeItem(COL.autorisationsSalaire, d.id), 'Demande supprimée')
+  // Une demande se corrige tant qu'aucune étape du circuit ne l'a validée.
+  const peutCorriger = (d) => (d.statut || 'en_attente') === 'en_attente' && !Object.keys(d.validations || {}).length
 
   const invalide = (ok) => tente && !ok
   const nomEmploye = modal?.employeId ? employes.find((e) => e.id === modal.employeId)?.nom : ''
@@ -135,8 +148,11 @@ export default function AutorisationsSalaire() {
                 <MiniatureCircuit d={d} />
               </div>
               <div className="relative flex items-center gap-1">
-                {(d.statut || 'en_attente') !== 'en_attente' && (
-                  <button onClick={(e) => { e.stopPropagation(); supprimer(d) }} className="rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-600" title="Supprimer la demande" aria-label="Supprimer la demande"><Trash2 size={14} /></button>
+                {peutCorriger(d) && (
+                  <button onClick={(e) => { e.stopPropagation(); setTente(false); setModal({ id: d.id, employeId: d.employeId, mois: d.mois, montant: String(d.montant || ''), message: d.message || '' }) }} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-sky-50 hover:text-sky-700" title="Corriger la demande" aria-label="Corriger la demande"><Pencil size={14} /></button>
+                )}
+                {peutSupprimer && (
+                  <button onClick={(e) => { e.stopPropagation(); supprimer(d) }} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600" title="Supprimer la demande" aria-label="Supprimer la demande"><Trash2 size={14} /></button>
                 )}
                 <ChevronRight size={18} className="text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-500" aria-hidden="true" />
               </div>
@@ -145,7 +161,7 @@ export default function AutorisationsSalaire() {
         })}
       </section>
 
-      <ModalRh open={!!modal} onClose={() => setModal(null)} title="Demande d'autorisation de salaire" libelleSave="Envoyer la demande"
+      <ModalRh open={!!modal} onClose={() => setModal(null)} title={modal?.id ? "Corriger la demande d'autorisation" : "Demande d'autorisation de salaire"} libelleSave={modal?.id ? 'Enregistrer' : 'Envoyer la demande'}
         icone={UserRound} titreHero="Demande d'autorisation de salaire de :"
         intro={nomEmploye
           ? <span className="inline-flex items-center gap-1.5 text-base font-extrabold text-white"><UserRound size={15} aria-hidden="true" />{nomEmploye}</span>

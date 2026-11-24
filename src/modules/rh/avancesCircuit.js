@@ -24,7 +24,7 @@ export function etatsAvance(a) {
   if (s === 'refusee') return ['faite', 'refusee']
   return s === 'demandee' ? ['faite', 'cours'] : ['faite', 'faite']
 }
-export const nomsAvance = (a, ge) => [a.creePar || 'La RH', a.approuvePar || a.refusePar || ge || 'Gérante exécutive']
+export const nomsAvance = (a) => [a.creePar || 'La RH', a.approuvePar || a.refusePar || 'GE']
 
 // ── Calculs ──
 const nombre = (v) => Number(v) || 0

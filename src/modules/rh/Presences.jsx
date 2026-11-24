@@ -4,7 +4,7 @@
 //    Les employés et les directeurs n'arrivent pas à la même heure : chacun suit les horaires de son profil (réglés dans RH, Paramètres, Présences).
 //  - Mois et Plage : synthèse par employé (présent, retard, absent, congé, mission) et liste des absences avec leur motif.
 import { useEffect, useMemo, useState } from 'react'
-import { UserX, CalendarCheck as IconePresences, CalendarDays, Clock3, TriangleAlert, Check, Users, FileText, LogOut, Crown, UserRound, ShieldCheck, ShieldAlert, Pencil, LogIn, Briefcase } from 'lucide-react'
+import { UserX, CalendarCheck as IconePresences, CalendarDays, Clock3, TriangleAlert, Check, Users, FileText, LogOut, Crown, UserRound, ShieldCheck, ShieldAlert } from 'lucide-react'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import Badge from '../../shared/ui/Badge'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
@@ -39,6 +39,8 @@ function InterrupteurPointage({ actif, onChange, nom }) {
   )
 }
 
+const SANS_GESTION_PRESENCES = ['secretaire', 'assistant_ge', 'assistant_comptable']
+
 export default function Presences() {
   const user = useAuth((s) => s.user)
   const { data: employes } = useCollection(COL.employes)
@@ -67,7 +69,12 @@ export default function Presences() {
   // Horaires : réglés dans RH, Paramètres, Présences. Chaque employé suit ceux de son profil (employé ou direction).
   const horaires = lireHoraires(configs)
   const regles = lireRegles(configs)
-  const peutVoirArgent = canExportExcel(useAuth((s) => s.roleReel))
+  const roleReel = useAuth((s) => s.roleReel)
+  const roleCourant = useAuth((s) => s.role)
+  const peutVoirArgent = canExportExcel(roleReel)
+  // La secrétaire et les assistant(e)s consultent les présences mais n'ont aucun des boutons de gestion :
+  // calendrier, interrupteur « Pointé », horaires, pointage, absence, correction, justification.
+  const lectureSeulePointage = SANS_GESTION_PRESENCES.includes(roleCourant) || SANS_GESTION_PRESENCES.includes(roleReel)
   const horairesPour = (emp) => horairesDe(emp, horaires, postes)
   const limiteRetard = (emp) => minutes(horairesPour(emp).arrivee) + horaires.tolerance
   const estPointe = (emp) => emp.pointe !== false
@@ -76,6 +83,7 @@ export default function Presences() {
   const duJour = useMemo(() => { const m = {}; presences.filter((p) => p.date === date).forEach((p) => { m[p.employeId] = p }); return m }, [presences, date])
 
   async function enregistrer(emp, champs) {
+    if (lectureSeulePointage) return toast.error('Les présences sont en consultation seule pour votre profil')
     // id déterministe : date_employé, un seul enregistrement par jour et par employé
     await setItem(COL.presences, `${date}_${emp.id}`, { date, employeId: emp.id, employeNom: emp.nom, ...champs })
   }
@@ -99,10 +107,12 @@ export default function Presences() {
   }
   // Réglages par employé : pointé ou non, profil d'horaire.
   async function basculerPointage(emp) {
+    if (lectureSeulePointage) return toast.error('Les présences sont en consultation seule pour votre profil')
     await updateItem(COL.employes, emp.id, { pointe: !estPointe(emp) })
     toast.success(estPointe(emp) ? `${emp.nom} n'est plus pointé` : `${emp.nom} sera pointé`)
   }
   async function changerProfil(emp) {
+    if (lectureSeulePointage) return toast.error('Les présences sont en consultation seule pour votre profil')
     const suivant = horairesPour(emp).profil === 'direction' ? 'employe' : 'direction'
     await updateItem(COL.employes, emp.id, { profilHoraire: suivant })
     toast.success(`${emp.nom} : horaires ${suivant === 'direction' ? 'de la direction' : 'des employés'}`)
@@ -121,37 +131,9 @@ export default function Presences() {
     toast.success(`${absent.nom} : absence ${justifie ? 'justifiée' : 'non justifiée'} enregistrée`)
     setAbsent(null)
   }
-  // Saisie manuelle : renseigner à la main l'état d'un jour (heure d'arrivée et de départ, absence, congé, mission), pour aujourd'hui ou un jour passé.
-  // Le retard se calcule tout seul d'après l'heure d'arrivée saisie, la tolérance et les horaires du profil de l'employé.
-  const [manuel, setManuel] = useState(null)
-  function chargerManuel(emp, d) {
-    const rec = presences.find((p) => p.date === d && p.employeId === emp.id)
-    setManuel({ emp, date: d, statut: rec ? (rec.statut === 'retard' ? 'present' : rec.statut) : 'present', heure: rec?.heure || '', heureDepart: rec?.heureDepart || '', motif: rec?.motif || '', justifie: rec?.justifie !== false, tente: false })
-  }
-  const ouvrirManuel = (emp) => chargerManuel(emp, mode === 'jour' && date <= aujourdhui ? date : aujourdhui)
-  async function enregistrerManuel() {
-    const m = manuel
-    if (m.date > aujourdhui) return toast.error('Impossible de saisir un jour à venir')
-    const emp = m.emp
-    const base = { date: m.date, employeId: emp.id, employeNom: emp.nom, par: user?.nom || '', saisieManuelle: true }
-    let champs
-    if (m.statut === 'present') {
-      if (!m.heure) return setManuel({ ...m, tente: true }) || toast.error("Indiquez l'heure d'arrivée")
-      if (m.heureDepart && minutes(m.heureDepart) <= minutes(m.heure)) return toast.error("Le départ doit être après l'arrivée")
-      const retard = minutes(m.heure) > limiteRetard(emp)
-      champs = { statut: retard ? 'retard' : 'present', heure: m.heure, ...(m.heureDepart ? { heureDepart: m.heureDepart } : {}), motif: '' }
-    } else if (m.statut === 'absent') {
-      if (!m.motif.trim()) return setManuel({ ...m, tente: true }) || toast.error("Indiquez le motif de l'absence")
-      champs = { statut: 'absent', heure: '', motif: m.motif.trim(), justifie: m.justifie }
-    } else {
-      champs = { statut: m.statut, heure: '', motif: m.motif.trim() }
-    }
-    await setItem(COL.presences, `${m.date}_${emp.id}`, { ...base, ...champs })
-    toast.success(`${emp.nom} : ${TYPES_PRESENCE[champs.statut].label.toLowerCase()} enregistré pour le ${formatDateShort(m.date)} ✓`)
-    setManuel(null)
-  }
   // Une absence non justifiée retient une part du salaire : on peut la rendre justifiée (justificatif rapporté) ou l'inverse.
   async function basculerJustification(emp, rec) {
+    if (lectureSeulePointage) return toast.error('Les présences sont en consultation seule pour votre profil')
     const suivant = rec.justifie === false
     // On modifie l'enregistrement de CE jour-là (la date de l'absence), pas celui du jour affiché à l'écran.
     await updateItem(COL.presences, rec.id || `${rec.date}_${emp.id}`, { justifie: suivant })
@@ -185,12 +167,14 @@ export default function Presences() {
 
   const futur = date > aujourdhui
   const aPasseSonHeure = (emp) => date < aujourdhui || (date === aujourdhui && minutes(maintenant) >= limiteRetard(emp))
-  const memeHoraires = horaires.heureArriveeDirection === horaires.heureArrivee && horaires.heureDepartDirection === horaires.heureDepart
 
-  const Capsule = ({ couleur, icone: Ic, children }) => (
-    <span className="relative inline-flex items-center gap-1.5 rounded-full bg-white/70 py-1 pl-1 pr-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
-      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),0_3px_6px_-2px_rgba(0,0,0,0.35)] ${couleur}`}><Ic size={11} aria-hidden="true" /></span>
-      {children}
+  // Bulle de verre dépoli teintée de la couleur du groupe : fond translucide, flou, bord lumineux, reflet en haut, ombre colorée.
+  const Capsule = ({ teinte, icone: Ic, titre, children }) => (
+    <span title={titre} className="relative inline-flex items-center gap-1.5 overflow-hidden rounded-full border border-white/85 py-1 pl-1 pr-2.5 backdrop-blur-md backdrop-saturate-150"
+      style={{ background: `linear-gradient(145deg, rgba(255,255,255,.78), color-mix(in srgb, ${teinte} 16%, rgba(255,255,255,.22)))`, boxShadow: `inset 0 1px 0 #fff, inset 0 -7px 12px -8px color-mix(in srgb, ${teinte} 45%, transparent), 0 10px 16px -12px ${teinte}` }}>
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-1 top-0 h-1/2 rounded-full bg-gradient-to-b from-white/70 to-transparent" />
+      <span className="relative flex h-5 w-5 items-center justify-center rounded-full text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.7),0_3px_6px_-2px_rgba(0,0,0,0.35)]" style={{ background: `linear-gradient(145deg, color-mix(in srgb, ${teinte} 60%, white), ${teinte})` }}><Ic size={11} aria-hidden="true" /></span>
+      <span className="relative inline-flex items-center gap-1.5">{children}</span>
     </span>
   )
 
@@ -206,18 +190,16 @@ export default function Presences() {
         </>} />
 
       {/* Horaires : pastille de verre compacte, un profil pour les employés et un pour la direction (réglés dans RH, Paramètres, Présences) */}
-      <div className="ed-entree relative flex w-fit max-w-full flex-wrap items-center gap-x-1 gap-y-1 overflow-hidden rounded-3xl border border-white/70 bg-gradient-to-br from-white/75 via-sky-50/60 to-white/40 p-1 text-[11px] font-bold text-slate-700 shadow-[0_10px_22px_-14px_rgba(2,132,199,0.6),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl"
+      <div className="ed-entree relative flex w-fit max-w-full flex-wrap items-center gap-x-1 gap-y-1 overflow-hidden rounded-3xl border border-white/85 bg-gradient-to-br from-white/50 via-sky-100/30 to-white/15 p-1 text-[11px] font-bold text-slate-700 shadow-[0_14px_26px_-14px_rgba(2,132,199,0.55),inset_0_1px_0_rgba(255,255,255,1),inset_0_-10px_18px_-12px_rgba(2,132,199,0.25)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/15 dark:from-white/10 dark:via-white/5 dark:to-white/5 dark:text-slate-200"
         title="Horaires réglés dans RH, Paramètres, Présences">
         <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/60 to-transparent" />
-        <Capsule couleur="bg-emerald-500" icone={UserRound}>
-          {memeHoraires ? 'Tous' : 'Employés'} <span className="tabular-nums text-slate-900">{horaires.heureArrivee}</span><span className="text-slate-400">→</span><span className="tabular-nums text-slate-900">{horaires.heureDepart}</span>
+        <Capsule teinte="#10b981" icone={UserRound} titre={`Employés : arrivée ${horaires.heureArrivee}, départ ${horaires.heureDepart}${horaires.employesProgrammes ? '' : ' (horaires par défaut : à programmer dans Paramètres, Présences)'}`}>
+          <span className="tabular-nums text-slate-900 dark:text-white">{horaires.heureArrivee}</span><span className="text-slate-400">→</span><span className="tabular-nums text-slate-900 dark:text-white">{horaires.heureDepart}</span>
           {horaires.tolerance ? <span className="font-semibold text-slate-500">(+{horaires.tolerance} min)</span> : null}
         </Capsule>
-        {!memeHoraires && (
-          <Capsule couleur="bg-violet-500" icone={Crown}>
-            Direction <span className="tabular-nums text-slate-900">{horaires.heureArriveeDirection}</span><span className="text-slate-400">→</span><span className="tabular-nums text-slate-900">{horaires.heureDepartDirection}</span>
-          </Capsule>
-        )}
+        <Capsule teinte="#8b5cf6" icone={Crown} titre={`Directeurs : arrivée ${horaires.heureArriveeDirection}, départ ${horaires.heureDepartDirection}${horaires.directionProgrammee ? '' : ' (comme les employés : à programmer dans Paramètres, Présences)'}`}>
+          <span className="tabular-nums text-slate-900 dark:text-white">{horaires.heureArriveeDirection}</span><span className="text-slate-400">→</span><span className="tabular-nums text-slate-900 dark:text-white">{horaires.heureDepartDirection}</span>
+        </Capsule>
       </div>
 
       {employes.length === 0 ? (
@@ -238,14 +220,7 @@ export default function Presences() {
               const h = horairesPour(emp)
               const pointe = estPointe(emp)
               const retardMin = rec?.heure && s === 'retard' ? minutes(rec.heure) - minutes(h.arrivee) : 0
-              const peutPointerDepart = pointe && date === aujourdhui && (s === 'present' || s === 'retard') && !rec?.heureDepart
-              // Saisie manuelle : à côté du bouton Pointer (ou de la correction), pour renseigner les heures, une absence, un congé ou une mission à la main.
-              const boutonManuel = (
-                <button type="button" onClick={() => ouvrirManuel(emp)} title={`Saisie manuelle pour ${emp.nom} : heures, absence, congé, mission`} aria-label={`Saisie manuelle pour ${emp.nom}`}
-                  className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50/90 px-2.5 py-1 text-xs font-bold text-sky-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white active:scale-95">
-                  <Pencil size={12} aria-hidden="true" /> Saisie manuelle
-                </button>
-              )
+              const peutPointerDepart = !lectureSeulePointage && pointe && date === aujourdhui && (s === 'present' || s === 'retard') && !rec?.heureDepart
               return (
                 <li key={emp.id} className={`ed-entree flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/80 px-3.5 py-2.5 shadow-[0_10px_22px_-16px_rgba(26,26,26,0.4),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md ${pointe || s ? 'bg-white/65' : 'bg-white/35'}`}
                   style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}>
@@ -258,16 +233,20 @@ export default function Presences() {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    {!lectureSeulePointage && (
                     <button type="button" onClick={() => setCalendrierDe(emp)} title={`Calendrier de présence de ${emp.nom}`} aria-label={`Calendrier de présence de ${emp.nom}`}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/80 bg-white/70 text-sky-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white active:scale-95">
                       <CalendarDays size={15} aria-hidden="true" />
                     </button>
-                    <InterrupteurPointage actif={pointe} onChange={() => basculerPointage(emp)} nom={emp.nom} />
+                    )}
+                    {!lectureSeulePointage && <InterrupteurPointage actif={pointe} onChange={() => basculerPointage(emp)} nom={emp.nom} />}
+                    {!lectureSeulePointage && (
                     <button type="button" onClick={() => changerProfil(emp)} title={`Horaires ${h.profil === 'direction' ? 'de la direction' : 'des employés'} : arrivée ${h.arrivee}, départ ${h.depart}. Touchez pour changer de profil.`}
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] transition-all hover:-translate-y-0.5 active:scale-95 ${h.profil === 'direction' ? 'border-violet-200 bg-violet-50/90 text-violet-700' : 'border-white/80 bg-white/70 text-slate-600'}`}>
                       {h.profil === 'direction' ? <Crown size={11} aria-hidden="true" /> : <UserRound size={11} aria-hidden="true" />}
                       <span className="tabular-nums">{h.arrivee}</span>
                     </button>
+                    )}
 
                     {s ? (
                       <>
@@ -281,7 +260,10 @@ export default function Presences() {
                             <LogOut size={12} aria-hidden="true" /> Pointer le départ
                           </button>
                         )}
-                        {s === 'absent' && (
+                        {s === 'absent' && lectureSeulePointage && (
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${rec.justifie === false ? 'border-red-300 bg-red-100 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{rec.justifie === false ? 'Non justifiée' : 'Justifiée'}</span>
+                        )}
+                        {s === 'absent' && !lectureSeulePointage && (
                           <button type="button" onClick={() => basculerJustification(emp, rec)} aria-label={rec.justifie === false ? 'Absence non justifiée : la marquer justifiée' : 'Absence justifiée : la marquer non justifiée'}
                             title={rec.justifie === false ? `Non justifiée : ${regles.pctAbsence} % d'une journée retenus sur le salaire. Touchez si un justificatif est rapporté.` : 'Justifiée : aucune retenue. Touchez pour la marquer non justifiée.'}
                             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-extrabold transition-all hover:-translate-y-0.5 active:scale-95 ${rec.justifie === false ? 'border-red-300 bg-red-100 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
@@ -289,22 +271,24 @@ export default function Presences() {
                           </button>
                         )}
                         {s === 'absent' && rec.motif && <span className="inline-flex max-w-[14rem] items-center gap-1 truncate rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700" title={rec.motif}><FileText size={11} aria-hidden="true" />{rec.motif}</span>}
+                        {!lectureSeulePointage && (
                         <select value="" onChange={(e) => e.target.value && corriger(emp, e.target.value)} aria-label={`Corriger le pointage de ${emp.nom}`}
                           className="rounded-xl border border-white/80 bg-white/70 px-2 py-1 text-xs font-bold text-gray-600 shadow-sm backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-sky-300">
                           <option value="">Corriger…</option>
                           {Object.entries(TYPES_PRESENCE).filter(([v]) => v !== s).map(([v, o]) => <option key={v} value={v}>{o.label}</option>)}
                         </select>
-                        {boutonManuel}
+                        )}
                       </>
+                    ) : lectureSeulePointage ? (
+                      <span className="text-[11px] font-semibold text-gray-400">{pointe ? 'Pas encore pointé' : 'Pas de pointage'}</span>
                     ) : !pointe ? (
-                      <><span className="text-[11px] font-semibold text-gray-400">Pas de pointage</span>{!futur && boutonManuel}</>
+                      <><span className="text-[11px] font-semibold text-gray-400">Pas de pointage</span></>
                     ) : futur ? (
                       <span className="text-xs font-semibold text-gray-400">Jour à venir</span>
                     ) : (
                       <>
                         <BoutonPointerMini onClick={() => pointer(emp)} title={date === aujourdhui ? "Pointer l'arrivée" : 'Marquer présent'} />
                         {aPasseSonHeure(emp) && <BoutonAbsentMini onClick={() => ouvrirAbsence(emp)} />}
-                        {boutonManuel}
                         {date === aujourdhui && !aPasseSonHeure(emp) && <span className="text-[11px] font-semibold text-gray-400">Absent possible dès {heureTexte(limiteRetard(emp))}</span>}
                       </>
                     )}
@@ -366,67 +350,6 @@ export default function Presences() {
       {/* Calendrier de présence d'un employé : jours pointés, absents, en retard, non pointés. */}
       <CalendrierPresence employe={calendrierDe} presences={presences} regles={regles} avecArgent={peutVoirArgent} onClose={() => setCalendrierDe(null)}
         onBasculerJustification={basculerJustification} moisInitial={(mode === 'mois' ? mois : date).slice(0, 7)} />
-
-      {/* Saisie manuelle d'un jour : statut, heures d'arrivée et de départ, motif. */}
-      <ModalRh open={!!manuel} onClose={() => setManuel(null)} title="Saisie manuelle" titreHero={manuel?.emp.nom} icone={Pencil}
-        intro={manuel ? `${formatDateShort(manuel.date)} : arrivée ${horairesPour(manuel.emp).arrivee}, départ ${horairesPour(manuel.emp).depart}` : ''} onSave={enregistrerManuel}>
-        {manuel && (() => {
-          const h = horairesPour(manuel.emp)
-          const retardMin = manuel.heure ? minutes(manuel.heure) - minutes(h.arrivee) : 0
-          const enRetard = manuel.heure && minutes(manuel.heure) > limiteRetard(manuel.emp)
-          const maj = (k, v) => setManuel({ ...manuel, [k]: v })
-          const STATUTS = [{ v: 'present', label: 'Présent', icone: Check, ton: 'border-emerald-400 bg-emerald-50 text-emerald-800' }, { v: 'absent', label: 'Absent', icone: UserX, ton: 'border-red-400 bg-red-50 text-red-800' },
-            { v: 'conge', label: 'Congé', icone: CalendarDays, ton: 'border-sky-400 bg-sky-50 text-sky-800' }, { v: 'mission', label: 'Mission', icone: Briefcase, ton: 'border-violet-400 bg-violet-50 text-violet-800' }]
-          return (<>
-            <Champ label="Jour" icone={CalendarDays} iconeLabel>
-              <input type="date" value={manuel.date} max={aujourdhui} onChange={(e) => e.target.value && chargerManuel(manuel.emp, e.target.value)} className="input-base" />
-            </Champ>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="État du jour">
-              {STATUTS.map((o) => (
-                <button key={o.v} type="button" role="radio" aria-checked={manuel.statut === o.v} onClick={() => maj('statut', o.v)}
-                  className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-extrabold transition-all active:scale-[0.98] ${manuel.statut === o.v ? o.ton : 'border-white/80 bg-white/60 text-gray-500 hover:bg-white'}`}>
-                  <o.icone size={15} aria-hidden="true" />{o.label}
-                </button>
-              ))}
-            </div>
-            {manuel.statut === 'present' && (<>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Champ label="Heure d'arrivée" icone={LogIn} iconeLabel required erreur={manuel.tente && !manuel.heure ? "L'heure d'arrivée est obligatoire." : undefined}>
-                  <input type="time" value={manuel.heure} onChange={(e) => maj('heure', e.target.value)} className="input-base" autoFocus />
-                </Champ>
-                <Champ label="Heure de départ" icone={LogOut} iconeLabel aide="Laissez vide si la personne n'est pas encore partie.">
-                  <input type="time" value={manuel.heureDepart} onChange={(e) => maj('heureDepart', e.target.value)} className="input-base" />
-                </Champ>
-              </div>
-              {manuel.heure && (
-                <p className={`rounded-2xl border px-3 py-2 text-xs font-bold ${enRetard ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
-                  {enRetard ? `Retard de ${retardMin} min : compté comme retard` : 'À l\'heure : aucun retard'}
-                </p>
-              )}
-            </>)}
-            {manuel.statut === 'absent' && (<>
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="L'absence est-elle justifiée ?">
-                {[{ v: true, label: 'Justifiée', sous: 'Aucune retenue', icone: ShieldCheck, ton: 'border-emerald-400 bg-emerald-50 text-emerald-800' },
-                  { v: false, label: 'Non justifiée', sous: regles.pctAbsence > 0 ? `${regles.pctAbsence} % d'une journée retenus` : 'Aucune retenue réglée', icone: ShieldAlert, ton: 'border-red-400 bg-red-50 text-red-800' }].map((o) => (
-                  <button key={String(o.v)} type="button" role="radio" aria-checked={manuel.justifie === o.v} onClick={() => maj('justifie', o.v)}
-                    className={`flex flex-col items-start gap-0.5 rounded-2xl border px-3 py-2.5 text-left transition-all active:scale-[0.98] ${manuel.justifie === o.v ? o.ton : 'border-white/80 bg-white/60 text-gray-500 hover:bg-white'}`}>
-                    <span className="flex items-center gap-1.5 text-sm font-extrabold"><o.icone size={15} aria-hidden="true" />{o.label}</span>
-                    <span className="text-[11px] font-semibold opacity-80">{o.sous}</span>
-                  </button>
-                ))}
-              </div>
-              <Champ label="Motif de l'absence" icone={FileText} required erreur={manuel.tente && !manuel.motif.trim() ? 'Le motif est obligatoire.' : undefined}>
-                <input value={manuel.motif} onChange={(e) => maj('motif', e.target.value)} className="input-base" placeholder="Ex. malade, raison familiale" />
-              </Champ>
-            </>)}
-            {(manuel.statut === 'conge' || manuel.statut === 'mission') && (
-              <Champ label="Précision (facultatif)" icone={FileText} iconeLabel>
-                <input value={manuel.motif} onChange={(e) => maj('motif', e.target.value)} className="input-base" placeholder={manuel.statut === 'mission' ? 'Ex. mission à Kara' : 'Ex. congé annuel'} />
-              </Champ>
-            )}
-          </>)
-        })()}
-      </ModalRh>
 
       {/* Justification d'une absence : le motif est obligatoire. */}
       <ModalRh open={!!absent} onClose={() => setAbsent(null)} title="Marquer absent" titreHero={absent?.nom} icone={UserX}

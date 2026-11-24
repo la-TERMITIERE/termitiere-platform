@@ -1,11 +1,11 @@
-// Visuel d'un département : les départements sont les modules de l'entreprise (sauf E-DÉPENSES, E-G.Pro et E-VOYAGE).
+// Visuel d'un département : les départements sont les modules de l'entreprise (sauf E-DÉPENSES et E-G.Pro).
 // Ordre de choix du logo : image ajoutée par l'utilisateur, puis logo du module, puis icône du module, puis icône de la CATÉGORIE
 // (choisie, ou devinée d'après le nom), puis icône par défaut.
 import { Building2, Sprout, Truck, BrickWall, MapPin, Baby, Calculator, HeartPulse, ShoppingCart, Cpu, Crown } from 'lucide-react'
 import { MODULES } from '../../shared/modules'
 import { icone3D } from '../../utils/color'
 
-const EXCLUS = ['depense', 'projet', 'voyage']
+const EXCLUS = ['depense', 'projet']
 export const MODULES_DEPARTEMENTS = MODULES.filter((m) => !EXCLUS.includes(m.id))
 
 // Catégories de départements. `mots` sert à deviner la catégorie d'après le nom saisi.

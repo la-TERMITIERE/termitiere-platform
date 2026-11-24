@@ -82,6 +82,7 @@ export const DROIT_CONGE_ANNUEL = 25
 // IRPP = barème progressif simplifié ici.
 export const PAIE_CONFIG_DEFAUT = {
   tauxCnssSalarie: 0.04,
+  tauxAmuSalarie: 0.05,      // AMU retenue sur le salaire de l'employé (avec la CNSS salarié : 9 % au total)
   tauxCnssEmployeur: 0.175,
   tauxAmuEmployeur: 0.05,
   // Barème IRPP simplifié (tranches mensuelles, XOF) — paramétrable dans Configuration.
@@ -168,13 +169,15 @@ export function calculerBulletin(brut, primes = 0, config = PAIE_CONFIG_DEFAUT, 
   const brutTotal = Math.max(0, (Number(brut) || 0) + (Number(primes) || 0) - retenueAbsences)
   const cnssSalarie = Math.round(brutTotal * config.tauxCnssSalarie)
   const baseImposable = brutTotal - cnssSalarie
+  // AMU salarié : retenue sur le salaire, en plus de la CNSS salarié (et de la part AMU payée par l'employeur).
+  const amuSalarie = Math.round(brutTotal * (config.tauxAmuSalarie ?? PAIE_CONFIG_DEFAUT.tauxAmuSalarie))
   const its = calculerITS(baseImposable, config.bareme)
   const retenueAvances = Math.max(0, Math.round(Number(retenues) || 0))
-  const net = brutTotal - cnssSalarie - its - retenueAvances
+  const net = brutTotal - cnssSalarie - amuSalarie - its - retenueAvances
   const cnssEmployeur = Math.round(brutTotal * config.tauxCnssEmployeur)
   const amuEmployeur = Math.round(brutTotal * (config.tauxAmuEmployeur ?? PAIE_CONFIG_DEFAUT.tauxAmuEmployeur))
   const coutEmployeur = brutTotal + cnssEmployeur + amuEmployeur
-  return { brutTotal, cnssSalarie, baseImposable, its, retenueAvances, retenuePresence: retenueAbsences, net, cnssEmployeur, amuEmployeur, coutEmployeur }
+  return { brutTotal, cnssSalarie, amuSalarie, baseImposable, its, retenueAvances, retenuePresence: retenueAbsences, net, cnssEmployeur, amuEmployeur, coutEmployeur }
 }
 
 function calculerITS(base, bareme = PAIE_CONFIG_DEFAUT.bareme) {

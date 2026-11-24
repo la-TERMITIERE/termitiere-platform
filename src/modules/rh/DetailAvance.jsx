@@ -6,7 +6,6 @@ import DetailFiche from './DetailFiche'
 import Modal from '../../shared/ui/Modal'
 import Button from '../../shared/ui/Button'
 import { useAuth } from '../../hooks/useAuth'
-import { useCollection } from '../../hooks/useFirestore'
 import { toast } from '../../core/notifications'
 import { isFullAccessRole } from '../../core/roles'
 import { formatMoney, formatDateShort } from '../../utils/formatters'
@@ -78,7 +77,6 @@ function RemboursementModal({ avance, onClose }) {
 export default function DetailAvance({ avance, employes = [], onClose, onModifier, onSupprimer }) {
   const user = useAuth((s) => s.user)
   const role = useAuth((s) => s.role)
-  const { data: users } = useCollection('users')
   const [refus, setRefus] = useState(false)
   const [rembourse, setRembourse] = useState(false)
   const [envoi, setEnvoi] = useState(false)
@@ -86,7 +84,6 @@ export default function DetailAvance({ avance, employes = [], onClose, onModifie
   const a = avance
   const st = STATUTS_AVANCE[a.statut || 'demandee']
   const complet = isFullAccessRole(role)
-  const ge = users.filter((u) => u.role === 'ge').map((u) => u.nom || u.login).join(', ')
 
   const faire = async (fn, message) => { setEnvoi(true); try { await fn(); toast.success(message); onClose() } finally { setEnvoi(false) } }
   const actions = []
@@ -111,7 +108,7 @@ export default function DetailAvance({ avance, employes = [], onClose, onModifie
             <div className="space-y-3 rounded-2xl border border-white/80 bg-white/70 px-3 py-3 backdrop-blur-md">
               <div>
                 <span className="mb-3 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">Circuit de la demande</span>
-                <ChapeletMission mission={a} etapes={ETAPES_AVANCE} etats={etatsAvance(a)} noms={nomsAvance(a, ge)} />
+                <ChapeletMission mission={a} etapes={ETAPES_AVANCE} etats={etatsAvance(a)} noms={nomsAvance(a)} />
               </div>
               {['versee', 'remboursee'].includes(a.statut) && <BarreRemboursement avance={a} />}
             </div>

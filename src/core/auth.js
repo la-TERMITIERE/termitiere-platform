@@ -140,7 +140,10 @@ function sessionFromProfile(p) {
     nom: p.nom || 'Utilisateur',
     role,
     // Les rôles « voit tout » (accès total + superviseur) reçoivent tous les modules.
-    modules: isViewAllRole(role) ? ALL_MODULES.filter((id) => !(Array.isArray(p.modulesRetires) && p.modulesRetires.includes(id))) : (p.modules || []),
+    // E-TACHES est ouvert à TOUS les employés par défaut (sauf retrait explicite par Info via `modulesRetires`).
+    modules: isViewAllRole(role)
+      ? ALL_MODULES.filter((id) => !(Array.isArray(p.modulesRetires) && p.modulesRetires.includes(id)))
+      : [...new Set([...(p.modules || []), ...(Array.isArray(p.modulesRetires) && p.modulesRetires.includes('taches') ? [] : ['taches'])])],
     // Droits de saisie par catégorie d'animaux (Maxi-Agro). null = aucune restriction
     // (comptes hérités) ; tableau (même vide) = restriction explicite.
     agroCategories: Array.isArray(p.agroCategories) ? p.agroCategories : null,
@@ -469,7 +472,7 @@ export const useAuthStore = create((set, get) => ({
   // Helpers de contrôle d'accès
   hasModule: (mod) => {
     const { role, modules } = get()
-    // Restriction dure par rôle (ex. E-VOYAGE réservé admins / PAU / GE) : prime sur
+    // Restriction dure par rôle (ex. un module réservé à certains rôles) : prime sur
     // l'attribution individuelle ET sur l'accès « voit tout ».
     if (!moduleRoleOk(mod, role)) return false
     if (isViewAllRole(role)) return !(get().user?.modulesRetires || []).includes(mod)

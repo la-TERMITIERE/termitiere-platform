@@ -80,7 +80,12 @@ export const finAliment = ({ init, ent, sor }) =>
 // (généré automatiquement lors de l'ajustement d'un écart de facturation).
 export const ENTREE_TYPES_ANIMAL = ['Achat', 'Naissance', 'Retour du marché', 'Dons', 'Autres']
 // Types de SORTIES pour les animaux. La « Mutation » porte une espèce de destination.
-export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', 'Perte', 'Dons', 'Autres']
+// « Transfert Lomé » : les animaux quittent la ferme pour être stockés à Lomé, où ils se vendent (voir stockLome.js). Le stock de la ferme baisse,
+// celui de Lomé augmente. Ce n'est ni une vente ni une perte.
+export const TYPE_TRANSFERT_LOME = 'Transfert Lomé'
+// « Transfert autre localité » : même principe pour une autre localité que l'agent précise en tapant son nom (Kara, Kpalimé…).
+export const TYPE_TRANSFERT_AUTRE = 'Transfert autre localité'
+export const SORTIE_TYPES_ANIMAL = ['Ventes', 'Décès', 'Mutation', TYPE_TRANSFERT_LOME, TYPE_TRANSFERT_AUTRE, 'Perte', 'Dons', 'Autres']
 // Saisie directe : Ventes et Dons passent par le workflow « Demande » (approbation).
 export const SORTIE_TYPES_SAISIE_ANIMAL = SORTIE_TYPES_ANIMAL.filter((t) => !['Ventes', 'Dons'].includes(t))
 // Aliments / divers : pas de naissance ni de décès ni de mutation inter-espèces.
@@ -90,7 +95,7 @@ export const SORTIE_TYPES_SAISIE_ALIMENT = SORTIE_TYPES_ALIMENT.filter((t) => ![
 
 // Le type « Autres » exige une précision (personne / motif personnalisé).
 // Le type « Décès » exige un motif (faithful à la règle d'origine).
-export const labelRequis = (type) => type === 'Autres' || type === 'Décès'
+export const labelRequis = (type) => type === 'Autres' || type === 'Décès' || type === TYPE_TRANSFERT_AUTRE
 
 // Somme des quantités d'une liste de mouvements.
 export const sommeMouvements = (lignes) =>
@@ -157,6 +162,72 @@ export function agregerAnimal({ init = 0, entrees = [], sorties = [] }, autoSor 
   return { init, naiss, ent, sor, dec: decManuel, fin, decMotif, mutIn: mutIn || 0 }
 }
 
+// Stock disponible pour une mutation : tout ce que l'espèce a ce jour-là, moins ses autres sorties (une mutation ne peut pas dépasser le stock).
+export function stockPourMutation({ init = 0, entrees = [], sorties = [] }, autoSor = 0, mutIn = 0) {
+  const autresSorties = sommeMouvements((sorties || []).filter((l) => l.type !== 'Mutation'))
+  return (parseInt(init) || 0) + sommeMouvements(entrees) + (mutIn || 0) - autresSorties - (autoSor || 0)
+}
+export const totalMutations = (sorties) => sommeType(sorties, 'Mutation')
+
+// Première espèce dont les mutations dépassent le stock (null si tout est cohérent).
+export function mutationAuDessusDuStock(especes, anim, autoSorOf, mutIn) {
+  for (const e of especes || []) {
+    const d = anim?.[e.id]
+    const demande = totalMutations(d?.sorties)
+    if (!d || demande <= 0) continue
+    const stock = stockPourMutation(d, autoSorOf(e.id, 'animaux'), mutIn?.[e.id] || 0)
+    if (demande > stock) return { nom: e.nom, stock: Math.max(0, stock), demande }
+  }
+  return null
+}
+
+// ── Continuité des jours : l'EF Initial d'un jour = l'EF Final de la veille ─────────────────────────────────────────
+// Quand un jour est modifié après coup (mutation, correction, ajustement de facture…), les jours suivants déjà enregistrés
+// (dont les reports automatiques) gardaient l'ancien EF Initial : l'effectif « revenait » au nombre d'avant. Cette fonction
+// renvoie les jours suivants à corriger (EF Initial réaligné, EF Final recalculé), sans toucher aux mouvements.
+// Un EF Initial volontairement réajusté (`initAjuste`) est respecté : on repart de son EF Final.
+const listeDe = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.values(x) : [])
+
+function recalculerNoeud(kind, n, init, mutIn) {
+  const nouveauFormat = n.autoSor !== undefined || n.mutIn !== undefined || n.entrees !== undefined || n.sorties !== undefined
+  if (!nouveauFormat) return { ...n, init, fin: Math.max(0, (n.fin || 0) + (init - (n.init || 0))) } // ancienne saisie à champs scalaires
+  const base = { init, entrees: listeDe(n.entrees), sorties: listeDe(n.sorties) }
+  return { ...n, ...(kind === 'animaux' ? agregerAnimal(base, n.autoSor || 0, mutIn) : agregerAliment(base, n.autoSor || 0)) }
+}
+
+export function suiteRecalculee(inventaires, dateDepart) {
+  const tries = (inventaires || []).filter((i) => i && i.date).sort((a, b) => (a.date < b.date ? -1 : 1))
+  const depart = tries.find((i) => i.date === dateDepart)
+  if (!depart) return []
+  const prevFin = { animaux: {}, aliments: {} }
+  ;['animaux', 'aliments'].forEach((k) => Object.entries(depart[k] || {}).forEach(([id, n]) => {
+    if (n && n.fin !== undefined && n.fin !== null) prevFin[k][id] = n.fin || 0
+  }))
+  const aCorriger = []
+  tries.filter((i) => i.date > dateDepart).forEach((doc) => {
+    const mutInJour = mutationsEntrantes(doc.animaux)
+    const maj = { date: doc.date }
+    let change = false
+    ;['animaux', 'aliments'].forEach((kind) => {
+      const nouveaux = { ...(doc[kind] || {}) }
+      Object.entries(doc[kind] || {}).forEach(([id, n]) => {
+        if (!n) return
+        const attendu = prevFin[kind][id]
+        let noeud = n
+        if (attendu !== undefined && !n.initAjuste && (n.init || 0) !== attendu) {
+          noeud = recalculerNoeud(kind, n, attendu, kind === 'animaux' ? (mutInJour[id] || 0) : 0)
+          nouveaux[id] = noeud
+          change = true
+        }
+        if (noeud.fin !== undefined && noeud.fin !== null) prevFin[kind][id] = noeud.fin || 0
+      })
+      maj[kind] = nouveaux
+    })
+    if (change) aCorriger.push(maj)
+  })
+  return aCorriger
+}
+
 // Agrégation aliments (pas de naissance / décès).
 // autoSor = sorties auto issues des demandes approuvées (incluses dans le total).
 export function agregerAliment({ init = 0, entrees = [], sorties = [] }, autoSor = 0) {
@@ -176,7 +247,10 @@ export function mouvementsDepuisSaisie(saved, kind = 'animaux') {
   const sorties = []
   if (kind === 'animaux') {
     if (saved.naiss) entrees.push({ type: 'Naissance', qte: saved.naiss, label: '' })
-    if (saved.ent) entrees.push({ type: 'Achat', qte: saved.ent, label: '' })
+    // `ent` inclut les mutations entrantes (calculées à part) : on les retire, sinon elles réapparaissent en faux « Achat » au
+    // rechargement (le stockage supprime les listes vides, donc un article qui ne fait que recevoir des mutations n'a plus de liste).
+    const entAchat = Math.max(0, (saved.ent || 0) - (saved.mutIn || 0))
+    if (entAchat) entrees.push({ type: 'Achat', qte: entAchat, label: '' })
     if (saved.dec) sorties.push({ type: 'Décès', qte: saved.dec, label: saved.decMotif || '' })
     // saved.sor inclut les sorties auto (demandes) → on ne les recrée pas en manuel.
   } else {

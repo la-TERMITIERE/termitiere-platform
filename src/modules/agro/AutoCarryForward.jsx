@@ -40,7 +40,7 @@ function dernierFinConnu(historique, id, kind) {
 }
 
 // Construit l'inventaire de report d'une journée à partir de tout l'historique connu.
-function construireReport(historiqueAvant, date, especes, aliments, demandes) {
+export function construireReport(historiqueAvant, date, especes, aliments, demandes) {
   const animaux = {}
   especes.forEach((e) => {
     const init = dernierFinConnu(historiqueAvant, e.id, 'animaux')

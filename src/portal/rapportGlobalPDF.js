@@ -33,6 +33,8 @@ const BAS_CORPS = 262    // fin du corps (au-dessus du pied de page)
 const nb = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/[  ]/g, ' ')
 const fcfa = (n) => `${nb(n)} FCFA`
 const dateCourte = (j) => String(j || '').split('-').reverse().join('/')
+const signe = (n) => `${n < 0 ? '- ' : ''}${fcfa(Math.abs(n))}`
+const sn = (n) => `${n < 0 ? '-' : ''}${nb(Math.abs(n))}`
 const rgb = (hex) => { const h = String(hex || '#64748b').replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) }
 
 // Polygone plein à partir de points absolus [[x, y], ...].
@@ -47,7 +49,7 @@ function polygone(doc, points, couleur) {
 }
 
 // ─── EN-TÊTE (comme le papier à en-tête de la société) ─────────────────────────
-function enTete(doc, logo) {
+export function enTete(doc, logo) {
   if (logo?.dataURL) {
     const h = 33, w = h * (logo.w / logo.h)
     doc.addImage(logo.dataURL, 'PNG', 12, 5, w, h)
@@ -73,7 +75,7 @@ function icone(doc, x, y, type) {
   else if (type === 'mail') { doc.setFont('times', 'bold'); doc.setFontSize(6.2); doc.text('@', x, y + 0.9, { align: 'center' }) }
   else { doc.circle(x, y - 0.3, 0.95, 'F'); doc.triangle(x - 0.9, y + 0.2, x + 0.9, y + 0.2, x, y + 1.6, 'F') }
 }
-function piedDePage(doc, numero, total, meta) {
+export function piedDePage(doc, numero, total, meta) {
   const h = doc.internal.pageSize.getHeight()
   polygone(doc, [[0, h - 25], [77, h - 25], [81, h - 10], [0, h - 10]], ROSE)
   doc.setTextColor(255, 255, 255); doc.setFont('times', 'bold'); doc.setFontSize(8.6)
@@ -184,6 +186,8 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       ligne(doc, `Recettes : ${fcfa(s.recettes)}     Dépenses : ${fcfa(s.depenses)}     Bénéfice : ${s.benefice < 0 ? '- ' : ''}${fcfa(Math.abs(s.benefice))}`, y)
       y += 5.5
       if (s.cible > 0) { ligne(doc, `Objectif : ${fcfa(s.cible)}, atteint à ${Math.round(s.pct)} %`, y, { taille: 9.5, couleur: GRIS_TXT }); y += 5.5 }
+      ligne(doc, `Cumul total : recettes ${fcfa(s.cumulRecettes)}     dépenses ${fcfa(s.cumulDepenses)}     bénéfice ${signe(s.cumulBenefice)}`, y, { style: 'bold' })
+      y += 5.5
     }
     const faits = s.activite.map((a) => `${a.libelle} : ${nb(a.valeur)}`)
     if (sansMontant) faits.push(`Opérations enregistrées : ${nb(s.nbOperations)}`)
@@ -203,6 +207,32 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       })
       y = doc.lastAutoTable.finalY + 8
     } else {
+      y += 7
+    }
+  }
+
+  // Situation générale : tous les secteurs, période et cumul total, avec le total général en bas.
+  const sit = rapport.situation
+  if (sit) {
+    place(sansMontant ? 30 : 60)
+    y = titreSection(doc, y, 'Situation générale de tous les secteurs')
+    if (sansMontant) {
+      ligne(doc, `Secteurs suivis : ${nb(sit.secteurs.length)}     Opérations enregistrées sur la période : ${nb(total.nbOperations)}`, y)
+      y += 8
+    } else {
+      autoTable(doc, {
+        ...STYLE_TABLEAU, startY: y, margin: { left: MARGE, right: MARGE, top: HAUT_CORPS, bottom: 300 - BAS_CORPS },
+        styles: { ...STYLE_TABLEAU.styles, fontSize: 8.5, cellPadding: 1.6 },
+        head: [['Secteur', 'Recettes (période)', 'Dépenses (période)', 'Bénéfice (période)', 'Cumul recettes', 'Cumul dépenses', 'Cumul bénéfice']],
+        body: sit.secteurs.map((l) => [l.label, nb(l.recettes), nb(l.depenses), sn(l.benefice), nb(l.cumulRecettes), nb(l.cumulDepenses), sn(l.cumulBenefice)]),
+        foot: [['TOTAL GÉNÉRAL', nb(sit.total.recettes), nb(sit.total.depenses), sn(sit.total.benefice), nb(sit.total.cumulRecettes), nb(sit.total.cumulDepenses), sn(sit.total.cumulBenefice)]],
+        showFoot: 'lastPage',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+        didParseCell: (d) => { if (d.section === 'body' && d.column.index === 0) d.cell.styles.textColor = rgb(sit.secteurs[d.row.index]?.couleur) }
+      })
+      y = doc.lastAutoTable.finalY + 6
+      place(14)
+      ligne(doc, `Au total, tous secteurs confondus, depuis l'origine : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' })
       y += 7
     }
   }

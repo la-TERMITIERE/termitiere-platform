@@ -10,6 +10,7 @@ export const MODULE_THEME = {
   comptabilite: { color: '#ea580c', color2: '#9a3412', logo: null,                          nom: 'COMPTABILITÉ'           },
   gym:          { color: '#E8850F', color2: '#A6342A', logo: '/Maxi_Gym.png',                nom: 'MAXI-GYM'               },
   projet:       { color: '#0d9488', color2: '#0f5450', logo: null,                          nom: 'E-G.Pro'                },
+  taches:       { color: '#7c3aed', color2: '#4c1d95', logo: null,                          nom: 'E-TACHES'               },
   depense:      { color: '#B45309', color2: '#78350F', logo: null,                          nom: 'E-DÉPENSES'             },
   default:      { color: '#BC3C31', color2: '#1A1A1A', logo: '/termitiere-logo.png',         nom: 'LA TERMITIÈRE'          }
 }

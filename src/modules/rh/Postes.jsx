@@ -12,6 +12,7 @@ import { COL, STATUTS_EMPLOYE } from './store/rhStore'
 import { useDepartements } from './useDepartements'
 import { useChoixDepartement } from './departementsChoix'
 import { PageHeader, Champ, ModalRh, ChoixBoutons } from './rhui'
+import { usePeutSupprimerRh } from './suppression'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 import DetailKpiModal from './DetailKpiModal'
 import { visuelDepartement, LogoDepartement } from './departementsVisuel'
@@ -26,6 +27,7 @@ const RYTHME = ['lg:col-span-3', 'lg:col-span-3', 'lg:col-span-2', 'lg:col-span-
 export default function Postes() {
   const departements = useDepartements()
   const choixDep = useChoixDepartement()
+  const peutSupprimer = usePeutSupprimerRh() // le bouton Supprimer est réservé à l'administration
   const { data: postes } = useCollection(COL.postes)
   const { data: employes } = useCollection(COL.employes)
   const { data: departementsDocs } = useCollection(COL.departements)
@@ -136,8 +138,8 @@ export default function Postes() {
                 <span className="flex items-center gap-1.5">
                   <button type="button" onClick={() => setModal({ ...vide(), ...p })} aria-label={`Modifier ${p.intitule}`} title="Modifier"
                     className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/70 text-gray-500 shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white hover:text-sky-700 active:scale-90"><Pencil size={14} /></button>
-                  <button type="button" onClick={() => supprimer(p)} aria-label={`Supprimer ${p.intitule}`} title="Supprimer"
-                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-white/70 text-red-500 shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-700 active:scale-90"><Trash2 size={14} /></button>
+                  {peutSupprimer && <button type="button" onClick={() => supprimer(p)} aria-label={`Supprimer ${p.intitule}`} title="Supprimer"
+                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-white/70 text-red-500 shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-700 active:scale-90"><Trash2 size={14} /></button>}
                 </span>
               </div>
             </div>
@@ -154,7 +156,7 @@ export default function Postes() {
         </div>
       )}
 
-      {/* Fiche d'un poste : ses chiffres clés et les agents qui l'occupent. */}
+      {/* Fiche d'un poste : ses chiffres clés et les employés qui l'occupent. */}
       {detail && (() => {
         const v = visuelDe(detail)
         const agents = employes.filter((e) => norme(e.poste) === norme(detail.intitule))
@@ -164,7 +166,7 @@ export default function Postes() {
               titre: detail.intitule, icone: v.Icone, logo: v.logo, couleur: v.couleur,
               sous: `${detail.departement || 'Sans département'}${detail.missions ? ' : ' + detail.missions : ''}`,
               tuiles: [
-                { icone: Users, titre: 'Agents', valeur: agents.length },
+                { icone: Users, titre: 'Employés', valeur: agents.length },
                 { icone: Banknote, titre: 'Salaire de base', valeur: detail.salaireBase ? formatMoney(detail.salaireBase) : 'Non défini' },
                 { icone: Layers, titre: 'Classification', valeur: detail.classification || 'Non définie' }
               ],
@@ -173,7 +175,7 @@ export default function Postes() {
             }}
             pied={<>
               <Button variant="ghost" onClick={() => { const p = detail; setDetail(null); setModal({ ...vide(), ...p }) }}><Pencil size={15} /> Modifier</Button>
-              <Button variant="ghost" onClick={() => supprimer(detail)} style={{ color: '#dc2626' }}><Trash2 size={15} /> Supprimer</Button>
+              {peutSupprimer && <Button variant="ghost" onClick={() => supprimer(detail)} style={{ color: '#dc2626' }}><Trash2 size={15} /> Supprimer</Button>}
             </>} />
         )
       })()}

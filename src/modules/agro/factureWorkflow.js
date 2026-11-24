@@ -4,10 +4,11 @@
 // L'UI (confirmations, toasts) reste dans les composants.
 import { updateItem, removeItem } from '../../core/db'
 import { audit } from '../../core/audit'
+import { factureStatut } from './data'
 import { notify } from '../../core/notify'
 import { APPROVER_ROLES } from '../../core/roles'
 import { formatMoney, todayStr } from '../../utils/formatters'
-import { creerDemandesFacture, ajusterFactureEcart } from './factureStock'
+import { creerDemandesFacture, ajusterFactureEcart, annulerEffetStockFacture } from './factureStock'
 import { appliquerCorrectif, payloadDemandeCorrectif, payloadDecisionCorrectif } from '../../shared/demandes/correctif'
 
 const horo = () => `${todayStr()} ${new Date().toTimeString().slice(0, 5)}`
@@ -66,7 +67,8 @@ export async function appliquerAjustement(f, user, ajustements) {
   const lignesReelles = await ajusterFactureEcart(f, ajustements)
   await updateItem('agro_factures', f.id, {
     statut: 'sortie_approuvee', lignesDemandees: f.lignesDemandees || f.lignes,
-    lignesReelles, ecartAjuste: true, ecartAjusteLe: horo(), ecartAjustePar: user.nom
+    lignesReelles, ecartAjustements: (ajustements || []).map((a) => ({ ligneIdx: a.ligneIdx, sold: parseInt(a.sold) || 0, dead: parseInt(a.dead) || 0 })),
+    ecartAjuste: true, ecartAjusteLe: horo(), ecartAjustePar: user.nom
   })
   await audit('agro', 'FACTURE_ECART_AJUSTE', `${f.numero} : quantités réelles ajustées`)
   await notify({ type: 'approuve', title: 'Quantités ajustées ✅', body: `Facture ${f.numero} : vous pouvez certifier la facture ajustée`, module: 'agro', forUsers: [f.createdByUid], excludeUid: user.uid, link: '/agro/factures' })
@@ -134,6 +136,17 @@ export async function trancherCorrectif(f, user, accepte, commentaire = '') {
 // Suppression d'une facture avant tout effet sur le stock (brouillon, sortie
 // demandée, refusée). Après approbation, le stock est engagé : on passe alors par
 // l'écart ou le correctif.
+// Info seul : supprime une facture CERTIFIÉE. Le stock sorti revient au stock existant, le chiffre d'affaires disparaît avec la facture.
+// L'audit garde la trace complète (numéro, client, montant, lignes) puisque la facture elle-même n'existera plus.
+export async function supprimerFactureCertifiee(f, user) {
+  if (user?.role !== 'info') throw new Error('Action réservée à Info')
+  if (factureStatut(f) !== 'certifiee') throw new Error('Seule une facture certifiée se supprime ainsi')
+  await annulerEffetStockFacture(f)
+  await removeItem('agro_factures', f.id)
+  const lignes = lignesEffectives(f).map((l) => `${l.qte} ${l.article}`).join(', ')
+  await audit('agro', 'FACTURE_DELETE_CERTIFIEE', `${f.numero} : ${f.client?.nom || ''} : ${formatMoney(calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC)} : stock réintégré (${lignes})`)
+}
+
 export async function supprimerFacture(f) {
   await removeItem('agro_factures', f.id)
   await audit('agro', 'FACTURE_DELETE', `${f.numero} (${f.statut || 'brouillon'})`)

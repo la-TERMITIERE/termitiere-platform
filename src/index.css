@@ -26,6 +26,9 @@ html, body, #root {
    les débordements dans les tableaux denses. */
 html { font-size: 17px; }
 @media (max-width: 380px) { html { font-size: 16px; } }
+/* Les boutons Modifier / Supprimer qui n'apparaissent qu'au survol de la souris restaient invisibles sur téléphone et tablette (pas de survol) :
+   sur un écran tactile ils sont toujours visibles, pour pouvoir corriger ou supprimer partout. */
+@media (hover: none) { .opacity-0.group-hover\:opacity-100 { opacity: 1; } }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
@@ -773,3 +776,12 @@ html.dark .onglets-verre { background: rgba(255,255,255,.06); border-color: rgba
 html.dark .onglet-verre:not([data-actif="true"]) { color: #cbd5e1; }
 html.dark .onglet-verre:not([data-actif="true"]):hover { background: rgba(255,255,255,.12); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .onglet-verre { transition: none; } .onglet-verre[data-actif="true"] { animation: none; } .onglet-verre:hover, .onglet-verre:active { transform: none; } }
+
+/* ===== Boutons d'icône en relief (3D) : voir shared/ui/BoutonIcone3D.jsx ===== */
+.icone-3d { transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s ease, filter .2s ease; }
+.icone-3d:hover:not(:disabled) { transform: translateY(-2px) scale(1.07); filter: brightness(1.07) saturate(1.05); }
+.icone-3d:active:not(:disabled) { transform: translateY(1px) scale(.92); filter: brightness(.96); transition-duration: .08s; }
+@media (prefers-reduced-motion: reduce) {
+  .icone-3d { transition: none; }
+  .icone-3d:hover:not(:disabled), .icone-3d:active:not(:disabled) { transform: none; }
+}

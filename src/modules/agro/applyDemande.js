@@ -13,15 +13,36 @@
 // partiel (cela casserait le report des autres articles) : la sortie sera prise en
 // compte naturellement lorsque la saisie de ce jour sera enregistrée (la colonne
 // Sorties lit déjà les demandes approuvées en direct).
-import { getAll, updateAtomic } from '../../core/db'
+import { getAll, setItem, updateAtomic } from '../../core/db'
 import { getInventaire, previousInventoryDate, autoSorties } from './logic'
 import { estCertifie } from '../../shared/workflow'
+import { propagerSuite } from './propagation'
+import { useAgroStore } from './store/agroStore'
+import { construireReport } from './AutoCarryForward'
+import { todayStr } from '../../utils/formatters'
+
+// Résultat explicite : { ok: true } ou { ok: false, raison }. Une sortie qui n'a pas pu être décomptée ne doit JAMAIS passer
+// inaperçue : les appelants affichent la raison (ou la lèvent en erreur) au lieu de laisser la facture « approuvée » sans effet.
+const echec = (raison) => ({ ok: false, raison })
+
+// Jour sans saisie (trou entre deux saisies, ou jour qui n'a jamais été ouvert) : on crée le report complet de ce jour
+// (EF Initial = dernier EF Final connu, sorties sur demande décomptées) au lieu d'ignorer la sortie.
+// Renvoie le document créé, ou null si c'est impossible (référentiel pas prêt, aucune saisie avant cette date).
+async function creerJourManquant(inventaires, demandes, date) {
+  const { especes, aliments, ready } = useAgroStore.getState()
+  if (!ready || (!especes.length && !aliments.length)) return null // jamais de report avec le référentiel par défaut
+  const avant = inventaires.filter((i) => i.date && i.date < date).sort((a, b) => (a.date < b.date ? -1 : 1))
+  if (!avant.length) return null
+  const report = construireReport(avant, date, especes, aliments, demandes)
+  await setItem('agro_inventaires', date, report)
+  return report
+}
 
 export async function appliquerDemandeAuStock(demande) {
   try {
-    if (!demande || !estCertifie(demande.statut)) return
+    if (!demande || !estCertifie(demande.statut)) return { ok: true }
     const { typeArticle, articleId, dateSortie } = demande
-    if (!articleId || !dateSortie) return
+    if (!articleId || !dateSortie) return echec("article ou date de sortie manquants")
     const kind = typeArticle === 'aliment' ? 'aliments' : 'animaux'
 
     const [inventaires, demandes] = await Promise.all([
@@ -29,8 +50,13 @@ export async function appliquerDemandeAuStock(demande) {
       getAll('agro_demandes')
     ])
 
-    const inv = getInventaire(inventaires, dateSortie)
-    if (!inv) return // pas de saisie pour cette date → sera capturé à la saisie
+    let inv = getInventaire(inventaires, dateSortie)
+    if (!inv) {
+      // Sortie prévue un jour pas encore ouvert : le report automatique du jour la décomptera.
+      if (dateSortie > todayStr()) return { ok: true }
+      inv = await creerJourManquant(inventaires, demandes, dateSortie)
+      if (!inv) return echec(`aucune saisie le ${dateSortie} et aucun jour précédent pour la reporter`)
+    }
 
     // Total AUTORITAIRE des demandes approuvées pour cet article/cette date.
     const totalAuto = autoSorties(demandes, articleId, dateSortie, typeArticle)
@@ -65,8 +91,10 @@ export async function appliquerDemandeAuStock(demande) {
       }
       return { ...cur, [kind]: { ...(cur[kind] || {}), [articleId]: node } }
     })
+    await propagerSuite(dateSortie) // les jours suivants repartent du nouvel EF Final
+    return { ok: true }
   } catch (e) {
-    // best effort : ne jamais bloquer l'approbation à cause du décompte stock.
     console.warn('[applyDemande] échec application au stock :', e)
+    return echec(e?.message || String(e))
   }
 }

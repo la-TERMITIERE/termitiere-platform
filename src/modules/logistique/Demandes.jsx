@@ -25,8 +25,8 @@ import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
 import { todayStr, nowHM, genNumero, formatMoney, formatDateShort } from '../../utils/formatters'
-import { dernierStock } from './logic'
-import { APPROVER_ROLES, CERTIFIER_ROLES, isReadOnlyRole, logistiquePeutApprouver, logistiqueVoitMontants } from '../../core/roles'
+import { stockDisponible } from './logic'
+import { APPROVER_ROLES, VALIDATEURS_SORTIE, isReadOnlyRole, logistiquePeutApprouver, peutCertifierSortie, logistiqueVoitMontants } from '../../core/roles'
 import { STATUTS_DEMANDE, normaliserStatut, actionsDemande, peutSupprimerDemande, estAuteurDemande } from '../../shared/workflow'
 import DemandeDetail from '../../shared/demandes/DemandeDetail'
 import CorrectifModal from '../../shared/demandes/CorrectifModal'
@@ -62,18 +62,16 @@ export default function Demandes() {
   const { data: allInventaires } = useCollection('logistique_inventaires')
   const materiel = useLogistiqueStore((s) => s.materiel)
   const isFullManager = canManage() // gérant / direction : accès total, à tout statut
-  const isCertifier = canCertify()
+  const isCertifier = canCertify() || peutCertifierSortie(role)
   // Montants masqués pour la secrétaire : elle valide sur la quantité et le motif,
   // pas sur la valeur financière de la prestation.
   const voitMontants = logistiqueVoitMontants(role)
-  // La secrétaire approuve au 1er niveau dans CE module uniquement (sans être ajoutée
-  // à APPROVER_ROLES, qui lui ouvrirait aussi MAXI-AGRO et la Briqueterie). Elle ne
-  // certifie jamais : la certification approuve la facture, donc reste à la direction.
-  // Et son accès est borné à l'étape « en_attente » : une fois la demande sortie de
-  // cet état (par elle ou par quelqu'un d'autre), elle sort définitivement de son
-  // périmètre — plus de décision, plus de correctif, plus même la simple consultation.
-  const peutGererDemande = (d) => isFullManager || (logistiquePeutApprouver(role) && normaliserStatut(d.statut) === 'en_attente')
-  const peutVoirDetail = (d) => role !== 'secretaire' || normaliserStatut(d.statut) === 'en_attente'
+  // La secrétaire (et l'Assistant(e) GE) approuve ET certifie les sorties, comme la direction, tant que la demande attend une
+  // décision (« en_attente » ou « à certifier »). Elle n'est pas ajoutée à APPROVER_ROLES (cela lui ouvrirait aussi MAXI-AGRO et
+  // la Briqueterie) : ses droits viennent de peutCertifierSortie / logistiquePeutApprouver. Correctifs et suppressions restent à
+  // la hiérarchie. Une fois la demande décidée, elle sort de son périmètre.
+  const peutGererDemande = (d) => isFullManager || (logistiquePeutApprouver(role) && ['en_attente', 'approuve_n1'].includes(normaliserStatut(d.statut)))
+  const peutVoirDetail = (d) => role !== 'secretaire' || ['en_attente', 'approuve_n1'].includes(normaliserStatut(d.statut))
 
   const liste = useMemo(() => allDemandes.filter((d) => matchSite(d, site)), [allDemandes, site])
   const factures = useMemo(() => allFactures.filter((f) => matchSite(f, site)), [allFactures, site])
@@ -220,7 +218,7 @@ export default function Demandes() {
       await notify({
         type: 'demande', title: 'Sortie matériel à certifier 🟡',
         body: `${siteLabel(site)} : prestation ${d.prestationNum} (${totalQte} pièce(s)) : approuvée par ${user.nom}`,
-        module: 'logistique', forRoles: CERTIFIER_ROLES, excludeUid: user.uid, link: `/logistique/${site}/demandes`
+        module: 'logistique', forRoles: VALIDATEURS_SORTIE, excludeUid: user.uid, link: `/logistique/${site}/demandes`
       })
       // Le demandeur doit savoir que sa demande est approuvée — sans cela il n'apprenait
       // son sort qu'à la certification (2e niveau), parfois bien plus tard.
@@ -284,7 +282,7 @@ export default function Demandes() {
     const deltas = deltasLignes(lignesRelance, lignes, CLES)
     if (!aDesEcarts(deltas)) return toast.error('Aucun matériel ni quantité modifié')
     for (const dd of deltas) {
-      const stock = dernierStock(inventaires, dd.id)
+      const stock = stockDisponible(inventaires, liste, dd.id)
       if (dd.delta > stock) return toast.error(`Stock insuffisant pour ${dd.nom} (${dd.delta} à sortir en plus, ${stock} disponible)`)
     }
     await run(async () => {
@@ -589,7 +587,7 @@ export default function Demandes() {
               {formLignes.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {formLignes.map((l, i) => {
-                    const stock = dernierStock(inventaires, l.materielId)
+                    const stock = stockDisponible(inventaires, liste, l.materielId)
                     const insuffisant = l.qte > stock
                     const pct = stock > 0 ? Math.min(100, Math.round((l.qte / stock) * 100)) : 100
                     const couleur = insuffisant ? '#DC2626' : pct > 80 ? '#E8850F' : '#16A34A'
@@ -660,7 +658,7 @@ export default function Demandes() {
           const fac = factures.find((f) => f.id === d.factureId)
           const items = (d.lignes || []).map((l) => ({
             nom: l.materielNom, cat: l.materielCat,
-            qte: parseInt(l.qte) || 0, stock: dernierStock(inventaires, l.materielId)
+            qte: parseInt(l.qte) || 0, stock: stockDisponible(inventaires, liste, l.materielId)
           }))
           return (
             <>
@@ -673,7 +671,7 @@ export default function Demandes() {
                     correctif={d.correctif}
                     deltas={deltasLignes(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
                     changements={changementsArticle(d.correctif.lignesAvant || d.lignes || [], d.correctif.lignes || [], CLES)}
-                    stockOf={(x) => dernierStock(inventaires, x.id)}
+                    stockOf={(x) => stockDisponible(inventaires, liste, x.id)}
                   />
                 </div>
               )}
@@ -777,7 +775,7 @@ export default function Demandes() {
           articles={materiel}
           onPickArticle={(m) => ({ materielCat: m.cat, unite: m.unite, tarifUnitaire: m.tarifLocation || 0 })}
           prixField="tarifUnitaire" prixLabel="Tarif / jour"
-          stockOf={(l) => dernierStock(inventaires, l.materielId)}
+          stockOf={(l) => stockDisponible(inventaires, liste, l.materielId)}
           onSubmit={envoyerCorrectif}
         />
       )}

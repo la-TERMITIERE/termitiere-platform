@@ -1,28 +1,66 @@
-// Alertes « À traiter » de la page d'accueil : une ligne de verre dépoli par alerte (icône en relief, titre, précision, bouton), teintée de la couleur
+// Alertes et messages de la page d'accueil : une ligne de verre dépoli par alerte (icône en relief, titre, précision, bouton), teintée de la couleur
 // de la demande. Compactes : trois lignes visibles au plus, le reste se déplie. Utilisées pour les autorisations de salaire, les ordres de mission
-// à approuver et les paiements à confirmer.
-//   items : [{ id, icone, couleur, titre, sous, action: { label, onClick, loading? } }]
-import { useState } from 'react'
-import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
+// à approuver, les paiements à confirmer, les échéances RH et les annonces.
+//   items : [{ id, icone, couleur, titre, sous, action: { label, onClick, loading? }, action2?, fait?: { label, title, onClick } }]
+//
+// La CROIX de chaque ligne la masque pour le moment seulement : l'alerte REVIENT au créneau suivant tant qu'elle n'est pas traitée, soit au moins trois
+// fois par jour (avant midi, de midi à 16 h, après 16 h). Elle disparaît pour de bon quand elle est traitée (la demande n'existe plus) ou quand la RH la
+// marque « effectuée » (`fait`, réservé à celles qui peuvent le faire). Le masquage est propre à la personne et à l'appareil.
+import { useEffect, useState } from 'react'
+import { ChevronRight, ChevronDown, Loader2, X, CheckCheck } from 'lucide-react'
 import { icone3D } from '../utils/color'
+import { useAuth } from '../hooks/useAuth'
 
 const VISIBLES = 3
+const DEBUTS_CRENEAUX = [0, 12, 16] // heures : avant midi, midi à 16 h, après 16 h
+
+// Début du créneau de la journée où l'on se trouve.
+export function debutCreneau(ts = Date.now()) {
+  const d = new Date(ts)
+  const h = d.getHours()
+  d.setHours([...DEBUTS_CRENEAUX].reverse().find((x) => h >= x), 0, 0, 0)
+  return d.getTime()
+}
+// Quand l'alerte masquée maintenant reviendra (pour l'infobulle de la croix).
+export const prochainRappel = (ts = Date.now()) => { const h = new Date(ts).getHours(); return h < 12 ? 'à midi' : h < 16 ? 'à 16 h' : 'demain matin' }
+
+const cle = (uid) => `alertes_fermees:${uid || 'anonyme'}`
+const lire = (uid) => { try { return JSON.parse(localStorage.getItem(cle(uid)) || '{}') } catch { return {} } }
+const ecrire = (uid, v) => { try { localStorage.setItem(cle(uid), JSON.stringify(v)) } catch { /* stockage indisponible : le masquage ne survit pas au rechargement */ } }
 
 export default function AlertesAccueil({ items, titre = 'À traiter' }) {
+  const uid = useAuth((s) => s.user?.uid)
   const [tout, setTout] = useState(false)
-  if (!items.length) return null
-  const montres = tout ? items : items.slice(0, VISIBLES)
+  const [fermees, setFermees] = useState(() => lire(uid))
+  const [maintenant, setMaintenant] = useState(() => Date.now())
+  // Le créneau change en cours de session : on réévalue régulièrement pour que l'alerte revienne seule, sans recharger la page.
+  useEffect(() => { const t = setInterval(() => setMaintenant(Date.now()), 30000); return () => clearInterval(t) }, [])
+  useEffect(() => { setFermees(lire(uid)) }, [uid])
+
+  const debut = debutCreneau(maintenant)
+  const visibles = items.filter((it) => !(fermees[it.id] >= debut))
+  if (!visibles.length) return null
+  const montres = tout ? visibles : visibles.slice(0, VISIBLES)
+
+  const fermer = (id) => {
+    const limite = Date.now() - 3 * 86400000
+    const suite = Object.fromEntries(Object.entries(fermees).filter(([, ts]) => ts > limite))
+    suite[id] = Date.now()
+    setFermees(suite)
+    ecrire(uid, suite)
+  }
+
   return (
-    <section aria-label="À traiter" className="mb-5">
+    <section aria-label={titre} className="mb-5">
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
         <p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
           <span className="relative flex h-2 w-2" aria-hidden="true"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-70 motion-reduce:hidden" /><span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" /></span>
           {titre}
-          <span className="rounded-full bg-red-500 px-1.5 py-px text-[10px] font-black tabular-nums text-white shadow-[0_2px_6px_-2px_rgba(220,38,38,0.8)]">{items.length}</span>
+          <span className="rounded-full bg-red-500 px-1.5 py-px text-[10px] font-black tabular-nums text-white shadow-[0_2px_6px_-2px_rgba(220,38,38,0.8)]">{visibles.length}</span>
         </p>
-        {items.length > VISIBLES && (
+        {visibles.length > VISIBLES && (
           <button type="button" onClick={() => setTout((t) => !t)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-gray-500 transition-colors hover:bg-white/70 hover:text-gray-800">
-            {tout ? 'Réduire' : `Voir tout (${items.length})`}<ChevronDown size={12} className={tout ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
+            {tout ? 'Réduire' : `Voir tout (${visibles.length})`}<ChevronDown size={12} className={tout ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -48,10 +86,21 @@ export default function AlertesAccueil({ items, titre = 'À traiter' }) {
                     {it.action2.icone && <it.action2.icone size={12} aria-hidden="true" />}{it.action2.label}
                   </button>
                 )}
+                {it.fait && (
+                  <button type="button" title={it.fait.title || 'Marquer comme effectué : ne sera plus rappelé à personne'} onClick={(e) => { e.stopPropagation(); it.fait.onClick() }}
+                    className="relative inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50/90 px-2.5 py-1.5 text-xs font-bold text-emerald-700 shadow-[0_6px_12px_-8px_rgba(5,150,105,0.5),inset_0_1px_0_rgba(255,255,255,0.95)] transition-all hover:bg-emerald-100 active:scale-95">
+                    <CheckCheck size={13} aria-hidden="true" />{it.fait.label || 'Effectué'}
+                  </button>
+                )}
                 <button type="button" onClick={(e) => { e.stopPropagation(); if (!it.action.loading) it.action.onClick() }}
                   className="relative inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-[0_6px_12px_-6px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.45)] transition-all active:scale-95"
                   style={{ background: `linear-gradient(145deg, color-mix(in srgb, ${it.couleur} 78%, white), ${it.couleur})` }}>
                   {it.action.loading ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : (it.action.icone ? <it.action.icone size={13} aria-hidden="true" /> : null)}{it.action.label}{!it.action.loading && !it.action.icone && <ChevronRight size={13} aria-hidden="true" />}
+                </button>
+                <button type="button" aria-label={`Masquer pour le moment : revient ${prochainRappel(maintenant)}`} title={`Masquer pour le moment : revient ${prochainRappel(maintenant)} tant que ce n'est pas traité`}
+                  onClick={(e) => { e.stopPropagation(); fermer(it.id) }}
+                  className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white/80 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400">
+                  <X size={14} aria-hidden="true" />
                 </button>
               </div>
             </li>

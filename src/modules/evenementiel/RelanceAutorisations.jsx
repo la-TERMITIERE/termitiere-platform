@@ -1,5 +1,5 @@
 // Briqueterie : plus aucune autorisation n'est validée toute seule. Pour que personne ne l'oublie,
-// les validateurs (administration, GE, PAU, Info, directeurs : CERTIFIER_ROLES) sont alertés :
+// les validateurs (administration, GE, PAU, Info, directeurs, secrétaire : VALIDATEURS_SORTIE, jamais un agent) sont alertés :
 //  - RelanceAutorisations (headless, monté dans AppShell) : une notification (cloche + alerte système)
 //    à la création de la demande, puis un rappel toutes les 10 minutes pendant 1 heure tant qu'elle n'est
 //    pas décidée. Un seul envoi par demande et par rappel, même si plusieurs sessions sont ouvertes.
@@ -12,7 +12,7 @@ import { useCollection } from '../../hooks/useFirestore'
 import { useAuth } from '../../hooks/useAuth'
 import { claimOnce, getAll } from '../../core/db'
 import { notify } from '../../core/notify'
-import { CERTIFIER_ROLES } from '../../core/roles'
+import { VALIDATEURS_SORTIE } from '../../core/roles'
 import { normaliserStatut } from '../../shared/workflow'
 import AlerteDashboard, { useTick } from '../../shared/ui/AlerteDashboard'
 
@@ -46,7 +46,7 @@ export default function RelanceAutorisations() {
             ? `${d.num || ''} : ${libelle(d)}${d.clientNom ? ' : ' + d.clientNom : ''}, demandée par ${d.demandeurNom || d.demandeur || 'un agent'}. Ouvrez les autorisations pour la valider.`
             : `${d.num || ''} : ${libelle(d)}${d.clientNom ? ' : ' + d.clientNom : ''} attend une décision depuis ${rang * 10} min (rappel ${rang}/${MAX_RAPPELS}).`,
           module: 'evenementiel',
-          forRoles: CERTIFIER_ROLES,
+          forRoles: VALIDATEURS_SORTIE,
           excludeUid: auteur?.uid || null,
           link: '/evenementiel/demandes'
         })
@@ -80,7 +80,7 @@ export function AlerteAutorisations({ demandes }) {
   useTick()
   const role = useAuth((s) => s.role)
   const login = useAuth((s) => s.user?.login)
-  if (!CERTIFIER_ROLES.includes(role)) return null
+  if (!VALIDATEURS_SORTIE.includes(role)) return null
   const items = aValider(demandes)
     .filter((d) => !d.demandeur || d.demandeur !== login)
     .map((d) => ({ id: d.id, texte: d.num || libelle(d), detail: d.clientNom || libelle(d) }))
