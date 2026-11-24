@@ -197,13 +197,18 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       doc.text(lignes, MARGE, y)
       y += lignes.length * 4.8
     }
-    if (!sansMontant && avecDetails && s.operations.length) {
+    if (avecDetails && s.operations.length) {
+      // Sans montant (Assistant(e) GE) : le détail garde la date, la nature et le libellé de chaque opération, jamais la somme.
       autoTable(doc, {
         ...STYLE_TABLEAU, startY: y + 1, margin: { left: MARGE, right: MARGE, top: HAUT_CORPS, bottom: 300 - BAS_CORPS },
         styles: { ...STYLE_TABLEAU.styles, fontSize: 9, cellPadding: 1.5, overflow: 'linebreak' },
-        head: [['Date', 'Type', 'Libellé', 'Montant (FCFA)']],
-        body: s.operations.map((o) => [dateCourte(o.date), o.sens === 'recette' ? 'Recette' : 'Dépense', o.libelle || '-', `${o.sens === 'recette' ? '+' : '-'} ${nb(o.montant)}`]),
-        columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 20 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 32, halign: 'right' } }
+        head: [sansMontant ? ['Date', 'Nature', 'Libellé'] : ['Date', 'Type', 'Libellé', 'Montant (FCFA)']],
+        body: s.operations.map((o) => (sansMontant
+          ? [dateCourte(o.date), o.sens === 'recette' ? 'Recette' : 'Dépense', o.libelle || '-']
+          : [dateCourte(o.date), o.sens === 'recette' ? 'Recette' : 'Dépense', o.libelle || '-', `${o.sens === 'recette' ? '+' : '-'} ${nb(o.montant)}`])),
+        columnStyles: sansMontant
+          ? { 0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 'auto' } }
+          : { 0: { cellWidth: 22 }, 1: { cellWidth: 20 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 32, halign: 'right' } }
       })
       y = doc.lastAutoTable.finalY + 8
     } else {

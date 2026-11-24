@@ -318,11 +318,19 @@ export default function Saisie() {
     const ko = articleManquant(especes, anim) || articleManquant(aliments, alim)
     if (ko) return toast.error(`Précisez le motif « ${ko.type} » : ${ko.nom}`)
 
+    // Validation : une ligne de mutation à 0 ne fait rien (l'effectif ne bouge pas) : on le dit au lieu de l'enregistrer en silence.
+    const mutVide = especes.find((e) => (anim[e.id]?.sorties || []).some((l) => l.type === 'Mutation' && l.cible && !(parseInt(l.qte) > 0)))
+    if (mutVide) return toast.error(`Mutation à 0 pour ${mutVide.nom} : indiquez la quantité à muter (bouton « Tout »), ou supprimez la ligne`)
+
     // Validation : toute mutation sortante doit désigner une espèce de destination.
     const mutSansCible = especes.find((e) =>
       (anim[e.id]?.sorties || []).some((l) => l.type === 'Mutation' && (parseInt(l.qte) || 0) > 0 && !l.cible)
     )
-    if (mutSansCible) return toast.error(`Choisissez l'espèce de destination de la mutation : ${mutSansCible.nom}`)
+    if (mutSansCible) {
+      const ligneSansCible = (anim[mutSansCible.id]?.sorties || []).find((l) => l.type === 'Mutation' && (parseInt(l.qte) || 0) > 0 && !l.cible)
+      const auteur = ligneSansCible?.agentNom && ligneSansCible.agentId !== user.uid ? ` (ligne saisie par ${ligneSansCible.agentNom})` : ''
+      return toast.error(`Choisissez l'espèce de destination de la mutation : ${mutSansCible.nom}${auteur}. Ouvrez les Sorties de cette espèce.`)
+    }
 
     // Blocage : on ne peut pas muter plus d'animaux qu'il n'y en a en stock.
     const mutTropGrande = mutationAuDessusDuStock(especes, anim, autoSorOf, mutIn)
@@ -724,7 +732,11 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
     ? (dir === 'entree' ? ENTREE_TYPES_ANIMAL : SORTIE_TYPES_SAISIE_ANIMAL)
     : (dir === 'entree' ? ENTREE_TYPES_ALIMENT : SORTIE_TYPES_SAISIE_ALIMENT)
 
-  const peutEditer = (l) => peutSaisir && user && peutModifierLigne(l, user.uid)
+  // Une ligne est modifiable par son auteur ; l'administration (accès total) peut aussi compléter ou corriger celles des autres agents :
+  // sans cela, une mutation saisie sans destination par un agent bloquerait l'enregistrement de toute la journée, sans que personne puisse la réparer.
+  const roleMoi = useAuth((st) => st.role)
+  const adminPeutCorriger = isFullAccessRole(roleMoi)
+  const peutEditer = (l) => peutSaisir && user && (peutModifierLigne(l, user.uid) || adminPeutCorriger)
   const addLigne = () => onChange([...lignes, { type: types[0], qte: 1, label: '', cible: '', agentId: user?.uid, agentNom: user?.nom }])
   const setLigne = (i, patch) => {
     if (!peutEditer(lignes[i])) return
@@ -755,6 +767,13 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
       {dir === 'sortie' && (
         <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           Les sorties <strong>Ventes</strong> et <strong>Dons</strong> passent par une demande à approuver : bouton « Demander une sortie ».
+        </p>
+      )}
+
+      {/* Un transfert vers un point de vente n'existe pour les Points de vente qu'une fois la saisie ENREGISTRÉE (le brouillon automatique reste sur cet appareil). */}
+      {dir === 'sortie' && kind === 'animaux' && lignes.some((l) => (l.type === 'Transfert Lomé' || l.type === 'Transfert autre localité') && (parseInt(l.qte) || 0) > 0) && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+          Ce transfert n'apparaîtra dans « Points de vente » qu'une fois la saisie enregistrée : après « Terminer », cliquez sur « Enregistrer » en haut de la page.
         </p>
       )}
 
@@ -793,9 +812,9 @@ function MouvementModal({ modal, anim, alim, especes = [], autoSor, mutIn = 0, m
           const locked = !peutEditer(l)
           return (
           <div key={i} className={`rounded-lg border p-2 ${locked ? 'border-amber-200 bg-amber-50/50' : 'border-gray-200'}`}>
-            {locked && l.agentNom && (
+            {l.agentNom && l.agentId !== user?.uid && (
               <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-amber-700">
-                <Lock size={10} /> Saisi par {l.agentNom} : lecture seule
+                <Lock size={10} /> Saisi par {l.agentNom} : {locked ? 'lecture seule' : "vous pouvez le corriger (administration)"}
               </p>
             )}
             <div className="flex items-center gap-2">
