@@ -136,11 +136,15 @@ export async function trancherCorrectif(f, user, accepte, commentaire = '') {
 // Suppression d'une facture avant tout effet sur le stock (brouillon, sortie
 // demandée, refusée). Après approbation, le stock est engagé : on passe alors par
 // l'écart ou le correctif.
-// Info seul : supprime une facture CERTIFIÉE. Le stock sorti revient au stock existant, le chiffre d'affaires disparaît avec la facture.
+// Statuts où le stock de la ferme est engagé par la facture : approuvée, écart signalé, certifiée.
+export const STATUTS_STOCK_ENGAGE = ['sortie_approuvee', 'modif_demandee', 'certifiee']
+
+// Info seul : supprime une facture dont le stock est engagé (approuvée, écart, certifiée). Le stock sorti revient au stock existant, le chiffre
+// d'affaires disparaît avec la facture.
 // L'audit garde la trace complète (numéro, client, montant, lignes) puisque la facture elle-même n'existera plus.
 export async function supprimerFactureCertifiee(f, user) {
   if (user?.role !== 'info') throw new Error('Action réservée à Info')
-  if (factureStatut(f) !== 'certifiee') throw new Error('Seule une facture certifiée se supprime ainsi')
+  if (!STATUTS_STOCK_ENGAGE.includes(factureStatut(f))) throw new Error("Cette facture n'a pas encore sorti de stock : suppression ordinaire")
   await annulerEffetStockFacture(f)
   await removeItem('agro_factures', f.id)
   const lignes = lignesEffectives(f).map((l) => `${l.qte} ${l.article}`).join(', ')
@@ -148,6 +152,7 @@ export async function supprimerFactureCertifiee(f, user) {
 }
 
 export async function supprimerFacture(f) {
+  await annulerEffetStockFacture(f) // sécurité : si des sorties liées existent, elles sont rendues au stock avant la suppression
   await removeItem('agro_factures', f.id)
   await audit('agro', 'FACTURE_DELETE', `${f.numero} (${f.statut || 'brouillon'})`)
 }
