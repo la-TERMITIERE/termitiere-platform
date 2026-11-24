@@ -67,6 +67,9 @@
           "droitsModules": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },
+          "tachesNiveau": {
+            ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
+          },
           "gerePartenaires": {
             ".validate": "root.child('tp/users').child(auth.uid).child('role').val().matches(/^(pau|ge|df|admin|info)$/) || newData.val() === data.val()"
           },

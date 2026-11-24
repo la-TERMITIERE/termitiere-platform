@@ -24,6 +24,7 @@ import ProjetPurgeWatcher from '../ProjetPurgeWatcher'
 import DepensePurgeWatcher from '../DepensePurgeWatcher'
 import ProjetAutoDemarrage from '../ProjetAutoDemarrage'
 import { useAuth } from '../../hooks/useAuth'
+import { niveauTachesDe, definirNiveauMoi } from '../../modules/taches/data'
 import { COULEUR_MODULE } from '../../utils/color'
 import { MODULES, MODULE_NAV } from '../modules'
 import { moduleEnLecture } from '../../core/roles'
@@ -34,6 +35,7 @@ import MotifSuppressionHost from '../MotifSuppressionHost'
 export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, hasModule, role } = useAuth()
+  definirNiveauMoi(niveauTachesDe(user)) // niveau E-TACHES du compte connecté, posé avant que les écrans ne s'affichent
   // Couleur du module courant : teinte des tableaux, en-têtes et survols en verre (cf. index.css).
   const segment = useLocation().pathname.split('/')[1]
   const accent = COULEUR_MODULE[segment] || '#BC3C31'

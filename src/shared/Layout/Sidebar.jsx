@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCollection } from '../../hooks/useFirestore'
 import { niveauBilanGlobal, agentEnPlus, roleLabel, peutGererUtilisateurs, canManagePartenaires, voletRetire, depenseRoleEffectif, PROJET_ROLES_CLOISONNES } from '../../core/roles'
 import { estActif } from '../workflow'
+import { niveauTachesDe } from '../../modules/taches/data'
 import { calculerBadges } from '../nouveautes'
 import { projetsVisibles, scopeParProjets, secteurEffectif } from '../../modules/projet/logic'
 import { SECTEURS as SECTEURS_PROJET } from '../../modules/depense/data'
@@ -267,6 +268,7 @@ export default function Sidebar({ open, onClose }) {
   const navRole = activeModule?.id === 'depense' ? depenseRoleEffectif(role) : role
   const canSeeNav = (item) => {
     if (activeModule && voletRetire(user, activeModule.id, item.to)) return false // retiré à ce compte par Info
+    if (item.niveaux) return item.niveaux.includes(niveauTachesDe(user)) // volets d'E-TACHES : selon le niveau du compte
     if (item.roles && (item.roles.includes(navRole) || (item.roles.includes('agent') && navRole === 'secretaire' && agentEnPlus(roleReel)))) return true
     if (item.perm === 'partenaires' && canManagePartenaires(navRole, user)) return true
     return !item.roles && !item.perm
