@@ -19,7 +19,7 @@ function nomsFeuilles(labels) {
 }
 
 // Rapport sans montant (Assistant(e) GE) : une seule feuille, l'activité de chaque secteur, aucune somme d'argent.
-function rapportSansMontant({ secteurs, libelle, edite, fichier }) {
+function rapportSansMontant({ secteurs, libelle, edite, fichier, avecDetails = false }) {
   const colonnes = [{ key: 'secteur', label: 'Secteur', width: 30 }, { key: 'activite', label: 'Activité sur la période', width: 90 }, { key: 'operations', label: 'Opérations', type: 'number', width: 12, align: 'center' }]
   const sections = [{
     name: 'Activité', title: 'Rapport global des secteurs : LA TERMITIÈRE', subtitle: `Période : ${libelle} · ${edite}`,
@@ -42,6 +42,21 @@ function rapportSansMontant({ secteurs, libelle, edite, fichier }) {
     rows: sit.secteurs.map((l) => ({ secteur: l.label, recettes: nbr(l.recettes), depenses: nbr(l.depenses), benefice: nbr(l.benefice), cumulRecettes: nbr(l.cumulRecettes), cumulDepenses: nbr(l.cumulDepenses), cumulBenefice: nbr(l.cumulBenefice) })),
     totals: { __label: 'TOTAL GÉNÉRAL', recettes: nbr(sit.total.recettes), depenses: nbr(sit.total.depenses), benefice: nbr(sit.total.benefice), cumulRecettes: nbr(sit.total.cumulRecettes), cumulDepenses: nbr(sit.total.cumulDepenses), cumulBenefice: nbr(sit.total.cumulBenefice) }
   })
+  // Détail demandé : une feuille par secteur avec la date, la nature et le libellé de chaque opération, jamais le montant.
+  if (avecDetails) {
+    const noms = nomsFeuilles(secteurs.map((s) => s.label))
+    secteurs.forEach((s, i) => {
+      sections.push({
+        name: noms[i], title: `${s.label} : opérations`, subtitle: `Période : ${libelle} · ${edite}`,
+        columns: [
+          { key: 'date', label: 'Date', width: 12 },
+          { key: 'nature', label: 'Nature', width: 12 },
+          { key: 'libelle', label: 'Libellé', width: 80 }
+        ],
+        rows: s.operations.map((o) => ({ date: dateCourte(o.date), nature: o.sens === 'recette' ? 'Recette' : 'Dépense', libelle: o.libelle || '' }))
+      })
+    })
+  }
   exportRapportExcel({ filename: fichier || 'rapport-global.xlsx', sections })
   return sections
 }
@@ -50,7 +65,7 @@ export function genererRapportGlobalExcel({ rapport, libelle, par = '', avecDeta
   const { secteurs, total } = rapport
   const maintenant = new Date()
   const edite = `Édité le ${maintenant.toLocaleDateString('fr-FR')} à ${maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${par ? ` par ${par}` : ''}`
-  if (sansMontant) return rapportSansMontant({ secteurs, libelle, edite, fichier })
+  if (sansMontant) return rapportSansMontant({ secteurs, libelle, edite, fichier, avecDetails })
 
   const sections = [{
     name: 'Synthèse', title: 'Rapport global des secteurs : LA TERMITIÈRE', subtitle: `Période : ${libelle} · ${edite} · montants en FCFA`,

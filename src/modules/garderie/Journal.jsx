@@ -1,6 +1,7 @@
 // Journal d'activité Garderie. Deux vues complémentaires : « Journal » = recherche
 // par période/type/utilisateur avec export Excel (existant, inchangé) ;
 // « Historique » = archive complète en timeline par jour, sans limite de période.
+import MetaDetail from '../../shared/ui/MetaDetail'
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown, Loader2, BookOpen } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -176,17 +177,7 @@ function OngletJournal({ evenements, loading }) {
                     <tr className="bg-gray-50/70">
                       <td></td>
                       <td colSpan={4} className="px-3 py-2">
-                        <div className="space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs">
-                          {typeof r.meta === 'object' && r.meta !== null
-                            ? Object.entries(r.meta).map(([k, v]) => (
-                              <div key={k} className="flex gap-2">
-                                <span className="min-w-[100px] font-semibold capitalize text-gray-500">{k}</span>
-                                <span className="text-gray-700">{safeStr(v)}</span>
-                              </div>
-                            ))
-                            : <span className="text-gray-500">{safeStr(r.meta)}</span>
-                          }
-                        </div>
+                        {typeof r.meta === 'object' && r.meta !== null ? <MetaDetail meta={r.meta} /> : <span className="text-xs text-gray-500">{safeStr(r.meta)}</span>}
                       </td>
                     </tr>
                   )}

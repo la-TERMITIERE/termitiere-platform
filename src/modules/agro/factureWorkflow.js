@@ -2,7 +2,7 @@
 // entre la page Facturation et la page Demandes de sortie. Chaque fonction effectue
 // l'écriture en base + l'audit + les notifications (+ le stock le cas échéant).
 // L'UI (confirmations, toasts) reste dans les composants.
-import { updateItem, removeItem } from '../../core/db'
+import { updateItem, removeItem, instantane } from '../../core/db'
 import { audit } from '../../core/audit'
 import { factureStatut } from './data'
 import { notify } from '../../core/notify'
@@ -148,7 +148,9 @@ export async function supprimerFactureCertifiee(f, user) {
   await annulerEffetStockFacture(f)
   await removeItem('agro_factures', f.id)
   const lignes = lignesEffectives(f).map((l) => `${l.qte} ${l.article}`).join(', ')
-  await audit('agro', 'FACTURE_DELETE_CERTIFIEE', `${f.numero} : ${f.client?.nom || ''} : ${formatMoney(calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC)} : stock réintégré (${lignes})`)
+  // La facture n'existera plus : l'audit en garde la copie complète (date, client, lignes, montants, étapes du circuit…), visible au clic dans le Journal.
+  await audit('agro', 'FACTURE_DELETE_CERTIFIEE', `${f.numero} : ${f.client?.nom || ''} : ${formatMoney(calcTotaux(lignesEffectives(f), f.remise, f.tva).totalTTC)} : stock réintégré (${lignes})`,
+    { numero: f.numero, dateFacture: f.date, statutAvantSuppression: factureStatut(f), stockReintegre: lignes || 'aucun', donnees: instantane(f) })
 }
 
 export async function supprimerFacture(f) {

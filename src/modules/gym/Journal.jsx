@@ -1,6 +1,7 @@
 // Journal d'activité MAXI-GYM — événements filtrés sur module === 'gym'.
 // Même structure que les autres modules (ex. Briqueterie) : « Journal » = recherche
 // par période/type/utilisateur avec export Excel ; « Historique » = timeline complète.
+import MetaDetail from '../../shared/ui/MetaDetail'
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown, BookOpen } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -140,6 +141,12 @@ function OngletJournal({ evenements }) {
                     </td>
                     <td className="px-3 py-2 text-gray-600">{r.details || '—'}</td>
                   </tr>
+                  {hasMeta && isOpen && (
+                    <tr className="bg-gray-50/70">
+                      <td></td>
+                      <td colSpan={4} className="px-3 py-2"><MetaDetail meta={r.meta} /></td>
+                    </tr>
+                  )}
                 </Fragment>
               )
             })}

@@ -2,6 +2,7 @@
 // Deux vues distinctes réunies dans un seul volet : « Journal » = log des actions
 // (ci-dessous, inchangé) ; « Historique » = frise des dépenses (création → approbation
 // → certification), importée telle quelle depuis ./Historique.jsx.
+import MetaDetail from '../../shared/ui/MetaDetail'
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown, BookOpen, History, Newspaper } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -154,14 +155,7 @@ function OngletJournal({ evenements }) {
                     <tr className="bg-gray-50/70">
                       <td></td>
                       <td colSpan={4} className="px-3 py-2">
-                        <div className="space-y-1 rounded-xl border border-gray-200/60 bg-white/60 p-3 text-xs shadow-[0_8px_20px_-14px_rgba(26,26,26,0.10)] backdrop-blur-md backdrop-saturate-150">
-                          {Object.entries(r.meta).map(([k, v]) => (
-                            <div key={k} className="flex gap-2">
-                              <span className="min-w-[120px] font-semibold capitalize text-gray-500">{k}</span>
-                              <span className="text-gray-700">{String(v)}</span>
-                            </div>
-                          ))}
-                        </div>
+                        <MetaDetail meta={r.meta} />
                       </td>
                     </tr>
                   )}
