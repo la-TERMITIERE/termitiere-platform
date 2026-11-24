@@ -106,6 +106,14 @@ export const updateItem = protegerEcriture('updateItem', impl.updateItem)
 // `{ motif }` : motif déjà recueilli par l'appelant (aucune question posée).
 const COLLECTIONS_TECHNIQUES = new Set(['push_subs', 'users_secret', 'notifications', 'depense_depenses_supprimees'])
 const supprimerSansMotif = protegerEcriture('removeItem', impl.removeItem)
+// Copie de l'enregistrement tel qu'il était avant sa suppression, pour le Journal (« Données supprimées »). Les textes très longs (photos, fichiers
+// encodés) sont tronqués pour ne pas alourdir le journal ; les valeurs vides et les fonctions sont écartées.
+export const instantane = (rec) => {
+  if (!rec) return null
+  try {
+    return JSON.parse(JSON.stringify(rec, (_c, v) => (typeof v === 'string' && v.length > 600 ? `${v.slice(0, 120)}… (texte tronqué)` : v)))
+  } catch { return null }
+}
 const libelleDe = (rec, id) => {
   if (!rec) return id
   if (rec.num && rec.clientNom) return `${rec.num} : ${rec.clientNom}`
@@ -128,12 +136,13 @@ export async function removeItem(collection, id, options = {}) {
     throw err
   }
   let libelle = id
-  try { libelle = libelleDe(await impl.getOne(collection, id), id) } catch { /* sans libellé */ }
+  let avant = null
+  try { avant = await impl.getOne(collection, id); libelle = libelleDe(avant, id) } catch { /* sans libellé */ }
   const motif = options.motif || (await demanderMotif({ collection, id, libelle }))
   if (!motif) throw new SuppressionAnnulee()
   const resultat = await supprimerSansMotif(collection, id)
   import('./audit')
-    .then(({ audit }) => audit(String(collection).split('_')[0], 'SUPPRESSION', `${libelle} (${collection}) : motif : ${motif}`, { collection, id, libelle, motif }))
+    .then(({ audit }) => audit(String(collection).split('_')[0], 'SUPPRESSION', `${libelle} (${collection}) : motif : ${motif}`, { collection, id, libelle, motif, ...(avant ? { donnees: instantane(avant) } : {}) }))
     .catch(() => {})
   return resultat
 }

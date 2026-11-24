@@ -2,6 +2,7 @@
 // Deux vues complémentaires : « Journal » = recherche par période/type/utilisateur
 // avec export Excel (existant, inchangé) ; « Historique » = archive complète en
 // timeline par jour, sans limite de période.
+import MetaDetail, { metaToText } from '../../shared/ui/MetaDetail'
 import { Fragment, useMemo, useState } from 'react'
 import { FileSpreadsheet, ChevronRight, ChevronDown, ScrollText } from 'lucide-react'
 import Card from '../../shared/ui/Card'
@@ -87,29 +88,7 @@ function TableJournal({ lignes, openRow, setOpenRow }) {
   )
 }
 
-function MetaDetail({ meta }) {
-  return (
-    <div className="space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs">
-      {Object.entries(meta).map(([k, v]) => (
-        <div key={k} className="flex gap-2">
-          <span className="min-w-[120px] font-semibold capitalize text-gray-500">{k}</span>
-          <span className="text-gray-700">
-            {v && typeof v === 'object'
-              ? <span className="space-y-0.5">{Object.entries(v).map(([k2, v2]) => <span key={k2} className="block">• <strong>{k2}</strong> : {String(v2)}</span>)}</span>
-              : String(v)}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
-function metaToText(meta) {
-  if (!meta || typeof meta !== 'object') return ''
-  return Object.entries(meta)
-    .map(([k, v]) => `${k}: ${v && typeof v === 'object' ? Object.entries(v).map(([a, b]) => `${a}=${b}`).join('; ') : v}`)
-    .join(' | ')
-}
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 

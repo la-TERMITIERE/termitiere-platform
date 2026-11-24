@@ -25,7 +25,7 @@ import { useAgroStore } from './store/agroStore'
 import BandeAgro, { usePeriodeBande } from './BandeAgro'
 import FriseVente from './FriseVente'
 import { BoutonBande, ChampBande, CLASSE_CHAMP_BANDE, OngletsBande } from '../../shared/ui/BandeauVolet'
-import { addItem, updateItem } from '../../core/db'
+import { addItem, updateItem, instantane } from '../../core/db'
 import { audit } from '../../core/audit'
 import { notify } from '../../core/notify'
 import { toast } from '../../core/notifications'
@@ -200,7 +200,7 @@ export default function Factures() {
     if (!confirm(`Supprimer la facture ${f.numero} ?\nL'action est définitive ; si du stock avait été sorti, il est réintégré.`)) return
     await run(async () => {
       await wfSupprimer(f)
-      await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`)
+      await audit('agro', 'FACTURE_DELETE', `${f.numero} (${factureStatut(f)})`, { numero: f.numero, dateFacture: f.date, donnees: instantane(f) })
     }, 'Facture supprimée')
   }
 
