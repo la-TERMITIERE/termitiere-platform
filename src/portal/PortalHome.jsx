@@ -14,6 +14,7 @@ import Button from '../shared/ui/Button'
 import { todayStr } from '../utils/formatters'
 import { estActif } from '../shared/workflow'
 import { projetsVisibles } from '../modules/projet/logic'
+import { COL as COL_TACHES, estDestinataire, estMembre, estArchivee, enRetard } from '../modules/taches/data'
 import AlertesAccueil from './AlertesAccueil'
 import AnnoncesAccueil from '../modules/rh/AnnoncesAccueil'
 import { useDecaissementsRh } from '../modules/depense/decaissementsRh'
@@ -126,6 +127,7 @@ export default function PortalHome() {
   const { data: employesRh }    = useCollection(hasModule('rh')          ? 'rh_employes'             : null)
   const { data: seancesGym }    = useCollection(hasModule('gym')         ? 'gym_seances'             : null)
   const { data: abonnementsGym }= useCollection(hasModule('gym')         ? 'gym_abonnements'         : null)
+  const { data: tachesTous }    = useCollection(hasModule('taches')      ? COL_TACHES.taches         : null)
 
   const dernier = [...(inventaires||[])].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
   const totalAnimaux = dernier ? Object.values(dernier.animaux || {}).reduce((s, a) => s + (a.fin || 0), 0) : 0
@@ -139,6 +141,11 @@ export default function PortalHome() {
   const seancesGymMois = (seancesGym||[]).filter((s) => (s.date || '').startsWith(moisEnCours)).length
   const abonnementsGymMois = (abonnementsGym||[]).filter((a) => (a.date || '').startsWith(moisEnCours)).length
 
+  // E-TACHES : mes tâches en cours (confiées à moi ou à mon équipe), dont celles en retard.
+  const moiTaches = user?.uid || user?.login || null
+  const mesTaches = (tachesTous || []).filter((x) => (estDestinataire(x, moiTaches) || estMembre(x, moiTaches)) && x.statut !== 'Terminé' && !estArchivee(x))
+  const mesTachesEnRetard = mesTaches.filter((x) => enRetard(x)).length
+
   const depensesEnAttente = depensesTous.filter((d) => d.statut === 'en_attente' || d.statut === 'approuvee').length
   const projetsEnCours = projetsVisibles(projets || [], user, role).filter((p) => p.statut === 'en_cours').length
 
@@ -151,7 +158,8 @@ export default function PortalHome() {
     foncier: dossiersActifs ? `${dossiersActifs} dossier(s) actif(s)` : 'Aucun dossier',
     rh: (autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length + primesAApprouver.length) ? `${autorisationsATraiter.length + missionsAApprouver.length + avancesAApprouver.length + primesAApprouver.length} demande(s) RH à traiter` : (employesRh || []).length ? `${employesRh.length} employé(s)` : 'Aucun employé',
     garderie: enfantsActifs ? `${enfantsActifs} enfant(s) inscrit(s)` : 'Aucun enfant inscrit',
-    gym: (seancesGymMois || abonnementsGymMois) ? `${seancesGymMois} séance(s) · ${abonnementsGymMois} abonnement(s) ce mois` : 'Aucune activité ce mois'
+    gym: (seancesGymMois || abonnementsGymMois) ? `${seancesGymMois} séance(s) · ${abonnementsGymMois} abonnement(s) ce mois` : 'Aucune activité ce mois',
+    taches: mesTaches.length ? `${mesTaches.length} tâche(s) en cours${mesTachesEnRetard ? ` · ${mesTachesEnRetard} en retard` : ''}` : 'Aucune tâche en cours'
   }
 
   const mots = (user?.nom || '').trim().split(/\s+/).filter(Boolean)
