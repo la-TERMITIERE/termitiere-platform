@@ -10,6 +10,7 @@ import { avatarGradient } from '../utils/color'
 import { toast } from '../core/notifications'
 import { useAuth } from '../hooks/useAuth'
 import { MODULES, MODULE_NAV } from '../shared/modules'
+import { NIVEAUX_TACHES, niveauTachesDe } from '../modules/taches/data'
 import { roleEffectif, agentEnPlus, bilanParDefaut, isViewAllRole, isReadOnlyRole, roleLabel, roleTone, canManagePartenaires, lectureImposeeParRole, moduleRoleOk, moduleRetire, voletRetire, ACTIONS_DROIT, ROLES_LECTURE_PAR_DEFAUT, droitEffectif, droitParDefaut, encoderDroits, actionImposeeInterdite } from '../core/roles'
 
 const rgba = (hex, a) => {
@@ -21,6 +22,7 @@ const rgba = (hex, a) => {
 // Les entrées `{ heading }` ne sont que des séparateurs de section : on les écarte.
 function voletsVisibles(u, moduleId) {
   const canSee = (item) => {
+    if (item.niveaux) return item.niveaux.includes(niveauTachesDe(u))
     if (item.roles && (item.roles.includes(roleEffectif(u.role)) || (item.roles.includes('agent') && roleEffectif(u.role) === 'secretaire' && agentEnPlus(u.role)))) return true
     if (item.perm === 'partenaires' && canManagePartenaires(roleEffectif(u.role), u)) return true
     return !item.roles && !item.perm
@@ -213,6 +215,24 @@ export default function AccesUtilisateur({ user, onClose, onSave }) {
                     onClick={() => modifierAcces({ accesBilanGlobal: !(user.accesBilanGlobal === true) }, 'bilan', user.accesBilanGlobal === true ? 'Tableau de bord global retiré ✓' : 'Tableau de bord global accordé ✓')} />
                   <span className="text-[11px] font-medium text-gray-400">Récap du jour des secteurs, sans montant : repart à zéro chaque jour.</span>
                 </>)}
+          </div>
+
+          {/* E-TACHES : tout le monde y a accès ; Info règle ce que chaque compte y voit (ses tâches seulement, ou davantage). */}
+          <div className="acc-anim flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-white/70 bg-white/70 px-3.5 py-3 shadow-sm backdrop-blur-md"
+            style={{ animation: 'acc-entree 0.4s ease-out 0.32s both' }}>
+            <span className="relative flex items-center gap-1.5 overflow-hidden rounded-full py-1 pl-1 pr-3 text-[11px] font-extrabold tracking-wide text-white"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, rgba(124,58,237,0.78))', boxShadow: '0 6px 14px -5px rgba(124,58,237,0.6), inset 0 1px 0 rgba(255,255,255,0.45)' }}>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+              <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-white/25"><ShieldCheck size={11} /></span>
+              <span className="relative">E-TACHES : NIVEAU</span>
+            </span>
+            <select value={user.tachesNiveau || ''} disabled={!!occupe} aria-label="Niveau d'accès E-TACHES"
+              onChange={(e) => modifierAcces({ tachesNiveau: e.target.value }, 'taches-niveau', e.target.value ? `E-TACHES : ${NIVEAUX_TACHES[e.target.value].label} ✓` : 'E-TACHES : niveau selon le rôle ✓')}
+              className="input-base !w-auto min-w-[14rem] !py-1.5 text-xs font-bold">
+              <option value="">Selon le rôle ({NIVEAUX_TACHES[niveauTachesDe({ role: user.role })].label})</option>
+              {Object.entries(NIVEAUX_TACHES).map(([id, n]) => <option key={id} value={id}>{n.label}</option>)}
+            </select>
+            <span className="min-w-0 flex-1 basis-56 text-[11px] font-medium text-gray-400">{NIVEAUX_TACHES[niveauTachesDe(user)].aide}</span>
           </div>
 
           {modules.length > 0 && (

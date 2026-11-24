@@ -7,7 +7,7 @@ import {
   Wallet, Gauge, Receipt, Landmark, Banknote, Stamp, Waves, PackagePlus, Handshake, HandCoins, Wrench, Scale, HardHat, Lightbulb, Coins, Repeat, Dumbbell, Ticket, Tag, Plane, UserCog, CalendarHeart, Gift, Target, Archive, Repeat as RoutineIcon, BookUser, Briefcase, Layers, Megaphone, Warehouse
 } from 'lucide-react'
 import { cheminsDuGroupe } from '../modules/rh/groupes'
-import { ROLES_PILOTAGE_TACHES, ROLES_PAR_EMPLOYE, ROLES_PAR_DIRECTEUR, ROLES_PAR_NIVEAU, ROLES_ANNUAIRE } from '../modules/taches/data'
+import { NIVEAUX_VUE } from '../modules/taches/data'
 import { FINANCE_VIEW_ROLES, PROJET_PILOTAGE_ROLES, PROJET_DEPENSES_ROLES, FULL_ACCESS_ROLES, ADMIN_VOLETS_ROLES, BANQUE_ROLES, BTP_ROLES, ANALYSES_DEPENSE_ROLES } from '../core/roles'
 
 export const MODULES = [
@@ -277,11 +277,11 @@ export const MODULE_NAV = {
     { label: 'Tableau de bord', to: '/taches', icon: LayoutDashboard, end: true },
     { label: 'Tâches', to: '/taches/taches', icon: ListChecks },
     { label: 'Routine journalière', to: '/taches/routine', icon: RoutineIcon },
-    { label: 'Annuaire', to: '/taches/annuaire', icon: BookUser, roles: ROLES_ANNUAIRE },
-    { label: 'Pilotage', to: '/taches/pilotage', icon: Gauge, roles: ROLES_PILOTAGE_TACHES },
-    { label: 'Par employé', to: '/taches/par-employe', icon: UserCircle, roles: ROLES_PAR_EMPLOYE },
-    { label: 'Par directeur', to: '/taches/par-directeur', icon: Briefcase, roles: ROLES_PAR_DIRECTEUR },
-    { label: 'Par niveau', to: '/taches/par-niveau', icon: Layers, roles: ROLES_PAR_NIVEAU },
+    { label: 'Annuaire', to: '/taches/annuaire', icon: BookUser, niveaux: NIVEAUX_VUE.annuaire },
+    { label: 'Pilotage', to: '/taches/pilotage', icon: Gauge, niveaux: NIVEAUX_VUE.pilotage },
+    { label: 'Par employé', to: '/taches/par-employe', icon: UserCircle, niveaux: NIVEAUX_VUE.parEmploye },
+    { label: 'Par directeur', to: '/taches/par-directeur', icon: Briefcase, niveaux: NIVEAUX_VUE.parDirecteur },
+    { label: 'Par niveau', to: '/taches/par-niveau', icon: Layers, niveaux: NIVEAUX_VUE.parNiveau },
     { label: 'Objectifs', to: '/taches/objectifs', icon: Target },
     { label: 'Rapports', to: '/taches/rapports', icon: FileText },
     { label: 'Innovation', to: '/taches/innovation', icon: Lightbulb },

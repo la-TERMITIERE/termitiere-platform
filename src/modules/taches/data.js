@@ -25,22 +25,24 @@ export const COULEUR_PRIORITE = { Haute: '#dc2626', Moyenne: '#d97706', Basse: '
 export const TON_STATUT = { 'À faire': 'neutral', 'En cours': 'info', 'Terminé': 'success', 'En retard': 'danger' }
 export const TON_PRIORITE = { Haute: 'danger', Moyenne: 'warning', Basse: 'success' }
 
-// ── Droits de l'application source fusionnés avec les rôles de la plateforme ───────────────────────────────────────
-// Il n'existe QU'UNE liste de rôles : ceux de la plateforme. Chacun reçoit les droits E-TACHES de son équivalent dans l'application
-// d'origine (Gestion-des-t-ches) ; aucun rôle E-TACHES n'est attribué à part.
-//   chef : direction générale (voit tout, modifie tout, Pilotage). D'origine : PAU, GE, Chef administrateur ; Info voit tout aussi.
-//   dir  : directeurs (d'origine : DF et Directeur). rh : DA-RH. resp : responsables de terrain (d'origine : chef de département).
-//   emp  : employés (d'origine : employé, y compris l'Assistante RH) : agents, secrétaires, assistantes, tata, etc.
-const NIVEAU_PAR_ROLE = {
-  super_admin: 'chef', info: 'chef', assistant_pau: 'chef', pau: 'chef', ge: 'chef',
-  df: 'dir', directeur: 'dir',
-  rh: 'rh',
-  gerant: 'resp', gerante_garderie: 'resp', chef_projet: 'resp',
-  superviseur: 'emp', partenaire: 'emp', agent: 'emp', tata: 'emp', secretaire: 'emp', assistant_comptable: 'emp', assistant_ge: 'emp'
+// ── Qui voit quoi dans E-TACHES ──────────────────────────────────────────────────────────────────────────────────────
+// Chaque compte a un NIVEAU. Par défaut, seuls le PAU, la GE, Info, le DF, la RH et l'Assistante GE (et le super administrateur) ont l'accès
+// total : toutes les tâches et tous les volets. TOUS LES AUTRES (agents, directeurs, superviseurs, gérants, secrétaires…) ne voient que leurs
+// propres tâches et leur propre récapitulatif. Info règle le niveau de chaque compte dans sa fiche d'accès (champ `tachesNiveau` du profil).
+export const NIVEAUX_TACHES = {
+  chef: { label: 'Accès total', aide: 'Toutes les tâches, tous les volets (pilotage, par employé, par directeur…), modifie tout.' },
+  dir:  { label: 'Directeur', aide: 'Toutes les tâches, vues par employé, par directeur et par niveau.' },
+  rh:   { label: 'Ressources humaines', aide: 'Toutes les tâches, vues par directeur et par niveau, jours fériés.' },
+  resp: { label: 'Responsable', aide: "Objectifs et routines de l'équipe, annuaire ; ses propres tâches." },
+  emp:  { label: 'Ses tâches seulement', aide: 'Voit uniquement les tâches qui lui sont confiées ou qu\'il crée, et son récapitulatif.' }
 }
-export const niveauTaches = (role) => NIVEAU_PAR_ROLE[role] || 'emp'
-// Direction générale : voit le Pilotage, modifie toutes les tâches.
-export const ROLES_PILOTAGE_TACHES = Object.keys(NIVEAU_PAR_ROLE).filter((r) => NIVEAU_PAR_ROLE[r] === 'chef')
+const NIVEAU_PAR_ROLE = { super_admin: 'chef', info: 'chef', pau: 'chef', ge: 'chef', df: 'chef', rh: 'chef', assistant_ge: 'chef' }
+// Niveau d'un compte : le réglage d'Info s'il existe, sinon celui de son rôle RÉEL (l'Assistante GE se distingue ainsi de la secrétaire).
+export const niveauTachesDe = (user) => (NIVEAUX_TACHES[user?.tachesNiveau] ? user.tachesNiveau : NIVEAU_PAR_ROLE[user?.role] || 'emp')
+// Niveau du compte connecté, posé une fois par la coque de l'application : tous les écrans d'E-TACHES calculent des droits pour LE compte connecté.
+let niveauMoi = null
+export const definirNiveauMoi = (n) => { niveauMoi = n || null }
+export const niveauTaches = (role) => niveauMoi || NIVEAU_PAR_ROLE[role] || 'emp'
 // Voit toutes les tâches de l'entreprise.
 export const voitToutesLesTaches = (role) => ['chef', 'dir', 'rh'].includes(niveauTaches(role))
 // Confie des tâches à n'importe qui ; les autres ne s'en confient qu'à eux-mêmes.
@@ -96,10 +98,11 @@ export const trierParEcheance = (a, b) => (a.dateLimite || '9999') < (b.dateLimi
 
 export const formatJour = (d) => (d ? String(d).split('-').reverse().join('/') : '')
 
-// Rôles de la plateforme autorisés pour chaque vue d'analyse (menu et garde d'accès), selon l'ancienne application :
-//   Par employé : direction générale et directeurs · Par directeur et Par niveau : + RH · Annuaire : tous sauf les employés simples.
-const rolesDuNiveau = (...niveaux) => Object.keys(NIVEAU_PAR_ROLE).filter((r) => niveaux.includes(NIVEAU_PAR_ROLE[r]))
-export const ROLES_PAR_EMPLOYE = rolesDuNiveau('chef', 'dir')
-export const ROLES_PAR_DIRECTEUR = rolesDuNiveau('chef', 'dir', 'rh')
-export const ROLES_PAR_NIVEAU = rolesDuNiveau('chef', 'dir', 'rh')
-export const ROLES_ANNUAIRE = rolesDuNiveau('chef', 'dir', 'rh', 'resp')
+// Niveaux autorisés pour chaque vue d'analyse (menu et garde d'accès).
+export const NIVEAUX_VUE = {
+  annuaire: ['chef', 'dir', 'rh', 'resp'],
+  pilotage: ['chef'],
+  parEmploye: ['chef', 'dir'],
+  parDirecteur: ['chef', 'dir', 'rh'],
+  parNiveau: ['chef', 'dir', 'rh']
+}

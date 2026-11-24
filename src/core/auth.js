@@ -161,6 +161,8 @@ function sessionFromProfile(p) {
     // Modules et volets retirés individuellement par Info (même pour un rôle « voit tout »).
     modulesRetires: Array.isArray(p.modulesRetires) ? p.modulesRetires : [],
     voletsRetires: p.voletsRetires && typeof p.voletsRetires === 'object' ? p.voletsRetires : {},
+    // Niveau d'accès E-TACHES réglé par Info ('' = celui du rôle).
+    tachesNiveau: typeof p.tachesNiveau === 'string' ? p.tachesNiveau : '',
     secteur: p.secteur || '',
     actif: p.actif !== false
   }

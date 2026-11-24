@@ -16,6 +16,7 @@ import { getModule, MODULE_NAV } from '../modules'
 import { useAuth } from '../../hooks/useAuth'
 import { canManagePartenaires, depenseRoleEffectif, voletRetire, niveauBilanGlobal, agentEnPlus } from '../../core/roles'
 import { teinterHex } from '../../utils/color'
+import { niveauTachesDe } from '../../modules/taches/data'
 
 const LOG_SITES = { lome: 'Lomé', kara: 'Kara' }
 // Modules multi-sites (Maxi Logistique, MAXI-GYM) : sous-application (site)
@@ -67,6 +68,7 @@ export default function MobileBottomNav({ onOpenMenu }) {
   const navRole = activeModule?.id === 'depense' ? depenseRoleEffectif(role) : role
   const canSee = (item) => {
     if (activeModule && voletRetire(user, activeModule.id, item.to)) return false // retiré à ce compte par Info
+    if (item.niveaux) return item.niveaux.includes(niveauTachesDe(user)) // volets d'E-TACHES : selon le niveau du compte
     if (item.roles && (item.roles.includes(navRole) || (item.roles.includes('agent') && navRole === 'secretaire' && agentEnPlus(roleReel)))) return true
     if (item.perm === 'partenaires' && canManagePartenaires(navRole, user)) return true
     return !item.roles && !item.perm
