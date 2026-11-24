@@ -1,6 +1,6 @@
 // RH — Paie & Bulletins (Temps & Paie). Génère les bulletins mensuels (CNSS/IRPP Togo).
 import { useMemo, useState } from 'react'
-import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck, HeartPulse, UserX, Clock, Pencil, UserRound, Briefcase, Banknote, ShieldCheck, CalendarDays, Wallet, Gift, Settings2 } from 'lucide-react'
+import { Receipt, Zap, Trash2, Landmark, CheckCircle2, BadgeCheck, HeartPulse, UserX, Clock, Pencil, UserRound, Briefcase, Banknote, ShieldCheck, CalendarDays, Wallet, Gift, Settings2, FileDown } from 'lucide-react'
 import Card from '../../shared/ui/Card'
 import ChampRecherche, { correspond } from '../../shared/ui/ChampRecherche'
 import StatCard from '../../shared/ui/StatCard'
@@ -21,6 +21,8 @@ import { lireRegles, lireHoraires } from './horaires'
 import { calculerRetenuePresence, detailRetenuePresence } from './retenuesPresence'
 import { primesDuMois } from './primesCircuit'
 import DetailFiche from './DetailFiche'
+// Le générateur de PDF est lourd : chargé seulement au moment d'imprimer un bulletin.
+const imprimerBulletin = async (b, libelleMois, par) => (await import('./bulletinPDF')).genererBulletinPDF({ bulletin: b, libelleMois, par })
 import { usePeutSupprimerRh, supprimerAvecRetour } from './suppression'
 import { BoutonBande } from '../../shared/ui/BandeauVolet'
 import FiltrePeriode from '../../shared/ui/FiltrePeriode'
@@ -268,8 +270,11 @@ export default function Paie() {
         </div>
       </Card>
       <DetailFiche fiche={bulletinDetail ? ficheBulletin(bulletinDetail) : null} onClose={() => setBulletinId(null)}
-        actions={bulletinDetail && bulletinDetail.statut === 'brouillon' ? [{ label: 'Modifier', icone: Pencil, tone: 'primaire', onClick: () => { ouvrirEdition(bulletinDetail); setBulletinId(null) } }, { label: 'Valider ce bulletin', icone: CheckCircle2, tone: 'succes', onClick: () => { valider(bulletinDetail); setBulletinId(null) } }]
-          : bulletinDetail && bulletinDetail.statut === 'valide' ? [{ label: 'Marquer payé', icone: BadgeCheck, tone: 'primaire', onClick: () => { marquerPaye(bulletinDetail); setBulletinId(null) } }] : []} />
+        actions={bulletinDetail ? [
+          { label: 'Bulletin PDF', icone: FileDown, tone: 'neutre', onClick: () => imprimerBulletin(bulletinDetail, moisLabel(bulletinDetail.mois), user?.nom || '').catch(() => toast.error('Impossible de générer le bulletin. Réessayez dans un instant.')) },
+          ...(bulletinDetail.statut === 'brouillon' ? [{ label: 'Modifier', icone: Pencil, tone: 'primaire', onClick: () => { ouvrirEdition(bulletinDetail); setBulletinId(null) } }, { label: 'Valider ce bulletin', icone: CheckCircle2, tone: 'succes', onClick: () => { valider(bulletinDetail); setBulletinId(null) } }]
+            : bulletinDetail.statut === 'valide' ? [{ label: 'Marquer payé', icone: BadgeCheck, tone: 'primaire', onClick: () => { marquerPaye(bulletinDetail); setBulletinId(null) } }] : [])
+        ] : []} />
       <ModalRh open={!!edition} onClose={() => setEdition(null)} title="Modifier le bulletin" titreHero={edition?.employeNom} icone={Pencil} size="lg"
         intro={edition ? `Bulletin de ${moisLabel(edition.mois)} (brouillon). Les cotisations et le net se recalculent tout seuls.` : ''} libelleSave="Enregistrer les modifications" onSave={enregistrerEdition}>
         {edition && (<>

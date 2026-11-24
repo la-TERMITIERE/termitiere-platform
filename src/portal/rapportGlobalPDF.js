@@ -49,7 +49,7 @@ function polygone(doc, points, couleur) {
 }
 
 // ─── EN-TÊTE (comme le papier à en-tête de la société) ─────────────────────────
-function enTete(doc, logo) {
+export function enTete(doc, logo) {
   if (logo?.dataURL) {
     const h = 33, w = h * (logo.w / logo.h)
     doc.addImage(logo.dataURL, 'PNG', 12, 5, w, h)
@@ -75,7 +75,7 @@ function icone(doc, x, y, type) {
   else if (type === 'mail') { doc.setFont('times', 'bold'); doc.setFontSize(6.2); doc.text('@', x, y + 0.9, { align: 'center' }) }
   else { doc.circle(x, y - 0.3, 0.95, 'F'); doc.triangle(x - 0.9, y + 0.2, x + 0.9, y + 0.2, x, y + 1.6, 'F') }
 }
-function piedDePage(doc, numero, total, meta) {
+export function piedDePage(doc, numero, total, meta) {
   const h = doc.internal.pageSize.getHeight()
   polygone(doc, [[0, h - 25], [77, h - 25], [81, h - 10], [0, h - 10]], ROSE)
   doc.setTextColor(255, 255, 255); doc.setFont('times', 'bold'); doc.setFontSize(8.6)
