@@ -26,22 +26,6 @@ function rapportSansMontant({ secteurs, libelle, edite, fichier, avecDetails = f
     columns: colonnes,
     rows: secteurs.map((s) => ({ secteur: s.label, activite: s.activite.map((a) => `${a.libelle} : ${nbr(a.valeur).toLocaleString('fr-FR').replace(/[  ]/g, ' ')}`).join(' · '), operations: s.nbOperations }))
   }]
-  // Dernière feuille : la situation générale de TOUS les secteurs (période et cumul total).
-  const sit = rapport.situation
-  if (sit) sections.push({
-    name: 'Situation générale', title: 'Situation générale de tous les secteurs : LA TERMITIÈRE', subtitle: `Période : ${libelle} · cumul total depuis l'origine · ${edite} · montants en FCFA`,
-    columns: [
-      { key: 'secteur', label: 'Secteur', width: 30 },
-      { key: 'recettes', label: 'Recettes (période)', type: 'money', width: 20 },
-      { key: 'depenses', label: 'Dépenses (période)', type: 'money', width: 20 },
-      { key: 'benefice', label: 'Bénéfice (période)', type: 'money', width: 20 },
-      { key: 'cumulRecettes', label: 'Cumul recettes', type: 'money', width: 20 },
-      { key: 'cumulDepenses', label: 'Cumul dépenses', type: 'money', width: 20 },
-      { key: 'cumulBenefice', label: 'Cumul bénéfice', type: 'money', width: 20 }
-    ],
-    rows: sit.secteurs.map((l) => ({ secteur: l.label, recettes: nbr(l.recettes), depenses: nbr(l.depenses), benefice: nbr(l.benefice), cumulRecettes: nbr(l.cumulRecettes), cumulDepenses: nbr(l.cumulDepenses), cumulBenefice: nbr(l.cumulBenefice) })),
-    totals: { __label: 'TOTAL GÉNÉRAL', recettes: nbr(sit.total.recettes), depenses: nbr(sit.total.depenses), benefice: nbr(sit.total.benefice), cumulRecettes: nbr(sit.total.cumulRecettes), cumulDepenses: nbr(sit.total.cumulDepenses), cumulBenefice: nbr(sit.total.cumulBenefice) }
-  })
   // Détail demandé : une feuille par secteur avec la date, la nature et le libellé de chaque opération, jamais le montant.
   if (avecDetails) {
     const noms = nomsFeuilles(secteurs.map((s) => s.label))
@@ -77,9 +61,9 @@ export function genererRapportGlobalExcel({ rapport, libelle, par = '', avecDeta
       { key: 'objectif', label: 'Objectif', type: 'money', width: 18 },
       { key: 'atteint', label: 'Atteint (%)', type: 'number', width: 13, align: 'center' },
       { key: 'operations', label: 'Opérations', type: 'number', width: 12, align: 'center' },
-      { key: 'cumulRecettes', label: 'Cumul recettes', type: 'money', width: 18 },
-      { key: 'cumulDepenses', label: 'Cumul dépenses', type: 'money', width: 18 },
-      { key: 'cumulBenefice', label: 'Cumul bénéfice', type: 'money', width: 18 }
+      { key: 'cumulRecettes', label: 'Cumul recettes (mois)', type: 'money', width: 20 },
+      { key: 'cumulDepenses', label: 'Cumul dépenses (mois)', type: 'money', width: 20 },
+      { key: 'cumulBenefice', label: 'Cumul bénéfice (mois)', type: 'money', width: 20 }
     ],
     rows: secteurs.map((s) => ({
       secteur: s.label, recettes: nbr(s.recettes), depenses: nbr(s.depenses), benefice: nbr(s.benefice),
@@ -95,7 +79,7 @@ export function genererRapportGlobalExcel({ rapport, libelle, par = '', avecDeta
       const activite = s.activite.map((a) => `${a.libelle} : ${nbr(a.valeur).toLocaleString('fr-FR').replace(/[  ]/g, ' ')}`).join(' · ')
       sections.push({
         name: noms[i], title: `${s.label} : opérations`,
-        subtitle: `Période : ${libelle}${activite ? ` · ${activite}` : ''}${s.cible > 0 ? ` · Objectif ${nbr(s.cible).toLocaleString('fr-FR').replace(/[  ]/g, ' ')} FCFA atteint à ${Math.round(s.pct)} %` : ''} · Cumul total : recettes ${fmt(s.cumulRecettes)}, dépenses ${fmt(s.cumulDepenses)}, bénéfice ${fmt(s.cumulBenefice)} FCFA`,
+        subtitle: `Période : ${libelle}${activite ? ` · ${activite}` : ''}${s.cible > 0 ? ` · Objectif ${nbr(s.cible).toLocaleString('fr-FR').replace(/[  ]/g, ' ')} FCFA atteint à ${Math.round(s.pct)} %` : ''} · Cumul ${rapport.libelleCumul} : recettes ${fmt(s.cumulRecettes)}, dépenses ${fmt(s.cumulDepenses)}, bénéfice ${fmt(s.cumulBenefice)} FCFA`,
         columns: [
           { key: 'date', label: 'Date', width: 12 },
           { key: 'type', label: 'Type', width: 12 },
@@ -111,6 +95,22 @@ export function genererRapportGlobalExcel({ rapport, libelle, par = '', avecDeta
       })
     })
   }
+  // Dernière feuille : la situation générale de TOUS les secteurs (période et cumul total).
+  const sit = rapport.situation
+  if (sit) sections.push({
+    name: 'Situation générale', title: 'Situation générale de tous les secteurs : LA TERMITIÈRE', subtitle: `Période : ${libelle} · cumul ${rapport.libelleCumul} (du 1er du mois à la date d'extraction) · ${edite} · montants en FCFA`,
+    columns: [
+      { key: 'secteur', label: 'Secteur', width: 30 },
+      { key: 'recettes', label: 'Recettes (période)', type: 'money', width: 20 },
+      { key: 'depenses', label: 'Dépenses (période)', type: 'money', width: 20 },
+      { key: 'benefice', label: 'Bénéfice (période)', type: 'money', width: 20 },
+      { key: 'cumulRecettes', label: 'Cumul recettes (mois)', type: 'money', width: 22 },
+      { key: 'cumulDepenses', label: 'Cumul dépenses (mois)', type: 'money', width: 22 },
+      { key: 'cumulBenefice', label: 'Cumul bénéfice (mois)', type: 'money', width: 22 }
+    ],
+    rows: sit.secteurs.map((l) => ({ secteur: l.label, recettes: nbr(l.recettes), depenses: nbr(l.depenses), benefice: nbr(l.benefice), cumulRecettes: nbr(l.cumulRecettes), cumulDepenses: nbr(l.cumulDepenses), cumulBenefice: nbr(l.cumulBenefice) })),
+    totals: { __label: 'TOTAL GÉNÉRAL', recettes: nbr(sit.total.recettes), depenses: nbr(sit.total.depenses), benefice: nbr(sit.total.benefice), cumulRecettes: nbr(sit.total.cumulRecettes), cumulDepenses: nbr(sit.total.cumulDepenses), cumulBenefice: nbr(sit.total.cumulBenefice) }
+  })
   exportRapportExcel({ filename: fichier || 'rapport-global.xlsx', sections })
   return sections
 }

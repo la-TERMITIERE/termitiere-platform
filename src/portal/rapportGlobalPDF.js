@@ -186,7 +186,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       ligne(doc, `Recettes : ${fcfa(s.recettes)}     Dépenses : ${fcfa(s.depenses)}     Bénéfice : ${s.benefice < 0 ? '- ' : ''}${fcfa(Math.abs(s.benefice))}`, y)
       y += 5.5
       if (s.cible > 0) { ligne(doc, `Objectif : ${fcfa(s.cible)}, atteint à ${Math.round(s.pct)} %`, y, { taille: 9.5, couleur: GRIS_TXT }); y += 5.5 }
-      ligne(doc, `Cumul total : recettes ${fcfa(s.cumulRecettes)}     dépenses ${fcfa(s.cumulDepenses)}     bénéfice ${signe(s.cumulBenefice)}`, y, { style: 'bold' })
+      ligne(doc, `Cumul ${rapport.libelleCumul} : recettes ${fcfa(s.cumulRecettes)}     dépenses ${fcfa(s.cumulDepenses)}     bénéfice ${signe(s.cumulBenefice)}`, y, { style: 'bold' })
       y += 5.5
     }
     const faits = s.activite.map((a) => `${a.libelle} : ${nb(a.valeur)}`)
@@ -216,11 +216,12 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
     }
   }
 
-  // Situation générale : tous les secteurs, période et cumul total, avec le total général en bas.
+  // Situation générale : tous les secteurs, période et cumul du mois (du 1er du mois à la date d'extraction), avec le total général en bas.
   const sit = rapport.situation
   if (sit) {
     place(sansMontant ? 30 : 60)
     y = titreSection(doc, y, 'Situation générale de tous les secteurs')
+    if (!sansMontant) { ligne(doc, `Cumul : ${rapport.libelleCumul} (du 1er du mois à la date d'extraction du rapport)`, y, { taille: 9.5, couleur: GRIS_TXT }); y += 6 }
     if (sansMontant) {
       ligne(doc, `Secteurs suivis : ${nb(sit.secteurs.length)}     Opérations enregistrées sur la période : ${nb(total.nbOperations)}`, y)
       y += 8
@@ -228,7 +229,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       autoTable(doc, {
         ...STYLE_TABLEAU, startY: y, margin: { left: MARGE, right: MARGE, top: HAUT_CORPS, bottom: 300 - BAS_CORPS },
         styles: { ...STYLE_TABLEAU.styles, fontSize: 8.5, cellPadding: 1.6 },
-        head: [['Secteur', 'Recettes (période)', 'Dépenses (période)', 'Bénéfice (période)', 'Cumul recettes', 'Cumul dépenses', 'Cumul bénéfice']],
+        head: [['Secteur', 'Recettes (période)', 'Dépenses (période)', 'Bénéfice (période)', 'Cumul recettes (mois)', 'Cumul dépenses (mois)', 'Cumul bénéfice (mois)']],
         body: sit.secteurs.map((l) => [l.label, nb(l.recettes), nb(l.depenses), sn(l.benefice), nb(l.cumulRecettes), nb(l.cumulDepenses), sn(l.cumulBenefice)]),
         foot: [['TOTAL GÉNÉRAL', nb(sit.total.recettes), nb(sit.total.depenses), sn(sit.total.benefice), nb(sit.total.cumulRecettes), nb(sit.total.cumulDepenses), sn(sit.total.cumulBenefice)]],
         showFoot: 'lastPage',
@@ -237,7 +238,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       })
       y = doc.lastAutoTable.finalY + 6
       place(14)
-      ligne(doc, `Au total, tous secteurs confondus, depuis l'origine : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' })
+      ligne(doc, `Au total, tous secteurs confondus, ${rapport.libelleCumul} : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' })
       y += 7
     }
   }

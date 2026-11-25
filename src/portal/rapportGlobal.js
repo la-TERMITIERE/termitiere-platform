@@ -49,7 +49,6 @@ export async function chargerDonnees() {
 }
 
 const montant = (v) => Number(v) || 0
-const ORIGINE = '2000-01-01' // début du cumul total (avant toute donnée de la plateforme)
 const dansPeriode = (date, { start, end }) => { const d = String(date || '').slice(0, 10); return !!d && d >= start && d <= end }
 
 // Ce que le secteur a fait sur la période, hors argent : { libelle, valeur }.
@@ -94,8 +93,10 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
   const precB = periodePrecedente(bornes)
   const prec = calc(precB)
   const precParId = Object.fromEntries(prec.rows.map((r) => [r.id, r]))
-  // Cumul total : tout ce que le secteur a encaissé et dépensé depuis le début, jusqu'à la fin de la période choisie.
-  const cumul = calc({ start: ORIGINE, end: bornes.end })
+  // Cumul du mois : du 1er du mois jusqu'au jour où le rapport est extrait (quelle que soit la période choisie pour le reste du rapport).
+  const aujourdhui = todayStr()
+  const bornesCumul = { start: `${aujourdhui.slice(0, 7)}-01`, end: aujourdhui }
+  const cumul = calc(bornesCumul)
   const cumulParId = Object.fromEntries(cumul.rows.map((r) => [r.id, r]))
 
   const secteurs = SECTEURS_RAPPORT.filter((s) => ids.includes(s.id)).map((s) => {
@@ -138,8 +139,11 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
     secteurs: lignesSituation,
     total: { recettes: sommeS('recettes'), depenses: sommeS('depenses'), benefice: sommeS('benefice'), cumulRecettes: sommeS('cumulRecettes'), cumulDepenses: sommeS('cumulDepenses'), cumulBenefice: sommeS('cumulBenefice') }
   }
-  return { secteurs, total, situation, jours, bornes, precedente: precB }
+  return { secteurs, total, situation, jours, bornes, precedente: precB, bornesCumul, libelleCumul: libelleCumul(bornesCumul) }
 }
+
+// « du 01/11/2026 au 25/11/2026 » : période du cumul, écrite en clair dans les rapports.
+export const libelleCumul = ({ start, end }) => `du ${start.split('-').reverse().join('/')} au ${end.split('-').reverse().join('/')}`
 
 // « Novembre 2026 », « Année 2026 », « 19/11/2026 » ou « Du 01/11/2026 au 19/11/2026 ».
 export function libellePeriode(mode, bornes) {
