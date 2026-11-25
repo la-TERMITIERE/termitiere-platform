@@ -59,12 +59,18 @@ async function soumettre(event, body) {
   // Champ piège : un visiteur humain ne remplit jamais « site ».
   if (body.site) return reponse(200, { ok: true })
 
-  const nom = texte(body.nom, 80)
+  const nomFamille = texte(body.nom, 60)
+  const prenom = texte(body.prenom, 60)
+  const nom = `${nomFamille} ${prenom}`.trim() // forme d'affichage de la plateforme : NOM Prénom
   const login = texte(body.login, 40)
   const telephone = texte(body.telephone, 30)
   const poste = texte(body.poste, 60)
+  const note = texte(body.note, 300)
   const pass = String(body.pass || '')
-  if (nom.length < 2) return reponse(200, { ok: false, error: 'Indiquez votre nom et prénom.' })
+  if (nomFamille.length < 2) return reponse(200, { ok: false, error: 'Indiquez votre nom.' })
+  if (prenom.length < 2) return reponse(200, { ok: false, error: 'Indiquez votre prénom.' })
+  if (telephone.replace(/\D/g, '').length < 8) return reponse(200, { ok: false, error: 'Indiquez un numéro de téléphone valide.' })
+  if (poste.length < 2) return reponse(200, { ok: false, error: 'Indiquez votre poste.' })
   if (!/^[a-zA-Z0-9._-]{3,40}$/.test(login)) return reponse(200, { ok: false, error: "L'identifiant doit faire 3 à 40 caractères (lettres, chiffres, point, tiret)." })
   if (pass.length < 6 || pass.length > 100) return reponse(200, { ok: false, error: 'Le mot de passe doit faire au moins 6 caractères.' })
 
@@ -92,16 +98,16 @@ async function soumettre(event, body) {
   const salt = randomSaltHex()
   const passHash = await pbkdf2(pass, salt)
   const ref = db.ref('tp/demandes_acces').push()
-  await ref.set({ nom, login, telephone, poste, statut: 'en_attente', creeLe: maintenant, createdAt: maintenant })
+  await ref.set({ nom, nomFamille, prenom, login, telephone, poste, note, statut: 'en_attente', creeLe: maintenant, createdAt: maintenant })
   await db.ref(`tp/demandes_acces_secret/${ref.key}`).set({ salt, passHash })
   await refLimite.set({ debut: frais.debut, n: frais.n + 1 })
 
-  // Alerte dans la cloche de la RH et d'Info (même forme que src/core/notify.js).
+  // Alerte dans la cloche de la RH, qui valide (même forme que src/core/notify.js). Info voit les demandes sans être dans le circuit.
   try {
     await db.ref('tp/notifications').push().set({
       type: 'demande', title: "🔑 Demande d'accès à la plateforme",
       body: `${nom}${poste ? ` (${poste})` : ''} demande un compte : identifiant « ${login} ». À approuver ou refuser dans RH, Demandes d'accès.`,
-      module: 'rh', forRoles: ['rh', 'info'], forUsers: [], excludeUid: null, link: '/rh/acces', readBy: {}, createdAt: maintenant
+      module: 'rh', forRoles: ['rh'], forUsers: [], excludeUid: null, link: '/rh/acces', readBy: {}, createdAt: maintenant
     })
   } catch (e) { console.warn('[acces] notification non créée :', e?.message) }
 
@@ -131,9 +137,21 @@ async function decider(event, body) {
   // Info est un rôle fantôme : son nom n'apparaît jamais dans ce que la RH peut lire.
   const decideur = { decidePar: moi.role === 'info' ? "l'administration" : (moi.nom || moi.login || ''), decideLe: maintenant }
 
+  // La RH reçoit le message de chaque décision prise par quelqu'un d'autre (Info, ou une autre personne de la RH).
+  const informerRh = async (titre, corps) => {
+    try {
+      await db.ref('tp/notifications').push().set({
+        type: 'info', title: titre, body: corps, module: 'rh', forRoles: ['rh'], forUsers: [], excludeUid: uid, link: '/rh/acces', readBy: {}, createdAt: maintenant
+      })
+    } catch (e) { console.warn('[acces] notification RH non créée :', e?.message) }
+  }
+
   if (decision === 'refuser') {
-    await refDemande.update({ statut: 'refusee', motif: texte(body.motif, 200), ...decideur })
+    const motif = texte(body.motif, 300)
+    if (motif.length < 3) return reponse(200, { ok: false, error: 'Justifiez le refus : le motif est obligatoire.' })
+    await refDemande.update({ statut: 'refusee', motif, ...decideur })
     await db.ref(`tp/demandes_acces_secret/${id}`).remove()
+    await informerRh("⛔ Demande d'accès refusée", `${demande.nom} (${demande.login}) : refusée par ${decideur.decidePar}. Motif : ${motif}`)
     return reponse(200, { ok: true })
   }
 
@@ -147,11 +165,21 @@ async function decider(event, body) {
 
   await db.ref(`tp/users_secret/${cle}`).set({ salt: secret.salt, passHash: secret.passHash })
   await db.ref(`tp/users/${cle}`).set({
-    uid: cle, login: demande.login, nom: demande.nom, role: 'agent', modules: MODULES_PAR_DEFAUT,
-    telephone: demande.telephone || '', poste: demande.poste || '', secteur: '', actif: true, creeParDemande: true
+    uid: cle, login: demande.login, nom: demande.nom, prenom: demande.prenom || '', nomFamille: demande.nomFamille || '', role: 'agent', modules: MODULES_PAR_DEFAUT,
+    telephone: demande.telephone || '', poste: demande.poste || '', secteur: '', actif: true, creeParDemande: true,
+    bienvenue: true // message de bienvenue affiché à la première connexion (puis effacé par la personne elle-même)
   })
   await refDemande.update({ statut: 'approuvee', uidCree: cle, ...decideur })
   await db.ref(`tp/demandes_acces_secret/${id}`).remove()
+  // Message de bienvenue dans la cloche du nouveau compte, et la RH informée.
+  try {
+    await db.ref('tp/notifications').push().set({
+      type: 'success', title: '🎉 Bienvenue sur la plateforme LA TERMITIÈRE',
+      body: `Bonjour ${demande.prenom || demande.nom}, votre accès est validé. Vous pouvez dès maintenant utiliser E-TACHES : vos tâches, votre routine et vos objectifs.`,
+      module: '', forRoles: [], forUsers: [cle], excludeUid: null, link: '/taches', readBy: {}, createdAt: maintenant
+    })
+  } catch (e) { console.warn('[acces] bienvenue non créée :', e?.message) }
+  await informerRh("✅ Demande d'accès validée", `${demande.nom} (${demande.login}) : compte créé par ${decideur.decidePar}, accès à E-TACHES.`)
   await db.ref('tp/audit_global').push().set({
     userId: uid, userNom: moi.nom || '', userRole: moi.role, module: 'portail', action: 'USER_CREATE',
     details: `${demande.login} : agent (demande d'accès approuvée)`, meta: null, timestamp: maintenant, createdAt: maintenant

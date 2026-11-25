@@ -1,7 +1,7 @@
 // Page d'accueil du portail : grille de cartes de modules cliquables.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon, Wallet, Plane, HandCoins, Gift } from 'lucide-react'
+import { ShieldCheck, ChevronRight, ChevronDown, CheckCircle2, CalendarDays, Sun, Sunset, Moon, Wallet, Plane, HandCoins, Gift, KeyRound, PartyPopper, ListChecks } from 'lucide-react'
 import { MODULES } from '../shared/modules'
 import { useAuth } from '../hooks/useAuth'
 import { useCollection } from '../hooks/useFirestore'
@@ -16,7 +16,9 @@ import { estActif } from '../shared/workflow'
 import { projetsVisibles } from '../modules/projet/logic'
 import { COL as COL_TACHES, estDestinataire, estMembre, estArchivee, enRetard } from '../modules/taches/data'
 import AlertesAccueil from './AlertesAccueil'
-import AnnoncesAccueil from '../modules/rh/AnnoncesAccueil'
+import { useAnnoncesAccueil } from '../modules/rh/AnnoncesAccueil'
+import EtudeDemandeAcces from './EtudeDemandeAcces'
+import { getOne } from '../core/db'
 import { useDecaissementsRh } from '../modules/depense/decaissementsRh'
 import { useEcheancesRh, ROLES_ECHEANCES_RH } from '../modules/rh/echeances'
 import DetailPrime from '../modules/rh/DetailPrime'
@@ -84,6 +86,26 @@ export default function PortalHome() {
     [primesRh, user, role]
   )
   const [primeOuverte, setPrimeOuverte] = useState(null)
+
+  // Demandes d'accès à la plateforme : la RH les valide ; Info les voit et peut aussi décider (sans être dans le circuit).
+  const voitAcces = role === 'rh' || role === 'info'
+  const { data: demandesAcces } = useCollection(voitAcces ? 'demandes_acces' : null)
+  const accesAEtudier = useMemo(() => (demandesAcces || []).filter((d) => d.statut === 'en_attente').sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0)), [demandesAcces])
+  const [accesOuvert, setAccesOuvert] = useState(null)
+
+  // Annonces non lues : réunies au même bandeau.
+  const annoncesAccueil = useAnnoncesAccueil()
+
+  // Message de bienvenue du compte créé par une demande d'accès validée : affiché une fois, à la première connexion.
+  const [bienvenue, setBienvenue] = useState(false)
+  useEffect(() => {
+    if (!user?.uid) return
+    getOne('users', user.uid).then((p) => setBienvenue(p?.bienvenue === true)).catch(() => {})
+  }, [user?.uid])
+  async function fermerBienvenue() {
+    setBienvenue(false)
+    try { await updateItem('users', user.uid, { bienvenue: false }) } catch { /* sans gravité : le message reviendra à la prochaine connexion */ }
+  }
 
   // Missions et avances approuvées à décaisser (finance) : boutons « Décaisser de la caisse » et « Non » directement sur la ligne.
   const decaissements = useDecaissementsRh()
@@ -236,46 +258,73 @@ export default function PortalHome() {
         </div>
       </div>
 
-      {/* À traiter : une ligne de verre par alerte (autorisations de salaire, missions à approuver, paiements à confirmer). */}
+      {/* À traiter : UN SEUL bandeau qui résume tout (salaires, accès, missions, avances, primes, décaissements, échéances, annonces…) ;
+          un clic ouvre la liste, chaque demande a son bouton « Étudier ». */}
       <AlertesAccueil items={[
+        ...accesAEtudier.map((d) => ({
+          id: `acces_${d.id}`, categorie: 'acces', icone: KeyRound, couleur: '#BC3C31',
+          titre: `${d.nom} demande un accès`,
+          sous: `Identifiant « ${d.login} »${d.poste ? ` · ${d.poste}` : ''}${d.telephone ? ` · ${d.telephone}` : ''}`,
+          action: { label: 'Étudier', onClick: () => setAccesOuvert(d.id) }
+        })),
         ...autorisationsATraiter.map((d) => ({
-          id: `salaire_${d.id}`, icone: Wallet, couleur: '#0284c7',
+          id: `salaire_${d.id}`, categorie: 'salaire', icone: Wallet, couleur: '#0284c7',
           titre: `${d.employeNom} : ${Number(d.montant).toLocaleString('fr-FR')} FCFA`,
           sous: `Salaire de ${moisAutorisation(d.mois)} · ${etapeCourante(d)?.label} (${etapeCourante(d)?.sigle}) · par ${d.creePar || 'la RH'}`,
-          action: { label: 'Voir', onClick: () => setAutorisationOuverte(d.id) }
+          action: { label: 'Étudier', onClick: () => setAutorisationOuverte(d.id) }
         })),
         ...missionsAApprouver.map((m) => ({
-          id: `mission_${m.id}`, icone: Plane, couleur: '#7c3aed',
+          id: `mission_${m.id}`, categorie: 'mission', icone: Plane, couleur: '#7c3aed',
           titre: `${m.employeNom} : ${m.objet}`,
           sous: `Ordre de mission${m.destination ? ` à ${m.destination}` : ''}${Number(m.montantFrais) > 0 ? ` · frais ${Number(m.montantFrais).toLocaleString('fr-FR')} FCFA` : ''} · par ${m.creePar || 'la RH'}`,
-          action: { label: 'Voir', onClick: () => setMissionOuverte(m.id) }
+          action: { label: 'Étudier', onClick: () => setMissionOuverte(m.id) }
         })),
         ...avancesAApprouver.map((a) => ({
-          id: `avance_${a.id}`, icone: HandCoins, couleur: '#0d9488',
+          id: `avance_${a.id}`, categorie: 'avance', icone: HandCoins, couleur: '#0d9488',
           titre: `${a.employeNom} : ${libelleTypeAvance(a.type).toLowerCase()} de ${Number(a.montant).toLocaleString('fr-FR')} FCFA`,
           sous: `${a.nbMensualites > 1 ? `${a.nbMensualites} mensualités` : 'Retenue en une fois'}${a.motif ? ` · ${a.motif}` : ''} · par ${a.creePar || 'la RH'}`,
-          action: { label: 'Voir', onClick: () => setAvanceOuverte(a.id) }
+          action: { label: 'Étudier', onClick: () => setAvanceOuverte(a.id) }
         })),
         ...primesAApprouver.map((p) => ({
-          id: `prime_${p.id}`, icone: Gift, couleur: '#be185d',
+          id: `prime_${p.id}`, categorie: 'prime', icone: Gift, couleur: '#be185d',
           titre: `${p.typeNom} : ${cibleLibellePrime(p)}`,
           sous: `${valeurLibellePrime(p)}${p.periodicite === 'ponctuelle' ? '' : ' par mois'} · ${etapePrime(p)?.label} (${etapePrime(p)?.sigle}) · par ${p.creePar || 'la RH'}`,
-          action: { label: 'Voir', onClick: () => setPrimeOuverte(p.id) }
+          action: { label: 'Étudier', onClick: () => setPrimeOuverte(p.id) }
         })),
-        ...decaissements.items,
+        ...decaissements.items.map((it) => ({ ...it, categorie: 'decaisse' })),
         ...echeancesRh.filter((e) => !faitesSet.has(cleFaite(e))).map((e) => ({
-          id: e.id, icone: e.icone, couleur: e.couleur, titre: e.titre, sous: e.sous, action: { label: 'Voir', onClick: () => navigate(e.lien) },
+          id: e.id, categorie: 'echeance', icone: e.icone, couleur: e.couleur, titre: e.titre, sous: e.sous, action: { label: 'Voir', onClick: () => navigate(e.lien) },
           fait: peutMarquerEcheance ? { label: 'Effectué', onClick: () => setItem('rh_alertes_faites', cleFaite(e), { signature: signatureEcheance(e), parNom: user?.nom || '', ts: Date.now() }).catch(() => {}) } : undefined
         })),
         ...paiementsAConfirmer.map((d) => ({
-          id: `paiement_${d.id}`, icone: CheckCircle2, couleur: '#4f46e5',
+          id: `paiement_${d.id}`, categorie: 'paiement', icone: CheckCircle2, couleur: '#4f46e5',
           titre: `${Number(d.montant).toLocaleString('fr-FR')} FCFA reçus ?`,
           sous: d.description || 'Paiement décaissé : confirmez la réception',
           action: { label: "J'ai reçu", onClick: () => confirmerReception(d), loading: confirmingId === d.id }
-        }))
+        })),
+        // Annonces de la RH et de la direction adressées à cette personne, tant qu'elle ne les a pas lues.
+        ...annoncesAccueil.items
       ]} />
-      {/* Annonces de la RH et de la direction adressées à cette personne, tant qu'elle ne les a pas lues. */}
-      <AnnoncesAccueil />
+      {annoncesAccueil.modal}
+      {accesOuvert && <EtudeDemandeAcces demande={(demandesAcces || []).find((d) => d.id === accesOuvert)} onClose={() => setAccesOuvert(null)} />}
+      {bienvenue && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-[#1A1A1A]/55 via-[#6B1A10]/35 to-[#BC3C31]/35 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="bienvenue-titre">
+          <div className="ed-entree relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 p-6 text-center shadow-[0_30px_70px_-24px_rgba(120,30,20,0.55),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-2xl">
+            <span aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#BC3C31] opacity-30 blur-3xl" />
+            <span className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-3xl text-white shadow-[0_14px_28px_-10px_rgba(188,60,49,0.7),inset_0_2px_2px_rgba(255,255,255,0.5)]" style={{ background: 'linear-gradient(145deg, #d4574b, #8f2a21)' }}>
+              <PartyPopper size={32} aria-hidden="true" />
+            </span>
+            <h2 id="bienvenue-titre" className="relative mt-4 text-2xl font-black text-gray-800">Bienvenue, {prenom} !</h2>
+            <p className="relative mt-2 text-sm text-gray-600">Votre accès à la plateforme <strong>LA TERMITIÈRE</strong> est validé. Vous pouvez dès maintenant utiliser <strong>E-TACHES</strong> : vos tâches, votre routine et vos objectifs.</p>
+            <div className="relative mt-6 flex flex-wrap justify-center gap-2">
+              <button type="button" onClick={() => { fermerBienvenue(); navigate('/taches') }} className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_14px_26px_-12px_rgba(188,60,49,0.8),inset_0_1px_0_rgba(255,255,255,0.45)]" style={{ background: 'linear-gradient(135deg, #d4574b 0%, #BC3C31 50%, #8f2a21 100%)' }}>
+                <ListChecks size={17} aria-hidden="true" />Ouvrir E-TACHES
+              </button>
+              <button type="button" onClick={fermerBienvenue} className="rounded-2xl border border-white/80 bg-white/70 px-5 py-2.5 text-sm font-extrabold text-gray-700 backdrop-blur-md hover:bg-white">Plus tard</button>
+            </div>
+          </div>
+        </div>
+      )}
       <DetailAutorisationSalaire demande={(autorisationsSalaire || []).find((d) => d.id === autorisationOuverte)} onClose={() => setAutorisationOuverte(null)} />
       <DetailPrime prime={(primesRh || []).find((p) => p.id === primeOuverte)} employes={employesRh2 || []} onClose={() => setPrimeOuverte(null)} />
       {decaissements.modal}

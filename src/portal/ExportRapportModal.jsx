@@ -119,7 +119,7 @@ export default function ExportRapportModal({ format = 'pdf', periode, sansMontan
             <span className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.3)] transition-all" style={{ left: details ? '1.35rem' : '0.12rem' }} />
           </span>
         </button>
-        {sansMontant && <p className="px-1 text-xs text-gray-500">Le rapport présente l'activité de chaque secteur, sans aucun montant.</p>}
+        {sansMontant && <p className="px-1 text-xs text-gray-500">Le rapport présente l'activité de chaque secteur et le cumul du mois (du 1er du mois à aujourd'hui), sans les montants de la période ni des opérations.</p>}
       </div>
     </Modal>
   )

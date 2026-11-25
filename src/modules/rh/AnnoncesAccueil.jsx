@@ -9,7 +9,8 @@ import AlertesAccueil from '../../portal/AlertesAccueil'
 import LectureAnnonce from './LectureAnnonce'
 import { COL_ANNONCES, COL_LECTURES, categorieAnnonce, concerne, estActive, rappelee, peutPublierAnnonce, cleLecture } from './annoncesData'
 
-export default function AnnoncesAccueil() {
+// Lignes « annonce » pour le bandeau unique de l'accueil, et la fenêtre de lecture à poser dans la page.
+export function useAnnoncesAccueil() {
   const user = useAuth((s) => s.user)
   const role = useAuth((s) => s.role)
   const peutMarquer = peutPublierAnnonce(role)
@@ -25,21 +26,24 @@ export default function AnnoncesAccueil() {
       .sort((a, b) => (Number(!!b.epinglee) - Number(!!a.epinglee)) || ((b.createdAt || 0) - (a.createdAt || 0)))
   }, [annonces, lectures, user])
 
-  if (!aLire.length && !ouverte) return null
-  return (
-    <>
-      <AlertesAccueil titre="Annonces" items={aLire.map((a) => {
+  const items = aLire.map((a) => {
         const cat = categorieAnnonce(a)
         return {
-          id: `annonce_${a.id}`, icone: cat.icone, couleur: cat.couleur,
+          id: `annonce_${a.id}`, categorie: 'annonce', icone: cat.icone, couleur: cat.couleur,
           titre: `${cat.label} : ${a.titre}`,
           sous: `${a.texte.length > 90 ? `${a.texte.slice(0, 90)}…` : a.texte} · par ${a.parNom || 'la RH'}`,
           action: { label: 'Lire', onClick: () => setOuverte(a) },
           // La RH marque l'annonce « effectuée » : elle n'est plus rappelée à personne.
           fait: peutMarquer && rappelee(a) ? { label: 'Effectué', onClick: () => updateItem(COL_ANNONCES, a.id, { effectueLe: Date.now(), effectuePar: user?.nom || 'La RH' }).then(() => toast.success('Annonce marquée effectuée : plus de rappel')).catch((e) => toast.error(e?.message || 'Action impossible')) } : undefined
         }
-      })} />
-      {ouverte && <LectureAnnonce annonce={ouverte} onClose={() => setOuverte(null)} />}
-    </>
-  )
+      })
+  const modal = ouverte ? <LectureAnnonce annonce={ouverte} onClose={() => setOuverte(null)} /> : null
+  return { items, modal }
+}
+
+// Bloc autonome (bandeau « Annonces ») pour les écrans qui n'ont pas le bandeau unique de l'accueil.
+export default function AnnoncesAccueil() {
+  const { items, modal } = useAnnoncesAccueil()
+  if (!items.length && !modal) return null
+  return (<><AlertesAccueil titre="Annonces" items={items} />{modal}</>)
 }

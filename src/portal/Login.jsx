@@ -38,6 +38,15 @@ export default function Login() {
   const [voir, setVoir] = useState(false)
   const [accueil, setAccueil] = useState(0)
   const [demande, setDemande] = useState(false)
+  // Clic sur « Demander un accès » : une onde rouge part du point touché, le bouton s'enfonce, puis la fenêtre s'ouvre.
+  const [ondes, setOndes] = useState([])
+  function cliquerAcces(e) {
+    const r = e.currentTarget.getBoundingClientRect()
+    const id = Date.now()
+    setOndes((l) => [...l, { id, x: (e.clientX || r.left + r.width / 2) - r.left, y: (e.clientY || r.top + r.height / 2) - r.top }])
+    setTimeout(() => setOndes((l) => l.filter((o) => o.id !== id)), 650)
+    setTimeout(() => setDemande(true), 180)
+  }
   useEffect(() => { const t = setInterval(() => setAccueil((i) => (i + 1) % ACCUEILS.length), 3200); return () => clearInterval(t) }, [])
 
   const onSubmit = async (e) => {
@@ -78,6 +87,9 @@ export default function Login() {
         @keyframes lg-patte-b { 0%, 100% { transform: rotate(14deg); } 50% { transform: rotate(-14deg); } }
         .lg-termite-orbite { animation: lg-orbite 11s linear 1.2s infinite both; }
         /* Éclats : trois petites étoiles qui clignotent doucement derrière la termite (l'animation est légère et discrète). */
+        /* Clic sur « Demander un accès » : onde rouge depuis le point touché (la classe commune .bv-onde est masquée hors de MAXI-AGRO). */
+        @keyframes lg-onde-acces { from { transform: translate(-50%, -50%) scale(0); opacity: 0.85; } to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+        .lg-onde-acces { position: absolute; width: 260px; height: 260px; border-radius: 9999px; pointer-events: none; background: radial-gradient(circle, rgba(188, 60, 49, 0.4) 0%, rgba(188, 60, 49, 0) 68%); transform: translate(-50%, -50%) scale(0); animation: lg-onde-acces 0.6s ease-out forwards; }
         @keyframes lg-clignote { 0%, 100% { opacity: 0.18; transform: scale(0.65) rotate(0deg); } 50% { opacity: 1; transform: scale(1.15) rotate(45deg); } }
         .lg-eclat { position: absolute; left: 50%; top: 4px; width: 0; height: 0; }
         .lg-eclat svg { position: absolute; overflow: visible; opacity: 0.18; filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.95)) drop-shadow(0 0 1px #f59e0b); animation: lg-clignote 1.9s ease-in-out infinite; }
@@ -220,8 +232,9 @@ export default function Login() {
               </span>
             </button>
 
-            <button type="button" onClick={() => setDemande(true)} className="w-full rounded-2xl border border-white/80 bg-white/50 py-2.5 text-sm font-extrabold text-gray-700 backdrop-blur-md transition-colors hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BC3C31]/40">
-              Pas encore de compte ? <span style={{ color: ROUGE }}>Demander un accès</span>
+            <button type="button" onClick={cliquerAcces} className="bv-clic relative w-full overflow-hidden rounded-2xl border border-white/80 bg-white/50 py-2.5 text-sm font-extrabold text-gray-700 backdrop-blur-md transition-colors hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BC3C31]/40">
+              {ondes.map((o) => <span key={o.id} aria-hidden="true" className="lg-onde-acces" style={{ left: o.x, top: o.y }} />)}
+              <span className="relative">Pas encore de compte ? <span style={{ color: ROUGE }}>Demander un accès</span></span>
             </button>
 
             {/* Comptes de démonstration : visibles uniquement en développement local, jamais sur le site déployé (production). */}
