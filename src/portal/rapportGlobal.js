@@ -139,11 +139,12 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
     secteurs: lignesSituation,
     total: { recettes: sommeS('recettes'), depenses: sommeS('depenses'), benefice: sommeS('benefice'), cumulRecettes: sommeS('cumulRecettes'), cumulDepenses: sommeS('cumulDepenses'), cumulBenefice: sommeS('cumulBenefice') }
   }
-  return { secteurs, total, situation, jours, bornes, precedente: precB, bornesCumul, libelleCumul: libelleCumul(bornesCumul) }
+  return { secteurs, total, situation, jours, bornes, precedente: precB, bornesCumul, libelleCumul: libelleCumul(bornesCumul, new Date()) }
 }
 
 // « du 01/11/2026 au 25/11/2026 » : période du cumul, écrite en clair dans les rapports.
-export const libelleCumul = ({ start, end }) => `du ${start.split('-').reverse().join('/')} au ${end.split('-').reverse().join('/')}`
+// Avec l'heure de l'extraction : le cumul est arrêté à l'instant où le rapport est tiré (« du 01/11/2026 au 25/11/2026 à 19 h 26 »).
+export const libelleCumul = ({ start, end }, instant = null) => `du ${start.split('-').reverse().join('/')} au ${end.split('-').reverse().join('/')}${instant ? ` à ${String(instant.getHours()).padStart(2, '0')} h ${String(instant.getMinutes()).padStart(2, '0')}` : ''}`
 
 // « Novembre 2026 », « Année 2026 », « 19/11/2026 » ou « Du 01/11/2026 au 19/11/2026 ».
 export function libellePeriode(mode, bornes) {
