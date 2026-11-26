@@ -30,10 +30,11 @@ const HAUT_CORPS = 52    // début du corps sous l'en-tête
 const BAS_CORPS = 262    // fin du corps (au-dessus du pied de page)
 
 // jsPDF ne sait pas afficher l'espace fine insécable de toLocaleString : on la remplace par une espace simple.
-const nb = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/[  ]/g, ' ')
-const fcfa = (n) => `${nb(n)} FCFA`
+// Espace insécable (U+00A0, que jsPDF sait afficher) entre les milliers et avant « FCFA » : un montant n'est jamais coupé en fin de ligne.
+const nb = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/[   ]/g, ' ')
+const fcfa = (n) => `${nb(n)} FCFA`
 const dateCourte = (j) => String(j || '').split('-').reverse().join('/')
-const signe = (n) => `${n < 0 ? '- ' : ''}${fcfa(Math.abs(n))}`
+const signe = (n) => `${n < 0 ? '- ' : ''}${fcfa(Math.abs(n))}`
 const sn = (n) => `${n < 0 ? '-' : ''}${nb(Math.abs(n))}`
 const rgb = (hex) => { const h = String(hex || '#64748b').replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) }
 
@@ -121,7 +122,9 @@ const titreSecteur = (doc, y, texte, couleur) => {
 }
 const ligne = (doc, texte, y, { taille = 10.5, style = 'normal', couleur = NOIR } = {}) => {
   doc.setFont('times', style); doc.setFontSize(taille); doc.setTextColor(...couleur)
-  doc.text(texte, MARGE, y)
+  const lignes = doc.splitTextToSize(String(texte), PAGE_W - 2 * MARGE)
+  doc.text(lignes, MARGE, y)
+  return (lignes.length - 1) * taille * 0.45 // hauteur des lignes ajoutées (en mm)
 }
 // Tableau sobre : fond blanc, filets fins, aucun aplat de couleur.
 const STYLE_TABLEAU = {
@@ -157,8 +160,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
     y = titreSection(doc, y, 'Chiffres clés')
     const cles = [`Recettes : ${fcfa(total.recettes)}`, `Dépenses : ${fcfa(total.depenses)}`, `Bénéfice : ${total.benefice < 0 ? '- ' : ''}${fcfa(Math.abs(total.benefice))}`]
     if (total.cible > 0) cles.push(`Objectif atteint : ${Math.round(total.pct)} %`)
-    ligne(doc, cles.join('     '), y)
-    y += 9
+    y += ligne(doc, cles.join('     '), y) + 9
 
     // Synthèse par secteur : le seul tableau du rapport.
     y = titreSection(doc, y, 'Synthèse par secteur')
@@ -182,22 +184,22 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
     if (!aDuContenu && !tousLesSecteurs) continue
     place(34)
     y = titreSecteur(doc, y, s.label, rgb(s.couleur))
-    if (!sansMontant) {
-      ligne(doc, `Recettes : ${fcfa(s.recettes)}     Dépenses : ${fcfa(s.depenses)}     Bénéfice : ${s.benefice < 0 ? '- ' : ''}${fcfa(Math.abs(s.benefice))}`, y)
-      y += 5.5
-      if (s.cible > 0) { ligne(doc, `Objectif : ${fcfa(s.cible)}, atteint à ${Math.round(s.pct)} %`, y, { taille: 9.5, couleur: GRIS_TXT }); y += 5.5 }
-    }
-    // Cumul du mois : visible par tous, y compris l'Assistant(e) GE (seul montant de son rapport).
-    ligne(doc, `Cumul ${rapport.libelleCumul} : recettes ${fcfa(s.cumulRecettes)}     dépenses ${fcfa(s.cumulDepenses)}     bénéfice ${signe(s.cumulBenefice)}`, y, { style: 'bold' })
-    y += 5.5
+    // 1) L'activité (prestations, séances, briques…) : toujours visible, même sans le détail des opérations.
     const faits = s.activite.map((a) => `${a.libelle} : ${nb(a.valeur)}`)
     if (sansMontant) faits.push(`Opérations enregistrées : ${nb(s.nbOperations)}`)
     if (faits.length) {
       const lignes = doc.splitTextToSize(faits.join('   ·   '), PAGE_W - 2 * MARGE)
       doc.setFont('times', 'normal'); doc.setFontSize(10); doc.setTextColor(...GRIS_TXT)
       doc.text(lignes, MARGE, y)
-      y += lignes.length * 4.8
+      y += lignes.length * 4.8 + 0.7
     }
+    // 2) Recettes, dépenses et bénéfice de la période.
+    if (!sansMontant) {
+      y += ligne(doc, `Recettes : ${fcfa(s.recettes)}     Dépenses : ${fcfa(s.depenses)}     Bénéfice : ${s.benefice < 0 ? '- ' : ''}${fcfa(Math.abs(s.benefice))}`, y) + 5.5
+      if (s.cible > 0) { y += ligne(doc, `Objectif : ${fcfa(s.cible)}, atteint à ${Math.round(s.pct)} %`, y, { taille: 9.5, couleur: GRIS_TXT }) + 5.5 }
+    }
+    // 3) En bas : le cumul du 1er du mois à l'instant de l'extraction (visible par tous, y compris l'Assistant(e) GE).
+    y += ligne(doc, `Cumul ${rapport.libelleCumul} : recettes ${fcfa(s.cumulRecettes)}     dépenses ${fcfa(s.cumulDepenses)}     bénéfice ${signe(s.cumulBenefice)}`, y, { style: 'bold' }) + 5.5
     if (avecDetails && s.operations.length) {
       // Sans montant (Assistant(e) GE) : le détail garde la date, la nature et le libellé de chaque opération, jamais la somme.
       autoTable(doc, {
@@ -222,7 +224,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
   if (sit) {
     place(sansMontant ? 30 : 60)
     y = titreSection(doc, y, 'Situation générale de tous les secteurs')
-    ligne(doc, `Cumul : ${rapport.libelleCumul} (du 1er du mois à la date d'extraction du rapport)`, y, { taille: 9.5, couleur: GRIS_TXT }); y += 6
+    y += ligne(doc, `Cumul : ${rapport.libelleCumul} (du 1er du mois à la date d'extraction du rapport)`, y, { taille: 9.5, couleur: GRIS_TXT }) + 6
     if (sansMontant) {
       // Assistant(e) GE : le cumul seulement (pas les montants de la période).
       autoTable(doc, {
@@ -237,8 +239,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       })
       y = doc.lastAutoTable.finalY + 6
       place(14)
-      ligne(doc, `Au total, tous secteurs confondus, ${rapport.libelleCumul} : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' })
-      y += 7
+      y += ligne(doc, `Au total, tous secteurs confondus, ${rapport.libelleCumul} : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' }) + 7
     } else {
       autoTable(doc, {
         ...STYLE_TABLEAU, startY: y, margin: { left: MARGE, right: MARGE, top: HAUT_CORPS, bottom: 300 - BAS_CORPS },
@@ -252,8 +253,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
       })
       y = doc.lastAutoTable.finalY + 6
       place(14)
-      ligne(doc, `Au total, tous secteurs confondus, ${rapport.libelleCumul} : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' })
-      y += 7
+      y += ligne(doc, `Au total, tous secteurs confondus, ${rapport.libelleCumul} : recettes ${fcfa(sit.total.cumulRecettes)}, dépenses ${fcfa(sit.total.cumulDepenses)}, bénéfice ${signe(sit.total.cumulBenefice)}.`, y, { taille: 10, style: 'bold' }) + 7
     }
   }
 
