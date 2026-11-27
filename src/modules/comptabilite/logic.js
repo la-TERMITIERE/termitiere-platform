@@ -8,6 +8,7 @@ import {
   PLAN_COMPTABLE_DEFAUT, CLASSES, classeDe, getClasse, CATEGORIES_IMMO,
   COMPTE_TVA_COLLECTEE, COMPTE_TVA_DEDUCTIBLE, TYPES_COMPTE
 } from './data'
+import { libelleCompteRef, statutCompte } from './planReference'
 
 // ── Plan comptable effectif ───────────────────────────────────────────────────
 // Fusionne le plan par défaut avec les comptes personnalisés (Firebase). Un compte
@@ -29,8 +30,8 @@ export function planEffectif(comptesPersonnalises = []) {
 }
 
 export function libelleCompte(plan, num) {
-  const c = plan.find((x) => x.num === String(num))
-  return c ? `${c.num} : ${c.label}` : String(num || '')
+  const label = libelleCompteRef(plan, num) // plan de l'entreprise, sinon référentiel SYSCOHADA
+  return label ? `${num} : ${label}` : String(num || '')
 }
 
 // ── Équilibre d'une écriture ──────────────────────────────────────────────────
@@ -45,7 +46,9 @@ export function ecritureEquilibree(lignes = []) {
 }
 
 // Valide une écriture avant enregistrement. Renvoie { ok, erreurs[] }.
-export function validerEcriture(ec) {
+// `plan` (facultatif) : si fourni, chaque numéro de compte doit exister dans le plan de
+// l'entreprise ou se rattacher au référentiel SYSCOHADA (cf. planReference.statutCompte).
+export function validerEcriture(ec, { plan = null } = {}) {
   const erreurs = []
   const lignes = (ec.lignes || []).filter((l) => l.compte && ((Number(l.debit) || 0) > 0 || (Number(l.credit) || 0) > 0))
   if (!ec.date) erreurs.push('La date est obligatoire.')
@@ -55,6 +58,9 @@ export function validerEcriture(ec) {
     const d = Number(l.debit) || 0
     const c = Number(l.credit) || 0
     if (d > 0 && c > 0) erreurs.push(`Ligne ${i + 1} : une ligne ne peut être à la fois au débit et au crédit.`)
+    if (plan && statutCompte(l.compte, plan).statut === 'inconnu') {
+      erreurs.push(`Ligne ${i + 1} : le compte ${l.compte} n'existe pas dans le plan SYSCOHADA.`)
+    }
   })
   if (lignes.length >= 2 && !ecritureEquilibree(lignes)) {
     erreurs.push(`Écriture déséquilibrée : débit ${totalDebit(lignes)} ≠ crédit ${totalCredit(lignes)}.`)
@@ -132,7 +138,7 @@ export function balance(mvts, plan, { debut = null, fin = null } = {}) {
       const solde = p.debit - p.credit
       return {
         ...p,
-        libelle: (plan.find((c) => c.num === p.compte)?.label) || '',
+        libelle: libelleCompteRef(plan, p.compte), // plan de l'entreprise, sinon référentiel SYSCOHADA
         soldeDebiteur: solde > 0 ? solde : 0,
         soldeCrediteur: solde < 0 ? -solde : 0
       }

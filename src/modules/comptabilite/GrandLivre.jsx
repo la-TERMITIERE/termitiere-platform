@@ -9,6 +9,7 @@ import { exportRapportExcel } from '../../utils/excelReport'
 import { useCompta } from './useCompta'
 import { balance, grandLivreCompte } from './logic'
 import { getJournal, classeDe } from './data'
+import { libelleCompteRef } from './planReference'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 
 const TABS = ['Balance Générale', 'Grand Livre', 'Balance Auxiliaire']
@@ -120,7 +121,7 @@ function GrandLivreVue({ plan, mvts, bal, bornes }) {
     return bal.postes.filter((p) => !t || p.compte.includes(t) || (p.libelle || '').toLowerCase().includes(t))
   }, [bal, q])
   const gl = useMemo(() => compteSel ? grandLivreCompte(mvts, compteSel, bornes) : null, [mvts, compteSel, bornes])
-  const compteLibelle = plan.find((c) => c.num === compteSel)?.label || ''
+  const compteLibelle = libelleCompteRef(plan, compteSel)
 
   return (
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">

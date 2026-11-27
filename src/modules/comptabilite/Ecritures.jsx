@@ -13,6 +13,7 @@ import { useCompta } from './useCompta'
 import { useAuth } from '../../hooks/useAuth'
 import { JOURNAUX, getJournal, journalDefaut, STATUTS_ECRITURE, COL } from './data'
 import { validerEcriture, totalDebit, totalCredit, ecritureEquilibree, prochainNumeroPiece } from './logic'
+import { statutCompte, libelleCompteRef } from './planReference'
 import BandeauCompta, { OngletsBande, BoutonBande, ChampBande, CLASSE_CHAMP_BANDE } from './BandeauCompta'
 import { JournauxOnglet, ExercicesOnglet, ModelesOnglet, estVerrouillee } from './EcrituresOnglets'
 
@@ -74,7 +75,7 @@ export default function Ecritures() {
     const candidat = { ...modal, statut: statutCible }
     if (verrou(modal.date)) { setErreurs(['Cette date tombe dans un exercice clôturé : rouvrez-le (onglet Exercices) pour y saisir.']); return }
     if (statutCible === 'validee') {
-      const { ok, erreurs: errs } = validerEcriture(candidat)
+      const { ok, erreurs: errs } = validerEcriture(candidat, { plan })
       if (!ok) { setErreurs(errs); return }
     }
     // Nettoyage des lignes (montants → nombres, on retire les lignes vides).
@@ -96,7 +97,7 @@ export default function Ecritures() {
 
   const valider = async (ec) => {
     if (verrou(ec.date)) { alert('Exercice clôturé : écriture verrouillée.'); return }
-    const { ok, erreurs: errs } = validerEcriture(ec)
+    const { ok, erreurs: errs } = validerEcriture(ec, { plan })
     if (!ok) { alert('Écriture non validable :\n' + errs.join('\n')); return }
     await updateItem(COL.ecritures, ec.id, { statut: 'validee' })
   }
@@ -181,7 +182,7 @@ export default function Ecritures() {
                   {(ec.lignes || []).map((l, i) => (
                     <tr key={i} className="border-b border-gray-50 last:border-0 dark:border-white/5">
                       <td className="px-4 py-1.5 font-mono text-xs text-gray-500">{l.compte}</td>
-                      <td className="px-2 py-1.5 text-gray-700 dark:text-gray-200">{l.libelle || plan.find((p) => p.num === String(l.compte))?.label || ''}</td>
+                      <td className="px-2 py-1.5 text-gray-700 dark:text-gray-200">{l.libelle || libelleCompteRef(plan, l.compte)}</td>
                       <td className="px-4 py-1.5 text-right font-medium text-gray-800 dark:text-gray-100">{l.debit ? formatMoney(l.debit) : ''}</td>
                       <td className="px-4 py-1.5 text-right font-medium text-gray-800 dark:text-gray-100">{l.credit ? formatMoney(l.credit) : ''}</td>
                     </tr>
@@ -267,10 +268,11 @@ export default function Ecritures() {
                       <td className="px-2 py-1.5">
                         <input list="plan-comptes" value={l.compte} onChange={(e) => setLigne(i, 'compte', e.target.value.replace(/[^0-9]/g, ''))}
                           placeholder="N°" className="w-24 rounded border border-gray-200 px-2 py-1.5 font-mono text-sm dark:border-white/10 dark:bg-white/5" />
+                        <IndiceCompte num={l.compte} plan={plan} />
                       </td>
                       <td className="px-2 py-1.5">
                         <input value={l.libelle} onChange={(e) => setLigne(i, 'libelle', e.target.value)}
-                          placeholder={plan.find((p) => p.num === String(l.compte))?.label || 'Détail…'}
+                          placeholder={libelleCompteRef(plan, l.compte) || 'Détail…'}
                           className="w-full min-w-[140px] rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/5" />
                       </td>
                       <td className="px-2 py-1.5">
@@ -320,4 +322,18 @@ function Champ({ label, children, className = '' }) {
       {children}
     </div>
   )
+}
+
+// Indication sous le numéro saisi : compte du plan, compte SYSCOHADA hors plan,
+// subdivision d'un compte SYSCOHADA, ou compte inconnu (refusé à la validation).
+function IndiceCompte({ num, plan }) {
+  if (!num) return null
+  const { statut, compte } = statutCompte(num, plan)
+  if (statut === 'plan') return null // le libellé apparaît déjà dans la colonne voisine
+  const txt = {
+    referentiel: { c: 'text-sky-600', t: 'Hors plan (SYSCO.)' },
+    subdivision: { c: 'text-sky-600', t: `Sous-compte de ${compte?.num}` },
+    inconnu: { c: 'text-red-600', t: 'Compte inconnu' }
+  }[statut]
+  return <p className={`mt-0.5 w-24 truncate text-[10px] font-semibold ${txt.c}`} title={compte ? `${compte.num} : ${compte.label}` : txt.t}>{txt.t}</p>
 }
