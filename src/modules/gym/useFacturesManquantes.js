@@ -21,7 +21,7 @@ export function useFacturesManquantesGym(site) {
   const dejaTente = useRef(new Set())
 
   const manquants = useMemo(
-    () => trouverManquants({ factures: allFactures, abonnements: allAbonnements, seances: allSeances, site, moisSeul: todayStr().slice(0, 7) }),
+    () => trouverManquants({ factures: allFactures, abonnements: allAbonnements, seances: allSeances, site, moisSeul: todayStr().slice(0, 7), delaiMs: 5 * 60 * 1000 }),
     [allFactures, allAbonnements, allSeances, site]
   )
 

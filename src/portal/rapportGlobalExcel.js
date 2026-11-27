@@ -64,11 +64,11 @@ function rapportSansMontant({ rapport, secteurs, libelle, edite, fichier, avecDe
 export function genererRapportGlobalExcel({ rapport, libelle, par = '', avecDetails = true, sansMontant = false, fichier }) {
   const { secteurs, total } = rapport
   const maintenant = new Date()
-  const edite = `Édité le ${maintenant.toLocaleDateString('fr-FR')} à ${maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${par ? ` par ${par}` : ''}`
+  const edite = `Édité le ${maintenant.toLocaleDateString('fr-FR')}${par ? ` par ${par}` : ''}`
   if (sansMontant) return rapportSansMontant({ rapport, secteurs, libelle, edite, fichier, avecDetails })
 
   const sections = [{
-    name: 'Synthèse', title: 'Rapport global des secteurs : LA TERMITIÈRE', subtitle: `Période : ${libelle} · ${edite} · montants en FCFA`,
+    name: 'Synthèse', title: `${rapport.titreSituation || 'Situation journalière'} par secteur : LA TERMITIÈRE`, subtitle: `Période : ${libelle} · ${edite} · montants en FCFA`,
     columns: [
       { key: 'secteur', label: 'Secteur', width: 30 },
       { key: 'recettes', label: 'Recettes', type: 'money', width: 18 },

@@ -139,7 +139,9 @@ export function calculerRapport(d, { ids = TOUS_LES_SECTEURS, mode = 'mois', bor
     secteurs: lignesSituation,
     total: { recettes: sommeS('recettes'), depenses: sommeS('depenses'), benefice: sommeS('benefice'), cumulRecettes: sommeS('cumulRecettes'), cumulDepenses: sommeS('cumulDepenses'), cumulBenefice: sommeS('cumulBenefice') }
   }
-  return { secteurs, total, situation, jours, bornes, precedente: precB, bornesCumul, libelleCumul: libelleCumul(bornesCumul, new Date()) }
+  return { secteurs, total, situation, jours, bornes, precedente: precB, bornesCumul, libelleCumul: libelleCumul(bornesCumul),
+    // Intitulé de la situation de la période : « Situation journalière » pour un jour, sinon « Situation de la période ».
+    titreSituation: bornes.start === bornes.end ? 'Situation journalière' : 'Situation de la période' }
 }
 
 // « du 01/11/2026 au 25/11/2026 » : période du cumul, écrite en clair dans les rapports.
