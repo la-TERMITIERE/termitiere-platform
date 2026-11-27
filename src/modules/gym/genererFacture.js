@@ -1,6 +1,6 @@
 // MAXI-GYM — génération de facture, déclenchée depuis l'enregistrement d'une
 // séance ou d'un abonnement (case à cocher dans leur formulaire respectif).
-import { addItem, getAll, updateAtomic } from '../../core/db'
+import { addItem, getAll, getOne, updateAtomic, claimOnce, updateItem } from '../../core/db'
 import { audit } from '../../core/audit'
 import { todayStr } from '../../utils/formatters'
 
@@ -43,11 +43,30 @@ export async function genererFactureGym({ sourceType, sourceId, clientNom, clien
     ...(avoir ? { avoir: true } : {}), ...(versement ? { versement: true } : {}), ...(motif ? { motif } : {}),
     enregistrePar: user?.nom || user?.login || '—', enregistreParUid: user?.uid || null, createdAt: Date.now()
   }
-  await addItem('gym_factures', payload)
-  await audit('gym', avoir ? 'REMBOURSEMENT' : 'FACTURE_CREATE', `${numero} : ${clientNom} : ${Number(montant).toLocaleString('fr-FR')} FCFA${motif ? ` : ${motif}` : ''}`)
+  // Facture d'une vente (séance ou abonnement) : clé fixe `auto_<type>_<id>`, la MÊME que le rattrapage automatique des factures manquantes
+  // (facturesManquantes.js). Avant, la facture normale avait une clé au hasard : si le rattrapage passait pendant l'enregistrement (autre poste
+  // ouvert sur le Dashboard ou la Facturation), la vente était facturée deux fois et le chiffre d'affaires gonflé. Désormais le premier arrivé
+  // crée la facture ; si c'est le rattrapage, la facture normale la complète au lieu d'en créer une seconde.
+  // (Les remboursements et les soldes d'abonnement gardent une clé à part : une vente peut en avoir plusieurs.)
+  const venteUnique = sourceType && sourceId && !avoir && !versement
+  if (venteUnique) {
+    const cle = `auto_${sourceType}_${sourceId}`
+    const cree = await claimOnce('gym_factures', cle, payload)
+    if (!cree) {
+      // Le rattrapage a déjà créé la facture : on la complète (qui a encaissé, mode de paiement, ticket imprimé) en gardant SON numéro,
+      // et le ticket imprimé porte ce même numéro.
+      const existante = await getOne('gym_factures', cle)
+      const { numero: _numeroInutilise, createdAt: _c, ...complement } = payload
+      await updateItem('gym_factures', cle, { ...complement, autoGeneree: false })
+      payload.numero = existante?.numero || numero
+    }
+  } else {
+    await addItem('gym_factures', payload)
+  }
+  await audit('gym', avoir ? 'REMBOURSEMENT' : 'FACTURE_CREATE', `${payload.numero} : ${clientNom} : ${Number(montant).toLocaleString('fr-FR')} FCFA${motif ? ` : ${motif}` : ''}`)
   if (generatePDF) {
     await generatePDF({
-      numero, date: payload.date,
+      numero: payload.numero, date: payload.date,
       client: { nom: clientNom, tel: clientTelephone || '' },
       lignes: [{ article: description, qte: 1, prixUnit: payload.montant, total: payload.montant }],
       totalHT: payload.montant, totalTTC: payload.montant

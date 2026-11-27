@@ -10,7 +10,10 @@ import { matchSite } from './site/useSite'
 import { categorieLabel } from './data'
 import { numeroFactureSuivant } from './genererFacture'
 
-export function trouverManquants({ factures, abonnements, seances, site, moisSeul = null, moisExclu = null }) {
+// `delaiMs` : une vente plus récente que ce délai est ignorée (son enregistrement est peut-être en train de créer sa facture).
+export function trouverManquants({ factures, abonnements, seances, site, moisSeul = null, moisExclu = null, delaiMs = 0 }) {
+  const maintenant = Date.now()
+  const tropRecente = (x) => delaiMs > 0 && Number(x.createdAt) > 0 && maintenant - Number(x.createdAt) < delaiMs
   const lies = new Set(factures.filter((f) => f.sourceType && f.sourceId).map((f) => `${f.sourceType}:${f.sourceId}`))
   const dansMois = (d) => {
     const m = (d || '').slice(0, 7)
@@ -20,10 +23,10 @@ export function trouverManquants({ factures, abonnements, seances, site, moisSeu
   }
   const montantDu = (x) => Number(x.montantPaye ?? x.montant) || 0
   const abos = abonnements
-    .filter((a) => matchSite(a, site) && dansMois(a.date) && !a.annule && montantDu(a) > 0 && !lies.has(`abonnement:${a.id}`))
+    .filter((a) => matchSite(a, site) && dansMois(a.date) && !a.annule && montantDu(a) > 0 && !lies.has(`abonnement:${a.id}`) && !tropRecente(a))
     .map((src) => ({ type: 'abonnement', src, montant: montantDu(src) }))
   const sea = seances
-    .filter((s) => matchSite(s, site) && dansMois(s.date) && !s.annule && !s.partenaire && Number(s.montant) > 0 && !lies.has(`seance:${s.id}`))
+    .filter((s) => matchSite(s, site) && dansMois(s.date) && !s.annule && !s.partenaire && Number(s.montant) > 0 && !lies.has(`seance:${s.id}`) && !tropRecente(s))
     .map((src) => ({ type: 'seance', src, montant: Number(src.montant) || 0 }))
   return [...abos, ...sea]
 }
