@@ -142,7 +142,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const { secteurs, total } = rapport
   const maintenant = new Date()
-  const horodatage = `${maintenant.toLocaleDateString('fr-FR')} à ${maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+  const horodatage = maintenant.toLocaleDateString('fr-FR') // la date seule : pas d'heure dans les rapports
   let y = HAUT_CORPS
   const place = (hauteur) => { if (y + hauteur > BAS_CORPS) { doc.addPage(); y = HAUT_CORPS } }
 
@@ -163,7 +163,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
     y += ligne(doc, cles.join('     '), y) + 9
 
     // Synthèse par secteur : le seul tableau du rapport.
-    y = titreSection(doc, y, 'Synthèse par secteur')
+    y = titreSection(doc, y, `${rapport.titreSituation || 'Situation journalière'} par secteur`)
     autoTable(doc, {
       ...STYLE_TABLEAU, startY: y, margin: { left: MARGE, right: MARGE, top: HAUT_CORPS, bottom: 300 - BAS_CORPS },
       head: [['Secteur', 'Recettes', 'Dépenses', 'Bénéfice']],
@@ -195,6 +195,7 @@ export async function construireRapportGlobalPDF({ rapport, libelle, par = '', a
     }
     // 2) Recettes, dépenses et bénéfice de la période.
     if (!sansMontant) {
+      y += ligne(doc, `${rapport.titreSituation || 'Situation journalière'} :`, y, { taille: 10, style: 'bold' }) + 4.6
       y += ligne(doc, `Recettes : ${fcfa(s.recettes)}     Dépenses : ${fcfa(s.depenses)}     Bénéfice : ${s.benefice < 0 ? '- ' : ''}${fcfa(Math.abs(s.benefice))}`, y) + 5.5
       if (s.cible > 0) { y += ligne(doc, `Objectif : ${fcfa(s.cible)}, atteint à ${Math.round(s.pct)} %`, y, { taille: 9.5, couleur: GRIS_TXT }) + 5.5 }
     }
